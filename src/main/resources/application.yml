@@ -1,0 +1,24 @@
+spring:
+  application:
+    name: portal-patrocinador
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/portal}
+    username: ${DB_USER:portal}
+    password: ${DB_PASSWORD:portal}
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 25MB
+server:
+  port: 8080
+  error:
+    include-message: always
+portal:
+  jwt:
+    # troque em produção: mínimo 32 caracteres
+    secret: ${JWT_SECRET:troque-esta-chave-por-uma-com-pelo-menos-32-bytes-ok}
+    expira-minutos: 120
+  armazenamento: ${ARMAZENAMENTO_DIR:./armazenamento}
+  cors-origens: ${CORS_ORIGENS:http://localhost:5173,http://localhost:3000}
+  # só para desenvolvimento: troca os hashes simulados da amostra por BCrypt de "senha123"
+  dev-seed: ${DEV_SEED:true}

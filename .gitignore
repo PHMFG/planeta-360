@@ -1,0 +1,23 @@
+
+# Arquivos gerados pelo Java e Maven
+target/
+
+# Dependências e arquivos gerados pelo front-end
+frontend/node_modules/
+frontend/dist/
+
+# Arquivos e dados locais
+armazenamento/
+*.log
+
+# Configurações de IDE
+.idea/
+*.iml/
+
+# Configurações locais e credenciais
+.env
+.env.*
+!.env.example
+
+# Arquivos compilados Java
+*.class
