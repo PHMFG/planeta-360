@@ -3825,4 +3825,11 @@ Os símbolos propriamente ditos são definidos nos componentes React. */
     animation: none !important;
   }
 
+.brand-mini .brand-logo-image {
+  height: 30px;
+  width: auto;
+  max-width: 160px;
+  object-fit: contain;
 }
+}
+

@@ -229,9 +229,13 @@ export default function App() {
     return <div className="login-page">
       <div className="login-shell">
         <section className="login-brand">
-          <div className="brand-mini"><span className="brand-orbit">a</span><span>PLANETA 360</span></div>
-          <div className="login-brand-copy"><p className="eyebrow">PLANETA ATLÂNTIDA · PARCERIAS</p><h1>Tudo da sua parceria<br/>em um só lugar.</h1><p>Materiais, prazos, resultados e documentos, com cada empresa vendo somente o que está autorizado para ela.</p></div>
-          <div className="brand-bottom"><span className="brand-mark">P360</span><span>PORTAL DO PATROCINADOR</span></div>
+<div className="brand-mini">
+  <img
+    src="/assets/logoPlaneta360.png"
+    alt="Planeta 360"
+    className="brand-logo-image"
+  />
+</div>
         </section>
         <form className="login-form" onSubmit={login}>
           <div className="login-kicker">ACESSO CORPORATIVO</div><h2>Boas-vindas</h2><p className="muted">Entre com o e-mail autorizado pela RBS.</p>
