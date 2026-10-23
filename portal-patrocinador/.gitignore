@@ -1,0 +1,17 @@
+# Dependências e compilação
+/target/
+/frontend/node_modules/
+/frontend/dist/
+/frontend/*.tsbuildinfo
+/src/main/resources/static/assets/
+/src/main/resources/static/app-react.html
+
+# Dados locais, IDE e segredos
+/armazenamento/
+.idea/
+*.iml
+*.class
+*.log
+.env
+.env.*
+!.env.example
