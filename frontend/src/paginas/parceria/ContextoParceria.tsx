@@ -1,6 +1,6 @@
 // Abre uma parceria pelo id da rota e entrega os dados dela às telas das oito seções. [ITEM-3] [ISOLAMENTO]
 // O patrocinador só tem as próprias parcerias na sessão; a RBS consulta qualquer uma pela API.
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useOutletContext, useParams } from 'react-router'
 import { ErroApi } from '../../api/cliente'
 import { obterParceria, paraResumo } from '../../api/parcerias'
@@ -9,10 +9,15 @@ import { Aviso } from '../../componentes/Aviso'
 import { Layout } from '../../componentes/Layout'
 import { TelaCarregando, useSessao } from '../../sessao/Sessao'
 
-type Contexto = { parceria: ParceriaResumo }
+type Contexto = { parceria: ParceriaResumo; recarregar: () => void }
 
 export function useParceria() {
   return useOutletContext<Contexto>().parceria
+}
+
+/** Para telas que mudam a parceria (ex.: liberar uma aba) atualizarem o menu na hora. */
+export function useRecarregarParceria() {
+  return useOutletContext<Contexto>().recarregar
 }
 
 export function ContextoParceria() {
@@ -24,15 +29,23 @@ export function ContextoParceria() {
 
   const [daApi, setDaApi] = useState<ParceriaResumo | null>(null)
   const [erro, setErro] = useState<string | null>(null)
+  const [versao, setVersao] = useState(0)
 
   useEffect(() => {
     if (!rbs || !Number.isFinite(id)) return
-    setDaApi(null)
     setErro(null)
     obterParceria(id)
       .then((detalhe) => setDaApi(paraResumo(detalhe)))
       .catch((falha: unknown) => setErro(falha instanceof ErroApi ? falha.message : 'Não foi possível abrir a parceria.'))
-  }, [rbs, id])
+  }, [rbs, id, versao])
+
+  // Trocar de parceria limpa a anterior, para o menu não mostrar a parceria errada enquanto carrega.
+  const [idAnterior, setIdAnterior] = useState(id)
+  if (id !== idAnterior) {
+    setIdAnterior(id)
+    setDaApi(null)
+  }
+  const recarregar = useCallback(() => setVersao((atual) => atual + 1), [])
 
   const parceria = rbs ? daApi : daSessao
 
@@ -47,5 +60,5 @@ export function ContextoParceria() {
       </div>
     )
   }
-  return <Layout parceria={parceria} contexto={{ parceria } satisfies Contexto} />
+  return <Layout parceria={parceria} contexto={{ parceria, recarregar } satisfies Contexto} />
 }

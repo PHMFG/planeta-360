@@ -25,7 +25,7 @@ import { SECOES } from '../../componentes/secoes'
 import { Tabela } from '../../componentes/Tabela'
 import { useSessao } from '../../sessao/Sessao'
 import { dataHora, moeda } from '../../util/formatar'
-import { useParceria } from './ContextoParceria'
+import { useParceria, useRecarregarParceria } from './ContextoParceria'
 import { EntregasDaAba } from './EntregasDaAba'
 
 const SITUACOES: Record<Situacao, string> = {
@@ -252,10 +252,16 @@ export function Perfil() {
   const parceria = useParceria()
   const { usuario } = useSessao()
   const rbs = usuario?.perfil === 'ADMIN_RBS'
+  const recarregarParceria = useRecarregarParceria()
   const dados = useDados(() => obterParceria(parceria.id), [parceria.id])
   const [editando, setEditando] = useState(false)
   const [atual, setAtual] = useState<ParceriaDetalhe | null>(null)
   const detalhe = atual ?? dados.dado
+  // Depois de editar, o menu (nome e cadeados das abas) também precisa ver a mudança.
+  const salvo = (novo: ParceriaDetalhe) => {
+    setAtual(novo)
+    recarregarParceria()
+  }
 
   return (
     <div data-secao="perfil" className="flex flex-col gap-4">
@@ -282,7 +288,7 @@ export function Perfil() {
                   <EdicaoEmpresa
                     detalhe={detalhe}
                     aoSalvar={(novo) => {
-                      setAtual(novo)
+                      salvo(novo)
                       setEditando(false)
                     }}
                   />
@@ -303,7 +309,7 @@ export function Perfil() {
                 )}
               </Cartao>
 
-              <AbasLiberadas detalhe={detalhe} rbs={rbs} aoSalvar={setAtual} />
+              <AbasLiberadas detalhe={detalhe} rbs={rbs} aoSalvar={salvo} />
 
               {rbs ? (
                 <AcessosRbs parceriaId={detalhe.id} />
