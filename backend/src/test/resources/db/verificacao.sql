@@ -67,8 +67,10 @@ END $f$;
 -- ---------------------------------------------------------------------
 DO $$
 BEGIN
+    -- A tabela de controle do Flyway (flyway_schema_history) não é do portal: fica de fora quando o banco foi criado pelo Flyway.
     PERFORM pg_temp.confere('ESTRUTURA', 'tabelas (29 da modelagem + 4 novas)', 33,
-       (SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'));
+       (SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
+           AND table_name <> 'flyway_schema_history'));
     PERFORM pg_temp.confere('ESTRUTURA', 'visões de consolidação', 7,
        (SELECT count(*) FROM information_schema.views WHERE table_schema = 'public'));
     PERFORM pg_temp.confere('ESTRUTURA', 'funções fn_carregar_veiculacoes, fn_carregar_pesquisa, fn_gerar_relatorio', 3,

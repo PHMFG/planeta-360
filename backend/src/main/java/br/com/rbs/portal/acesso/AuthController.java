@@ -1,0 +1,61 @@
+package br.com.rbs.portal.acesso;
+
+import br.com.rbs.portal.acesso.AcessoDtos.CsrfResposta;
+import br.com.rbs.portal.acesso.AcessoDtos.LoginRequisicao;
+import br.com.rbs.portal.acesso.AcessoDtos.UsuarioLogadoDto;
+import br.com.rbs.portal.comum.UsuarioAutenticado;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.Valid;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.web.csrf.CsrfToken;
+import org.springframework.security.web.csrf.DeferredCsrfToken;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+/**
+ * Rotas de entrada no portal: GET /csrf, POST /login e GET /eu. Atende os itens 3 e 5 da Entrega 2.
+ * O logout (POST /api/auth/logout, 204) é tratado pelo Spring Security, configurado em SegurancaConfig.
+ * [PENDENTE] POST /api/auth/ativar (primeiro acesso com o código) entra na etapa 4.
+ */
+@RestController
+@RequestMapping("/api/auth")
+public class AuthController {
+
+    private final AuthService servico;
+
+    public AuthController(AuthService servico) {
+        this.servico = servico;
+    }
+
+    /**
+     * O front chama antes do primeiro POST se ainda não tiver o cookie XSRF-TOKEN. Esta chamada também grava o cookie.
+     * Devolve o token BRUTO (o mesmo valor do cookie), que é o que o cabeçalho X-XSRF-TOKEN aceita no modo SPA.
+     * O parâmetro CsrfToken do Spring traz a versão embaralhada (contra o ataque BREACH), que serve só para formulários.
+     */
+    @GetMapping("/csrf")
+    public CsrfResposta csrf(HttpServletRequest requisicao) {
+        // O CsrfFilter deixa o token da requisição neste atributo (carrega do cookie ou gera um novo e grava o cookie).
+        DeferredCsrfToken adiado = (DeferredCsrfToken) requisicao.getAttribute(DeferredCsrfToken.class.getName());
+        if (adiado == null) {
+            throw new IllegalStateException("A proteção CSRF não está ligada nesta rota.");
+        }
+        CsrfToken token = adiado.get();
+        return new CsrfResposta(token.getHeaderName(), token.getToken());
+    }
+
+    @PostMapping("/login")
+    public UsuarioLogadoDto login(@Valid @RequestBody LoginRequisicao corpo, HttpServletRequest requisicao,
+                                  HttpServletResponse resposta) {
+        return servico.login(corpo, requisicao, resposta);
+    }
+
+    @GetMapping("/eu")
+    public UsuarioLogadoDto eu(@AuthenticationPrincipal UsuarioAutenticado usuario, HttpServletRequest requisicao,
+                               HttpServletResponse resposta) {
+        return servico.eu(usuario, requisicao, resposta);
+    }
+}

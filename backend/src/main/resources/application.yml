@@ -1,0 +1,67 @@
+# Configuração da API. Atende o item 3 da Entrega 2 (back-end com o banco já migrado pelo Flyway).
+#
+# Três jeitos de rodar:
+#   sem perfil  -> banco "portal", só as migrações de todos os ambientes (db/migration). É o jeito de produção.
+#   perfil dev  -> banco "portal", migrações + a amostra de exemplo (db/dev). Uso diário de quem desenvolve.
+#   perfil test -> banco "portal_teste", igual ao dev, e os testes o apagam e recriam a cada execução.
+#
+# Usuário, senha e endereço do banco vêm de variáveis de ambiente; o padrão serve para a máquina de desenvolvimento.
+
+spring:
+  application:
+    name: planeta360-portal
+  datasource:
+    url: ${PORTAL_BD_URL:jdbc:postgresql://localhost:5432/portal}
+    username: ${PORTAL_BD_USUARIO:portal}
+    password: ${PORTAL_BD_SENHA:portal}
+  flyway:
+    # Sem perfil: nunca carrega a amostra (db/dev) em produção.
+    locations: classpath:db/migration
+  servlet:
+    multipart:
+      # [UPLOAD] [CARGA] Limite de 20 MB por arquivo (material da marca e planilhas CSV). Padrão do Spring é 1 MB.
+      max-file-size: 20MB
+      max-request-size: 20MB
+  jackson:
+    mapper:
+      # Mantém a ordem dos campos como escrita nos records (id, nome, email...), sem ordenar por letra.
+      sort-properties-alphabetically: false
+
+server:
+  port: 8080
+  servlet:
+    session:
+      # Sessão de 8 horas sem uso. O cookie JSESSIONID não é lido por JavaScript (HttpOnly).
+      timeout: 8h
+      cookie:
+        http-only: true
+        same-site: lax
+        # [PENDENTE] Em produção, atrás do HTTPS: server.servlet.session.cookie.secure=true
+
+# [UPLOAD] Pasta dos arquivos enviados (usada a partir da etapa 5). Fica fora do banco; no banco vai só o caminho.
+portal:
+  armazenamento:
+    pasta: ./armazenamento
+
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+  flyway:
+    # [ITEM-1] A amostra (Amarelo, Roxo e Verde) mora em db/dev e só carrega neste perfil e no de teste.
+    locations: classpath:db/migration,classpath:db/dev
+
+---
+spring:
+  config:
+    activate:
+      on-profile: test
+  datasource:
+    # Banco separado do de desenvolvimento, porque os testes o apagam por inteiro.
+    # Variável própria (PORTAL_BD_TESTE_URL) para ninguém apagar o banco "portal" por engano.
+    url: ${PORTAL_BD_TESTE_URL:jdbc:postgresql://localhost:5432/portal_teste}
+  flyway:
+    locations: classpath:db/migration,classpath:db/dev
+    # O clean só roda pela estratégia de migração que existe nos testes (src/test/java), nunca no código de produção.
+    clean-disabled: false
