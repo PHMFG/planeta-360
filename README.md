@@ -12,19 +12,35 @@ Esta é a versão da **Entrega 2** (primeira versão funcional) do Desafio GC 20
 
 ## Antes de começar
 
-Instale:
+Instale e, depois de cada instalação, abra um terminal novo:
 
-- **JDK 21 ou mais novo** (recomendado: 25 LTS). Confira com `java -version`.
+- **JDK 21 ou mais novo** (recomendado: 25 LTS, por exemplo o Temurin). Confira com `java -version`.
 - **Node.js 24 LTS** (ou 22.22+). Confira com `node -v`.
-- **PostgreSQL 18.**
-  - macOS: `brew install postgresql@18` e depois `brew services start postgresql@18`.
-  - Windows: instalador oficial em postgresql.org. Marque o "Command Line Tools" para ter o `psql`.
+- **PostgreSQL 18** (funciona a partir do 15).
+  - macOS: `brew install postgresql@18` e depois `brew services start postgresql@18`. O Homebrew deixa o `psql` dessa versão fora do PATH. Rode a linha abaixo uma vez, abra um terminal novo e confira com `psql --version` (em Mac com Intel, troque `/opt/homebrew` por `/usr/local`):
 
-Maven não precisa: o projeto traz o Maven Wrapper (`mvnw` no macOS e Linux, `mvnw.cmd` no Windows).
+    ```bash
+    echo 'export PATH="/opt/homebrew/opt/postgresql@18/bin:$PATH"' >> ~/.zshrc
+    ```
+
+  - Windows: instalador oficial em postgresql.org. Guarde a senha do usuário `postgres` e a porta (5432, ou 5433 se já havia outro PostgreSQL na máquina). O `psql` fica no menu Iniciar, como "SQL Shell (psql)".
+  - Linux (Debian/Ubuntu): `sudo apt install postgresql`.
+
+Maven não precisa: o projeto traz o Maven Wrapper (`mvnw` no macOS e Linux, `mvnw.cmd` no Windows). Na primeira vez, o wrapper baixa o Maven e as dependências da API e o `npm install` baixa as do front: precisa de internet e leva alguns minutos.
+
+As portas 5432 (banco), 8080 (API) e 5173 (front) precisam estar livres. Para o banco em outra porta, veja o fim do passo 2.
 
 ## Como rodar
 
-**1. Criar os bancos (uma vez só).** Abra o `psql` como administrador do PostgreSQL (no Windows, o usuário `postgres`; no macOS com Homebrew, o seu próprio usuário) e rode:
+São três passos, nesta ordem: banco, API e front. A API e o front ficam cada um no seu terminal, abertos enquanto o portal estiver em uso. Para parar, `Ctrl+C` em cada um.
+
+**1. Criar os bancos (uma vez só).** Abra o `psql` como administrador do PostgreSQL:
+
+- macOS: `psql postgres`
+- Windows: abra o "SQL Shell (psql)", aperte Enter em Server e Database, informe a porta (Enter se for 5432), Enter em Username e digite a senha do `postgres`.
+- Linux: `sudo -u postgres psql`
+
+Rode e saia com `\q`:
 
 ```sql
 CREATE ROLE portal LOGIN PASSWORD 'portal';
@@ -34,6 +50,14 @@ CREATE DATABASE portal_teste OWNER portal;
 
 Os bancos começam vazios. As tabelas, as regras e a amostra (Amarelo, Roxo e Verde) são criadas pelo Flyway quando a API sobe.
 
+**Já rodou a Sprint 1 nesta máquina?** Ela usava o mesmo usuário `portal` e o mesmo banco `portal`, com as tabelas antigas. O `CREATE ROLE` vai avisar que o usuário já existe (pode seguir), mas o banco precisa ser apagado e criado de novo, com a versão antiga desligada:
+
+```sql
+DROP DATABASE portal;
+CREATE DATABASE portal OWNER portal;
+CREATE DATABASE portal_teste OWNER portal;
+```
+
 **2. Subir a API**, num terminal:
 
 ```bash
@@ -41,9 +65,24 @@ cd backend
 ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
 ```
 
-No Windows: `mvnw.cmd spring-boot:run -Dspring-boot.run.profiles=dev`. A API está pronta quando aparece `Started PortalApplication`. O perfil `dev` carrega a amostra de demonstração; sem perfil, sobe só a estrutura (como em produção).
+No Windows, no Prompt de Comando ou no PowerShell (no PowerShell, as aspas são obrigatórias):
 
-**3. Subir o front**, em outro terminal:
+```bat
+cd backend
+.\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=dev"
+```
+
+A API está pronta quando aparece `Started PortalApplication`. O perfil `dev` carrega a amostra de demonstração; sem perfil, sobe só a estrutura (como em produção). A 8080 é só a API: as telas ficam no front (passo 3).
+
+**PostgreSQL em outra porta** (a Sprint 1 usava a 5433)? Informe a URL do banco no mesmo terminal, antes de subir a API:
+
+```bash
+export PORTAL_BD_URL=jdbc:postgresql://localhost:5433/portal
+```
+
+No Windows: `set "PORTAL_BD_URL=jdbc:postgresql://localhost:5433/portal"` no Prompt de Comando, ou `$env:PORTAL_BD_URL="jdbc:postgresql://localhost:5433/portal"` no PowerShell. Usuário e senha diferentes de `portal` vão em `PORTAL_BD_USUARIO` e `PORTAL_BD_SENHA`.
+
+**3. Subir o front**, com a API no ar, em outro terminal:
 
 ```bash
 cd frontend
@@ -53,7 +92,22 @@ npm run dev
 
 Abra <http://localhost:5173>. O Vite repassa as chamadas `/api` para a porta 8080, então front e API funcionam como um site só.
 
-**Recomeçar do zero.** Para voltar à amostra original, apague e recrie o banco `portal` (passo 1) e suba a API de novo.
+**Recomeçar do zero.** Para voltar à amostra original, pare a API, rode no `psql` o `DROP DATABASE portal;` e o `CREATE DATABASE portal OWNER portal;` e suba a API de novo. Os arquivos enviados ficam em `backend/armazenamento/`, que pode ser apagada junto.
+
+## Se algo der errado
+
+| O que aparece | O que fazer |
+| --- | --- |
+| `psql: command not found` (macOS) | Falta a linha do PATH em "Antes de começar". Rode e abra um terminal novo. |
+| `'psql' não é reconhecido` (Windows) | Use o "SQL Shell (psql)" do menu Iniciar. |
+| `role "portal" already exists` ou `database "portal" already exists` | Ficaram de uma instalação anterior, talvez da Sprint 1. Veja "Já rodou a Sprint 1?" no passo 1. |
+| API: `Connection to localhost:5432 refused` | O PostgreSQL está parado ou em outra porta. macOS: `brew services start postgresql@18`. Windows: inicie o serviço `postgresql-x64-18` em Serviços. Outra porta: `PORTAL_BD_URL` (passo 2). |
+| API: `database "portal" does not exist`, `role "portal" does not exist` ou `password authentication failed for user "portal"` | O passo 1 não rodou nesse PostgreSQL. Confira se a porta é a mesma. |
+| API: `Found non-empty schema(s) "public" but no schema history table` | O banco `portal` tem as tabelas antigas da Sprint 1. Apague e crie de novo (passo 1). |
+| API: `Port 8080 was already in use` | Outra API ainda está rodando, talvez em outro terminal. Feche-a (no macOS e no Linux, `lsof -i :8080` mostra quem usa a porta). |
+| API: erro de compilação com `release version 21` | O Maven achou um JDK anterior ao 21. Confira `java -version` e, se existir, o `JAVA_HOME`. |
+| API, no PowerShell: `Unknown lifecycle phase ".run.profiles=dev"` | Faltaram as aspas em `"-Dspring-boot.run.profiles=dev"`. |
+| Login: "Sem conexão com o servidor. Confira se a API está rodando." | A API parou ou ainda está subindo. Espere o `Started PortalApplication` no terminal do passo 2. |
 
 ## Usuários de teste
 
@@ -91,7 +145,7 @@ cd backend
 ./mvnw test
 ```
 
-Os testes usam o banco `portal_teste`, que é apagado e recriado a cada execução (nunca aponte para o `portal`). Eles cobrem o isolamento entre parcerias pela API, as permissões, o envio com histórico, a carga sem duplicidade e o relatório. As conferências do banco ficam em `backend/src/test/resources/db/verificacao.sql`.
+No Windows: `.\mvnw.cmd test`. Os testes usam o banco `portal_teste`, que é apagado e recriado a cada execução (nunca aponte para o `portal`). Com o PostgreSQL em outra porta, informe `PORTAL_BD_TESTE_URL` (por exemplo, `jdbc:postgresql://localhost:5433/portal_teste`) do mesmo jeito que o `PORTAL_BD_URL` do passo 2. Eles cobrem o isolamento entre parcerias pela API, as permissões, o envio com histórico, a carga sem duplicidade e o relatório. As conferências do banco ficam em `backend/src/test/resources/db/verificacao.sql`.
 
 No front, `npm run build` confere os tipos e gera a versão de produção; `npm run lint` roda o Oxlint.
 
