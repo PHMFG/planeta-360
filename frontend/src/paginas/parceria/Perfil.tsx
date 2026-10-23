@@ -128,6 +128,7 @@ function AbasLiberadas({ detalhe, rbs, aoSalvar }: { detalhe: ParceriaDetalhe; r
                 <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold">
                   <input
                     type="checkbox"
+                    aria-label={`Liberar a aba ${secao?.nome ?? aba.nome}`}
                     className="size-4 accent-[var(--secao-cor)]"
                     checked={aba.liberada}
                     disabled={mudando !== null}
