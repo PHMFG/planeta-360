@@ -305,7 +305,14 @@ Use `cabecalho` como nome do cabeçalho e `token` como valor nas chamadas que al
 | 422 | Código inválido, vencido ou já usado (inclui conta que já foi ativada), e-mail não autorizado ou revogado, ou senha fora do tamanho. Para o código e o e-mail a frase é a mesma (`"Código inválido ou vencido. Peça um novo à RBS."`), para não revelar quais e-mails existem. Erros de formato vêm em `campos`. |
 | 403 | Faltou o token CSRF. |
 
-Depois de **5 códigos errados** para o mesmo e-mail, o código é bloqueado e a RBS precisa gerar outro (`POST /api/parcerias/{id}/emails`).
+Depois de **5 códigos errados** para o mesmo e-mail, o código é bloqueado e a RBS precisa gerar outro (`POST /api/parcerias/{id}/emails`). Bloqueado, até o código certo é recusado.
+
+Detalhes que o front pode contar com (etapa 4):
+
+- Os 422 de código e de e-mail trazem também `campos.codigo` com a mesma frase, para a tela destacar o campo. Erro de formato (senha curta, e-mail inválido) **não** conta como código errado.
+- O código aceito tem 8 símbolos de um alfabeto sem `0`, `O`, `1` e `I`, escrito `K7M2-9QXD`; a API ignora hífen, espaço e caixa.
+- Se o mesmo e-mail foi autorizado em mais de uma parceria antes do primeiro acesso (uma agência, por exemplo), a conta nasce com acesso a **todas** elas e os outros códigos pendentes deixam de valer. O histórico ganha uma linha `ATIVACAO` por parceria.
+- A senha também tem o limite de 72 **bytes** (acento conta mais de um); acima disso, 422 em `campos.senha`.
 
 ---
 
@@ -383,7 +390,9 @@ As datas de 2027 ainda estão em branco (aguardando a RBS).
 | `valorInvestimento`, `baseValor` | Opcionais, mas **um não vai sem o outro**. `baseValor`: `BRUTO_TABELA` ou `LIQUIDO`. |
 | `emails` | Opcional (pode autorizar depois, pela rota 12). `vinculo`: `MARCA` ou `AGENCIA`. |
 
-**201** (com o cabeçalho `Location: /api/parcerias/{id}`): o objeto da rota 9, em que cada e-mail autorizado traz também **`codigoAtivacao`** e **`codigoExpiraEm`**. O código só aparece **nesta resposta**; depois não há como ver de novo (só gerar outro). A RBS repassa o código ao patrocinador.
+**201** (com o cabeçalho `Location: /api/parcerias/{id}`): o objeto da rota 9, em que cada e-mail autorizado traz também **`codigoAtivacao`** e **`codigoExpiraEm`**. O código só aparece **nesta resposta**; depois não há como ver de novo (só gerar outro). A RBS repassa o código ao patrocinador. Se o e-mail já pertence a uma conta de patrocinador que fez o primeiro acesso por outra parceria, o vínculo é feito na hora: `situacao` vem `ATIVO` e `codigoAtivacao` vem `null`.
+
+Os e-mails são guardados em minúsculas e sem espaços nas pontas. A parceria nasce `ATIVA`, com as 7 abas abertas conforme a cota (o banco copia `cota_tipo_aba`). Tudo vai numa transação só: com qualquer erro, nada é gravado.
 
 **Erros**
 
@@ -391,7 +400,7 @@ As datas de 2027 ainda estão em branco (aguardando a RBS).
 | --- | --- |
 | 403 | Não é Admin RBS, ou faltou o token CSRF. |
 | 409 | O patrocinador já tem parceria nesta edição (`"Este patrocinador já tem parceria nesta edição do evento."`), ou já existe um patrocinador com este nome (use o `id`). |
-| 422 | Campo faltando, evento/cota/patrocinador que não existem, valor sem base, e-mail inválido (`campos`). |
+| 422 | Campo faltando, evento/cota/patrocinador que não existem, `id` e `nome` do patrocinador juntos (ou nenhum), valor sem base, e-mail inválido, repetido na lista ou de um usuário da RBS (`campos`; os da lista saem como `emails[0].email`). |
 
 **Histórico:** `CRIACAO` da parceria e `AUTORIZACAO` de cada e-mail.
 
@@ -444,7 +453,9 @@ A cota e o evento **não mudam** por aqui (mudar a cota refaria as abas). `abas`
 
 **200**: o objeto da rota 9, já com as mudanças. **Erros:** 403, 404, 409 (nome de patrocinador repetido), 422 (`valorInvestimento` sem `baseValor`, aba que não existe, situação inválida).
 
-**Histórico:** `EDICAO` (com o valor anterior e o novo) e `LIBERACAO_ABA` para cada aba alterada.
+**Regras:** campo ausente ou `null` = não muda; texto em branco em `nomeProduto`, `patrocinador.segmento` limpa o campo. O valor e a base vão sempre juntos (no estado final). O nome e o segmento do `patrocinador` valem para a marca inteira, em todas as edições. Mandar uma aba no estado em que ela já está não grava nada.
+
+**Histórico:** uma linha `EDICAO` **por campo alterado** (`detalhe` = nome do campo, com `valorAnterior` e `valorNovo`) e uma `LIBERACAO_ABA` para cada aba alterada (`valorAnterior`/`valorNovo` = `liberada`, `fechada` ou `oculta`). O `PATCH` sem mudança real não grava histórico.
 
 ## 11. `GET /api/parcerias/{id}/emails`  · etapa 4
 
@@ -484,7 +495,9 @@ O `codigoAtivacao` aparece **só nesta resposta**. No banco fica apenas o hash. 
 Casos especiais:
 
 - **E-mail pendente** (autorizado, ainda sem primeiro acesso): chamar de novo **reemite** o código; o anterior deixa de valer. Responde **200**.
-- **E-mail revogado antes** (reautorizar): o acesso volta. Se a pessoa já tinha conta, o vínculo volta na hora e `codigoAtivacao` vem `null`; se não tinha, vem um código novo.
+- **E-mail revogado antes** (reautorizar): o acesso volta. Se a pessoa já tinha conta, o vínculo volta na hora e `codigoAtivacao` vem `null`; se não tinha, vem um código novo. Responde **200** (a linha já existia).
+- **E-mail de uma conta que já fez o primeiro acesso** (por outra parceria): o vínculo é feito na hora, `situacao` vem `ATIVO` e `codigoAtivacao` vem `null`. Responde **201**.
+- O e-mail é guardado em minúsculas e sem espaços nas pontas. E-mail de um usuário da RBS não pode ser vinculado a uma parceria: 422 em `campos.email`.
 
 **Erros:** 403; 404 (parceria); 409 (`"Este e-mail já está autorizado nesta parceria."`, quando já está ativo); 422 (e-mail ou vínculo inválidos). **Histórico:** `AUTORIZACAO`.
 
@@ -494,7 +507,9 @@ Casos especiais:
 
 Revoga o e-mail. A linha **não é apagada**: fica marcada como revogada (a trilha é mantida), o banco remove o vínculo da pessoa com a parceria e invalida os códigos pendentes. O acesso some **na hora**: quem estava logado perde a parceria na chamada seguinte.
 
-**204**, sem corpo. **Erros:** 403; 404 (parceria ou e-mail que não existe ou é de outra parceria); 409 (já estava revogado). **Histórico:** `REVOGACAO`.
+**204**, sem corpo. **Erros:** 403; 404 (parceria ou e-mail que não existe ou é de outra parceria); 409 (`"Este e-mail já estava revogado."`). **Histórico:** `REVOGACAO`.
+
+Na chamada seguinte da pessoa revogada: `GET /api/auth/eu` responde 401 (a sessão termina), `GET /api/parcerias/{id}` responde 404 e `GET /api/parcerias` já não traz a parceria.
 
 ---
 
@@ -1051,7 +1066,7 @@ Colunas: `secao;indicador_codigo;indicador;recorte;valor;unidade;base_calculo;di
 - Toda rota que recebe o id de uma parceria (ou de algo que pertence a uma: entrega, arquivo, pergunta, relatório) confere, **a cada chamada**, se o usuário tem vínculo vigente com ela. A conferência vai ao banco toda vez e não é guardada na sessão. Por isso, quando a RBS revoga um e-mail, o acesso some na hora, mesmo para quem já estava logado.
 - Quem não tem vínculo recebe **404**, o mesmo erro de um id que não existe. Assim um patrocinador não descobre, pelo código de erro, quais parcerias existem.
 - A RBS passa em qualquer parceria que exista. Id que não existe é 404 para todos.
-- O `403` é para outra situação: o usuário **tem** acesso à parceria, mas o perfil dele não pode fazer aquela operação (rota só da RBS), ou a aba ainda não foi liberada.
+- O `403` é para outra situação: o usuário **tem** acesso à parceria, mas o perfil dele não pode fazer aquela operação (rota só da RBS), ou a aba ainda não foi liberada. Nas rotas só da RBS o perfil é conferido **primeiro**: o patrocinador recebe 403 com qualquer id (da parceria dele, de outra ou que não existe), então o 403 nunca revela se o id existe.
 
 ## Permissões por perfil
 

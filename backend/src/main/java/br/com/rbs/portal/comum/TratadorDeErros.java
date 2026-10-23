@@ -79,6 +79,20 @@ public class TratadorDeErros extends ResponseEntityExceptionHandler {
         return resposta(Problemas.padrao(HttpStatus.UNAUTHORIZED), request);
     }
 
+    /** [VALIDACAO] Regra de negócio que a API conferiu e recusou, com o campo errado em "campos" (etapa 4). */
+    @ExceptionHandler(DadosInvalidosException.class)
+    ResponseEntity<Object> dadosInvalidos(DadosInvalidosException ex, WebRequest request) {
+        ProblemDetail problema = Problemas.de(HttpStatus.UNPROCESSABLE_CONTENT, ex.getMessage());
+        problema.setProperty("campos", ex.campos());
+        return resposta(problema, request);
+    }
+
+    /** Estado atual que não deixa a operação (duplicado, já revogado...), conferido antes de gravar (etapa 4). */
+    @ExceptionHandler(ConflitoException.class)
+    ResponseEntity<Object> conflito(ConflitoException ex, WebRequest request) {
+        return resposta(Problemas.de(HttpStatus.CONFLICT, ex.getMessage()), request);
+    }
+
     // ---------------------------------------------------------------------
     // [VALIDACAO] Corpo ou parâmetros inválidos
     // ---------------------------------------------------------------------

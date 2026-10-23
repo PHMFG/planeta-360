@@ -3,6 +3,7 @@ package br.com.rbs.portal.acesso;
 import br.com.rbs.portal.comum.Perfil;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.util.List;
 
@@ -29,6 +30,35 @@ public final class AcessoDtos {
         /** Tira os espaços das pontas do e-mail antes da validação: quem copia e cola costuma levar um espaço junto. */
         public LoginRequisicao {
             email = email == null ? null : email.trim();
+        }
+    }
+
+    /** O @Email do Bean Validation aceita "a@b"; o banco (CHECK em usuario e email_autorizado) exige um ponto no domínio. */
+    static final String PADRAO_EMAIL = "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$";
+
+    /**
+     * [VALIDACAO] Corpo de POST /api/auth/ativar (primeiro acesso). O nome é opcional: sem ele, a conta usa a parte do
+     * e-mail antes do @. A senha tem de 8 a 72 caracteres (o BCrypt só lê os 72 primeiros).
+     */
+    public record AtivarRequisicao(
+            @NotBlank(message = "Informe o e-mail.")
+            @Email(message = "E-mail inválido.")
+            @Pattern(regexp = PADRAO_EMAIL, message = "E-mail inválido.")
+            @Size(max = 254, message = "O e-mail tem no máximo 254 caracteres.")
+            String email,
+            @NotBlank(message = "Informe o código de ativação.")
+            @Size(max = 40, message = "O código de ativação é menor que isso. Confira o que a RBS enviou.")
+            String codigo,
+            @NotBlank(message = "Informe a senha.")
+            @Size(min = 8, max = 72, message = "A senha deve ter de 8 a 72 caracteres.")
+            String senha,
+            @Size(max = 120, message = "O nome tem no máximo 120 caracteres.")
+            String nome) {
+
+        /** Espaços nas pontas do e-mail e do nome saem antes da validação; nome em branco vale como "não informado". */
+        public AtivarRequisicao {
+            email = email == null ? null : email.trim();
+            nome = nome == null || nome.isBlank() ? null : nome.trim();
         }
     }
 

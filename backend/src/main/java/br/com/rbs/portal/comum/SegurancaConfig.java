@@ -70,7 +70,7 @@ public class SegurancaConfig {
                 .authorizeHttpRequests(rotas -> rotas
                         .requestMatchers(HttpMethod.GET, "/api/auth/csrf").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
-                        // [PENDENTE] Primeiro acesso com o código de ativação; a rota é implementada na etapa 4.
+                        // Primeiro acesso com o código de ativação (etapa 4): a pessoa ainda não tem senha, então não tem sessão.
                         .requestMatchers(HttpMethod.POST, "/api/auth/ativar").permitAll()
                         .requestMatchers("/api/**").authenticated()
                         // [PENDENTE] Se a API passar a servir o front compilado, liberar aqui os arquivos estáticos.
