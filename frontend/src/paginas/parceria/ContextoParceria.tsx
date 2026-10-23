@@ -2,7 +2,8 @@
 // O patrocinador só tem as próprias parcerias na sessão; a RBS consulta qualquer uma pela API.
 import { useEffect, useState } from 'react'
 import { useOutletContext, useParams } from 'react-router'
-import { ErroApi, pedir } from '../../api/cliente'
+import { ErroApi } from '../../api/cliente'
+import { obterParceria, paraResumo } from '../../api/parcerias'
 import type { ParceriaResumo } from '../../api/tipos'
 import { Aviso } from '../../componentes/Aviso'
 import { Layout } from '../../componentes/Layout'
@@ -28,8 +29,8 @@ export function ContextoParceria() {
     if (!rbs || !Number.isFinite(id)) return
     setDaApi(null)
     setErro(null)
-    pedir<ParceriaResumo>(`/parcerias/${id}`)
-      .then(setDaApi)
+    obterParceria(id)
+      .then((detalhe) => setDaApi(paraResumo(detalhe)))
       .catch((falha: unknown) => setErro(falha instanceof ErroApi ? falha.message : 'Não foi possível abrir a parceria.'))
   }, [rbs, id])
 

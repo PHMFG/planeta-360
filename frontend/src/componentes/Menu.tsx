@@ -137,7 +137,7 @@ export function Menu({ parceria }: { parceria: ParceriaResumo | null }) {
   }
 
   return (
-    <aside className="fixed top-4 bottom-4 left-4 z-20 flex w-[264px] flex-col rounded-[20px] border border-borda-menu bg-white px-5 pt-6 pb-5 shadow-menu">
+    <aside className="fixed top-4 bottom-4 left-4 z-20 flex w-[264px] flex-col print:hidden rounded-[20px] border border-borda-menu bg-white px-5 pt-6 pb-5 shadow-menu">
       <div>
         <p className="font-display text-[56px] leading-[0.9] tracking-[-0.01em] whitespace-nowrap text-parceria uppercase">
           Planeta 360

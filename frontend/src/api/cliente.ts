@@ -18,6 +18,19 @@ export class ErroApi extends Error {
   }
 }
 
+/** Listas longas (histórico, fila, cargas) vêm paginadas pela API. */
+export type Pagina<T> = { itens: T[]; pagina: number; tamanho: number; total: number }
+
+/** Monta a parte "?a=1&b=2" da URL, pulando filtros vazios. */
+export function consulta(filtros: Record<string, string | number | boolean | undefined | null>) {
+  const busca = new URLSearchParams()
+  for (const [chave, valor] of Object.entries(filtros)) {
+    if (valor !== undefined && valor !== null && valor !== '') busca.set(chave, String(valor))
+  }
+  const texto = busca.toString()
+  return texto ? `?${texto}` : ''
+}
+
 let aoPerderSessao: (() => void) | null = null
 
 /** A sessão registra aqui o que fazer quando a API responde 401 (sessão expirada ou encerrada). */

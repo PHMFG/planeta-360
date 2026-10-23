@@ -7,7 +7,7 @@ export function Layout({ parceria, contexto }: { parceria: ParceriaResumo | null
   return (
     <div className="min-h-screen">
       <Menu parceria={parceria} />
-      <main className="py-4 pr-4 pl-[296px]">
+      <main className="py-4 pr-4 pl-[296px] print:p-0">
         <div className="flex max-w-[1200px] flex-col gap-4">
           <Outlet context={contexto} />
         </div>
