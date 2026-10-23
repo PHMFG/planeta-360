@@ -42,8 +42,8 @@ Contas de demonstração:
 
 | Empresa | E-mail | Senha |
 |---|---|---|
-| Patrocinador Amarelo | `marketing@amarelo.example` | `senha123` |
-| Patrocinador Roxo | `marketing@roxo.example` | `senha123` |
+| Patrocinador Amarelo | `marketing@gmail.com` | `senha123` |
+| Patrocinador Roxo | `marketing@gmail.com` | `senha123` |
 
 Cada conta representa uma parceria independente. O patrocinador Amarelo deve utilizar o e-mail correspondente à sua conta, assim como o patrocinador Roxo deve utilizar o seu próprio e-mail.
 
@@ -65,7 +65,7 @@ Conta de demonstração:
 
 | Perfil | E-mail | Senha |
 |---|---|---|
-| Gestão RBS | `b2b@rbs.example` | `senha123` |
+| Gestão RBS | `b2b@rbs.com.br` | `senha123` |
 
 O e-mail `b2b@rbs.example` corresponde ao perfil administrativo da RBS. Ele não deve ser confundido com os e-mails utilizados pelos patrocinadores.
 
