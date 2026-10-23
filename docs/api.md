@@ -15,7 +15,7 @@ Este documento é o **contrato entre o back-end e o front-end**. Quem faz a tela
 | Números | Números JSON. Dinheiro e quantidades têm até 2 casas decimais (`1000000.00`). Percentuais vão de 0 a 100, com 1 casa (`98.3`). |
 | Campos vazios | Um campo sem valor vem como `null`. As listas vêm sempre como `[]`, nunca `null`. |
 | Códigos | Cotas: `MASTER`, `SUBCOTA_G`, `SUBCOTA`. Abas: `PERFIL`, `APLICACOES`, `MIDIA`, `CORTESIAS`, `CREDENCIAMENTO`, `PESQUISA`, `CONTRATO`. Perfis: `ADMIN_RBS`, `ADMIN_PATROCINADOR`. |
-| Listas longas | Histórico, fila de entregas, cargas e rejeições são paginadas: `?pagina=0&tamanho=50` (pagina começa em 0; tamanho padrão 50, máximo 200). A resposta é `{"itens": [...], "pagina": 0, "tamanho": 50, "total": 137}`. As outras listas vêm inteiras, em array. |
+| Listas longas | Histórico, fila de entregas, cargas e rejeições são paginadas: `?pagina=0&tamanho=50` (pagina começa em 0; tamanho padrão 50, máximo 200; `pagina` negativa ou `tamanho` fora de 1 a 200 devolve 422). A resposta é `{"itens": [...], "pagina": 0, "tamanho": 50, "total": 137}`. As outras listas vêm inteiras, em array. |
 | Filtros de data | `de=2026-10-01&ate=2026-10-31` (datas, inclusive, no horário de Brasília). |
 
 **Quem pode chamar.** Cada rota abaixo diz um destes:
@@ -543,7 +543,7 @@ O patrocinador só enxerga as entregas das abas **liberadas** para a parceria de
 }
 ```
 
-`abaCodigo` e `titulo` (até 160 caracteres) são obrigatórios. `status` inicial é opcional: `NAO_INICIADO`, `AGUARDANDO_ENVIO` (padrão) ou `NAO_APLICAVEL`.
+`abaCodigo` e `titulo` (até 160 caracteres) são obrigatórios; `descricao` tem até 2000 caracteres e `prazo` é uma data (`AAAA-MM-DD`). `status` inicial é opcional: `NAO_INICIADO`, `AGUARDANDO_ENVIO` (padrão) ou `NAO_APLICAVEL`.
 
 **201**: a **Entrega** criada. **Erros:** 403, 404 (parceria), 422 (`campos`). **Histórico:** `CRIACAO`.
 
@@ -553,7 +553,9 @@ O patrocinador só enxerga as entregas das abas **liberadas** para a parceria de
 
 **Filtros (todos opcionais):** `status` (um ou vários, separados por vírgula: `ENVIADO,EM_ANALISE`), `parceriaId`, `eventoId`, `abaCodigo`, `atrasadas=true` (prazo vencido e entrega ainda pendente), `q` (parte do título), mais `pagina` e `tamanho`.
 
-**Ordem:** primeiro as que esperam análise (`ENVIADO` e `EM_ANALISE`), das mais antigas para as mais novas; depois as demais, pelo prazo mais próximo.
+**Ordem:** primeiro as que esperam análise (`ENVIADO` e `EM_ANALISE`), das que esperam há mais tempo para as mais novas (conta o último envio do patrocinador; sem envio, a última atualização); depois as demais, pelo prazo mais próximo (sem prazo por último).
+
+`atrasada` é verdadeira quando o prazo é anterior a hoje (no horário de Brasília) e a entrega ainda está pendente, isto é, não está `APROVADO` nem `NAO_APLICAVEL`. `ultimoEnvioEm` é a data do último arquivo enviado pelo patrocinador (`null` se ele ainda não enviou). Valor de filtro que não existe (`status`, `abaCodigo`) devolve 422.
 
 **200**: uma página.
 
@@ -586,14 +588,16 @@ O patrocinador só enxerga as entregas das abas **liberadas** para a parceria de
 
 **[UPLOAD] Regras do arquivo**
 
-- Extensões aceitas: `pdf`, `png`, `jpg`, `jpeg`, `docx`, `xlsx`, `pptx`, `csv`. O servidor também confere o **conteúdo** (não só o nome): um `.pdf` que não é PDF é recusado. SVG fica de fora, porque pode carregar script. (Lista a confirmar com a RBS.)
+- Extensões aceitas: `pdf`, `png`, `jpg`, `jpeg`, `docx`, `xlsx`, `pptx`, `csv`, `mp4`, `mp3`, `zip` (`mp4`, `mp3` e `zip` vieram da reunião com a RBS; a lista completa e o limite seguem em [PENDENTE] no fim deste arquivo). Sem diferenciar maiúsculas de minúsculas; só vale o que vem depois do último ponto.
+- O servidor também confere o **conteúdo**, pelos primeiros bytes (a "assinatura" do formato), e não só o nome: `pdf` começa com `%PDF`; `png` e `jpg`/`jpeg` com a assinatura de imagem; `zip`, `docx`, `xlsx` e `pptx` com `PK`; `mp4` tem `ftyp` logo no começo; `mp3` começa com `ID3` ou com um quadro de áudio; `csv` precisa ser texto UTF-8 válido, sem bytes nulos. Um executável renomeado para `.pdf` é recusado (415). SVG e executáveis ficam de fora, porque podem carregar script. O tipo (`mimeType`) gravado vem da extensão conferida, nunca do que o navegador informou.
+- O nome original perde o caminho da pasta e os caracteres de controle (`C:\fotos\logo.png` vira `logo.png`) e tem no máximo 255 caracteres.
 - O servidor guarda o arquivo com um nome que ele mesmo gera. O nome original só aparece na resposta e no download.
 - Categorias que o **patrocinador** pode usar: `MATERIAL_MARCA`, `MATERIAL_MIDIA`, `DOCUMENTO_INGRESSOS`, `CONTRATO`, `OUTRO`. As demais (`PLANO_COMERCIAL`, `RELATORIO_VEICULACAO`, `COMPROVACAO`, `PESQUISA`, `RELATORIO_PARCERIA`) são só da RBS.
 - Cada envio vira uma **nova versão** da entrega (1, 2, 3...). As versões antigas continuam disponíveis.
 - O patrocinador só envia em entrega de aba **liberada**, e só quando a entrega está em `NAO_INICIADO`, `AGUARDANDO_ENVIO`, `AJUSTE_SOLICITADO` ou `ENVIADO`. Depois de `EM_ANALISE`, `APROVADO` ou `NAO_APLICAVEL`, o envio é recusado com 409.
 - O envio do patrocinador muda o status da entrega para `ENVIADO`. O retorno da RBS **não** muda o status.
 
-**201**: o **Arquivo** criado, com o status atual da entrega.
+**201**: o **Arquivo** criado, com o status atual da entrega. O cabeçalho `Location` aponta para `/api/arquivos/{id}`.
 
 ```json
 {
@@ -612,9 +616,9 @@ O patrocinador só enxerga as entregas das abas **liberadas** para a parceria de
 | 403 | Aba ainda não liberada, ou categoria que o patrocinador não pode usar. |
 | 404 | Entrega que não existe ou é de outra parceria. |
 | 409 | A entrega não aceita mais envio no status em que está. |
-| 413 | Arquivo acima de 20 MB. |
-| 415 | Extensão ou conteúdo fora da lista. |
-| 422 | Parte `arquivo` ausente ou vazia. |
+| 413 | Arquivo acima de 20 MB (20.971.520 bytes; exatamente 20 MB ainda passa). |
+| 415 | Extensão ou conteúdo fora da lista, ou requisição que não é `multipart/form-data`. |
+| 422 | Parte `arquivo` ausente ou vazia, categoria que não existe, ou observação com mais de 500 caracteres (`campos.arquivo`, `campos.categoria`, `campos.observacao`). |
 
 **Histórico:** `ENVIO_ARQUIVO` no primeiro envio e `NOVA_VERSAO` nos seguintes, e `ALTERACAO_STATUS` quando o status muda.
 
@@ -626,9 +630,11 @@ O patrocinador só enxerga as entregas das abas **liberadas** para a parceria de
 
 ```text
 Content-Type: application/pdf
-Content-Disposition: attachment; filename*=UTF-8''logo_final.pdf
+Content-Disposition: attachment; filename="logo_final.pdf"; filename*=UTF-8''logo_final.pdf
 X-Content-Type-Options: nosniff
 ```
+
+O `filename*` leva o nome original em UTF-8 (com acentos e espaços codificados); o `filename` ao lado é a versão só com letras ASCII, para navegadores antigos. O PDF de um relatório que a RBS ainda não disponibilizou também dá 404 ao patrocinador.
 
 **Erros:** 404 (não existe, é de outra parceria, ou o arquivo sumiu do armazenamento). **Histórico:** `DOWNLOAD`, com quem baixou, de que IP e navegador.
 
@@ -642,7 +648,9 @@ X-Content-Type-Options: nosniff
 { "status": "AJUSTE_SOLICITADO", "observacao": "Enviar o logo em vetor." }
 ```
 
-`observacao` tem até 500 caracteres e é **obrigatória** ao pedir ajuste e ao reabrir uma entrega aprovada. Ela aparece para o patrocinador em `ultimaObservacao` e no histórico.
+`observacao` tem até 500 caracteres e é **obrigatória** ao pedir ajuste e ao reabrir uma entrega aprovada. Ela aparece para o patrocinador em `ultimaObservacao` e no histórico. A API confere primeiro se a mudança é permitida (409) e só depois a observação (422).
+
+`ultimaObservacao` vem do histórico: é o texto da última mudança de status feita pela RBS **que tinha recado**. Uma mudança sem texto (por exemplo, aprovar) e o status que muda sozinho quando o patrocinador envia um arquivo não apagam o recado anterior.
 
 **As mudanças permitidas** (o banco não limita; quem limita é a API):
 
@@ -725,6 +733,7 @@ Content-Disposition: attachment; filename="historico-2026-10-23.csv"
 - Separador **ponto e vírgula** e UTF-8 **com BOM**, para o Excel em português abrir as colunas e os acentos certos.
 - Colunas: `id;ocorrido_em;acao;entidade;entidade_id;parceria;usuario;perfil;valor_anterior;valor_novo;detalhe;ip;user_agent`.
 - Célula que começa com `=`, `+`, `-` ou `@` recebe um apóstrofo na frente, para o Excel não executar como fórmula.
+- Datas saem em ISO 8601 com o fuso de Brasília. **Números decimais saem com vírgula** (`90,9`, e não `90.9`) e sem zeros à direita (`100,00` vira `100`), porque é assim que o Excel em português lê um número; inteiros não mudam. O histórico em si não tem colunas decimais, mas a regra vale para todo CSV da API (por exemplo, o do relatório, rota 36, onde o valor de `ENTREGAS_CONCLUIDAS_PCT` passou a sair como `90,9`).
 - Máximo de **50 mil linhas**. Passou disso: 422 pedindo para filtrar por `de` e `ate`.
 
 ---

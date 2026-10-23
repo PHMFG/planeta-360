@@ -646,7 +646,7 @@ class RelatorioControllerTest {
                 .query(Long.class).single();
         assertThat(linhas).as("o cabeçalho e um número por linha").hasSize((int) numeros + 1);
         assertThat(linhas).contains(
-                "Cumprimento das entregas;ENTREGAS_CONCLUIDAS_PCT;Entregas concluídas;;90.9;%;10 aprovadas de 11 aplicáveis;sim",
+                "Cumprimento das entregas;ENTREGAS_CONCLUIDAS_PCT;Entregas concluídas;;90,9;%;10 aprovadas de 11 aplicáveis;sim",
                 "Mídia: previsto x exibido;MIDIA_PREVISTO;Mídia prevista;INSERCAO;1113;por unidade;soma do plano comercial;sim");
         assertThat(linhas).as("número sem dado: valor em branco e disponivel = nao").contains(
                 "O festival em números;FESTIVAL_NUMERO;O festival em números;;;variável;sem registro na base;nao");

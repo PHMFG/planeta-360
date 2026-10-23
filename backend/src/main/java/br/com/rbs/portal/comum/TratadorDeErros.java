@@ -93,6 +93,12 @@ public class TratadorDeErros extends ResponseEntityExceptionHandler {
         return resposta(Problemas.de(HttpStatus.CONFLICT, ex.getMessage()), request);
     }
 
+    /** [UPLOAD] Arquivo recusado pelo Armazenamento: 413 (acima do limite) ou 415 (extensão ou conteúdo fora da lista). */
+    @ExceptionHandler(ArquivoRecusadoException.class)
+    ResponseEntity<Object> arquivoRecusado(ArquivoRecusadoException ex, WebRequest request) {
+        return resposta(Problemas.de(ex.status(), ex.getMessage()), request);
+    }
+
     // ---------------------------------------------------------------------
     // [VALIDACAO] Corpo ou parâmetros inválidos
     // ---------------------------------------------------------------------

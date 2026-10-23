@@ -20,8 +20,10 @@ spring:
   servlet:
     multipart:
       # [UPLOAD] [CARGA] Limite de 20 MB por arquivo (material da marca e planilhas CSV). Padrão do Spring é 1 MB.
+      # A requisição ganha 1 MB de folga para os cabeçalhos do multipart: assim um arquivo de exatamente 20 MB chega
+      # ao Armazenamento, que confere o limite exato (portal.armazenamento.tamanho-maximo-bytes) e responde 413.
       max-file-size: 20MB
-      max-request-size: 20MB
+      max-request-size: 21MB
   jackson:
     mapper:
       # Mantém a ordem dos campos como escrita nos records (id, nome, email...), sem ordenar por letra.
@@ -39,9 +41,12 @@ server:
         # [PENDENTE] Em produção, atrás do HTTPS: server.servlet.session.cookie.secure=true
 
 # [UPLOAD] Pasta dos arquivos enviados (usada a partir da etapa 5). Fica fora do banco; no banco vai só o caminho.
+# Os arquivos ficam com nome gerado pelo servidor (UUID), fora de qualquer pasta pública, e só saem pelo download da API.
 portal:
   armazenamento:
     pasta: ./armazenamento
+    # Limite exato de um arquivo, conferido pelo Armazenamento (20 MB). A resposta ao passar disso é 413.
+    tamanho-maximo-bytes: 20971520
 
 ---
 spring:
@@ -65,3 +70,8 @@ spring:
     locations: classpath:db/migration,classpath:db/dev
     # O clean só roda pela estratégia de migração que existe nos testes (src/test/java), nunca no código de produção.
     clean-disabled: false
+
+# [UPLOAD] Nos testes, os arquivos vão para dentro de target/ (apagado pelo "mvn clean"), nunca para a pasta de desenvolvimento.
+portal:
+  armazenamento:
+    pasta: ./target/armazenamento-teste

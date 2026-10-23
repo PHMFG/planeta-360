@@ -19,8 +19,8 @@ import org.springframework.http.ResponseEntity;
 
 /**
  * Gera os arquivos CSV que a API exporta (lista de relatórios, relatório, histórico). Atende os itens 5 e 6 da Entrega 2.
- * [CARGA] Formato pensado para o Excel em português: separador ponto e vírgula, UTF-8 com BOM, aspas no padrão
- * RFC 4180 (feito pelo commons-csv) e células neutralizadas contra injeção de fórmula.
+ * [CARGA] Formato pensado para o Excel em português: separador ponto e vírgula, UTF-8 com BOM, números decimais com
+ * vírgula, aspas no padrão RFC 4180 (feito pelo commons-csv) e células neutralizadas contra injeção de fórmula.
  *
  * <p>Uso: {@code Csv.resposta("historico-2026-10-23.csv", List.of("id", "acao"), linhas)}, em que cada linha é uma lista
  * de células; {@link #linha(Object...)} monta uma linha que aceita células nulas.
@@ -97,15 +97,27 @@ public final class Csv {
     /**
      * Texto de uma célula. Número e data são formatados aqui e NÃO são neutralizados (um "-5" numérico é um número, não
      * uma fórmula); todo o resto vira texto e passa por {@link #neutralizar}. Nulo vira célula vazia.
+     * Decimais (BigDecimal, Double, Float) saem com VÍRGULA e sem zeros sobrando ("90,9"), que é como o Excel em português
+     * lê um número; com ponto ele o trataria como texto (ou como data). Inteiros saem como estão.
      */
     private static String celula(Object valor) {
         return switch (valor) {
             case null -> "";
-            case BigDecimal decimal -> decimal.signum() == 0 ? "0" : decimal.stripTrailingZeros().toPlainString();
+            case BigDecimal decimal -> decimalComVirgula(decimal);
+            case Double real -> real.isNaN() || real.isInfinite() ? "" : decimalComVirgula(BigDecimal.valueOf(real));
+            case Float real -> real.isNaN() || real.isInfinite() ? "" : decimalComVirgula(new BigDecimal(real.toString()));
             case Number numero -> numero.toString();
             case OffsetDateTime data -> DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(Datas.emBrasilia(data));
             case Enum<?> constante -> constante.name();
             default -> neutralizar(valor.toString());
         };
+    }
+
+    /** Sem notação científica, sem zeros à direita e com a vírgula no lugar do ponto: 100.00 vira "100", -12.50 vira "-12,5". */
+    private static String decimalComVirgula(BigDecimal decimal) {
+        if (decimal.signum() == 0) {
+            return "0";
+        }
+        return decimal.stripTrailingZeros().toPlainString().replace('.', ',');
     }
 }

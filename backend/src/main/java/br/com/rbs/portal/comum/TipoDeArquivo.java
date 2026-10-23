@@ -1,0 +1,126 @@
+package br.com.rbs.portal.comum;
+
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.charset.CharsetDecoder;
+import java.nio.charset.CodingErrorAction;
+import java.nio.charset.StandardCharsets;
+import java.util.Locale;
+import java.util.Optional;
+
+/**
+ * A lista de tipos de arquivo que o portal aceita (extensão, tipo MIME e como conferir o conteúdo). Atende o item 4 da
+ * Entrega 2. [UPLOAD] A extensão sozinha não vale: o servidor confere os primeiros bytes (a "assinatura" do formato), então
+ * um executável renomeado para .pdf é recusado. SVG fica de fora de propósito (pode carregar script) e não há executáveis.
+ * O tipo MIME gravado e devolvido no download vem DESTA lista, nunca do que o navegador disse no envio.
+ */
+public enum TipoDeArquivo {
+    PDF("application/pdf"),
+    PNG("image/png"),
+    JPG("image/jpeg"),
+    JPEG("image/jpeg"),
+    DOCX("application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+    XLSX("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+    PPTX("application/vnd.openxmlformats-officedocument.presentationml.presentation"),
+    CSV("text/csv"),
+    MP4("video/mp4"),
+    MP3("audio/mpeg"),
+    ZIP("application/zip");
+
+    private final String mime;
+
+    TipoDeArquivo(String mime) {
+        this.mime = mime;
+    }
+
+    public String extensao() {
+        return name().toLowerCase(Locale.ROOT);
+    }
+
+    public String mime() {
+        return mime;
+    }
+
+    /** O tipo pela extensão do nome (sem diferenciar maiúsculas); vazio se não tiver extensão ou se não estiver na lista. */
+    public static Optional<TipoDeArquivo> daExtensao(String nomeDoArquivo) {
+        String extensao = extensaoDe(nomeDoArquivo);
+        for (TipoDeArquivo tipo : values()) {
+            if (tipo.extensao().equals(extensao)) {
+                return Optional.of(tipo);
+            }
+        }
+        return Optional.empty();
+    }
+
+    /** O que vem depois do último ponto, em minúsculas; vazio se não há ponto. */
+    public static String extensaoDe(String nomeDoArquivo) {
+        int ponto = nomeDoArquivo == null ? -1 : nomeDoArquivo.lastIndexOf('.');
+        return ponto < 0 ? "" : nomeDoArquivo.substring(ponto + 1).toLowerCase(Locale.ROOT);
+    }
+
+    /** As extensões aceitas, para a frase de erro: "pdf, png, jpg...". */
+    public static String listaDeExtensoes() {
+        StringBuilder lista = new StringBuilder();
+        for (TipoDeArquivo tipo : values()) {
+            lista.append(lista.isEmpty() ? "" : ", ").append(tipo.extensao());
+        }
+        return lista.toString();
+    }
+
+    /**
+     * [UPLOAD] O conteúdo é mesmo deste tipo? pdf começa com %PDF; png com a assinatura de 8 bytes; jpeg com FF D8 FF;
+     * zip, docx, xlsx e pptx (que são zip por dentro) com PK; mp4 tem "ftyp" a partir do 5º byte; mp3 começa com ID3 ou com
+     * um quadro de áudio (FF e os 3 bits mais altos do byte seguinte ligados); csv é texto UTF-8 válido, sem bytes nulos.
+     */
+    public boolean conteudoConfere(byte[] b) {
+        return switch (this) {
+            case PDF -> comecaCom(b, '%', 'P', 'D', 'F');
+            case PNG -> comecaCom(b, 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A);
+            case JPG, JPEG -> comecaCom(b, 0xFF, 0xD8, 0xFF);
+            case DOCX, XLSX, PPTX, ZIP -> comecaCom(b, 'P', 'K', 3, 4) || comecaCom(b, 'P', 'K', 5, 6);
+            case MP4 -> b.length >= 12 && b[4] == 'f' && b[5] == 't' && b[6] == 'y' && b[7] == 'p';
+            case MP3 -> comecaCom(b, 'I', 'D', '3') || (b.length >= 2 && (b[0] & 0xFF) == 0xFF && (b[1] & 0xE0) == 0xE0);
+            case CSV -> ehTextoUtf8SemNulos(b);
+        };
+    }
+
+    private static boolean comecaCom(byte[] b, int... assinatura) {
+        if (b.length < assinatura.length) {
+            return false;
+        }
+        for (int i = 0; i < assinatura.length; i++) {
+            if ((b[i] & 0xFF) != assinatura[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** Decodifica aos poucos (sem montar o texto todo na memória): qualquer byte que não seja UTF-8 válido, ou nulo, reprova. */
+    private static boolean ehTextoUtf8SemNulos(byte[] bytes) {
+        for (byte b : bytes) {
+            if (b == 0) {
+                return false;
+            }
+        }
+        CharsetDecoder decodificador = StandardCharsets.UTF_8.newDecoder()
+                .onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT);
+        ByteBuffer entrada = ByteBuffer.wrap(bytes);
+        CharBuffer saida = CharBuffer.allocate(8192);
+        while (true) {
+            var resultado = decodificador.decode(entrada, saida, true);
+            if (resultado.isError()) {
+                return false;
+            }
+            if (resultado.isUnderflow()) {
+                break;
+            }
+            saida.clear();
+        }
+        while (decodificador.flush(saida).isOverflow()) {
+            saida.clear();
+        }
+        return true;
+    }
+}

@@ -77,7 +77,7 @@ class CsvTest {
         byte[] bytes = Csv.gerar(List.of("n"), List.of(
                 Csv.linha(-5), Csv.linha(new BigDecimal("-12.50")), Csv.linha("-5")));
 
-        assertThat(texto(bytes)).isEqualTo(BOM + "n\r\n-5\r\n-12.5\r\n'-5\r\n");
+        assertThat(texto(bytes)).isEqualTo(BOM + "n\r\n-5\r\n-12,5\r\n'-5\r\n");
     }
 
     @Test
@@ -85,8 +85,32 @@ class CsvTest {
         byte[] bytes = Csv.gerar(List.of("a", "b", "c", "d"), List.of(
                 Csv.linha("x", null, new BigDecimal("90.90"), new BigDecimal("100.00"))));
 
-        assertThat(texto(bytes)).isEqualTo(BOM + "a;b;c;d\r\nx;;90.9;100\r\n");
+        assertThat(texto(bytes)).isEqualTo(BOM + "a;b;c;d\r\nx;;90,9;100\r\n");
         assertThat(texto(Csv.gerar(List.of("a"), List.of(Csv.linha(new BigDecimal("0.00")))))).endsWith("\r\n0\r\n");
+    }
+
+    @Test
+    void decimaisSaemComVirgulaParaOExcelEmPortugues() {
+        byte[] bytes = Csv.gerar(List.of("a", "b", "c", "d", "e", "f"), List.of(
+                Csv.linha(new BigDecimal("1234.50"), 98.3, 0.5f, 2.0, 1.0E10, new BigDecimal("0.0001"))));
+
+        // Sem ponto decimal, sem notação científica e sem zeros à direita; o separador de colunas segue sendo o ";".
+        assertThat(texto(bytes)).isEqualTo(BOM + "a;b;c;d;e;f\r\n1234,5;98,3;0,5;2;10000000000;0,0001\r\n");
+    }
+
+    @Test
+    void decimalQueNaoEhNumeroFicaEmBranco() {
+        byte[] bytes = Csv.gerar(List.of("a", "b", "c", "d"), List.of(
+                Csv.linha("x", Double.NaN, Double.POSITIVE_INFINITY, Float.NaN)));
+
+        assertThat(texto(bytes)).isEqualTo(BOM + "a;b;c;d\r\nx;;;\r\n");
+    }
+
+    @Test
+    void inteirosNaoGanhamVirgulaNemCasasDecimais() {
+        byte[] bytes = Csv.gerar(List.of("a", "b", "c"), List.of(Csv.linha(7L, 12, new java.math.BigInteger("90000000000"))));
+
+        assertThat(texto(bytes)).isEqualTo(BOM + "a;b;c\r\n7;12;90000000000\r\n");
     }
 
     @Test
