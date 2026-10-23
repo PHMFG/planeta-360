@@ -62,13 +62,21 @@ function DecisaoRbs({ pergunta, aoDecidir }: { pergunta: Pergunta; aoDecidir: ()
   )
 }
 
-function Perguntas({ dados, rbs, aoMudar }: { dados: PesquisaDaParceria; rbs: boolean; aoMudar: (novo?: PesquisaDaParceria) => void }) {
+type PropsPerguntas = {
+  dados: PesquisaDaParceria
+  rbs: boolean
+  /** A marca enviou: a API devolve a pesquisa já atualizada. */
+  aoEnviar: (novo: PesquisaDaParceria) => void
+  /** A RBS decidiu sobre uma pergunta: a página busca de novo. */
+  aoDecidir: () => void
+}
+
+function Perguntas({ dados, rbs, aoEnviar, aoDecidir }: PropsPerguntas) {
   const ordens = Array.from({ length: dados.limitePerguntas }, (_, indice) => indice + 1)
   const porOrdem = (ordem: number) => dados.perguntas.find((pergunta) => pergunta.ordem === ordem)
   const [textos, setTextos] = useState<Record<number, string>>(() => Object.fromEntries(ordens.map((ordem) => [ordem, porOrdem(ordem)?.texto ?? ''])))
   const [erros, setErros] = useState<Record<string, string>>({})
   const [falha, setFalha] = useState<string | null>(null)
-  const [salvo, setSalvo] = useState(false)
   const [enviando, setEnviando] = useState(false)
 
   async function enviar() {
@@ -81,12 +89,10 @@ function Perguntas({ dados, rbs, aoMudar }: { dados: PesquisaDaParceria; rbs: bo
     })
     setErros(novos)
     setFalha(novos.geral ?? null)
-    setSalvo(false)
     if (Object.keys(novos).length) return
     setEnviando(true)
     try {
-      aoMudar(await enviarPerguntas(dados.parceriaId, lista))
-      setSalvo(true)
+      aoEnviar(await enviarPerguntas(dados.parceriaId, lista))
     } catch (erro) {
       setFalha(erro instanceof ErroApi ? erro.message : 'Não foi possível enviar as perguntas.')
     } finally {
@@ -132,7 +138,7 @@ function Perguntas({ dados, rbs, aoMudar }: { dados: PesquisaDaParceria; rbs: bo
                   ajuda="Entre 10 e 300 caracteres."
                 />
               )}
-              {rbs && pergunta?.status === 'ENVIADA' && <DecisaoRbs pergunta={pergunta} aoDecidir={() => aoMudar()} />}
+              {rbs && pergunta?.status === 'ENVIADA' && <DecisaoRbs pergunta={pergunta} aoDecidir={aoDecidir} />}
             </div>
           )
         })}
@@ -140,7 +146,6 @@ function Perguntas({ dados, rbs, aoMudar }: { dados: PesquisaDaParceria; rbs: bo
       {!rbs && (
         <div className="mt-4 flex flex-col gap-3">
           {falha && <Aviso tipo="falha" titulo={falha} />}
-          {salvo && <Aviso titulo="Perguntas enviadas para a RBS" />}
           <div>
             <Botao carregando={enviando} onClick={enviar} icone="ri-send-plane-line">
               Enviar perguntas
@@ -159,14 +164,20 @@ export function Pesquisa() {
   const aba = parceria.abas.find((item) => item.codigo === 'PESQUISA')
   const bloqueada = !aba?.liberada
   const dados = useDados(() => (bloqueada && !rbs ? Promise.resolve(null) : obterPesquisa(parceria.id)), [parceria.id, bloqueada, rbs])
-  const [versao, setVersao] = useState(0)
+  // Depois do envio vale a resposta da API; depois de uma decisão da RBS, a página busca de novo.
+  const [atual, setAtual] = useState<PesquisaDaParceria | null>(null)
+  const [enviadas, setEnviadas] = useState(false)
 
   return (
     <div data-secao="pesquisa" className="flex flex-col gap-4">
       <CabecalhoSecao
         trilha={rbs ? 'Planeta Atlântida / RBS · Gestão' : 'Planeta Atlântida / Patrocinador'}
         titulo="Pesquisa"
-        subtitulo="As três perguntas da sua marca na pesquisa do festival e os resultados."
+        subtitulo={
+          rbs
+            ? `As perguntas de ${parceria.patrocinador} na pesquisa do festival, para aprovar, e os resultados.`
+            : 'As três perguntas da sua marca na pesquisa do festival e os resultados.'
+        }
       />
       {bloqueada && !rbs ? (
         <Aviso tipo="restrito" titulo="Esta aba não faz parte da sua cota">
@@ -174,9 +185,14 @@ export function Pesquisa() {
         </Aviso>
       ) : (
         <Carregando dados={dados}>
-          {(dado) =>
-            dado && (
+          {(buscado) => {
+            const dado = atual ?? buscado
+            if (!dado) return null
+            // O formulário recomeça só quando as perguntas mudam de fato (envio ou decisão da RBS).
+            const assinatura = dado.perguntas.map((pergunta) => `${pergunta.id}:${pergunta.status}:${pergunta.texto}`).join('|')
+            return (
               <>
+                {enviadas && <Aviso titulo="Perguntas enviadas para a RBS">Cada pergunta fica “Enviada” até a RBS aprovar ou pedir ajuste.</Aviso>}
                 {dado.pesquisa ? (
                   <Aviso titulo={dado.pesquisa.nome}>
                     {dado.pesquisa.metodologia ?? 'Metodologia a informar pela RBS.'}
@@ -188,12 +204,16 @@ export function Pesquisa() {
                   </Aviso>
                 )}
                 <Perguntas
-                  key={versao}
+                  key={assinatura}
                   dados={dado}
                   rbs={rbs}
-                  aoMudar={() => {
+                  aoEnviar={(novo) => {
+                    setAtual(novo)
+                    setEnviadas(true)
+                  }}
+                  aoDecidir={() => {
+                    setAtual(null)
                     dados.recarregar()
-                    setVersao((atual) => atual + 1)
                   }}
                 />
                 <Cartao titulo="Resultados">
@@ -216,7 +236,7 @@ export function Pesquisa() {
                 </Cartao>
               </>
             )
-          }
+          }}
         </Carregando>
       )}
     </div>

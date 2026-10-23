@@ -9,6 +9,8 @@ import type { UsuarioLogado } from '../api/tipos'
 type EstadoSessao = {
   usuario: UsuarioLogado | null
   carregando: boolean
+  /** Verdadeiro depois de "Sair": aí o login não deve levar a pessoa seguinte à tela de quem saiu. */
+  saiu: boolean
   entrar: (email: string, senha: string) => Promise<UsuarioLogado>
   sair: () => Promise<void>
 }
@@ -18,6 +20,7 @@ const ContextoSessao = createContext<EstadoSessao | null>(null)
 export function ProvedorSessao({ children }: { children: ReactNode }) {
   const [usuario, setUsuario] = useState<UsuarioLogado | null>(null)
   const [carregando, setCarregando] = useState(true)
+  const [saiu, setSaiu] = useState(false)
 
   useEffect(() => {
     quandoPerderSessao(() => setUsuario(null))
@@ -29,6 +32,7 @@ export function ProvedorSessao({ children }: { children: ReactNode }) {
 
   const entrar = useCallback(async (email: string, senha: string) => {
     const logado = await entrarNaApi(email, senha)
+    setSaiu(false)
     setUsuario(logado)
     return logado
   }, [])
@@ -37,11 +41,12 @@ export function ProvedorSessao({ children }: { children: ReactNode }) {
     try {
       await sairNaApi()
     } finally {
+      setSaiu(true)
       setUsuario(null)
     }
   }, [])
 
-  const valor = useMemo(() => ({ usuario, carregando, entrar, sair }), [usuario, carregando, entrar, sair])
+  const valor = useMemo(() => ({ usuario, carregando, saiu, entrar, sair }), [usuario, carregando, saiu, entrar, sair])
   return <ContextoSessao.Provider value={valor}>{children}</ContextoSessao.Provider>
 }
 
@@ -60,11 +65,12 @@ export function telaInicial(usuario: UsuarioLogado): string {
 
 /** Só deixa passar quem está logado (e, se pedido, só a RBS). */
 export function RotaProtegida({ children, somenteRbs = false }: { children: ReactNode; somenteRbs?: boolean }) {
-  const { usuario, carregando } = useSessao()
+  const { usuario, carregando, saiu } = useSessao()
   const local = useLocation()
 
   if (carregando) return <TelaCarregando />
-  if (!usuario) return <Navigate to="/entrar" replace state={{ destino: local.pathname }} />
+  // Sessão vencida guarda a tela para voltar depois do login; quem clicou em "Sair" não deixa rastro.
+  if (!usuario) return <Navigate to="/entrar" replace state={saiu ? null : { destino: local.pathname }} />
   // [PERMISSAO] Esconder a tela é só conforto: quem barra de verdade é a API (403).
   if (somenteRbs && usuario.perfil !== 'ADMIN_RBS') return <Navigate to={telaInicial(usuario)} replace />
   return <>{children}</>
