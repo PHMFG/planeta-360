@@ -13,8 +13,9 @@ import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 
 /**
- * Uma pessoa usando a API nos testes da etapa 4: entra pela rota de login (sessão de verdade) e manda cada chamada com o
- * cookie da sessão e o token CSRF, como o front faz. Atende o item 3 da Entrega 2. Não faz parte da API.
+ * Uma pessoa usando a API nos testes: entra pela rota de login (sessão de verdade) e manda cada chamada com o cookie da
+ * sessão e o token CSRF, como o front faz. É o único ajudante de login dos testes das rotas (o ClienteDeTeste da pesquisa e
+ * da consolidação foi unido a este). Atende o item 3 da Entrega 2. Não faz parte da API.
  */
 public final class SessaoDeApi {
 
@@ -23,31 +24,46 @@ public final class SessaoDeApi {
     private final MockMvcTester mvc;
     private final MockHttpSession sessao = new MockHttpSession();
     private final Csrf csrf;
+    private final String agente;   // o cabeçalho User-Agent de toda chamada; nulo = não manda
 
-    private SessaoDeApi(MockMvcTester mvc) {
+    private SessaoDeApi(MockMvcTester mvc, String agente) {
         this.mvc = mvc;
+        this.agente = agente;
         this.csrf = ApoioDeTeste.pedirCsrf(mvc);
     }
 
     /** Alguém sem login (para as rotas públicas e para provar o 401). */
     public static SessaoDeApi anonima(MockMvcTester mvc) {
-        return new SessaoDeApi(mvc);
+        return new SessaoDeApi(mvc, null);
     }
 
     /** Entra pelo POST /api/auth/login e confere que deu certo. */
     public static SessaoDeApi entrar(MockMvcTester mvc, String email) {
-        SessaoDeApi pessoa = new SessaoDeApi(mvc);
+        return entrar(mvc, email, null);
+    }
+
+    /** Como {@link #entrar(MockMvcTester, String)}, mas toda chamada leva este User-Agent (para conferir o histórico). */
+    public static SessaoDeApi entrar(MockMvcTester mvc, String email, String agente) {
+        SessaoDeApi pessoa = new SessaoDeApi(mvc, agente);
         MvcTestResult login = pessoa.post("/api/auth/login", "{\"email\":\"" + email + "\",\"senha\":\"" + SENHA + "\"}");
         assertThat(login).as("login de " + email).hasStatus(HttpStatus.OK);
         return pessoa;
     }
 
     public MvcTestResult get(String uri, Object... variaveis) {
-        return mvc.get().uri(uri, variaveis).session(sessao).exchange();
+        var pedido = mvc.get().uri(uri, variaveis).session(sessao);
+        if (agente != null) {
+            pedido = pedido.header("User-Agent", agente);
+        }
+        return pedido.exchange();
     }
 
     public MvcTestResult post(String uri, String json) {
         return enviar(HttpMethod.POST, uri, json, true);
+    }
+
+    public MvcTestResult put(String uri, String json) {
+        return enviar(HttpMethod.PUT, uri, json, true);
     }
 
     public MvcTestResult patch(String uri, String json) {
@@ -60,11 +76,19 @@ public final class SessaoDeApi {
 
     /** O mesmo envio, mas sem o cabeçalho X-XSRF-TOKEN (a API tem de recusar com 403). */
     public MvcTestResult postSemCsrf(String uri, String json) {
-        return enviar(HttpMethod.POST, uri, json, false);
+        return semCsrf(HttpMethod.POST, uri, json);
+    }
+
+    /** Idem para qualquer método (PUT, PATCH...). */
+    public MvcTestResult semCsrf(HttpMethod metodo, String uri, String json) {
+        return enviar(metodo, uri, json, false);
     }
 
     private MvcTestResult enviar(HttpMethod metodo, String uri, String json, boolean comCsrf) {
         var pedido = mvc.method(metodo).uri(uri).session(sessao).cookie(csrf.cookie());
+        if (agente != null) {
+            pedido = pedido.header("User-Agent", agente);
+        }
         if (comCsrf) {
             pedido = pedido.header("X-XSRF-TOKEN", csrf.token());
         }

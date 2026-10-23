@@ -5,8 +5,8 @@ import static br.com.rbs.portal.ApoioDeTeste.lerJson;
 import static br.com.rbs.portal.ApoioDeTeste.lerLista;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import br.com.rbs.portal.ClienteDeTeste;
 import br.com.rbs.portal.TesteDeIntegracao;
+import br.com.rbs.portal.acesso.SessaoDeApi;
 import java.math.BigDecimal;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -15,7 +15,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,11 +38,11 @@ class ConsolidacaoControllerTest {
     @Autowired
     JdbcClient jdbc;
 
-    ClienteDeTeste cliente;
-
     @Autowired
-    void configurar(MockMvcTester mvc) {
-        this.cliente = new ClienteDeTeste(mvc);
+    MockMvcTester mvc;
+
+    SessaoDeApi entrar(String email) {
+        return SessaoDeApi.entrar(mvc, email);
     }
 
     // ---------------------------------------------------------------------
@@ -65,12 +64,12 @@ class ConsolidacaoControllerTest {
         return jdbc.sql("SELECT id FROM evento WHERE edicao = :e").param("e", edicao).query(Long.class).single();
     }
 
-    MvcTestResult consolidacao(MockHttpSession sessao, long parceriaId) {
-        return cliente.ler(sessao, "/api/parcerias/" + parceriaId + "/consolidacao");
+    MvcTestResult consolidacao(SessaoDeApi sessao, long parceriaId) {
+        return sessao.get("/api/parcerias/" + parceriaId + "/consolidacao");
     }
 
-    MvcTestResult painel(MockHttpSession sessao, String consulta) {
-        return cliente.ler(sessao, "/api/painel" + consulta);
+    MvcTestResult painel(SessaoDeApi sessao, String consulta) {
+        return sessao.get("/api/painel" + consulta);
     }
 
     static BigDecimal numero(Object valorDoJson) {
@@ -122,7 +121,7 @@ class ConsolidacaoControllerTest {
     @Test
     void amareloVeOPrevistoEOExibidoDeUmaUnidadeIgualAoBanco() {
         long amarelo = parceria("Cliente Amarelo");
-        MockHttpSession sessao = cliente.entrar(AMARELO);
+        SessaoDeApi sessao = entrar(AMARELO);
 
         MvcTestResult resposta = consolidacao(sessao, amarelo);
 
@@ -181,7 +180,7 @@ class ConsolidacaoControllerTest {
     @Test
     void unidadesDiferentesNuncaSaoSomadasEOsTotaisFechamPorVeiculoEPorLinha() {
         long roxo = parceria("Cliente Roxo");
-        MockHttpSession sessao = cliente.entrar(ROXO);
+        SessaoDeApi sessao = entrar(ROXO);
 
         MvcTestResult resposta = consolidacao(sessao, roxo);
 
@@ -248,9 +247,9 @@ class ConsolidacaoControllerTest {
         assertThat(todosNoBanco).as("a amostra tem faltantes que a marca não pode ver")
                 .contains("MIDIA_ABAIXO_DO_PREVISTO", "APLICACAO_SEM_COMPROVACAO", "FESTIVAL_SEM_NUMEROS");
 
-        MvcTestResult daMarca = consolidacao(cliente.entrar(AMARELO), amarelo);
-        MvcTestResult daAgencia = consolidacao(cliente.entrar(AGENCIA_DO_AMARELO), amarelo);
-        MvcTestResult daRbs = consolidacao(cliente.entrar(RBS), amarelo);
+        MvcTestResult daMarca = consolidacao(entrar(AMARELO), amarelo);
+        MvcTestResult daAgencia = consolidacao(entrar(AGENCIA_DO_AMARELO), amarelo);
+        MvcTestResult daRbs = consolidacao(entrar(RBS), amarelo);
 
         for (MvcTestResult r : List.of(daMarca, daAgencia)) {
             assertThat(r).hasStatus(HttpStatus.OK);
@@ -285,7 +284,7 @@ class ConsolidacaoControllerTest {
     void marcaSemNenhumFaltanteQueEstejaNaListaDaMarcaRecebeListaVazia() {
         long roxo = parceria("Cliente Roxo");
         // O Roxo (Subcota G) não tem pesquisa; só lhe resta a entrega pendente. Quando ela é aprovada, a lista fica vazia.
-        MockHttpSession sessao = cliente.entrar(ROXO);
+        SessaoDeApi sessao = entrar(ROXO);
         assertThat(lerLista(consolidacao(sessao, roxo), "$.faltantes[*].tipo")).containsExactly("ENTREGA_PENDENTE");
 
         jdbc.sql("UPDATE entrega SET status = 'APROVADO' WHERE parceria_id = :p").param("p", roxo).update();
@@ -299,7 +298,7 @@ class ConsolidacaoControllerTest {
     void parceriaSemPlanoNemEntregaNemCortesiaVemComListasVaziasETotaisNulos() {
         long vazia = criarParceriaVazia("EM_NEGOCIACAO");
 
-        MvcTestResult resposta = consolidacao(cliente.entrar(RBS), vazia);
+        MvcTestResult resposta = consolidacao(entrar(RBS), vazia);
 
         assertThat(resposta).hasStatus(HttpStatus.OK);
         assertThat(lerLista(resposta, "$.midia.porUnidade")).isEmpty();
@@ -324,7 +323,7 @@ class ConsolidacaoControllerTest {
     @Test
     void roxoPedindoAConsolidacaoDoAmareloRecebe404IgualAParceriaQueNaoExiste() {
         long amarelo = parceria("Cliente Amarelo");
-        MockHttpSession sessao = cliente.entrar(ROXO);
+        SessaoDeApi sessao = entrar(ROXO);
 
         MvcTestResult doAmarelo = consolidacao(sessao, amarelo);
         MvcTestResult inexistente = consolidacao(sessao, 999_999L);
@@ -335,13 +334,13 @@ class ConsolidacaoControllerTest {
         assertThat(lerJson(doAmarelo, "$.detail")).as("mesma frase de uma parceria que não existe")
                 .isEqualTo(lerJson(inexistente, "$.detail"));
         assertThat(corpo(doAmarelo)).doesNotContain("Rede Atlântida").doesNotContain("1113").doesNotContain("faltantes");
-        assertThat(consolidacao(cliente.entrar(RBS), 999_999L)).hasStatus(HttpStatus.NOT_FOUND);
+        assertThat(consolidacao(entrar(RBS), 999_999L)).hasStatus(HttpStatus.NOT_FOUND);
     }
 
     @Test
     void agenciaPerdeAConsolidacaoNaHoraQuandoOVinculoSai() {
         long amarelo = parceria("Cliente Amarelo");
-        MockHttpSession sessao = cliente.entrar(AGENCIA_DO_AMARELO);
+        SessaoDeApi sessao = entrar(AGENCIA_DO_AMARELO);
         assertThat(consolidacao(sessao, amarelo)).hasStatus(HttpStatus.OK);
 
         jdbc.sql("DELETE FROM parceria_usuario WHERE parceria_id = :p AND usuario_id = (SELECT id FROM usuario WHERE email = :e)")
@@ -354,8 +353,10 @@ class ConsolidacaoControllerTest {
     void semSessaoDevolve401NasDuasRotas() {
         long amarelo = parceria("Cliente Amarelo");
 
-        assertThat(consolidacao(null, amarelo)).hasStatus(HttpStatus.UNAUTHORIZED);
-        assertThat(painel(null, "")).hasStatus(HttpStatus.UNAUTHORIZED);
+        SessaoDeApi visitante = SessaoDeApi.anonima(mvc);
+
+        assertThat(consolidacao(visitante, amarelo)).hasStatus(HttpStatus.UNAUTHORIZED);
+        assertThat(painel(visitante, "")).hasStatus(HttpStatus.UNAUTHORIZED);
     }
 
     // ---------------------------------------------------------------------
@@ -365,7 +366,7 @@ class ConsolidacaoControllerTest {
     @Test
     void rbsVeOPainelDaEdicaoMaisNovaComOsNumerosIguaisAoBanco() {
         long evento = evento(2027);
-        MockHttpSession rbs = cliente.entrar(RBS);
+        SessaoDeApi rbs = entrar(RBS);
 
         MvcTestResult resposta = painel(rbs, "");
 
@@ -435,7 +436,7 @@ class ConsolidacaoControllerTest {
     @Test
     void painelDeOutraEdicaoPeloParametroEventoId() {
         long edicao2026 = evento(2026);
-        MockHttpSession rbs = cliente.entrar(RBS);
+        SessaoDeApi rbs = entrar(RBS);
 
         MvcTestResult resposta = painel(rbs, "?eventoId=" + edicao2026);
 
@@ -455,7 +456,7 @@ class ConsolidacaoControllerTest {
 
     @Test
     void painelComEdicaoQueNaoExisteDevolve404EComIdQueNaoEhNumeroDevolve400() {
-        MockHttpSession rbs = cliente.entrar(RBS);
+        SessaoDeApi rbs = entrar(RBS);
 
         MvcTestResult inexistente = painel(rbs, "?eventoId=999999");
 
@@ -478,7 +479,7 @@ class ConsolidacaoControllerTest {
         entrega(amarelo, "AGUARDANDO_ENVIO", 7);    // prazo no futuro
         entrega(amarelo, "AGUARDANDO_ENVIO", null); // sem prazo
 
-        MvcTestResult resposta = painel(cliente.entrar(RBS), "");
+        MvcTestResult resposta = painel(entrar(RBS), "");
 
         assertThat(lerJson(resposta, "$.entregas.atrasadas")).isEqualTo(3);
         assertThat(lerJson(resposta, "$.entregas.porStatus.AGUARDANDO_ENVIO")).isEqualTo(4);
@@ -499,7 +500,7 @@ class ConsolidacaoControllerTest {
                         """).query(Long.class).single();
         assertThat(faltantes).isGreaterThan(20);
 
-        MvcTestResult resposta = painel(cliente.entrar(RBS), "");
+        MvcTestResult resposta = painel(entrar(RBS), "");
 
         List<String> tipos = lerLista(resposta, "$.pendencias[*].tipo");
         assertThat(tipos).hasSize(20);
@@ -524,7 +525,7 @@ class ConsolidacaoControllerTest {
                         VALUES ('MIDIA', :e, :u, (SELECT max(executada_em) FROM carga) + interval '1 day', 12, 10, 2) RETURNING id
                         """).param("e", evento).param("u", rbs).query(Long.class).single();
 
-        MvcTestResult resposta = painel(cliente.entrar(RBS), "");
+        MvcTestResult resposta = painel(entrar(RBS), "");
 
         assertThat(lerJson(resposta, "$.parcerias.total")).isEqualTo(4);
         assertThat(lerJson(resposta, "$.parcerias.ativas")).as("em negociação não é ativa").isEqualTo(3);
@@ -543,7 +544,7 @@ class ConsolidacaoControllerTest {
     @Test
     void patrocinadorRecebe403NoPainel() {
         for (String email : List.of(AMARELO, AGENCIA_DO_AMARELO, ROXO)) {
-            MockHttpSession sessao = cliente.entrar(email);
+            SessaoDeApi sessao = entrar(email);
             MvcTestResult resposta = painel(sessao, "");
             assertThat(resposta).as(email).hasStatus(HttpStatus.FORBIDDEN);
             assertThat(resposta.getResponse().getContentType()).startsWith("application/problem+json");

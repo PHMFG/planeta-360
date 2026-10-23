@@ -5,7 +5,7 @@ import br.com.rbs.portal.acesso.AtivacaoRepositorio.Autorizacao;
 import br.com.rbs.portal.acesso.AtivacaoRepositorio.CodigoVigente;
 import br.com.rbs.portal.comum.AcaoHistorico;
 import br.com.rbs.portal.comum.DadosInvalidosException;
-import br.com.rbs.portal.comum.FusoBrasilia;
+import br.com.rbs.portal.comum.Datas;
 import br.com.rbs.portal.comum.HistoricoService;
 import br.com.rbs.portal.comum.Perfil;
 import br.com.rbs.portal.comum.UsuarioAutenticado;
@@ -70,7 +70,7 @@ public class AtivacaoService {
         repositorio.invalidarVigentes(emailAutorizadoId);
         String codigo = sortear();
         OffsetDateTime expiraEm = repositorio.inserirCodigo(emailAutorizadoId, hash(normalizar(codigo)), DIAS_DE_VALIDADE);
-        return new CodigoEmitido(codigo.substring(0, 4) + "-" + codigo.substring(4), FusoBrasilia.em(expiraEm));
+        return new CodigoEmitido(codigo.substring(0, 4) + "-" + codigo.substring(4), Datas.emBrasilia(expiraEm));
     }
 
     /**

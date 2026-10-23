@@ -1,6 +1,6 @@
 package br.com.rbs.portal.parceria;
 
-import br.com.rbs.portal.comum.FusoBrasilia;
+import br.com.rbs.portal.comum.Datas;
 import br.com.rbs.portal.parceria.ParceriaDtos.EmailAutorizadoDto;
 import br.com.rbs.portal.parceria.ParceriaDtos.EmailResumoDto;
 import br.com.rbs.portal.parceria.ParceriaDtos.UsuarioResumoDto;
@@ -169,6 +169,6 @@ public class EmailAutorizadoRepositorio {
         UsuarioResumoDto revogadoPor = l.revogadoPorId() == null ? null
                 : new UsuarioResumoDto(l.revogadoPorId(), l.revogadoPorNome(), l.revogadoPorPerfil());
         return new EmailAutorizadoDto(l.id(), l.email(), l.vinculo(), l.situacao(), l.usuarioId(), autorizadoPor,
-                FusoBrasilia.em(l.autorizadoEm()), revogadoPor, FusoBrasilia.em(l.revogadoEm()));
+                Datas.emBrasilia(l.autorizadoEm()), revogadoPor, Datas.emBrasilia(l.revogadoEm()));
     }
 }

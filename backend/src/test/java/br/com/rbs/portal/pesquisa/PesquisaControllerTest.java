@@ -5,8 +5,8 @@ import static br.com.rbs.portal.ApoioDeTeste.lerJson;
 import static br.com.rbs.portal.ApoioDeTeste.lerLista;
 import static org.assertj.core.api.Assertions.assertThat;
 
-import br.com.rbs.portal.ClienteDeTeste;
 import br.com.rbs.portal.TesteDeIntegracao;
+import br.com.rbs.portal.acesso.SessaoDeApi;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
@@ -15,7 +15,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +35,8 @@ class PesquisaControllerTest {
     private static final String AGENCIA_DO_AMARELO = "atendimento@agencia-x.example";
     private static final String ROXO = "marketing@roxo.example";
 
+    private static final String AGENTE = "TesteDePesquisa/1.0";
+
     private static final String P1 = "Você visitou o espaço da marca na Arena ou no Camarote?";
     private static final String P2 = "De 0 a 10, quanto você recomendaria a marca a um amigo?";
     private static final String P3 = "Depois da ativação, sua percepção sobre a marca mudou?";
@@ -44,11 +45,11 @@ class PesquisaControllerTest {
     @Autowired
     JdbcClient jdbc;
 
-    ClienteDeTeste cliente;
-
     @Autowired
-    void configurar(MockMvcTester mvc) {
-        this.cliente = new ClienteDeTeste(mvc);
+    MockMvcTester mvc;
+
+    SessaoDeApi entrar(String email) {
+        return SessaoDeApi.entrar(mvc, email, AGENTE);
     }
 
     // ---------------------------------------------------------------------
@@ -100,17 +101,17 @@ class PesquisaControllerTest {
         return json.append("]}").toString();
     }
 
-    MvcTestResult enviarPerguntas(MockHttpSession sessao, long parceriaId, String json) {
-        return cliente.enviar(sessao, HttpMethod.PUT, "/api/parcerias/" + parceriaId + "/pesquisa/perguntas", json);
+    MvcTestResult enviarPerguntas(SessaoDeApi sessao, long parceriaId, String json) {
+        return sessao.put("/api/parcerias/" + parceriaId + "/pesquisa/perguntas", json);
     }
 
-    MvcTestResult decidir(MockHttpSession sessao, long perguntaId, String decisao, String observacao) {
+    MvcTestResult decidir(SessaoDeApi sessao, long perguntaId, String decisao, String observacao) {
         String corpo = "{\"decisao\":\"" + decisao + "\"" + (observacao != null ? ",\"observacao\":\"" + observacao + "\"" : "") + "}";
-        return cliente.enviar(sessao, HttpMethod.PATCH, "/api/pesquisa/perguntas/" + perguntaId + "/status", corpo);
+        return sessao.patch("/api/pesquisa/perguntas/" + perguntaId + "/status", corpo);
     }
 
-    MvcTestResult verPesquisa(MockHttpSession sessao, long parceriaId) {
-        return cliente.ler(sessao, "/api/parcerias/" + parceriaId + "/pesquisa");
+    MvcTestResult verPesquisa(SessaoDeApi sessao, long parceriaId) {
+        return sessao.get("/api/parcerias/" + parceriaId + "/pesquisa");
     }
 
     static long numero(MvcTestResult resposta, String caminho) {
@@ -124,7 +125,7 @@ class PesquisaControllerTest {
     @Test
     void amareloVeAPesquisaComAsTresPerguntasAprovadasEOsResultadosComABase() {
         long amarelo = parceria("Cliente Amarelo");
-        MockHttpSession sessao = cliente.entrar(AMARELO);
+        SessaoDeApi sessao = entrar(AMARELO);
 
         MvcTestResult resposta = verPesquisa(sessao, amarelo);
 
@@ -178,7 +179,7 @@ class PesquisaControllerTest {
                 .query(Long.class).single();
         assertThat(daSegunda).as("a amostra tem resultado da pergunta 2").isPositive();
 
-        MvcTestResult resposta = verPesquisa(cliente.entrar(AMARELO), amarelo);
+        MvcTestResult resposta = verPesquisa(entrar(AMARELO), amarelo);
 
         assertThat(lerLista(resposta, "$.perguntas[*].status")).containsExactly("APROVADA", "ENVIADA", "APROVADA");
         assertThat(lerLista(resposta, "$.resultados")).hasSize((int) (total - daSegunda));
@@ -189,7 +190,7 @@ class PesquisaControllerTest {
     void rbsVeAPesquisaDeQualquerParceriaEAgenciaDoAmareloTambem() {
         long amarelo = parceria("Cliente Amarelo");
         long roxo = parceria("Cliente Roxo");
-        MockHttpSession rbs = cliente.entrar(RBS);
+        SessaoDeApi rbs = entrar(RBS);
 
         MvcTestResult doAmarelo = verPesquisa(rbs, amarelo);
         MvcTestResult doRoxo = verPesquisa(rbs, roxo);
@@ -203,7 +204,7 @@ class PesquisaControllerTest {
         assertThat(lerLista(doRoxo, "$.resultados")).isEmpty();
         assertThat(verPesquisa(rbs, 999_999L)).hasStatus(HttpStatus.NOT_FOUND);
 
-        assertThat(verPesquisa(cliente.entrar(AGENCIA_DO_AMARELO), amarelo)).hasStatus(HttpStatus.OK);
+        assertThat(verPesquisa(entrar(AGENCIA_DO_AMARELO), amarelo)).hasStatus(HttpStatus.OK);
     }
 
     @Test
@@ -211,7 +212,7 @@ class PesquisaControllerTest {
         long amarelo = parceria("Cliente Amarelo");
         apagarPerguntas(amarelo);
         jdbc.sql("DELETE FROM pesquisa WHERE escopo = 'ATIVACAO'").update();
-        MockHttpSession sessao = cliente.entrar(AMARELO);
+        SessaoDeApi sessao = entrar(AMARELO);
 
         MvcTestResult vazia = verPesquisa(sessao, amarelo);
         assertThat(vazia).hasStatus(HttpStatus.OK);
@@ -236,7 +237,7 @@ class PesquisaControllerTest {
         long amarelo = parceria("Cliente Amarelo");
         apagarPerguntas(amarelo);
         long pesquisa = jdbc.sql("SELECT id FROM pesquisa WHERE escopo = 'ATIVACAO'").query(Long.class).single();
-        MockHttpSession sessao = cliente.entrar(AMARELO);
+        SessaoDeApi sessao = entrar(AMARELO);
 
         MvcTestResult resposta = enviarPerguntas(sessao, amarelo, perguntas(P1, P2, P3));
 
@@ -268,7 +269,7 @@ class PesquisaControllerTest {
         assertThat(historico).allSatisfy(l -> {
             assertThat(((Number) l.get("usuario_id")).longValue()).isEqualTo(usuarioId(AMARELO));
             assertThat(l.get("ip")).isNotNull();
-            assertThat(l.get("user_agent")).isEqualTo(ClienteDeTeste.AGENTE);
+            assertThat(l.get("user_agent")).isEqualTo(AGENTE);
         });
     }
 
@@ -276,8 +277,8 @@ class PesquisaControllerTest {
     void fluxoCompletoEnviaAprovaPedeAjusteEBloqueiaAAprovada() {
         long amarelo = parceria("Cliente Amarelo");
         apagarPerguntas(amarelo);
-        MockHttpSession marca = cliente.entrar(AMARELO);
-        MockHttpSession rbs = cliente.entrar(RBS);
+        SessaoDeApi marca = entrar(AMARELO);
+        SessaoDeApi rbs = entrar(RBS);
         assertThat(enviarPerguntas(marca, amarelo, perguntas(P1, P2, P3))).hasStatus(HttpStatus.OK);
         long p1 = perguntaId(amarelo, 1);
         long p2 = perguntaId(amarelo, 2);
@@ -353,7 +354,7 @@ class PesquisaControllerTest {
         long amarelo = parceria("Cliente Amarelo");
         long antes = contarHistorico("EDICAO", amarelo);
 
-        MvcTestResult resposta = enviarPerguntas(cliente.entrar(AMARELO), amarelo, perguntas(P1, P2, P3));
+        MvcTestResult resposta = enviarPerguntas(entrar(AMARELO), amarelo, perguntas(P1, P2, P3));
 
         assertThat(resposta).hasStatus(HttpStatus.OK);
         assertThat(lerLista(resposta, "$.perguntas[*].status")).containsOnly("APROVADA");
@@ -364,7 +365,7 @@ class PesquisaControllerTest {
     void perguntaEnviadaPodeSerAlteradaOuRetiradaAteAReceberADecisao() {
         long amarelo = parceria("Cliente Amarelo");
         apagarPerguntas(amarelo);
-        MockHttpSession marca = cliente.entrar(AMARELO);
+        SessaoDeApi marca = entrar(AMARELO);
         enviarPerguntas(marca, amarelo, perguntas(P1, P2, P3));
         long p2 = perguntaId(amarelo, 2);
 
@@ -390,7 +391,7 @@ class PesquisaControllerTest {
     @Test
     void validacaoDevolve422ComOsCamposENadaMuda() {
         long amarelo = parceria("Cliente Amarelo");
-        MockHttpSession marca = cliente.entrar(AMARELO);
+        SessaoDeApi marca = entrar(AMARELO);
         String curto = "{\"perguntas\":[{\"ordem\":1,\"texto\":\"Curta\"}]}";
         String longo = "{\"perguntas\":[{\"ordem\":1,\"texto\":\"" + "a".repeat(301) + "\"}]}";
         String branco = "{\"perguntas\":[{\"ordem\":1,\"texto\":\"          \"}]}";
@@ -434,7 +435,7 @@ class PesquisaControllerTest {
         long amarelo = parceria("Cliente Amarelo");
         apagarPerguntas(amarelo);
 
-        MvcTestResult resposta = enviarPerguntas(cliente.entrar(AMARELO), amarelo,
+        MvcTestResult resposta = enviarPerguntas(entrar(AMARELO), amarelo,
                 "{\"perguntas\":[{\"ordem\":3,\"texto\":\"   " + P1 + "   \"}]}");
 
         assertThat(resposta).hasStatus(HttpStatus.OK);
@@ -449,7 +450,7 @@ class PesquisaControllerTest {
     @Test
     void decisaoQueNaoCabeDevolve409422Ou404() {
         long amarelo = parceria("Cliente Amarelo");
-        MockHttpSession rbs = cliente.entrar(RBS);
+        SessaoDeApi rbs = entrar(RBS);
         long aprovada = perguntaId(amarelo, 1);
 
         // Só a pergunta ENVIADA recebe decisão: a APROVADA da amostra devolve 409.
@@ -474,12 +475,12 @@ class PesquisaControllerTest {
         long amarelo = parceria("Cliente Amarelo");
         jdbc.sql("UPDATE pesquisa_pergunta SET status = 'ENVIADA' WHERE parceria_id = :p").param("p", amarelo).update();
         long pergunta = perguntaId(amarelo, 1);
-        MockHttpSession rbs = cliente.entrar(RBS);
+        SessaoDeApi rbs = entrar(RBS);
 
         MvcTestResult semObservacao = decidir(rbs, pergunta, "PEDIR_AJUSTE", null);
         MvcTestResult observacaoEmBranco = decidir(rbs, pergunta, "PEDIR_AJUSTE", "     ");
         MvcTestResult decisaoInvalida = decidir(rbs, pergunta, "TALVEZ", "Não sei.");
-        MvcTestResult semDecisao = cliente.enviar(rbs, HttpMethod.PATCH, "/api/pesquisa/perguntas/" + pergunta + "/status", "{}");
+        MvcTestResult semDecisao = rbs.patch("/api/pesquisa/perguntas/" + pergunta + "/status", "{}");
         MvcTestResult observacaoLonga = decidir(rbs, pergunta, "PEDIR_AJUSTE", "a".repeat(1001));
 
         for (MvcTestResult r : List.of(semObservacao, observacaoEmBranco)) {
@@ -505,7 +506,7 @@ class PesquisaControllerTest {
         jdbc.sql("UPDATE pesquisa_pergunta SET status = 'ENVIADA' WHERE id = :id").param("id", perguntaId(amarelo, 2)).update();
         long pergunta = perguntaId(amarelo, 2);
 
-        MvcTestResult resposta = decidir(cliente.entrar(RBS), pergunta, "APROVAR", "Ótima pergunta.");
+        MvcTestResult resposta = decidir(entrar(RBS), pergunta, "APROVAR", "Ótima pergunta.");
 
         assertThat(resposta).hasStatus(HttpStatus.OK);
         assertThat(lerJson(resposta, "$.status")).isEqualTo("APROVADA");
@@ -522,7 +523,7 @@ class PesquisaControllerTest {
     void rbsTentandoOPutRecebe403ENadaMuda() {
         long amarelo = parceria("Cliente Amarelo");
         apagarPerguntas(amarelo);
-        MockHttpSession rbs = cliente.entrar(RBS);
+        SessaoDeApi rbs = entrar(RBS);
 
         MvcTestResult resposta = enviarPerguntas(rbs, amarelo, perguntas(P1, P2, P3));
 
@@ -543,7 +544,7 @@ class PesquisaControllerTest {
 
         // Nem a marca dona da pergunta, nem a agência dela, nem outra marca: a decisão é só da RBS.
         for (String email : List.of(AMARELO, AGENCIA_DO_AMARELO, ROXO)) {
-            MockHttpSession sessao = cliente.entrar(email);
+            SessaoDeApi sessao = entrar(email);
             MvcTestResult resposta = decidir(sessao, pergunta, "APROVAR", null);
             assertThat(resposta).as(email).hasStatus(HttpStatus.FORBIDDEN);
             assertThat(resposta.getResponse().getContentType()).startsWith("application/problem+json");
@@ -560,7 +561,7 @@ class PesquisaControllerTest {
     @Test
     void roxoComAPesquisaFechadaRecebe403NaPropriaParceria() {
         long roxo = parceria("Cliente Roxo");
-        MockHttpSession sessao = cliente.entrar(ROXO);
+        SessaoDeApi sessao = entrar(ROXO);
 
         MvcTestResult ver = verPesquisa(sessao, roxo);
         MvcTestResult enviar = enviarPerguntas(sessao, roxo, perguntas(P1));
@@ -577,7 +578,7 @@ class PesquisaControllerTest {
     @Test
     void abaLiberadaMasInvisivelOuSoLiberadaDepoisContaComoAbertaSoSeAsDuasCoisas() {
         long roxo = parceria("Cliente Roxo");
-        MockHttpSession sessao = cliente.entrar(ROXO);
+        SessaoDeApi sessao = entrar(ROXO);
 
         // A RBS libera a aba para o Roxo: passa a valer.
         jdbc.sql("UPDATE parceria_aba SET liberada = TRUE WHERE parceria_id = :p AND aba_id = (SELECT id FROM aba WHERE codigo = 'PESQUISA')")
@@ -594,7 +595,7 @@ class PesquisaControllerTest {
     @Test
     void roxoPedindoAPesquisaEAsPerguntasDoAmareloRecebe404IgualAParceriaQueNaoExiste() {
         long amarelo = parceria("Cliente Amarelo");
-        MockHttpSession sessao = cliente.entrar(ROXO);
+        SessaoDeApi sessao = entrar(ROXO);
         long antes = contarHistorico("EDICAO", amarelo);
 
         MvcTestResult ver = verPesquisa(sessao, amarelo);
@@ -616,7 +617,7 @@ class PesquisaControllerTest {
     @Test
     void acessoRevogadoDerrubaAPesquisaNaHora() {
         long amarelo = parceria("Cliente Amarelo");
-        MockHttpSession sessao = cliente.entrar(AGENCIA_DO_AMARELO);
+        SessaoDeApi sessao = entrar(AGENCIA_DO_AMARELO);
         assertThat(verPesquisa(sessao, amarelo)).hasStatus(HttpStatus.OK);
 
         jdbc.sql("DELETE FROM parceria_usuario WHERE parceria_id = :p AND usuario_id = :u")
@@ -630,15 +631,15 @@ class PesquisaControllerTest {
     void semSessaoDevolve401ESemTokenCsrfDevolve403() {
         long amarelo = parceria("Cliente Amarelo");
         long pergunta = perguntaId(amarelo, 1);
-        MockHttpSession marca = cliente.entrar(AMARELO);
+        SessaoDeApi marca = entrar(AMARELO);
 
-        assertThat(cliente.ler(null, "/api/parcerias/" + amarelo + "/pesquisa")).hasStatus(HttpStatus.UNAUTHORIZED);
-        assertThat(cliente.enviar(null, HttpMethod.PUT, "/api/parcerias/" + amarelo + "/pesquisa/perguntas", perguntas(P1)))
+        assertThat(SessaoDeApi.anonima(mvc).get("/api/parcerias/" + amarelo + "/pesquisa")).hasStatus(HttpStatus.UNAUTHORIZED);
+        assertThat(SessaoDeApi.anonima(mvc).put("/api/parcerias/" + amarelo + "/pesquisa/perguntas", perguntas(P1)))
                 .hasStatus(HttpStatus.UNAUTHORIZED);
-        assertThat(cliente.enviar(null, HttpMethod.PATCH, "/api/pesquisa/perguntas/" + pergunta + "/status", "{\"decisao\":\"APROVAR\"}"))
+        assertThat(SessaoDeApi.anonima(mvc).patch("/api/pesquisa/perguntas/" + pergunta + "/status", "{\"decisao\":\"APROVAR\"}"))
                 .hasStatus(HttpStatus.UNAUTHORIZED);
         // Logado, mas sem o cabeçalho X-XSRF-TOKEN, o PUT é recusado.
-        MvcTestResult semToken = cliente.semToken(marca, HttpMethod.PUT,
+        MvcTestResult semToken = marca.semCsrf(HttpMethod.PUT,
                 "/api/parcerias/" + amarelo + "/pesquisa/perguntas", perguntas(P1, P2, P3));
         assertThat(semToken).hasStatus(HttpStatus.FORBIDDEN);
         assertThat((String) lerJson(semToken, "$.detail")).contains("CSRF");

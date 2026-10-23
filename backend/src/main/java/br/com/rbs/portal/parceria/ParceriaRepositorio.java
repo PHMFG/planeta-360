@@ -1,6 +1,6 @@
 package br.com.rbs.portal.parceria;
 
-import br.com.rbs.portal.comum.FusoBrasilia;
+import br.com.rbs.portal.comum.Datas;
 import br.com.rbs.portal.parceria.ParceriaDtos.CotaDto;
 import br.com.rbs.portal.parceria.ParceriaDtos.EntregasResumoDto;
 import br.com.rbs.portal.parceria.ParceriaDtos.EventoCompletoDto;
@@ -149,7 +149,7 @@ public class ParceriaRepositorio {
                 .optional()
                 .map(b -> new ParceriaBase(b.id(), b.patrocinadorId(), b.patrocinadorNome(), b.segmento(), b.eventoId(),
                         b.eventoNome(), b.edicao(), b.cotaCodigo(), b.cotaNome(), b.nomeProduto(), b.valorInvestimento(),
-                        b.baseValor(), b.situacao(), FusoBrasilia.em(b.criadoEm())));
+                        b.baseValor(), b.situacao(), Datas.emBrasilia(b.criadoEm())));
     }
 
     public void atualizarParceria(long parceriaId, String nomeProduto, BigDecimal valorInvestimento, String baseValor,
