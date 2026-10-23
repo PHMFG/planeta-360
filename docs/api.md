@@ -2,7 +2,7 @@
 
 Este documento é o **contrato entre o back-end e o front-end**. Quem faz a tela lê aqui o que cada rota pede, o que devolve e quais erros esperar, sem precisar abrir o código.
 
-- As rotas marcadas com **etapa 3** já existem e estão testadas. As das **etapas 4 a 7** estão definidas aqui para o front poder trabalhar em paralelo; o formato pode receber ajustes pequenos, e toda mudança será avisada e registrada neste arquivo.
+- Todas as 36 rotas estão implementadas e cobertas por testes de integração (`cd backend && ./mvnw test`), inclusive o isolamento entre parcerias. A coluna "Etapa" diz em que etapa do plano cada rota entrou. Mudança de formato daqui em diante entra neste arquivo no mesmo commit do código.
 - O banco está descrito em [`docs/banco.md`](banco.md). Os nomes de status, cotas e abas são os mesmos do banco.
 
 ## Como falar com a API
@@ -96,7 +96,7 @@ O login mantém o cookie `XSRF-TOKEN`; o **logout o apaga** (junto com o `JSESSI
 
 ## As rotas em uma tabela
 
-Etapa 3 = pronta e testada. Etapas 4 a 7 = definidas aqui, ainda por implementar.
+Todas prontas e testadas. A coluna "Etapa" mostra em que etapa do plano a rota entrou (3 a 7).
 
 | # | Rota | Quem chama | O que faz | Etapa |
 | --- | --- | --- | --- | --- |
