@@ -977,6 +977,7 @@ Gera uma **nova versão** do relatório da parceria, em `RASCUNHO`, copiando os 
 
 - `VALIDADO`: a RBS conferiu os números. Grava quem validou e quando; os números ficam congelados.
 - `DISPONIBILIZADO`: libera o relatório para o patrocinador. Grava quem liberou e quando. Só vale a partir de `VALIDADO`.
+- Pedir o status que o relatório já tem devolve **200** sem alterar nada e sem gravar histórico.
 
 **200**: o relatório (formato da rota 35).
 
@@ -989,7 +990,8 @@ Gera uma **nova versão** do relatório da parceria, em `RASCUNHO`, copiando os 
 **Quem chama:** patrocinador da parceria, ou Admin RBS.
 
 - **Patrocinador:** recebe a versão **disponibilizada** mais nova. Se a RBS ainda não disponibilizou nenhuma, **404** (`"O relatório desta parceria ainda não está disponível."`).
-- **RBS:** recebe a versão mais nova de qualquer status, ou a pedida em `?versao=2`.
+- **RBS:** recebe a versão mais nova de qualquer status, ou a pedida em `?versao=2` (404 se a versão não existe; 422 se for menor que 1).
+- `?versao=` não vale para o patrocinador: ele sempre recebe a disponibilizada mais nova.
 
 **200**
 
@@ -1032,7 +1034,7 @@ Gera uma **nova versão** do relatório da parceria, em `RASCUNHO`, copiando os 
 
 **Quem chama:** Admin RBS (qualquer versão) ou patrocinador da parceria (só se o relatório estiver `DISPONIBILIZADO`; senão **404**).
 
-**200**: CSV do relatório, um número por linha, no mesmo formato de arquivo da rota 22 (`filename="relatorio-amarelo-v1.csv"`).
+**200**: CSV do relatório, um número por linha, no mesmo formato de arquivo da rota 22 (`filename="relatorio-cliente-amarelo-v1.csv"`: o nome do patrocinador, sem acento e com hífens, e a versão).
 
 Colunas: `secao;indicador_codigo;indicador;recorte;valor;unidade;base_calculo;disponivel`. Número indisponível sai com `valor` em branco e `disponivel` igual a `nao`.
 
