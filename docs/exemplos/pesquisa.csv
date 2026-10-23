@@ -1,0 +1,12 @@
+patrocinador,pergunta,indicador,alternativa,valor,unidade,base_respondentes
+Cliente Amarelo,1,,Sim,64,PERCENTUAL,412
+Cliente Amarelo,1,,Não,36,PERCENTUAL,412
+Cliente Amarelo,2,,Nota média,8.4,NOTA,412
+Cliente Amarelo,2,,Notas 9 e 10,61,PERCENTUAL,412
+Cliente Amarelo,2,,Notas 7 e 8,28,PERCENTUAL,412
+Cliente Amarelo,2,,Notas de 0 a 6,11,PERCENTUAL,412
+Cliente Amarelo,3,,Melhorou,58,PERCENTUAL,412
+Cliente Amarelo,3,,Não mudou,39,PERCENTUAL,412
+Cliente Amarelo,3,,Piorou,3,PERCENTUAL,412
+Amarelo,1,,Sim,64,PERCENTUAL,412
+Cliente Amarelo,3,,Outro,140,PERCENTUAL,412
