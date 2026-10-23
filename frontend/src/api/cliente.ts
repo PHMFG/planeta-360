@@ -4,6 +4,7 @@
 const BASE = '/api'
 const COOKIE_CSRF = 'XSRF-TOKEN'
 const CABECALHO_CSRF = 'X-XSRF-TOKEN'
+const SEM_API = 'Sem conexão com o servidor. Confira se a API está rodando.'
 
 /** Erro devolvido pela API (ProblemDetail do Spring), pronto para mostrar ao usuário. */
 export class ErroApi extends Error {
@@ -62,9 +63,12 @@ async function lerErro(resposta: Response): Promise<ErroApi> {
   const mensagem =
     corpo?.detail ??
     corpo?.title ??
-    (resposta.status >= 500
-      ? 'O servidor não respondeu como esperado. Tente de novo em instantes.'
-      : 'Não foi possível concluir o pedido.')
+    // 502 a 504 sem corpo da API: quem respondeu foi o proxy (o Vite, em desenvolvimento), porque a API está fora do ar.
+    (resposta.status >= 502 && resposta.status <= 504
+      ? SEM_API
+      : resposta.status >= 500
+        ? 'O servidor não respondeu como esperado. Tente de novo em instantes.'
+        : 'Não foi possível concluir o pedido.')
   return new ErroApi(resposta.status, mensagem, corpo?.campos ?? {})
 }
 
@@ -101,7 +105,7 @@ export async function pedir<T = void>(caminho: string, opcoes: Opcoes = {}): Pro
       credentials: 'same-origin',
     })
   } catch {
-    throw new ErroApi(0, 'Sem conexão com o servidor. Confira se a API está rodando.')
+    throw new ErroApi(0, SEM_API)
   }
 
   if (resposta.status === 401 && !opcoes.ignorarSessao) aoPerderSessao?.()
