@@ -835,15 +835,15 @@ O patrocinador recebe 403 nesta rota mesmo para a pergunta da própria parceria 
 
 | Parte | Obrigatória | O que é |
 | --- | --- | --- |
-| `arquivo` | Sim | O CSV (UTF-8, vírgula como separador, cabeçalho na primeira linha). Até 20 MB. |
+| `arquivo` | Sim | O CSV, com extensão `.csv` (UTF-8, vírgula como separador, cabeçalho na primeira linha; o BOM do Excel no começo é aceito). Até 20 MB. |
 | `tipo` | Sim | `VEICULACAO` ou `PESQUISA`. |
 | `eventoId` | Sim | A edição a que a planilha se refere. |
-| `escopo` | Só em `PESQUISA` | `ATIVACAO` (padrão) ou `GERAL` (pesquisa do festival, sem patrocinador). |
+| `escopo` | Só em `PESQUISA` | `ATIVACAO` (padrão) ou `GERAL` (pesquisa do festival, sem patrocinador). Em `VEICULACAO` a parte é ignorada. |
 
 **Como funciona** [CARGA] [DUPLICIDADE]
 
-1. A API confere o cabeçalho (todas as colunas esperadas) e guarda o arquivo.
-2. Grava as linhas numa área de passagem e chama a função do banco, que rejeita o que não tem campo obrigatório ou não bate com nenhuma parceria, e **insere sem duplicar**.
+1. A API confere o cabeçalho e guarda o arquivo como arquivo geral da RBS (sem parceria; categoria `RELATORIO_VEICULACAO` ou `PESQUISA`). O cabeçalho precisa ter **todas** as colunas do tipo, em qualquer ordem e em maiúsculas ou minúsculas; coluna a mais é ignorada. Veiculação: `patrocinador, veiculo, formato, espaco_programa, exibido_em, quantidade, link`. Pesquisa: `patrocinador, pergunta, indicador, alternativa, valor, unidade, base_respondentes`. Célula vazia vale como nulo.
+2. Grava as linhas numa área de passagem e chama a função do banco, que rejeita o que não tem campo obrigatório ou não bate com nenhuma parceria, e **insere sem duplicar**. Data ou número que não dá para ler (por exemplo `exibido_em` = "ontem", ou decimal com vírgula) não derruba o arquivo: a linha é rejeitada, com o campo e o motivo. Data sem fuso vale no horário de Brasília. Tudo corre numa transação: se algo falhar, não ficam a carga, as linhas nem o arquivo.
 3. A chave da veiculação é a **linha do plano comercial + data e hora**. Reenviar o mesmo arquivo não insere nada: tudo conta como duplicada. Reenviar com quantidade corrigida também conta como duplicada (a primeira versão prevalece).
 4. Na pesquisa da ativação, só pergunta `APROVADA` recebe resultado; a linha de pergunta ainda não aprovada é rejeitada.
 
@@ -860,13 +860,15 @@ O patrocinador recebe 403 nesta rota mesmo para a pergunta da própria parceria 
 
 Linhas lidas = inseridas + duplicadas + rejeitadas. As rejeitadas, com o motivo, estão na rota 28.
 
-**Erros:** 403; 413 (acima de 20 MB); 415 (não é CSV); 422 (parte ausente, `tipo` inválido, evento que não existe, ou cabeçalho com coluna faltando: `campos.arquivo` lista as colunas que faltam).
+`linha`, nas rejeições, é o número da linha no arquivo (o cabeçalho é a linha 1; linha em branco conta no número, mas não é lida).
+
+**Erros:** 403 (conferido antes de qualquer outra coisa); 413 (acima de 20 MB); 415 (não é CSV: extensão diferente de `.csv`, ou conteúdo que não é texto UTF-8); 422 com `campos`: parte ausente ou inválida (`arquivo`, `tipo`, `eventoId`, `escopo`), evento que não existe (`campos.eventoId`), edição sem a pesquisa pedida cadastrada (`campos.escopo`), e problemas do arquivo em `campos.arquivo`: cabeçalho com coluna faltando (lista as que faltam), texto maior que a coluna do banco (diz a linha e a coluna), CSV mal formado (aspas abertas) e planilha sem nenhuma linha de dados. Nesses casos nada é gravado.
 
 **Histórico:** `CARGA`. No banco o `tipo` `VEICULACAO` é gravado como `MIDIA`.
 
 ## 27. `GET /api/cargas`  · etapa 6
 
-**Quem chama:** Admin RBS. **Filtros (opcionais):** `tipo`, `eventoId`, `pagina`, `tamanho`. A ordem é da carga mais nova para a mais antiga.
+**Quem chama:** Admin RBS. **Filtros (opcionais):** `tipo` (`VEICULACAO` ou `PESQUISA`; outro valor dá 422), `eventoId`, `pagina`, `tamanho`. A ordem é da carga mais nova para a mais antiga (pelo id da carga).
 
 **200**: uma página de cargas, cada item no formato da resposta da rota 26.
 
@@ -879,14 +881,14 @@ Linhas lidas = inseridas + duplicadas + rejeitadas. As rejeitadas, com o motivo,
 ```json
 {
   "itens": [
-    { "linha": 12, "campo": "exibido_em", "motivo": "Data e hora obrigatória", "conteudo": "Cliente Verde,Rede Atlântida RS,Citação 5\",,,1," },
-    { "linha": 1301, "campo": "patrocinador", "motivo": "Patrocinador sem parceria nesta edição", "conteudo": "Cliente Azul,atl.la,Post,,2026-11-20T10:15:30-03:00,1," }
+    { "linha": 12, "campo": "exibido_em", "motivo": "Campo obrigatório vazio ou inválido", "conteudo": "Cliente Verde | No evento | VT telão 30\" | Telões (1 por dia)" },
+    { "linha": 1301, "campo": "patrocinador", "motivo": "Patrocinador sem parceria nesta edição", "conteudo": "Cliente Azul | Rede Atlântida RS | Chamadas assinadas 5\" | Indeterminado | 01/12/2026 10:00" }
   ],
   "pagina": 0, "tamanho": 50, "total": 2
 }
 ```
 
-`linha` é o número da linha no arquivo enviado. **Erros:** 403; 404 (carga que não existe).
+`linha` é o número da linha no arquivo enviado. `conteudo` é a linha reescrita pelo banco, com os campos separados por ` | ` (a data em horário de Brasília). **Erros:** 403 (também para carga que não existe: a permissão é conferida primeiro); 404 (carga que não existe, para a RBS).
 
 ## 29. `GET /api/parcerias/{id}/consolidacao`  · etapa 6
 

@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * Rotas 29 e 30 do contrato (docs/api.md): previsto x exibido de uma parceria e painel da RBS. Atende os itens 5 e 7 da
  * Entrega 2. [ISOLAMENTO] A 29 serve ao patrocinador da parceria e à RBS; [PERMISSAO] a 30 é só da RBS (403 para o
- * patrocinador). As regras ficam no ConsolidacaoService. As cargas de planilha (rotas 26 a 28) entram na parte B da etapa.
+ * patrocinador). As regras ficam no ConsolidacaoService. As cargas de planilha (rotas 26 a 28) estão no CargaController.
  */
 @RestController
 @RequestMapping("/api")
