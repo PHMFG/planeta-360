@@ -760,8 +760,10 @@ Content-Disposition: attachment; filename="historico-2026-10-23.csv"
 }
 ```
 
-- `status` da pergunta: `RASCUNHO` (ainda não enviada, ou devolvida para ajuste), `ENVIADA` (espera a RBS) ou `APROVADA`. `observacaoRbs` é o recado da RBS no último pedido de ajuste.
-- `pesquisa` é `null` enquanto a RBS não abriu a pesquisa da ativação daquela edição.
+- `status` da pergunta: `RASCUNHO` (ainda não enviada, ou devolvida para ajuste), `ENVIADA` (espera a RBS) ou `APROVADA`. `observacaoRbs` é o recado da RBS na última decisão sobre a pergunta (pedido de ajuste ou aprovação com observação), enquanto a pergunta continua no status que aquela decisão gerou; quando a marca reenvia, o recado antigo sai e vem `null`.
+- `pesquisa` é `null` enquanto a RBS não abriu a pesquisa da ativação daquela edição. A marca já pode enviar as perguntas nesse período; a carga de resultados liga cada uma à pesquisa depois.
+- `abaLiberada` é sempre `true` para o patrocinador (senão ele recebe 403). Para a RBS mostra o estado real da aba. Aba só conta como liberada se estiver liberada **e** visível.
+- As perguntas vêm em ordem (`ordem` 1 a 3); os resultados, por pergunta e depois na ordem da carga.
 - `resultados` só existem para perguntas `APROVADA` e sempre trazem a **base de respondentes**. `unidade`: `PERCENTUAL`, `NOTA` ou `CONTAGEM`.
 
 ## 24. `PUT /api/parcerias/{id}/pesquisa/perguntas`  · etapa 6
@@ -784,14 +786,16 @@ Content-Disposition: attachment; filename="historico-2026-10-23.csv"
 | Quantidade | De 1 a **3** perguntas. |
 | `ordem` | 1, 2 ou 3, sem repetir. |
 | `texto` | De 10 a 300 caracteres. |
-| O que acontece | Pergunta nova ou alterada fica `ENVIADA`, esperando a RBS. Pergunta já `APROVADA` e sem mudança continua como está. |
+| O que acontece | Pergunta nova ou alterada fica `ENVIADA`, esperando a RBS. Pergunta já `APROVADA` e sem mudança continua como está. Pergunta devolvida (`RASCUNHO`) volta a `ENVIADA` ao ser enviada de novo, mesmo com o mesmo texto. Pergunta `ENVIADA` e sem mudança fica como está. |
 | Pergunta aprovada | Não pode ser alterada nem tirada da lista (409). Para mudar, a marca fala com a RBS. |
+| Pergunta fora da lista | Pergunta que ainda não foi aprovada e não vem na lista é retirada. |
+| Tudo ou nada | Se qualquer pergunta recusar, nada é gravado. Lista igual à que já está salva não muda nada e não grava histórico. |
 
 **200**: o mesmo objeto da rota 23.
 
-**Erros:** 403; 404; 409 (`"A pergunta 2 já foi aprovada pela RBS e não pode mais ser alterada."`); 422 (mais de 3, ordem repetida, texto curto ou longo, em `campos`).
+**Erros:** 403; 404; 409 (`"A pergunta 2 já foi aprovada pela RBS e não pode mais ser alterada."`, com o número da pergunta aprovada que foi alterada ou retirada); 422 (mais de 3, ordem repetida, texto curto ou longo, em `campos`). As chaves de `campos` seguem o corpo: `perguntas` (quantidade, "Envie de 1 a 3 perguntas."), `perguntas[0].texto`, `perguntas[0].ordem` e, para ordem repetida, o segundo item repetido (`perguntas[1].ordem`). Corpo que não é JSON: 400. A RBS recebe 403 antes de qualquer outra conferência (inclusive com parceria que não existe).
 
-**Histórico:** `EDICAO` (entidade `pesquisa_pergunta`).
+**Histórico:** `EDICAO` (entidade `pesquisa_pergunta`), uma linha por pergunta que mudou (enviada, alterada, devolvida e reenviada, ou retirada), com o texto anterior e o novo.
 
 ## 25. `PATCH /api/pesquisa/perguntas/{id}/status`  · etapa 6
 
@@ -808,9 +812,11 @@ Content-Disposition: attachment; filename="historico-2026-10-23.csv"
 | `APROVAR` | A pergunta fica `APROVADA`. Só a partir daí a carga de resultados aceita linhas dela. `observacao` é opcional. |
 | `PEDIR_AJUSTE` | A pergunta volta a `RASCUNHO` e a `observacao` (obrigatória) aparece para a marca em `observacaoRbs`. |
 
-**200**: a pergunta (mesmo formato dos itens de `perguntas` da rota 23). **Erros:** 403; 404; 409 (a pergunta não está `ENVIADA`); 422 (decisão inválida, ou observação que falta).
+**200**: a pergunta (mesmo formato dos itens de `perguntas` da rota 23). **Erros:** 403; 404; 409 (a pergunta não está `ENVIADA`); 422 (decisão inválida em `campos.decisao`, observação que falta em `campos.observacao`, ou observação com mais de 1000 caracteres).
 
-**Histórico:** `ALTERACAO_STATUS`, com a observação em `detalhe`. Qualquer Admin RBS pode decidir (regra provisória: a RBS ainda vai confirmar se é só o time de pesquisa).
+O patrocinador recebe 403 nesta rota mesmo para a pergunta da própria parceria e mesmo para um id que não existe: a permissão é conferida antes de procurar a pergunta.
+
+**Histórico:** `ALTERACAO_STATUS` (entidade `pesquisa_pergunta`, status anterior e novo), com a observação em `detalhe`. Qualquer Admin RBS pode decidir (regra provisória: a RBS ainda vai confirmar se é só o time de pesquisa).
 
 ## 26. `POST /api/cargas`  · etapa 6
 
@@ -904,8 +910,10 @@ Linhas lidas = inseridas + duplicadas + rejeitadas. As rejeitadas, com o motivo,
 }
 ```
 
-- `percentual` é exibido ÷ previsto × 100 (pode passar de 100). Seções sem plano comercial (`midia` sem linhas, por exemplo) vêm com listas vazias e `null` nos totais.
+- `percentual` é exibido ÷ previsto × 100 (pode passar de 100). Seções sem plano comercial (`midia` sem linhas, por exemplo) vêm com listas vazias e `null` nos totais: `aplicacoes`, `entregas` e `cortesias` continuam como objeto, com todos os campos `null` quando a parceria não tem dado naquela seção.
+- `porUnidade` e `porVeiculo` vêm em ordem de unidade (`INSERCAO`, `CPM`, `APLICACAO`); `porVeiculo` e `linhas`, por veículo e formato. Linha do plano ainda sem exibição traz `exibido` 0 e `percentual` 0, nunca `null`.
 - `faltantes` é o que impede ou enfraquece o relatório. Tipos: `MIDIA_SEM_EXIBICAO`, `MIDIA_ABAIXO_DO_PREVISTO`, `APLICACAO_SEM_COMPROVACAO`, `PESQUISA_SEM_PERGUNTAS`, `PERGUNTA_SEM_RESULTADO`, `ENTREGA_PENDENTE`, `PARCERIA_SEM_USUARIO`, `FESTIVAL_SEM_NUMEROS`.
+- Os `faltantes` vêm do mais para o menos importante, na ordem dos tipos listada acima. [PENDENTE] A RBS ainda não definiu uma ordem de importância; vale a ordem desta lista.
 - **Filtrado para o patrocinador:** ele vê só os faltantes que **ele** pode resolver (`ENTREGA_PENDENTE` e `PESQUISA_SEM_PERGUNTAS`). Os demais são de trabalho interno da RBS e só ela recebe. [PENDENTE] A RBS ainda vai confirmar se a marca vê o previsto x exibido antes de o relatório ser validado.
 
 **Erros:** 404 (parceria que não existe ou é de outra).
@@ -932,7 +940,16 @@ Linhas lidas = inseridas + duplicadas + rejeitadas. As rejeitadas, com o motivo,
 }
 ```
 
-`pendencias` são os faltantes (rota 29) de todas as parcerias da edição, limitados aos 20 mais importantes. `ultimaCarga` é `null` se ainda não houve nenhuma.
+`pendencias` são os faltantes (rota 29) de todas as parcerias da edição, limitados aos 20 mais importantes (mesma ordem de tipos da rota 29; dentro do tipo, por patrocinador). `ultimaCarga` é `null` se ainda não houve nenhuma.
+
+Como cada número é contado:
+
+- `parcerias.ativas`: parcerias com situação `ATIVA`; `semUsuario`: parcerias sem nenhum vínculo de usuário (o faltante `PARCERIA_SEM_USUARIO`).
+- `entregas.porStatus` traz sempre os 7 status, com 0 nos que não têm entrega. `esperandoAnalise` = `ENVIADO` + `EM_ANALISE` (a bola está com a RBS).
+- `entregas.atrasadas`: prazo já vencido (data de Brasília; vencer hoje ainda não é atraso) e entrega ainda com a marca: `NAO_INICIADO`, `AGUARDANDO_ENVIO` ou `AJUSTE_SOLICITADO`. Entrega já enviada não conta como atraso da marca. [PENDENTE] A RBS pode preferir outra definição.
+- `relatorios` conta a situação da **versão mais nova** de cada parceria da edição; `semRelatorio` é quem não tem versão.
+- `ultimaCarga` é a carga mais nova **da edição**; o `tipo` usa o nome da API (`VEICULACAO`, e não `MIDIA` do banco).
+- `eventoId` que não existe: 404; que não é número: 400. O patrocinador recebe 403 antes de qualquer conferência.
 
 ---
 
