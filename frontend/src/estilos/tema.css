@@ -1,0 +1,147 @@
+/* Cores, fontes e medidas do Figma (página "06 · Planeta 360 · UI com a marca"). [ITEM-7]
+   Cada seção tem três cores: a principal (cabeçalho, botão, item ativo), a de texto e a tinta (fundo suave).
+   O atributo data-secao troca as três juntas, como o modo "P360 · Seção" do Figma. */
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Montserrat", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Bebas Neue", "Montserrat", sans-serif;
+
+  --color-fundo: #fafafa;
+  --color-cinza-100: #f2f2f5;
+  --color-borda: #e6e6ea;
+  --color-borda-menu: #e4e4e9;
+  --color-cinza-400: #bdbdbd;
+  --color-texto-2: #424242;
+  --color-tinta: #0c0b0b;
+  --color-atlas: #2b2d33;
+
+  --color-parceria: #073c89;
+  --color-perfil: #0a7d91;
+  --color-aplicacoes: #00862e;
+  --color-midia: #a36b00;
+  --color-cortesias: #cf4000;
+  --color-credenciamento: #d62f57;
+  --color-pesquisa: #e1047d;
+  --color-contrato: #572781;
+
+  /* Estados dos avisos (S00): fundo a 14% e ícone na cor cheia */
+  --color-estado-vazio: #9e9e9e;
+  --color-estado-carregando: #0cb2cd;
+  --color-estado-falha: #ff4d70;
+  --color-estado-restrito: #572781;
+  --color-estado-ausente: #ffd201;
+
+  --shadow-menu: 0 4px 16px rgba(13, 18, 51, 0.06);
+  --shadow-modal: 0 24px 60px rgba(13, 10, 10, 0.35);
+  --shadow-atlas: 0 6px 16px rgba(26, 26, 38, 0.18);
+}
+
+/* As utilidades bg-secao, text-secao-texto e bg-secao-tinta seguem o data-secao mais próximo. */
+@theme inline {
+  --color-secao: var(--secao-cor);
+  --color-secao-texto: var(--secao-texto);
+  --color-secao-tinta: var(--secao-tinta);
+}
+
+:root,
+[data-secao="parceria"] {
+  --secao-cor: #073c89;
+  --secao-texto: #073c89;
+  --secao-tinta: #e6ebf3;
+}
+[data-secao="perfil"] {
+  --secao-cor: #0a7d91;
+  --secao-texto: #0a6e80;
+  --secao-tinta: #e7f7fa;
+}
+[data-secao="aplicacoes"] {
+  --secao-cor: #00862e;
+  --secao-texto: #007a2a;
+  --secao-tinta: #e5f8ec;
+}
+[data-secao="midia"] {
+  --secao-cor: #a36b00;
+  --secao-texto: #8a6a00;
+  --secao-tinta: #fff8d6;
+}
+[data-secao="cortesias"] {
+  --secao-cor: #cf4000;
+  --secao-texto: #c23b00;
+  --secao-tinta: #ffede6;
+}
+[data-secao="credenciamento"] {
+  --secao-cor: #d62f57;
+  --secao-texto: #c8203f;
+  --secao-tinta: #ffedf1;
+}
+[data-secao="pesquisa"] {
+  --secao-cor: #e1047d;
+  --secao-texto: #c10069;
+  --secao-tinta: #fce6f2;
+}
+[data-secao="contrato"] {
+  --secao-cor: #572781;
+  --secao-texto: #572781;
+  --secao-tinta: #eee9f2;
+}
+/* Modo neutro do Figma (mapa e estados), usado nas telas da RBS que não pertencem a uma seção */
+[data-secao="neutro"] {
+  --secao-cor: #0c0b0b;
+  --secao-texto: #0c0b0b;
+  --secao-tinta: #f2f2f5;
+}
+
+@layer base {
+  html {
+    background: var(--color-fundo);
+    color: var(--color-tinta);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  body {
+    margin: 0;
+    min-height: 100vh;
+  }
+  :focus-visible {
+    outline: 2px solid var(--secao-cor);
+    outline-offset: 2px;
+  }
+}
+
+/* Estilos de texto nomeados no Figma */
+@utility texto-display {
+  font-family: var(--font-display);
+  font-size: 64px;
+  line-height: 0.92;
+  letter-spacing: 0.005em;
+  text-transform: uppercase;
+}
+@utility texto-titulo {
+  font-family: var(--font-display);
+  font-size: 28px;
+  line-height: 1.05;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+}
+@utility texto-sobretitulo {
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+@utility texto-botao {
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Faixas diagonais brancas a 7% dos cabeçalhos e do cartão do login */
+@utility padrao-diagonal {
+  background-image: url("/padrao-diagonal.svg");
+  background-repeat: repeat;
+  background-position: -24px -60px;
+}

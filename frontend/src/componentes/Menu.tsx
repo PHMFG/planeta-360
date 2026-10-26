@@ -1,0 +1,204 @@
+// Menu lateral flutuante do Figma (P360/Navegação): marca, conta, as oito seções e o rodapé. [ITEM-7]
+// A RBS vê também os atalhos de gestão e escolhe a parceria que está consultando.
+import { useState } from 'react'
+import { NavLink, useNavigate } from 'react-router'
+import type { ParceriaResumo, UsuarioLogado } from '../api/tipos'
+import { useSessao } from '../sessao/Sessao'
+import { GESTAO_RBS, SECOES, type Secao } from './secoes'
+
+const NOME_COTA: Record<ParceriaResumo['cota']['codigo'], string> = {
+  MASTER: 'Master',
+  SUBCOTA_G: 'Subcota G',
+  SUBCOTA: 'Subcota',
+}
+
+export function nomeCota(parceria: ParceriaResumo) {
+  return NOME_COTA[parceria.cota.codigo] ?? parceria.cota.nome
+}
+
+function iniciais(nome: string) {
+  const palavras = nome.replace(/^Cliente\s+/i, '').split(/\s+/).filter(Boolean)
+  if (palavras.length === 1) return palavras[0].slice(0, 2).toUpperCase()
+  return palavras
+    .slice(0, 2)
+    .map((palavra) => palavra[0]?.toUpperCase())
+    .join('')
+}
+
+const ITEM =
+  'flex h-11 items-center gap-3 rounded-[10px] px-3 text-sm transition-colors'
+
+function classeItem(ativo: boolean) {
+  return ativo
+    ? `${ITEM} bg-secao font-bold text-white`
+    : `${ITEM} font-semibold text-tinta hover:bg-cinza-100`
+}
+
+function ItemSecao({ secao, parceria }: { secao: Secao; parceria: ParceriaResumo }) {
+  const aba = secao.aba ? parceria.abas.find((item) => item.codigo === secao.aba) : null
+  const bloqueada = aba ? !aba.liberada : false
+  const destino = `/parceria/${parceria.id}${secao.caminho ? `/${secao.caminho}` : ''}`
+
+  return (
+    <li data-secao={secao.chave}>
+      <NavLink to={destino} end className={({ isActive }) => classeItem(isActive)}>
+        {({ isActive }) => (
+          <>
+            <i className={`${secao.icone} text-xl ${isActive ? 'text-white' : 'text-secao'}`} aria-hidden="true" />
+            <span className="flex-1">{secao.nome}</span>
+            {/* [PERMISSAO] A aba aparece para todos; o cadeado avisa que a cota não a libera. */}
+            {bloqueada && (
+              <i
+                className={`ri-lock-line text-base ${isActive ? 'text-white' : 'text-cinza-400'}`}
+                aria-label="não incluída na sua cota"
+                title="Não incluída na sua cota"
+              />
+            )}
+          </>
+        )}
+      </NavLink>
+    </li>
+  )
+}
+
+function ChipConta({ usuario, parceria }: { usuario: UsuarioLogado; parceria: ParceriaResumo | null }) {
+  const navegar = useNavigate()
+  const rbs = usuario.perfil === 'ADMIN_RBS'
+  const varias = !rbs && usuario.parcerias.length > 1
+  const nome = parceria?.patrocinador ?? (rbs ? 'Nenhuma parceria' : usuario.nome)
+
+  return (
+    <div className="mt-5 flex items-center gap-2.5 rounded-xl bg-cinza-100 p-2.5">
+      <span className="grid size-8 shrink-0 place-items-center rounded-full bg-tinta font-display text-base text-white">
+        {parceria ? iniciais(parceria.patrocinador) : rbs ? 'RBS' : iniciais(usuario.nome)}
+      </span>
+      <div className="min-w-0 flex-1 text-[13px] leading-tight font-semibold">
+        {rbs && <span className="block text-[11px] font-medium text-texto-2">Contexto</span>}
+        {varias ? (
+          <select
+            aria-label="Parceria"
+            className="w-full truncate bg-transparent font-semibold outline-none"
+            value={parceria?.id ?? ''}
+            onChange={(evento) => navegar(`/parceria/${evento.target.value}`)}
+          >
+            {usuario.parcerias.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.patrocinador.replace(/^Cliente\s+/i, '')} · {nomeCota(item)}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <span className="block truncate">
+            {nome}
+            {parceria && ` · ${nomeCota(parceria)}`}
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function BotaoAtlas() {
+  // [ATLAS-DEPOIS] O Atlas fica no menu, como no Figma, mas só entra na Entrega 3.
+  return (
+    <div>
+      <button
+        type="button"
+        disabled
+        aria-describedby="atlas-legenda"
+        className="relative flex h-[60px] w-full cursor-not-allowed items-center justify-center gap-2 overflow-hidden rounded-2xl border border-white/20 bg-atlas text-white shadow-atlas"
+      >
+        <span className="absolute -top-6 -left-4 size-20 rounded-full bg-[#0a2a6e] opacity-70 blur-2xl" aria-hidden="true" />
+        <span className="absolute -bottom-8 left-16 size-20 rounded-full bg-[#572781] opacity-70 blur-2xl" aria-hidden="true" />
+        <span className="absolute -right-6 -bottom-6 size-20 rounded-full bg-[#e1047d] opacity-60 blur-2xl" aria-hidden="true" />
+        <i className="ri-globe-fill relative text-2xl" aria-hidden="true" />
+        <span className="relative text-xl font-semibold tracking-[-0.01em]">atlas</span>
+        <span className="absolute top-1.5 right-2 rounded-full bg-white/15 px-2 py-0.5 text-[9px] font-bold tracking-wider uppercase">
+          Em breve
+        </span>
+      </button>
+      <p id="atlas-legenda" className="mt-1.5 text-center text-[11px] font-medium text-texto-2">
+        Assistente IA · ajuda com sua parceria
+      </p>
+    </div>
+  )
+}
+
+export function Menu({ parceria }: { parceria: ParceriaResumo | null }) {
+  const { usuario, sair } = useSessao()
+  const navegar = useNavigate()
+  const [ajudaAberta, setAjudaAberta] = useState(false)
+  if (!usuario) return null
+  const rbs = usuario.perfil === 'ADMIN_RBS'
+
+  async function encerrar() {
+    await sair()
+    navegar('/entrar', { replace: true })
+  }
+
+  return (
+    <aside className="fixed top-4 bottom-4 left-4 z-20 flex w-[264px] flex-col print:hidden rounded-[20px] border border-borda-menu bg-white px-5 pt-6 pb-5 shadow-menu">
+      <div>
+        <p className="font-display text-[56px] leading-[0.9] tracking-[-0.01em] whitespace-nowrap text-parceria uppercase">
+          Planeta 360
+        </p>
+        <p className="mt-1.5 text-[10px] font-bold tracking-[0.14em] text-texto-2 uppercase">
+          {rbs ? 'RBS · Gestão' : 'Patrocinador'}
+        </p>
+      </div>
+
+      <ChipConta usuario={usuario} parceria={parceria} />
+
+      <nav className="-mx-1 mt-5 flex-1 overflow-y-auto px-1" aria-label="Menu principal">
+        {rbs && (
+          <>
+            <ul className="flex flex-col gap-1" data-secao="neutro">
+              {GESTAO_RBS.map((atalho) => (
+                <li key={atalho.caminho}>
+                  <NavLink to={atalho.caminho} end className={({ isActive }) => classeItem(isActive)}>
+                    <i className={`${atalho.icone} text-xl`} aria-hidden="true" />
+                    {atalho.nome}
+                  </NavLink>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-4 mb-2 px-3 text-[10px] font-bold tracking-[0.14em] text-texto-2 uppercase">
+              {parceria ? 'Parceria aberta' : 'Abra uma parceria em Patrocinadores'}
+            </p>
+          </>
+        )}
+        {parceria && (
+          <ul className="flex flex-col gap-1">
+            {SECOES.map((secao) => (
+              <ItemSecao key={secao.chave} secao={secao} parceria={parceria} />
+            ))}
+          </ul>
+        )}
+      </nav>
+
+      <div className="mt-4 flex flex-col gap-4">
+        <BotaoAtlas />
+        <div className="relative flex items-center justify-between border-t border-borda pt-4 text-[13px] font-semibold">
+          <button
+            type="button"
+            className="flex items-center gap-1.5 hover:text-parceria"
+            aria-expanded={ajudaAberta}
+            onClick={() => setAjudaAberta((aberta) => !aberta)}
+          >
+            <i className="ri-question-line text-lg" aria-hidden="true" />
+            Ajuda
+          </button>
+          <button type="button" className="flex items-center gap-1.5 hover:text-parceria" onClick={encerrar}>
+            <i className="ri-logout-box-r-line text-lg" aria-hidden="true" />
+            Sair
+          </button>
+          {ajudaAberta && (
+            <p className="absolute right-0 bottom-full left-0 mb-2 rounded-xl border border-borda bg-white p-3 text-xs font-medium shadow-menu">
+              Dúvidas sobre a parceria, acessos ou prazos: fale com o time B2B da RBS.
+            </p>
+          )}
+        </div>
+      </div>
+    </aside>
+  )
+}

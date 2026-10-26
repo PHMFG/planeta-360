@@ -1,0 +1,13 @@
+patrocinador,veiculo,formato,espaco_programa,exibido_em,quantidade,link
+Cliente Amarelo,Rede Atlântida RS,"Chamadas assinadas 5""",Indeterminado,2026-11-20T10:15:30-03:00,1,https://exemplo.example/rede-atlantida/1001
+Cliente Amarelo,Rede Atlântida RS,"Chamadas assinadas 5""",Indeterminado,2026-11-20T14:42:10-03:00,1,
+Amarelo,Rádio 92,"Chamadas assinadas 5""",Indeterminado,2026-11-21T09:05:45-03:00,1,
+Cliente Amarelo,RBS TV,"Comercial 30""",PTV2,2026-11-21T19:20:15-03:00,1,
+Cliente Amarelo,Zero Hora,Página inteira assinada,,2026-11-22T06:00:20-03:00,1,https://exemplo.example/zero-hora/2201
+Cliente Roxo,Rádio 102.3,"Mídia de apoio (comerciais 30"")",Indeterminado 07h às 19h,2026-11-20T08:30:30-03:00,1,
+Cliente Roxo,atl.la,Matéria digital,Site Atlântida,2026-11-23T12:00:40-03:00,1,https://exemplo.example/atlantida/materia-1
+Cliente Roxo,atl.la,Mídia display multiformatos,Site Atlântida,2026-11-23T00:00:50-03:00,12500,
+Cliente Verde,No evento,"VT telão 30""",Telões (1 por dia),2026-11-20T21:00:30-03:00,1,
+Cliente Verde,atl.la,Story próprio de até 1' (ativação do cotista),IG do evento,2026-11-21T18:00:30-03:00,1,https://exemplo.example/instagram/story-1
+Cliente Amarelo,Rede Atlântida RS,"Chamadas assinadas 5""",Indeterminado,2026-11-20T10:15:30-03:00,1,https://exemplo.example/rede-atlantida/1001
+Cliente Verde,No evento,"VT telão 30""",Telões (1 por dia),,1,

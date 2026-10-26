@@ -1,23 +1,26 @@
 
 # Arquivos gerados pelo Java e Maven
 target/
+*.class
 
 # Dependências e arquivos gerados pelo front-end
-frontend/node_modules/
+node_modules/
 frontend/dist/
+*.tsbuildinfo
 
-# Arquivos e dados locais
+# Arquivos enviados pelos usuários em desenvolvimento
 armazenamento/
+
+# Logs
 *.log
 
-# Configurações de IDE
+# Configurações de IDE e do sistema
 .idea/
-*.iml/
+*.iml
+.vscode/
+.DS_Store
 
 # Configurações locais e credenciais
 .env
 .env.*
 !.env.example
-
-# Arquivos compilados Java
-*.class

@@ -1,270 +1,191 @@
-# Planeta 360 — Portal do Patrocinador
+# Planeta 360 · Portal do Patrocinador
 
-## 1. Sobre o projeto
+Portal em que cada marca patrocinadora do Planeta Atlântida acompanha a própria parceria com a RBS: materiais, prazos, pesquisa, resultados de mídia e o relatório pós-evento. A RBS cadastra as parcerias, libera os acessos, analisa os materiais, carrega as planilhas e gera o relatório a partir da base, sem montagem manual.
 
-O Planeta 360 — Portal do Patrocinador é uma aplicação web desenvolvida para centralizar informações, documentos, entregas e atividades relacionadas às parcerias do Planeta Atlântida.
+Esta é a versão da **Entrega 2** (primeira versão funcional) do Desafio GC 2026. A versão anterior continua no GitHub, na tag `sprint-1`.
 
-O sistema possui dois perfis de acesso distintos:
+| Parte | Tecnologia | Porta |
+| --- | --- | --- |
+| Banco | PostgreSQL 18 (funciona a partir do 15), tabelas criadas pelo Flyway | 5432 |
+| API | Java 21+, Spring Boot 4.1, sessão por cookie com CSRF | 8080 |
+| Front | React 19, TypeScript, Vite 8 e Tailwind 4, no visual do Figma | 5173 |
 
-- **Patrocinador:** acessa as informações e funcionalidades relacionadas exclusivamente à sua própria parceria.
-- **Gestão RBS:** acessa a área administrativa para acompanhar entregas, gerenciar parcerias e consultar informações conforme as permissões do perfil.
+## Antes de começar
 
-Cada usuário deve utilizar o e-mail correspondente ao seu perfil. A interface e as permissões disponíveis dependem da autenticação e das regras de autorização implementadas no sistema.
+Instale e, depois de cada instalação, abra um terminal novo:
 
-## 2. Tecnologias utilizadas
+- **JDK 21 ou mais novo** (recomendado: 25 LTS, por exemplo o Temurin). Confira com `java -version`.
+- **Node.js 24 LTS** (ou 22.22+). Confira com `node -v`.
+- **PostgreSQL 18** (funciona a partir do 15).
+  - macOS: `brew install postgresql@18` e depois `brew services start postgresql@18`. O Homebrew deixa o `psql` dessa versão fora do PATH. Rode a linha abaixo uma vez, abra um terminal novo e confira com `psql --version` (em Mac com Intel, troque `/opt/homebrew` por `/usr/local`):
 
-| Camada | Tecnologia |
-|---|---|
-| Front-end | React |
-| Linguagem do front-end | TypeScript |
-| Estilização | Tailwind CSS |
-| Back-end | Java 21 |
-| Framework do back-end | Spring Boot |
-| Banco de dados | PostgreSQL |
-| Gerenciamento do back-end | Apache Maven |
-| Gerenciamento do front-end | npm |
+    ```bash
+    echo 'export PATH="/opt/homebrew/opt/postgresql@18/bin:$PATH"' >> ~/.zshrc
+    ```
 
-## 3. Perfis de acesso
+  - Windows: instalador oficial em postgresql.org. Guarde a senha do usuário `postgres` e a porta (5432, ou 5433 se já havia outro PostgreSQL na máquina). O `psql` fica no menu Iniciar, como "SQL Shell (psql)".
+  - Linux (Debian/Ubuntu): `sudo apt install postgresql`.
 
-### 3.1. Patrocinador — área da parceria
+Maven não precisa: o projeto traz o Maven Wrapper (`mvnw` no macOS e Linux, `mvnw.cmd` no Windows). Na primeira vez, o wrapper baixa o Maven e as dependências da API e o `npm install` baixa as do front: precisa de internet e leva alguns minutos.
 
-O perfil de patrocinador é destinado às empresas que possuem uma parceria com o evento. O usuário utiliza o e-mail autorizado para consultar as informações da própria empresa.
+As portas 5432 (banco), 8080 (API) e 5173 (front) precisam estar livres. Para o banco em outra porta, veja o fim do passo 2.
 
-As funcionalidades previstas incluem:
+## Como rodar
 
-- Consulta das informações da parceria e da cota contratada.
-- Acompanhamento de entregas e pendências.
-- Envio e consulta de materiais da marca.
-- Consulta de documentos disponibilizados pela RBS.
-- Acesso às funcionalidades habilitadas para a respectiva parceria.
+São três passos, nesta ordem: banco, API e front. A API e o front ficam cada um no seu terminal, abertos enquanto o portal estiver em uso. Para parar, `Ctrl+C` em cada um.
 
-Contas de demonstração:
+**1. Criar os bancos (uma vez só).** Abra o `psql` como administrador do PostgreSQL:
 
-| Empresa | E-mail | Senha |
-|---|---|---|
-| Patrocinador Amarelo | `marketing@gmail.com` | `senha123` |
-| Patrocinador Roxo | `marketing@gmail.com` | `senha123` |
+- macOS: `psql postgres`
+- Windows: abra o "SQL Shell (psql)", aperte Enter em Server e Database, informe a porta (Enter se for 5432), Enter em Username e digite a senha do `postgres`.
+- Linux: `sudo -u postgres psql`
 
-Cada conta representa uma parceria independente. O patrocinador Amarelo deve utilizar o e-mail correspondente à sua conta, assim como o patrocinador Roxo deve utilizar o seu próprio e-mail.
+Rode e saia com `\q`:
 
-O patrocinador não possui acesso automático às funcionalidades administrativas da RBS.
-
-### 3.2. Gestão RBS — área administrativa
-
-O perfil de gestão RBS é destinado à equipe responsável pela administração e pelo acompanhamento operacional das parcerias.
-
-As funcionalidades previstas incluem:
-
-- Consulta e acompanhamento das entregas dos patrocinadores.
-- Acompanhamento de materiais recebidos e pendências.
-- Gerenciamento de informações das empresas, cotas e acessos, conforme as permissões disponíveis.
-- Consulta dos status das entregas.
-- Preparação e disponibilização de informações e documentos relacionados às parcerias.
-
-Conta de demonstração:
-
-| Perfil | E-mail | Senha |
-|---|---|---|
-| Gestão RBS | `b2b@rbs.com.br` | `senha123` |
-
-O e-mail `b2b@rbs.example` corresponde ao perfil administrativo da RBS. Ele não deve ser confundido com os e-mails utilizados pelos patrocinadores.
-
-**Importante:** as contas e senhas apresentadas nesta documentação são destinadas ao ambiente local de demonstração. A separação efetiva de permissões depende da configuração de autenticação e autorização do back-end. A simples alteração do e-mail exibido na interface não deve conceder acesso administrativo.
-
-## 4. Pré-requisitos
-
-Antes de executar o projeto, instale os seguintes componentes:
-
-1. Java JDK 21.
-2. Node.js, incluindo o npm.
-3. PostgreSQL.
-4. Apache Maven.
-
-Após a instalação, abra o Prompt de Comando do Windows e verifique se as ferramentas estão disponíveis:
-
-```cmd
-java -version
-node -v
-npm -v
-mvn -version
+```sql
+CREATE ROLE portal LOGIN PASSWORD 'portal';
+CREATE DATABASE portal OWNER portal;
+CREATE DATABASE portal_teste OWNER portal;
 ```
 
-Cada comando deve apresentar a versão correspondente.
+Os bancos começam vazios. As tabelas, as regras e a amostra (Amarelo, Roxo e Verde) são criadas pelo Flyway quando a API sobe.
 
-### Configuração do Maven
+**Já rodou a Sprint 1 nesta máquina?** Ela usava o mesmo usuário `portal` e o mesmo banco `portal`, com as tabelas antigas. O `CREATE ROLE` vai avisar que o usuário já existe (pode seguir), mas o banco precisa ser apagado e criado de novo, com a versão antiga desligada:
 
-Se o Maven estiver instalado, mas o comando `mvn` não for reconhecido, configure o caminho da pasta `bin` da instalação.
-
-Exemplo utilizado no ambiente de desenvolvimento:
-
-```cmd
-set "PATH=C:\Users\voce\Downloads\apache-maven-3.10.0-bin\apache-maven-3.10.0\bin;%PATH%"
-mvn -version
+```sql
+DROP DATABASE portal;
+CREATE DATABASE portal OWNER portal;
+CREATE DATABASE portal_teste OWNER portal;
 ```
 
-O caminho acima é específico do computador em que o projeto foi configurado. Em outro ambiente, substitua-o pelo caminho real da instalação do Maven.
+**2. Subir a API**, num terminal:
 
-Essa configuração temporária vale apenas para a janela atual do Prompt de Comando.
-
-## 5. Como executar o projeto no Windows
-
-### 5.1. Abrir a pasta do projeto
-
-Extraia os arquivos do projeto e localize a pasta principal `portal-patrocinador`, que contém o arquivo `pom.xml`, a pasta `frontend` e a pasta `database`.
-
-Para abrir o Prompt de Comando diretamente nessa pasta:
-
-1. Abra a pasta no Explorador de Arquivos.
-2. Clique na barra de endereço.
-3. Digite `cmd`.
-4. Pressione Enter.
-
-Caso necessário, entre na pasta manualmente:
-
-```cmd
-cd /d "C:\CAMINHO\portal-patrocinador"
+```bash
+cd backend
+./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
 ```
 
-Substitua o caminho pelo local em que o projeto foi extraído.
+No Windows, no Prompt de Comando ou no PowerShell (no PowerShell, as aspas são obrigatórias):
 
-### 5.2. Instalar as dependências e compilar o front-end
+```bat
+cd backend
+.\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=dev"
+```
 
-Na pasta principal do projeto, execute:
+A API está pronta quando aparece `Started PortalApplication`. O perfil `dev` carrega a amostra de demonstração; sem perfil, sobe só a estrutura (como em produção). A 8080 é só a API: as telas ficam no front (passo 3).
 
-```cmd
+**PostgreSQL em outra porta** (a Sprint 1 usava a 5433)? Informe a URL do banco no mesmo terminal, antes de subir a API:
+
+```bash
+export PORTAL_BD_URL=jdbc:postgresql://localhost:5433/portal
+```
+
+No Windows: `set "PORTAL_BD_URL=jdbc:postgresql://localhost:5433/portal"` no Prompt de Comando, ou `$env:PORTAL_BD_URL="jdbc:postgresql://localhost:5433/portal"` no PowerShell. Usuário e senha diferentes de `portal` vão em `PORTAL_BD_USUARIO` e `PORTAL_BD_SENHA`.
+
+**3. Subir o front**, com a API no ar, em outro terminal:
+
+```bash
 cd frontend
 npm install
-npm run build
-cd ..
+npm run dev
 ```
 
-A compilação gera os arquivos estáticos do front-end na pasta `frontend\dist`.
+Abra <http://localhost:5173>. O Vite repassa as chamadas `/api` para a porta 8080, então front e API funcionam como um site só.
 
-Em seguida, copie os arquivos gerados para a pasta estática utilizada pelo Spring Boot:
+**Recomeçar do zero.** Para voltar à amostra original, pare a API, rode no `psql` o `DROP DATABASE portal;` e o `CREATE DATABASE portal OWNER portal;` e suba a API de novo. Os arquivos enviados ficam em `backend/armazenamento/`, que pode ser apagada junto.
 
-```cmd
-if not exist src\main\resources\static mkdir src\main\resources\static
-xcopy /E /I /Y frontend\dist\* src\main\resources\static\
+## Se algo der errado
+
+| O que aparece | O que fazer |
+| --- | --- |
+| `psql: command not found` (macOS) | Falta a linha do PATH em "Antes de começar". Rode e abra um terminal novo. |
+| `'psql' não é reconhecido` (Windows) | Use o "SQL Shell (psql)" do menu Iniciar. |
+| `role "portal" already exists` ou `database "portal" already exists` | Ficaram de uma instalação anterior, talvez da Sprint 1. Veja "Já rodou a Sprint 1?" no passo 1. |
+| API: `Connection to localhost:5432 refused` | O PostgreSQL está parado ou em outra porta. macOS: `brew services start postgresql@18`. Windows: inicie o serviço `postgresql-x64-18` em Serviços. Outra porta: `PORTAL_BD_URL` (passo 2). |
+| API: `database "portal" does not exist`, `role "portal" does not exist` ou `password authentication failed for user "portal"` | O passo 1 não rodou nesse PostgreSQL. Confira se a porta é a mesma. |
+| API: `Found non-empty schema(s) "public" but no schema history table` | O banco `portal` tem as tabelas antigas da Sprint 1. Apague e crie de novo (passo 1). |
+| API: `Port 8080 was already in use` | Outra API ainda está rodando, talvez em outro terminal. Feche-a (no macOS e no Linux, `lsof -i :8080` mostra quem usa a porta). |
+| API: erro de compilação com `release version 21` | O Maven achou um JDK anterior ao 21. Confira `java -version` e, se existir, o `JAVA_HOME`. |
+| API, no PowerShell: `Unknown lifecycle phase ".run.profiles=dev"` | Faltaram as aspas em `"-Dspring-boot.run.profiles=dev"`. |
+| Login: "Sem conexão com o servidor. Confira se a API está rodando." | A API parou ou ainda está subindo. Espere o `Started PortalApplication` no terminal do passo 2. |
+
+## Usuários de teste
+
+Todos usam a senha `senha123`. O sistema detecta o perfil pela conta: a RBS cai no painel de gestão e o patrocinador na própria parceria.
+
+| E-mail | Perfil | Vê |
+| --- | --- | --- |
+| `b2b@rbs.example` | Admin RBS | Todas as parcerias e a gestão |
+| `pesquisa@rbs.example` | Admin RBS | Todas as parcerias e a gestão |
+| `marketing@amarelo.example` | Patrocinador | Cliente Amarelo · Master · 2027 |
+| `atendimento@agencia-x.example` | Patrocinador (agência) | Cliente Amarelo · Master · 2027 |
+| `marketing@roxo.example` | Patrocinador | Cliente Roxo · Subcota G · 2027 |
+| `marketing@verde.example` | Patrocinador | Cliente Verde · Subcota · 2027 |
+
+**Primeiro acesso de um e-mail novo.** A RBS cadastra a parceria (ou autoriza o e-mail no Perfil) e recebe um código de ativação, que aparece uma vez só. A pessoa entra em "Primeiro acesso", informa o e-mail, o código e cria a senha. Na V1 não há e-mail automático: a RBS repassa o código.
+
+## Roteiro de demonstração (item 7)
+
+Com o banco recém-criado (amostra original):
+
+1. Entre como `marketing@roxo.example`. "Minha parceria" mostra a próxima ação: o "VT para os telões dos palcos", com o ajuste pedido pela RBS.
+2. Em **Mídia e conteúdo**, solte um PDF (ou JPG, PNG, MP4) na área de envio, escolha a entrega e envie. O arquivo vira uma nova versão, com autor, data e status "Enviado".
+3. Isolamento: ainda como Roxo, abra <http://localhost:5173/parceria/2> (a parceria do Amarelo). A tela diz "Parceria não encontrada" e a API responde 404, igual a um id que não existe.
+4. Saia e entre como `b2b@rbs.example`. Em **Fila de materiais**, abra o envio do Roxo e aprove (ou peça ajuste com uma observação). Tudo fica no **Histórico**, com autor e data.
+5. Em **Cargas**, envie `docs/exemplos/veiculacao.csv` duas vezes. Na segunda, nada é inserido: as linhas contam como duplicadas.
+6. Em **Relatórios**, gere uma nova versão do relatório do Roxo, valide e disponibilize.
+7. Volte como Roxo: o relatório aparece em **Relatório**, com as seções do modelo, e pode ser impresso ou exportado em CSV.
+
+**Regras de envio.** Arquivos de até 20 MB nos formatos PDF, PNG, JPG, DOCX, XLSX, PPTX, CSV, MP4, MP3 e ZIP. A API confere o conteúdo, e não só o nome. O download sai sempre como anexo. As planilhas de carga são CSV em UTF-8 com vírgula como separador; as colunas estão em `docs/banco.md` e há exemplos em `docs/exemplos/`.
+
+## Testes
+
+```bash
+cd backend
+./mvnw test
 ```
 
-A operação deve copiar o arquivo `index.html` e os arquivos de recursos da pasta `assets`.
+No Windows: `.\mvnw.cmd test`. Os testes usam o banco `portal_teste`, que é apagado e recriado a cada execução (nunca aponte para o `portal`). Com o PostgreSQL em outra porta, informe `PORTAL_BD_TESTE_URL` (por exemplo, `jdbc:postgresql://localhost:5433/portal_teste`) do mesmo jeito que o `PORTAL_BD_URL` do passo 2. Eles cobrem o isolamento entre parcerias pela API, as permissões, o envio com histórico, a carga sem duplicidade e o relatório. As conferências do banco ficam em `backend/src/test/resources/db/verificacao.sql`.
 
-Essa etapa deve ser repetida sempre que o front-end for atualizado e precisar ser servido pelo back-end Java.
+No front, `npm run build` confere os tipos e gera a versão de produção; `npm run lint` roda o Oxlint.
 
-### 5.3. Configurar o PostgreSQL
+## Itens da Entrega 2
 
-A configuração utilizada durante a preparação do ambiente local foi:
+| # | Item | Onde está |
+| --- | --- | --- |
+| 1 | Diagnóstico dos dados | Amostra organizada em `backend/src/main/resources/db/dev/R__amostra.sql`; entidades Java em `record` nos pacotes de cada área |
+| 2 | Modelo do relatório | Seções e catálogo de 17 indicadores no banco (V3); tela Relatório |
+| 3 | Acesso e cadastro | Login por sessão, primeiro acesso por código, Patrocinadores (cadastro), Perfil (empresa, abas e e-mails); isolamento testado pela API |
+| 4 | Materiais e acompanhamento | Mídia e conteúdo e as abas, com versões, status e histórico; Fila de materiais da RBS |
+| 5 | Consolidação dos dados | Cargas (planilhas de veiculação e de pesquisa) sem contagem duplicada, rejeições com motivo, previsto x exibido e faltantes |
+| 6 | Relatório | Gerado por parceria a partir da base; a RBS valida e disponibiliza; exporta CSV e imprime |
+| 7 | Integração | Menu com as sete abas, painel da RBS e o roteiro acima |
+| 8 | Modelagem e database | `docs/banco.md` (tabelas, colunas, regras e Sprint 1 x Entrega 2), `docs/modelagem/sprint-1/` e as migrações do Flyway |
 
-| Parâmetro | Valor |
-|---|---|
-| Banco de dados | `portal` |
-| Usuário da aplicação | `portal` |
-| Senha da aplicação | `portal` |
-| Servidor | `localhost` |
-| Porta | `5433` |
-| Versão utilizada no teste | PostgreSQL 18.6 |
+## Pendências registradas
 
-A porta pode variar de acordo com a instalação do PostgreSQL. Caso seja diferente, ajuste os comandos SQL e a URL de conexão utilizados na inicialização da aplicação.
+- Comprovações de marca, plano comercial (previsto) e números do festival entram só pela amostra. Uma parceria cadastrada ao vivo fica sem previsto, e a planilha dela é rejeitada com o motivo "aproveitamento não encontrado".
+- "O festival em números" sai como indisponível nos relatórios de 2027, porque só há números de 2026.
+- Telas próprias de Aplicações de marca, Cortesias, Credenciamento e Contrato: nesta versão cada aba mostra as próprias entregas.
+- E-mail automático do código de ativação; recuperação de senha.
+- PDF do relatório: pela impressão do navegador.
+- A confirmar com a RBS: abas por cota (hoje todas liberadas, Pesquisa só para Master), limite de usuários por parceria, quem envia as fotos de comprovação, formato dos resultados da pesquisa, quem aprova as perguntas, a lista final de formatos de arquivo (o `.ai` do Illustrator ficou de fora) e o limite de 20 MB.
+- Segurança para produção: limite de tentativas de login e cookie de sessão `Secure` atrás de HTTPS.
+- Fora da Entrega 2: assistente Atlas (o botão aparece desabilitado), JEV, n8n, Open Staff, cifra de arquivos, Docker e Swagger.
 
-Na primeira configuração, os scripts SQL da pasta `database` devem ser executados na seguinte ordem:
-
-1. `00_criar_banco.sql` — cria o usuário e o banco de dados.
-2. `01_schema.sql` — cria as tabelas e os índices.
-3. `02_logica.sql` — configura as funções e visões do banco.
-4. `03_amostra.sql` — carrega os dados de demonstração.
-5. `04_cargas.sql` — executa as cargas de dados previstas no projeto.
-
-Os scripts devem ser executados conforme as dependências entre eles e as instruções de cada arquivo.
-
-**Atenção:** execute os scripts de inicialização apenas quando necessário. Não os execute novamente sobre um banco já configurado sem verificar seus efeitos, pois objetos existentes podem gerar conflitos ou dados podem ser alterados.
-
-A senha administrativa do usuário `postgres` é independente da senha do usuário de aplicação `portal`.
-
-### 5.4. Iniciar o back-end
-
-Na pasta principal do projeto, configure as variáveis de ambiente e inicie o Spring Boot:
-
-```cmd
-set "DB_URL=jdbc:postgresql://localhost:5433/portal"
-set "DB_USER=portal"
-set "DB_PASSWORD=portal"
-set "DEV_SEED=true"
-mvn spring-boot:run
-```
-
-Se o PostgreSQL estiver utilizando outra porta, ajuste a variável `DB_URL`.
-
-Mantenha a janela do Prompt de Comando aberta enquanto estiver utilizando o portal. Na primeira execução, o Maven poderá precisar de alguns minutos para baixar as dependências.
-
-### 5.5. Acessar a aplicação
-
-Após a inicialização bem-sucedida do Spring Boot, abra o navegador e acesse:
-
-[http://localhost:8080/](http://localhost:8080/)
-
-Utilize uma das contas de demonstração descritas na seção de perfis de acesso.
-
-Para encerrar a aplicação, retorne à janela do Prompt de Comando e pressione `Ctrl + C`.
-
-## 6. Estrutura do projeto
+## Pastas
 
 ```text
-portal-patrocinador/
-├── frontend/       # Interface React e TypeScript
-├── src/            # Aplicação Java e arquivos estáticos
-├── database/       # Scripts SQL e dados de demonstração
-├── pom.xml         # Configuração e dependências do Maven
-└── README.md       # Documentação do projeto
+backend/    API Spring Boot (pacotes comum, acesso, parceria, materiais, pesquisa, consolidacao, relatorio)
+            src/main/resources/db/migration  estrutura, regras e dados base (Flyway)
+            src/main/resources/db/dev        amostra de demonstração
+frontend/   React + Vite (api, componentes, paginas/acesso, paginas/parceria, paginas/rbs)
+docs/       banco.md, api.md, exemplos de CSV e a modelagem da Sprint 1
 ```
 
-## 7. Solução de problemas
+## Referências
 
-### O comando `mvn` não é reconhecido
-
-Verifique se o Apache Maven foi extraído corretamente e se a pasta `bin` está incluída no `PATH` da janela atual do Prompt de Comando.
-
-### O comando `node` ou `npm` não é reconhecido
-
-Verifique a instalação do Node.js e abra uma nova janela do Prompt de Comando após a instalação.
-
-### O front-end não compila
-
-Verifique se as dependências foram instaladas e se os comandos foram executados dentro da pasta `frontend`.
-
-```cmd
-npm install
-npm run build
-```
-
-### O site não abre no navegador
-
-Confirme se o Spring Boot iniciou sem erros e se a porta `8080` está disponível.
-
-### A aplicação não conecta ao banco de dados
-
-Verifique se o serviço PostgreSQL está ativo, se a porta configurada está correta e se as credenciais correspondem ao usuário de aplicação.
-
-### O login não funciona
-
-Confirme que está utilizando o e-mail correspondente ao perfil desejado e que os dados de demonstração foram carregados corretamente.
-
-O acesso de patrocinador e o acesso da gestão RBS são distintos. Utilize o e-mail administrativo somente para testar a área RBS.
-
-## 8. Segurança e ambiente de demonstração
-
-As credenciais documentadas neste arquivo são destinadas exclusivamente ao ambiente local de demonstração.
-
-Antes de disponibilizar o sistema em produção, é necessário:
-
-- Configurar credenciais próprias e seguras.
-- Revisar as regras de autenticação e autorização.
-- Garantir o isolamento dos dados de cada patrocinador.
-- Proteger as informações sensíveis e as configurações de conexão.
-- Validar as permissões administrativas no back-end.
-- Desabilitar configurações e dados exclusivos de demonstração quando apropriado.
-
-## 9. Considerações finais
-
-O Planeta 360 — Portal do Patrocinador centraliza as informações das parcerias em uma única aplicação, com áreas destinadas aos patrocinadores e à equipe de gestão RBS.
-
-A documentação descreve a configuração utilizada no ambiente local de demonstração. O funcionamento de cada recurso depende da implementação disponível no código, das permissões configuradas e dos dados existentes no banco de dados.
+- Contrato da API: [`docs/api.md`](docs/api.md)
+- Banco de dados: [`docs/banco.md`](docs/banco.md)
+- Figma: [Mockup · 06 · UI com a marca](https://www.figma.com/design/tXjjKVcZD978u5f6bYFimf/Mockup?node-id=165-2)
+- Documentos da Etapa 2 no Drive: Diagnóstico dos dados, Modelo do relatório e Modelagem do banco

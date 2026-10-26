@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Back-end do Planeta 360 · Portal do Patrocinador: Spring Boot 4.1.2 com Flyway e PostgreSQL.
+  Atende os itens 1 e 3 da Entrega 2. Sem Lombok, Swagger ou Docker: o contrato da API está em docs/api.md.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>4.1.2</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>br.com.rbs</groupId>
+    <artifactId>portal</artifactId>
+    <version>0.1.0-SNAPSHOT</version>
+    <name>Planeta 360 - Portal do Patrocinador</name>
+    <description>API do portal: login por sessão, parcerias, materiais, pesquisa, consolidação e relatório</description>
+
+    <properties>
+        <!-- O código mira o Java 21 (LTS). Roda também em JDK mais novo, porque o Boot 4.1 aceita do 17 ao 27. -->
+        <java.version>21</java.version>
+        <!-- O commons-csv não faz parte do BOM do Spring Boot, então a versão é declarada aqui. -->
+        <commons-csv.version>1.14.1</commons-csv.version>
+    </properties>
+
+    <dependencies>
+        <!-- API REST (Spring MVC, Tomcat e Jackson 3) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webmvc</artifactId>
+        </dependency>
+        <!-- Login por sessão, CSRF e proteção das rotas -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+        <!-- [VALIDACAO] Bean Validation nos corpos das requisições -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+        <!-- Acesso ao banco: entidades em record (Spring Data JDBC) e JdbcClient para as consultas -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jdbc</artifactId>
+        </dependency>
+
+        <!-- Migrações do banco. No Boot 4 o flyway-core sozinho não liga a migração: é preciso o starter. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-flyway</artifactId>
+        </dependency>
+        <!-- O PostgreSQL tem módulo próprio no Flyway; a versão vem do BOM do Boot. -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+        <!-- Escopo de compilação (e não só de execução) porque o TratadorDeErros lê o código SQLSTATE do PSQLException. -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+        </dependency>
+
+        <!-- [CARGA] Leitura dos CSV de veiculação e de pesquisa (etapa 6) e exportação dos CSV de histórico e relatório -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-csv</artifactId>
+            <version>${commons-csv.version}</version>
+        </dependency>
+
+        <!-- Testes: MockMvc/MockMvcTester e utilidades de sessão e CSRF -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webmvc-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+        </plugins>
+    </build>
+</project>
