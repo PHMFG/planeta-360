@@ -6,6 +6,10 @@
 #   perfil test -> banco "portal_teste", igual ao dev, e os testes o apagam e recriam a cada execução.
 #
 # Usuário, senha e endereço do banco vêm de variáveis de ambiente; o padrão serve para a máquina de desenvolvimento.
+#
+# [ATLAS] O modelo de linguagem do Atlas vem DESLIGADO (spring.ai.model.chat=none): o portal e a suíte sobem para todo mundo,
+# sem chave, e o Atlas cai no plano B (o botão "Montar relatório"). Para ligar: ATLAS_LLM=openai e OPENCODE_API_KEY, e, se
+# quiser, ATLAS_LLM_BASE_URL e ATLAS_LLM_MODELO. Chave só em variável de ambiente, nunca neste arquivo.
 
 spring:
   application:
@@ -28,6 +32,31 @@ spring:
     mapper:
       # Mantém a ordem dos campos como escrita nos records (id, nome, email...), sem ordenar por letra.
       sort-properties-alphabetically: false
+  ai:
+    model:
+      # [ATLAS] none: não cria nenhum modelo, e o Atlas só oferece o botão (plano B). openai: liga o OpenCode Go (compatível com OpenAI).
+      chat: ${ATLAS_LLM:none}
+      # O portal só conversa; os outros modelos do starter da OpenAI nunca são criados, com ou sem chave.
+      embedding: none
+      image: none
+      moderation: none
+      audio:
+        speech: none
+        transcription: none
+    openai:
+      api-key: ${OPENCODE_API_KEY:}
+      base-url: ${ATLAS_LLM_BASE_URL:https://opencode.ai/inference/go/openai/v1}
+      # O Go pede um user agent próprio; o Spring AI manda "spring-ai-openai" por padrão.
+      custom-headers:
+        "[User-Agent]": PlanetaAtlas/0.1
+      chat:
+        model: ${ATLAS_LLM_MODELO:deepseek-v4.1-flash}
+        temperature: 0.2
+        # O DeepSeek vem com raciocínio ligado e responde 400 com ferramentas se o reasoning_content não voltar.
+        # Desligado aqui (vai no topo do JSON, aninhado); o provedor ainda guarda e devolve o reasoning_content se vier.
+        extra-body:
+          thinking:
+            type: disabled
 
 server:
   port: 8080
@@ -70,6 +99,10 @@ spring:
     locations: classpath:db/migration,classpath:db/dev
     # O clean só roda pela estratégia de migração que existe nos testes (src/test/java), nunca no código de produção.
     clean-disabled: false
+  ai:
+    model:
+      # [ATLAS] A suíte sobe sem chave e nunca chama o provedor: o loop usa o roteiro de teste.
+      chat: none
 
 # [UPLOAD] Nos testes, os arquivos vão para dentro de target/ (apagado pelo "mvn clean"), nunca para a pasta de desenvolvimento.
 portal:

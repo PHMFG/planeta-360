@@ -26,7 +26,22 @@
         <java.version>21</java.version>
         <!-- O commons-csv não faz parte do BOM do Spring Boot, então a versão é declarada aqui. -->
         <commons-csv.version>1.14.1</commons-csv.version>
+        <!-- [ATLAS] Spring AI fixado na 2.0.2: já existe a 2.1.0-RC1 no Maven Central, que não queremos. -->
+        <spring-ai.version>2.0.2</spring-ai.version>
     </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <!-- O BOM do Spring AI só fixa as versões do Spring AI; o resto continua vindo do Spring Boot. -->
+            <dependency>
+                <groupId>org.springframework.ai</groupId>
+                <artifactId>spring-ai-bom</artifactId>
+                <version>${spring-ai.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <dependencies>
         <!-- API REST (Spring MVC, Tomcat e Jackson 3) -->
@@ -72,6 +87,15 @@
             <groupId>org.apache.commons</groupId>
             <artifactId>commons-csv</artifactId>
             <version>${commons-csv.version}</version>
+        </dependency>
+
+        <!--
+          [ATLAS] Cliente do modelo de linguagem (OpenCode Go, compatível com OpenAI). Desligado por padrão
+          (spring.ai.model.chat=none): sem a variável ATLAS_LLM=openai nada é criado e o Atlas só oferece o botão.
+        -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-model-openai</artifactId>
         </dependency>
 
         <!-- Testes: MockMvc/MockMvcTester e utilidades de sessão e CSRF -->
