@@ -115,3 +115,22 @@ export async function pedir<T = void>(caminho: string, opcoes: Opcoes = {}): Pro
   const tipo = resposta.headers.get('Content-Type') ?? ''
   return (tipo.includes('json') ? await resposta.json() : await resposta.text()) as T
 }
+
+/**
+ * Baixa um anexo da API e entrega ao navegador com o nome do arquivo. [UPLOAD]
+ * Um link comum falharia calado quando a API recusa (ex.: arquivo que não está mais no armazenamento); aqui o erro volta para a tela.
+ */
+export async function baixar(caminho: string, nomeDoArquivo: string) {
+  let resposta: Response
+  try {
+    resposta = await fetch(`${BASE}${caminho}`, { credentials: 'same-origin' })
+  } catch {
+    throw new ErroApi(0, SEM_API)
+  }
+  if (resposta.status === 401) aoPerderSessao?.()
+  if (!resposta.ok) throw await lerErro(resposta)
+  const endereco = URL.createObjectURL(await resposta.blob())
+  const link = Object.assign(document.createElement('a'), { href: endereco, download: nomeDoArquivo })
+  link.click()
+  setTimeout(() => URL.revokeObjectURL(endereco), 1000)
+}

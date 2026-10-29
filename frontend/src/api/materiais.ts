@@ -1,5 +1,5 @@
 // Entregas, arquivos e histórico (rotas 14 a 22 do docs/api.md). [ITEM-4]
-import { consulta, pedir, type Pagina } from './cliente'
+import { baixar, consulta, pedir, type Pagina } from './cliente'
 import type { UsuarioResumo } from './parcerias'
 import type { CodigoAba } from './tipos'
 import type { StatusEntrega } from '../componentes/Status'
@@ -14,6 +14,8 @@ export type Arquivo = {
   categoria: string
   enviadoPor: UsuarioResumo | null
   enviadoEm: string
+  /** O que quem enviou escreveu junto com esta versão. */
+  observacao?: string | null
   statusDaEntrega?: StatusEntrega
 }
 
@@ -79,8 +81,8 @@ export function enviarArquivo(entregaId: number, arquivo: File, opcoes: { catego
   return pedir<Arquivo>(`/entregas/${entregaId}/arquivos`, { metodo: 'POST', formulario })
 }
 
-/** O download é um link comum: o navegador envia o cookie de sessão e a API responde como anexo. */
-export const enderecoArquivo = (arquivoId: number) => `/api/arquivos/${arquivoId}`
+/** A API responde como anexo; se recusar, a mensagem dela volta como ErroApi para a tela mostrar. */
+export const baixarArquivo = (arquivo: Pick<Arquivo, 'id' | 'nomeOriginal'>) => baixar(`/arquivos/${arquivo.id}`, arquivo.nomeOriginal)
 
 export const mudarStatusEntrega = (entregaId: number, status: StatusEntrega, observacao?: string) =>
   pedir<Entrega>(`/entregas/${entregaId}/status`, { metodo: 'PATCH', corpo: { status, observacao: observacao || undefined } })
@@ -113,6 +115,18 @@ export const ACEITA_ENVIO: StatusEntrega[] = ['NAO_INICIADO', 'AGUARDANDO_ENVIO'
 /** Extensões aceitas no envio; a API confere de novo, inclusive o conteúdo do arquivo. */
 export const EXTENSOES_ACEITAS = '.pdf,.png,.jpg,.jpeg,.docx,.xlsx,.pptx,.csv,.mp4,.mp3,.zip'
 export const LIMITE_BYTES = 20 * 1024 * 1024
+export const REGRA_ENVIO = 'PDF, PNG, JPG, DOCX, XLSX, PPTX, CSV, MP4, MP3 ou ZIP, até 20 MB'
+
+/**
+ * Confere no navegador o que a API vai recusar de qualquer jeito (tipo e tamanho), para avisar antes do envio. [UPLOAD]
+ * A API confere de novo, inclusive o conteúdo do arquivo.
+ */
+export function problemaNoArquivo(arquivo: File): string | null {
+  const extensao = arquivo.name.includes('.') ? `.${arquivo.name.split('.').pop()?.toLowerCase()}` : ''
+  if (!EXTENSOES_ACEITAS.split(',').includes(extensao)) return `Este tipo de arquivo não é aceito. Envie ${REGRA_ENVIO}.`
+  if (arquivo.size > LIMITE_BYTES) return 'O arquivo passa de 20 MB. Reduza o tamanho ou envie em partes.'
+  return null
+}
 
 export const NOMES_ACAO: Record<string, string> = {
   CRIACAO: 'Criação',

@@ -1,10 +1,11 @@
 // Mídia e conteúdo (Figma P03, F01, F02): envio de material, arquivos da marca e da RBS e previsto x exibido. [ITEM-4] [ITEM-5]
 import { useState, type FormEvent } from 'react'
 import { ErroApi } from '../../api/cliente'
-import { ACEITA_ENVIO, LIMITE_BYTES, enviarArquivo, listarEntregas, type Arquivo, type Entrega } from '../../api/materiais'
+import { ACEITA_ENVIO, EXTENSOES_ACEITAS, REGRA_ENVIO, enviarArquivo, listarEntregas, problemaNoArquivo, type Arquivo, type Entrega } from '../../api/materiais'
 import { obterConsolidacao, type LinhaMidia } from '../../api/resultados'
 import { useDados } from '../../api/useDados'
 import { CartaoArquivo } from '../../componentes/Arquivo'
+import { AvisoAbaFechada, estadoAbaNaParceria } from '../../componentes/AbaFechada'
 import { AreaEnvio } from '../../componentes/AreaEnvio'
 import { Aviso } from '../../componentes/Aviso'
 import { Barra } from '../../componentes/Barra'
@@ -18,7 +19,7 @@ import { Status } from '../../componentes/Status'
 import { Tabela } from '../../componentes/Tabela'
 import { useSessao } from '../../sessao/Sessao'
 import { data, dataHora, numero, tamanho } from '../../util/formatar'
-import { useParceria } from './ContextoParceria'
+import { useParceria, useRecarregarSeAbaFechou } from './ContextoParceria'
 import { DetalheEntrega } from './DetalheEntrega'
 import { ListaEntregas, NovaEntrega } from './EntregasDaAba'
 
@@ -26,6 +27,16 @@ type Origem = 'todos' | 'marca' | 'rbs'
 type ArquivoDaEntrega = { arquivo: Arquivo; entrega: Entrega }
 
 const UNIDADES: Record<string, string> = { INSERCAO: 'Inserções', CPM: 'CPM (mil impressões)', APLICACAO: 'Aplicações' }
+
+/** Busca que acha "teste pequeno" em "teste-pequeno.pdf": sem acento, sem maiúscula e com hífen, ponto e sublinhado valendo espaço. */
+function normalizar(texto: string) {
+  return texto
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[-_.\s]+/g, ' ')
+    .trim()
+}
 
 function PreparoEnvio({
   arquivo,
@@ -45,11 +56,12 @@ function PreparoEnvio({
   const [falha, setFalha] = useState<string | null>(null)
   const [enviando, setEnviando] = useState(false)
   const escolhida = abertas.find((entrega) => String(entrega.id) === entregaId) ?? abertas[0]
+  // Tipo ou tamanho que a API vai recusar: avisa já, antes de a pessoa preencher o resto.
+  const problema = arquivo ? problemaNoArquivo(arquivo) : null
 
   async function enviar(evento: FormEvent) {
     evento.preventDefault()
-    if (!arquivo || !escolhida) return
-    if (arquivo.size > LIMITE_BYTES) return setFalha('O arquivo passa de 20 MB.')
+    if (!arquivo || !escolhida || problema) return
     setEnviando(true)
     setFalha(null)
     try {
@@ -80,7 +92,8 @@ function PreparoEnvio({
           </div>
           {abertas.length === 0 ? (
             <Aviso tipo="restrito" titulo="Nenhuma entrega de mídia aceita envio agora">
-              As entregas desta aba estão em análise, aprovadas ou ainda não foram abertas pela RBS.
+              As entregas desta aba estão em análise, aprovadas ou ainda não foram abertas pela RBS. Quando a RBS abrir uma entrega ou pedir um
+              ajuste, ela aparece aqui. Dúvidas sobre prazos: fale com o time B2B da RBS.
             </Aviso>
           ) : (
             <>
@@ -97,12 +110,12 @@ function PreparoEnvio({
               </Aviso>
             </>
           )}
-          {falha && <Aviso tipo="falha" titulo={falha} />}
+          {(problema ?? falha) && <Aviso tipo="falha" titulo={problema ?? falha ?? ''} />}
           <div className="grid grid-cols-2 gap-4">
             <Botao variante="secundario" onClick={aoFechar} className="min-w-0">
               Cancelar
             </Botao>
-            <Botao type="submit" carregando={enviando} disabled={!escolhida} className="min-w-0">
+            <Botao type="submit" carregando={enviando} disabled={!escolhida || problema !== null} className="min-w-0">
               Enviar material
             </Botao>
           </div>
@@ -148,8 +161,27 @@ export function Midia() {
   const parceria = useParceria()
   const { usuario } = useSessao()
   const rbs = usuario?.perfil === 'ADMIN_RBS'
+  const estado = estadoAbaNaParceria(parceria, 'MIDIA')
+  // [PERMISSAO] Com a aba fechada, a marca não busca nada daqui (a API recusaria) e lê só o aviso.
+  if (!rbs && estado !== 'LIBERADA') {
+    return (
+      <div data-secao="midia" className="flex flex-col gap-4">
+        <CabecalhoSecao trilha="Planeta Atlântida / Patrocinador" titulo="Mídia e conteúdo" />
+        <AvisoAbaFechada parceria={parceria} estado={estado} nome="Mídia e conteúdo" rbs={false} />
+      </div>
+    )
+  }
+  return <ConteudoMidia rbs={rbs} />
+}
+
+function ConteudoMidia({ rbs }: { rbs: boolean }) {
+  const parceria = useParceria()
+  const estado = estadoAbaNaParceria(parceria, 'MIDIA')
   const entregas = useDados(() => listarEntregas(parceria.id, 'MIDIA'), [parceria.id])
+  useRecarregarSeAbaFechou(entregas)
   const [selecionado, setSelecionado] = useState<File | null>(null)
+  // Cada arquivo escolhido abre um "Preparar envio" novo: a observação e o erro do envio anterior não passam para o próximo.
+  const [envios, setEnvios] = useState(0)
   const [aberta, setAberta] = useState<Entrega | null>(null)
   const [criando, setCriando] = useState(false)
   const [recebido, setRecebido] = useState<{ arquivo: Arquivo; entrega: Entrega } | null>(null)
@@ -161,11 +193,11 @@ export function Midia() {
     .flatMap((entrega) => entrega.arquivos.map((arquivo) => ({ arquivo, entrega })))
     .sort((a, b) => b.arquivo.enviadoEm.localeCompare(a.arquivo.enviadoEm))
   const daRbs = (item: ArquivoDaEntrega) => item.arquivo.enviadoPor?.perfil === 'ADMIN_RBS'
-  const termo = busca.trim().toLowerCase()
+  const termo = normalizar(busca)
   const visiveis = arquivos.filter(
     (item) =>
       (origem === 'todos' || (origem === 'rbs') === daRbs(item)) &&
-      (!termo || item.arquivo.nomeOriginal.toLowerCase().includes(termo) || item.entrega.titulo.toLowerCase().includes(termo)),
+      (!termo || normalizar(item.arquivo.nomeOriginal).includes(termo) || normalizar(item.entrega.titulo).includes(termo)),
   )
 
   return (
@@ -173,8 +205,14 @@ export function Midia() {
       <CabecalhoSecao
         trilha={rbs ? 'Planeta Atlântida / RBS · Gestão' : 'Planeta Atlântida / Patrocinador'}
         titulo="Mídia e conteúdo"
-        subtitulo="Envie os materiais da campanha e consulte as publicações disponibilizadas pela RBS."
+        subtitulo={
+          rbs
+            ? `Os materiais que ${parceria.patrocinador} enviou, os retornos publicados pela RBS e o previsto x exibido da mídia.`
+            : 'Envie os materiais da campanha e consulte as publicações disponibilizadas pela RBS.'
+        }
       />
+
+      {rbs && <AvisoAbaFechada parceria={parceria} estado={estado} nome="Mídia e conteúdo" rbs />}
 
       {recebido && (
         <Aviso titulo="Envio recebido">
@@ -185,9 +223,11 @@ export function Midia() {
 
       {!rbs && (
         <AreaEnvio
-          texto="ou selecione no computador · a entrega vinculada é escolhida antes do envio"
+          texto={`ou selecione no computador · ${REGRA_ENVIO} · a entrega é escolhida na hora do envio`}
+          aceitar={EXTENSOES_ACEITAS}
           aoEscolher={(arquivo) => {
             setRecebido(null)
+            setEnvios((total) => total + 1)
             setSelecionado(arquivo)
           }}
           desabilitado={!entregas.dado}
@@ -208,7 +248,10 @@ export function Midia() {
       <Carregando dados={entregas}>
         {() =>
           visiveis.length === 0 ? (
-            <Aviso tipo="vazio" titulo={arquivos.length ? 'Nenhum arquivo com esse filtro' : 'Nenhum arquivo enviado ainda'} />
+            <Aviso
+              tipo="vazio"
+              titulo={!arquivos.length ? 'Nenhum arquivo enviado ainda' : termo ? 'Nenhum arquivo encontrado com essa busca' : 'Nenhum arquivo com esse filtro'}
+            />
           ) : (
             <Grade3>
               {visiveis.map(({ arquivo, entrega }) => (
@@ -253,6 +296,7 @@ export function Midia() {
       </Aviso>
 
       <PreparoEnvio
+        key={envios}
         arquivo={selecionado}
         entregas={lista}
         aoFechar={() => setSelecionado(null)}
@@ -262,7 +306,15 @@ export function Midia() {
           entregas.recarregar()
         }}
       />
-      <DetalheEntrega entrega={aberta} aoFechar={() => setAberta(null)} aoMudar={entregas.recarregar} />
+      <DetalheEntrega
+        entrega={aberta}
+        aoFechar={() => setAberta(null)}
+        aoMudar={() => {
+          // O aviso "Envio recebido" do topo é do envio anterior; o novo aparece dentro do detalhe.
+          setRecebido(null)
+          entregas.recarregar()
+        }}
+      />
       {rbs && <NovaEntrega aba="MIDIA" aberto={criando} aoFechar={() => setCriando(false)} aoCriar={entregas.recarregar} />}
     </div>
   )

@@ -5,11 +5,11 @@ import { ErroApi } from '../../api/cliente'
 import {
   ACEITA_ENVIO,
   EXTENSOES_ACEITAS,
-  LIMITE_BYTES,
   TRANSICOES,
-  enderecoArquivo,
+  baixarArquivo,
   enviarArquivo,
   mudarStatusEntrega,
+  problemaNoArquivo,
   type Arquivo,
   type Entrega,
 } from '../../api/materiais'
@@ -49,10 +49,45 @@ function precisaObservacao(de: StatusEntrega, para: StatusEntrega) {
   return para === 'AJUSTE_SOLICITADO' || (de === 'APROVADO' && para === 'EM_ANALISE')
 }
 
+/**
+ * Ação da RBS em cada passagem de status, no lugar do nome do status de destino. [ITEM-4]
+ * Ex.: de "Aprovado" para "Em análise" é reabrir a análise, não um status novo escolhido do zero.
+ */
+const ACOES: Partial<Record<StatusEntrega, Partial<Record<StatusEntrega, string>>>> = {
+  NAO_INICIADO: { AGUARDANDO_ENVIO: 'Abrir para o envio da marca', NAO_APLICAVEL: 'Marcar como não aplicável' },
+  AGUARDANDO_ENVIO: { NAO_APLICAVEL: 'Marcar como não aplicável' },
+  ENVIADO: { EM_ANALISE: 'Colocar em análise', AJUSTE_SOLICITADO: 'Pedir ajuste à marca', APROVADO: 'Aprovar' },
+  EM_ANALISE: { AJUSTE_SOLICITADO: 'Pedir ajuste à marca', APROVADO: 'Aprovar' },
+  AJUSTE_SOLICITADO: { NAO_APLICAVEL: 'Marcar como não aplicável' },
+  APROVADO: { EM_ANALISE: 'Reabrir a análise' },
+  NAO_APLICAVEL: { NAO_INICIADO: 'Voltar a valer para a parceria' },
+}
+
+/** Estados em que a vez é da marca: a RBS espera o envio e só tem ações fora do fluxo normal. */
+const ESPERANDO_A_MARCA: Partial<Record<StatusEntrega, string>> = {
+  AGUARDANDO_ENVIO: 'Aguardando a marca enviar o material.',
+  AJUSTE_SOLICITADO: 'Aguardando a marca enviar a versão corrigida.',
+}
+
 function Versao({ arquivo }: { arquivo: Arquivo }) {
   const daRbs = arquivo.enviadoPor?.perfil === 'ADMIN_RBS'
+  const [falha, setFalha] = useState<string | null>(null)
+  const [baixando, setBaixando] = useState(false)
+
+  async function baixar() {
+    setFalha(null)
+    setBaixando(true)
+    try {
+      await baixarArquivo(arquivo)
+    } catch (erro) {
+      setFalha(erro instanceof ErroApi ? erro.message : 'Não foi possível baixar o arquivo.')
+    } finally {
+      setBaixando(false)
+    }
+  }
+
   return (
-    <li className="flex items-center gap-4 border-b border-borda py-3 last:border-b-0">
+    <li className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-borda py-3 last:border-b-0">
       <span className="grid size-10 shrink-0 place-items-center rounded-[10px] bg-secao-tinta font-display text-lg text-secao-texto">
         v{arquivo.versao}
       </span>
@@ -62,10 +97,17 @@ function Versao({ arquivo }: { arquivo: Arquivo }) {
           {daRbs ? 'Retorno da RBS' : 'Envio da marca'} · {arquivo.enviadoPor?.nome ?? '—'} · {dataHora(arquivo.enviadoEm)} · {tamanho(arquivo.tamanhoBytes)}
           {NOMES_CATEGORIA[arquivo.categoria] && ` · ${NOMES_CATEGORIA[arquivo.categoria]}`}
         </p>
+        {arquivo.observacao && <p className="mt-1 text-xs">“{arquivo.observacao}”</p>}
       </div>
-      <a href={enderecoArquivo(arquivo.id)} className="flex items-center gap-1 text-xs font-bold text-secao-texto hover:underline" download>
-        <i className="ri-download-line text-base" aria-hidden="true" /> Baixar
-      </a>
+      <button
+        type="button"
+        onClick={baixar}
+        disabled={baixando}
+        className="flex items-center gap-1 text-xs font-bold text-secao-texto hover:underline disabled:opacity-60"
+      >
+        <i className={`${baixando ? 'ri-loader-4-line animate-spin' : 'ri-download-line'} text-base`} aria-hidden="true" /> Baixar
+      </button>
+      {falha && <Aviso tipo="falha" titulo={falha} className="w-full" />}
     </li>
   )
 }
@@ -78,11 +120,18 @@ function FormularioEnvio({ entrega, rbs, aoEnviar }: { entrega: Entrega; rbs: bo
   const [falha, setFalha] = useState<string | null>(null)
   const [enviando, setEnviando] = useState(false)
 
+  // Outro arquivo escolhido: o erro do anterior não vale mais.
+  function escolher(novo: File | null) {
+    setArquivo(novo)
+    setFalha(novo ? problemaNoArquivo(novo) : null)
+  }
+
   async function enviar(evento: FormEvent) {
     evento.preventDefault()
     if (!arquivo) return setFalha('Escolha o arquivo.')
     // [UPLOAD] A API confere de novo (extensão, conteúdo e tamanho); aqui só evita esperar um envio que vai falhar.
-    if (arquivo.size > LIMITE_BYTES) return setFalha('O arquivo passa de 20 MB.')
+    const problema = problemaNoArquivo(arquivo)
+    if (problema) return setFalha(problema)
     setFalha(null)
     setEnviando(true)
     try {
@@ -99,10 +148,10 @@ function FormularioEnvio({ entrega, rbs, aoEnviar }: { entrega: Entrega; rbs: bo
   return (
     <form onSubmit={enviar} className="flex flex-col gap-4 rounded-2xl border border-borda p-4">
       <p className="text-sm font-bold">{rbs ? 'Publicar retorno da RBS' : entrega.arquivos.length ? 'Enviar nova versão' : 'Enviar material'}</p>
-      <label className="flex cursor-pointer items-center gap-3 rounded-xl border-[1.5px] border-dashed border-secao bg-secao-tinta px-4 py-3 text-sm">
+      <label className="flex cursor-pointer items-center gap-3 rounded-xl border-[1.5px] border-dashed border-secao bg-secao-tinta px-4 py-3 text-sm focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-secao">
         <i className="ri-attachment-2 text-xl text-secao" aria-hidden="true" />
         <span className="flex-1 truncate font-semibold">{arquivo ? `${arquivo.name} · ${tamanho(arquivo.size)}` : 'Escolher arquivo (até 20 MB)'}</span>
-        <input type="file" className="sr-only" accept={EXTENSOES_ACEITAS} onChange={(evento) => setArquivo(evento.target.files?.[0] ?? null)} />
+        <input type="file" className="sr-only" accept={EXTENSOES_ACEITAS} onChange={(evento) => escolher(evento.target.files?.[0] ?? null)} />
       </label>
       <div className="grid gap-4 sm:grid-cols-2">
         <Seletor rotulo="Tipo de conteúdo" value={categoria} onChange={(evento) => setCategoria(evento.target.value)}>
@@ -131,7 +180,8 @@ function FormularioEnvio({ entrega, rbs, aoEnviar }: { entrega: Entrega; rbs: bo
 
 function MudancaStatus({ entrega, aoMudar }: { entrega: Entrega; aoMudar: (entrega: Entrega) => void }) {
   const opcoes = TRANSICOES[entrega.status]
-  const [para, setPara] = useState<StatusEntrega | ''>(opcoes[0] ?? '')
+  // Nada vem escolhido: "Registrar" sem escolher não pode virar um status que a RBS não pediu.
+  const [para, setPara] = useState<StatusEntrega | ''>('')
   const [observacao, setObservacao] = useState('')
   const [falha, setFalha] = useState<string | null>(null)
   const [salvando, setSalvando] = useState(false)
@@ -140,7 +190,7 @@ function MudancaStatus({ entrega, aoMudar }: { entrega: Entrega; aoMudar: (entre
 
   async function salvar(evento: FormEvent) {
     evento.preventDefault()
-    if (!para) return
+    if (!para) return setFalha('Escolha o que fazer com esta entrega.')
     if (exige && !observacao.trim()) return setFalha('Escreva a observação para a marca.')
     setFalha(null)
     setSalvando(true)
@@ -156,12 +206,18 @@ function MudancaStatus({ entrega, aoMudar }: { entrega: Entrega; aoMudar: (entre
 
   return (
     <form onSubmit={salvar} className="flex flex-col gap-4 rounded-2xl border border-borda p-4">
-      <p className="text-sm font-bold">Análise da RBS</p>
+      <div>
+        <p className="text-sm font-bold">Análise da RBS</p>
+        {ESPERANDO_A_MARCA[entrega.status] && <p className="mt-1 text-xs font-medium text-texto-2">{ESPERANDO_A_MARCA[entrega.status]}</p>}
+      </div>
       <div className="grid gap-4 sm:grid-cols-2">
-        <Seletor rotulo="Novo status" value={para} onChange={(evento) => setPara(evento.target.value as StatusEntrega)}>
+        <Seletor rotulo="O que fazer" value={para} onChange={(evento) => setPara(evento.target.value as StatusEntrega)}>
+          <option value="" disabled>
+            Escolha uma ação
+          </option>
           {opcoes.map((codigo) => (
             <option key={codigo} value={codigo}>
-              {nomeStatus(codigo)}
+              {ACOES[entrega.status]?.[codigo] ?? nomeStatus(codigo)}
             </option>
           ))}
         </Seletor>
