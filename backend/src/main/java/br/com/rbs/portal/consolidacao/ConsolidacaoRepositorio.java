@@ -18,6 +18,9 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class ConsolidacaoRepositorio {
 
+    // [RELATORIO] Todo percentual deste repositório (e das visões que ele lê) é cortado na primeira casa por fn_pct_truncado,
+    // nunca arredondado: nenhum número parece maior do que é, e só chega a 100 quem está completo. Passar de 100 vale.
+
     public record LinhaDeUnidade(String unidade, BigDecimal previsto, BigDecimal exibido, BigDecimal percentual) {
     }
 
@@ -103,8 +106,7 @@ public class ConsolidacaoRepositorio {
     }
 
     /**
-     * Cada linha do plano de mídia com a soma das exibições dela. Mesma conta da visão, só que sem agrupar por veículo
-     * (e o mesmo percentual: cortado na primeira casa, para nunca mostrar 100 sem estar completo).
+     * Cada linha do plano de mídia com a soma das exibições dela. Mesma conta da visão, só que sem agrupar por veículo.
      */
     public List<LinhaDoPlano> linhasDoPlano(long parceriaId) {
         return jdbc.sql("""
@@ -126,7 +128,7 @@ public class ConsolidacaoRepositorio {
     public Optional<LinhaDeAplicacoes> aplicacoes(long parceriaId) {
         return jdbc.sql("""
                         SELECT CAST(previstas AS numeric(14,2)) AS previstas, CAST(comprovadas AS numeric(14,2)) AS comprovadas,
-                               CAST(fotos AS bigint) AS fotos, fn_pct_arredondado(100 * comprovadas / previstas) AS percentual
+                               CAST(fotos AS bigint) AS fotos, fn_pct_truncado(100 * comprovadas / previstas) AS percentual
                         FROM vw_aplicacoes WHERE parceria_id = :parceriaId
                         """)
                 .param("parceriaId", parceriaId)
@@ -147,7 +149,7 @@ public class ConsolidacaoRepositorio {
     public Optional<LinhaDeCortesias> cortesias(long parceriaId) {
         return jdbc.sql("""
                         SELECT CAST(disponiveis AS bigint) AS disponiveis, CAST(destinadas AS bigint) AS destinadas,
-                               fn_pct_arredondado(100.0 * destinadas / nullif(disponiveis, 0)) AS percentual
+                               fn_pct_truncado(100.0 * destinadas / nullif(disponiveis, 0)) AS percentual
                         FROM vw_cortesias WHERE parceria_id = :parceriaId
                         """)
                 .param("parceriaId", parceriaId)

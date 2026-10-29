@@ -156,7 +156,7 @@ class ConsolidacaoControllerTest {
         assertThat(numero(lerJson(resposta, "$.aplicacoes.previstas"))).isEqualByComparingTo(previstas).isEqualByComparingTo("19");
         assertThat(numero(lerJson(resposta, "$.aplicacoes.comprovadas"))).isEqualByComparingTo(comprovadas).isEqualByComparingTo("17");
         assertThat(((Number) lerJson(resposta, "$.aplicacoes.fotos")).longValue()).isEqualTo(fotos);
-        assertThat(numero(lerJson(resposta, "$.aplicacoes.percentual"))).isEqualByComparingTo("89.5");
+        assertThat(numero(lerJson(resposta, "$.aplicacoes.percentual"))).isEqualByComparingTo("89.4");   // 17 de 19 = 89,47%: cortado, como a mídia
 
         long aprovadas = jdbc.sql("SELECT count(*) FROM entrega WHERE parceria_id = :p AND status = 'APROVADO'")
                 .param("p", amarelo).query(Long.class).single();

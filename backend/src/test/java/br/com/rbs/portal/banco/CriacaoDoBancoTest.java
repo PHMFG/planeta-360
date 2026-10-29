@@ -22,12 +22,12 @@ class CriacaoDoBancoTest {
     }
 
     @Test
-    void flywayAplicouAsCincoMigracoesEAAmostra() {
-        // V1 a V5 versionadas; R__amostra repetível. Todas com sucesso.
+    void flywayAplicouAsSeisMigracoesEAAmostra() {
+        // V1 a V6 versionadas; R__amostra repetível. Todas com sucesso.
         long sucesso = contar("SELECT count(*) FROM flyway_schema_history WHERE success");
         long total = contar("SELECT count(*) FROM flyway_schema_history");
-        assertThat(total).isEqualTo(6);
-        assertThat(sucesso).isEqualTo(6);
+        assertThat(total).isEqualTo(7);
+        assertThat(sucesso).isEqualTo(7);
         assertThat(contar("SELECT count(*) FROM flyway_schema_history WHERE version IS NULL AND script LIKE '%R__amostra%'"))
                 .as("a amostra de dev/test foi aplicada").isEqualTo(1);
     }

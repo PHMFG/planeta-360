@@ -873,11 +873,14 @@ class RelatorioControllerTest {
         assertThat(jdbc.sql("SELECT fn_numero_br(-1500.25)").query(String.class).single()).isEqualTo("-1.500,25");
         assertThat(jdbc.sql("SELECT fn_numero_br(999)").query(String.class).single()).isEqualTo("999");
         assertThat(jdbc.sql("SELECT fn_numero_br(1000)").query(String.class).single()).isEqualTo("1.000");
+        // Um critério só: todo percentual corta na 1ª casa. Passar de 100 vale (exibido acima do previsto).
         assertThat(jdbc.sql("SELECT fn_pct_truncado(99.978)").query(BigDecimal.class).single()).isEqualByComparingTo("99.9");
         assertThat(jdbc.sql("SELECT fn_pct_truncado(104.06)").query(BigDecimal.class).single()).isEqualByComparingTo("104.0");
-        assertThat(jdbc.sql("SELECT fn_pct_arredondado(99.96)").query(BigDecimal.class).single()).as("abaixo de 100 nunca chega a 100").isEqualByComparingTo("99.9");
-        assertThat(jdbc.sql("SELECT fn_pct_arredondado(66.666)").query(BigDecimal.class).single()).as("fora disso, arredonda").isEqualByComparingTo("66.7");
-        assertThat(jdbc.sql("SELECT fn_pct_arredondado(100)").query(BigDecimal.class).single()).isEqualByComparingTo("100");
+        assertThat(jdbc.sql("SELECT fn_pct_truncado(66.666)").query(BigDecimal.class).single()).as("corta, não arredonda para 66,7").isEqualByComparingTo("66.6");
+        assertThat(jdbc.sql("SELECT fn_pct_truncado(197.26)").query(BigDecimal.class).single()).as("acima de 100").isEqualByComparingTo("197.2");
+        assertThat(jdbc.sql("SELECT fn_pct_truncado(100)").query(BigDecimal.class).single()).isEqualByComparingTo("100");
+        assertThat(jdbc.sql("SELECT count(*) FROM pg_proc WHERE proname = 'fn_pct_arredondado'").query(Long.class).single())
+                .as("o arredondamento saiu de cena (V5)").isZero();
     }
 
     // ---------------------------------------------------------------------
@@ -1007,5 +1010,69 @@ class RelatorioControllerTest {
         MvcTestResult lista = ler(rbs, "/api/relatorios");
         assertThat(lerLista(lista, "$[?(@.parceriaId==" + roxo + ")].relatorio.indicadoresIndisponiveis"))
                 .containsExactly((int) indisponiveisNaLeitura);
+    }
+
+    // ---------------------------------------------------------------------
+    // Percentuais: um critério só (cortar na 1ª casa) e acima de 100 quando o exibido passa do previsto
+    // ---------------------------------------------------------------------
+
+    @Test
+    void percentualDeEntregaPassaDe100QuandoOExibidoSuperaOPrevistoEOCsvAcompanha() {
+        cpmDaVerde(460_000, 907_300);   // 197,23%
+        MockHttpSession rbs = entrar(RBS);
+
+        MvcTestResult resposta = gerar(rbs, parceria("Cliente Verde"));
+
+        Map<String, Object> entrega = indicador(resposta, "MIDIA_ENTREGA_PCT", "CPM");
+        assertThat(numero(entrega.get("valor"))).as("não corta em 100").isEqualByComparingTo("197.2");
+        assertThat(entrega.get("baseCalculo")).isEqualTo("907.300 de 460.000");
+        assertThat(entrega).containsEntry("disponivel", true);
+        assertThat(numero(indicador(resposta, "MIDIA_VEICULO_PCT", "atl.la · CPM").get("valor"))).isEqualByComparingTo("197.2");
+        long relatorio = ((Number) lerJson(resposta, "$.id")).longValue();
+        assertThat(texto(ler(rbs, "/api/relatorios/" + relatorio + "/csv"))).contains(";CPM;197,2;%;907.300 de 460.000;sim");
+        // A consolidação (mesma conta) também passa de 100, na unidade, no veículo e na linha do plano.
+        MvcTestResult consolidacao = ler(rbs, "/api/parcerias/" + parceria("Cliente Verde") + "/consolidacao");
+        assertThat(numero(lerLista(consolidacao, "$.midia.porUnidade[?(@.unidade=='CPM')].percentual").getFirst()))
+                .isEqualByComparingTo("197.2");
+        assertThat(numero(lerLista(consolidacao, "$.midia.porVeiculo[?(@.unidade=='CPM')].percentual").getFirst()))
+                .isEqualByComparingTo("197.2");
+        assertThat(numero(lerLista(consolidacao, "$.midia.linhas[?(@.unidade=='CPM')].percentual").getFirst()))
+                .isEqualByComparingTo("197.2");
+    }
+
+    @Test
+    void todoPercentualCortaNaPrimeiraCasaNoRelatorioENaConsolidacao() {
+        // Aplicações do Amarelo: 17 de 19 = 89,47%. Arredondado saía 89,5; cortado sai 89,4, como a mídia (99,28% = 99,2).
+        long amarelo = parceria("Cliente Amarelo");
+        MockHttpSession rbs = entrar(RBS);
+        MvcTestResult relatorio = gerar(rbs, amarelo);
+        assertThat(numero(indicador(relatorio, "APLICACOES_COMPROVADAS_PCT", "").get("valor"))).isEqualByComparingTo("89.4");
+        assertThat(indicador(relatorio, "APLICACOES_COMPROVADAS_PCT", "").get("baseCalculo")).isEqualTo("17 de 19");
+        assertThat(numero(indicador(relatorio, "MIDIA_ENTREGA_PCT", "INSERCAO").get("valor"))).isEqualByComparingTo("99.2");
+        long id = ((Number) lerJson(relatorio, "$.id")).longValue();
+        assertThat(texto(ler(rbs, "/api/relatorios/" + id + "/csv"))).contains(";89,4;%;17 de 19;sim");
+
+        // Entregas e cortesias: 2 de 3 = 66,67%. Arredondado saía 66,7; cortado sai 66,6.
+        long aoVivo = parceriaAoVivo(1);
+        for (String status : List.of("APROVADO", "APROVADO", "ENVIADO")) {
+            jdbc.sql("""
+                            INSERT INTO entrega (parceria_id, aba_id, titulo, status)
+                            SELECT :p, a.id, 'Entrega de teste', :s FROM aba a WHERE a.codigo = 'PERFIL'
+                            """).param("p", aoVivo).param("s", status).update();
+        }
+        long cota = jdbc.sql("INSERT INTO cortesia_cota (parceria_id, setor, dia, quantidade) VALUES (:p, 'ARENA', 'SEXTA', 3) RETURNING id")
+                .param("p", aoVivo).query(Long.class).single();
+        jdbc.sql("INSERT INTO cortesia_destinacao (cortesia_cota_id, destinatario_nome, quantidade, registrado_por) VALUES (:c, 'Fulana', 2, :u)")
+                .param("c", cota).param("u", usuarioId(RBS)).update();
+
+        MvcTestResult doAoVivo = gerar(rbs, aoVivo);
+        assertThat(numero(indicador(doAoVivo, "ENTREGAS_CONCLUIDAS_PCT", "").get("valor"))).isEqualByComparingTo("66.6");
+        assertThat(numero(indicador(doAoVivo, "CORTESIAS_DESTINADAS_PCT", "").get("valor"))).isEqualByComparingTo("66.6");
+        MvcTestResult consolidacao = ler(rbs, "/api/parcerias/" + aoVivo + "/consolidacao");
+        assertThat(numero(lerJson(consolidacao, "$.entregas.percentualConcluido"))).isEqualByComparingTo("66.6");
+        assertThat(numero(lerJson(consolidacao, "$.cortesias.percentual"))).isEqualByComparingTo("66.6");
+        MvcTestResult lista = ler(rbs, "/api/parcerias");
+        assertThat(numero(lerLista(lista, "$[?(@.id==" + aoVivo + ")].entregas.percentualConcluido").getFirst()))
+                .as("o resumo da lista de parcerias usa a mesma visão").isEqualByComparingTo("66.6");
     }
 }
