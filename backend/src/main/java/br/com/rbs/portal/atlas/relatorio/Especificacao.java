@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.UnaryOperator;
 import java.util.regex.Pattern;
 
 /**
@@ -103,12 +104,19 @@ public record Especificacao(String modelo, int versao, String aba, String titulo
     /**
      * Um parágrafo. Fixo ({@code redigivel} falso, com {@code texto}) ou redigível: aí o {@code texto} começa vazio, o Atlas (ou
      * o plano B, com a {@code fraseModelo}) o preenche e {@code redigidoPor} diz quem foi: ATLAS ou MODELO. O texto só leva
-     * marcadores {@code {{ref}}}; os números entram na hora de resolver.
+     * marcadores {@code {{ref}}}; os números entram na hora de resolver. {@code recusas} conta quantas vezes a checagem do texto
+     * recusou a redação do modelo para este bloco (zero se nunca, e volta a zero quando uma redação passa ou o bloco recua para
+     * a frase-modelo): na segunda recusa o bloco fica com a {@code fraseModelo}.
      */
     public record Paragrafo(String id, boolean redigivel,
                             @JsonProperty("frase_modelo") String fraseModelo,
                             String texto,
-                            @JsonProperty("redigido_por") String redigidoPor) implements Bloco {
+                            @JsonProperty("redigido_por") String redigidoPor,
+                            Integer recusas) implements Bloco {
+
+        public Paragrafo {
+            recusas = recusas == null ? 0 : recusas;   // o modelo-base e as especificações antigas não têm o campo
+        }
     }
 
     public record Kpi(String id, String rotulo, Referencia valor) implements Bloco {
@@ -171,15 +179,24 @@ public record Especificacao(String modelo, int versao, String aba, String titulo
     // Mudança (devolve uma especificação nova)
     // ---------------------------------------------------------------------
 
-    /** O parágrafo com o texto e o autor dados. O bloco precisa existir e ser redigível. */
+    /** O parágrafo com o texto e o autor dados (e a contagem de recusas zerada). O bloco precisa existir e ser redigível. */
     public Especificacao comTexto(String blocoId, String texto, String redigidoPor) {
+        return comParagrafo(blocoId, p -> new Paragrafo(p.id(), true, p.fraseModelo(), texto, redigidoPor, 0));
+    }
+
+    /** O parágrafo com o texto que tinha e a contagem de recusas dada (a checagem do texto recusou a redação do modelo). */
+    public Especificacao comRecusas(String blocoId, int recusas) {
+        return comParagrafo(blocoId, p -> new Paragrafo(p.id(), true, p.fraseModelo(), p.texto(), p.redigidoPor(), recusas));
+    }
+
+    private Especificacao comParagrafo(String blocoId, UnaryOperator<Paragrafo> troca) {
         boolean achou = false;
         List<Secao> novas = new ArrayList<>();
         for (Secao secao : secoes) {
             List<Bloco> blocos = new ArrayList<>();
             for (Bloco bloco : secao.blocos()) {
                 if (bloco instanceof Paragrafo p && p.id().equals(blocoId) && p.redigivel()) {
-                    blocos.add(new Paragrafo(p.id(), true, p.fraseModelo(), texto, redigidoPor));
+                    blocos.add(troca.apply(p));
                     achou = true;
                 } else {
                     blocos.add(bloco);

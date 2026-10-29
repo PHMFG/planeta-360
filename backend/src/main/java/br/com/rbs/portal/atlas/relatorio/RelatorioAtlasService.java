@@ -9,6 +9,7 @@ import br.com.rbs.portal.atlas.relatorio.Especificacao.Bloco;
 import br.com.rbs.portal.atlas.relatorio.RelatorioAtlasDtos.CalculoDto;
 import br.com.rbs.portal.atlas.relatorio.RelatorioAtlasDtos.RelatorioAtlasDto;
 import br.com.rbs.portal.atlas.relatorio.RelatorioAtlasDtos.RelatorioAtlasResumoDto;
+import br.com.rbs.portal.atlas.relatorio.ChecagemDeTexto.Veredito;
 import br.com.rbs.portal.atlas.relatorio.RelatorioAtlasDtos.SnapshotDto;
 import br.com.rbs.portal.atlas.relatorio.ResolvedorDeReferencias.Resolucao;
 import br.com.rbs.portal.atlas.relatorio.ResolvedorDeReferencias.Valor;
@@ -41,7 +42,7 @@ import tools.jackson.core.type.TypeReference;
 /**
  * O relatório do Atlas e as operações que o montam. [ATLAS] São as mesmas operações do plano B (o botão "Montar relatório") e das
  * ferramentas do modelo de linguagem da etapa seguinte, que só as embrulha: {@link #iniciar}, {@link #solicitarCampos},
- * {@link #responder}, {@link #preencherFrasesModelo} e {@link #finalizar}. Cada uma é uma transação curta, com o {@code FOR UPDATE}
+ * {@link #responder}, {@link #preencherFrasesModelo}, {@link #definirTextos} e {@link #finalizar}. Cada uma é uma transação curta, com o {@code FOR UPDATE}
  * na linha do relatório valendo só dentro dela; nenhuma fica aberta durante trabalho longo. A parceria vem sempre do
  * {@link AtlasContexto} (da conversa), nunca do argumento. O Atlas monta e redige, mas não escreve número: onde o relatório
  * precisa de um, o bloco leva uma referência e a resolução o busca nos services do portal.
@@ -60,6 +61,9 @@ public class RelatorioAtlasService {
 
     public static final int LIMITE_DE_CARTOES = 3;
     public static final int MAXIMO_DE_CAMPOS_NO_CARTAO = 8;
+    public static final int MAXIMO_DE_OPERACOES_POR_EDICAO = 10;
+    /** Na segunda recusa do mesmo bloco, ele fica com a frase-modelo. */
+    static final int RECUSAS_ATE_A_FRASE_MODELO = 2;
     static final int LIMITE_DO_OBJETIVO = 300;
     static final int LIMITE_DA_MENSAGEM = 400;
     static final int LIMITE_DO_ID_DA_CHAMADA = 80;
@@ -126,6 +130,21 @@ public class RelatorioAtlasService {
         }
     }
 
+    /** Uma operação {@code definir_texto} de {@code relatorio_editar}: o bloco e o texto (com marcadores) que o modelo escreveu. */
+    public record OperacaoDeTexto(String bloco, String texto) {
+    }
+
+    /**
+     * O que aconteceu com uma operação: {@code aplicada}; {@code recusada} (com o motivo em {@code erro}, e o modelo tem mais uma
+     * tentativa); ou {@code frase_modelo} (a segunda recusa do bloco: ele ficou com a frase-modelo do modelo-base).
+     */
+    public record ResultadoDaOperacao(int indice, String bloco, String resultado, String erro) {
+    }
+
+    /** O que {@code relatorio_editar} devolve: uma linha por operação e os blocos redigíveis que ainda estão sem texto. */
+    public record ResultadoDaEdicao(long relatorioId, List<ResultadoDaOperacao> operacoes, List<String> blocosSemTexto) {
+    }
+
     /** O que {@code relatorio_finalizar} devolve. */
     public record RelatorioFinalizado(long relatorioId, String titulo, String status) {
 
@@ -141,10 +160,11 @@ public class RelatorioAtlasService {
     private final DadoInformadoService dados;
     private final VerificadorDeAcesso verificador;
     private final HistoricoService historico;
+    private final ChecagemDeTexto checagem;
 
     public RelatorioAtlasService(AtlasRepositorio repositorio, ModeloBase modelos, ResolvedorDeReferencias resolvedor,
                                  MontadorDoRelatorio montador, DadoInformadoService dados, VerificadorDeAcesso verificador,
-                                 HistoricoService historico) {
+                                 HistoricoService historico, ChecagemDeTexto checagem) {
         this.repositorio = repositorio;
         this.modelos = modelos;
         this.resolvedor = resolvedor;
@@ -152,6 +172,7 @@ public class RelatorioAtlasService {
         this.dados = dados;
         this.verificador = verificador;
         this.historico = historico;
+        this.checagem = checagem;
     }
 
     // ---------------------------------------------------------------------
@@ -440,6 +461,57 @@ public class RelatorioAtlasService {
         if (mudou && !repositorio.atualizarEspecificacao(relatorioId, AtlasJson.escrever(especificacao), relatorio.versaoEspecificacao())) {
             throw new ConflitoException("O relatório mudou enquanto era preenchido. Tente de novo.");
         }
+    }
+
+    /**
+     * {@code relatorio_editar}, operação {@code definir_texto}: grava o texto que o modelo escreveu em cada bloco redigível, se ele
+     * passar na {@link ChecagemDeTexto} (sem algarismo fora de marcador, marcadores que resolvem, até 3 frases e 600 caracteres,
+     * sem HTML nem URL). Parágrafo redigido sai com {@code redigidoPor} ATLAS. A recusa não é erro da chamada: volta ao modelo no
+     * resultado da operação, e ele tem mais uma tentativa; na segunda recusa do mesmo bloco, o bloco fica com a frase-modelo
+     * (MODELO). Bloco que não existe ou não é redigível é recusado sem contar. As operações valem uma a uma, na ordem, e a
+     * especificação é gravada uma vez (trava otimista). Ordem das respostas: 404 (relatório de outra conversa), 403 (aba do modelo
+     * fechada), 409 (o relatório não está em montagem; ou mudou enquanto era editado).
+     */
+    @Transactional
+    public ResultadoDaEdicao definirTextos(AtlasContexto contexto, long relatorioId, List<OperacaoDeTexto> operacoes) {
+        LinhaDeRelatorio relatorio = relatorioDoContexto(contexto, relatorioId, true);
+        Especificacao original = ler(relatorio);
+        verificador.exigirAbaLiberada(contexto.usuario(), contexto.parceriaId(), original.aba());
+        exigirMontando(relatorio);
+
+        Resolucao resolucao = resolvedor.abrir(contexto.usuario(), contexto.parceriaId(), original);
+        Especificacao especificacao = original;
+        List<ResultadoDaOperacao> resultados = new ArrayList<>();
+        for (int i = 0; i < operacoes.size(); i++) {
+            OperacaoDeTexto operacao = operacoes.get(i);
+            var bloco = especificacao.bloco(operacao.bloco());
+            if (bloco.isEmpty() || !(bloco.get() instanceof Especificacao.Paragrafo paragrafo) || !paragrafo.redigivel()) {
+                resultados.add(new ResultadoDaOperacao(i, operacao.bloco(), "recusada", "O bloco " + operacao.bloco()
+                        + " não existe ou não é redigível. Os blocos redigíveis são: " + String.join(", ",
+                        especificacao.redigiveis().stream().map(Especificacao.Paragrafo::id).toList()) + "."));
+                continue;
+            }
+            Veredito veredito = checagem.paragrafo(resolucao, operacao.texto());
+            if (veredito.aprovado()) {
+                especificacao = especificacao.comTexto(paragrafo.id(), veredito.texto(), "ATLAS");
+                resultados.add(new ResultadoDaOperacao(i, paragrafo.id(), "aplicada", null));
+            } else if (paragrafo.recusas() + 1 >= RECUSAS_ATE_A_FRASE_MODELO) {
+                especificacao = especificacao.comTexto(paragrafo.id(), paragrafo.fraseModelo(), "MODELO");
+                resultados.add(new ResultadoDaOperacao(i, paragrafo.id(), "frase_modelo", veredito.motivo()
+                        + " Este bloco já foi recusado duas vezes e ficou com a frase-modelo; não precisa reescrevê-lo."));
+            } else {
+                especificacao = especificacao.comRecusas(paragrafo.id(), paragrafo.recusas() + 1);
+                resultados.add(new ResultadoDaOperacao(i, paragrafo.id(), "recusada", veredito.motivo()
+                        + " Escreva este bloco de novo; se a segunda redação também for recusada, ele fica com a frase-modelo."));
+            }
+        }
+        if (!especificacao.equals(original)
+                && !repositorio.atualizarEspecificacao(relatorioId, AtlasJson.escrever(especificacao), relatorio.versaoEspecificacao())) {
+            throw new ConflitoException("O relatório mudou enquanto era editado. Tente de novo.");
+        }
+        List<String> semTexto = especificacao.redigiveis().stream().filter(p -> p.texto() == null || p.texto().isBlank())
+                .map(Especificacao.Paragrafo::id).toList();
+        return new ResultadoDaEdicao(relatorioId, resultados, semTexto);
     }
 
     // ---------------------------------------------------------------------
