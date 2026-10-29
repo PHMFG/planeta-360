@@ -103,27 +103,26 @@ function ChipConta({ usuario, parceria }: { usuario: UsuarioLogado; parceria: Pa
   )
 }
 
-function BotaoAtlas() {
-  // [ATLAS-DEPOIS] O Atlas fica no menu, como no Figma, mas só entra na Entrega 3.
+function BotaoAtlas({ aoAbrir }: { aoAbrir?: () => void }) {
+  // [ATLAS] Só a marca conversa com o Atlas, dentro de uma parceria; para a RBS o botão fica desabilitado, e os relatórios
+  // do Atlas aparecem na tela Relatório da parceria.
   return (
     <div>
       <button
         type="button"
-        disabled
+        disabled={!aoAbrir}
+        onClick={aoAbrir}
         aria-describedby="atlas-legenda"
-        className="relative flex h-[60px] w-full cursor-not-allowed items-center justify-center gap-2 overflow-hidden rounded-2xl border border-white/20 bg-atlas text-white shadow-atlas"
+        className="relative flex h-[60px] w-full items-center justify-center gap-2 overflow-hidden rounded-2xl border border-white/20 bg-atlas text-white shadow-atlas transition-[filter] enabled:hover:brightness-125 disabled:cursor-not-allowed"
       >
         <span className="absolute -top-6 -left-4 size-20 rounded-full bg-[#0a2a6e] opacity-70 blur-2xl" aria-hidden="true" />
         <span className="absolute -bottom-8 left-16 size-20 rounded-full bg-[#572781] opacity-70 blur-2xl" aria-hidden="true" />
         <span className="absolute -right-6 -bottom-6 size-20 rounded-full bg-[#e1047d] opacity-60 blur-2xl" aria-hidden="true" />
         <i className="ri-globe-fill relative text-2xl" aria-hidden="true" />
         <span className="relative text-xl font-semibold tracking-[-0.01em]">atlas</span>
-        <span className="absolute top-1.5 right-2 rounded-full bg-white/15 px-2 py-0.5 text-[9px] font-bold tracking-wider uppercase">
-          Em breve
-        </span>
       </button>
       <p id="atlas-legenda" className="mt-1.5 text-center text-[11px] font-medium text-texto-2">
-        Assistente IA · ajuda com sua parceria
+        {aoAbrir ? 'Assistente IA · monta o relatório da ativação' : 'Assistente da marca · relatórios na tela Relatório'}
       </p>
     </div>
   )
@@ -134,9 +133,11 @@ type PropsMenu = {
   /** Abaixo de 1024 px o menu é uma gaveta: fechada até a pessoa tocar em "Menu". */
   aberto: boolean
   aoFechar: () => void
+  /** Abre o painel do Atlas; sem ele (RBS ou fora de uma parceria), o botão fica desabilitado. */
+  aoAbrirAtlas?: () => void
 }
 
-export function Menu({ parceria, aberto, aoFechar }: PropsMenu) {
+export function Menu({ parceria, aberto, aoFechar, aoAbrirAtlas }: PropsMenu) {
   const { usuario, sair } = useSessao()
   const navegar = useNavigate()
   const [ajudaAberta, setAjudaAberta] = useState(false)
@@ -216,7 +217,7 @@ export function Menu({ parceria, aberto, aoFechar }: PropsMenu) {
         </nav>
 
         <div className="mt-4 flex flex-col gap-4">
-          <BotaoAtlas />
+          <BotaoAtlas aoAbrir={aoAbrirAtlas} />
           <div className="relative flex items-center justify-between border-t border-borda pt-4 text-[13px] font-semibold">
             <button
               type="button"

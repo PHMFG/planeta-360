@@ -3,10 +3,16 @@
 import { useState } from 'react'
 import { Outlet } from 'react-router'
 import type { ParceriaResumo } from '../api/tipos'
+import { PainelAtlas } from '../atlas/PainelAtlas'
+import { useSessao } from '../sessao/Sessao'
 import { Menu } from './Menu'
 
 export function Layout({ parceria, contexto }: { parceria: ParceriaResumo | null; contexto?: unknown }) {
   const [menuAberto, setMenuAberto] = useState(false)
+  const [atlasAberto, setAtlasAberto] = useState(false)
+  const { usuario } = useSessao()
+  // [ATLAS] Só a marca conversa com o Atlas, e sempre dentro de uma parceria.
+  const comAtlas = parceria !== null && usuario?.perfil === 'ADMIN_PATROCINADOR'
 
   return (
     <div className="min-h-screen">
@@ -23,7 +29,20 @@ export function Layout({ parceria, contexto }: { parceria: ParceriaResumo | null
           Menu
         </button>
       </header>
-      <Menu parceria={parceria} aberto={menuAberto} aoFechar={() => setMenuAberto(false)} />
+      <Menu
+        parceria={parceria}
+        aberto={menuAberto}
+        aoFechar={() => setMenuAberto(false)}
+        aoAbrirAtlas={
+          comAtlas
+            ? () => {
+                setMenuAberto(false)
+                setAtlasAberto(true)
+              }
+            : undefined
+        }
+      />
+      {comAtlas && <PainelAtlas key={parceria.id} parceria={parceria} aberto={atlasAberto} aoFechar={() => setAtlasAberto(false)} />}
       <main className="p-4 lg:pl-[296px] print:p-0">
         <div className="flex max-w-[1200px] min-w-0 flex-col gap-4">
           <Outlet context={contexto} />
