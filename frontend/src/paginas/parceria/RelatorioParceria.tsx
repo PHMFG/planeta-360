@@ -61,7 +61,7 @@ function valorDo(indicador: Indicador) {
 function Documento({ relatorio }: { relatorio: Relatorio }) {
   const parceria = useParceria()
   return (
-    <article className="rounded-[20px] border border-borda bg-white p-10 print:border-0 print:p-0">
+    <article className="rounded-[20px] border border-borda bg-white p-5 sm:p-10 print:border-0 print:p-0">
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4 border-b border-borda pb-6">
         <div>
           <p className="texto-sobretitulo text-texto-2">Planeta 360 · relatório pós-evento</p>
@@ -90,27 +90,29 @@ function Documento({ relatorio }: { relatorio: Relatorio }) {
           <h3 className="mb-3 text-base font-bold">
             {indice + 1}. {secao.secao}
           </h3>
-          <table className="w-full border-separate border-spacing-0 text-sm">
-            <thead>
-              <tr>
-                {['Indicador', 'Recorte', 'Valor', 'Como foi calculado'].map((titulo, posicao) => (
-                  <th key={titulo} className={`bg-cinza-100 px-3 py-2 text-left font-semibold ${posicao === 0 ? 'rounded-l-[10px]' : ''} ${posicao === 3 ? 'rounded-r-[10px]' : ''}`}>
-                    {titulo}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {secao.indicadores.map((indicador) => (
-                <tr key={`${indicador.codigo}-${indicador.recorte}`}>
-                  <td className="border-b border-borda px-3 py-2.5 font-semibold">{indicador.nome}</td>
-                  <td className="border-b border-borda px-3 py-2.5">{recorteDo(indicador)}</td>
-                  <td className="border-b border-borda px-3 py-2.5 whitespace-nowrap">{valorDo(indicador)}</td>
-                  <td className="border-b border-borda px-3 py-2.5 text-xs text-texto-2">{indicador.baseCalculo ?? '—'}</td>
+          <div className="overflow-x-auto">
+            <table className="w-full border-separate border-spacing-0 text-sm">
+              <thead>
+                <tr>
+                  {['Indicador', 'Recorte', 'Valor', 'Como foi calculado'].map((titulo, posicao) => (
+                    <th key={titulo} className={`bg-cinza-100 px-3 py-2 text-left font-semibold ${posicao === 0 ? 'rounded-l-[10px]' : ''} ${posicao === 3 ? 'rounded-r-[10px]' : ''}`}>
+                      {titulo}
+                    </th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {secao.indicadores.map((indicador) => (
+                  <tr key={`${indicador.codigo}-${indicador.recorte}`}>
+                    <td className="border-b border-borda px-3 py-2.5 font-semibold">{indicador.nome}</td>
+                    <td className="border-b border-borda px-3 py-2.5">{recorteDo(indicador)}</td>
+                    <td className="border-b border-borda px-3 py-2.5 whitespace-nowrap">{valorDo(indicador)}</td>
+                    <td className="border-b border-borda px-3 py-2.5 text-xs text-texto-2">{indicador.baseCalculo ?? '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
       ))}
       <p className="text-xs text-texto-2">
