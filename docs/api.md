@@ -2,7 +2,7 @@
 
 Este documento é o **contrato entre o back-end e o front-end**. Quem faz a tela lê aqui o que cada rota pede, o que devolve e quais erros esperar, sem precisar abrir o código.
 
-- Todas as 38 rotas estão implementadas e cobertas por testes de integração (`cd backend && ./mvnw test`), inclusive o isolamento entre parcerias. A coluna "Etapa" diz em que etapa do plano cada rota entrou. Mudança de formato daqui em diante entra neste arquivo no mesmo commit do código.
+- Todas as 41 rotas estão implementadas e cobertas por testes de integração (`cd backend && ./mvnw test`), inclusive o isolamento entre parcerias. A coluna "Etapa" diz em que etapa do plano cada rota entrou (as do Atlas, 37 em diante, entram como `Atlas 1`). Mudança de formato daqui em diante entra neste arquivo no mesmo commit do código.
 - O banco está descrito em [`docs/banco.md`](banco.md). Os nomes de status, cotas e abas são os mesmos do banco.
 
 ## Como falar com a API
@@ -142,8 +142,11 @@ Todas prontas e testadas. A coluna "Etapa" mostra em que etapa do plano a rota e
 | 36 | `GET /api/relatorios/{id}/csv` | Patrocinador da parceria | Um relatório em CSV | 7 |
 | 37 | `GET /api/parcerias/{id}/aplicacoes` | Patrocinador da parceria | O plano de aplicações de marca, linha a linha, com as fotos | Atlas 1 |
 | 38 | `POST /api/parcerias/{id}/aplicacoes/{aproveitamentoId}/comprovacoes` | Admin RBS | Anexa uma foto de comprovação a uma aplicação | Atlas 1 |
+| 39 | `GET /api/campos` | Logado | O catálogo dos campos que a marca pode informar | Atlas 1 |
+| 40 | `GET /api/parcerias/{id}/dados` | Patrocinador da parceria | Os valores vigentes dos campos de uma aba, com autor e data | Atlas 1 |
+| 41 | `POST /api/parcerias/{id}/dados` | Patrocinador da parceria | Grava de 1 a 20 valores novos de uma aba | Atlas 1 |
 
-São 38 operações (método + caminho). A rota 5 (`ativar`) faz parte do contrato de autenticação, mas só é implementada na etapa 4. As rotas 37 em diante vieram com o Atlas (MVP, parte 1): a coluna "Etapa" diz `Atlas 1`.
+São 41 operações (método + caminho). A rota 5 (`ativar`) faz parte do contrato de autenticação, mas só é implementada na etapa 4. As rotas 37 em diante vieram com o Atlas (MVP, parte 1): a coluna "Etapa" diz `Atlas 1`.
 
 ## Objetos que se repetem
 
@@ -1278,6 +1281,124 @@ A aba **Aplicações** deixa de ser só uma lista de entregas: ela mostra o plan
 
 ---
 
+# Dados informados pela marca (Atlas, parte 1)
+
+Os números que o sistema não tem e só a marca (ou a agência dela) sabe, como os visitantes no espaço e os brindes distribuídos. O que se pode informar está num **catálogo fixo** (rota 39); o valor de cada parceria tem **autor, data e origem** (`PORTAL` para o formulário da aba, `ATLAS` para o cartão do assistente) e entra pela mesma rota de gravação (41) nos dois casos, com a mesma validação. Cada valor é uma linha nova: corrigir é gravar de novo, e a mais recente vale.
+
+## 39. `GET /api/campos`  · Atlas 1
+
+**Quem chama:** qualquer pessoa logada. O catálogo é fixo e não carrega dado de parceria nenhuma. **Filtro (opcional):** `aba` (um dos 7 códigos de aba; outro valor dá **422** com `campos.aba` = `Aba inválida. Use PERFIL, APLICACOES, ...`). Sem `aba`, vêm os campos de todas as abas; aba que existe e não tem campos devolve `[]`.
+
+**200**: a lista de campos, na ordem do formulário.
+
+```json
+[
+  { "chave": "ativacao.visitantes_total", "aba": "APLICACOES", "rotulo": "Visitantes no espaço", "tipo": "INTEIRO",
+    "unidade": "pessoas", "minimo": 0, "maximo": null, "ajuda": "Quantas pessoas passaram pelo espaço da marca durante o festival, segundo a contagem da agência.",
+    "limiteCampo": null },
+  { "chave": "ativacao.cadastros_consentidos", "aba": "APLICACOES", "rotulo": "Cadastros com consentimento", "tipo": "INTEIRO",
+    "unidade": "cadastros", "minimo": 0, "maximo": null, "ajuda": "...", "limiteCampo": "ativacao.visitantes_total" }
+]
+```
+
+Hoje são quatro campos, todos da aba `APLICACOES`, inteiros a partir de 0 e sem máximo: `ativacao.visitantes_total` (Visitantes no espaço), `ativacao.cadastros_consentidos` (Cadastros com consentimento; **limite: os visitantes**), `ativacao.brindes_disponiveis` (Brindes disponíveis) e `ativacao.brindes_distribuidos` (Brindes distribuídos; **limite: os disponíveis**).
+
+- `tipo`: `INTEIRO`, `DECIMAL`, `DATA` ou `ARQUIVO`. Um campo `ARQUIVO` ainda não é aceito pela rota 41.
+- `minimo` e `maximo`: `null` quando não há limite. Num campo `INTEIRO` saem como inteiro (`0`), num `DECIMAL` com até 2 casas.
+- `limiteCampo`: a `chave` do campo cujo valor vigente este não pode passar, ou `null`.
+
+**Erros:** 401; 422 (aba que não existe).
+
+## 40. `GET /api/parcerias/{id}/dados?aba=APLICACOES`  · Atlas 1
+
+**Quem chama:** patrocinador da parceria, ou Admin RBS. A marca de outra parceria recebe **404**; a marca só lê com a aba pedida aberta (**403** com as duas frases de "Aba"); a RBS lê sempre. **Filtro obrigatório:** `aba` (um dos 7 códigos; ausente, vazia ou que não existe dá **422** com `campos.aba`).
+
+**200**: os campos da aba, na ordem do catálogo (rota 39), cada um com o valor vigente.
+
+```json
+{
+  "parceriaId": 2,
+  "aba": "APLICACOES",
+  "campos": [
+    {
+      "chave": "ativacao.visitantes_total", "aba": "APLICACOES", "rotulo": "Visitantes no espaço", "tipo": "INTEIRO",
+      "unidade": "pessoas", "minimo": 0, "maximo": null, "ajuda": "...", "limiteCampo": null,
+      "vigente": {
+        "valor": 1200, "origem": "PORTAL",
+        "informadoPor": { "id": 3, "nome": "Marketing Amarelo", "perfil": "ADMIN_PATROCINADOR" },
+        "informadoEm": "2026-10-29T10:00:00-03:00"
+      }
+    },
+    {
+      "chave": "ativacao.cadastros_consentidos", "aba": "APLICACOES", "rotulo": "Cadastros com consentimento", "tipo": "INTEIRO",
+      "unidade": "cadastros", "minimo": 0, "maximo": null, "ajuda": "...", "limiteCampo": "ativacao.visitantes_total",
+      "vigente": null
+    }
+  ]
+}
+```
+
+- Cada campo traz os mesmos dados da rota 39 mais `vigente`: o valor **mais recente** que a parceria informou. `vigente` é `null` enquanto ninguém informou.
+- `valor` é um inteiro (campo `INTEIRO`), um decimal (`DECIMAL`) ou uma data `AAAA-MM-DD` (`DATA`). `origem` é `PORTAL` (formulário da aba) ou `ATLAS` (cartão do assistente). `informadoPor` é quem informou (a marca ou a RBS) e `informadoEm` tem o fuso de Brasília.
+- Corrigir um número é gravá-lo de novo (rota 41): a rota mostra só o mais recente, e os anteriores ficam guardados.
+
+**Erros:** 401; 403 (aba fechada, só para a marca); 404 (parceria que não existe ou é de outra); 422 (`aba`).
+
+## 41. `POST /api/parcerias/{id}/dados`  · Atlas 1
+
+**Quem chama:** patrocinador da parceria, ou Admin RBS (exige o token CSRF). A marca de outra parceria recebe **404**; a marca só grava com a aba dos campos aberta (**403**). Grava de 1 a 20 valores de uma aba só; a origem gravada é `PORTAL`.
+
+**Corpo**
+
+```json
+{ "valores": [ { "chave": "ativacao.visitantes_total", "valor": 1200 }, { "chave": "ativacao.cadastros_consentidos", "valor": 900 } ] }
+```
+
+`valor` é um **número JSON** (`1200`, e não `"1200"`); `1200.0` vale como o inteiro 1200. Num campo `DATA`, um texto `"2026-12-01"`.
+
+**Como funciona** [VALIDACAO] [HISTORICO]
+
+1. Cada valor vira **uma linha nova** com autor, data e origem. Os anteriores não mudam: corrigir é gravar de novo, e a rota 40 mostra o mais recente.
+2. **Valor igual ao vigente não grava linha nova** (nem entra no histórico). Se todos forem iguais, a resposta é a mesma, sem nada gravado.
+3. Tudo ou nada: com qualquer erro, nenhum valor do pedido é gravado.
+4. Dois pedidos da mesma parceria ao mesmo tempo esperam um pelo outro, para os limites serem conferidos sobre o valor vigente de verdade.
+
+**200**: o mesmo corpo da rota 40 para a aba dos campos enviados, já com os valores novos.
+
+**Erros**
+
+| Status | Quando |
+| --- | --- |
+| 400 | Corpo vazio ou que não é JSON. |
+| 403 | Aba dos campos fechada para a marca (as duas frases de "Aba"; conferido antes dos erros de valor), ou falta o token CSRF. |
+| 404 | Parceria que não existe ou é de outra. |
+| 422 | Veja abaixo. |
+
+**Os erros 422** trazem `campos` chaveado pela **chave do campo** (por exemplo `"ativacao.cadastros_consentidos"`), todos juntos numa resposta só:
+
+| Quando | Frase |
+| --- | --- |
+| Lista de valores ausente, vazia ou com mais de 20 itens | `campos.valores`: `Envie a lista de valores.` / `Envie de 1 a 20 valores.` |
+| Item sem chave | `campos["valores[0].chave"]`: `Informe a chave do campo.` |
+| Chave que não está no catálogo | `Campo desconhecido.` |
+| Mesma chave duas vezes no pedido | `Este campo aparece mais de uma vez no pedido.` |
+| Campos de abas diferentes no mesmo pedido | `campos.valores`: `Envie os campos de uma aba só.` |
+| Campo de arquivo (ainda não aceito por JSON) | `Este campo recebe um arquivo, que ainda não é aceito por aqui.` |
+| Valor ausente ou `null` | `Informe o valor.` |
+| Valor que não é número inteiro num campo `INTEIRO` (`12.5`, `"1200"`, `true`) | `Informe um número inteiro.` |
+| Valor que não é número num campo `DECIMAL`, ou com mais de 2 casas | `Informe um número.` / `Use no máximo 2 casas decimais.` |
+| Data fora de `AAAA-MM-DD` num campo `DATA` | `Informe a data no formato AAAA-MM-DD.` |
+| Número acima do que o banco guarda (999.999.999.999,99) | `O valor é grande demais.` |
+| Abaixo do mínimo ou acima do máximo do campo | `O valor mínimo é 0.` / `O valor máximo é 100.` |
+| Acima do `limiteCampo`: o valor vigente dele, ou o valor novo enviado no mesmo pedido | `Não pode passar de Visitantes no espaço (1.200).` |
+| O inverso: baixar o campo-limite abaixo de um campo que depende dele e já tem valor vigente (e não está no pedido) | `Não pode ficar abaixo de Cadastros com consentimento (900).` |
+
+Os números das frases saem no padrão brasileiro (`1.200`). Sem valor vigente no campo-limite, não há com o que comparar, e o valor passa. Se o campo-limite e o dependente vêm no mesmo pedido, vale o par novo (cadastros 400 com visitantes 500 passa, mesmo com os vigentes 900 e 1.200); um dependente acima do limite novo recebe o erro no próprio campo.
+
+**Histórico:** `CRIACAO` por valor gravado (entidade `dado_informado`), com o valor anterior em `valorAnterior` (quando havia), o novo em `valorNovo` (já formatado, `1.200`) e o rótulo do campo com a origem em `detalhe` (`Visitantes no espaço (portal)`).
+
+---
+
 # Regras que valem para todas as rotas
 
 ## Isolamento entre parcerias
@@ -1293,8 +1414,8 @@ A aba **Aplicações** deixa de ser só uma lista de entregas: ela mostra o plan
 
 | Quem | Pode |
 | --- | --- |
-| **Admin RBS** | Tudo: criar parcerias, autorizar e revogar e-mails, criar entregas, mudar status, mandar retorno, aprovar perguntas, subir cargas (inclusive o plano comercial), anexar as fotos de comprovação das aplicações, gerar e disponibilizar relatórios, ver o histórico geral e o painel. |
-| **Admin Patrocinador** | Ver a própria parceria, as entregas das abas liberadas, enviar materiais, baixar arquivos da parceria, ver o histórico dela, enviar as perguntas da pesquisa, ver a consolidação, o plano de aplicações com as fotos (aba `APLICACOES` aberta) e o relatório disponibilizado. **Nunca** vê outra parceria nem as rotas da RBS. |
+| **Admin RBS** | Tudo: criar parcerias, autorizar e revogar e-mails, criar entregas, mudar status, mandar retorno, aprovar perguntas, subir cargas (inclusive o plano comercial), anexar as fotos de comprovação das aplicações, informar os dados da ativação no lugar da marca, gerar e disponibilizar relatórios, ver o histórico geral e o painel. |
+| **Admin Patrocinador** | Ver a própria parceria, as entregas das abas liberadas, enviar materiais, baixar arquivos da parceria, ver o histórico dela, enviar as perguntas da pesquisa, ver a consolidação, o plano de aplicações com as fotos e informar os dados da ativação (aba `APLICACOES` aberta) e o relatório disponibilizado. **Nunca** vê outra parceria nem as rotas da RBS. |
 
 ## O que a API grava no histórico
 
@@ -1314,6 +1435,7 @@ Nenhuma nas rotas de autenticação. Três observações:
 - **[PENDENTE]** Se a marca vê o previsto x exibido antes de o relatório ser validado (rota 29).
 - **[PENDENTE]** Quem aprova as perguntas da pesquisa: qualquer Admin RBS, ou só o time de pesquisa (rota 25).
 - **[PENDENTE]** Quem envia as fotos de comprovação das aplicações: só a RBS (como está, rota 38) ou a marca também.
+- **[PENDENTE]** Se os dados que a marca informa (rota 41) precisam de aprovação da RBS antes de aparecer. Hoje entram direto, com autor, data e origem à vista.
 - **[PENDENTE]** Limite de tentativas de login por IP e por e-mail. Hoje a falha só fica registrada no histórico.
 - **[PENDENTE]** Em produção (HTTPS): marcar o cookie de sessão como `Secure` e enviar o token CSRF só por conexão segura.
 - **[ATLAS-DEPOIS]** O assistente com IA (Atlas) fica fora desta versão: não há rota para ele aqui.

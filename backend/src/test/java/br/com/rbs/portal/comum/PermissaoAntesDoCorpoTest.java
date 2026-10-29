@@ -192,7 +192,8 @@ class PermissaoAntesDoCorpoTest {
             "POST /api/entregas/{id}/arquivos", "GET /api/arquivos/{id}", "GET /api/parcerias/{id}/historico",
             "GET /api/parcerias/{id}/pesquisa", "PUT /api/parcerias/{id}/pesquisa/perguntas",
             "GET /api/parcerias/{id}/consolidacao", "GET /api/parcerias/{id}/relatorio", "GET /api/relatorios/{id}/csv",
-            "GET /api/parcerias/{id}/aplicacoes");
+            "GET /api/parcerias/{id}/aplicacoes", "GET /api/campos", "GET /api/parcerias/{id}/dados",
+            "POST /api/parcerias/{id}/dados");
 
     @Test
     void todaRotaDaApiEstaClassificadaEAListaDaRbsSoTemRotasQueExistem() {
