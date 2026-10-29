@@ -58,10 +58,10 @@ Todo erro, sem exceção, vem como `application/problem+json` no formato `Proble
 
 | Status | Título | Quando acontece |
 | --- | --- | --- |
-| 400 | Requisição inválida | Corpo vazio ou que não é JSON. |
+| 400 | Requisição inválida | Corpo vazio ou que não é JSON, ou filtro da URL com o tipo errado (`?pagina=abc`, `?eventoId=abc`, `?atrasadas=talvez`): o `detail` diz qual, por exemplo `"O parâmetro pagina precisa ser um número inteiro."` ou `"O parâmetro atrasadas precisa ser true ou false."`. |
 | 401 | Não autenticado | Sem sessão (ou sessão vencida), e-mail/senha incorretos no login, ou sessão de uma conta que perdeu o acesso (veja "Sessão e CSRF"). |
 | 403 | Acesso negado | Logado, mas o perfil não pode fazer a operação (rota só da RBS), a aba ainda não foi liberada para a parceria, ou falta o token CSRF. |
-| 404 | Não encontrado | O recurso **não existe ou é de outra parceria**. Os dois casos têm a mesma resposta, de propósito. Vale também para rota inexistente. |
+| 404 | Não encontrado | O recurso **não existe ou é de outra parceria**. Os dois casos têm a mesma resposta, de propósito. Vale também para rota inexistente e para **id na URL que não é número** (`GET /api/parcerias/abc`): um id que não pode existir é um id que não existe, e o `detail` é a frase de "não encontrado" do recurso da rota (`"Não encontramos esta parceria."`, `"... esta entrega."`, `"... este arquivo."`, `"... esta pergunta."`, `"... este relatório."`, `"... esta carga."`, `"Não encontramos este e-mail nesta parceria."`), igual à de um id numérico sem registro. |
 | 405 | Método não permitido | A rota existe, mas não aceita esse método HTTP. |
 | 409 | Conflito | Uma regra do negócio recusou: regra do banco (SQLSTATE da classe 23, com a frase do gatilho), transição de status que não é permitida, registro duplicado. |
 | 413 | Arquivo grande demais | Envio acima de 20 MB. |

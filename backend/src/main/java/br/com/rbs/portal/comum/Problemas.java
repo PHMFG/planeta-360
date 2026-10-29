@@ -71,7 +71,7 @@ public final class Problemas {
         };
     }
 
-    private static String detalhePadrao(HttpStatusCode status) {
+    static String detalhePadrao(HttpStatusCode status) {
         return switch (status.value()) {
             case 400 -> "Não foi possível entender a requisição.";
             case 401 -> "Entre no portal para continuar.";
