@@ -138,7 +138,7 @@ class ConsolidacaoControllerTest {
         assertThat(lerJson(resposta, "$.midia.porUnidade[0].unidade")).isEqualTo("INSERCAO");
         assertThat(numero(lerJson(resposta, "$.midia.porUnidade[0].previsto"))).isEqualByComparingTo(previstoNoBanco);
         assertThat(numero(lerJson(resposta, "$.midia.porUnidade[0].exibido"))).isEqualByComparingTo(exibidoNoBanco);
-        assertThat(numero(lerJson(resposta, "$.midia.porUnidade[0].percentual"))).isEqualByComparingTo("99.3");
+        assertThat(numero(lerJson(resposta, "$.midia.porUnidade[0].percentual"))).isEqualByComparingTo("99.2");   // 1105 de 1113 = 99,28%: cortado, e não arredondado
 
         // Aplicações de marca, entregas e cortesias, também conferidas nas tabelas.
         BigDecimal previstas = jdbc.sql("SELECT sum(quantidade_prevista) FROM aproveitamento_previsto "
@@ -194,7 +194,7 @@ class ConsolidacaoControllerTest {
         }
         assertThat(numero(unidade(resposta, "INSERCAO").get("previsto"))).isEqualByComparingTo("343");
         assertThat(numero(unidade(resposta, "CPM").get("previsto"))).isEqualByComparingTo("460000");
-        assertThat(numero(unidade(resposta, "CPM").get("percentual"))).isEqualByComparingTo("97.3");
+        assertThat(numero(unidade(resposta, "CPM").get("percentual"))).isEqualByComparingTo("97.2");
 
         // Por veículo: cada par (veículo, unidade) bate com o banco, e a soma de cada unidade fecha com o total dela.
         Map<String, BigDecimal> previstoPorVeiculo = new LinkedHashMap<>();

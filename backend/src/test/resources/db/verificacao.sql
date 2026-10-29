@@ -159,13 +159,13 @@ END $$;
 -- ---------------------------------------------------------------------
 DO $$
 BEGIN
-    PERFORM pg_temp.confere('CONSOLIDAÇÃO', 'Roxo, inserções: exibido de previsto (%)', 97.1,
+    PERFORM pg_temp.confere('CONSOLIDAÇÃO', 'Roxo, inserções: exibido de previsto (%, cortado na 1ª casa)', 97.0,
         (SELECT u.pct_entrega FROM vw_midia_unidade u JOIN parceria pa ON pa.id = u.parceria_id JOIN patrocinador p ON p.id = pa.patrocinador_id
           WHERE p.nome_canonico = 'Cliente Roxo' AND u.unidade = 'INSERCAO'));
-    PERFORM pg_temp.confere('CONSOLIDAÇÃO', 'Roxo, CPM: exibido de previsto (%), sem somar com inserções', 97.3,
+    PERFORM pg_temp.confere('CONSOLIDAÇÃO', 'Roxo, CPM: exibido de previsto (%, cortado), sem somar com inserções', 97.2,
         (SELECT u.pct_entrega FROM vw_midia_unidade u JOIN parceria pa ON pa.id = u.parceria_id JOIN patrocinador p ON p.id = pa.patrocinador_id
           WHERE p.nome_canonico = 'Cliente Roxo' AND u.unidade = 'CPM'));
-    PERFORM pg_temp.confere('CONSOLIDAÇÃO', 'Amarelo, inserções: exibido de previsto (%)', 99.3,
+    PERFORM pg_temp.confere('CONSOLIDAÇÃO', 'Amarelo, inserções: exibido de previsto (%, cortado: 1105 de 1113 = 99,28)', 99.2,
         (SELECT u.pct_entrega FROM vw_midia_unidade u JOIN parceria pa ON pa.id = u.parceria_id JOIN patrocinador p ON p.id = pa.patrocinador_id
           WHERE p.nome_canonico = 'Cliente Amarelo' AND u.unidade = 'INSERCAO'));
     PERFORM pg_temp.confere('CONSOLIDAÇÃO', 'Verde, inserções: exibido de previsto (%)', 100,
