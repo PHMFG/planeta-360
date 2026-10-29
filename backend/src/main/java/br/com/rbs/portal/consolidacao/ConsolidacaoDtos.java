@@ -9,6 +9,8 @@ import java.util.Map;
  * Objetos de saída das rotas 29 (consolidação da parceria) e 30 (painel da RBS), todos em record. Atende os itens 5 e 7
  * da Entrega 2. O formato é o contrato com o front (docs/api.md). [RELATORIO] Unidades de mídia (INSERCAO, CPM,
  * APLICACAO) nunca são somadas entre si: cada total traz a sua unidade. Seção sem dado vem com listas vazias e totais nulos.
+ * [PERMISSAO] A seção de uma aba fechada para o patrocinador (mídia, aplicações, cortesias) também vem assim: mídia com as
+ * três listas vazias, aplicações e cortesias com todos os totais nulos.
  */
 public final class ConsolidacaoDtos {
 

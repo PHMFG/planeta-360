@@ -66,13 +66,16 @@ public class ConsolidacaoService {
     /**
      * Rota 29. [ISOLAMENTO] Parceria de outro patrocinador: 404. Uma só leitura (REPEATABLE READ) para os números da tela
      * serem do mesmo instante, mesmo que uma carga termine no meio. Seção sem dado vem com lista vazia e totais nulos:
-     * nunca zero inventado.
+     * nunca zero inventado. [PERMISSAO] A parte de cada aba só sai para o patrocinador se a aba estiver aberta para a
+     * parceria dele: mídia (aba MIDIA) vem com as três listas vazias, aplicações (APLICACOES) e cortesias (CORTESIAS) com
+     * os totais nulos, exatamente como quando não há dado. A RBS vê tudo.
      */
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public ConsolidacaoDto consolidar(UsuarioAutenticado usuario, long parceriaId) {
         verificador.exigirParceria(usuario, parceriaId);
 
-        MidiaDto midia = new MidiaDto(
+        MidiaDto midia = !verificador.podeVerAba(usuario, parceriaId, "MIDIA") ? new MidiaDto(List.of(), List.of(), List.of())
+                : new MidiaDto(
                 repositorio.porUnidade(parceriaId).stream()
                         .map(l -> new TotalPorUnidadeDto(l.unidade(), l.previsto(), l.exibido(), l.percentual())).toList(),
                 repositorio.porVeiculo(parceriaId).stream()
@@ -81,13 +84,15 @@ public class ConsolidacaoService {
                 repositorio.linhasDoPlano(parceriaId).stream()
                         .map(l -> new LinhaDoPlanoDto(l.aproveitamentoId(), l.veiculo(), l.formato(), l.espacoPrograma(),
                                 l.unidade(), l.previsto(), l.exibido(), l.percentual())).toList());
-        AplicacoesDto aplicacoes = repositorio.aplicacoes(parceriaId)
+        AplicacoesDto aplicacoes = !verificador.podeVerAba(usuario, parceriaId, "APLICACOES") ? new AplicacoesDto(null, null, null, null)
+                : repositorio.aplicacoes(parceriaId)
                 .map(l -> new AplicacoesDto(l.previstas(), l.comprovadas(), l.fotos(), l.percentual()))
                 .orElse(new AplicacoesDto(null, null, null, null));
         EntregasDto entregas = repositorio.entregas(parceriaId)
                 .map(l -> new EntregasDto(l.total(), l.aprovadas(), l.pendentes(), l.naoAplicaveis(), l.percentualConcluido()))
                 .orElse(new EntregasDto(null, null, null, null, null));
-        CortesiasDto cortesias = repositorio.cortesias(parceriaId)
+        CortesiasDto cortesias = !verificador.podeVerAba(usuario, parceriaId, "CORTESIAS") ? new CortesiasDto(null, null, null)
+                : repositorio.cortesias(parceriaId)
                 .map(l -> new CortesiasDto(l.disponiveis(), l.destinadas(), l.percentual()))
                 .orElse(new CortesiasDto(null, null, null));
 

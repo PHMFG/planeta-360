@@ -145,7 +145,7 @@ class PermissaoAntesDoCorpoTest {
         for (String corpo : List.of(PERGUNTAS_INVALIDAS, "{}", "", "isto nao e json")) {
             MvcTestResult resposta = sessao.put("/api/parcerias/" + roxo + "/pesquisa/perguntas", corpo);
             assertThat(resposta).as("corpo [" + corpo + "]").hasStatus(HttpStatus.FORBIDDEN);
-            assertThat(lerJson(resposta, "$.detail")).isEqualTo("Esta aba ainda não foi liberada para a sua parceria.");
+            assertThat(lerJson(resposta, "$.detail")).isEqualTo("Esta aba não faz parte da cota da sua parceria.");
         }
     }
 

@@ -711,7 +711,7 @@ class PesquisaControllerTest {
         for (MvcTestResult r : List.of(ver, enviar)) {
             assertThat(r).hasStatus(HttpStatus.FORBIDDEN);
             assertThat(r.getResponse().getContentType()).startsWith("application/problem+json");
-            assertThat(lerJson(r, "$.detail")).isEqualTo("Esta aba ainda não foi liberada para a sua parceria.");
+            assertThat(lerJson(r, "$.detail")).isEqualTo("Esta aba não faz parte da cota da sua parceria.");
         }
         assertThat(jdbc.sql("SELECT count(*) FROM pesquisa_pergunta WHERE parceria_id = :p").param("p", roxo)
                 .query(Long.class).single()).isZero();

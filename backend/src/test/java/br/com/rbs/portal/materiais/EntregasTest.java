@@ -201,7 +201,7 @@ class EntregasTest extends ApoioDeMateriais {
         MvcTestResult todas = roxo.get("/api/parcerias/" + roxo() + "/entregas");
 
         assertThat(fechada).hasStatus(HttpStatus.FORBIDDEN);
-        assertThat(lerJson(fechada, "$.detail")).isEqualTo("Esta aba ainda não foi liberada para a sua parceria.");
+        assertThat(lerJson(fechada, "$.detail")).isEqualTo("Esta aba não faz parte da cota da sua parceria.");
         assertThat(todas).hasStatus(HttpStatus.OK);
         assertThat(lerLista(todas, "$[*].abaCodigo")).as("a aba fechada some da lista geral").doesNotContain("PESQUISA").isNotEmpty();
         // A RBS vê a aba fechada normalmente.

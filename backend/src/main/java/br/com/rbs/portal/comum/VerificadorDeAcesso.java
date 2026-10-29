@@ -11,8 +11,21 @@ import org.springframework.stereotype.Component;
 @Component
 public class VerificadorDeAcesso {
 
-    /** A frase do 403 de quem pede uma aba que a RBS ainda não liberou para a parceria. */
+    /**
+     * A frase do 403 de quem pede uma aba que a cota da parceria INCLUI mas que a RBS ainda não abriu (ou escondeu do menu).
+     * A RBS resolve liberando a aba.
+     */
     public static final String ABA_NAO_LIBERADA = "Esta aba ainda não foi liberada para a sua parceria.";
+
+    /**
+     * A frase do 403 de quem pede uma aba que a cota da parceria NÃO inclui (cota_tipo_aba). Nem a RBS consegue liberar essa
+     * aba para esta parceria; é outra situação de "fechada" e por isso tem outra frase.
+     */
+    public static final String ABA_FORA_DA_COTA = "Esta aba não faz parte da cota da sua parceria.";
+
+    /** O estado de uma aba numa parceria: aberta para o patrocinador (liberada E visível) e se a cota a inclui. */
+    private record EstadoDaAba(boolean aberta, boolean naCota) {
+    }
 
     private final JdbcClient jdbc;
 
@@ -49,24 +62,48 @@ public class VerificadorDeAcesso {
 
     /**
      * [PERMISSAO] O patrocinador só passa numa aba liberada para a parceria dele; a RBS passa em qualquer aba. Como no
-     * contrato (objeto Aba), a aba só conta como liberada se estiver liberada E visível. Chamar depois de exigirParceria.
+     * contrato (objeto Aba), a aba só conta como liberada se estiver liberada E visível. O 403 diz o motivo: aba que a
+     * cota não inclui ({@link #ABA_FORA_DA_COTA}) ou aba da cota que a RBS ainda não abriu ({@link #ABA_NAO_LIBERADA}).
+     * Chamar depois de exigirParceria.
      */
     public void exigirAbaLiberada(UsuarioAutenticado usuario, long parceriaId, String codigoDaAba) {
         if (usuario.ehRbs()) {
             return;
         }
-        boolean liberada = jdbc.sql("""
-                        SELECT EXISTS (
-                            SELECT 1 FROM parceria_aba pab JOIN aba a ON a.id = pab.aba_id
-                            WHERE pab.parceria_id = :parceriaId AND a.codigo = :aba AND pab.liberada AND pab.visivel)
+        EstadoDaAba estado = estadoDaAba(parceriaId, codigoDaAba);
+        if (!estado.aberta()) {
+            throw new SemPermissaoException(estado.naCota() ? ABA_NAO_LIBERADA : ABA_FORA_DA_COTA);
+        }
+    }
+
+    /**
+     * [PERMISSAO] Quem pode ver o que pertence a uma aba: a RBS sempre; o patrocinador só se a aba estiver aberta (liberada E
+     * visível) para a parceria dele. É a versão de "sim ou não" do {@link #exigirAbaLiberada}, para rotas que não negam a
+     * resposta inteira, só escondem a parte da aba fechada (por exemplo, a consolidação).
+     */
+    public boolean podeVerAba(UsuarioAutenticado usuario, long parceriaId, String codigoDaAba) {
+        return usuario.ehRbs() || estadoDaAba(parceriaId, codigoDaAba).aberta();
+    }
+
+    /**
+     * Aba ou parceria que não existem contam como fechadas (e dentro da cota, para a frase ser a de "ainda não liberada").
+     * A parceria sem a linha da aba em parceria_aba também conta como fechada.
+     */
+    private EstadoDaAba estadoDaAba(long parceriaId, String codigoDaAba) {
+        return jdbc.sql("""
+                        SELECT coalesce(pab.liberada AND pab.visivel, FALSE) AS aberta,
+                               EXISTS (SELECT 1 FROM cota_tipo_aba cta
+                                       WHERE cta.cota_tipo_id = pa.cota_tipo_id AND cta.aba_id = a.id) AS na_cota
+                        FROM parceria pa
+                        JOIN aba a ON a.codigo = :aba
+                        LEFT JOIN parceria_aba pab ON pab.parceria_id = pa.id AND pab.aba_id = a.id
+                        WHERE pa.id = :parceriaId
                         """)
                 .param("parceriaId", parceriaId)
                 .param("aba", codigoDaAba)
-                .query(Boolean.class)
-                .single();
-        if (!liberada) {
-            throw new SemPermissaoException(ABA_NAO_LIBERADA);
-        }
+                .query(EstadoDaAba.class)
+                .optional()
+                .orElse(new EstadoDaAba(false, true));
     }
 
     // O usuário precisa estar ativo: desativar uma conta derruba o acesso mesmo com o vínculo ainda gravado.

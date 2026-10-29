@@ -8,7 +8,6 @@ import br.com.rbs.portal.comum.DadosInvalidosException;
 import br.com.rbs.portal.comum.Datas;
 import br.com.rbs.portal.comum.HistoricoService;
 import br.com.rbs.portal.comum.NaoEncontradoException;
-import br.com.rbs.portal.comum.SemPermissaoException;
 import br.com.rbs.portal.comum.UsuarioAutenticado;
 import br.com.rbs.portal.comum.VerificadorDeAcesso;
 import br.com.rbs.portal.pesquisa.PesquisaDtos.DecisaoRequisicao;
@@ -43,8 +42,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class PesquisaService {
 
-    static final String ABA_NAO_LIBERADA = VerificadorDeAcesso.ABA_NAO_LIBERADA;
-
     private static final String ENTIDADE = "pesquisa_pergunta";
 
     private final PesquisaRepositorio repositorio;
@@ -63,16 +60,14 @@ public class PesquisaService {
 
     /**
      * Rota 23. [ISOLAMENTO] Parceria de outro patrocinador: 404. [PERMISSAO] O patrocinador só entra se a aba PESQUISA
-     * estiver liberada para a parceria dele (senão 403); a RBS vê sempre, e {@code abaLiberada} diz como a aba está.
+     * estiver liberada para a parceria dele (senão 403, com a frase da cota ou a da aba ainda fechada); a RBS vê sempre, e
+     * {@code abaLiberada} diz como a aba está.
      */
     @Transactional(readOnly = true)
     public PesquisaDaParceriaDto ver(UsuarioAutenticado usuario, long parceriaId) {
         verificador.exigirParceria(usuario, parceriaId);
-        boolean liberada = repositorio.abaLiberada(parceriaId);
-        if (!usuario.ehRbs() && !liberada) {
-            throw new SemPermissaoException(ABA_NAO_LIBERADA);
-        }
-        return montar(parceriaId, liberada);
+        verificador.exigirAbaLiberada(usuario, parceriaId, "PESQUISA");
+        return montar(parceriaId, repositorio.abaLiberada(parceriaId));
     }
 
     // ---------------------------------------------------------------------

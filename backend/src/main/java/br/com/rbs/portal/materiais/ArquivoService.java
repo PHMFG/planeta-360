@@ -139,8 +139,8 @@ public class ArquivoService {
 
     /**
      * Rota 18. [ISOLAMENTO] Arquivo que não existe, de outra parceria ou geral da RBS (sem parceria) dá 404 ao patrocinador,
-     * sempre com a mesma frase. O arquivo que sumiu do armazenamento também dá 404. [HISTORICO] DOWNLOAD só quando o
-     * arquivo existe e vai ser entregue.
+     * sempre com a mesma frase. [PERMISSAO] Arquivo de uma aba fechada para a parceria dá 403 ao patrocinador. O arquivo
+     * que sumiu do armazenamento dá 404. [HISTORICO] DOWNLOAD só quando o arquivo existe e vai ser entregue.
      */
     @Transactional
     public ArquivoBaixado baixar(UsuarioAutenticado usuario, long arquivoId, HttpServletRequest requisicao) {
@@ -159,6 +159,11 @@ public class ArquivoService {
         // [RELATORIO] O PDF de um relatório só chega ao patrocinador depois de disponibilizado.
         if (!usuario.ehRbs() && arquivo.relatorioNaoDisponibilizado()) {
             throw naoEncontrado();
+        }
+        // [PERMISSAO] O arquivo de uma aba fechada não sai pelo download, como a entrega dele não sai pela lista: 403 com a
+        // mesma regra e as mesmas frases (cota que não inclui a aba, ou aba que a RBS ainda não liberou). A RBS baixa tudo.
+        if (arquivo.parceriaId() != null && arquivo.abaCodigo() != null) {
+            verificador.exigirAbaLiberada(usuario, arquivo.parceriaId(), arquivo.abaCodigo());
         }
         Path caminho = armazenamento.localizar(arquivo.caminho()).orElseThrow(
                 () -> new NaoEncontradoException("Este arquivo não está mais disponível. Avise a equipe da RBS."));

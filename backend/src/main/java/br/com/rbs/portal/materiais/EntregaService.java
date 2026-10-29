@@ -5,7 +5,6 @@ import br.com.rbs.portal.comum.ConflitoException;
 import br.com.rbs.portal.comum.DadosInvalidosException;
 import br.com.rbs.portal.comum.Datas;
 import br.com.rbs.portal.comum.HistoricoService;
-import br.com.rbs.portal.comum.SemPermissaoException;
 import br.com.rbs.portal.comum.UsuarioAutenticado;
 import br.com.rbs.portal.comum.VerificadorDeAcesso;
 import br.com.rbs.portal.materiais.EntregaRepositorio.EntregaBase;
@@ -65,16 +64,14 @@ public class EntregaService {
 
     /**
      * Rota 14. [ISOLAMENTO] Parceria de outro dá 404. [PERMISSAO] Pedir {@code aba} de uma aba fechada dá 403 para o
-     * patrocinador; sem {@code aba}, ele recebe as entregas de todas as abas liberadas. A RBS vê tudo.
+     * patrocinador (a frase diz se a cota não inclui a aba ou se a RBS ainda não a liberou); sem {@code aba}, ele recebe
+     * as entregas de todas as abas liberadas. A RBS vê tudo.
      */
     @Transactional(readOnly = true)
     public List<EntregaDto> listar(UsuarioAutenticado usuario, long parceriaId, String abaCodigo, String status) {
         verificador.exigirParceria(usuario, parceriaId);
-        if (abaCodigo != null && !usuario.ehRbs()) {
-            boolean liberada = repositorio.abaId(abaCodigo).map(abaId -> repositorio.abaLiberada(parceriaId, abaId)).orElse(false);
-            if (!liberada) {
-                throw new SemPermissaoException(AcessoAEntregas.ABA_FECHADA);
-            }
+        if (abaCodigo != null) {
+            verificador.exigirAbaLiberada(usuario, parceriaId, abaCodigo);
         }
         return montar(repositorio.daParceria(parceriaId, abaCodigo, status, !usuario.ehRbs()));
     }

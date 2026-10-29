@@ -308,7 +308,7 @@ class ArquivosTest extends ApoioDeMateriais {
         MvcTestResult resposta = enviar(entrar(ROXO), pesquisaDoRoxo, "perguntas.pdf", pdf("perguntas"));
 
         assertThat(resposta).hasStatus(HttpStatus.FORBIDDEN);
-        assertThat(lerJson(resposta, "$.detail")).isEqualTo("Esta aba ainda não foi liberada para a sua parceria.");
+        assertThat(lerJson(resposta, "$.detail")).isEqualTo("Esta aba não faz parte da cota da sua parceria.");
         assertThat(arquivosDaEntrega(pesquisaDoRoxo)).isZero();
     }
 

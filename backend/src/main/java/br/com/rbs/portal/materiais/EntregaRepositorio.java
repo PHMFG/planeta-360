@@ -62,18 +62,6 @@ public class EntregaRepositorio {
         return jdbc.sql("SELECT id FROM aba WHERE codigo = :codigo").param("codigo", codigo).query(Integer.class).optional();
     }
 
-    /** Como no contrato, uma aba só conta como liberada se estiver liberada E visível para a parceria. */
-    public boolean abaLiberada(long parceriaId, int abaId) {
-        return jdbc.sql("""
-                        SELECT EXISTS (SELECT 1 FROM parceria_aba WHERE parceria_id = :parceriaId AND aba_id = :abaId
-                                       AND liberada AND visivel)
-                        """)
-                .param("parceriaId", parceriaId)
-                .param("abaId", abaId)
-                .query(Boolean.class)
-                .single();
-    }
-
     public long inserir(long parceriaId, int abaId, String titulo, String descricao, String status, LocalDate prazo) {
         return jdbc.sql("""
                         INSERT INTO entrega (parceria_id, aba_id, titulo, descricao, status, prazo)
