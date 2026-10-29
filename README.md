@@ -189,5 +189,5 @@ docs/       banco.md, api.md, exemplos de CSV e a modelagem da Sprint 1
 
 - Contrato da API: [`docs/api.md`](docs/api.md)
 - Banco de dados: [`docs/banco.md`](docs/banco.md)
-- Figma: [Mockup · 06 · UI com a marca](https://www.figma.com/design/tXjjKVcZD978u5f6bYFimf/Mockup?node-id=165-2)
+- Figma: [Mockup · 07 · Implementação (Entrega 2)](https://www.figma.com/design/tXjjKVcZD978u5f6bYFimf/Mockup?node-id=408-2), com as telas do portal desta versão; o desenho de referência continua em [06 · UI com a marca](https://www.figma.com/design/tXjjKVcZD978u5f6bYFimf/Mockup?node-id=165-2)
 - Documentos da Etapa 2 no Drive: Diagnóstico dos dados, Modelo do relatório e Modelagem do banco
