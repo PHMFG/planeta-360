@@ -12,6 +12,7 @@ import br.com.rbs.portal.comum.VerificadorDeAcesso;
 import br.com.rbs.portal.consolidacao.CargaDtos.CargaDto;
 import br.com.rbs.portal.consolidacao.CargaDtos.RejeicaoDto;
 import br.com.rbs.portal.consolidacao.CargaRepositorio.LinhaDePesquisa;
+import br.com.rbs.portal.consolidacao.CargaRepositorio.LinhaDePlano;
 import br.com.rbs.portal.consolidacao.CargaRepositorio.LinhaDeVeiculacao;
 import br.com.rbs.portal.consolidacao.LeitorDeCsv.Coluna;
 import br.com.rbs.portal.consolidacao.LeitorDeCsv.Linha;
@@ -32,16 +33,21 @@ import org.springframework.web.multipart.MultipartFile;
 
 /**
  * Carga de planilhas CSV da RBS: envio (rota 26), lista de cargas (27) e linhas rejeitadas (28). Atende o item 5 da Entrega 2.
- * [CARGA] [DUPLICIDADE] A API confere o arquivo e o cabeçalho, guarda a planilha como arquivo da RBS, grava as linhas na área
- * de passagem e chama a função do banco, que rejeita o que não serve e insere sem duplicar. [PERMISSAO] Tudo aqui é só da
- * RBS (403 para o patrocinador, antes de qualquer outra conferência). [HISTORICO] Cada carga registra a ação CARGA.
+ * Três tipos: veiculação (mídia exibida), pesquisa (resultados agregados) e plano (o plano comercial, que enche o previsto de
+ * mídia e de aplicações de marca). [CARGA] [DUPLICIDADE] A API confere o arquivo e o cabeçalho, guarda a planilha como arquivo
+ * da RBS, grava as linhas na área de passagem e chama a função do banco, que rejeita o que não serve e insere sem duplicar.
+ * [PERMISSAO] Tudo aqui é só da RBS (403 para o patrocinador, antes de qualquer outra conferência). [HISTORICO] Cada carga
+ * registra a ação CARGA.
  */
 @Service
 public class CargaService {
 
     static final String VEICULACAO = "VEICULACAO";
     static final String PESQUISA = "PESQUISA";
+    static final String PLANO = "PLANO";
     private static final Set<String> ESCOPOS = Set.of("ATIVACAO", "GERAL");
+
+    static final String FRASE_DE_TIPO_INVALIDO = "Tipo inválido. Use VEICULACAO, PESQUISA ou PLANO.";
 
     /** Linhas gravadas por vez na área de passagem (um lote por ida ao banco). */
     private static final int LOTE = 1000;
@@ -53,6 +59,12 @@ public class CargaService {
     private static final List<Coluna> COLUNAS_DA_PESQUISA = List.of(new Coluna("patrocinador", 120),
             new Coluna("pergunta", 40), new Coluna("indicador", 120), new Coluna("alternativa", 120),
             new Coluna("valor", 40), new Coluna("unidade", 12), new Coluna("base_respondentes", 40));
+    // O plano comercial (os nomes são os de stg_plano e de aproveitamento_previsto; o limite é o da coluna do banco). A quantidade
+    // e a página têm 40: são lidas como número, e o limite só protege contra texto absurdo (a coluna do texto original é de 40).
+    private static final List<Coluna> COLUNAS_DO_PLANO = List.of(new Coluna("patrocinador", 120), new Coluna("categoria", 20),
+            new Coluna("bloco", 80), new Coluna("veiculo", 80), new Coluna("formato", 160), new Coluna("espaco_programa", 160),
+            new Coluna("janela", 80), new Coluna("tipo_midia", 20), new Coluna("quantidade_prevista", 40),
+            new Coluna("unidade", 15), new Coluna("fonte_pagina", 40));
 
     private final CargaRepositorio repositorio;
     private final Armazenamento armazenamento;
@@ -73,7 +85,7 @@ public class CargaService {
 
     /**
      * Rota 26. Ordem das respostas: 403 (patrocinador), 422 (parte ausente, planilha de 0 bytes, tipo, evento ou escopo
-     * inválido, ou edição sem a pesquisa pedida), 415 (não é .csv), 413/415 do Armazenamento (tamanho; conteúdo que não é
+     * inválido, ou edição sem a pesquisa pedida; o escopo só vale na pesquisa), 415 (não é .csv), 413/415 do Armazenamento (tamanho; conteúdo que não é
      * texto UTF-8, com a instrução de salvar como CSV UTF-8) e 422 (cabeçalho sem coluna, texto maior que a coluna, CSV mal
      * formado, planilha sem linhas de dados).
      * Tudo corre numa transação: se qualquer passo falhar, a carga, as linhas da área de passagem, o registro do arquivo e
@@ -93,8 +105,8 @@ public class CargaService {
             campos.put("arquivo", "A planilha está vazia.");
         }
         String tipo = tipoInformado == null ? "" : tipoInformado.strip();
-        if (!VEICULACAO.equals(tipo) && !PESQUISA.equals(tipo)) {
-            campos.put("tipo", "Tipo inválido. Use VEICULACAO ou PESQUISA.");
+        if (!VEICULACAO.equals(tipo) && !PESQUISA.equals(tipo) && !PLANO.equals(tipo)) {
+            campos.put("tipo", FRASE_DE_TIPO_INVALIDO);
         }
         Long eventoId = numero(eventoIdInformado);
         Integer edicao = null;
@@ -106,7 +118,7 @@ public class CargaService {
                 campos.put("eventoId", "Esta edição do festival não existe.");
             }
         }
-        // O escopo só existe na pesquisa; na veiculação a parte é ignorada. Sem escopo, vale a pesquisa da ativação.
+        // O escopo só existe na pesquisa; na veiculação e no plano a parte é ignorada. Sem escopo, vale a pesquisa da ativação.
         String escopo = null;
         if (PESQUISA.equals(tipo)) {
             escopo = escopoInformado == null || escopoInformado.isBlank() ? "ATIVACAO" : escopoInformado.strip();
@@ -137,18 +149,35 @@ public class CargaService {
 
         // A planilha fica guardada como arquivo geral da RBS (sem parceria), com autor, data e hash. Confere tamanho e
         // conteúdo (413/415); se algo falhar daqui em diante, o rollback apaga o arquivo do disco.
-        var gravado = armazenamento.gravar(conteudo, nome, VEICULACAO.equals(tipo) ? "RELATORIO_VEICULACAO" : "PESQUISA",
-                usuario.id(), null);
+        // [CARGA] No banco a veiculação é MIDIA e o plano é PLANO_COMERCIAL (o CHECK de carga.tipo); a categoria do arquivo
+        // acompanha o assunto da planilha (o plano guarda o CSV como PLANO_COMERCIAL, categoria que o CHECK de arquivo já tem).
+        var gravado = armazenamento.gravar(conteudo, nome, switch (tipo) {
+            case VEICULACAO -> "RELATORIO_VEICULACAO";
+            case PLANO -> "PLANO_COMERCIAL";
+            default -> "PESQUISA";
+        }, usuario.id(), null);
 
-        long cargaId = repositorio.criar(VEICULACAO.equals(tipo) ? "MIDIA" : "PESQUISA", gravado.id(), eventoId, usuario.id());
-        if (VEICULACAO.equals(tipo)) {
-            LeitorDeCsv.ler(conteudo, COLUNAS_DA_VEICULACAO, LOTE, lote -> repositorio.gravarVeiculacoes(cargaId,
-                    lote.stream().map(CargaService::veiculacao).toList()));
-            repositorio.processarVeiculacoes(cargaId, eventoId);
-        } else {
-            LeitorDeCsv.ler(conteudo, COLUNAS_DA_PESQUISA, LOTE, lote -> repositorio.gravarPesquisa(cargaId,
-                    lote.stream().map(CargaService::pesquisa).toList()));
-            repositorio.processarPesquisa(cargaId, pesquisaId);
+        long cargaId = repositorio.criar(switch (tipo) {
+            case VEICULACAO -> "MIDIA";
+            case PLANO -> "PLANO_COMERCIAL";
+            default -> "PESQUISA";
+        }, gravado.id(), eventoId, usuario.id());
+        switch (tipo) {
+            case VEICULACAO -> {
+                LeitorDeCsv.ler(conteudo, COLUNAS_DA_VEICULACAO, LOTE, lote -> repositorio.gravarVeiculacoes(cargaId,
+                        lote.stream().map(CargaService::veiculacao).toList()));
+                repositorio.processarVeiculacoes(cargaId, eventoId);
+            }
+            case PLANO -> {
+                LeitorDeCsv.ler(conteudo, COLUNAS_DO_PLANO, LOTE, lote -> repositorio.gravarPlano(cargaId,
+                        lote.stream().map(CargaService::plano).toList()));
+                repositorio.processarPlano(cargaId, eventoId);
+            }
+            default -> {
+                LeitorDeCsv.ler(conteudo, COLUNAS_DA_PESQUISA, LOTE, lote -> repositorio.gravarPesquisa(cargaId,
+                        lote.stream().map(CargaService::pesquisa).toList()));
+                repositorio.processarPesquisa(cargaId, pesquisaId);
+            }
         }
 
         CargaDto carga = repositorio.buscar(cargaId).orElseThrow();
@@ -164,7 +193,7 @@ public class CargaService {
     // Rotas 27 e 28: leitura
     // ---------------------------------------------------------------------
 
-    /** Rota 27. A carga mais nova primeiro; filtros opcionais por tipo (VEICULACAO ou PESQUISA) e por edição. */
+    /** Rota 27. A carga mais nova primeiro; filtros opcionais por tipo (VEICULACAO, PESQUISA ou PLANO) e por edição. */
     @Transactional(readOnly = true)
     public PaginaDto<CargaDto> listar(UsuarioAutenticado usuario, String tipoInformado, Long eventoId, int pagina, int tamanho) {
         verificador.exigirRbs(usuario);
@@ -173,7 +202,8 @@ public class CargaService {
             tipo = switch (tipoInformado.strip()) {
                 case VEICULACAO -> "MIDIA";
                 case PESQUISA -> "PESQUISA";
-                default -> throw new DadosInvalidosException(Map.of("tipo", "Tipo inválido. Use VEICULACAO ou PESQUISA."));
+                case PLANO -> "PLANO_COMERCIAL";
+                default -> throw new DadosInvalidosException(Map.of("tipo", FRASE_DE_TIPO_INVALIDO));
             };
         }
         long total = repositorio.contar(tipo, eventoId);
@@ -204,6 +234,18 @@ public class CargaService {
         BigDecimal quantidade = Celulas.decimal(v.get(5), 14);
         return new LinhaDeVeiculacao(l.numero(), v.get(0), v.get(1), v.get(2), v.get(3), exibidoEm, quantidade, v.get(6),
                 exibidoEm == null ? v.get(4) : null, quantidade == null ? v.get(5) : null);
+    }
+
+    // Os valores chegam na ordem de COLUNAS_DO_PLANO. Categoria, tipo e unidade são códigos de lista fechada: valem em maiúsculas
+    // ("midia" vale como MIDIA) e a função do banco confere se são um dos aceitos. A quantidade que não converte vai nula, com o
+    // texto original ao lado, e a função rejeita a linha dizendo o formato; a página (opcional) fora de 1 a 32767 vai nula.
+    private static LinhaDePlano plano(Linha l) {
+        List<String> v = l.valores();
+        BigDecimal quantidade = Celulas.decimal(v.get(8), 14);
+        Integer pagina = Celulas.inteiro(v.get(10), 1, Short.MAX_VALUE);
+        return new LinhaDePlano(l.numero(), v.get(0), Celulas.codigo(v.get(1)), v.get(2), v.get(3), v.get(4), v.get(5), v.get(6),
+                Celulas.codigo(v.get(7)), quantidade, quantidade == null ? v.get(8) : null, Celulas.codigo(v.get(9)),
+                pagina == null ? null : pagina.shortValue());
     }
 
     // Colunas de stg_pesquisa: pergunta é smallint, valor é numeric(10,2) e a base é integer.

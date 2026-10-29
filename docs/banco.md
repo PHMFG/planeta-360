@@ -18,7 +18,7 @@ Os números: **36 tabelas, 8 visões, 6 funções e 16 gatilhos de regra**. As f
 | `backend/src/main/resources/db/dev/R__amostra.sql` | A amostra: Amarelo, Roxo e Verde, usuários, planos, entregas com arquivos, cargas, relatórios | Só dev e test |
 | `backend/src/main/resources/dev/exemplos/` | Arquivos de exemplo (png, jpg, mp4, mp3, docx, xlsx, pptx, zip) que a API copia para o armazenamento no perfil dev | Só dev |
 | `backend/src/test/resources/db/verificacao.sql` | As conferências (contagens, órfãos, uma tentativa de violar cada regra) | Quando se quiser conferir |
-| `docs/exemplos/veiculacao.csv` e `pesquisa.csv` | Exemplos de planilha para as duas cargas | Teste manual |
+| `docs/exemplos/veiculacao.csv`, `pesquisa.csv` e `plano.csv` | Exemplos de planilha para as três cargas | Teste manual |
 
 Duas regras de convivência:
 
@@ -316,9 +316,9 @@ erDiagram
 
 ## Formatos dos CSV
 
-Os dois exemplos estão em `docs/exemplos/`. Valem para os dois arquivos:
+Os três exemplos estão em `docs/exemplos/`. Valem para os três arquivos:
 
-- Texto em UTF-8, sem BOM, uma linha de cabeçalho com os nomes abaixo.
+- Texto em UTF-8 (o BOM que o Excel grava no começo é aceito), uma linha de cabeçalho com os nomes abaixo, em qualquer ordem. Coluna a mais é ignorada.
 - Separador vírgula. Texto com vírgula ou aspas vai entre aspas, e a aspa dentro do texto é dobrada (`"Chamadas assinadas 5"""`).
 - Número com ponto decimal (`8.4`). Data e hora no padrão ISO 8601 com o fuso (`2026-11-20T10:15:30-03:00`).
 - Campo vazio vale como nulo.
@@ -352,6 +352,24 @@ As colunas são as mesmas de `stg_veiculacao`, como prevê o plano.
 
 O exemplo tem 11 linhas: 9 entram, 1 é repetida com o apelido "Amarelo" (duplicada) e 1 tem percentual de 140 (rejeitada).
 Reenviar o mesmo arquivo não insere nada.
+
+**`plano.csv`** (vai para `stg_plano`). É o plano comercial: uma linha por item que a cota comprou, de mídia ou de aplicação de marca. O limite de texto de cada coluna é o da coluna de `aproveitamento_previsto`; acima dele a API recusa o arquivo inteiro (422).
+
+| Coluna | Obrigatória | O que é |
+| --- | --- | --- |
+| `patrocinador` | Sim | Nome canônico ou grafia alternativa da marca (até 120 caracteres) |
+| `categoria` | Sim | `MIDIA` ou `APLICACAO_MARCA` (até 20) |
+| `bloco` | Não | Agrupamento do plano, por exemplo "Aplicações de marca" (até 80) |
+| `veiculo` | Sim | Por exemplo "Rede Atlântida RS". Nas aplicações de marca, "No evento", como na amostra: a coluna é obrigatória em todas as categorias (até 80) |
+| `formato` | Sim | O formato da mídia ou a descrição da aplicação, por exemplo "Elemento na Arena" (até 160) |
+| `espaco_programa` | Não | Coluna "Determinação" do plano (até 160). Vazio é um espaço como outro: a mesma linha com e sem espaço são duas linhas do plano |
+| `janela` | Não | Período de veiculação, em texto (até 80). Não entra na chave |
+| `tipo_midia` | Em mídia | `ASSINADA`, `PROPRIA`, `MERCHANDISING`, `BRANDED` ou `CONTEUDO_DE_MARCA` (até 20). Vazio nas aplicações; se vier, é ignorado |
+| `quantidade_prevista` | Sim | Maior que zero, com ponto decimal |
+| `unidade` | Sim | `INSERCAO`, `CPM` ou `APLICACAO` em mídia; sempre `APLICACAO` nas aplicações de marca (até 15) |
+| `fonte_pagina` | Não | Página do PDF do plano comercial, inteiro de 1 a 32767. Fora disso, ou se não for número, fica sem página (não rejeita a linha) |
+
+`categoria`, `tipo_midia` e `unidade` valem em maiúsculas ou minúsculas. A chave de uma linha é **patrocinador + veículo + formato + espaço do programa**; a mesma linha repetida conta como duplicada e a primeira prevalece. O exemplo foi feito para a parceria **"Cliente Teste"** da edição 2027, a que se cria pela tela na demonstração (nasce sem plano comercial). Ele tem 11 linhas: 8 entram (6 aplicações de marca "No evento" e 2 de mídia, com tipo), 1 é repetida (o "Elemento na Arena" de novo, com quantidade 2: a primeira, de 1, prevalece), e 2 são rejeitadas (a mídia "Menções ao vivo", sem tipo, e o "Cliente Azul", que não tem parceria). Reenviar o mesmo arquivo não insere nada: as 9 linhas válidas viram duplicadas. Enviado a uma edição em que a "Cliente Teste" não tem parceria, o exemplo inteiro é rejeitado.
 
 ## Como conferir
 

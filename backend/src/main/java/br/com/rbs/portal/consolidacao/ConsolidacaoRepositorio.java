@@ -271,10 +271,15 @@ public class ConsolidacaoRepositorio {
                 .single();
     }
 
+    /**
+     * A carga mais nova da edição, só de mídia ou de pesquisa: a carga do plano comercial (que enche o previsto) não ocupa o
+     * card "última carga" do painel, que fala de exibição e de resultado.
+     */
     public Optional<LinhaDeCarga> ultimaCarga(long eventoId) {
         return jdbc.sql("""
                         SELECT id, tipo, executada_em, linhas_inseridas, linhas_rejeitadas
-                        FROM carga WHERE evento_id = :eventoId ORDER BY executada_em DESC, id DESC LIMIT 1
+                        FROM carga WHERE evento_id = :eventoId AND tipo IN ('MIDIA', 'PESQUISA')
+                        ORDER BY executada_em DESC, id DESC LIMIT 1
                         """)
                 .param("eventoId", eventoId)
                 .query(LinhaDeCarga.class)

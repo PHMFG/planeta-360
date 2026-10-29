@@ -26,14 +26,14 @@ class CargaRollbackTest extends ApoioDeCargas {
 
     /** Tudo o que uma carga mexe, para comparar antes e depois. */
     private record Foto(long cargas, long arquivos, long linhasDePassagem, long rejeicoes, long veiculacoes, long historicoDeCarga,
-                        long arquivosEmDisco) {
+                        long arquivosEmDisco, long linhasDePassagemDoPlano, long linhasDoPlano) {
     }
 
     Foto fotografar() {
         return new Foto(contar("SELECT count(*) FROM carga"), contar("SELECT count(*) FROM arquivo"),
                 contar("SELECT count(*) FROM stg_veiculacao"), contar("SELECT count(*) FROM carga_rejeicao"),
                 contar("SELECT count(*) FROM veiculacao"), contar("SELECT count(*) FROM historico WHERE acao = 'CARGA'"),
-                arquivosEmDisco());
+                arquivosEmDisco(), contar("SELECT count(*) FROM stg_plano"), contar("SELECT count(*) FROM aproveitamento_previsto"));
     }
 
     private static long arquivosEmDisco() {
@@ -88,6 +88,50 @@ class CargaRollbackTest extends ApoioDeCargas {
 
         assertThat(resposta).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat((String) lerJson(resposta, "$.campos.arquivo")).contains("Linha 1502").contains("link");
+        assertThat(fotografar()).isEqualTo(antes);
+    }
+
+    @Test
+    void seAFuncaoDoPlanoFalharNadaFicaPelaMetade() {
+        SessaoDeApi rbs = entrar(RBS);
+        // O mesmo gatilho de mentira, agora no plano: a função falha DEPOIS de a carga e as linhas já estarem no banco.
+        jdbc.sql("""
+                CREATE FUNCTION tmp_recusa_plano() RETURNS trigger LANGUAGE plpgsql AS $$
+                BEGIN
+                    RAISE EXCEPTION 'Linha do plano recusada pelo teste.' USING ERRCODE = 'check_violation';
+                END $$""").update();
+        jdbc.sql("CREATE TRIGGER tmp_recusa_plano BEFORE INSERT ON aproveitamento_previsto FOR EACH ROW EXECUTE FUNCTION tmp_recusa_plano()")
+                .update();
+        try {
+            Foto antes = fotografar();
+            String csv = CABECALHO_PLANO + "\nCliente Amarelo,APLICACAO_MARCA,,No evento,Elemento novo do teste,,,,1,APLICACAO,\n";
+
+            MvcTestResult resposta = enviar(rbs, "plano.csv", texto(csv), "PLANO", evento(2027), null);
+
+            assertThat(resposta).hasStatus(HttpStatus.CONFLICT);
+            assertThat((String) lerJson(resposta, "$.detail")).doesNotContain("tmp_recusa").doesNotContain("ERROR");
+            assertThat(fotografar()).isEqualTo(antes);
+        } finally {
+            jdbc.sql("DROP TRIGGER tmp_recusa_plano ON aproveitamento_previsto").update();
+            jdbc.sql("DROP FUNCTION tmp_recusa_plano()").update();
+        }
+    }
+
+    @Test
+    void erroNoMeioDaLeituraDoPlanoDesfazOQueJaTinhaSidoGravadoNaAreaDePassagem() {
+        SessaoDeApi rbs = entrar(RBS);
+        // 1.500 linhas boas e, no fim, um bloco grande demais: a API grava o 1º lote de 1.000 linhas e só então descobre o erro.
+        StringBuilder csv = new StringBuilder(CABECALHO_PLANO).append('\n');
+        for (int i = 0; i < 1500; i++) {
+            csv.append("Cliente Amarelo,APLICACAO_MARCA,,No evento,Elemento ").append(i).append(",,,,1,APLICACAO,\n");
+        }
+        csv.append("Cliente Amarelo,APLICACAO_MARCA,").append("b".repeat(81)).append(",No evento,Elemento final,,,,1,APLICACAO,\n");
+        Foto antes = fotografar();
+
+        MvcTestResult resposta = enviar(rbs, "grande.csv", texto(csv.toString()), "PLANO", evento(2027), null);
+
+        assertThat(resposta).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat((String) lerJson(resposta, "$.campos.arquivo")).contains("Linha 1502").contains("bloco");
         assertThat(fotografar()).isEqualTo(antes);
     }
 }

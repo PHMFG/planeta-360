@@ -16,8 +16,8 @@ public final class CargaDtos {
     }
 
     /**
-     * Uma carga (resposta da rota 26 e item da rota 27). {@code tipo} é VEICULACAO ou PESQUISA (no banco, a veiculação
-     * é gravada como MIDIA). Linhas lidas = inseridas + duplicadas + rejeitadas.
+     * Uma carga (resposta da rota 26 e item da rota 27). {@code tipo} é VEICULACAO, PESQUISA ou PLANO (no banco, a veiculação
+     * é gravada como MIDIA e o plano como PLANO_COMERCIAL). Linhas lidas = inseridas + duplicadas + rejeitadas.
      */
     public record CargaDto(Long id, String tipo, Long eventoId, Long arquivoId, UsuarioResumoDto executadaPor,
                            OffsetDateTime executadaEm, OffsetDateTime processadaEm, int linhasLidas, int linhasInseridas,

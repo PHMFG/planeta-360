@@ -129,7 +129,7 @@ Todas prontas e testadas. A coluna "Etapa" mostra em que etapa do plano a rota e
 | 23 | `GET /api/parcerias/{id}/pesquisa` | Patrocinador da parceria | Perguntas e resultados da pesquisa | 6 |
 | 24 | `PUT /api/parcerias/{id}/pesquisa/perguntas` | Admin Patrocinador da parceria | Envia as até 3 perguntas | 6 |
 | 25 | `PATCH /api/pesquisa/perguntas/{id}/status` | Admin RBS | Aprova a pergunta ou pede ajuste | 6 |
-| 26 | `POST /api/cargas` | Admin RBS | Envia um CSV de veiculação ou de pesquisa | 6 |
+| 26 | `POST /api/cargas` | Admin RBS | Envia um CSV de veiculação, de pesquisa ou do plano comercial | 6 |
 | 27 | `GET /api/cargas` | Admin RBS | Lista as cargas feitas | 6 |
 | 28 | `GET /api/cargas/{id}/rejeicoes` | Admin RBS | Linhas que não entraram na carga, com o motivo | 6 |
 | 29 | `GET /api/parcerias/{id}/consolidacao` | Patrocinador da parceria | Previsto x exibido e faltantes | 6 |
@@ -887,23 +887,24 @@ O patrocinador recebe 403 nesta rota mesmo para a pergunta da própria parceria 
 
 ## 26. `POST /api/cargas`  · etapa 6
 
-**Quem chama:** Admin RBS (exige o token CSRF). Envia uma planilha CSV de **veiculação** (mídia exibida) ou de **pesquisa** (resultados agregados). Os formatos das colunas estão em [`docs/banco.md`](banco.md#formatos-dos-csv), e há exemplos em `docs/exemplos/`.
+**Quem chama:** Admin RBS (exige o token CSRF). Envia uma planilha CSV de **veiculação** (mídia exibida), de **pesquisa** (resultados agregados) ou do **plano** comercial (o que a cota comprou: o previsto de mídia e de aplicações de marca). Os formatos das colunas estão em [`docs/banco.md`](banco.md#formatos-dos-csv), e há exemplos em `docs/exemplos/`.
 
 **Corpo:** `multipart/form-data`
 
 | Parte | Obrigatória | O que é |
 | --- | --- | --- |
 | `arquivo` | Sim | O CSV, com extensão `.csv` (UTF-8, vírgula como separador, cabeçalho na primeira linha; o BOM do Excel no começo é aceito). Até 20 MB. |
-| `tipo` | Sim | `VEICULACAO` ou `PESQUISA`. |
+| `tipo` | Sim | `VEICULACAO`, `PESQUISA` ou `PLANO`. |
 | `eventoId` | Sim | A edição a que a planilha se refere. |
-| `escopo` | Só em `PESQUISA` | `ATIVACAO` (padrão) ou `GERAL` (pesquisa do festival, sem patrocinador). Em `VEICULACAO` a parte é ignorada. |
+| `escopo` | Só em `PESQUISA` | `ATIVACAO` (padrão) ou `GERAL` (pesquisa do festival, sem patrocinador). Em `VEICULACAO` e em `PLANO` a parte é ignorada. |
 
 **Como funciona** [CARGA] [DUPLICIDADE]
 
-1. A API confere o cabeçalho e guarda o arquivo como arquivo geral da RBS (sem parceria; categoria `RELATORIO_VEICULACAO` ou `PESQUISA`). O cabeçalho precisa ter **todas** as colunas do tipo, em qualquer ordem e em maiúsculas ou minúsculas; coluna a mais é ignorada. Veiculação: `patrocinador, veiculo, formato, espaco_programa, exibido_em, quantidade, link`. Pesquisa: `patrocinador, pergunta, indicador, alternativa, valor, unidade, base_respondentes`. Célula vazia vale como nulo.
+1. A API confere o cabeçalho e guarda o arquivo como arquivo geral da RBS (sem parceria; categoria `RELATORIO_VEICULACAO`, `PESQUISA` ou `PLANO_COMERCIAL`). O cabeçalho precisa ter **todas** as colunas do tipo, em qualquer ordem e em maiúsculas ou minúsculas; coluna a mais é ignorada. Veiculação: `patrocinador, veiculo, formato, espaco_programa, exibido_em, quantidade, link`. Pesquisa: `patrocinador, pergunta, indicador, alternativa, valor, unidade, base_respondentes`. Plano: `patrocinador, categoria, bloco, veiculo, formato, espaco_programa, janela, tipo_midia, quantidade_prevista, unidade, fonte_pagina`. Célula vazia vale como nulo.
 2. Grava as linhas numa área de passagem e chama a função do banco, que rejeita o que não tem campo obrigatório ou não bate com nenhuma parceria, e **insere sem duplicar**. Data ou número que não dá para ler (por exemplo `exibido_em` = "ontem", ou decimal com vírgula) não derruba o arquivo: a linha é rejeitada, com o campo e o **motivo específico**, que diz o formato esperado (veja a rota 28). Data sem fuso vale no horário de Brasília. Tudo corre numa transação: se algo falhar, não ficam a carga, as linhas nem o arquivo.
 3. A chave da veiculação é a **linha do plano comercial + data e hora**. Reenviar o mesmo arquivo não insere nada: tudo conta como duplicada. Reenviar com quantidade corrigida também conta como duplicada (a primeira versão prevalece).
 4. Na pesquisa da ativação, só pergunta `APROVADA` recebe resultado; a linha de pergunta ainda não aprovada é rejeitada.
+5. **No plano**, cada linha vira uma linha de `aproveitamento_previsto` da parceria da marca naquela edição (a mesma carga serve ao previsto de mídia e ao de aplicações de marca). A chave é **parceria + veículo + formato + espaço do programa** (categoria, unidade e janela ficam fora): linha repetida no arquivo, ou que já está no plano, conta como duplicada e a **primeira versão prevalece**. Reenviar uma linha com a quantidade corrigida **não** corrige o plano (editar uma linha fica fora desta etapa). `categoria`, `tipo_midia` e `unidade` valem em maiúsculas ou minúsculas. Os textos são gravados sem espaço nas pontas, e `fonte_pagina` fora de 1 a 32767 (ou que não é número) vira nula sem rejeitar a linha. Aplicação de marca não leva tipo de mídia: se vier um tipo válido, ele é ignorado. Os motivos de rejeição estão na rota 28.
 
 **201**
 
@@ -922,11 +923,13 @@ Linhas lidas = inseridas + duplicadas + rejeitadas. As rejeitadas, com o motivo,
 
 **Erros:** 403 (conferido antes de qualquer outra coisa); 413 (acima de 20 MB); 415 (não é CSV: extensão diferente de `.csv`, texto que não está em UTF-8, com a instrução de salvar como CSV UTF-8, ou conteúdo que não parece texto, com a frase de arquivo renomeado); 422 com `campos`: parte ausente (`campos.arquivo` = `Envie a planilha CSV na parte "arquivo" do formulário.`), planilha de 0 bytes (`campos.arquivo` = `A planilha está vazia.`), parte inválida (`tipo`, `eventoId`, `escopo`), evento que não existe (`campos.eventoId`), edição sem a pesquisa pedida cadastrada (`campos.escopo`), e problemas do arquivo em `campos.arquivo`: cabeçalho com coluna faltando (lista as que faltam), texto maior que a coluna do banco (diz a linha e a coluna), CSV mal formado (aspas abertas) e planilha sem nenhuma linha de dados. Nesses casos nada é gravado.
 
-**Histórico:** `CARGA`. No banco o `tipo` `VEICULACAO` é gravado como `MIDIA`.
+Texto maior que a coluna derruba o arquivo inteiro (422), como nas outras cargas. No plano, os limites são: `patrocinador` 120, `categoria` 20, `bloco` 80, `veiculo` 80, `formato` 160, `espaco_programa` 160, `janela` 80, `tipo_midia` 20, `unidade` 15.
+
+**Histórico:** `CARGA`. No banco o `tipo` `VEICULACAO` é gravado como `MIDIA` e `PLANO` como `PLANO_COMERCIAL`; a resposta e a lista (rota 27) usam sempre `VEICULACAO`, `PESQUISA` e `PLANO`.
 
 ## 27. `GET /api/cargas`  · etapa 6
 
-**Quem chama:** Admin RBS. **Filtros (opcionais):** `tipo` (`VEICULACAO` ou `PESQUISA`; outro valor dá 422), `eventoId`, `pagina`, `tamanho`. A ordem é da carga mais nova para a mais antiga (pelo id da carga).
+**Quem chama:** Admin RBS. **Filtros (opcionais):** `tipo` (`VEICULACAO`, `PESQUISA` ou `PLANO`; outro valor dá 422 com `Tipo inválido. Use VEICULACAO, PESQUISA ou PLANO.`), `eventoId`, `pagina`, `tamanho`. A ordem é da carga mais nova para a mais antiga (pelo id da carga).
 
 **200**: uma página de cargas, cada item no formato da resposta da rota 26.
 
@@ -966,7 +969,22 @@ Linhas lidas = inseridas + duplicadas + rejeitadas. As rejeitadas, com o motivo,
 | `base_respondentes` zero ou negativa | `A base de respondentes deve ser maior que zero.` |
 | `pergunta` ilegível ou fora de 1 a 3 (pesquisa da ativação) | `Pergunta inválida. Use o número da pergunta: 1, 2 ou 3.` / `Pergunta fora do intervalo de 1 a 3` |
 | percentual fora de 0 a 100 | `Percentual fora do intervalo de 0 a 100` |
-| pergunta sem cadastro ou ainda não aprovada | `Pergunta não cadastrada para esta parceria nesta pesquisa` / `Pergunta ainda não aprovada pela RBS` | **Erros:** 403 (também para carga que não existe: a permissão é conferida primeiro); 404 (carga que não existe, para a RBS).
+| pergunta sem cadastro ou ainda não aprovada | `Pergunta não cadastrada para esta parceria nesta pesquisa` / `Pergunta ainda não aprovada pela RBS` |
+
+**Os motivos do plano** (carga `PLANO`). Também um só por linha, na ordem desta tabela (vale o primeiro problema). O `campo` é o nome da coluna do CSV.
+
+| Campo | Motivo |
+| --- | --- |
+| `patrocinador`, `categoria`, `veiculo` ou `formato` vazio; `quantidade_prevista` ou `unidade` vazia | `Campo obrigatório vazio ou inválido` (o `veiculo` é obrigatório também nas aplicações de marca: use `No evento`) |
+| `quantidade_prevista` ilegível (`1x`, `1,5`) | `Quantidade inválida. Use só números, como 1 ou 250 (ponto nos decimais).` |
+| `quantidade_prevista` zero ou negativa | `A quantidade deve ser maior que zero.` |
+| `categoria` fora da lista | `Categoria inválida. Use MIDIA ou APLICACAO_MARCA.` |
+| `unidade` fora da lista | `Unidade inválida. Use INSERCAO, CPM ou APLICACAO.` |
+| `unidade` diferente de `APLICACAO` numa aplicação de marca | `Aplicação de marca usa a unidade APLICACAO.` |
+| `tipo_midia` vazio numa mídia, ou preenchido e fora da lista (em qualquer categoria) | `Tipo de mídia inválido. Use ASSINADA, PROPRIA, MERCHANDISING, BRANDED ou CONTEUDO_DE_MARCA.` |
+| `patrocinador` sem parceria na edição | `Patrocinador sem parceria nesta edição` |
+
+**Erros:** 403 (também para carga que não existe: a permissão é conferida primeiro); 404 (carga que não existe, para a RBS). Vale para as cargas de veiculação, de pesquisa e de plano.
 
 ## 29. `GET /api/parcerias/{id}/consolidacao`  · etapa 6
 
@@ -1038,7 +1056,7 @@ Como cada número é contado:
 - `entregas.porStatus` traz sempre os 7 status, com 0 nos que não têm entrega. `esperandoAnalise` = `ENVIADO` + `EM_ANALISE` (a bola está com a RBS).
 - `entregas.atrasadas`: prazo já vencido (data de Brasília; vencer hoje ainda não é atraso) e entrega ainda com a marca: `NAO_INICIADO`, `AGUARDANDO_ENVIO` ou `AJUSTE_SOLICITADO`. Entrega já enviada não conta como atraso da marca. [PENDENTE] A RBS pode preferir outra definição.
 - `relatorios` conta a situação da **versão mais nova** de cada parceria da edição; `semRelatorio` é quem não tem versão. `marcaVe` é outra conta: quantas parcerias da edição têm **pelo menos uma versão disponibilizada**, mesmo que a mais nova seja rascunho ou validada (a marca continua vendo a disponibilizada anterior). Uma parceria com a v2 disponibilizada e a v3 em rascunho conta em `rascunho` e em `marcaVe`. O card "Relatórios disponibilizados" do Painel deve mostrar `marcaVe`.
-- `ultimaCarga` é a carga mais nova **da edição**; o `tipo` usa o nome da API (`VEICULACAO`, e não `MIDIA` do banco).
+- `ultimaCarga` é a carga mais nova **da edição, de veiculação ou de pesquisa**; o `tipo` usa o nome da API (`VEICULACAO`, e não `MIDIA` do banco). A carga do plano comercial (`PLANO`) não entra nessa conta: ela enche o previsto e não ocupa o card.
 - `eventoId` que não existe: 404; que não é número: 400. O patrocinador recebe 403 antes de qualquer conferência.
 
 ---
