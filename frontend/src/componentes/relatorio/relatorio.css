@@ -1,0 +1,17 @@
+/* Relatório do Atlas em A4: o mesmo documento na tela e na impressão do navegador ("Imprimir ou salvar PDF"). [ATLAS] */
+@page {
+  size: A4;
+  margin: 14mm;
+}
+
+@media print {
+  .rel-bloco {
+    break-inside: avoid;
+  }
+  .rel-secao {
+    break-before: auto;
+  }
+  .nao-imprimir {
+    display: none !important;
+  }
+}

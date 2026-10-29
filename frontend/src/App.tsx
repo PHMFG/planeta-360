@@ -15,6 +15,7 @@ import { MinhaParceria } from './paginas/parceria/MinhaParceria'
 import { PaginaAba } from './paginas/parceria/PaginaAba'
 import { Perfil } from './paginas/parceria/Perfil'
 import { Pesquisa } from './paginas/parceria/Pesquisa'
+import { RelatorioAtlas } from './paginas/parceria/RelatorioAtlas'
 import { RelatorioParceria } from './paginas/parceria/RelatorioParceria'
 import { Cargas } from './paginas/rbs/Cargas'
 import { Fila } from './paginas/rbs/Fila'
@@ -78,6 +79,7 @@ export function App() {
           )
         })}
         <Route path="relatorio" element={<RelatorioParceria />} />
+        <Route path="relatorios-atlas/:relatorioId" element={<RelatorioAtlas />} />
         <Route path="historico" element={<HistoricoParceria />} />
       </Route>
 
