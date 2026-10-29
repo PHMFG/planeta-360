@@ -74,7 +74,8 @@ public class ArquivoService {
      * "arquivo" ausente ou vazia, categoria ou observação inválida), 403 (categoria só da RBS), 409 (status que não aceita
      * envio), 413/415 (tamanho, extensão ou conteúdo, conferidos pelo Armazenamento).
      * [HISTORICO] ENVIO_ARQUIVO no primeiro envio, NOVA_VERSAO nos seguintes e ALTERACAO_STATUS quando o status muda,
-     * tudo na mesma transação do arquivo: se algo falhar, nem o registro nem o arquivo em disco ficam.
+     * tudo na mesma transação do arquivo: se algo falhar, nem o registro nem o arquivo em disco ficam. A observação
+     * fica ligada à versão (aparece na lista de versões da entrega) e também no detalhe do histórico.
      */
     @Transactional
     public ArquivoEnviadoDto enviar(UsuarioAutenticado usuario, long entregaId, MultipartFile arquivo, String categoriaInformada,
@@ -113,7 +114,7 @@ public class ArquivoService {
         }
 
         var gravado = armazenamento.gravarNaEntrega(bytesDe(arquivo), arquivo.getOriginalFilename(), categoria, usuario.id(),
-                entregaId);
+                entregaId, observacao);
 
         int versao = gravado.versao();
         String novo = gravado.nomeOriginal() + " (versão " + versao + ")";
@@ -133,7 +134,7 @@ public class ArquivoService {
 
         return new ArquivoEnviadoDto(gravado.id(), entregaId, gravado.nomeOriginal(), gravado.mimeType(), gravado.tamanhoBytes(),
                 versao, gravado.categoria(), new UsuarioResumoDto(usuario.id(), usuario.nome(), usuario.perfil().name()),
-                Datas.emBrasilia(gravado.enviadoEm()), status);
+                Datas.emBrasilia(gravado.enviadoEm()), gravado.observacao(), status);
     }
 
     /**

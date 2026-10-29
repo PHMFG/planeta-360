@@ -97,6 +97,47 @@ class ArquivosTest extends ApoioDeMateriais {
     }
 
     @Test
+    void aObservacaoDoEnvioFicaNaVersaoESaiNaRespostaENaListaDeVersoesDaEntrega() {
+        long entrega = criarEntrega(entrar(RBS), amarelo(), "MIDIA", "Peça nova");
+        SessaoDeApi amarelo = entrar(AMARELO);
+
+        MvcTestResult v1 = enviar(amarelo, entrega, "peca.pdf", pdf("v1"), null, "  Primeira versão, sem trilha.  ");
+        MvcTestResult v2 = enviar(amarelo, entrega, "peca.pdf", pdf("v2"), null, null);
+        MvcTestResult v3 = enviar(amarelo, entrega, "peca.pdf", pdf("v3"), null, "Agora com a trilha liberada.");
+
+        // A resposta da rota 17 já traz a observação (sem os espaços das pontas) ou null.
+        assertThat(lerJson(v1, "$.observacao")).isEqualTo("Primeira versão, sem trilha.");
+        assertThat(lerJson(v2, "$.observacao")).isNull();
+        assertThat(lerJson(v3, "$.observacao")).isEqualTo("Agora com a trilha liberada.");
+        // E a lista de versões da entrega (rota 14), da mais nova para a mais antiga, traz cada uma com a sua.
+        MvcTestResult lista = amarelo.get("/api/parcerias/" + amarelo() + "/entregas?aba=MIDIA");
+        List<Object> versoes = lerLista(lista, "$[?(@.id == " + entrega + ")].arquivos[*].versao");
+        List<Object> observacoes = lerLista(lista, "$[?(@.id == " + entrega + ")].arquivos[*].observacao");
+        assertThat(versoes).containsExactly(3, 2, 1);
+        assertThat(observacoes).containsExactly("Agora com a trilha liberada.", null, "Primeira versão, sem trilha.");
+        // O banco guarda na linha do arquivo, e o histórico continua com o mesmo texto.
+        assertThat(jdbc.sql("SELECT observacao FROM arquivo WHERE id = :id").param("id", id(v1)).query(String.class).single())
+                .isEqualTo("Primeira versão, sem trilha.");
+        assertThat(historico("ENVIO_ARQUIVO", "entrega", entrega).getFirst().get("detalhe")).isEqualTo("Primeira versão, sem trilha.");
+        // A RBS também vê a observação de cada versão, e o retorno que ela mesma envia pode ter a sua.
+        MvcTestResult retorno = enviar(entrar(RBS), entrega, "retorno.pdf", pdf("retorno"), "OUTRO", "Segue a versão com a marcação.");
+        assertThat(lerJson(retorno, "$.observacao")).isEqualTo("Segue a versão com a marcação.");
+        MvcTestResult daRbs = entrar(RBS).get("/api/parcerias/" + amarelo() + "/entregas?aba=MIDIA");
+        assertThat(lerLista(daRbs, "$[?(@.id == " + entrega + ")].arquivos[0].observacao")).containsExactly("Segue a versão com a marcação.");
+    }
+
+    @Test
+    void observacaoLongaDemaisContinuaRecusadaEOArquivoNaoFicaComTextoPela() {
+        long entrega = criarEntrega(entrar(RBS), amarelo(), "MIDIA", "Peça nova");
+
+        MvcTestResult resposta = enviar(entrar(AMARELO), entrega, "peca.pdf", pdf("v1"), null, "x".repeat(501));
+
+        assertThat(resposta).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(lerJson(resposta, "$.campos.observacao")).isNotNull();
+        assertThat(arquivosDaEntrega(entrega)).isZero();
+    }
+
+    @Test
     void segundoEnvioViraVersao2ComNovaVersaoNoHistoricoESemOutraMudancaDeStatus() {
         long entrega = criarEntrega(entrar(RBS), amarelo(), "MIDIA", "VT para os telões dos palcos");
         SessaoDeApi amarelo = entrar(AMARELO);
@@ -204,13 +245,13 @@ class ArquivosTest extends ApoioDeMateriais {
     void depoisDeAjusteSolicitadoOReenvioVoltaParaEnviadoEFicaNaVersao2() {
         SessaoDeApi rbs = entrar(RBS);
         SessaoDeApi roxo = entrar(ROXO);
-        long entrega = entregaDaAmostra(roxo(), "VT para os telões dos palcos");   // AJUSTE_SOLICITADO na amostra
+        long entrega = entregaDaAmostra(roxo(), "VT para os telões dos palcos");   // AJUSTE_SOLICITADO na amostra, com a versão 1 da marca
 
         MvcTestResult resposta = enviar(roxo, entrega, "vt_ajustado.mp4", mp4(), "MATERIAL_MIDIA", null);
 
         assertThat(resposta).hasStatus(HttpStatus.CREATED);
         assertThat(lerJson(resposta, "$.mimeType")).isEqualTo("video/mp4");
-        assertThat(lerJson(resposta, "$.versao")).isEqualTo(1);
+        assertThat(lerJson(resposta, "$.versao")).as("a amostra já tem a versão 1 enviada pela marca").isEqualTo(2);
         assertThat(lerJson(resposta, "$.statusDaEntrega")).isEqualTo("ENVIADO");
         assertThat(statusDaEntrega(entrega)).isEqualTo("ENVIADO");
         assertThat(rbs.get("/api/entregas?status=ENVIADO&parceriaId=" + roxo())).hasStatus(HttpStatus.OK);

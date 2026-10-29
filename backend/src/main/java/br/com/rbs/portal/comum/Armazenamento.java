@@ -39,7 +39,7 @@ public class Armazenamento {
     private static final int LIMITE_NOME = 255;   // coluna arquivo.nome_original
     private static final String COLUNAS = """
             id, parceria_id, aba_id, entrega_id, categoria, nome_original, mime_type, tamanho_bytes, caminho,
-            hash_sha256, versao, enviado_por, enviado_em""";
+            hash_sha256, versao, enviado_por, enviado_em, observacao""";
 
     private final JdbcClient jdbc;
     private final Path pasta;
@@ -80,6 +80,15 @@ public class Armazenamento {
      * ao mesmo tempo não pegarem a mesma versão.
      */
     public Arquivo gravarNaEntrega(byte[] conteudo, String nomeOriginal, String categoria, long enviadoPor, long entregaId) {
+        return gravarNaEntrega(conteudo, nomeOriginal, categoria, enviadoPor, entregaId, null);
+    }
+
+    /**
+     * O mesmo, com a observação de quem enviou (pode ser nula): ela fica ligada a esta versão e aparece na lista de
+     * versões da entrega.
+     */
+    public Arquivo gravarNaEntrega(byte[] conteudo, String nomeOriginal, String categoria, long enviadoPor, long entregaId,
+                                   String observacao) {
         Preparado pronto = preparar(conteudo, nomeOriginal);
         Long parceriaId = jdbc.sql("SELECT parceria_id FROM entrega WHERE id = :id").param("id", entregaId)
                 .query(Long.class).optional().orElseThrow(() -> new NaoEncontradoException("Não encontramos esta entrega."));
@@ -87,14 +96,15 @@ public class Armazenamento {
         escrever(caminho, conteudo);
         return inserir("""
                         INSERT INTO arquivo (parceria_id, aba_id, entrega_id, categoria, nome_original, mime_type,
-                                             tamanho_bytes, caminho, hash_sha256, versao, enviado_por)
+                                             tamanho_bytes, caminho, hash_sha256, versao, enviado_por, observacao)
                         SELECT e.parceria_id, e.aba_id, e.id, :categoria, :nome, :mime, :tamanho, :caminho, :hash,
-                               coalesce((SELECT max(a.versao) FROM arquivo a WHERE a.entrega_id = e.id), 0) + 1, :enviadoPor
+                               coalesce((SELECT max(a.versao) FROM arquivo a WHERE a.entrega_id = e.id), 0) + 1, :enviadoPor,
+                               nullif(CAST(:observacao AS text), '')
                         FROM entrega e WHERE e.id = :entregaId
                         RETURNING\s""" + COLUNAS,
                 Map.of("categoria", categoria, "nome", pronto.nomeOriginal(), "mime", pronto.tipo().mime(),
                         "tamanho", (long) conteudo.length, "caminho", caminho, "hash", pronto.hash(),
-                        "enviadoPor", enviadoPor, "entregaId", entregaId),
+                        "enviadoPor", enviadoPor, "entregaId", entregaId, "observacao", observacao == null ? "" : observacao),
                 parceriaId, caminho);
     }
 

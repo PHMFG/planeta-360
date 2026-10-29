@@ -167,9 +167,12 @@ Estes formatos aparecem em várias rotas.
   "id": 12, "entregaId": 31, "nomeOriginal": "logo_final.pdf", "mimeType": "application/pdf",
   "tamanhoBytes": 482113, "versao": 2, "categoria": "MATERIAL_MARCA",
   "enviadoPor": { "id": 3, "nome": "Marketing Amarelo", "perfil": "ADMIN_PATROCINADOR" },
-  "enviadoEm": "2026-10-17T18:03:00-03:00"
+  "enviadoEm": "2026-10-17T18:03:00-03:00",
+  "observacao": "Logo em vetor, como pedido."
 }
 ```
+
+`observacao` é o recado que quem enviou escreveu **junto com aquela versão** (até 500 caracteres), ou `null` se não escreveu nada. Cada versão tem o seu: a v1 e a v2 de um arquivo podem ter recados diferentes. O mesmo texto também fica no histórico (`detalhe` do `ENVIO_ARQUIVO` ou da `NOVA_VERSAO`).
 
 **Entrega**:
 
@@ -608,7 +611,7 @@ O patrocinador só enxerga as entregas das abas **liberadas** para a parceria de
 | --- | --- | --- |
 | `arquivo` | Sim | O arquivo. Até **20 MB**. |
 | `categoria` | Não | Tipo do material. Padrão: `MATERIAL_MARCA` (patrocinador) ou `OUTRO` (RBS). |
-| `observacao` | Não | Recado de até 500 caracteres, gravado no histórico. |
+| `observacao` | Não | Recado de até 500 caracteres. Fica ligado à versão (campo `observacao` do Arquivo) e também no histórico. |
 
 **[UPLOAD] Regras do arquivo**
 
@@ -621,7 +624,7 @@ O patrocinador só enxerga as entregas das abas **liberadas** para a parceria de
 - O patrocinador só envia em entrega de aba **liberada**, e só quando a entrega está em `NAO_INICIADO`, `AGUARDANDO_ENVIO`, `AJUSTE_SOLICITADO` ou `ENVIADO`. Depois de `EM_ANALISE`, `APROVADO` ou `NAO_APLICAVEL`, o envio é recusado com 409.
 - O envio do patrocinador muda o status da entrega para `ENVIADO`. O retorno da RBS **não** muda o status.
 
-**201**: o **Arquivo** criado, com o status atual da entrega. O cabeçalho `Location` aponta para `/api/arquivos/{id}`.
+**201**: o **Arquivo** criado (com a `observacao` enviada, ou `null`), mais o status atual da entrega. O cabeçalho `Location` aponta para `/api/arquivos/{id}`.
 
 ```json
 {
@@ -629,6 +632,7 @@ O patrocinador só enxerga as entregas das abas **liberadas** para a parceria de
   "tamanhoBytes": 482113, "versao": 2, "categoria": "MATERIAL_MARCA",
   "enviadoPor": { "id": 3, "nome": "Marketing Amarelo", "perfil": "ADMIN_PATROCINADOR" },
   "enviadoEm": "2026-10-17T18:03:00-03:00",
+  "observacao": "Logo em vetor, como pedido.",
   "statusDaEntrega": "ENVIADO"
 }
 ```
