@@ -7,6 +7,7 @@ import { Layout } from './componentes/Layout'
 import { SECOES, type ChaveSecao } from './componentes/secoes'
 import { Ativar } from './paginas/acesso/Ativar'
 import { Login } from './paginas/acesso/Login'
+import { Aplicacoes } from './paginas/parceria/Aplicacoes'
 import { ContextoParceria } from './paginas/parceria/ContextoParceria'
 import { HistoricoParceria } from './paginas/parceria/HistoricoParceria'
 import { Midia } from './paginas/parceria/Midia'
@@ -23,10 +24,11 @@ import { Patrocinadores } from './paginas/rbs/Patrocinadores'
 import { Relatorios } from './paginas/rbs/Relatorios'
 import { RotaProtegida, TelaCarregando, telaInicial, useSessao } from './sessao/Sessao'
 
-// Cada seção do menu e a tela que a mostra; as quatro abas fora da prioridade usam a tela genérica.
+// Cada seção do menu e a tela que a mostra; as três abas fora da prioridade (Cortesias, Credenciamento, Contrato) usam a genérica.
 const TELAS: Partial<Record<ChaveSecao, ReactNode>> = {
   parceria: <MinhaParceria />,
   perfil: <Perfil />,
+  aplicacoes: <Aplicacoes />,
   midia: <Midia />,
   pesquisa: <Pesquisa />,
 }
