@@ -111,7 +111,8 @@ function PreparoEnvio({
             </>
           )}
           {(problema ?? falha) && <Aviso tipo="falha" titulo={problema ?? falha ?? ''} />}
-          <div className="grid grid-cols-2 gap-4">
+          {/* No celular os botões empilham (Enviar em cima): lado a lado, "Enviar" cobria parte de "Cancelar". */}
+          <div className="flex flex-col-reverse gap-3 sm:grid sm:grid-cols-2 sm:gap-4">
             <Botao variante="secundario" onClick={aoFechar} className="min-w-0">
               Cancelar
             </Botao>
@@ -262,6 +263,9 @@ function ConteudoMidia({ rbs }: { rbs: boolean }) {
                   rodape={
                     arquivo.enviadoPor?.perfil === 'ADMIN_RBS' ? (
                       <span className="font-bold text-secao-texto">Publicado pela RBS · abrir / baixar</span>
+                    ) : arquivo.versao < Math.max(...entrega.arquivos.map((item) => item.versao)) ? (
+                      // O status é da entrega e vale para a versão mais nova; a antiga não foi aprovada nem recusada sozinha.
+                      <span className="font-semibold text-texto-2">Versão anterior · ver detalhe / histórico</span>
                     ) : (
                       <Status codigo={entrega.status} complemento="ver detalhe / histórico" />
                     )

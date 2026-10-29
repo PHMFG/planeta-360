@@ -1,5 +1,5 @@
 // Detalhe de uma entrega (Figma F01, F02 e R01): versões com autor e data, novo envio, retorno da RBS e status. [ITEM-4] [UPLOAD]
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
 import { ErroApi } from '../../api/cliente'
 import {
@@ -8,6 +8,7 @@ import {
   TRANSICOES,
   baixarArquivo,
   enviarArquivo,
+  listarEntregas,
   mudarStatusEntrega,
   problemaNoArquivo,
   type Arquivo,
@@ -126,6 +127,8 @@ function FormularioEnvio({ entrega, rbs, aoEnviar }: { entrega: Entrega; rbs: bo
     setFalha(novo ? problemaNoArquivo(novo) : null)
   }
 
+  const problema = arquivo ? problemaNoArquivo(arquivo) : null
+
   async function enviar(evento: FormEvent) {
     evento.preventDefault()
     if (!arquivo) return setFalha('Escolha o arquivo.')
@@ -170,7 +173,7 @@ function FormularioEnvio({ entrega, rbs, aoEnviar }: { entrega: Entrega; rbs: bo
       )}
       {falha && <Aviso tipo="falha" titulo={falha} />}
       <div>
-        <Botao type="submit" carregando={enviando} disabled={!arquivo} icone="ri-upload-cloud-2-line">
+        <Botao type="submit" carregando={enviando} disabled={!arquivo || problema !== null} icone="ri-upload-cloud-2-line">
           {rbs ? 'Publicar retorno' : 'Enviar material'}
         </Botao>
       </div>
@@ -259,9 +262,34 @@ export function DetalheEntrega({ entrega: inicial, aoFechar, aoMudar }: Props) {
     setEntrega(inicial)
     setRecebido(null)
   }
+  // Com o detalhe aberto, voltar para a aba do navegador traz a versão e o status de agora: a outra ponta pode ter
+  // enviado ou decidido nesse meio-tempo, e a RBS não deve registrar uma decisão sobre um dado velho.
+  useEffect(() => {
+    if (!inicial) return
+    const { id, parceriaId, abaCodigo } = inicial
+    const aoVoltar = () => {
+      if (document.visibilityState !== 'visible') return
+      listarEntregas(parceriaId, abaCodigo)
+        .then((lista) => {
+          const atual = lista.find((item) => item.id === id)
+          if (atual) setEntrega(atual)
+        })
+        .catch(() => {})
+    }
+    document.addEventListener('visibilitychange', aoVoltar)
+    return () => document.removeEventListener('visibilitychange', aoVoltar)
+  }, [inicial])
+
   if (!entrega || !inicial) return null
   const secao = SECOES.find((item) => item.aba === entrega.abaCodigo) ?? SECOES[0]
   const podeEnviar = rbs || ACEITA_ENVIO.includes(entrega.status)
+  // O recado vale enquanto o ajuste está pedido ou se é sobre a versão atual; depois do reenvio, ele fica no Histórico.
+  const ultimoEnvio = entrega.arquivos[0]?.enviadoEm
+  const recado =
+    entrega.ultimaObservacao &&
+    (entrega.status === 'AJUSTE_SOLICITADO' || !ultimoEnvio || new Date(entrega.ultimaObservacao.em) >= new Date(ultimoEnvio))
+      ? entrega.ultimaObservacao
+      : null
 
   return (
     <Modal titulo={entrega.titulo} legenda={`${secao.nome} · prazo ${data(entrega.prazo)}`} aberto aoFechar={aoFechar} largura="max-w-[760px]">
@@ -271,9 +299,9 @@ export function DetalheEntrega({ entrega: inicial, aoFechar, aoMudar }: Props) {
           <span className="text-xs font-medium text-texto-2">Atualizada em {dataHora(entrega.atualizadoEm)}</span>
         </div>
         {entrega.descricao && <p className="text-sm">{entrega.descricao}</p>}
-        {entrega.ultimaObservacao && (
-          <Aviso tipo={entrega.status === 'AJUSTE_SOLICITADO' ? 'falha' : 'info'} titulo={`Observação da RBS · ${entrega.ultimaObservacao.por}`}>
-            {entrega.ultimaObservacao.texto} <span className="text-xs text-texto-2">({dataHora(entrega.ultimaObservacao.em)})</span>
+        {recado && (
+          <Aviso tipo={entrega.status === 'AJUSTE_SOLICITADO' ? 'falha' : 'info'} titulo={`Observação da RBS · ${recado.por}`}>
+            {recado.texto} <span className="text-xs text-texto-2">({dataHora(recado.em)})</span>
           </Aviso>
         )}
         {recebido && (

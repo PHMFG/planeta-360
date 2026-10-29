@@ -94,10 +94,11 @@ type Filtro<T extends string> = { valor: T; nome: string; total?: number }
 /** Filtros em texto do Figma ("Todos (3) · Enviados pela marca (2) · ..."). */
 export function Filtros<T extends string>({ opcoes, valor, aoMudar }: { opcoes: Filtro<T>[]; valor: T; aoMudar: (valor: T) => void }) {
   return (
-    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs font-medium" role="group" aria-label="Filtros">
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs font-medium sm:gap-x-2" role="group" aria-label="Filtros">
       {opcoes.map((opcao, indice) => (
         <span key={opcao.valor} className="flex items-center gap-2">
-          {indice > 0 && <span className="text-cinza-400">·</span>}
+          {/* No celular os filtros quebram linha: sem o ponto, nenhuma linha começa com "·". */}
+          {indice > 0 && <span className="text-cinza-400 max-sm:hidden">·</span>}
           <button
             type="button"
             aria-pressed={opcao.valor === valor}

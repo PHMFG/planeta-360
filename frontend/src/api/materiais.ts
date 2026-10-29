@@ -124,7 +124,7 @@ export const REGRA_ENVIO = 'PDF, PNG, JPG, DOCX, XLSX, PPTX, CSV, MP4, MP3 ou ZI
 export function problemaNoArquivo(arquivo: File): string | null {
   const extensao = arquivo.name.includes('.') ? `.${arquivo.name.split('.').pop()?.toLowerCase()}` : ''
   if (!EXTENSOES_ACEITAS.split(',').includes(extensao)) return `Este tipo de arquivo não é aceito. Envie ${REGRA_ENVIO}.`
-  if (arquivo.size > LIMITE_BYTES) return 'O arquivo passa de 20 MB. Reduza o tamanho ou envie em partes.'
+  if (arquivo.size > LIMITE_BYTES) return 'O arquivo passa do limite de 20 MB. Reduza o tamanho e escolha de novo.'
   return null
 }
 
