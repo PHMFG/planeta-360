@@ -985,7 +985,7 @@ Linhas lidas = inseridas + duplicadas + rejeitadas. As rejeitadas, com o motivo,
     "porStatus": { "NAO_INICIADO": 0, "AGUARDANDO_ENVIO": 0, "ENVIADO": 1, "EM_ANALISE": 1, "AJUSTE_SOLICITADO": 1, "APROVADO": 26, "NAO_APLICAVEL": 1 },
     "esperandoAnalise": 2, "atrasadas": 0
   },
-  "relatorios": { "semRelatorio": 0, "rascunho": 3, "validado": 0, "disponibilizado": 0 },
+  "relatorios": { "semRelatorio": 0, "rascunho": 3, "validado": 0, "disponibilizado": 0, "marcaVe": 0 },
   "ultimaCarga": { "id": 3, "tipo": "VEICULACAO", "executadaEm": "2026-11-21T09:00:00-03:00", "linhasInseridas": 1483, "linhasRejeitadas": 4 },
   "pendencias": [
     { "parceriaId": 2, "patrocinador": "Cliente Amarelo", "tipo": "ENTREGA_PENDENTE", "detalhe": "Peça de 30\" para mídia própria (em analise)" }
@@ -1000,7 +1000,7 @@ Como cada número é contado:
 - `parcerias.ativas`: parcerias com situação `ATIVA`; `semUsuario`: parcerias sem nenhum vínculo de usuário (o faltante `PARCERIA_SEM_USUARIO`).
 - `entregas.porStatus` traz sempre os 7 status, com 0 nos que não têm entrega. `esperandoAnalise` = `ENVIADO` + `EM_ANALISE` (a bola está com a RBS).
 - `entregas.atrasadas`: prazo já vencido (data de Brasília; vencer hoje ainda não é atraso) e entrega ainda com a marca: `NAO_INICIADO`, `AGUARDANDO_ENVIO` ou `AJUSTE_SOLICITADO`. Entrega já enviada não conta como atraso da marca. [PENDENTE] A RBS pode preferir outra definição.
-- `relatorios` conta a situação da **versão mais nova** de cada parceria da edição; `semRelatorio` é quem não tem versão.
+- `relatorios` conta a situação da **versão mais nova** de cada parceria da edição; `semRelatorio` é quem não tem versão. `marcaVe` é outra conta: quantas parcerias da edição têm **pelo menos uma versão disponibilizada**, mesmo que a mais nova seja rascunho ou validada (a marca continua vendo a disponibilizada anterior). Uma parceria com a v2 disponibilizada e a v3 em rascunho conta em `rascunho` e em `marcaVe`. O card "Relatórios disponibilizados" do Painel deve mostrar `marcaVe`.
 - `ultimaCarga` é a carga mais nova **da edição**; o `tipo` usa o nome da API (`VEICULACAO`, e não `MIDIA` do banco).
 - `eventoId` que não existe: 404; que não é número: 400. O patrocinador recebe 403 antes de qualquer conferência.
 
@@ -1031,6 +1031,7 @@ O relatório de uma parceria é uma **fotografia** dos números do momento em qu
       "validadoEm": null, "disponibilizadoEm": null,
       "indicadoresDisponiveis": 25, "indicadoresIndisponiveis": 3
     },
+    "disponibilizada": { "id": 1, "versao": 1, "disponibilizadoEm": "2026-11-23T11:00:00-03:00" },
     "faltantes": 4
   }
 ]
@@ -1038,11 +1039,13 @@ O relatório de uma parceria é uma **fotografia** dos números do momento em qu
 
 `relatorio` é a **versão mais nova** (ou `null`, com `situacao: "SEM_RELATORIO"`). `faltantes` é quantos itens a consolidação (rota 29) ainda aponta para a parceria.
 
+`disponibilizada` é a **versão que a marca vê**: a disponibilizada mais nova, com o `id`, a `versao` e quando ela foi liberada (`disponibilizadoEm`). Fica `null` se nenhuma versão foi disponibilizada. Ela pode ser mais antiga que `relatorio`: com a v3 em rascunho e a v2 disponibilizada, a linha traz `relatorio.versao` 3 (`situacao` `RASCUNHO`) e `disponibilizada.versao` 2, e a tela da RBS deve mostrar as duas ("Rascunho · v3, a marca vê a v2"). Quando a versão mais nova é a própria disponibilizada, `disponibilizada` repete o mesmo `id` e `versao`.
+
 ## 32. `GET /api/relatorios.csv`  · etapa 7
 
 **Quem chama:** Admin RBS. Os mesmos filtros e as mesmas linhas da rota 31, em CSV (mesmo formato de arquivo da rota 22: ponto e vírgula, UTF-8 com BOM, `Content-Disposition: attachment; filename="relatorios-2026-11-22.csv"`).
 
-Colunas: `parceria_id;patrocinador;cota;edicao;situacao;versao;gerado_em;validado_em;disponibilizado_em;indicadores_disponiveis;indicadores_indisponiveis;faltantes`.
+Colunas: `parceria_id;patrocinador;cota;edicao;situacao;versao;gerado_em;validado_em;disponibilizado_em;indicadores_disponiveis;indicadores_indisponiveis;faltantes;marca_ve_versao;marca_ve_disponibilizado_em`. As duas últimas são a versão que a marca vê e quando foi liberada (`disponibilizada` da rota 31), em branco se nenhuma foi disponibilizada.
 
 ## 33. `POST /api/parcerias/{id}/relatorios`  · etapa 7
 

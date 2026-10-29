@@ -8,6 +8,7 @@ import br.com.rbs.portal.comum.NaoEncontradoException;
 import br.com.rbs.portal.comum.UsuarioAutenticado;
 import br.com.rbs.portal.comum.VerificadorDeAcesso;
 import br.com.rbs.portal.relatorio.RelatorioDtos.CotaDto;
+import br.com.rbs.portal.relatorio.RelatorioDtos.DisponibilizadaDto;
 import br.com.rbs.portal.relatorio.RelatorioDtos.EventoDto;
 import br.com.rbs.portal.relatorio.RelatorioDtos.IndicadorDto;
 import br.com.rbs.portal.relatorio.RelatorioDtos.RelatorioDto;
@@ -92,19 +93,25 @@ public class RelatorioService {
             linhas.add(Csv.linha(s.parceriaId(), s.patrocinador(), s.cota().nome(), s.evento().edicao(), s.situacao(),
                     r != null ? r.versao() : null, r != null ? r.geradoEm() : null, r != null ? r.validadoEm() : null,
                     r != null ? r.disponibilizadoEm() : null, r != null ? r.indicadoresDisponiveis() : null,
-                    r != null ? r.indicadoresIndisponiveis() : null, s.faltantes()));
+                    r != null ? r.indicadoresIndisponiveis() : null, s.faltantes(),
+                    s.disponibilizada() != null ? s.disponibilizada().versao() : null,
+                    s.disponibilizada() != null ? s.disponibilizada().disponibilizadoEm() : null));
         }
         return new ArquivoCsv("relatorios-" + Datas.hoje() + ".csv", List.of(
                 "parceria_id", "patrocinador", "cota", "edicao", "situacao", "versao", "gerado_em", "validado_em",
-                "disponibilizado_em", "indicadores_disponiveis", "indicadores_indisponiveis", "faltantes"), linhas);
+                "disponibilizado_em", "indicadores_disponiveis", "indicadores_indisponiveis", "faltantes",
+                "marca_ve_versao", "marca_ve_disponibilizado_em"), linhas);
     }
 
     private static SituacaoDto paraSituacao(LinhaDeSituacao l) {
         ResumoDoRelatorioDto resumo = l.relatorioId() == null ? null : new ResumoDoRelatorioDto(l.relatorioId(), l.versao(),
                 l.status(), Datas.emBrasilia(l.geradoEm()), Datas.emBrasilia(l.validadoEm()),
                 Datas.emBrasilia(l.disponibilizadoEm()), l.disponiveis(), l.indisponiveis());
+        // [RELATORIO] O que a marca vê: a disponibilizada mais nova. A RBS precisa enxergar isso ao lado da versão mais nova.
+        DisponibilizadaDto marcaVe = l.marcaVeId() == null ? null
+                : new DisponibilizadaDto(l.marcaVeId(), l.marcaVeVersao(), Datas.emBrasilia(l.marcaVeEm()));
         return new SituacaoDto(l.parceriaId(), l.patrocinador(), new CotaDto(l.cotaCodigo(), l.cotaNome()),
-                new EventoDto(l.eventoId(), l.eventoNome(), l.edicao()), l.status(), resumo, l.faltantes());
+                new EventoDto(l.eventoId(), l.eventoNome(), l.edicao()), l.status(), resumo, marcaVe, l.faltantes());
     }
 
     // ---------------------------------------------------------------------

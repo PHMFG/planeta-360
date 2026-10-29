@@ -31,12 +31,18 @@ public final class RelatorioDtos {
                                        int indicadoresDisponiveis, int indicadoresIndisponiveis) {
     }
 
+    /** A versão que a marca vê: a disponibilizada mais nova, com a data em que a RBS a liberou. */
+    public record DisponibilizadaDto(Long id, Integer versao, OffsetDateTime disponibilizadoEm) {
+    }
+
     /**
      * Uma linha da rota 31: a situação do relatório de uma parceria. {@code situacao} é SEM_RELATORIO, RASCUNHO, VALIDADO ou
-     * DISPONIBILIZADO (a da versão mais nova); {@code relatorio} é nulo quando não há versão; {@code faltantes} vem de vw_faltantes.
+     * DISPONIBILIZADO (a da versão mais nova); {@code relatorio} é nulo quando não há versão; {@code disponibilizada} é a
+     * versão disponibilizada mais nova (a que a marca vê, mesmo quando a mais nova é um rascunho) ou nulo se nenhuma foi
+     * disponibilizada; {@code faltantes} vem de vw_faltantes.
      */
     public record SituacaoDto(Long parceriaId, String patrocinador, CotaDto cota, EventoDto evento, String situacao,
-                              ResumoDoRelatorioDto relatorio, int faltantes) {
+                              ResumoDoRelatorioDto relatorio, DisponibilizadaDto disponibilizada, int faltantes) {
     }
 
     /**

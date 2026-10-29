@@ -231,7 +231,11 @@ public class ConsolidacaoRepositorio {
                 .single();
     }
 
-    /** Quantas parcerias da edição estão em cada situação do relatório mais novo (SEM_RELATORIO, RASCUNHO...). */
+    /**
+     * Quantas parcerias da edição estão em cada situação da versão MAIS NOVA do relatório (SEM_RELATORIO, RASCUNHO...).
+     * Não diz o que a marca vê: com a v3 em rascunho e a v2 disponibilizada, a parceria conta como RASCUNHO aqui
+     * (veja {@link #relatoriosQueAMarcaVe}).
+     */
     public List<Contagem> relatoriosPorSituacao(long eventoId) {
         return jdbc.sql("""
                         SELECT coalesce(r.status, 'SEM_RELATORIO') AS chave, count(*) AS total
@@ -243,6 +247,18 @@ public class ConsolidacaoRepositorio {
                 .param("eventoId", eventoId)
                 .query(Contagem.class)
                 .list();
+    }
+
+    /** Quantas parcerias da edição têm ao menos uma versão disponibilizada: o que a marca de fato consegue ver. */
+    public long relatoriosQueAMarcaVe(long eventoId) {
+        return jdbc.sql("""
+                        SELECT count(*) FROM parceria pa
+                        WHERE pa.evento_id = :eventoId
+                          AND EXISTS (SELECT 1 FROM relatorio r WHERE r.parceria_id = pa.id AND r.status = 'DISPONIBILIZADO')
+                        """)
+                .param("eventoId", eventoId)
+                .query(Long.class)
+                .single();
     }
 
     public Optional<LinhaDeCarga> ultimaCarga(long eventoId) {

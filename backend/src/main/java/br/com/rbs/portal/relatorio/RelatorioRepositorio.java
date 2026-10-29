@@ -27,11 +27,15 @@ public class RelatorioRepositorio {
                                    String unidade, String baseCalculo, boolean disponivel) {
     }
 
-    /** Uma linha da rota 31, ainda sem a montagem do JSON. {@code relatorioId} é nulo quando a parceria não tem versão. */
+    /**
+     * Uma linha da rota 31, ainda sem a montagem do JSON. {@code relatorioId} é nulo quando a parceria não tem versão;
+     * os campos "marcaVe" são da versão disponibilizada mais nova e ficam nulos quando nenhuma foi disponibilizada.
+     */
     public record LinhaDeSituacao(Long parceriaId, String patrocinador, String cotaCodigo, String cotaNome, Long eventoId,
                                   String eventoNome, Integer edicao, Long relatorioId, Integer versao, String status,
                                   OffsetDateTime geradoEm, OffsetDateTime validadoEm, OffsetDateTime disponibilizadoEm,
-                                  int disponiveis, int indisponiveis, int faltantes) {
+                                  int disponiveis, int indisponiveis, Long marcaVeId, Integer marcaVeVersao,
+                                  OffsetDateTime marcaVeEm, int faltantes) {
     }
 
     /** O estado de um relatório com a linha travada (SELECT ... FOR UPDATE), para a mudança de status. */
@@ -65,8 +69,9 @@ public class RelatorioRepositorio {
 
     /**
      * Uma linha por parceria da edição, com a versão MAIS NOVA do relatório (LATERAL com ORDER BY versao DESC), quantos números
-     * dela estão disponíveis e indisponíveis, e quantos itens a visão vw_faltantes aponta. [RELATORIO] "Sem relatório" é
-     * a situação de quem não tem nenhuma versão.
+     * dela estão disponíveis e indisponíveis, a versão que a marca vê (a disponibilizada mais nova, que pode ser anterior à
+     * mais nova) e quantos itens a visão vw_faltantes aponta. [RELATORIO] "Sem relatório" é a situação de quem não tem
+     * nenhuma versão.
      */
     public List<LinhaDeSituacao> situacoes(long eventoId, String statusFiltro) {
         return jdbc.sql("""
@@ -76,6 +81,7 @@ public class RelatorioRepositorio {
                                r.gerado_em, r.validado_em, r.disponibilizado_em,
                                coalesce(ri.disponiveis, 0)::int AS disponiveis,
                                coalesce(ri.indisponiveis, 0)::int AS indisponiveis,
+                               d.id AS marca_ve_id, d.versao AS marca_ve_versao, d.disponibilizado_em AS marca_ve_em,
                                coalesce(f.itens, 0)::int AS faltantes
                         FROM parceria pa
                         JOIN patrocinador pat ON pat.id = pa.patrocinador_id
@@ -83,6 +89,9 @@ public class RelatorioRepositorio {
                         JOIN evento e ON e.id = pa.evento_id
                         LEFT JOIN LATERAL (SELECT * FROM relatorio WHERE parceria_id = pa.id
                                            ORDER BY versao DESC LIMIT 1) r ON TRUE
+                        LEFT JOIN LATERAL (SELECT id, versao, disponibilizado_em FROM relatorio
+                                           WHERE parceria_id = pa.id AND status = 'DISPONIBILIZADO'
+                                           ORDER BY versao DESC LIMIT 1) d ON TRUE
                         LEFT JOIN LATERAL (SELECT count(*) FILTER (WHERE disponivel) AS disponiveis,
                                                   count(*) FILTER (WHERE NOT disponivel) AS indisponiveis
                                            FROM relatorio_indicador WHERE relatorio_id = r.id) ri ON TRUE

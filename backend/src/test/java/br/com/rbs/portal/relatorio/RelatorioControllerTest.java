@@ -319,13 +319,20 @@ class RelatorioControllerTest {
         assertThat(bytes).startsWith((byte) 0xEF, (byte) 0xBB, (byte) 0xBF);
         String[] linhas = texto(resposta).substring(1).split("\r\n");
         assertThat(linhas[0]).isEqualTo("parceria_id;patrocinador;cota;edicao;situacao;versao;gerado_em;validado_em;"
-                + "disponibilizado_em;indicadores_disponiveis;indicadores_indisponiveis;faltantes");
+                + "disponibilizado_em;indicadores_disponiveis;indicadores_indisponiveis;faltantes;marca_ve_versao;"
+                + "marca_ve_disponibilizado_em");
         assertThat(linhas).hasSize(4);
-        assertThat(linhas[1]).startsWith(parceria("Cliente Amarelo") + ";Cliente Amarelo;Master;2027;RASCUNHO;1;"
-                + "2027-02-21T11:00:00-03:00;;;");
-        assertThat(linhas[1].split(";", -1)).as("12 colunas, com validado_em e disponibilizado_em em branco").hasSize(12);
-        assertThat(linhas[1].split(";", -1)[9]).isEqualTo("35");
-        assertThat(linhas[1].split(";", -1)[10]).isEqualTo("2");
+        assertThat(linhas[1]).startsWith(parceria("Cliente Amarelo") + ";Cliente Amarelo;Master;2027;RASCUNHO;1;");
+        String[] amarelo = linhas[1].split(";", -1);
+        assertThat(amarelo).as("14 colunas, com validado_em, disponibilizado_em e as duas da marca em branco").hasSize(14);
+        assertThat(amarelo[6]).as("gerado_em: um horário de Brasília no passado").endsWith("-03:00");
+        assertThat(java.time.OffsetDateTime.parse(amarelo[6])).isBefore(java.time.OffsetDateTime.now());
+        assertThat(amarelo[7]).isEmpty();
+        assertThat(amarelo[8]).isEmpty();
+        assertThat(amarelo[9]).isEqualTo("35");
+        assertThat(amarelo[10]).isEqualTo("2");
+        assertThat(amarelo[12]).as("nenhuma versão disponibilizada: a marca não vê nada").isEmpty();
+        assertThat(amarelo[13]).isEmpty();
     }
 
     @Test
@@ -706,5 +713,70 @@ class RelatorioControllerTest {
                         """).param("id", relatorio).query().singleRow();
         assertThat(((Number) download.get("usuario_id")).longValue()).isEqualTo(usuarioId(AMARELO));
         assertThat(((Number) download.get("parceria_id")).longValue()).isEqualTo(amarelo);
+    }
+
+    // ---------------------------------------------------------------------
+    // Rota 31: a RBS vê o que a marca vê (campo disponibilizada)
+    // ---------------------------------------------------------------------
+
+    @Test
+    void listaTrazAVersaoQueAMarcaVeMesmoQuandoAMaisNovaEstaEmRascunhoOuValidada() {
+        MockHttpSession rbs = entrar(RBS);
+        long amarelo = parceria("Cliente Amarelo");
+        MvcTestResult semNada = ler(rbs, "/api/relatorios");
+        assertThat(lerLista(semNada, "$[*].disponibilizada")).as("nenhuma versão disponibilizada: null nas três").hasSize(3).containsOnlyNulls();
+
+        // A v1 vai até DISPONIBILIZADO; depois a RBS gera a v2 (rascunho) e a valida. A marca continua vendo a v1.
+        long v1 = relatorioDaAmostra(amarelo);
+        assertThat(mudarStatus(rbs, v1, "VALIDADO")).hasStatus(HttpStatus.OK);
+        assertThat(mudarStatus(rbs, v1, "DISPONIBILIZADO")).hasStatus(HttpStatus.OK);
+        long v2 = ((Number) lerJson(gerar(rbs, amarelo), "$.id")).longValue();
+
+        MvcTestResult comRascunho = ler(rbs, "/api/relatorios");
+        assertThat(lerJson(comRascunho, "$[0].situacao")).as("a versão mais nova é um rascunho").isEqualTo("RASCUNHO");
+        assertThat(lerJson(comRascunho, "$[0].relatorio.versao")).isEqualTo(2);
+        assertThat(lerJson(comRascunho, "$[0].disponibilizada.versao")).as("mas a marca vê a v1").isEqualTo(1);
+        assertThat(((Number) lerJson(comRascunho, "$[0].disponibilizada.id")).longValue()).isEqualTo(v1);
+        String quando = (String) lerJson(comRascunho, "$[0].disponibilizada.disponibilizadoEm");
+        assertThat(quando).endsWith("-03:00");
+        assertThat(java.time.OffsetDateTime.parse(quando)).isBetween(java.time.OffsetDateTime.now().minusMinutes(5),
+                java.time.OffsetDateTime.now().plusMinutes(5));
+        assertThat(lerJson(comRascunho, "$[0].disponibilizada")).isInstanceOf(Map.class);
+        assertThat(new java.util.TreeSet<Object>(((Map<?, ?>) lerJson(comRascunho, "$[0].disponibilizada")).keySet()))
+                .containsExactly("disponibilizadoEm", "id", "versao");
+        assertThat(lerJson(comRascunho, "$[1].disponibilizada")).as("o Roxo não tem nada disponibilizado").isNull();
+        // O que a RBS lê aqui é o que a marca recebe na rota 35.
+        MvcTestResult daMarca = ler(entrar(AMARELO), "/api/parcerias/" + amarelo + "/relatorio");
+        assertThat(lerJson(daMarca, "$.versao")).isEqualTo(lerJson(comRascunho, "$[0].disponibilizada.versao"));
+
+        assertThat(mudarStatus(rbs, v2, "VALIDADO")).hasStatus(HttpStatus.OK);
+        MvcTestResult validada = ler(rbs, "/api/relatorios");
+        assertThat(lerJson(validada, "$[0].situacao")).isEqualTo("VALIDADO");
+        assertThat(lerJson(validada, "$[0].disponibilizada.versao")).isEqualTo(1);
+
+        // Quando a mais nova passa a ser a disponibilizada, a linha repete a mesma versão nos dois campos.
+        assertThat(mudarStatus(rbs, v2, "DISPONIBILIZADO")).hasStatus(HttpStatus.OK);
+        MvcTestResult nova = ler(rbs, "/api/relatorios");
+        assertThat(lerJson(nova, "$[0].situacao")).isEqualTo("DISPONIBILIZADO");
+        assertThat(lerJson(nova, "$[0].disponibilizada.versao")).isEqualTo(2);
+        assertThat(((Number) lerJson(nova, "$[0].disponibilizada.id")).longValue()).isEqualTo(v2);
+    }
+
+    @Test
+    void csvDaListaTrazAVersaoQueAMarcaVe() {
+        MockHttpSession rbs = entrar(RBS);
+        long amarelo = parceria("Cliente Amarelo");
+        long v1 = relatorioDaAmostra(amarelo);
+        mudarStatus(rbs, v1, "VALIDADO");
+        mudarStatus(rbs, v1, "DISPONIBILIZADO");
+        gerar(rbs, amarelo);
+
+        String[] linhas = texto(ler(rbs, "/api/relatorios.csv")).substring(1).split("\r\n");
+
+        String[] colunas = linhas[1].split(";", -1);
+        assertThat(colunas[5]).as("versão mais nova").isEqualTo("2");
+        assertThat(colunas[4]).isEqualTo("RASCUNHO");
+        assertThat(colunas[12]).as("marca_ve_versao").isEqualTo("1");
+        assertThat(colunas[13]).as("marca_ve_disponibilizado_em").endsWith("-03:00");
     }
 }

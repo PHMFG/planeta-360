@@ -34,6 +34,7 @@ class ConsolidacaoControllerTest {
     private static final String AMARELO = "marketing@amarelo.example";
     private static final String AGENCIA_DO_AMARELO = "atendimento@agencia-x.example";
     private static final String ROXO = "marketing@roxo.example";
+    private static final String VERDE = "marketing@verde.example";
 
     @Autowired
     JdbcClient jdbc;
@@ -406,6 +407,7 @@ class ConsolidacaoControllerTest {
         assertThat(lerJson(resposta, "$.relatorios.rascunho")).isEqualTo(3);
         assertThat(lerJson(resposta, "$.relatorios.validado")).isEqualTo(0);
         assertThat(lerJson(resposta, "$.relatorios.disponibilizado")).isEqualTo(0);
+        assertThat(lerJson(resposta, "$.relatorios.marcaVe")).as("nenhuma marca vê relatório ainda").isEqualTo(0);
 
         // Última carga: a de pesquisa, que é a mais nova da edição; o tipo e os totais vêm da própria linha.
         var carga = jdbc.sql("SELECT id, tipo, linhas_inseridas, linhas_rejeitadas FROM carga WHERE evento_id = :e "
@@ -427,6 +429,50 @@ class ConsolidacaoControllerTest {
                 "Destinação das cortesias (enviado)");
         Map<String, Object> primeira = castMapa(lerLista(resposta, "$.pendencias").get(0));
         assertThat(primeira).containsOnlyKeys("parceriaId", "patrocinador", "tipo", "detalhe");
+    }
+
+    /** Põe o relatório na ordem RASCUNHO, VALIDADO, DISPONIBILIZADO direto no banco (o gatilho confere a ordem). */
+    void disponibilizar(long relatorioId, long usuarioId) {
+        jdbc.sql("UPDATE relatorio SET status = 'VALIDADO', validado_por = :u, validado_em = now() WHERE id = :id")
+                .param("u", usuarioId).param("id", relatorioId).update();
+        jdbc.sql("UPDATE relatorio SET status = 'DISPONIBILIZADO', disponibilizado_por = :u, disponibilizado_em = now() WHERE id = :id")
+                .param("u", usuarioId).param("id", relatorioId).update();
+    }
+
+    @Test
+    void marcaVeContaAParceriaComVersaoDisponibilizadaMesmoQuandoAMaisNovaEstaEmRascunho() {
+        long amarelo = parceria("Cliente Amarelo");
+        long rbsId = jdbc.sql("SELECT id FROM usuario WHERE email = :e").param("e", RBS).query(Long.class).single();
+        long v1 = jdbc.sql("SELECT id FROM relatorio WHERE parceria_id = :p AND versao = 1").param("p", amarelo).query(Long.class).single();
+        disponibilizar(v1, rbsId);
+        jdbc.sql("SELECT fn_gerar_relatorio(:p, :u)").param("p", amarelo).param("u", rbsId).query(Long.class).single();   // v2, rascunho
+
+        MvcTestResult resposta = painel(entrar(RBS), "");
+
+        assertThat(resposta).hasStatus(HttpStatus.OK);
+        // Pela versão mais nova, o Amarelo é um rascunho (v2): o card "disponibilizados" não o conta.
+        assertThat(lerJson(resposta, "$.relatorios.rascunho")).isEqualTo(3);
+        assertThat(lerJson(resposta, "$.relatorios.disponibilizado")).isEqualTo(0);
+        // Mas a marca continua vendo a v1: é isso que marcaVe conta.
+        assertThat(lerJson(resposta, "$.relatorios.marcaVe")).isEqualTo(1);
+        assertThat(lerJson(resposta, "$.relatorios.semRelatorio")).isEqualTo(0);
+        assertThat(entrar(AMARELO).get("/api/parcerias/" + amarelo + "/relatorio")).hasStatus(HttpStatus.OK);
+    }
+
+    @Test
+    void marcaVeSomaTodasAsParceriasDaEdicaoEIgnoraOutraEdicao() {
+        long rbsId = jdbc.sql("SELECT id FROM usuario WHERE email = :e").param("e", RBS).query(Long.class).single();
+        for (String cliente : List.of("Cliente Amarelo", "Cliente Roxo")) {
+            disponibilizar(jdbc.sql("SELECT id FROM relatorio WHERE parceria_id = :p AND versao = 1").param("p", parceria(cliente))
+                    .query(Long.class).single(), rbsId);
+        }
+
+        MvcTestResult daEdicaoNova = painel(entrar(RBS), "");
+        MvcTestResult de2026 = painel(entrar(RBS), "?eventoId=" + evento(2026));
+
+        assertThat(lerJson(daEdicaoNova, "$.relatorios.marcaVe")).isEqualTo(2);
+        assertThat(lerJson(daEdicaoNova, "$.relatorios.disponibilizado")).isEqualTo(2);
+        assertThat(lerJson(de2026, "$.relatorios.marcaVe")).isEqualTo(0);
     }
 
     @SuppressWarnings("unchecked")

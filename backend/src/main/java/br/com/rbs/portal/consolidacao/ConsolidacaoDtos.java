@@ -71,8 +71,11 @@ public final class ConsolidacaoDtos {
     public record EntregasDoPainelDto(Map<String, Long> porStatus, long esperandoAnalise, long atrasadas) {
     }
 
-    /** A situação da versão mais nova do relatório de cada parceria da edição. */
-    public record RelatoriosDoPainelDto(long semRelatorio, long rascunho, long validado, long disponibilizado) {
+    /**
+     * A situação da versão mais nova do relatório de cada parceria da edição. {@code marcaVe} é outra conta: as parcerias
+     * com pelo menos uma versão disponibilizada, mesmo que a mais nova seja rascunho ou validada (a marca vê a anterior).
+     */
+    public record RelatoriosDoPainelDto(long semRelatorio, long rascunho, long validado, long disponibilizado, long marcaVe) {
     }
 
     /** {@code tipo} usa o nome da API: o MIDIA do banco sai como VEICULACAO. */

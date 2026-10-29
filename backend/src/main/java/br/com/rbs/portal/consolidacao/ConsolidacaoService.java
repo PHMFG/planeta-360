@@ -135,7 +135,8 @@ public class ConsolidacaoService {
                 new ParceriasDoPainelDto(parcerias.total(), parcerias.ativas(), parcerias.semUsuario()),
                 new EntregasDoPainelDto(porStatus, entregas.esperandoAnalise(), entregas.atrasadas()),
                 new RelatoriosDoPainelDto(situacoes.getOrDefault("SEM_RELATORIO", 0L), situacoes.getOrDefault("RASCUNHO", 0L),
-                        situacoes.getOrDefault("VALIDADO", 0L), situacoes.getOrDefault("DISPONIBILIZADO", 0L)),
+                        situacoes.getOrDefault("VALIDADO", 0L), situacoes.getOrDefault("DISPONIBILIZADO", 0L),
+                        repositorio.relatoriosQueAMarcaVe(id)),
                 ultimaCarga, pendencias);
     }
 
