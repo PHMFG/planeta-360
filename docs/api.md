@@ -793,7 +793,7 @@ Content-Disposition: attachment; filename="historico-2026-10-23.csv"
 }
 ```
 
-- `status` da pergunta: `RASCUNHO` (ainda não enviada, ou devolvida para ajuste), `ENVIADA` (espera a RBS) ou `APROVADA`. `observacaoRbs` é o recado da RBS na última decisão sobre a pergunta (pedido de ajuste ou aprovação com observação), enquanto a pergunta continua no status que aquela decisão gerou; quando a marca reenvia, o recado antigo sai e vem `null`.
+- `status` da pergunta: `RASCUNHO` (ainda não enviada, devolvida para ajuste ou reaberta pela RBS depois de aprovada), `ENVIADA` (espera a RBS) ou `APROVADA`. `observacaoRbs` é o recado da RBS na última decisão sobre a pergunta (pedido de ajuste ou aprovação com observação), enquanto a pergunta continua no status que aquela decisão gerou; quando a marca reenvia, o recado antigo sai e vem `null`.
 - `pesquisa` é `null` enquanto a RBS não abriu a pesquisa da ativação daquela edição. A marca já pode enviar as perguntas nesse período; a carga de resultados liga cada uma à pesquisa depois.
 - `abaLiberada` é sempre `true` para o patrocinador (senão ele recebe 403). Para a RBS mostra o estado real da aba. Aba só conta como liberada se estiver liberada **e** visível.
 - As perguntas vêm em ordem (`ordem` 1 a 3); os resultados, por pergunta e depois na ordem da carga.
@@ -820,7 +820,8 @@ Content-Disposition: attachment; filename="historico-2026-10-23.csv"
 | `ordem` | 1, 2 ou 3, sem repetir. |
 | `texto` | De 10 a 300 caracteres. |
 | O que acontece | Pergunta nova ou alterada fica `ENVIADA`, esperando a RBS. Pergunta já `APROVADA` e sem mudança continua como está. Pergunta devolvida (`RASCUNHO`) volta a `ENVIADA` ao ser enviada de novo, mesmo com o mesmo texto. Pergunta `ENVIADA` e sem mudança fica como está. |
-| Pergunta aprovada | Não pode ser alterada nem tirada da lista (409). Para mudar, a marca fala com a RBS. |
+| Pergunta aprovada | A marca não pode alterá-la nem tirá-la da lista (409). Para mudar, a marca fala com a RBS, que **reabre** a pergunta pedindo ajuste (rota 25); ela volta a `RASCUNHO` e a marca passa a poder editá-la. |
+| Pergunta reaberta com resultados | Uma pergunta que já teve resultados carregados não pode ser **retirada** da lista (409: `"A pergunta 3 já tem resultados carregados e não pode ser retirada da lista. Altere o texto dela ou fale com a RBS."`), porque apagá-la apagaria os resultados. Alterar o texto dela é permitido. |
 | Pergunta fora da lista | Pergunta que ainda não foi aprovada e não vem na lista é retirada. |
 | Tudo ou nada | Se qualquer pergunta recusar, nada é gravado. Lista igual à que já está salva não muda nada e não grava histórico. |
 
@@ -832,7 +833,7 @@ Content-Disposition: attachment; filename="historico-2026-10-23.csv"
 
 ## 25. `PATCH /api/pesquisa/perguntas/{id}/status`  · etapa 6
 
-**Quem chama:** Admin RBS (exige o token CSRF). A RBS decide sobre uma pergunta que está `ENVIADA`.
+**Quem chama:** Admin RBS (exige o token CSRF). A RBS decide sobre uma pergunta `ENVIADA` (aprova ou devolve) e também pode **reabrir** uma pergunta `APROVADA` pedindo ajuste.
 
 **Corpo**
 
@@ -840,16 +841,29 @@ Content-Disposition: attachment; filename="historico-2026-10-23.csv"
 { "decisao": "PEDIR_AJUSTE", "observacao": "Troque \"bom\" por uma escala de 0 a 10." }
 ```
 
-| `decisao` | Efeito |
-| --- | --- |
-| `APROVAR` | A pergunta fica `APROVADA`. Só a partir daí a carga de resultados aceita linhas dela. `observacao` é opcional. |
-| `PEDIR_AJUSTE` | A pergunta volta a `RASCUNHO` e a `observacao` (obrigatória) aparece para a marca em `observacaoRbs`. |
+| `decisao` | Vale para | Efeito |
+| --- | --- | --- |
+| `APROVAR` | pergunta `ENVIADA` | A pergunta fica `APROVADA`. Só a partir daí a carga de resultados aceita linhas dela. `observacao` é opcional. |
+| `PEDIR_AJUSTE` | pergunta `ENVIADA` ou `APROVADA` | A pergunta vai (ou volta) a `RASCUNHO` e a `observacao` (obrigatória) aparece para a marca em `observacaoRbs`. Em uma pergunta `ENVIADA` é a devolução para ajuste; em uma `APROVADA` é a **reabertura** (abaixo). |
 
-**200**: a pergunta (mesmo formato dos itens de `perguntas` da rota 23). **Erros:** 403; 404; 409 (a pergunta não está `ENVIADA`); 422 (decisão inválida em `campos.decisao`, observação que falta em `campos.observacao`, ou observação com mais de 1000 caracteres).
+**200**: a pergunta (mesmo formato dos itens de `perguntas` da rota 23). **Erros:** 403; 404; 409 (a decisão não cabe no status da pergunta: aprovar só a `ENVIADA`; pedir ajuste só a `ENVIADA` ou a `APROVADA`); 422 (decisão inválida em `campos.decisao`, observação que falta em `campos.observacao`, ou observação com mais de 1000 caracteres).
 
-O patrocinador recebe 403 nesta rota mesmo para a pergunta da própria parceria e mesmo para um id que não existe: a permissão é conferida antes de procurar a pergunta.
+O patrocinador recebe 403 nesta rota mesmo para a pergunta da própria parceria e mesmo para um id que não existe: a permissão é conferida antes de procurar a pergunta (e antes de ler o corpo).
 
-**Histórico:** `ALTERACAO_STATUS` (entidade `pesquisa_pergunta`, status anterior e novo), com a observação em `detalhe`. Qualquer Admin RBS pode decidir (regra provisória: a RBS ainda vai confirmar se é só o time de pesquisa).
+**Reabrir uma pergunta aprovada.** A marca não altera nem retira uma pergunta aprovada; o caminho para mudá-la é a RBS reabri-la. `PEDIR_AJUSTE` numa pergunta `APROVADA`, com `observacao` obrigatória (sem ela, 422 e nada muda), devolve a pergunta ao estado em que a marca pode editar:
+
+```json
+{
+  "id": 7, "ordem": 1, "texto": "Você visitou o espaço da marca na Arena ou no Camarote?",
+  "status": "RASCUNHO", "observacaoRbs": "Troque \"bom\" por uma escala de 0 a 10.",
+  "enviadaPor": { "id": 3, "nome": "Marketing Amarelo", "perfil": "ADMIN_PATROCINADOR" },
+  "enviadaEm": "2026-11-20T16:00:00-03:00"
+}
+```
+
+É o mesmo objeto da rota 23, com `status` `RASCUNHO` e o recado da RBS em `observacaoRbs`. A marca vê o recado em `GET /api/parcerias/{id}/pesquisa`, edita o texto (ou só reenvia) com o `PUT` da rota 24 e a pergunta volta a `ENVIADA`, esperando a RBS aprovar de novo. Enquanto não estiver `APROVADA`, os `resultados` dela **deixam de aparecer** na rota 23 e a carga de resultados recusa linhas dela; os resultados já carregados ficam guardados e voltam a aparecer quando a pergunta for aprovada de novo. Se o texto mudou, esses resultados eram da versão anterior da pergunta: a RBS deve conferir (e recarregar) antes de aprovar.
+
+**Histórico:** `ALTERACAO_STATUS` (entidade `pesquisa_pergunta`, status anterior e novo; na reabertura, `APROVADA` para `RASCUNHO`), com a observação em `detalhe`. Qualquer Admin RBS pode decidir (regra provisória: a RBS ainda vai confirmar se é só o time de pesquisa).
 
 ## 26. `POST /api/cargas`  · etapa 6
 

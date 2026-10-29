@@ -22,8 +22,11 @@ public class PesquisaRepositorio {
                                   OffsetDateTime enviadaEm) {
     }
 
-    /** A pergunta como o PUT e o PATCH precisam: com a linha travada (FOR UPDATE) até o fim da transação. */
-    public record PerguntaTravada(Long id, Long parceriaId, Integer ordem, String texto, String status) {
+    /**
+     * A pergunta como o PUT e o PATCH precisam: com a linha travada (FOR UPDATE) até o fim da transação. temResultados: já há
+     * resultado carregado para ela (só existe se ela foi aprovada um dia; a reabertura pela RBS a deixa fora de APROVADA).
+     */
+    public record PerguntaTravada(Long id, Long parceriaId, Integer ordem, String texto, String status, boolean temResultados) {
     }
 
     public record LinhaDeResultado(Long perguntaId, Integer ordem, String alternativa, BigDecimal valor, String unidade,
@@ -133,7 +136,9 @@ public class PesquisaRepositorio {
      */
     public List<PerguntaTravada> perguntasTravadas(long parceriaId) {
         return jdbc.sql("""
-                        SELECT id, parceria_id, ordem, texto, status FROM pesquisa_pergunta
+                        SELECT id, parceria_id, ordem, texto, status,
+                               EXISTS (SELECT 1 FROM pesquisa_resultado r WHERE r.pergunta_id = pesquisa_pergunta.id) AS tem_resultados
+                        FROM pesquisa_pergunta
                         WHERE parceria_id = :parceriaId ORDER BY ordem FOR UPDATE
                         """)
                 .param("parceriaId", parceriaId)
@@ -142,7 +147,11 @@ public class PesquisaRepositorio {
     }
 
     public Optional<PerguntaTravada> travarPergunta(long perguntaId) {
-        return jdbc.sql("SELECT id, parceria_id, ordem, texto, status FROM pesquisa_pergunta WHERE id = :id FOR UPDATE")
+        return jdbc.sql("""
+                        SELECT id, parceria_id, ordem, texto, status,
+                               EXISTS (SELECT 1 FROM pesquisa_resultado r WHERE r.pergunta_id = pesquisa_pergunta.id) AS tem_resultados
+                        FROM pesquisa_pergunta WHERE id = :id FOR UPDATE
+                        """)
                 .param("id", perguntaId)
                 .query(PerguntaTravada.class)
                 .optional();

@@ -453,18 +453,20 @@ class PesquisaControllerTest {
         SessaoDeApi rbs = entrar(RBS);
         long aprovada = perguntaId(amarelo, 1);
 
-        // Só a pergunta ENVIADA recebe decisão: a APROVADA da amostra devolve 409.
+        // Aprovar vale só para a pergunta ENVIADA: a APROVADA da amostra devolve 409 (pedir ajuste nela é a reabertura, outro teste).
         MvcTestResult jaAprovada = decidir(rbs, aprovada, "APROVAR", null);
         assertThat(jaAprovada).hasStatus(HttpStatus.CONFLICT);
         assertThat(jaAprovada.getResponse().getContentType()).startsWith("application/problem+json");
         assertThat((String) lerJson(jaAprovada, "$.detail")).contains("pergunta 1").contains("aprovada");
-        assertThat(decidir(rbs, aprovada, "PEDIR_AJUSTE", "Mude o texto.")).hasStatus(HttpStatus.CONFLICT);
         assertThat(statusNoBanco(aprovada)).isEqualTo("APROVADA");
 
-        // A pergunta devolvida (RASCUNHO) também não recebe decisão até a marca enviá-la de novo.
+        // A pergunta devolvida (RASCUNHO) não recebe decisão nenhuma até a marca enviá-la de novo.
         jdbc.sql("UPDATE pesquisa_pergunta SET status = 'ENVIADA' WHERE id = :id").param("id", aprovada).update();
         assertThat(decidir(rbs, aprovada, "PEDIR_AJUSTE", "Mude o texto.")).hasStatus(HttpStatus.OK);
         assertThat(decidir(rbs, aprovada, "APROVAR", null)).hasStatus(HttpStatus.CONFLICT);
+        MvcTestResult ajusteEmRascunho = decidir(rbs, aprovada, "PEDIR_AJUSTE", "Mude o texto de novo.");
+        assertThat(ajusteEmRascunho).hasStatus(HttpStatus.CONFLICT);
+        assertThat((String) lerJson(ajusteEmRascunho, "$.detail")).contains("pergunta 1").contains("rascunho");
 
         // Pergunta que não existe.
         assertThat(decidir(rbs, 999_999L, "APROVAR", null)).hasStatus(HttpStatus.NOT_FOUND);
@@ -513,6 +515,146 @@ class PesquisaControllerTest {
         assertThat(lerJson(resposta, "$.observacaoRbs")).isEqualTo("Ótima pergunta.");
         assertThat(jdbc.sql("SELECT detalhe FROM historico WHERE acao = 'ALTERACAO_STATUS' AND entidade_id = :id")
                 .param("id", pergunta).query(String.class).single()).isEqualTo("Ótima pergunta.");
+    }
+
+    // ---------------------------------------------------------------------
+    // Rota 25: a RBS reabre uma pergunta aprovada (PEDIR_AJUSTE) para a marca poder mudá-la
+    // ---------------------------------------------------------------------
+
+    long resultadosDaPergunta(long perguntaId) {
+        return jdbc.sql("SELECT count(*) FROM pesquisa_resultado WHERE pergunta_id = :id").param("id", perguntaId)
+                .query(Long.class).single();
+    }
+
+    @Test
+    void rbsReabreUmaPerguntaAprovadaEAMarcaVoltaAPoderEditar() {
+        long amarelo = parceria("Cliente Amarelo");
+        long p1 = perguntaId(amarelo, 1);
+        long p2 = perguntaId(amarelo, 2);
+        long p3 = perguntaId(amarelo, 3);
+        SessaoDeApi rbs = entrar(RBS);
+        SessaoDeApi marca = entrar(AMARELO);
+        assertThat(resultadosDaPergunta(p2)).as("a amostra tem resultados nesta pergunta").isPositive();
+        long resultadosGuardados = resultadosDaPergunta(p2);
+
+        MvcTestResult reaberta = decidir(rbs, p2, "PEDIR_AJUSTE", "Use uma escala de 0 a 10 com legenda.");
+
+        assertThat(reaberta).hasStatus(HttpStatus.OK);
+        assertThat(numero(reaberta, "$.id")).isEqualTo(p2);
+        assertThat(lerJson(reaberta, "$.status")).as("volta ao estado em que a marca edita").isEqualTo("RASCUNHO");
+        assertThat(lerJson(reaberta, "$.observacaoRbs")).isEqualTo("Use uma escala de 0 a 10 com legenda.");
+        assertThat(lerJson(reaberta, "$.texto")).as("o texto continua o mesmo até a marca mudar").isEqualTo(P2);
+        assertThat(statusNoBanco(p1)).isEqualTo("APROVADA");
+        assertThat(statusNoBanco(p2)).isEqualTo("RASCUNHO");
+        assertThat(statusNoBanco(p3)).isEqualTo("APROVADA");
+
+        // A marca vê a pergunta devolvida com o recado; os resultados dela somem enquanto não for aprovada de novo, mas ficam guardados.
+        MvcTestResult vista = verPesquisa(marca, amarelo);
+        assertThat(lerLista(vista, "$.perguntas[*].status")).containsExactly("APROVADA", "RASCUNHO", "APROVADA");
+        assertThat(lerJson(vista, "$.perguntas[1].observacaoRbs")).isEqualTo("Use uma escala de 0 a 10 com legenda.");
+        assertThat(lerLista(vista, "$.resultados[*].perguntaId").stream().map(id -> ((Number) id).longValue()))
+                .contains(p1, p3).doesNotContain(p2);
+        assertThat(resultadosDaPergunta(p2)).isEqualTo(resultadosGuardados);
+
+        // [HISTORICO] Fica registrado como mudança de status da pergunta, de APROVADA para RASCUNHO, com o recado da RBS.
+        var linha = jdbc.sql("""
+                        SELECT usuario_id, parceria_id, valor_anterior, valor_novo, detalhe FROM historico
+                        WHERE acao = 'ALTERACAO_STATUS' AND entidade = 'pesquisa_pergunta' AND entidade_id = :id
+                        """).param("id", p2).query().singleRow();
+        assertThat(((Number) linha.get("usuario_id")).longValue()).isEqualTo(usuarioId(RBS));
+        assertThat(((Number) linha.get("parceria_id")).longValue()).isEqualTo(amarelo);
+        assertThat(linha.get("valor_anterior")).isEqualTo("APROVADA");
+        assertThat(linha.get("valor_novo")).isEqualTo("RASCUNHO");
+        assertThat(linha.get("detalhe")).isEqualTo("Use uma escala de 0 a 10 com legenda.");
+
+        // A marca muda só o texto da reaberta; as aprovadas seguem como estão. A pergunta volta a esperar a RBS, sem o recado antigo.
+        String novoTexto = "De 0 a 10, quanto você recomendaria a marca (0 = nunca, 10 = com certeza)?";
+        MvcTestResult reenviada = enviarPerguntas(marca, amarelo, perguntas(P1, novoTexto, P3));
+        assertThat(reenviada).hasStatus(HttpStatus.OK);
+        assertThat(lerLista(reenviada, "$.perguntas[*].status")).containsExactly("APROVADA", "ENVIADA", "APROVADA");
+        assertThat(lerJson(reenviada, "$.perguntas[1].texto")).isEqualTo(novoTexto);
+        assertThat(lerJson(reenviada, "$.perguntas[1].observacaoRbs")).isNull();
+        assertThat(textoNoBanco(p1)).isEqualTo(P1);
+        assertThat(textoNoBanco(p3)).isEqualTo(P3);
+        assertThat(contarHistorico("EDICAO", amarelo)).as("só a pergunta 2 mudou").isEqualTo(1);
+
+        // A RBS aprova a nova versão; a partir daí a marca não altera mais (409), como antes.
+        assertThat(decidir(rbs, p2, "APROVAR", null)).hasStatus(HttpStatus.OK);
+        assertThat(statusNoBanco(p2)).isEqualTo("APROVADA");
+        MvcTestResult tentativa = enviarPerguntas(marca, amarelo, perguntas(P1, P2, P3));
+        assertThat(tentativa).hasStatus(HttpStatus.CONFLICT);
+        assertThat(lerJson(tentativa, "$.detail")).isEqualTo("A pergunta 2 já foi aprovada pela RBS e não pode mais ser alterada.");
+    }
+
+    @Test
+    void perguntaReabertaPodeVoltarSemMudarOTextoEOsResultadosVoltamAoSerAprovadaDeNovo() {
+        long amarelo = parceria("Cliente Amarelo");
+        long p1 = perguntaId(amarelo, 1);
+        SessaoDeApi rbs = entrar(RBS);
+        SessaoDeApi marca = entrar(AMARELO);
+        assertThat(decidir(rbs, p1, "PEDIR_AJUSTE", "Releia com calma.")).hasStatus(HttpStatus.OK);
+
+        MvcTestResult reenviada = enviarPerguntas(marca, amarelo, perguntas(P1, P2, P3));
+
+        assertThat(reenviada).hasStatus(HttpStatus.OK);
+        assertThat(lerLista(reenviada, "$.perguntas[*].status")).containsExactly("ENVIADA", "APROVADA", "APROVADA");
+        assertThat(jdbc.sql("SELECT detalhe FROM historico WHERE acao = 'EDICAO' AND entidade_id = :id").param("id", p1)
+                .query(String.class).single()).contains("devolvida e enviada de novo");
+        assertThat(decidir(rbs, p1, "APROVAR", null)).hasStatus(HttpStatus.OK);
+        assertThat(lerLista(verPesquisa(marca, amarelo), "$.resultados[*].perguntaId").stream().map(id -> ((Number) id).longValue()))
+                .contains(p1);
+    }
+
+    @Test
+    void reabrirExigeObservacaoENadaMudaSemEla() {
+        long amarelo = parceria("Cliente Amarelo");
+        long p1 = perguntaId(amarelo, 1);
+        SessaoDeApi rbs = entrar(RBS);
+
+        MvcTestResult semObservacao = decidir(rbs, p1, "PEDIR_AJUSTE", null);
+        MvcTestResult emBranco = decidir(rbs, p1, "PEDIR_AJUSTE", "   ");
+
+        for (MvcTestResult r : List.of(semObservacao, emBranco)) {
+            assertThat(r).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
+            assertThat(lerJson(r, "$.campos.observacao")).isEqualTo("Diga à marca o que precisa ser ajustado na pergunta.");
+        }
+        assertThat(statusNoBanco(p1)).isEqualTo("APROVADA");
+        assertThat(contarHistorico("ALTERACAO_STATUS", amarelo)).isZero();
+    }
+
+    @Test
+    void marcaNaoReabreNemAlteraNemRetiraPerguntaAprovada() {
+        long amarelo = parceria("Cliente Amarelo");
+        long p1 = perguntaId(amarelo, 1);
+        SessaoDeApi marca = entrar(AMARELO);
+
+        // A marca não reabre (403, rota da RBS) e não altera nem retira a aprovada (409): só a RBS reabre.
+        assertThat(decidir(marca, p1, "PEDIR_AJUSTE", "Quero mudar.")).hasStatus(HttpStatus.FORBIDDEN);
+        MvcTestResult alterar = enviarPerguntas(marca, amarelo, perguntas("Texto novo para a pergunta um, sem a RBS", P2, P3));
+        MvcTestResult retirar = enviarPerguntas(marca, amarelo, perguntas(P1, P2));
+        assertThat(alterar).hasStatus(HttpStatus.CONFLICT);
+        assertThat(retirar).hasStatus(HttpStatus.CONFLICT);
+        assertThat(statusNoBanco(p1)).isEqualTo("APROVADA");
+        assertThat(textoNoBanco(p1)).isEqualTo(P1);
+    }
+
+    @Test
+    void perguntaReabertaQueJaTeveResultadosNaoSaiDaListaPorqueApagariaOsResultados() {
+        long amarelo = parceria("Cliente Amarelo");
+        long p3 = perguntaId(amarelo, 3);
+        SessaoDeApi rbs = entrar(RBS);
+        SessaoDeApi marca = entrar(AMARELO);
+        long resultados = resultadosDaPergunta(p3);
+        assertThat(resultados).isPositive();
+        assertThat(decidir(rbs, p3, "PEDIR_AJUSTE", "Pergunta confusa.")).hasStatus(HttpStatus.OK);
+
+        MvcTestResult retirar = enviarPerguntas(marca, amarelo, perguntas(P1, P2));
+
+        assertThat(retirar).hasStatus(HttpStatus.CONFLICT);
+        assertThat(lerJson(retirar, "$.detail")).isEqualTo("A pergunta 3 já tem resultados carregados e não pode ser retirada da lista. "
+                + "Altere o texto dela ou fale com a RBS.");
+        assertThat(statusNoBanco(p3)).isEqualTo("RASCUNHO");
+        assertThat(resultadosDaPergunta(p3)).isEqualTo(resultados);
     }
 
     // ---------------------------------------------------------------------
