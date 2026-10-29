@@ -11,6 +11,9 @@ import org.springframework.stereotype.Component;
 @Component
 public class VerificadorDeAcesso {
 
+    /** A frase do 403 de quem pede uma aba que a RBS ainda não liberou para a parceria. */
+    public static final String ABA_NAO_LIBERADA = "Esta aba ainda não foi liberada para a sua parceria.";
+
     private final JdbcClient jdbc;
 
     public VerificadorDeAcesso(JdbcClient jdbc) {
@@ -34,6 +37,35 @@ public class VerificadorDeAcesso {
     public void exigirRbs(UsuarioAutenticado usuario) {
         if (!usuario.ehRbs()) {
             throw new SemPermissaoException("Esta operação é restrita à equipe da RBS.");
+        }
+    }
+
+    /** [PERMISSAO] Rotas que só o Admin Patrocinador usa (a RBS não preenche pelo patrocinador): a RBS recebe 403 com a frase dada. */
+    public void exigirPatrocinador(UsuarioAutenticado usuario, String mensagem) {
+        if (usuario.ehRbs()) {
+            throw new SemPermissaoException(mensagem);
+        }
+    }
+
+    /**
+     * [PERMISSAO] O patrocinador só passa numa aba liberada para a parceria dele; a RBS passa em qualquer aba. Como no
+     * contrato (objeto Aba), a aba só conta como liberada se estiver liberada E visível. Chamar depois de exigirParceria.
+     */
+    public void exigirAbaLiberada(UsuarioAutenticado usuario, long parceriaId, String codigoDaAba) {
+        if (usuario.ehRbs()) {
+            return;
+        }
+        boolean liberada = jdbc.sql("""
+                        SELECT EXISTS (
+                            SELECT 1 FROM parceria_aba pab JOIN aba a ON a.id = pab.aba_id
+                            WHERE pab.parceria_id = :parceriaId AND a.codigo = :aba AND pab.liberada AND pab.visivel)
+                        """)
+                .param("parceriaId", parceriaId)
+                .param("aba", codigoDaAba)
+                .query(Boolean.class)
+                .single();
+        if (!liberada) {
+            throw new SemPermissaoException(ABA_NAO_LIBERADA);
         }
     }
 

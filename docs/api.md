@@ -69,6 +69,8 @@ Todo erro, sem exceção, vem como `application/problem+json` no formato `Proble
 | 422 | Dados inválidos | Campo faltando ou fora do formato. Vem com `campos`. |
 | 500 | Erro interno | Falha inesperada. O `detail` é sempre genérico. |
 
+**Ordem das conferências.** Quando uma chamada tem mais de um problema, a API responde, em geral, pelo primeiro destes: 401 (sem sessão, ou conta que perdeu o acesso) → 403 por perfil (rota só da RBS) → 404 (não existe ou não é do usuário) → 403 por aba não liberada → 400 e 422 (formato do corpo, das partes ou dos filtros) → 409 (o estado atual não permite). A validação do corpo vem depois da permissão: quem não pode usar a rota nunca recebe um erro de campo. Regras de campo que dependem do estado atual (por exemplo, a observação obrigatória da rota 19) vêm depois do 409; cada rota diz.
+
 ## Sessão e CSRF
 
 O login abre uma **sessão no servidor**, identificada pelo cookie `JSESSIONID` (`HttpOnly`, `SameSite=Lax`, vale 8 horas sem uso). O JavaScript não lê esse cookie; o navegador o envia sozinho. Não existe token JWT.
@@ -804,7 +806,7 @@ Content-Disposition: attachment; filename="historico-2026-10-23.csv"
 
 **200**: o mesmo objeto da rota 23.
 
-**Erros:** 403; 404; 409 (`"A pergunta 2 já foi aprovada pela RBS e não pode mais ser alterada."`, com o número da pergunta aprovada que foi alterada ou retirada); 422 (mais de 3, ordem repetida, texto curto ou longo, em `campos`). As chaves de `campos` seguem o corpo: `perguntas` (quantidade, "Envie de 1 a 3 perguntas."), `perguntas[0].texto`, `perguntas[0].ordem` e, para ordem repetida, o segundo item repetido (`perguntas[1].ordem`). Corpo que não é JSON: 400. A RBS recebe 403 antes de qualquer outra conferência (inclusive com parceria que não existe).
+**Erros:** 403; 404; 409 (`"A pergunta 2 já foi aprovada pela RBS e não pode mais ser alterada."`, com o número da pergunta aprovada que foi alterada ou retirada); 422 (mais de 3, ordem repetida, texto curto ou longo, em `campos`). As chaves de `campos` seguem o corpo: `perguntas` (quantidade, "Envie de 1 a 3 perguntas."), `perguntas[0].texto`, `perguntas[0].ordem` e, para ordem repetida, o segundo item repetido (`perguntas[1].ordem`). Corpo que não é JSON: 400. A RBS recebe 403 antes de qualquer outra conferência (inclusive com parceria que não existe). A ordem é: 403 (RBS) → 404 (parceria que não é do usuário ou não existe) → 403 (aba `PESQUISA` não liberada) → só então o corpo é lido e validado (400 e 422). Ou seja, numa parceria sem a aba liberada o patrocinador recebe 403 com qualquer corpo, vazio ou inválido.
 
 **Histórico:** `EDICAO` (entidade `pesquisa_pergunta`), uma linha por pergunta que mudou (enviada, alterada, devolvida e reenviada, ou retirada), com o texto anterior e o novo.
 
@@ -1096,7 +1098,7 @@ Colunas: `secao;indicador_codigo;indicador;recorte;valor;unidade;base_calculo;di
 - Toda rota que recebe o id de uma parceria (ou de algo que pertence a uma: entrega, arquivo, pergunta, relatório) confere, **a cada chamada**, se o usuário tem vínculo vigente com ela. A conferência vai ao banco toda vez e não é guardada na sessão. Por isso, quando a RBS revoga um e-mail, o acesso some na hora, mesmo para quem já estava logado.
 - Quem não tem vínculo recebe **404**, o mesmo erro de um id que não existe. Assim um patrocinador não descobre, pelo código de erro, quais parcerias existem.
 - A RBS passa em qualquer parceria que exista. Id que não existe é 404 para todos.
-- O `403` é para outra situação: o usuário **tem** acesso à parceria, mas o perfil dele não pode fazer aquela operação (rota só da RBS), ou a aba ainda não foi liberada. Nas rotas só da RBS o perfil é conferido **primeiro**: o patrocinador recebe 403 com qualquer id (da parceria dele, de outra ou que não existe), então o 403 nunca revela se o id existe.
+- O `403` é para outra situação: o usuário **tem** acesso à parceria, mas o perfil dele não pode fazer aquela operação (rota só da RBS), ou a aba ainda não foi liberada. Nas rotas só da RBS o perfil é conferido **primeiro**: o patrocinador recebe 403 com qualquer id (da parceria dele, de outra ou que não existe) e com **qualquer corpo ou filtro** (corpo vazio, JSON quebrado, campo inválido, `?tamanho=999`...). O 403 nunca revela se o id existe nem como é o formato do corpo da rota. As rotas só da RBS são as marcadas "Admin RBS" na tabela do início deste arquivo.
 
 ## Permissões por perfil
 

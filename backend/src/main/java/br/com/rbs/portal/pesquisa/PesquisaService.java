@@ -43,7 +43,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class PesquisaService {
 
-    static final String ABA_NAO_LIBERADA = "Esta aba ainda não foi liberada para a sua parceria.";
+    static final String ABA_NAO_LIBERADA = VerificadorDeAcesso.ABA_NAO_LIBERADA;
 
     private static final String ENTIDADE = "pesquisa_pergunta";
 
@@ -95,13 +95,10 @@ public class PesquisaService {
     @Transactional
     public PesquisaDaParceriaDto enviarPerguntas(UsuarioAutenticado usuario, long parceriaId,
                                                  EnviarPerguntasRequisicao corpo, HttpServletRequest requisicao) {
-        if (usuario.ehRbs()) {
-            throw new SemPermissaoException("Só o Admin Patrocinador da parceria envia as perguntas da pesquisa.");
-        }
+        // Estas três conferências também rodam antes de o corpo ser lido (PermissaoAntesDoCorpo); ficam aqui por segurança.
+        verificador.exigirPatrocinador(usuario, "Só o Admin Patrocinador da parceria envia as perguntas da pesquisa.");
         verificador.exigirParceria(usuario, parceriaId);
-        if (!repositorio.abaLiberada(parceriaId)) {
-            throw new SemPermissaoException(ABA_NAO_LIBERADA);
-        }
+        verificador.exigirAbaLiberada(usuario, parceriaId, "PESQUISA");
         conferirOrdensDiferentes(corpo.perguntas());
 
         repositorio.travarParceria(parceriaId);
