@@ -1,5 +1,5 @@
 // Modal do Figma (F01): painel de 560 px sobre um véu escuro, com título e "Fechar". [ITEM-4]
-import { useEffect, useRef, type ReactNode } from 'react'
+import { useEffect, useEffectEvent, useRef, type ReactNode } from 'react'
 
 type PropsModal = {
   titulo: string
@@ -12,18 +12,22 @@ type PropsModal = {
 
 export function Modal({ titulo, legenda, aberto, aoFechar, children, largura = 'max-w-[560px]' }: PropsModal) {
   const painel = useRef<HTMLDivElement>(null)
+  // O Esc chama sempre o aoFechar mais recente, sem refazer o efeito abaixo a cada tecla digitada no formulário.
+  const fecharComEsc = useEffectEvent((evento: KeyboardEvent) => evento.key === 'Escape' && aoFechar())
 
+  // O foco vai para o painel só ao abrir e volta para onde estava só ao fechar.
+  // Depender do aoFechar (uma função nova a cada render) roubava o foco do campo depois da primeira letra.
   useEffect(() => {
     if (!aberto) return
     const anterior = document.activeElement as HTMLElement | null
     painel.current?.focus()
-    const aoTeclar = (evento: KeyboardEvent) => evento.key === 'Escape' && aoFechar()
+    const aoTeclar = (evento: KeyboardEvent) => fecharComEsc(evento)
     document.addEventListener('keydown', aoTeclar)
     return () => {
       document.removeEventListener('keydown', aoTeclar)
       anterior?.focus()
     }
-  }, [aberto, aoFechar])
+  }, [aberto])
 
   if (!aberto) return null
   return (
