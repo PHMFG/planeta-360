@@ -225,9 +225,14 @@ class CargaControllerTest extends ApoioDeCargas {
         assertThat(lerLista(rejeicoes, "$.itens[*].linha")).containsExactly(2, 3, 4, 6, 7);
         assertThat(lerLista(rejeicoes, "$.itens[*].campo"))
                 .containsExactly("patrocinador", "exibido_em", "quantidade", "formato", "quantidade");
+        // [VALIDACAO] Data e quantidade ilegíveis dizem o formato esperado; quantidade zero diz que precisa ser maior que zero.
         assertThat(lerLista(rejeicoes, "$.itens[*].motivo")).containsExactly("Patrocinador sem parceria nesta edição",
-                "Campo obrigatório vazio ou inválido", "Campo obrigatório vazio ou inválido",
-                "Aproveitamento não encontrado no plano comercial", "Campo obrigatório vazio ou inválido");
+                "Data inválida. Use o formato 2026-11-20T10:15:30-03:00 (ano-mês-dia, hora e fuso).",
+                "Quantidade inválida. Use só números, como 1 ou 250 (ponto nos decimais).",
+                "Aproveitamento não encontrado no plano comercial", "A quantidade deve ser maior que zero.");
+        // O texto que não deu para ler aparece no conteúdo da rejeição, como estava na planilha.
+        assertThat((String) lerJson(rejeicoes, "$.itens[1].conteudo")).contains("ontem à tarde");
+        assertThat((String) lerJson(rejeicoes, "$.itens[2].conteudo")).endsWith("muitas");
         assertThat((String) lerJson(rejeicoes, "$.itens[0].conteudo")).contains("Cliente Azul");
     }
 
@@ -422,9 +427,14 @@ class CargaControllerTest extends ApoioDeCargas {
         byte[] binario = {(byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13, (byte) 0xFF, (byte) 0xFE};
         byte[] latin1 = "patrocinador,veiculo\nCliente Amarelo,Rádio".getBytes(StandardCharsets.ISO_8859_1);
 
-        assertThat(enviar(rbs, "planilha.csv", binario, "VEICULACAO", evento(2027), null)).hasStatus(HttpStatus.UNSUPPORTED_MEDIA_TYPE);
-        assertThat(enviar(rbs, "planilha.csv", latin1, "VEICULACAO", evento(2027), null)).as("não é UTF-8")
-                .hasStatus(HttpStatus.UNSUPPORTED_MEDIA_TYPE);
+        MvcTestResult umPng = enviar(rbs, "planilha.csv", binario, "VEICULACAO", evento(2027), null);
+        MvcTestResult emLatin1 = enviar(rbs, "planilha.csv", latin1, "VEICULACAO", evento(2027), null);
+        assertThat(umPng).hasStatus(HttpStatus.UNSUPPORTED_MEDIA_TYPE);
+        assertThat(emLatin1).as("não é UTF-8").hasStatus(HttpStatus.UNSUPPORTED_MEDIA_TYPE);
+        // As duas frases são diferentes: o PNG renomeado não é planilha; o texto em Latin-1 só precisa ser salvo de novo em UTF-8.
+        assertThat((String) lerJson(umPng, "$.detail")).contains("não é um CSV de verdade").contains("renomeado").doesNotContain("UTF-8");
+        assertThat((String) lerJson(emLatin1, "$.detail")).contains("não está em UTF-8").contains("CSV UTF-8 (separado por vírgulas)")
+                .doesNotContain("de verdade");
         // Mesmo conteúdo certo, com extensão que não é .csv (o Armazenamento até aceita pdf e xlsx; a carga não).
         byte[] csv = exemplo("veiculacao.csv");
         assertThat(enviar(rbs, "planilha.xlsx", csv, "VEICULACAO", evento(2027), null)).hasStatus(HttpStatus.UNSUPPORTED_MEDIA_TYPE);
@@ -466,6 +476,96 @@ class CargaControllerTest extends ApoioDeCargas {
         assertThat(chaves(escopoInvalido, "$.campos")).containsExactly("escopo");
         assertThat(vazio).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(chaves(vazio, "$.campos")).containsExactly("arquivo");
+        // Arquivo de 0 bytes e arquivo que nem foi enviado são problemas diferentes, com frases diferentes.
+        assertThat(lerJson(vazio, "$.campos.arquivo")).isEqualTo("A planilha está vazia.");
+        assertThat(lerJson(tudoErrado, "$.campos.arquivo")).isEqualTo("Envie a planilha CSV na parte \"arquivo\" do formulário.");
+    }
+
+    @Test
+    void planilhaDeZeroBytesDizQueEstaVaziaEPlanilhaQueNaoFoiEnviadaPedeOEnvio() {
+        SessaoDeApi rbs = entrar(RBS);
+        long cargasAntes = contar("SELECT count(*) FROM carga");
+
+        MvcTestResult zeroBytes = enviar(rbs, "planilha.csv", new byte[0], "VEICULACAO", evento(2027), null);
+        MvcTestResult naoEnviada = enviar(rbs, null, null, "VEICULACAO", evento(2027), null);
+
+        assertThat(zeroBytes).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(lerJson(zeroBytes, "$.campos.arquivo")).isEqualTo("A planilha está vazia.");
+        assertThat(naoEnviada).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(lerJson(naoEnviada, "$.campos.arquivo")).isEqualTo("Envie a planilha CSV na parte \"arquivo\" do formulário.");
+        assertThat(contar("SELECT count(*) FROM carga")).as("nada foi gravado").isEqualTo(cargasAntes);
+    }
+
+    @Test
+    void dataEQuantidadeIlegiveisSaoRejeitadasComOFormatoEsperadoENaoComOMotivoGenerico() {
+        semVeiculacoes();
+        SessaoDeApi rbs = entrar(RBS);
+        String linha = "Cliente Amarelo,Rede Atlântida RS,\"Chamadas assinadas 5\"\"\",Indeterminado,%s,%s,\n";
+        String csv = CABECALHO_VEICULACAO + "\n"
+                + linha.formatted("31/02/2026", "1")                       // 2: data com dia que não existe
+                + linha.formatted("2026-13-45", "1")                       // 3: mês e dia fora do calendário
+                + linha.formatted("amanhã", "1")                           // 4: texto
+                + linha.formatted("2026-12-02", "1")                       // 5: só a data, sem hora
+                + linha.formatted("2026-12-01T10:00:00-03:00", "1x")       // 6: quantidade com letra
+                + linha.formatted("2026-12-01T11:00:00-03:00", "12a")      // 7: quantidade com letra no fim
+                + linha.formatted("2026-12-01T12:00:00-03:00", "\"1,5\"")  // 8: vírgula decimal (entre aspas, para não virar duas colunas)
+                + linha.formatted("2026-12-01T13:00:00-03:00", "-3")       // 9: negativa
+                + linha.formatted("", "1")                                 // 10: data vazia
+                + linha.formatted("2026-12-01T14:00:00-03:00", "")         // 11: quantidade vazia
+                + linha.formatted("2026-12-01T15:00:00-03:00", "1");       // 12: a única boa
+        String data = "Data inválida. Use o formato 2026-11-20T10:15:30-03:00 (ano-mês-dia, hora e fuso).";
+        String quantidade = "Quantidade inválida. Use só números, como 1 ou 250 (ponto nos decimais).";
+        String generico = "Campo obrigatório vazio ou inválido";
+
+        MvcTestResult carga = enviar(rbs, "ilegiveis.csv", texto(csv), "VEICULACAO", evento(2027), null);
+
+        assertThat(carga).hasStatus(HttpStatus.CREATED);
+        assertThat(inteiro(carga, "$.linhasLidas")).isEqualTo(11);
+        assertThat(inteiro(carga, "$.linhasInseridas")).isEqualTo(1);
+        assertThat(inteiro(carga, "$.linhasRejeitadas")).isEqualTo(10);
+        MvcTestResult rejeicoes = rbs.get("/api/cargas/" + longo(carga, "$.id") + "/rejeicoes");
+        assertThat(lerLista(rejeicoes, "$.itens[*].linha")).containsExactly(2, 3, 4, 5, 6, 7, 8, 9, 10, 11);
+        assertThat(lerLista(rejeicoes, "$.itens[*].campo")).containsExactly("exibido_em", "exibido_em", "exibido_em", "exibido_em",
+                "quantidade", "quantidade", "quantidade", "quantidade", "exibido_em", "quantidade");
+        assertThat(lerLista(rejeicoes, "$.itens[*].motivo")).containsExactly(data, data, data, data, quantidade, quantidade,
+                quantidade, "A quantidade deve ser maior que zero.", generico, generico);
+        // O texto que não deu para ler vai no conteúdo da rejeição, como a RBS o escreveu.
+        assertThat(lerLista(rejeicoes, "$.itens[*].conteudo")).satisfies(c -> {
+            assertThat((String) c.get(0)).endsWith("31/02/2026");
+            assertThat((String) c.get(1)).endsWith("2026-13-45");
+            assertThat((String) c.get(2)).endsWith("amanhã");
+            assertThat((String) c.get(4)).endsWith("1x");
+            assertThat((String) c.get(5)).endsWith("12a");
+        });
+    }
+
+    @Test
+    void pesquisaComValorUnidadeBaseEPerguntaIlegiveisTemMotivoEspecifico() {
+        semResultadosDePesquisa();
+        SessaoDeApi rbs = entrar(RBS);
+        String csv = CABECALHO_PESQUISA + "\n"
+                + "Cliente Amarelo,1,,Sim,abc,PERCENTUAL,412\n"        // 2: valor com letras
+                + "Cliente Amarelo,1,,Não,36,POR_CENTO,412\n"          // 3: unidade que não existe
+                + "Cliente Amarelo,2,,Nota média,8.4,NOTA,412x\n"      // 4: base com letra
+                + "Cliente Amarelo,2,,Notas 9 e 10,61,PERCENTUAL,0\n"  // 5: base zero
+                + "Cliente Amarelo,x,,Melhorou,58,PERCENTUAL,412\n"    // 6: pergunta com letra
+                + "Cliente Amarelo,3,,Melhorou,58,PERCENTUAL,412\n";   // 7: a única boa
+
+        MvcTestResult carga = enviar(rbs, "ilegiveis.csv", texto(csv), "PESQUISA", evento(2027), null);
+
+        assertThat(carga).hasStatus(HttpStatus.CREATED);
+        assertThat(inteiro(carga, "$.linhasInseridas")).isEqualTo(1);
+        assertThat(inteiro(carga, "$.linhasRejeitadas")).isEqualTo(5);
+        MvcTestResult rejeicoes = rbs.get("/api/cargas/" + longo(carga, "$.id") + "/rejeicoes");
+        assertThat(lerLista(rejeicoes, "$.itens[*].linha")).containsExactly(2, 3, 4, 5, 6);
+        assertThat(lerLista(rejeicoes, "$.itens[*].campo")).containsExactly("valor", "unidade", "base_respondentes",
+                "base_respondentes", "pergunta");
+        assertThat(lerLista(rejeicoes, "$.itens[*].motivo")).containsExactly(
+                "Valor inválido. Use só números, com ponto nos decimais, como 8.4 ou 64.",
+                "Unidade inválida. Use PERCENTUAL, NOTA ou CONTAGEM.",
+                "Base de respondentes inválida. Use só números inteiros, como 412.",
+                "A base de respondentes deve ser maior que zero.",
+                "Pergunta inválida. Use o número da pergunta: 1, 2 ou 3.");
     }
 
     @Test

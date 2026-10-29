@@ -19,6 +19,8 @@ import br.com.rbs.portal.materiais.MateriaisDtos.PaginaDto;
 import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.math.BigDecimal;
+import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -70,9 +72,10 @@ public class CargaService {
     // ---------------------------------------------------------------------
 
     /**
-     * Rota 26. Ordem das respostas: 403 (patrocinador), 422 (parte ausente, tipo, evento ou escopo inválido, ou edição sem
-     * a pesquisa pedida), 415 (não é .csv), 413/415/422 do Armazenamento (tamanho, conteúdo que não é texto UTF-8, arquivo
-     * vazio) e 422 (cabeçalho sem coluna, texto maior que a coluna, CSV mal formado, planilha sem linhas de dados).
+     * Rota 26. Ordem das respostas: 403 (patrocinador), 422 (parte ausente, planilha de 0 bytes, tipo, evento ou escopo
+     * inválido, ou edição sem a pesquisa pedida), 415 (não é .csv), 413/415 do Armazenamento (tamanho; conteúdo que não é
+     * texto UTF-8, com a instrução de salvar como CSV UTF-8) e 422 (cabeçalho sem coluna, texto maior que a coluna, CSV mal
+     * formado, planilha sem linhas de dados).
      * Tudo corre numa transação: se qualquer passo falhar, a carga, as linhas da área de passagem, o registro do arquivo e
      * o arquivo em disco não ficam (o Armazenamento apaga o arquivo no rollback).
      */
@@ -83,8 +86,11 @@ public class CargaService {
 
         // [VALIDACAO] Junta os erros de campo numa resposta só.
         Map<String, String> campos = new LinkedHashMap<>();
-        if (arquivo == null || arquivo.isEmpty()) {
+        if (arquivo == null || (arquivo.isEmpty() && vazio(arquivo.getOriginalFilename()))) {
             campos.put("arquivo", "Envie a planilha CSV na parte \"arquivo\" do formulário.");
+        } else if (arquivo.isEmpty()) {
+            // Chegou um arquivo com nome, mas sem nenhum byte: o problema é a planilha, e não o formulário.
+            campos.put("arquivo", "A planilha está vazia.");
         }
         String tipo = tipoInformado == null ? "" : tipoInformado.strip();
         if (!VEICULACAO.equals(tipo) && !PESQUISA.equals(tipo)) {
@@ -190,19 +196,28 @@ public class CargaService {
     // ---------------------------------------------------------------------
 
     // Os valores chegam na ordem de COLUNAS_DA_VEICULACAO. O que não converte (data ou quantidade ilegível) vai nulo e a
-    // função do banco rejeita a linha com o campo e o motivo.
+    // função do banco rejeita a linha com o campo e o motivo. O texto original do que não converteu vai junto (e só nesse
+    // caso), para a função distinguir "ilegível" de "vazio" e dizer qual é o formato esperado.
     private static LinhaDeVeiculacao veiculacao(Linha l) {
         List<String> v = l.valores();
-        return new LinhaDeVeiculacao(l.numero(), v.get(0), v.get(1), v.get(2), v.get(3), Celulas.data(v.get(4)),
-                Celulas.decimal(v.get(5), 14), v.get(6));
+        OffsetDateTime exibidoEm = Celulas.data(v.get(4));
+        BigDecimal quantidade = Celulas.decimal(v.get(5), 14);
+        return new LinhaDeVeiculacao(l.numero(), v.get(0), v.get(1), v.get(2), v.get(3), exibidoEm, quantidade, v.get(6),
+                exibidoEm == null ? v.get(4) : null, quantidade == null ? v.get(5) : null);
     }
 
     // Colunas de stg_pesquisa: pergunta é smallint, valor é numeric(10,2) e a base é integer.
     private static LinhaDePesquisa pesquisa(Linha l) {
         List<String> v = l.valores();
-        return new LinhaDePesquisa(l.numero(), v.get(0), Celulas.inteiro(v.get(1), Short.MIN_VALUE, Short.MAX_VALUE), v.get(2),
-                v.get(3), Celulas.decimal(v.get(4), 10), Celulas.unidade(v.get(5)),
-                Celulas.inteiro(v.get(6), Integer.MIN_VALUE, Integer.MAX_VALUE));
+        Integer pergunta = Celulas.inteiro(v.get(1), Short.MIN_VALUE, Short.MAX_VALUE);
+        BigDecimal valor = Celulas.decimal(v.get(4), 10);
+        Integer base = Celulas.inteiro(v.get(6), Integer.MIN_VALUE, Integer.MAX_VALUE);
+        return new LinhaDePesquisa(l.numero(), v.get(0), pergunta, v.get(2), v.get(3), valor, Celulas.unidade(v.get(5)), base,
+                pergunta == null ? v.get(1) : null, valor == null ? v.get(4) : null, base == null ? v.get(6) : null);
+    }
+
+    private static boolean vazio(String texto) {
+        return texto == null || texto.isBlank();
     }
 
     private static Long numero(String texto) {

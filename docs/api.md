@@ -616,7 +616,7 @@ O patrocinador só enxerga as entregas das abas **liberadas** para a parceria de
 **[UPLOAD] Regras do arquivo**
 
 - Extensões aceitas: `pdf`, `png`, `jpg`, `jpeg`, `docx`, `xlsx`, `pptx`, `csv`, `mp4`, `mp3`, `zip` (`mp4`, `mp3` e `zip` vieram da reunião com a RBS; a lista completa e o limite seguem em [PENDENTE] no fim deste arquivo). Sem diferenciar maiúsculas de minúsculas; só vale o que vem depois do último ponto.
-- O servidor também confere o **conteúdo**, pelos primeiros bytes (a "assinatura" do formato), e não só o nome: `pdf` começa com `%PDF`; `png` e `jpg`/`jpeg` com a assinatura de imagem; `zip`, `docx`, `xlsx` e `pptx` com `PK`; `mp4` tem `ftyp` logo no começo; `mp3` começa com `ID3` ou com um quadro de áudio; `csv` precisa ser texto UTF-8 válido, sem bytes nulos. Um executável renomeado para `.pdf` é recusado (415). SVG e executáveis ficam de fora, porque podem carregar script. O tipo (`mimeType`) gravado vem da extensão conferida, nunca do que o navegador informou.
+- O servidor também confere o **conteúdo**, pelos primeiros bytes (a "assinatura" do formato), e não só o nome: `pdf` começa com `%PDF`; `png` e `jpg`/`jpeg` com a assinatura de imagem; `zip`, `docx`, `xlsx` e `pptx` com `PK`; `mp4` tem `ftyp` logo no começo; `mp3` começa com `ID3` ou com um quadro de áudio; `csv` precisa ser texto UTF-8 válido, sem bytes nulos. Planilha que é texto mas não está em UTF-8 (o Excel grava em ANSI/Latin-1 quando não se escolhe "CSV UTF-8") recebe 415 com a instrução de salvar de novo como "CSV UTF-8 (separado por vírgulas)"; arquivo que não parece texto (um PNG renomeado para `.csv`) recebe 415 com a frase de arquivo renomeado. Um executável renomeado para `.pdf` é recusado (415). SVG e executáveis ficam de fora, porque podem carregar script. O tipo (`mimeType`) gravado vem da extensão conferida, nunca do que o navegador informou.
 - O nome original perde o caminho da pasta e os caracteres de controle (`C:\fotos\logo.png` vira `logo.png`) e tem no máximo 255 caracteres.
 - O servidor guarda o arquivo com um nome que ele mesmo gera. O nome original só aparece na resposta e no download.
 - Categorias que o **patrocinador** pode usar: `MATERIAL_MARCA`, `MATERIAL_MIDIA`, `DOCUMENTO_INGRESSOS`, `CONTRATO`, `OUTRO`. As demais (`PLANO_COMERCIAL`, `RELATORIO_VEICULACAO`, `COMPROVACAO`, `PESQUISA`, `RELATORIO_PARCERIA`) são só da RBS.
@@ -887,7 +887,7 @@ O patrocinador recebe 403 nesta rota mesmo para a pergunta da própria parceria 
 **Como funciona** [CARGA] [DUPLICIDADE]
 
 1. A API confere o cabeçalho e guarda o arquivo como arquivo geral da RBS (sem parceria; categoria `RELATORIO_VEICULACAO` ou `PESQUISA`). O cabeçalho precisa ter **todas** as colunas do tipo, em qualquer ordem e em maiúsculas ou minúsculas; coluna a mais é ignorada. Veiculação: `patrocinador, veiculo, formato, espaco_programa, exibido_em, quantidade, link`. Pesquisa: `patrocinador, pergunta, indicador, alternativa, valor, unidade, base_respondentes`. Célula vazia vale como nulo.
-2. Grava as linhas numa área de passagem e chama a função do banco, que rejeita o que não tem campo obrigatório ou não bate com nenhuma parceria, e **insere sem duplicar**. Data ou número que não dá para ler (por exemplo `exibido_em` = "ontem", ou decimal com vírgula) não derruba o arquivo: a linha é rejeitada, com o campo e o motivo. Data sem fuso vale no horário de Brasília. Tudo corre numa transação: se algo falhar, não ficam a carga, as linhas nem o arquivo.
+2. Grava as linhas numa área de passagem e chama a função do banco, que rejeita o que não tem campo obrigatório ou não bate com nenhuma parceria, e **insere sem duplicar**. Data ou número que não dá para ler (por exemplo `exibido_em` = "ontem", ou decimal com vírgula) não derruba o arquivo: a linha é rejeitada, com o campo e o **motivo específico**, que diz o formato esperado (veja a rota 28). Data sem fuso vale no horário de Brasília. Tudo corre numa transação: se algo falhar, não ficam a carga, as linhas nem o arquivo.
 3. A chave da veiculação é a **linha do plano comercial + data e hora**. Reenviar o mesmo arquivo não insere nada: tudo conta como duplicada. Reenviar com quantidade corrigida também conta como duplicada (a primeira versão prevalece).
 4. Na pesquisa da ativação, só pergunta `APROVADA` recebe resultado; a linha de pergunta ainda não aprovada é rejeitada.
 
@@ -906,7 +906,7 @@ Linhas lidas = inseridas + duplicadas + rejeitadas. As rejeitadas, com o motivo,
 
 `linha`, nas rejeições, é o número da linha no arquivo (o cabeçalho é a linha 1; linha em branco conta no número, mas não é lida).
 
-**Erros:** 403 (conferido antes de qualquer outra coisa); 413 (acima de 20 MB); 415 (não é CSV: extensão diferente de `.csv`, ou conteúdo que não é texto UTF-8); 422 com `campos`: parte ausente ou inválida (`arquivo`, `tipo`, `eventoId`, `escopo`), evento que não existe (`campos.eventoId`), edição sem a pesquisa pedida cadastrada (`campos.escopo`), e problemas do arquivo em `campos.arquivo`: cabeçalho com coluna faltando (lista as que faltam), texto maior que a coluna do banco (diz a linha e a coluna), CSV mal formado (aspas abertas) e planilha sem nenhuma linha de dados. Nesses casos nada é gravado.
+**Erros:** 403 (conferido antes de qualquer outra coisa); 413 (acima de 20 MB); 415 (não é CSV: extensão diferente de `.csv`, texto que não está em UTF-8, com a instrução de salvar como CSV UTF-8, ou conteúdo que não parece texto, com a frase de arquivo renomeado); 422 com `campos`: parte ausente (`campos.arquivo` = `Envie a planilha CSV na parte "arquivo" do formulário.`), planilha de 0 bytes (`campos.arquivo` = `A planilha está vazia.`), parte inválida (`tipo`, `eventoId`, `escopo`), evento que não existe (`campos.eventoId`), edição sem a pesquisa pedida cadastrada (`campos.escopo`), e problemas do arquivo em `campos.arquivo`: cabeçalho com coluna faltando (lista as que faltam), texto maior que a coluna do banco (diz a linha e a coluna), CSV mal formado (aspas abertas) e planilha sem nenhuma linha de dados. Nesses casos nada é gravado.
 
 **Histórico:** `CARGA`. No banco o `tipo` `VEICULACAO` é gravado como `MIDIA`.
 
@@ -932,7 +932,27 @@ Linhas lidas = inseridas + duplicadas + rejeitadas. As rejeitadas, com o motivo,
 }
 ```
 
-`linha` é o número da linha no arquivo enviado. `conteudo` é a linha reescrita pelo banco, com os campos separados por ` | ` (a data em horário de Brasília). **Erros:** 403 (também para carga que não existe: a permissão é conferida primeiro); 404 (carga que não existe, para a RBS).
+`linha` é o número da linha no arquivo enviado. `conteudo` é a linha reescrita pelo banco, com os campos separados por ` | ` (a data em horário de Brasília; o que não deu para ler aparece como foi escrito na planilha).
+
+**Os motivos** de uma linha que não entrou. Cada linha tem um só (o primeiro problema encontrado):
+
+| Campo | Motivo |
+| --- | --- |
+| `patrocinador`, `veiculo`, `formato` (veiculação) | `Campo obrigatório vazio ou inválido` |
+| `exibido_em` vazio | `Campo obrigatório vazio ou inválido` |
+| `exibido_em` ilegível (`31/02/2026`, `2026-13-45`, `amanhã`, só a data) | `Data inválida. Use o formato 2026-11-20T10:15:30-03:00 (ano-mês-dia, hora e fuso).` |
+| `quantidade` vazia | `Campo obrigatório vazio ou inválido` |
+| `quantidade` ilegível (`1x`, `12a`, `1,5`) | `Quantidade inválida. Use só números, como 1 ou 250 (ponto nos decimais).` |
+| `quantidade` zero ou negativa | `A quantidade deve ser maior que zero.` |
+| `patrocinador` sem parceria na edição | `Patrocinador sem parceria nesta edição` |
+| linha que não está no plano comercial | `Aproveitamento não encontrado no plano comercial` |
+| `valor` ilegível (pesquisa) | `Valor inválido. Use só números, com ponto nos decimais, como 8.4 ou 64.` |
+| `unidade` fora da lista (pesquisa) | `Unidade inválida. Use PERCENTUAL, NOTA ou CONTAGEM.` |
+| `base_respondentes` ilegível (pesquisa) | `Base de respondentes inválida. Use só números inteiros, como 412.` |
+| `base_respondentes` zero ou negativa | `A base de respondentes deve ser maior que zero.` |
+| `pergunta` ilegível ou fora de 1 a 3 (pesquisa da ativação) | `Pergunta inválida. Use o número da pergunta: 1, 2 ou 3.` / `Pergunta fora do intervalo de 1 a 3` |
+| percentual fora de 0 a 100 | `Percentual fora do intervalo de 0 a 100` |
+| pergunta sem cadastro ou ainda não aprovada | `Pergunta não cadastrada para esta parceria nesta pesquisa` / `Pergunta ainda não aprovada pela RBS` | **Erros:** 403 (também para carga que não existe: a permissão é conferida primeiro); 404 (carga que não existe, para a RBS).
 
 ## 29. `GET /api/parcerias/{id}/consolidacao`  · etapa 6
 

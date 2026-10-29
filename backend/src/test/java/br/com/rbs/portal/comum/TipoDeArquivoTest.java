@@ -90,6 +90,21 @@ class TipoDeArquivoTest {
     }
 
     @Test
+    void textoQueNaoEUtf8SeDistingueDeArquivoQueNaoEhTexto() {
+        // Latin-1 e ANSI do Excel: texto, só que não UTF-8. UTF-16 do "Texto Unicode" também (marca FF FE ou FE FF).
+        assertThat(TipoDeArquivo.ehTextoQueNaoEUtf8("patrocinador;veículo\nJoão;Rádio\r\n".getBytes(StandardCharsets.ISO_8859_1))).isTrue();
+        assertThat(TipoDeArquivo.ehTextoQueNaoEUtf8(bytes('a', ';', 0xE7, 0xE3, 'o', '\t', 'b'))).isTrue();
+        assertThat(TipoDeArquivo.ehTextoQueNaoEUtf8(bytes(0xFF, 0xFE, 'a', 0, ';', 0))).as("UTF-16 com BOM").isTrue();
+        assertThat(TipoDeArquivo.ehTextoQueNaoEUtf8(bytes('a', 0xC3))).as("UTF-8 cortado: ainda é texto").isTrue();
+        // UTF-8 válido não tem o que corrigir.
+        assertThat(TipoDeArquivo.ehTextoQueNaoEUtf8("ação;coração\n".getBytes(StandardCharsets.UTF_8))).isFalse();
+        // Binário: byte nulo ou caractere de controle (PNG, PDF compactado, executável).
+        assertThat(TipoDeArquivo.ehTextoQueNaoEUtf8(bytes(0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A))).as("PNG").isFalse();
+        assertThat(TipoDeArquivo.ehTextoQueNaoEUtf8(bytes('M', 'Z', 0x90, 0, 3, 0, 0, 0))).as("executável").isFalse();
+        assertThat(TipoDeArquivo.ehTextoQueNaoEUtf8(bytes('a', 0xE7, 0x01, 'b'))).as("Latin-1 com caractere de controle").isFalse();
+    }
+
+    @Test
     void csvGrandeComTextoValidoAte20MbNaoEstouraAMemoria() {
         byte[] grande = new byte[20 * 1024 * 1024];
         java.util.Arrays.fill(grande, (byte) 'a');

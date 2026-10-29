@@ -84,6 +84,28 @@ public enum TipoDeArquivo {
         };
     }
 
+    /**
+     * O conteúdo é texto, mas não UTF-8? Serve para dizer ao usuário como salvar a planilha de novo. É texto quando não há
+     * byte nulo nem caractere de controle além de tabulação e quebra de linha (um texto em Latin-1 passa; um PNG ou um
+     * executável não), ou quando o arquivo começa com a marca de UTF-16 (FF FE ou FE FF) que o Excel grava em "Texto Unicode".
+     * Texto que já é UTF-8 válido devolve falso: para ele não há o que corrigir.
+     */
+    public static boolean ehTextoQueNaoEUtf8(byte[] b) {
+        if (ehTextoUtf8SemNulos(b)) {
+            return false;
+        }
+        if (comecaCom(b, 0xFF, 0xFE) || comecaCom(b, 0xFE, 0xFF)) {
+            return true;
+        }
+        for (byte valor : b) {
+            int caractere = valor & 0xFF;
+            if (caractere == 0 || (caractere < 0x20 && caractere != '\t' && caractere != '\n' && caractere != '\r') || caractere == 0x7F) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     private static boolean comecaCom(byte[] b, int... assinatura) {
         if (b.length < assinatura.length) {
             return false;

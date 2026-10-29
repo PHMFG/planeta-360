@@ -138,6 +138,23 @@ class ArquivosTest extends ApoioDeMateriais {
     }
 
     @Test
+    void csvEmLatin1RecebeAInstrucaoDeSalvarEmUtf8ENaoAFraseDeArquivoRenomeado() {
+        long entrega = criarEntrega(entrar(RBS), amarelo(), "MIDIA", "Planilha");
+        SessaoDeApi amarelo = entrar(AMARELO);
+        byte[] latin1 = "nome;cargo\nJoão;Diretor de Marketing".getBytes(StandardCharsets.ISO_8859_1);
+        byte[] umPng = {(byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13};
+
+        MvcTestResult emLatin1 = enviar(amarelo, entrega, "lista.csv", latin1);
+        MvcTestResult pngRenomeado = enviar(amarelo, entrega, "lista.csv", umPng);
+
+        assertThat(emLatin1).hasStatus(HttpStatus.UNSUPPORTED_MEDIA_TYPE);
+        assertThat((String) lerJson(emLatin1, "$.detail")).contains("não está em UTF-8").contains("CSV UTF-8");
+        assertThat(pngRenomeado).hasStatus(HttpStatus.UNSUPPORTED_MEDIA_TYPE);
+        assertThat((String) lerJson(pngRenomeado, "$.detail")).contains("não é um CSV de verdade").contains("renomeado");
+        assertThat(arquivosDaEntrega(entrega)).isZero();
+    }
+
+    @Test
     void segundoEnvioViraVersao2ComNovaVersaoNoHistoricoESemOutraMudancaDeStatus() {
         long entrega = criarEntrega(entrar(RBS), amarelo(), "MIDIA", "VT para os telões dos palcos");
         SessaoDeApi amarelo = entrar(AMARELO);
