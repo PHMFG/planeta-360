@@ -5,6 +5,7 @@ import br.com.rbs.portal.acesso.AcessoDtos.UsuarioLogadoDto;
 import br.com.rbs.portal.comum.HistoricoService;
 import br.com.rbs.portal.comum.NaoAutenticadoException;
 import br.com.rbs.portal.comum.Perfil;
+import br.com.rbs.portal.comum.RespostasDeSeguranca;
 import br.com.rbs.portal.comum.UsuarioAutenticado;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -85,14 +86,15 @@ public class AuthService {
     }
 
     /**
-     * GET /api/auth/eu. Lê o usuário de novo no banco: se a conta foi desativada ou perdeu todos os vínculos desde o
-     * login, a sessão é encerrada e a resposta é 401. [PERMISSAO] A revogação vale na hora, sem esperar a sessão vencer.
+     * GET /api/auth/eu. Lê o usuário de novo no banco. [PERMISSAO] Que a conta desativada ou sem vínculos perde a sessão
+     * (401 "Sua sessão terminou...") quem confere é o ConfereContaDaSessao, para toda rota, antes de chegar aqui; por isso
+     * este método não repete a consulta de acesso (uma por requisição). Só o usuário que sumiu do banco ainda cai aqui.
      */
     public UsuarioLogadoDto eu(UsuarioAutenticado logado, HttpServletRequest requisicao, HttpServletResponse resposta) {
         Usuario usuario = usuarios.findById(logado.id()).orElse(null);
-        if (usuario == null || !acesso.temAcesso(usuario.id())) {
+        if (usuario == null) {
             new SecurityContextLogoutHandler().logout(requisicao, resposta, contextoAtual.getContext().getAuthentication());
-            throw new NaoAutenticadoException("Sua sessão terminou. Entre de novo.");
+            throw new NaoAutenticadoException(RespostasDeSeguranca.SESSAO_ENCERRADA);
         }
         return montar(usuario);
     }

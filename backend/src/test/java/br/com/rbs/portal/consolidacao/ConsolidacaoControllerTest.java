@@ -346,7 +346,8 @@ class ConsolidacaoControllerTest {
         jdbc.sql("DELETE FROM parceria_usuario WHERE parceria_id = :p AND usuario_id = (SELECT id FROM usuario WHERE email = :e)")
                 .param("p", amarelo).param("e", AGENCIA_DO_AMARELO).update();
 
-        assertThat(consolidacao(sessao, amarelo)).hasStatus(HttpStatus.NOT_FOUND);
+        // Era o único vínculo da agência: a sessão termina (401 em qualquer rota).
+        assertThat(consolidacao(sessao, amarelo)).hasStatus(HttpStatus.UNAUTHORIZED);
     }
 
     @Test

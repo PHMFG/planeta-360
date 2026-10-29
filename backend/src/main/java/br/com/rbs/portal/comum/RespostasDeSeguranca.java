@@ -21,6 +21,9 @@ import tools.jackson.databind.json.JsonMapper;
 @Component
 public class RespostasDeSeguranca implements AuthenticationEntryPoint, AccessDeniedHandler {
 
+    /** A frase de quem tinha sessão e perdeu o acesso (e-mail revogado, conta desativada). Vale em qualquer rota. */
+    public static final String SESSAO_ENCERRADA = "Sua sessão terminou. Entre de novo.";
+
     private final JsonMapper json;
 
     public RespostasDeSeguranca(JsonMapper json) {
@@ -32,6 +35,14 @@ public class RespostasDeSeguranca implements AuthenticationEntryPoint, AccessDen
     public void commence(HttpServletRequest requisicao, HttpServletResponse resposta, AuthenticationException ex)
             throws IOException {
         escrever(requisicao, resposta, Problemas.de(HttpStatus.UNAUTHORIZED, "Entre no portal para continuar."));
+    }
+
+    /**
+     * [PERMISSAO] A sessão existia, mas a conta deixou de valer (ConfereContaDaSessao): 401 com a frase do contrato, a
+     * mesma do GET /api/auth/eu, para o front levar a pessoa ao login.
+     */
+    public void sessaoEncerrada(HttpServletRequest requisicao, HttpServletResponse resposta) throws IOException {
+        escrever(requisicao, resposta, Problemas.de(HttpStatus.UNAUTHORIZED, SESSAO_ENCERRADA));
     }
 
     /**

@@ -1,5 +1,7 @@
 package br.com.rbs.portal.comum;
 
+import br.com.rbs.portal.acesso.AcessoRepositorio;
+import br.com.rbs.portal.acesso.ConfereContaDaSessao;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -13,10 +15,14 @@ import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.authentication.logout.HttpStatusReturningLogoutSuccessHandler;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.savedrequest.NullRequestCache;
+import org.springframework.security.web.servlet.util.matcher.PathPatternRequestMatcher;
+import org.springframework.security.web.util.matcher.OrRequestMatcher;
+import org.springframework.security.web.util.matcher.RequestMatcher;
 
 /**
  * Configura a segurança da API: sessão por cookie, CSRF para SPA, rotas protegidas e respostas JSON de erro.
@@ -51,9 +57,19 @@ public class SegurancaConfig {
         return new HttpSessionSecurityContextRepository();
     }
 
+    /**
+     * As únicas rotas sem sessão: o token CSRF, o login e a ativação do primeiro acesso (etapa 4: a pessoa ainda não tem
+     * senha). O mesmo conjunto vale para o permitAll e para a conferência de conta (ConfereContaDaSessao não roda nelas).
+     */
+    private static final RequestMatcher ROTAS_PUBLICAS = new OrRequestMatcher(
+            PathPatternRequestMatcher.pathPattern(HttpMethod.GET, "/api/auth/csrf"),
+            PathPatternRequestMatcher.pathPattern(HttpMethod.POST, "/api/auth/login"),
+            PathPatternRequestMatcher.pathPattern(HttpMethod.POST, "/api/auth/ativar"));
+
     @Bean
     SecurityFilterChain cadeiaDeSeguranca(HttpSecurity http, SecurityContextRepository repositorio,
-                                          RespostasDeSeguranca respostas, RegistraLogout registraLogout)
+                                          RespostasDeSeguranca respostas, RegistraLogout registraLogout,
+                                          AcessoRepositorio acesso)
             throws Exception {
         http
                 // Sem tela de login do Spring e sem senha no cabeçalho: o login é a rota JSON POST /api/auth/login.
@@ -68,13 +84,13 @@ public class SegurancaConfig {
                 .requestCache(cache -> cache.requestCache(new NullRequestCache()))
 
                 .authorizeHttpRequests(rotas -> rotas
-                        .requestMatchers(HttpMethod.GET, "/api/auth/csrf").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
-                        // Primeiro acesso com o código de ativação (etapa 4): a pessoa ainda não tem senha, então não tem sessão.
-                        .requestMatchers(HttpMethod.POST, "/api/auth/ativar").permitAll()
+                        .requestMatchers(ROTAS_PUBLICAS).permitAll()
                         .requestMatchers("/api/**").authenticated()
                         // [PENDENTE] Se a API passar a servir o front compilado, liberar aqui os arquivos estáticos.
                         .anyRequest().denyAll())
+
+                // [PERMISSAO] Antes de qualquer rota: a conta da sessão ainda vale? Se não, 401 e a sessão acaba.
+                .addFilterBefore(new ConfereContaDaSessao(acesso, respostas, ROTAS_PUBLICAS), AuthorizationFilter.class)
 
                 .exceptionHandling(erros -> erros
                         .authenticationEntryPoint(respostas)

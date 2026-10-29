@@ -59,7 +59,7 @@ Todo erro, sem exceção, vem como `application/problem+json` no formato `Proble
 | Status | Título | Quando acontece |
 | --- | --- | --- |
 | 400 | Requisição inválida | Corpo vazio ou que não é JSON. |
-| 401 | Não autenticado | Sem sessão (ou sessão vencida), ou e-mail/senha incorretos no login. |
+| 401 | Não autenticado | Sem sessão (ou sessão vencida), e-mail/senha incorretos no login, ou sessão de uma conta que perdeu o acesso (veja "Sessão e CSRF"). |
 | 403 | Acesso negado | Logado, mas o perfil não pode fazer a operação (rota só da RBS), a aba ainda não foi liberada para a parceria, ou falta o token CSRF. |
 | 404 | Não encontrado | O recurso **não existe ou é de outra parceria**. Os dois casos têm a mesma resposta, de propósito. Vale também para rota inexistente. |
 | 405 | Método não permitido | A rota existe, mas não aceita esse método HTTP. |
@@ -91,6 +91,8 @@ Roteiro de uso:
 ```
 
 No `fetch`, use sempre `credentials: "same-origin"` (ou `"include"`, se front e API estiverem em origens diferentes). Se uma chamada voltar **401** no meio do uso, a sessão terminou (venceu, foi encerrada ou a conta perdeu o acesso): leve o usuário à tela de login.
+
+**A conta é conferida em toda chamada com sessão.** A cada requisição a API confere, no banco, se a conta ainda vale: ativa e, para o patrocinador, com pelo menos um vínculo com parceria. Se a RBS revogou o e-mail ou desativou a conta depois do login, **qualquer rota** responde 401 com `detail` `"Sua sessão terminou. Entre de novo."` e a sessão é encerrada na hora (o `JSESSIONID` deixa de valer). Não existe 404 nem 403 "de transição": o front só precisa tratar o 401 em um lugar. O login, o `GET /api/auth/csrf`, a ativação e o logout continuam funcionando com uma sessão assim, para a pessoa entrar de novo com outra conta.
 
 O login mantém o cookie `XSRF-TOKEN`; o **logout o apaga** (junto com o `JSESSIONID`). Depois de sair, chame `GET /api/auth/csrf` de novo antes do próximo POST.
 
@@ -277,7 +279,7 @@ Use `cabecalho` como nome do cabeçalho e `token` como valor nas chamadas que al
 
 | Status | Quando |
 | --- | --- |
-| 401 | Sem sessão: `{"title":"Não autenticado","detail":"Entre no portal para continuar."}`. Também quando a sessão existe, mas a conta foi desativada ou perdeu todos os vínculos (acesso revogado) depois do login: a sessão é encerrada na hora e o `detail` é `"Sua sessão terminou. Entre de novo."`. |
+| 401 | Sem sessão: `{"title":"Não autenticado","detail":"Entre no portal para continuar."}`. Também quando a sessão existe, mas a conta foi desativada ou perdeu todos os vínculos (acesso revogado) depois do login: a sessão é encerrada na hora e o `detail` é `"Sua sessão terminou. Entre de novo."`. Isto vale para **toda** rota com sessão, não só para esta (veja "Sessão e CSRF"). |
 
 ## 5. `POST /api/auth/ativar`  · etapa 4
 
@@ -509,7 +511,7 @@ Revoga o e-mail. A linha **não é apagada**: fica marcada como revogada (a tril
 
 **204**, sem corpo. **Erros:** 403; 404 (parceria ou e-mail que não existe ou é de outra parceria); 409 (`"Este e-mail já estava revogado."`). **Histórico:** `REVOGACAO`.
 
-Na chamada seguinte da pessoa revogada: `GET /api/auth/eu` responde 401 (a sessão termina), `GET /api/parcerias/{id}` responde 404 e `GET /api/parcerias` já não traz a parceria.
+Na chamada seguinte da pessoa revogada, **qualquer rota** (`GET /api/auth/eu`, `GET /api/parcerias/{id}`, `GET /api/parcerias`, um `PUT`...) responde 401 com `"Sua sessão terminou. Entre de novo."` e a sessão termina. Isso vale quando o e-mail revogado era o último vínculo da pessoa; se ela ainda tem outra parceria, só a parceria revogada some (404 nela e fora da lista).
 
 ---
 

@@ -623,8 +623,11 @@ class PesquisaControllerTest {
         jdbc.sql("DELETE FROM parceria_usuario WHERE parceria_id = :p AND usuario_id = :u")
                 .param("p", amarelo).param("u", usuarioId(AGENCIA_DO_AMARELO)).update();
 
-        assertThat(verPesquisa(sessao, amarelo)).hasStatus(HttpStatus.NOT_FOUND);
-        assertThat(enviarPerguntas(sessao, amarelo, perguntas(P1))).hasStatus(HttpStatus.NOT_FOUND);
+        // A agência só tinha este vínculo: perdeu o último, então a sessão termina (401) em qualquer rota.
+        MvcTestResult ver = verPesquisa(sessao, amarelo);
+        assertThat(ver).hasStatus(HttpStatus.UNAUTHORIZED);
+        assertThat(lerJson(ver, "$.detail")).isEqualTo("Sua sessão terminou. Entre de novo.");
+        assertThat(sessao.sessao().isInvalid()).isTrue();
     }
 
     @Test
