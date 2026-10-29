@@ -22,12 +22,12 @@ class CriacaoDoBancoTest {
     }
 
     @Test
-    void flywayAplicouAsSeisMigracoesEAAmostra() {
-        // V1 a V6 versionadas; R__amostra repetível. Todas com sucesso.
+    void flywayAplicouAsSeteMigracoesEAAmostra() {
+        // V1 a V7 versionadas; R__amostra repetível. Todas com sucesso.
         long sucesso = contar("SELECT count(*) FROM flyway_schema_history WHERE success");
         long total = contar("SELECT count(*) FROM flyway_schema_history");
-        assertThat(total).isEqualTo(7);
-        assertThat(sucesso).isEqualTo(7);
+        assertThat(total).isEqualTo(8);
+        assertThat(sucesso).isEqualTo(8);
         assertThat(contar("SELECT count(*) FROM flyway_schema_history WHERE version IS NULL AND script LIKE '%R__amostra%'"))
                 .as("a amostra de dev/test foi aplicada").isEqualTo(1);
     }
@@ -35,9 +35,9 @@ class CriacaoDoBancoTest {
     @Test
     void estruturaDoBancoEstaCompleta() {
         assertThat(contar("SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE' "
-                + "AND table_name <> 'flyway_schema_history'")).as("tabelas").isEqualTo(33);
-        assertThat(contar("SELECT count(*) FROM information_schema.views WHERE table_schema = 'public'")).as("visões").isEqualTo(7);
-        assertThat(contar("SELECT count(*) FROM pg_trigger WHERE NOT tgisinternal AND tgname LIKE 'rn\\_%'")).as("gatilhos de regra").isEqualTo(15);
+                + "AND table_name <> 'flyway_schema_history'")).as("tabelas").isEqualTo(36);
+        assertThat(contar("SELECT count(*) FROM information_schema.views WHERE table_schema = 'public'")).as("visões").isEqualTo(8);
+        assertThat(contar("SELECT count(*) FROM pg_trigger WHERE NOT tgisinternal AND tgname LIKE 'rn\\_%'")).as("gatilhos de regra").isEqualTo(16);
     }
 
     @Test

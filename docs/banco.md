@@ -2,7 +2,7 @@
 
 Este documento explica o banco da Entrega 2. É para quem vai ler, testar ou mexer nele.
 O banco é o PostgreSQL (rodamos na versão 18; a mínima é a 15). As tabelas são criadas pelo Flyway.
-Os números: **33 tabelas, 7 visões, 5 funções e 15 gatilhos de regra**. As funções são as 3 de carga e de relatório mais as 2 que formatam números (`fn_numero_br` e `fn_pct_truncado`, da V4; a `fn_pct_arredondado` da V4 saiu na V6).
+Os números: **36 tabelas, 8 visões, 6 funções e 16 gatilhos de regra**. As funções são as 4 de carga e de relatório (`fn_carregar_veiculacoes`, `fn_carregar_pesquisa`, `fn_carregar_plano`, da V7, e `fn_gerar_relatorio`) mais as 2 que formatam números (`fn_numero_br` e `fn_pct_truncado`, da V4; a `fn_pct_arredondado` da V4 saiu na V6). Não contam aqui as funções `tg_*`, uma por gatilho.
 
 ## Onde está cada coisa
 
@@ -14,6 +14,7 @@ Os números: **33 tabelas, 7 visões, 5 funções e 15 gatilhos de regra**. As f
 | `backend/src/main/resources/db/migration/V4__observacao_numeros_e_motivos_de_carga.sql` | A observação de cada versão de arquivo, os números do relatório em português e os motivos específicos das cargas (veja "O que a V4 mudou") | Todos os ambientes |
 | `backend/src/main/resources/db/migration/V5__relatorio_completo.sql` | O relatório sempre completo: 6 seções e 17 indicadores, o que não tem dado sai indisponível (veja "O que a V5 e a V6 mudaram") | Todos os ambientes |
 | `backend/src/main/resources/db/migration/V6__percentuais_truncados.sql` | Um critério só para os percentuais: cortar na primeira casa (veja "O que a V5 e a V6 mudaram") | Todos os ambientes |
+| `backend/src/main/resources/db/migration/V7__plano_comprovacoes_dados_informados.sql` | A carga do plano comercial por CSV (`stg_plano` e `fn_carregar_plano`), o catálogo de campos e os dados informados pela marca, com a visão do valor vigente e o gatilho que os torna imutáveis (veja "O que a V7 mudou") | Todos os ambientes |
 | `backend/src/main/resources/db/dev/R__amostra.sql` | A amostra: Amarelo, Roxo e Verde, usuários, planos, entregas com arquivos, cargas, relatórios | Só dev e test |
 | `backend/src/main/resources/dev/exemplos/` | Arquivos de exemplo (png, jpg, mp4, mp3, docx, xlsx, pptx, zip) que a API copia para o armazenamento no perfil dev | Só dev |
 | `backend/src/test/resources/db/verificacao.sql` | As conferências (contagens, órfãos, uma tentativa de violar cada regra) | Quando se quiser conferir |
@@ -21,7 +22,7 @@ Os números: **33 tabelas, 7 visões, 5 funções e 15 gatilhos de regra**. As f
 
 Duas regras de convivência:
 
-- Migração já aplicada não se edita. Mudança vira uma migração nova (V7, V8...).
+- Migração já aplicada não se edita. Mudança vira uma migração nova (V8, V9...).
 - A amostra é repetível (`R__`) e tem uma trava: se os dados de exemplo já estão no banco, ela não faz nada. Para recarregar, recrie o banco de dev. Quem criou o banco com uma versão antiga da amostra precisa recriá-lo para ver a nova (veja "Recomeçar do zero" no README).
 - Os horários da amostra não são datas fixas: são contados para trás a partir do dia em que o banco foi criado (veja "A amostra e as datas").
 
@@ -89,6 +90,19 @@ A segunda rodada de testes pediu duas correções no relatório e na consolidaç
 
 A leitura do relatório (API) parte do catálogo `indicador`, e não das linhas gravadas: a versão gerada antes da V5, que não tem as linhas dos indicadores sem dado, também sai com as 6 seções e os 17 indicadores (o que faltava aparece como `sem registro na base`). A fotografia gravada não é alterada, porque depois de validada ela fica congelada. Os relatórios gerados antes da V6 mantêm os percentuais que tinham.
 
+## O que a V7 mudou
+
+A V7 abre a primeira parte do MVP do Atlas: o plano comercial passa a entrar por planilha (até aqui só a amostra o enchia), e a marca passa a informar os números que só ela sabe. Não mexe em nenhuma tabela, visão ou função que já existia, e não altera a amostra.
+
+| Assunto | O que a V7 faz |
+| --- | --- |
+| Carga do plano comercial | `stg_plano` (área de passagem, como `stg_veiculacao`) e `fn_carregar_plano(carga, evento)`, que enche `aproveitamento_previsto` a partir do `plano.csv`. A função trava a carga (`FOR UPDATE`), confere que ela é do tipo `PLANO_COMERCIAL`, devolve os totais gravados se já foi processada, rejeita com um motivo por linha (o primeiro problema) tudo o que a V1 recusaria, liga o patrocinador (nome ou grafia alternativa) à parceria da edição e insere sem duplicar. Os motivos e o formato do arquivo estão em "Formatos dos CSV" e na rota 28 de [`api.md`](api.md) |
+| Chave do plano | A chave natural `uq_aprov_chave_natural` (parceria, veículo, formato e espaço) é um **índice sobre expressões**, não uma constraint. Por isso a função usa `ON CONFLICT DO NOTHING` sem alvo (o `ON CONFLICT ON CONSTRAINT` da veiculação não funciona aqui) e grava os textos já sem espaço nas pontas: o índice compara com `lower()` e sem `btrim()`, e "Testeira " e "Testeira" virariam duas linhas. Espaço de programa vazio já vale `''` no índice |
+| Catálogo de campos | `campo_catalogo`: o que a marca pode informar, campo a campo (rótulo, tipo, unidade, mínimo, máximo, texto de ajuda). `limite_campo` aponta para outro campo cujo valor vigente o campo não pode passar. A API confere tipo, limites e `limite_campo`; o banco guarda e impede o campo que limita a si mesmo. Quatro campos entram em todos os ambientes, todos na aba Aplicações, inteiros a partir de 0 e sem máximo: `ativacao.visitantes_total`, `ativacao.cadastros_consentidos` (limite: visitantes), `ativacao.brindes_disponiveis` e `ativacao.brindes_distribuidos` (limite: disponíveis). O campo de arquivo (planilha da agência) fica para a etapa seguinte; o tipo `ARQUIVO` e a coluna `arquivo_id` já estão prontos |
+| Dados informados | `dado_informado`: um valor por linha, com autor, data e origem (`PORTAL` = formulário da aba; `ATLAS` = cartão do chat). Exatamente um entre `valor_numero`, `valor_data` e `arquivo_id` (`ck_dado_informado_um_valor`). O arquivo, quando houver, é da mesma parceria (chave composta). **Corrigir é gravar uma linha nova**: a visão `vw_dado_vigente` devolve a mais recente de cada (parceria, campo) e as anteriores ficam como trilha |
+| Imutabilidade | O gatilho `rn_dado_informado_imutavel` recusa `UPDATE` e `DELETE` de `dado_informado`, como `rn_historico_imutavel`. Apagar um dado informado fica fora desta etapa |
+| Fotos de comprovação | Nada muda na tabela nem nos gatilhos (`rn_comprovacao_*`). Muda como a API grava o arquivo: com a parceria **e a aba Aplicações**, para o download (rota 18) conferir se a aba está aberta. O `ck_arquivo_entrega_completo` só exige parceria e aba quando há entrega, então o arquivo de parceria sem entrega é aceito |
+
 ## Tabelas por área
 
 Colunas em **negrito** são novas desde a Sprint 1. `id` é sempre a chave primária. Colunas com sufixo `_id` apontam para outra tabela.
@@ -140,6 +154,7 @@ O banco não limita as transições de status da entrega. Essa regra fica na API
 | `carga_rejeicao` | Linhas que não entraram, com o motivo | id, carga_id, linha, campo, motivo, conteudo |
 | `stg_veiculacao` | Área de carga: as linhas da planilha de veiculação como chegam | carga_id, linha, patrocinador, veiculo, formato, espaco_programa, exibido_em, quantidade, link, **exibido_em_texto**, **quantidade_texto** |
 | `stg_pesquisa` | Área de carga: as linhas do CSV de resultados da pesquisa | carga_id, linha, patrocinador, pergunta, indicador, alternativa, valor, unidade, base_respondentes, **pergunta_texto**, **valor_texto**, **base_respondentes_texto** |
+| `stg_plano` | Área de carga: as linhas do `plano.csv` (plano comercial) | carga_id, linha, patrocinador, categoria, bloco, veiculo, formato, espaco_programa, janela, tipo_midia, quantidade_prevista, **quantidade_texto**, unidade, fonte_pagina |
 
 Unidades de mídia: `INSERCAO`, `CPM` e `APLICACAO`. Elas nunca são somadas entre si.
 
@@ -170,8 +185,15 @@ Na pesquisa geral o resultado não tem parceria nem pergunta. Na pesquisa da ati
 | `relatorio` | Uma versão do relatório de uma parceria. Status `RASCUNHO`, `VALIDADO`, `DISPONIBILIZADO` | id, parceria_id, versao, status, gerado_por, gerado_em, validado_por, validado_em, **disponibilizado_por**, **disponibilizado_em**, arquivo_id |
 | `relatorio_indicador` | A fotografia dos números daquela versão. Desde a V5 cada versão tem os 17 indicadores do catálogo; número indisponível fica nulo, nunca estimado | relatorio_id, indicador_codigo, recorte, valor, base_calculo, disponivel |
 
-As **7 visões** somam os números sem misturar unidades: `vw_midia_veiculo`, `vw_midia_unidade`, `vw_entregas_resumo`,
-`vw_aplicacoes`, `vw_cortesias`, `vw_indicadores_parceria` (todos os números do relatório) e `vw_faltantes` (o que impede ou enfraquece o relatório).
+### 8. Dados informados (V7)
+
+| Tabela | Para que serve | Colunas |
+| --- | --- | --- |
+| `campo_catalogo` | O catálogo fixo do que a marca pode informar. `limite_campo` é o campo cujo valor vigente este não pode passar | chave, aba_id, ordem, rotulo, tipo (`INTEIRO`, `DECIMAL`, `DATA`, `ARQUIVO`), unidade, minimo, maximo, ajuda, limite_campo |
+| `dado_informado` | Cada valor informado, com autor, data e origem. **Só aceita INSERT**; corrigir é gravar de novo | id, parceria_id, campo_chave, valor_numero, valor_data, arquivo_id, origem (`PORTAL` ou `ATLAS`), informado_por, informado_em |
+
+As **8 visões** somam os números sem misturar unidades: `vw_midia_veiculo`, `vw_midia_unidade`, `vw_entregas_resumo`,
+`vw_aplicacoes`, `vw_cortesias`, `vw_indicadores_parceria` (todos os números do relatório) e `vw_faltantes` (o que impede ou enfraquece o relatório), mais a `vw_dado_vigente`, que devolve o valor mais recente de cada campo informado de cada parceria.
 
 ## Regras do banco
 
@@ -198,6 +220,15 @@ Se o reenvio traz uma quantidade corrigida, ela também conta como duplicada: a 
 
 Na pesquisa geral do festival, a linha traz só o indicador (sem patrocinador e sem pergunta).
 
+**Plano comercial** (`fn_carregar_plano`, V7). Funciona do mesmo jeito, com `stg_plano`, e preenche `aproveitamento_previsto` da parceria da edição: a mesma carga serve ao previsto de **mídia** e ao de **aplicações de marca**. Faz quatro coisas:
+
+1. Rejeita, antes do `INSERT`, tudo o que a V1 recusaria (uma linha que ferisse um `CHECK` derrubaria a carga inteira). Cada linha tem um só motivo, o primeiro desta lista: campo obrigatório vazio (`patrocinador`, `categoria`, `veiculo`, `formato`, `quantidade_prevista`, `unidade`); quantidade ilegível; quantidade zero ou negativa; categoria fora de `MIDIA` e `APLICACAO_MARCA`; unidade fora de `INSERCAO`, `CPM` e `APLICACAO`; aplicação de marca com unidade que não seja `APLICACAO`; mídia sem tipo, ou tipo preenchido fora da lista (em qualquer categoria).
+2. Liga o patrocinador (nome canônico ou grafia alternativa, sem diferenciar caixa nem espaço nas pontas) à parceria da edição. O que não liga é rejeitado com "Patrocinador sem parceria nesta edição".
+3. Insere sem duplicar. A chave é **parceria + veículo + formato + espaço do programa**; categoria, unidade e janela ficam fora. Linha repetida no próprio arquivo, ou que já existe no plano, conta como duplicada, e a primeira versão prevalece: reenviar uma linha com a quantidade corrigida **não** corrige o plano (editar uma linha do plano fica fora desta etapa). O texto é gravado sem espaço nas pontas.
+4. Grava os totais em `carga`. Reenviar o mesmo arquivo não insere nada: as linhas válidas viram duplicadas, e as ruins seguem rejeitadas.
+
+Aplicação de marca não leva tipo de mídia (a coluna é só da mídia): se o arquivo trouxer um tipo válido numa aplicação, ele é ignorado. `fonte_arquivo_id` fica nulo, porque o CSV é arquivo geral da RBS.
+
 ### As 8 correções
 
 | # | O que acontecia | Como ficou | Como o banco responde |
@@ -218,6 +249,7 @@ Os itens 1, 2 e 4 não são "recusas": a conferência mostra o comportamento esp
 | Regra | Nome | Em linguagem simples |
 | --- | --- | --- |
 | Histórico imutável | `rn_historico_imutavel` | Não se altera nem se apaga uma linha do histórico. Parceria com histórico não se apaga |
+| Dado informado imutável | `rn_dado_informado_imutavel` | Não se altera nem se apaga um dado informado. Para corrigir, grava-se um valor novo (a visão `vw_dado_vigente` mostra o mais recente) |
 | Isolamento | chaves compostas e `rn_*` | Tudo o que uma marca vê é da parceria dela |
 | Vínculo exige autorização | `rn_vinculo_exige_autorizacao` | Ninguém é vinculado sem e-mail autorizado e não revogado |
 | Abas padrão | `rn_parceria_abas_padrao` | A parceria nasce com as 7 abas, abertas conforme `cota_tipo_aba` |
@@ -259,6 +291,7 @@ erDiagram
     carga ||--o{ carga_rejeicao : "rejeita"
     carga ||--o{ stg_veiculacao : "recebe"
     carga ||--o{ stg_pesquisa : "recebe"
+    carga ||--o{ stg_plano : "recebe"
     carga |o--o{ veiculacao : "origem"
     carga |o--o{ pesquisa_resultado : "origem"
     parceria ||--o{ cortesia_cota : "ganha"
@@ -273,6 +306,12 @@ erDiagram
     parceria ||--o{ relatorio : "tem_versoes"
     relatorio ||--o{ relatorio_indicador : "fotografa"
     indicador ||--o{ relatorio_indicador : "define"
+    aba ||--o{ campo_catalogo : "agrupa"
+    campo_catalogo |o--o{ campo_catalogo : "limita"
+    campo_catalogo ||--o{ dado_informado : "descreve"
+    parceria ||--o{ dado_informado : "informa"
+    usuario ||--o{ dado_informado : "autor"
+    arquivo |o--o{ dado_informado : "anexo"
 ```
 
 ## Formatos dos CSV
@@ -327,6 +366,7 @@ for f in backend/src/main/resources/db/migration/V1__estrutura.sql \
          backend/src/main/resources/db/migration/V4__observacao_numeros_e_motivos_de_carga.sql \
          backend/src/main/resources/db/migration/V5__relatorio_completo.sql \
          backend/src/main/resources/db/migration/V6__percentuais_truncados.sql \
+         backend/src/main/resources/db/migration/V7__plano_comprovacoes_dados_informados.sql \
          backend/src/main/resources/db/dev/R__amostra.sql; do
   psql -X -h localhost -U portal -d portal_verificacao -v ON_ERROR_STOP=1 -1 -f "$f"
 done
@@ -334,7 +374,7 @@ psql -X -P pager=off -h localhost -U portal -d portal_verificacao -v ON_ERROR_ST
 psql -X -h localhost -U portal -d postgres -c "DROP DATABASE portal_verificacao"
 ```
 
-O `verificacao.sql` imprime uma tabela com cada conferência e termina com erro se alguma falhar. Hoje são **164 conferências, todas ok** (as 4 últimas a entrar olham a amostra: nenhum horário no futuro, nenhuma entrega Enviado, Em análise ou Aprovado sem arquivo, nenhum pedido de ajuste sem recado da RBS e o ajuste aberto com o envio da marca e o pedido da RBS no histórico).
+O `verificacao.sql` imprime uma tabela com cada conferência e termina com erro se alguma falhar. Hoje são **208 conferências, todas ok**. As 164 de antes seguem iguais (as contagens de estrutura passaram a 36 tabelas, 8 visões, 4 funções de carga e relatório e 16 gatilhos). As 44 novas são da V7: o catálogo, a carga do plano (15 linhas numa parceria criada só para a conferência, com cada motivo de rejeição, o reenvio e o `btrim`), o `CHECK` de um valor só, a chave composta do anexo, a imutabilidade, o valor vigente depois de uma correção e 5 verificações de órfãos.
 Nada fica gravado: as tentativas de violar regras são desfeitas.
 Rodar o `R__amostra.sql` uma segunda vez não muda nada: a trava avisa "Amostra já carregada".
 
@@ -346,9 +386,10 @@ Os números que a conferência exige:
 | Carga 2 (o mesmo arquivo reenviado) | 1.489 lidas, 0 inseridas, 1.485 duplicadas, 4 rejeitadas |
 | Rejeições da carga 1 | 2 reels do Roxo (fora do plano), 1 linha da Verde sem data, 1 do "Cliente Azul" (sem parceria) |
 | Carga de pesquisa | 11 lidas, 9 inseridas, 1 duplicada, 1 rejeitada. O reenvio insere 0 |
+| Carga do plano (parceria criada na própria conferência) | 15 lidas, 3 inseridas, 2 duplicadas, 10 rejeitadas, uma por motivo. O reenvio do mesmo arquivo: 15 lidas, 0 inseridas, 5 duplicadas, 10 rejeitadas |
 | Relatórios | 3, um por parceria de 2027, em rascunho |
 | Números dos relatórios | 83 no total, 14 indisponíveis |
-| Órfãos | 0 em todas as 18 verificações |
+| Órfãos | 0 em todas as 23 verificações (18 de antes e 5 das tabelas da V7) |
 
 Sobre os relatórios: na Sprint 1 eram 72 números e 6 indisponíveis. Agora são 83: a pesquisa do Amarelo ganhou 3 faixas de nota (75) e a V5 passou a registrar os indicadores sem dado (mais 8), porque todo relatório traz os 17 indicadores do catálogo (3 relatórios, 51 indicadores).
 Os 14 indisponíveis são: "O festival em números" e a pesquisa geral das 3 marcas (6; esses números existem só para 2026, os de 2027 ainda não foram carregados); a pesquisa da ativação do Roxo e da Verde, que ficam fora da cota (4); e as aplicações de marca do Roxo, que não tem aplicação no plano comercial (4).
@@ -382,6 +423,7 @@ O banco já funciona com uma resposta provisória para cada ponto. Se a RBS resp
 | Abas por cota | Todas as abas para todas as cotas, **exceto Pesquisa, só para a Master**. As três fontes do grupo discordavam | Alterar as linhas de `cota_tipo_aba` na V3 e, se preciso, a coluna `cotas` dos indicadores de pesquisa e a visão `vw_faltantes` |
 | Limite de usuários por parceria | Não existe limite | Um gatilho novo em `parceria_usuario` |
 | Quem envia as fotos de comprovação | A RBS (na amostra, as fotos são da RBS) | Regra da API; o banco aceita qualquer usuário |
+| Aprovação dos dados informados pela marca | Entram sem aprovação da RBS, com autor, data e origem à vista | Regra da API; o banco guarda sem aprovação (uma coluna de status entraria numa migração nova) |
 | Formato dos resultados da pesquisa | CSV de resultado já agregado, no formato de `pesquisa.csv` | Ajustar `stg_pesquisa` e a função `fn_carregar_pesquisa` |
 | Quem aprova as perguntas | A RBS aprova por uma rota da API, e só pergunta aprovada recebe resultado. **A confirmar: qualquer Admin RBS ou só o time de pesquisa** | Regra da API; o banco só exige o status `APROVADA` |
 | Quem carrega os resultados | A equipe de pesquisa da RBS (um Admin RBS) | Regra da API |
