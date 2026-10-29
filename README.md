@@ -96,6 +96,8 @@ Abra <http://localhost:5173>. O Vite repassa as chamadas `/api` para a porta 808
 
 **Quem já tinha o banco `portal` criado precisa recomeçar do zero para ver a amostra nova.** A amostra só carrega num banco vazio e não roda de novo sobre um banco que já a tem. A versão atual traz: entregas Enviado, Em análise e Aprovado com o arquivo que a marca mandou, o VT do Roxo em "Ajuste solicitado" com o recado da RBS no histórico, horários sempre no passado (contados a partir do dia em que o banco é criado) e nenhum "(simulada)" no nome da pesquisa. Num banco criado antes, as migrações novas (V4 a V6) rodam sozinhas ao subir a API, mas a amostra antiga continua como estava.
 
+**Atlas (V7 e V8).** As migrações do plano comercial, dos dados informados e do Atlas rodam sozinhas ao subir a API, sobre o banco que já existe. A amostra não mudou: não é preciso recriar o banco.
+
 ## Se algo der errado
 
 | O que aparece | O que fazer |
@@ -138,6 +140,36 @@ Com o banco recém-criado (amostra original):
 6. Em **Relatórios**, gere uma nova versão do relatório do Roxo, valide e disponibilize.
 7. Volte como Roxo: o relatório aparece em **Relatório**, com as seções do modelo, e pode ser impresso ou exportado em CSV.
 
+### Roteiro do Atlas
+
+Com a API sem modelo de linguagem (o padrão), o Atlas monta o relatório pelo botão:
+
+1. Como `b2b@rbs.example`, em **Patrocinadores**, cadastre a parceria "Cliente Teste" na edição 2027. Em **Cargas**, escolha "Plano comercial" e envie `docs/exemplos/plano.csv`: 8 linhas entram, 1 é duplicada e 2 são rejeitadas, com o motivo (mídia sem tipo e uma marca sem parceria).
+2. Abra a parceria do Cliente Amarelo, em **Aplicações da marca**: o plano linha a linha, com as fotos de comprovação. Use "Anexar foto" numa linha sem foto, e o total de comprovadas sobe.
+3. Entre como `marketing@amarelo.example` e toque em **atlas**, no menu. Em "Montar relatório da ativação", o Atlas pede num cartão os números que só a marca sabe (visitantes, cadastros e brindes). Responda: os números vão para a aba Aplicações, com o seu nome e a data.
+4. Abra o relatório pronto: um A4 com o selo de documento de trabalho e, em "Fontes e cálculos", a origem de cada número. Ele também aparece em **Relatório**, abaixo do relatório oficial, para a marca e para a RBS.
+
+### Ligar o modelo de linguagem (opcional)
+
+Sem estas variáveis, o portal e os testes funcionam normalmente, e o Atlas usa só o botão. Com elas, a marca também conversa com o Atlas pelo chat:
+
+```bash
+cd backend
+ATLAS_LLM=openai OPENCODE_API_KEY=sua-chave ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
+```
+
+No Windows (PowerShell): `$env:ATLAS_LLM="openai"; $env:OPENCODE_API_KEY="sua-chave"` antes do `.\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=dev"`.
+
+| Variável | Padrão | Para quê |
+| --- | --- | --- |
+| `ATLAS_LLM` | `none` | `openai` liga o modelo (qualquer serviço compatível com a API da OpenAI) |
+| `OPENCODE_API_KEY` | — | A chave do provedor. Só em variável de ambiente, nunca no repositório. Sem ela, o Atlas fica no botão e a API avisa no log |
+| `ATLAS_LLM_BASE_URL` | `https://opencode.ai/inference/go/openai/v1` | O endereço do provedor |
+| `ATLAS_LLM_MODELO` | `deepseek-v4.1-flash` | O modelo |
+| `ATLAS_TETO_DIARIO` | `200` | Mensagens do Atlas por parceria por dia; depois disso, o chat responde 429 e o botão continua funcionando |
+
+O Atlas nunca escreve um número: os números do relatório e do chat vêm da base do portal ou do que a marca informou, sempre com a origem. Use só dados fictícios enquanto o provedor estiver em teste.
+
 **Regras de envio.** Arquivos de até 20 MB nos formatos PDF, PNG, JPG, DOCX, XLSX, PPTX, CSV, MP4, MP3 e ZIP. A API confere o conteúdo, e não só o nome. O download sai sempre como anexo. Cada envio aceita uma observação (até 500 caracteres), que fica na versão e no histórico. As planilhas de carga são CSV em UTF-8 com vírgula como separador (no Excel, "Salvar como" e "CSV UTF-8"); as colunas estão em `docs/banco.md` e há exemplos em `docs/exemplos/`. Linha com data ou quantidade ilegível é rejeitada com o motivo e o formato esperado, e o resto do arquivo entra.
 
 ## Testes
@@ -166,22 +198,26 @@ No front, `npm run build` confere os tipos e gera a versão de produção; `npm 
 
 ## Pendências registradas
 
-- Comprovações de marca, plano comercial (previsto) e números do festival entram só pela amostra. Uma parceria cadastrada ao vivo fica sem previsto, e a planilha dela é rejeitada com o motivo "aproveitamento não encontrado"; o relatório dela sai com as 6 seções do modelo e os 17 indicadores, e os de mídia e de ativação aparecem como indisponíveis.
-- "O festival em números" sai como indisponível nos relatórios de 2027, porque só há números de 2026.
-- Telas próprias de Aplicações de marca, Cortesias, Credenciamento e Contrato: nesta versão cada aba mostra as próprias entregas.
+- O plano comercial de uma parceria cadastrada ao vivo entra pela carga "Plano comercial" (Cargas), e as fotos de comprovação pela aba Aplicações da marca (só a RBS anexa). Os números do festival ainda entram só pela amostra: "O festival em números" sai como indisponível nos relatórios de 2027, porque só há números de 2026.
+- Corrigir uma linha do plano comercial: o reenvio com outra quantidade conta como duplicado (vale a primeira versão), e não há tela para editar a linha.
+- Telas próprias de Cortesias, Credenciamento e Contrato: nesta versão cada uma dessas abas mostra as próprias entregas.
+- Atlas com o modelo de linguagem: testado contra um servidor falso. O teste com a chave de verdade do OpenCode Go (tempo de resposta, cabeçalhos aceitos, comportamento do modelo com o prompt) é do dono da conta. Para decidir com a equipe: os termos de uso do OpenCode, que falam em uso interno de quem assina, e o acordo de retenção zero do DeepSeek no Go, que vence em 31/10/2026 e é renovado mês a mês.
+- Dados informados pela marca entram sem aprovação da RBS, com o nome de quem informou e a data.
 - E-mail automático do código de ativação; recuperação de senha.
 - PDF do relatório: pela impressão do navegador.
 - A confirmar com a RBS: abas por cota (hoje todas liberadas, Pesquisa só para Master), limite de usuários por parceria, quem envia as fotos de comprovação, formato dos resultados da pesquisa, quem aprova as perguntas, a lista final de formatos de arquivo (o `.ai` do Illustrator ficou de fora) e o limite de 20 MB.
 - Segurança para produção: limite de tentativas de login e cookie de sessão `Secure` atrás de HTTPS.
-- Fora da Entrega 2: assistente Atlas (o botão aparece desabilitado), JEV, n8n, Open Staff, cifra de arquivos, Docker e Swagger.
+- Fora desta versão: no Atlas, perguntas e respostas com fontes, o cálculo livre pedido pelo modelo e as fotos dentro do relatório; JEV, n8n, Open Staff, cifra de arquivos, Docker e Swagger.
 
 ## Pastas
 
 ```text
-backend/    API Spring Boot (pacotes comum, acesso, parceria, materiais, pesquisa, consolidacao, relatorio)
+backend/    API Spring Boot (pacotes comum, acesso, parceria, materiais, pesquisa, consolidacao, relatorio,
+            aplicacoes, dados, atlas)
             src/main/resources/db/migration  estrutura, regras e dados base (Flyway)
             src/main/resources/db/dev        amostra de demonstração
-frontend/   React + Vite (api, componentes, paginas/acesso, paginas/parceria, paginas/rbs)
+            src/main/resources/atlas         modelo do relatório do Atlas e o prompt
+frontend/   React + Vite (api, atlas, componentes, paginas/acesso, paginas/parceria, paginas/rbs)
 docs/       banco.md, api.md, exemplos de CSV e a modelagem da Sprint 1
 ```
 
