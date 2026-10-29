@@ -67,6 +67,7 @@ public final class Problemas {
             case 415 -> "Tipo de conteúdo não aceito";
             case 422 -> "Dados inválidos";
             case 500 -> "Erro interno";
+            case 503 -> "Serviço indisponível";
             default -> status.value() >= 500 ? "Erro no servidor" : "Erro na requisição";
         };
     }

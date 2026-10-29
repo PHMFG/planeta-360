@@ -99,6 +99,12 @@ public class TratadorDeErros extends ResponseEntityExceptionHandler {
         return resposta(Problemas.de(HttpStatus.CONFLICT, ex.getMessage()), request);
     }
 
+    /** Uma parte de que a operação depende está fora do ar (o modelo de linguagem do Atlas): 503 com a frase do que fazer no lugar. */
+    @ExceptionHandler(ServicoIndisponivelException.class)
+    ResponseEntity<Object> servicoIndisponivel(ServicoIndisponivelException ex, WebRequest request) {
+        return resposta(Problemas.de(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage()), request);
+    }
+
     /** [UPLOAD] Arquivo recusado pelo Armazenamento: 413 (acima do limite) ou 415 (extensão ou conteúdo fora da lista). */
     @ExceptionHandler(ArquivoRecusadoException.class)
     ResponseEntity<Object> arquivoRecusado(ArquivoRecusadoException ex, WebRequest request) {

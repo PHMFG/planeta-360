@@ -1,5 +1,7 @@
 package br.com.rbs.portal.comum;
 
+import java.util.LinkedHashSet;
+import java.util.Set;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Component;
 
@@ -22,6 +24,9 @@ public class VerificadorDeAcesso {
      * aba para esta parceria; é outra situação de "fechada" e por isso tem outra frase.
      */
     public static final String ABA_FORA_DA_COTA = "Esta aba não faz parte da cota da sua parceria.";
+
+    /** A frase do 403 de quem é da RBS e chama uma rota da conversa com o Atlas: só o Admin Patrocinador conversa com ele. */
+    public static final String SO_PATROCINADOR_USA_O_ATLAS = "Só o Admin Patrocinador da parceria conversa com o Atlas.";
 
     /** O estado de uma aba numa parceria: aberta para o patrocinador (liberada E visível) e se a cota a inclui. */
     private record EstadoDaAba(boolean aberta, boolean naCota) {
@@ -83,6 +88,23 @@ public class VerificadorDeAcesso {
      */
     public boolean podeVerAba(UsuarioAutenticado usuario, long parceriaId, String codigoDaAba) {
         return usuario.ehRbs() || estadoDaAba(parceriaId, codigoDaAba).aberta();
+    }
+
+    /**
+     * [PERMISSAO] Os códigos das abas abertas para este usuário nesta parceria, na ordem do menu: para o patrocinador, as abas
+     * liberadas E visíveis (a mesma regra de {@link #podeVerAba}); para a RBS, todas. É o que o Atlas leva no contexto.
+     */
+    public Set<String> abasAbertas(UsuarioAutenticado usuario, long parceriaId) {
+        return new LinkedHashSet<>(jdbc.sql("""
+                        SELECT a.codigo FROM aba a
+                        LEFT JOIN parceria_aba pab ON pab.parceria_id = :parceriaId AND pab.aba_id = a.id
+                        WHERE CAST(:rbs AS boolean) OR coalesce(pab.liberada AND pab.visivel, FALSE)
+                        ORDER BY a.ordem
+                        """)
+                .param("parceriaId", parceriaId)
+                .param("rbs", usuario.ehRbs())
+                .query(String.class)
+                .list());
     }
 
     /**
