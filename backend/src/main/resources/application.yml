@@ -46,9 +46,11 @@ spring:
     openai:
       api-key: ${OPENCODE_API_KEY:}
       base-url: ${ATLAS_LLM_BASE_URL:https://opencode.ai/inference/go/openai/v1}
-      # O Go pede um user agent próprio; o Spring AI manda "spring-ai-openai" por padrão.
-      custom-headers:
-        "[User-Agent]": PlanetaAtlas/0.1
+      # O Go pede um user agent próprio (PlanetaAtlas/0.1): quem o troca é o LlmConfig, porque custom-headers só acrescentaria um
+      # segundo valor ao User-Agent que o Spring AI já manda. O cabeçalho x-opencode-session vai a cada chamada, com a conversa.
+      # Poucas tentativas: o Go limita o uso a cada 5 horas e não vale gastar o limite repetindo.
+      max-retries: 1
+      timeout: 60s
       chat:
         model: ${ATLAS_LLM_MODELO:deepseek-v4.1-flash}
         temperature: 0.2
