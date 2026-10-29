@@ -49,7 +49,8 @@ public class PermissaoAntesDoCorpo implements HandlerInterceptor, WebMvcConfigur
             "GET /api/relatorios",
             "GET /api/relatorios.csv",
             "POST /api/parcerias/{id}/relatorios",
-            "PATCH /api/relatorios/{id}/status");
+            "PATCH /api/relatorios/{id}/status",
+            "POST /api/parcerias/{id}/aplicacoes/{aproveitamentoId}/comprovacoes");
 
     /** PUT /api/parcerias/{id}/pesquisa/perguntas: do Admin Patrocinador da parceria, com a aba liberada. */
     static final String ENVIO_DAS_PERGUNTAS = "PUT /api/parcerias/{id}/pesquisa/perguntas";

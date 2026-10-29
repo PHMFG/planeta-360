@@ -75,6 +75,39 @@ class ArmazenamentoTest {
     }
 
     @Test
+    void gravarArquivoAvulsoComAbaGuardaAParceriaEAAbaSemEntrega() {
+        byte[] png = {(byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13};
+
+        Arquivo gravado = armazenamento.gravar(png, "foto.png", "COMPROVACAO", rbs(), amarelo(), "APLICACOES");
+        Arquivo semAba = armazenamento.gravar(png, "outra.png", "COMPROVACAO", rbs(), amarelo());
+
+        assertThat(gravado.parceriaId()).isEqualTo(amarelo());
+        assertThat(gravado.abaId()).as("a aba APLICACOES, para o download conferir se ela está aberta")
+                .isEqualTo(jdbc.sql("SELECT id FROM aba WHERE codigo = 'APLICACOES'").query(Integer.class).single());
+        assertThat(gravado.entregaId()).isNull();
+        assertThat(gravado.categoria()).isEqualTo("COMPROVACAO");
+        assertThat(gravado.mimeType()).isEqualTo("image/png");
+        assertThat(gravado.caminho()).startsWith("parcerias/" + amarelo() + "/").endsWith(".png");
+        assertThat(armazenamento.localizar(gravado.caminho())).isPresent();
+        assertThat(semAba.abaId()).as("a versão sem aba continua como era").isNull();
+    }
+
+    @Test
+    void gravarComAbaConfereOArquivoELevaErroDeQuemChamaSeAAbaNaoServe() {
+        byte[] png = {(byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13};
+        long arquivosAntes = jdbc.sql("SELECT count(*) FROM arquivo").query(Long.class).single();
+
+        assertThatThrownBy(() -> armazenamento.gravar(png, "foto.png", "COMPROVACAO", rbs(), amarelo(), "NAO_EXISTE"))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("NAO_EXISTE");
+        assertThatThrownBy(() -> armazenamento.gravar(png, "foto.png", "COMPROVACAO", rbs(), null, "APLICACOES"))
+                .isInstanceOf(IllegalArgumentException.class);
+        // O conteúdo continua sendo conferido (um executável renomeado para .png é recusado) e nada fica gravado.
+        assertThatThrownBy(() -> armazenamento.gravar(new byte[]{'M', 'Z', 0, 0}, "foto.png", "COMPROVACAO", rbs(), amarelo(), "APLICACOES"))
+                .isInstanceOf(ArquivoRecusadoException.class);
+        assertThat(jdbc.sql("SELECT count(*) FROM arquivo").query(Long.class).single()).isEqualTo(arquivosAntes);
+    }
+
+    @Test
     void gravarNaEntregaUsaAParceriaEAAbaDelaECalculaAVersao() {
         long entrega = jdbc.sql("SELECT id FROM entrega WHERE parceria_id = :p AND titulo = 'Logo final para aplicações no evento'")
                 .param("p", amarelo()).query(Long.class).single();

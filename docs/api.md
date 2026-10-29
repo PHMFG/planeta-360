@@ -2,7 +2,7 @@
 
 Este documento é o **contrato entre o back-end e o front-end**. Quem faz a tela lê aqui o que cada rota pede, o que devolve e quais erros esperar, sem precisar abrir o código.
 
-- Todas as 36 rotas estão implementadas e cobertas por testes de integração (`cd backend && ./mvnw test`), inclusive o isolamento entre parcerias. A coluna "Etapa" diz em que etapa do plano cada rota entrou. Mudança de formato daqui em diante entra neste arquivo no mesmo commit do código.
+- Todas as 38 rotas estão implementadas e cobertas por testes de integração (`cd backend && ./mvnw test`), inclusive o isolamento entre parcerias. A coluna "Etapa" diz em que etapa do plano cada rota entrou. Mudança de formato daqui em diante entra neste arquivo no mesmo commit do código.
 - O banco está descrito em [`docs/banco.md`](banco.md). Os nomes de status, cotas e abas são os mesmos do banco.
 
 ## Como falar com a API
@@ -140,8 +140,10 @@ Todas prontas e testadas. A coluna "Etapa" mostra em que etapa do plano a rota e
 | 34 | `PATCH /api/relatorios/{id}/status` | Admin RBS | Valida ou disponibiliza o relatório | 7 |
 | 35 | `GET /api/parcerias/{id}/relatorio` | Patrocinador da parceria | Relatório da parceria (o patrocinador só vê o disponibilizado) | 7 |
 | 36 | `GET /api/relatorios/{id}/csv` | Patrocinador da parceria | Um relatório em CSV | 7 |
+| 37 | `GET /api/parcerias/{id}/aplicacoes` | Patrocinador da parceria | O plano de aplicações de marca, linha a linha, com as fotos | Atlas 1 |
+| 38 | `POST /api/parcerias/{id}/aplicacoes/{aproveitamentoId}/comprovacoes` | Admin RBS | Anexa uma foto de comprovação a uma aplicação | Atlas 1 |
 
-São 36 operações (método + caminho). A rota 5 (`ativar`) faz parte do contrato de autenticação, mas só é implementada na etapa 4.
+São 38 operações (método + caminho). A rota 5 (`ativar`) faz parte do contrato de autenticação, mas só é implementada na etapa 4. As rotas 37 em diante vieram com o Atlas (MVP, parte 1): a coluna "Etapa" diz `Atlas 1`.
 
 ## Objetos que se repetem
 
@@ -165,9 +167,9 @@ Estes formatos aparecem em várias rotas.
 | A cota da parceria **não inclui** a aba (`incluidaNaCota: false`) | `"Esta aba não faz parte da cota da sua parceria."` |
 | A cota inclui a aba, mas a RBS ainda não a abriu, a fechou ou a escondeu do menu (`incluidaNaCota: true`, `liberada: false`) | `"Esta aba ainda não foi liberada para a sua parceria."` |
 
-A regra é uma só em toda a API (lista de entregas, envio de arquivo, download de arquivo, pesquisa): aba aberta = liberada **e** visível. A RBS nunca recebe esse 403.
+A regra é uma só em toda a API (lista de entregas, envio de arquivo, download de arquivo, pesquisa, plano de aplicações): aba aberta = liberada **e** visível. A RBS nunca recebe esse 403.
 
-**O que sai quando a aba está fechada.** Para o patrocinador, nada que pertença a uma aba fechada sai por rota nenhuma: a lista de entregas (rota 14) e o download de arquivo de entrega (rota 18) respondem 403, o envio (rota 17) responde 403, e a consolidação (rota 29) não traz a parte daquela aba. A RBS continua vendo tudo.
+**O que sai quando a aba está fechada.** Para o patrocinador, nada que pertença a uma aba fechada sai por rota nenhuma: a lista de entregas (rota 14), o download de arquivo de entrega e o da foto de comprovação (rota 18) e o plano de aplicações (rota 37) respondem 403, o envio (rota 17) responde 403, e a consolidação (rota 29) não traz a parte daquela aba. A RBS continua vendo tudo.
 
 `incluidaNaCota` vem em toda lista de abas: `parcerias[].abas` do `UsuarioLogado` (login e `GET /api/auth/eu`) e `abas` da parceria (rotas 8, 9 e 10).
 
@@ -1198,6 +1200,84 @@ Colunas: `secao;indicador_codigo;indicador;recorte;valor;unidade;base_calculo;di
 
 ---
 
+# Aplicações de marca (Atlas, parte 1)
+
+A aba **Aplicações** deixa de ser só uma lista de entregas: ela mostra o plano de aplicações de marca no evento (o que a cota comprou, vindo da carga `PLANO`, rota 26) com as fotos de comprovação de cada linha. O plano e as fotos têm os mesmos números da consolidação (rota 29, campo `aplicacoes`): uma linha conta como comprovada até o limite do previsto, e o percentual é cortado na primeira casa.
+
+## 37. `GET /api/parcerias/{id}/aplicacoes`  · Atlas 1
+
+**Quem chama:** patrocinador da parceria, ou Admin RBS. A marca de outra parceria recebe **404**; a marca só lê com a aba `APLICACOES` aberta (**403** com as duas frases de "Aba" quando a aba está fechada ou fora da cota); a RBS lê sempre.
+
+**200**
+
+```json
+{
+  "parceriaId": 2,
+  "totais": { "previstas": 19.00, "comprovadas": 17.00, "fotos": 17, "percentual": 89.4 },
+  "linhas": [
+    {
+      "id": 31, "bloco": "Aplicações de marca", "veiculo": "No evento", "formato": "Elemento na Arena",
+      "espacoPrograma": null, "janela": null, "previsto": 1.00, "comprovadas": 1.00, "fotos": 2,
+      "comprovacoes": [
+        {
+          "id": 5, "arquivoId": 77, "nomeOriginal": "arena.jpg", "descricao": "Testeira no palco",
+          "registradoPor": { "id": 1, "nome": "Equipe B2B", "perfil": "ADMIN_RBS" },
+          "registradoEm": "2026-10-03T14:00:00-03:00"
+        }
+      ]
+    }
+  ]
+}
+```
+
+- `totais` são exatamente os números da rota 29 (`aplicacoes`): `previstas` é a soma do previsto das linhas, `comprovadas` soma, linha a linha, o menor entre o previsto e as fotos, `fotos` é o número de fotos e `percentual` é `comprovadas ÷ previstas × 100` cortado na primeira casa (17 de 19 é `89.4`).
+- Por linha, `comprovadas` = o menor entre `previsto` e `fotos`: uma segunda foto numa aplicação de quantidade 1 aumenta `fotos` (2) e não passa `comprovadas` de 1.
+- `linhas` traz só as aplicações de marca (a mídia fica na rota 29), em ordem de `bloco`, `formato` e `id`. `comprovacoes` vem da foto mais antiga para a mais nova, e `arquivoId` é o que a rota 18 baixa (a aba `APLICACOES` fechada para a marca vale também para o download: **403**). `registradoEm` tem o fuso de Brasília.
+- Parceria **sem aplicação de marca no plano** (ainda sem a carga `PLANO`, ou só com mídia): `totais` vem com os quatro campos `null` e `linhas` vem `[]`. Nunca zero inventado.
+
+**Erros:** 401; 403 (aba fechada, só para a marca); 404 (parceria que não existe ou é de outra).
+
+## 38. `POST /api/parcerias/{id}/aplicacoes/{aproveitamentoId}/comprovacoes`  · Atlas 1
+
+**Quem chama:** Admin RBS (exige o token CSRF). O patrocinador recebe **403** antes de qualquer outra conferência, com qualquer parceria, qualquer linha e qualquer conjunto de partes. Quem envia as fotos é decisão provisória da RBS (veja "Pendências"). `aproveitamentoId` é o `id` de uma linha da rota 37.
+
+**Corpo:** `multipart/form-data`
+
+| Parte | Obrigatória | O que é |
+| --- | --- | --- |
+| `arquivo` | Sim | A foto, em `png`, `jpg` ou `jpeg`. Até **20 MB**. |
+| `descricao` | Não | Texto de até 200 caracteres (sem os espaços das pontas; só espaços valem como ausente). |
+
+**Como funciona** [UPLOAD] [ISOLAMENTO]
+
+1. O servidor confere a extensão (só foto) e o **conteúdo** pela assinatura: um executável renomeado para `.png` é recusado, como em qualquer envio.
+2. Grava o arquivo (nome gerado pelo servidor, categoria `COMPROVACAO`) com a parceria **e a aba `APLICACOES`**, e a comprovação ligada à linha. Com a aba gravada, a marca baixa a foto pela rota 18 só enquanto a aba está aberta.
+3. A linha passa a contar a foto nas rotas 37 e 29 na hora.
+
+**201**: a comprovação criada, no mesmo formato de cada item de `comprovacoes` da rota 37.
+
+```json
+{
+  "id": 5, "arquivoId": 77, "nomeOriginal": "arena.jpg", "descricao": "Testeira no palco",
+  "registradoPor": { "id": 1, "nome": "Equipe B2B", "perfil": "ADMIN_RBS" },
+  "registradoEm": "2026-10-03T14:00:00-03:00"
+}
+```
+
+**Erros**
+
+| Status | Quando |
+| --- | --- |
+| 403 | Patrocinador (`"Esta operação é restrita à equipe da RBS."`), ou falta o token CSRF. |
+| 404 | Parceria que não existe (`"Não encontramos esta parceria."`), ou linha que não existe ou é de outra parceria (`"Não encontramos esta aplicação."`). Id da linha que não é número também é 404. |
+| 413 | Foto acima de 20 MB. |
+| 415 | Extensão que não é foto (`"Envie uma foto em PNG ou JPG."`), ou conteúdo que não bate com a extensão (`"O conteúdo do arquivo não é um PNG de verdade. Confira se o arquivo não foi renomeado."`). |
+| 422 | A linha é de mídia: `detail` e `campos.aproveitamentoId` = `"A comprovação vale só para aplicação de marca."`. Ou parte `arquivo` ausente ou vazia (`campos.arquivo`), ou `descricao` com mais de 200 caracteres (`campos.descricao`). |
+
+**Histórico:** `CRIACAO` (entidade `comprovacao_marca`, com o nome do arquivo em `valorNovo` e o formato da aplicação, mais a descrição, em `detalhe`).
+
+---
+
 # Regras que valem para todas as rotas
 
 ## Isolamento entre parcerias
@@ -1213,8 +1293,8 @@ Colunas: `secao;indicador_codigo;indicador;recorte;valor;unidade;base_calculo;di
 
 | Quem | Pode |
 | --- | --- |
-| **Admin RBS** | Tudo: criar parcerias, autorizar e revogar e-mails, criar entregas, mudar status, mandar retorno, aprovar perguntas, subir cargas, gerar e disponibilizar relatórios, ver o histórico geral e o painel. |
-| **Admin Patrocinador** | Ver a própria parceria, as entregas das abas liberadas, enviar materiais, baixar arquivos da parceria, ver o histórico dela, enviar as perguntas da pesquisa, ver a consolidação e o relatório disponibilizado. **Nunca** vê outra parceria nem as rotas da RBS. |
+| **Admin RBS** | Tudo: criar parcerias, autorizar e revogar e-mails, criar entregas, mudar status, mandar retorno, aprovar perguntas, subir cargas (inclusive o plano comercial), anexar as fotos de comprovação das aplicações, gerar e disponibilizar relatórios, ver o histórico geral e o painel. |
+| **Admin Patrocinador** | Ver a própria parceria, as entregas das abas liberadas, enviar materiais, baixar arquivos da parceria, ver o histórico dela, enviar as perguntas da pesquisa, ver a consolidação, o plano de aplicações com as fotos (aba `APLICACOES` aberta) e o relatório disponibilizado. **Nunca** vê outra parceria nem as rotas da RBS. |
 
 ## O que a API grava no histórico
 
@@ -1233,6 +1313,7 @@ Nenhuma nas rotas de autenticação. Três observações:
 - **[PENDENTE]** Lista de extensões aceitas no envio de material (rota 17) e o limite de tamanho (20 MB), com a RBS.
 - **[PENDENTE]** Se a marca vê o previsto x exibido antes de o relatório ser validado (rota 29).
 - **[PENDENTE]** Quem aprova as perguntas da pesquisa: qualquer Admin RBS, ou só o time de pesquisa (rota 25).
+- **[PENDENTE]** Quem envia as fotos de comprovação das aplicações: só a RBS (como está, rota 38) ou a marca também.
 - **[PENDENTE]** Limite de tentativas de login por IP e por e-mail. Hoje a falha só fica registrada no histórico.
 - **[PENDENTE]** Em produção (HTTPS): marcar o cookie de sessão como `Secure` e enviar o token CSRF só por conexão segura.
 - **[ATLAS-DEPOIS]** O assistente com IA (Atlas) fica fora desta versão: não há rota para ele aqui.
