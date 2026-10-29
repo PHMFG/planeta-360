@@ -90,7 +90,9 @@ public class ArquivoService {
         String categoria = categoriaInformada == null || categoriaInformada.isBlank()
                 ? (usuario.ehRbs() ? "OUTRO" : "MATERIAL_MARCA") : categoriaInformada.trim();
         if (!CATEGORIAS.contains(categoria)) {
-            campos.put("categoria", "Categoria inválida. Use uma destas: " + String.join(", ", new TreeSet<>(CATEGORIAS)) + ".");
+            // Só as categorias que ESTE perfil pode usar: a marca não precisa saber que existem as que são só da RBS.
+            Set<String> doPerfil = usuario.ehRbs() ? CATEGORIAS : CATEGORIAS_DO_PATROCINADOR;
+            campos.put("categoria", "Categoria inválida. Use uma destas: " + String.join(", ", new TreeSet<>(doPerfil)) + ".");
         }
         String observacao = observacaoInformada == null || observacaoInformada.isBlank() ? null : observacaoInformada.trim();
         if (observacao != null && observacao.length() > LIMITE_OBSERVACAO) {

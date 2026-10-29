@@ -622,7 +622,7 @@ O patrocinador só enxerga as entregas das abas **liberadas** para a parceria de
 | 409 | A entrega não aceita mais envio no status em que está. |
 | 413 | Arquivo acima de 20 MB (20.971.520 bytes; exatamente 20 MB ainda passa). |
 | 415 | Extensão ou conteúdo fora da lista, ou requisição que não é `multipart/form-data`. |
-| 422 | Parte `arquivo` ausente ou vazia, categoria que não existe, ou observação com mais de 500 caracteres (`campos.arquivo`, `campos.categoria`, `campos.observacao`). |
+| 422 | Parte `arquivo` ausente ou vazia, categoria que não existe, ou observação com mais de 500 caracteres (`campos.arquivo`, `campos.categoria`, `campos.observacao`). A frase de `campos.categoria` lista só as categorias que o **perfil de quem enviou** pode usar: para a marca, `"Categoria inválida. Use uma destas: CONTRATO, DOCUMENTO_INGRESSOS, MATERIAL_MARCA, MATERIAL_MIDIA, OUTRO."`; para a RBS, as 10. |
 
 **Histórico:** `ENVIO_ARQUIVO` no primeiro envio e `NOVA_VERSAO` nos seguintes, e `ALTERACAO_STATUS` quando o status muda.
 
