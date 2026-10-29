@@ -74,10 +74,15 @@ public class ParceriaRepositorio {
         return existe("SELECT EXISTS (SELECT 1 FROM patrocinador WHERE id = :id)", patrocinadorId);
     }
 
-    /** Mesma comparação do índice uq_patrocinador_nome (sem diferenciar maiúsculas); ignora o próprio id na edição. */
+    /**
+     * O nome já é de outro patrocinador? Sem diferenciar maiúsculas (como o índice uq_patrocinador_nome) E sem diferença de
+     * espaços: o nome recebido já vem normalizado (ParceriaService.nomeNormalizado) e o do banco é normalizado aqui na
+     * consulta, para pegar também nomes antigos gravados com espaços repetidos. Ignora o próprio id na edição.
+     */
     public boolean nomeDePatrocinadorEmUso(String nome, Long exceto) {
         return jdbc.sql("""
-                        SELECT EXISTS (SELECT 1 FROM patrocinador WHERE lower(nome_canonico) = lower(:nome)
+                        SELECT EXISTS (SELECT 1 FROM patrocinador
+                                       WHERE lower(btrim(regexp_replace(nome_canonico, '\\s+', ' ', 'g'))) = lower(:nome)
                                        AND (CAST(:exceto AS BIGINT) IS NULL OR id <> :exceto))
                         """)
                 .param("nome", nome)

@@ -58,7 +58,7 @@ public class ParceriaEdicaoService {
         String segmentoDepois = antes.segmento();
         Map<String, String> campos = new LinkedHashMap<>();
         if (pat != null && pat.nome() != null) {
-            String nome = ParceriaService.textoOuNulo(pat.nome());
+            String nome = ParceriaService.nomeNormalizado(pat.nome());
             if (nome == null) {
                 campos.put("patrocinador.nome", "Informe o nome do patrocinador.");
             } else {

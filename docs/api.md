@@ -396,6 +396,8 @@ As datas de 2027 ainda estão em branco (aguardando a RBS).
 
 **201** (com o cabeçalho `Location: /api/parcerias/{id}`): o objeto da rota 9, em que cada e-mail autorizado traz também **`codigoAtivacao`** e **`codigoExpiraEm`**. O código só aparece **nesta resposta**; depois não há como ver de novo (só gerar outro). A RBS repassa o código ao patrocinador. Se o e-mail já pertence a uma conta de patrocinador que fez o primeiro acesso por outra parceria, o vínculo é feito na hora: `situacao` vem `ATIVO` e `codigoAtivacao` vem `null`.
 
+**Nome do patrocinador.** O nome novo é guardado **normalizado**: sem espaços nas pontas e com qualquer sequência de espaços, tabulações ou espaços não quebráveis juntada num espaço só (`"  Marca   Nova "` vira `"Marca Nova"`). Para saber se o nome já existe, a API compara o nome normalizado com os já cadastrados, também normalizados, sem diferença de maiúsculas: `"Cliente  Verde"` e `"  cliente  ROXO "` batem com `"Cliente Verde"` e `"Cliente Roxo"` e dão 409, em vez de criar um segundo patrocinador. A mesma regra vale no `nome` do `PATCH` da rota 10.
+
 Os e-mails são guardados em minúsculas e sem espaços nas pontas. A parceria nasce `ATIVA`, com as 7 abas abertas conforme a cota (o banco copia `cota_tipo_aba`). Tudo vai numa transação só: com qualquer erro, nada é gravado.
 
 **Erros**
@@ -403,7 +405,7 @@ Os e-mails são guardados em minúsculas e sem espaços nas pontas. A parceria n
 | Status | Quando |
 | --- | --- |
 | 403 | Não é Admin RBS, ou faltou o token CSRF. |
-| 409 | O patrocinador já tem parceria nesta edição (`"Este patrocinador já tem parceria nesta edição do evento."`), ou já existe um patrocinador com este nome (use o `id`). |
+| 409 | O patrocinador já tem parceria nesta edição (`"Este patrocinador já tem parceria nesta edição do evento."`), ou já existe um patrocinador com este nome (`"Já existe um patrocinador com este nome. Escolha-o na lista \"Patrocinador\"."`; a comparação é feita sobre o nome normalizado, veja abaixo). |
 | 422 | Campo faltando, evento/cota/patrocinador que não existem, `id` e `nome` do patrocinador juntos (ou nenhum), valor sem base, e-mail inválido, repetido na lista ou de um usuário da RBS (`campos`; os da lista saem como `emails[0].email`). |
 
 **Histórico:** `CRIACAO` da parceria e `AUTORIZACAO` de cada e-mail.
@@ -457,7 +459,7 @@ A cota e o evento **não mudam** por aqui (mudar a cota refaria as abas). `abas`
 
 **200**: o objeto da rota 9, já com as mudanças. **Erros:** 403, 404, 409 (nome de patrocinador repetido), 422 (`valorInvestimento` sem `baseValor`, aba que não existe, situação inválida).
 
-**Regras:** campo ausente ou `null` = não muda; texto em branco em `nomeProduto`, `patrocinador.segmento` limpa o campo. O valor e a base vão sempre juntos (no estado final). O nome e o segmento do `patrocinador` valem para a marca inteira, em todas as edições. Mandar uma aba no estado em que ela já está não grava nada.
+**Regras:** campo ausente ou `null` = não muda; texto em branco em `nomeProduto`, `patrocinador.segmento` limpa o campo. O `patrocinador.nome` é normalizado como na rota 8 (sem espaços nas pontas nem repetidos) e comparado com os outros patrocinadores sem diferença de maiúsculas ou de espaços; repetido dá 409 (`"Já existe um patrocinador com este nome."`). Mandar o nome atual com espaços a mais não muda nada e não grava histórico. O valor e a base vão sempre juntos (no estado final). O nome e o segmento do `patrocinador` valem para a marca inteira, em todas as edições. Mandar uma aba no estado em que ela já está não grava nada.
 
 **Histórico:** uma linha `EDICAO` **por campo alterado** (`detalhe` = nome do campo, com `valorAnterior` e `valorNovo`) e uma `LIBERACAO_ABA` para cada aba alterada (`valorAnterior`/`valorNovo` = `liberada`, `fechada` ou `oculta`). O `PATCH` sem mudança real não grava histórico.
 
