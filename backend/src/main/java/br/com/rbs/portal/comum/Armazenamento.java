@@ -3,6 +3,7 @@ package br.com.rbs.portal.comum;
 import br.com.rbs.portal.materiais.Arquivo;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
@@ -121,6 +122,27 @@ public class Armazenamento {
         }
     }
 
+    /**
+     * Cria o arquivo no caminho dado SEM sobrescrever: se já existe um arquivo ali, não faz nada e devolve falso. Serve para
+     * dar conteúdo de exemplo aos arquivos da amostra de demonstração (veja ArquivosDaAmostra); o envio de verdade usa
+     * {@link #gravar} e {@link #gravarNaEntrega}. O caminho não pode sair da pasta de armazenamento.
+     */
+    boolean criarSeNaoExiste(String caminho, byte[] conteudo) {
+        Path destino = pasta.resolve(caminho).normalize();
+        if (!destino.startsWith(pasta)) {
+            throw new IllegalArgumentException("O caminho sai da pasta de armazenamento: " + caminho);
+        }
+        try {
+            Files.createDirectories(destino.getParent());
+            Files.write(destino, conteudo, StandardOpenOption.CREATE_NEW);
+            return true;
+        } catch (FileAlreadyExistsException jaExiste) {
+            return false;
+        } catch (IOException erro) {
+            throw new UncheckedIOException("Não consegui gravar o arquivo de exemplo no armazenamento", erro);
+        }
+    }
+
     public long limiteBytes() {
         return limiteBytes;
     }
@@ -188,7 +210,7 @@ public class Armazenamento {
         return limiteBytes % mega == 0 ? limiteBytes / mega + " MB" : limiteBytes + " bytes";
     }
 
-    private static String sha256(byte[] conteudo) {
+    static String sha256(byte[] conteudo) {
         try {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(conteudo));
         } catch (NoSuchAlgorithmException erro) {

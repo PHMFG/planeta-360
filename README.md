@@ -72,7 +72,7 @@ cd backend
 .\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=dev"
 ```
 
-A API está pronta quando aparece `Started PortalApplication`. O perfil `dev` carrega a amostra de demonstração; sem perfil, sobe só a estrutura (como em produção). A 8080 é só a API: as telas ficam no front (passo 3).
+A API está pronta quando aparece `Started PortalApplication`. O perfil `dev` carrega a amostra de demonstração e, ao subir, cria em `backend/armazenamento/` um arquivo de exemplo para cada arquivo da amostra (é o que faz o botão "Baixar" funcionar na demonstração); sem perfil, sobe só a estrutura (como em produção, sem amostra e sem arquivos de exemplo). A 8080 é só a API: as telas ficam no front (passo 3).
 
 **PostgreSQL em outra porta** (a Sprint 1 usava a 5433)? Informe a URL do banco no mesmo terminal, antes de subir a API:
 
