@@ -109,7 +109,8 @@ export type Painel = {
   evento: { id: number; nome: string; edicao: number }
   parcerias: { total: number; ativas: number; semUsuario: number }
   entregas: { porStatus: Partial<Record<StatusEntrega, number>>; esperandoAnalise: number; atrasadas: number }
-  relatorios: { semRelatorio: number; rascunho: number; validado: number; disponibilizado: number }
+  /** marcaVe: parcerias com alguma versão disponibilizada, mesmo que a mais nova ainda seja rascunho. */
+  relatorios: { semRelatorio: number; rascunho: number; validado: number; disponibilizado: number; marcaVe?: number }
   ultimaCarga: { id: number; tipo: string; executadaEm: string; linhasInseridas: number; linhasRejeitadas: number } | null
   pendencias: { parceriaId: number; patrocinador: string; tipo: string; detalhe: string }[]
 }
@@ -135,6 +136,8 @@ export type LinhaRelatorios = {
     indicadoresDisponiveis: number
     indicadoresIndisponiveis: number
   } | null
+  /** A versão disponibilizada mais nova, que é a que a marca vê (pode ser anterior à mais nova). */
+  disponibilizada?: { id: number; versao: number; disponibilizadoEm: string } | null
   faltantes: number
 }
 

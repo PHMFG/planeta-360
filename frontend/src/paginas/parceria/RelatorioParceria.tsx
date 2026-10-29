@@ -197,7 +197,9 @@ export function RelatorioParceria() {
           dado ? (
             <>
               {dado.status !== 'DISPONIBILIZADO' && (
-                <Aviso tipo="ausente" titulo={dado.status === 'RASCUNHO' ? 'Rascunho: a marca ainda não vê este relatório' : 'Validado: falta disponibilizar para a marca'} />
+                <Aviso tipo="ausente" titulo={dado.status === 'RASCUNHO' ? 'Rascunho: a marca ainda não vê esta versão' : 'Validado: falta disponibilizar esta versão para a marca'}>
+                  Se uma versão anterior já foi disponibilizada, a marca continua vendo aquela até esta ser disponibilizada.
+                </Aviso>
               )}
               <div className="flex flex-wrap gap-3 print:hidden">
                 <Botao variante="secundario" icone="ri-printer-line" onClick={() => window.print()}>

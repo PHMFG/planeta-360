@@ -15,6 +15,13 @@ import { CadastroPatrocinador } from './CadastroPatrocinador'
 
 type FiltroCota = 'TODAS' | ParceriaNaLista['cota']['codigo']
 
+const SITUACOES: Record<ParceriaNaLista['situacao'], string> = {
+  EM_NEGOCIACAO: 'Em negociação',
+  ATIVA: 'Ativa',
+  ENCERRADA: 'Encerrada',
+  CANCELADA: 'Cancelada',
+}
+
 export function Patrocinadores() {
   const eventos = useDados(listarEventos, [])
   const [eventoId, setEventoId] = useState('')
@@ -92,13 +99,24 @@ export function Patrocinadores() {
                   celula: (item) => (
                     <Link to={`/parceria/${item.id}`} className="font-semibold hover:underline">
                       {item.patrocinador.nome}
+                      {item.situacao !== 'ATIVA' && (
+                        <span className="ml-2 rounded-full bg-cinza-100 px-2 py-0.5 text-[11px] font-bold text-texto-2">{SITUACOES[item.situacao]}</span>
+                      )}
                       {item.nomeProduto && <span className="block text-xs font-medium text-texto-2">{item.nomeProduto}</span>}
                     </Link>
                   ),
                 },
                 { titulo: 'Cota', celula: (item) => item.cota.nome },
                 { titulo: 'Edição', celula: (item) => item.evento.edicao },
-                { titulo: 'Entregas aprovadas', celula: (item) => <Barra valor={item.entregas.percentualConcluido} rotulo="Entregas aprovadas" /> },
+                {
+                  titulo: 'Entregas aprovadas',
+                  celula: (item) =>
+                    item.entregas.total ? (
+                      <Barra valor={item.entregas.percentualConcluido} rotulo="Entregas aprovadas" />
+                    ) : (
+                      <span className="text-xs font-semibold text-[#c8203f]">Nenhuma entrega aberta</span>
+                    ),
+                },
                 { titulo: 'Pendências', celula: (item) => item.entregas.pendentes, classe: 'text-center' },
                 { titulo: 'Usuários', celula: (item) => item.usuarios ?? '—', classe: 'text-center' },
                 {
@@ -126,7 +144,6 @@ export function Patrocinadores() {
           aoFechar={() => setCadastrando(false)}
           aoCriar={lista.recarregar}
           eventos={eventos.dado}
-          parcerias={todas}
         />
       )}
     </div>
