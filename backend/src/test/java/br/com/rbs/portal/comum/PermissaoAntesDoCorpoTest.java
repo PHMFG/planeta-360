@@ -185,7 +185,10 @@ class PermissaoAntesDoCorpoTest {
     // Nenhuma rota fica sem decisão: ou é só da RBS (e está na lista), ou o patrocinador pode chamá-la
     // ---------------------------------------------------------------------
 
-    /** As rotas que o patrocinador pode chamar. Rota nova: decida aqui OU em PermissaoAntesDoCorpo.ROTAS_SO_DA_RBS. */
+    /**
+     * As rotas que o patrocinador pode chamar e a RBS também. Rota nova: decida aqui, em PermissaoAntesDoCorpo.ROTAS_SO_DA_RBS ou em
+     * PermissaoAntesDoCorpo.ROTAS_SO_DO_PATROCINADOR.
+     */
     private static final Set<String> ROTAS_DO_PATROCINADOR = Set.of(
             "GET /api/auth/csrf", "POST /api/auth/login", "POST /api/auth/ativar", "GET /api/auth/eu",
             "GET /api/eventos", "GET /api/parcerias", "GET /api/parcerias/{id}", "GET /api/parcerias/{id}/entregas",
@@ -193,7 +196,8 @@ class PermissaoAntesDoCorpoTest {
             "GET /api/parcerias/{id}/pesquisa", "PUT /api/parcerias/{id}/pesquisa/perguntas",
             "GET /api/parcerias/{id}/consolidacao", "GET /api/parcerias/{id}/relatorio", "GET /api/relatorios/{id}/csv",
             "GET /api/parcerias/{id}/aplicacoes", "GET /api/campos", "GET /api/parcerias/{id}/dados",
-            "POST /api/parcerias/{id}/dados");
+            "POST /api/parcerias/{id}/dados",
+            "GET /api/atlas/relatorios/{id}", "GET /api/parcerias/{id}/atlas/relatorios");
 
     @Test
     void todaRotaDaApiEstaClassificadaEAListaDaRbsSoTemRotasQueExistem() {
@@ -211,14 +215,77 @@ class PermissaoAntesDoCorpoTest {
 
         assertThat(mapeadas).as("a lista de rotas da RBS tem rota que não existe (nome mudou?)")
                 .containsAll(PermissaoAntesDoCorpo.ROTAS_SO_DA_RBS);
-        assertThat(mapeadas).as("rota nova sem decisão: é só da RBS (PermissaoAntesDoCorpo.ROTAS_SO_DA_RBS) ou do patrocinador "
-                + "(ROTAS_DO_PATROCINADOR neste teste)?")
-                .containsExactlyInAnyOrderElementsOf(unir(PermissaoAntesDoCorpo.ROTAS_SO_DA_RBS, ROTAS_DO_PATROCINADOR));
+        assertThat(mapeadas).as("a lista de rotas só do patrocinador tem rota que não existe (nome mudou?)")
+                .containsAll(PermissaoAntesDoCorpo.ROTAS_SO_DO_PATROCINADOR);
+        assertThat(mapeadas).as("rota nova sem decisão: é só da RBS (PermissaoAntesDoCorpo.ROTAS_SO_DA_RBS), só do patrocinador "
+                + "(PermissaoAntesDoCorpo.ROTAS_SO_DO_PATROCINADOR) ou dos dois (ROTAS_DO_PATROCINADOR neste teste)?")
+                .containsExactlyInAnyOrderElementsOf(unir(PermissaoAntesDoCorpo.ROTAS_SO_DA_RBS,
+                        PermissaoAntesDoCorpo.ROTAS_SO_DO_PATROCINADOR, ROTAS_DO_PATROCINADOR));
+        assertThat(PermissaoAntesDoCorpo.ROTAS_SO_DA_RBS).as("uma rota não é das duas listas")
+                .doesNotContainAnyElementsOf(PermissaoAntesDoCorpo.ROTAS_SO_DO_PATROCINADOR);
+        assertThat(PermissaoAntesDoCorpo.ROTAS_SO_DO_PATROCINADOR).hasSize(5);
     }
 
-    private static Set<String> unir(Set<String> a, Set<String> b) {
-        Set<String> todas = new TreeSet<>(a);
-        todas.addAll(b);
+    @SafeVarargs
+    private static Set<String> unir(Set<String>... conjuntos) {
+        Set<String> todas = new TreeSet<>();
+        for (Set<String> conjunto : conjuntos) {
+            todas.addAll(conjunto);
+        }
         return todas;
+    }
+
+    // ---------------------------------------------------------------------
+    // Atlas: a conversa é só da marca; o relatório é da marca e da RBS
+    // ---------------------------------------------------------------------
+
+    private static final String SO_PATROCINADOR_ATLAS = "Só o Admin Patrocinador da parceria conversa com o Atlas.";
+
+    @Test
+    void rbsRecebe403NasRotasDaConversaComOAtlasQualquerQueSejaOCorpoOuOId() {
+        long parceria = SessaoDeApi.parceriaDe2027(jdbc, "Cliente Amarelo");
+        SessaoDeApi rbs = SessaoDeApi.entrar(mvc, RBS);
+        List<Chamada> chamadas = List.of(
+                new Chamada(HttpMethod.POST, "/api/parcerias/" + parceria + "/atlas/conversas"),
+                new Chamada(HttpMethod.POST, "/api/parcerias/999999/atlas/conversas"),
+                new Chamada(HttpMethod.POST, "/api/atlas/conversas/1/mensagens"),
+                new Chamada(HttpMethod.POST, "/api/atlas/conversas/999999/mensagens"),
+                new Chamada(HttpMethod.POST, "/api/atlas/solicitacoes/1/respostas"),
+                new Chamada(HttpMethod.POST, "/api/atlas/solicitacoes/999999/respostas"));
+        List<String> corpos = List.of("", "{}", "isto nao e json", "[]", "{\"texto\":\"\"}", "{\"acao\":\"talvez\"}",
+                "{\"atalho\":\"MONTAR_RELATORIO\",\"modelo\":\"ATIVACAO_EVENTO\"}");
+
+        for (Chamada chamada : chamadas) {
+            for (String corpo : corpos) {
+                MvcTestResult resposta = chamar(rbs, chamada, corpo);
+                assertThat(resposta).as(chamada + " com corpo [" + corpo + "]").hasStatus(HttpStatus.FORBIDDEN);
+                assertThat(lerJson(resposta, "$.detail")).isEqualTo(SO_PATROCINADOR_ATLAS);
+            }
+        }
+        for (String uri : List.of("/api/parcerias/" + parceria + "/atlas/conversas", "/api/parcerias/999999/atlas/conversas",
+                "/api/atlas/conversas/1", "/api/atlas/conversas/999999")) {
+            MvcTestResult resposta = rbs.get(uri);
+            assertThat(resposta).as(uri).hasStatus(HttpStatus.FORBIDDEN);
+            assertThat(lerJson(resposta, "$.detail")).isEqualTo(SO_PATROCINADOR_ATLAS);
+        }
+    }
+
+    @Test
+    void patrocinadorContinuaRecebendoAValidacaoDoCorpoNaConversaComOAtlas() {
+        long parceria = SessaoDeApi.parceriaDe2027(jdbc, "Cliente Amarelo");
+        SessaoDeApi amarelo = SessaoDeApi.entrar(mvc, AMARELO);
+
+        assertThat(amarelo.post("/api/parcerias/" + parceria + "/atlas/conversas", "isto nao e json")).hasStatus(HttpStatus.BAD_REQUEST);
+        assertThat(amarelo.post("/api/parcerias/" + parceria + "/atlas/conversas", "{\"atalho\":\"OUTRO\",\"modelo\":\"X\"}"))
+                .hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
+    }
+
+    @Test
+    void rbsLeORelatorioDoAtlasEAListaDaParceria() {
+        long parceria = SessaoDeApi.parceriaDe2027(jdbc, "Cliente Amarelo");
+        SessaoDeApi rbs = SessaoDeApi.entrar(mvc, RBS);
+
+        assertThat(rbs.get("/api/parcerias/" + parceria + "/atlas/relatorios")).hasStatus(HttpStatus.OK);
+        assertThat(rbs.get("/api/atlas/relatorios/999999")).hasStatus(HttpStatus.NOT_FOUND);
     }
 }

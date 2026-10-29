@@ -179,6 +179,8 @@ public class TratadorDeErros extends ResponseEntityExceptionHandler {
                         case "relatorios" -> "Não encontramos este relatório.";
                         case "cargas" -> "Não encontramos esta carga.";
                         case "aplicacoes" -> "Não encontramos esta aplicação.";
+                        case "conversas" -> "Não encontramos esta conversa.";
+                        case "solicitacoes" -> "Não encontramos esta solicitação.";
                         default -> Problemas.detalhePadrao(HttpStatus.NOT_FOUND);
                     };
                 }

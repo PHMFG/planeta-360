@@ -2,7 +2,7 @@
 
 Este documento é o **contrato entre o back-end e o front-end**. Quem faz a tela lê aqui o que cada rota pede, o que devolve e quais erros esperar, sem precisar abrir o código.
 
-- Todas as 41 rotas estão implementadas e cobertas por testes de integração (`cd backend && ./mvnw test`), inclusive o isolamento entre parcerias. A coluna "Etapa" diz em que etapa do plano cada rota entrou (as do Atlas, 37 em diante, entram como `Atlas 1`). Mudança de formato daqui em diante entra neste arquivo no mesmo commit do código.
+- Todas as 48 rotas estão implementadas e cobertas por testes de integração (`cd backend && ./mvnw test`), inclusive o isolamento entre parcerias. A coluna "Etapa" diz em que etapa do plano cada rota entrou (as do Atlas, 37 em diante, entram como `Atlas 1` e `Atlas 2`). Mudança de formato daqui em diante entra neste arquivo no mesmo commit do código.
 - O banco está descrito em [`docs/banco.md`](banco.md). Os nomes de status, cotas e abas são os mesmos do banco.
 
 ## Como falar com a API
@@ -61,13 +61,14 @@ Todo erro, sem exceção, vem como `application/problem+json` no formato `Proble
 | 400 | Requisição inválida | Corpo vazio ou que não é JSON, ou filtro da URL com o tipo errado (`?pagina=abc`, `?eventoId=abc`, `?atrasadas=talvez`): o `detail` diz qual, por exemplo `"O parâmetro pagina precisa ser um número inteiro."` ou `"O parâmetro atrasadas precisa ser true ou false."`. |
 | 401 | Não autenticado | Sem sessão (ou sessão vencida), e-mail/senha incorretos no login, ou sessão de uma conta que perdeu o acesso (veja "Sessão e CSRF"). |
 | 403 | Acesso negado | Logado, mas o perfil não pode fazer a operação (rota só da RBS), a aba está fechada para a parceria (duas frases diferentes, veja "Aba"), ou falta o token CSRF. |
-| 404 | Não encontrado | O recurso **não existe ou é de outra parceria**. Os dois casos têm a mesma resposta, de propósito. Vale também para rota inexistente e para **id na URL que não é número** (`GET /api/parcerias/abc`): um id que não pode existir é um id que não existe, e o `detail` é a frase de "não encontrado" do recurso da rota (`"Não encontramos esta parceria."`, `"... esta entrega."`, `"... este arquivo."`, `"... esta pergunta."`, `"... este relatório."`, `"... esta carga."`, `"Não encontramos este e-mail nesta parceria."`), igual à de um id numérico sem registro. |
+| 404 | Não encontrado | O recurso **não existe ou é de outra parceria**. Os dois casos têm a mesma resposta, de propósito. Vale também para rota inexistente e para **id na URL que não é número** (`GET /api/parcerias/abc`): um id que não pode existir é um id que não existe, e o `detail` é a frase de "não encontrado" do recurso da rota (`"Não encontramos esta parceria."`, `"... esta entrega."`, `"... este arquivo."`, `"... esta pergunta."`, `"... este relatório."` (também o do Atlas), `"... esta carga."`, `"... esta conversa."`, `"... esta solicitação."`, `"Não encontramos este e-mail nesta parceria."`), igual à de um id numérico sem registro. |
 | 405 | Método não permitido | A rota existe, mas não aceita esse método HTTP. |
 | 409 | Conflito | Uma regra do negócio recusou: regra do banco (SQLSTATE da classe 23, com a frase do gatilho), transição de status que não é permitida, registro duplicado. |
 | 413 | Arquivo grande demais | Envio acima de 20 MB. |
 | 415 | Tipo de conteúdo não aceito | Extensão ou tipo de arquivo fora da lista permitida, ou `Content-Type` errado. |
 | 422 | Dados inválidos | Campo faltando ou fora do formato. Vem com `campos`. |
 | 500 | Erro interno | Falha inesperada. O `detail` é sempre genérico. |
+| 503 | Serviço indisponível | Uma parte de que a rota depende está fora do ar. Hoje só a rota 44: mensagem de texto no Atlas sem o modelo de linguagem. O `detail` diz o que fazer no lugar. |
 
 **Ordem das conferências.** Quando uma chamada tem mais de um problema, a API responde, em geral, pelo primeiro destes: 401 (sem sessão, ou conta que perdeu o acesso) → 403 por perfil (rota só da RBS) → 404 (não existe ou não é do usuário) → 403 por aba não liberada → 400 e 422 (formato do corpo, das partes ou dos filtros) → 409 (o estado atual não permite). A validação do corpo vem depois da permissão: quem não pode usar a rota nunca recebe um erro de campo. Regras de campo que dependem do estado atual (por exemplo, a observação obrigatória da rota 19) vêm depois do 409; cada rota diz.
 
@@ -145,8 +146,15 @@ Todas prontas e testadas. A coluna "Etapa" mostra em que etapa do plano a rota e
 | 39 | `GET /api/campos` | Logado | O catálogo dos campos que a marca pode informar | Atlas 1 |
 | 40 | `GET /api/parcerias/{id}/dados` | Patrocinador da parceria | Os valores vigentes dos campos de uma aba, com autor e data | Atlas 1 |
 | 41 | `POST /api/parcerias/{id}/dados` | Patrocinador da parceria | Grava de 1 a 20 valores novos de uma aba | Atlas 1 |
+| 42 | `POST /api/parcerias/{id}/atlas/conversas` | Admin Patrocinador da parceria | Abre uma conversa com o Atlas; com o atalho, já monta o relatório | Atlas 2 |
+| 43 | `GET /api/parcerias/{id}/atlas/conversas` | Admin Patrocinador da parceria | As conversas de quem pede nesta parceria | Atlas 2 |
+| 44 | `POST /api/atlas/conversas/{id}/mensagens` | Dono da conversa | Manda uma mensagem, ou o atalho "Montar relatório" | Atlas 2 |
+| 45 | `GET /api/atlas/conversas/{id}` | Dono da conversa | A conversa inteira | Atlas 2 |
+| 46 | `POST /api/atlas/solicitacoes/{id}/respostas` | Dono da conversa | Responde o cartão de perguntas (accept, decline ou cancel) | Atlas 2 |
+| 47 | `GET /api/atlas/relatorios/{id}` | Patrocinador da parceria | O relatório do Atlas, pronto ou em montagem | Atlas 2 |
+| 48 | `GET /api/parcerias/{id}/atlas/relatorios` | Patrocinador da parceria | Os relatórios do Atlas da parceria | Atlas 2 |
 
-São 41 operações (método + caminho). A rota 5 (`ativar`) faz parte do contrato de autenticação, mas só é implementada na etapa 4. As rotas 37 em diante vieram com o Atlas (MVP, parte 1): a coluna "Etapa" diz `Atlas 1`.
+São 48 operações (método + caminho). A rota 5 (`ativar`) faz parte do contrato de autenticação, mas só é implementada na etapa 4. As rotas 37 em diante vieram com o Atlas (MVP): a coluna "Etapa" diz `Atlas 1` (plano de aplicações e dados informados) ou `Atlas 2` (conversa, cartão de perguntas e relatório). Nas rotas 42 a 46 só o Admin Patrocinador chama (a RBS recebe **403** antes de o corpo ser lido); nas 47 e 48 chamam a marca da parceria e a RBS.
 
 ## Objetos que se repetem
 
@@ -1399,6 +1407,216 @@ Os números das frases saem no padrão brasileiro (`1.200`). Sem valor vigente n
 
 ---
 
+# O Atlas: conversa, cartão de perguntas e relatório (Atlas, parte 2)
+
+O Atlas monta o relatório de **Ativação no evento** da marca. Ele monta a estrutura e redige, mas **nunca escreve um número**: todo número do relatório vem do portal (a consolidação e o plano de aplicações), de um dado informado com autor e data (rotas 40 e 41) ou de uma conta registrada, e cada um aparece em "Fontes e cálculos". O relatório é um **documento de trabalho da marca**, com o selo "Não validado pela RBS": o relatório oficial (rotas 31 a 36) não muda.
+
+Nesta etapa o relatório sai pelo **botão "Montar relatório"** (o caminho sem modelo de linguagem, chamado de plano B): botão &rarr; base do relatório com os números do portal &rarr; cartão de perguntas com o que só a marca sabe &rarr; frases-modelo nos textos &rarr; relatório pronto. O modelo de linguagem (texto livre no chat) entra na etapa seguinte pelas mesmas rotas; enquanto não há provedor, `llmDisponivel` vem `false` e a mensagem de texto da rota 44 responde 503.
+
+**Regras que valem nas rotas 42 a 48**
+
+- **Perfil.** 42 a 46 são só do Admin Patrocinador; a RBS recebe **403** (`"Só o Admin Patrocinador da parceria conversa com o Atlas."`) antes de qualquer outra conferência e do corpo, com qualquer id e qualquer corpo. 47 e 48 são da marca da parceria e da RBS.
+- **Isolamento.** Recurso de outra parceria dá **404** com a mesma frase de um id que não existe (`"Não encontramos esta parceria."`, `"... esta conversa."`, `"... esta solicitação."`, `"... este relatório."`). A **conversa é de quem a abriu**: a conversa e o cartão de outro usuário da mesma parceria também dão 404. O **relatório é da parceria**: qualquer usuário dela (e a RBS) o vê nas rotas 47 e 48. A parceria é conferida a cada chamada (vínculo revogado vale na chamada seguinte).
+- **Aba.** A aba do modelo, `APLICACOES`, tem de estar aberta para a marca: fechada, todas as rotas 42 a 48 respondem **403** com as duas frases de "Aba". Vale **também para o relatório pronto**: fechar a aba esconde o documento da marca (rotas 47 e 48). A RBS lê o relatório sempre.
+- **POST** exige o token CSRF. Erros em `ProblemDetail`.
+- **Um turno por vez em cada conversa.** As rotas 42 (com atalho), 44 e 46 começam um turno; enquanto ele roda, outra chamada na mesma conversa recebe **409** (`"O Atlas ainda está respondendo nesta conversa. Espere a resposta."`). O turno termina sozinho, também em erro, e um turno parado há mais de 5 minutos deixa de valer.
+- **Ordem das conferências:** 403 (RBS) &rarr; 404 &rarr; 403 (aba) &rarr; 400 e 422 (formato do corpo) &rarr; 503 &rarr; 409 &rarr; 422 dos valores do cartão (que dependem do estado).
+
+## O objeto Conversa (rotas 42, 44, 45 e 46)
+
+```json
+{ "conversaId": 12, "llmDisponivel": false,
+  "itens": [
+    { "tipo": "usuario", "texto": "Montar o relatório da ativação (botão)" },
+    { "tipo": "texto", "texto": "Montei a base do relatório de ativação com os números do portal. Faltam números que só vocês sabem." },
+    { "tipo": "cartao", "solicitacaoId": 31, "relatorioId": 7, "mensagem": "Para fechar a seção de público, preciso destes números.", "status": "PENDENTE",
+      "campos": [ { "chave": "ativacao.visitantes_total", "aba": "APLICACOES", "rotulo": "Visitantes no espaço", "tipo": "INTEIRO", "unidade": "pessoas",
+                    "minimo": 0, "maximo": null, "ajuda": "Quantas pessoas passaram pelo espaço da marca durante o festival, segundo a contagem da agência.",
+                    "limiteCampo": null, "obrigatorio": true, "vigente": null } ] },
+    { "tipo": "relatorio_pronto", "relatorioId": 7, "titulo": "Ativação no evento" },
+    { "tipo": "aviso", "texto": "Cartão fechado. Use Montar relatório para continuar." } ] }
+```
+
+- `llmDisponivel` é `false` enquanto a API sobe sem modelo de linguagem. É o único lugar que a etapa seguinte liga.
+- As rotas **42, 44 e 46 devolvem só os itens do turno**; a **45 devolve a conversa inteira**.
+- Os itens são **derivados do histórico** da conversa, que o servidor grava no formato de chat completions (`user`, `assistant` com `tool_calls`, `tool`), como se o modelo tivesse chamado as ferramentas: nada é guardado só para a tela.
+
+| `tipo` | Quando aparece | Campos |
+| --- | --- | --- |
+| `usuario` | O que a pessoa disse (o botão aparece como "Montar o relatório da ativação (botão)") | `texto` |
+| `texto` | O que o Atlas disse. Os marcadores `{{...}}` já vêm trocados pelo valor; o que não tem valor vira "indisponível" | `texto` |
+| `cartao` | O cartão de perguntas, com o **estado de agora** | `solicitacaoId`, `relatorioId`, `mensagem`, `status` (`PENDENTE`, `RESPONDIDA`, `RECUSADA` ou `CANCELADA`), `campos` |
+| `relatorio_pronto` | O relatório ficou pronto; o front abre o A4 pela rota 47 | `relatorioId`, `titulo` |
+| `aviso` | Aviso do sistema: o cartão foi fechado (cancelado, ou o relatório foi descartado) | `texto` |
+
+Cada item de `campos` do cartão é um campo do catálogo (rota 39) mais `obrigatorio` e `vigente`, que usa o formato da rota 40 (`{valor, origem, informadoPor, informadoEm}`, ou `null` se ninguém informou). O cartão pede, de uma vez, o que o relatório precisa e ainda não tem valor: primeiro as obrigatórias (visitantes e cadastros), depois as opcionais (brindes disponíveis e distribuídos). Não há campo de arquivo no cartão.
+
+## 42. `POST /api/parcerias/{id}/atlas/conversas`  · Atlas 2
+
+**Quem chama:** Admin Patrocinador da parceria (exige o token CSRF). A RBS recebe **403**; a marca de outra parceria recebe **404**; com a aba `APLICACOES` fechada, **403** com as duas frases de "Aba".
+
+**Corpo (opcional)**
+
+- Sem corpo ou `{}`: abre uma conversa vazia.
+- `{"atalho": "MONTAR_RELATORIO", "modelo": "ATIVACAO_EVENTO"}`: abre a conversa e já roda o plano B (o botão "Montar relatório").
+
+**201**: o objeto Conversa. Conversa vazia: `itens: []`. Com o atalho, os itens do turno: `usuario`, `texto` e o `cartao` com as lacunas (status `PENDENTE`). Se a marca já informou tudo o que é obrigatório pelo formulário da aba (rota 41), não há cartão: os itens são `usuario`, `texto` ("Pronto: ...") e `relatorio_pronto`.
+
+**Erros**
+
+| Status | Quando |
+| --- | --- |
+| 400 | Corpo que não é JSON. |
+| 403 | RBS; aba `APLICACOES` fechada; falta o token CSRF. |
+| 404 | Parceria que não existe ou é de outra. |
+| 422 | Atalho ou modelo desconhecido, ou só um dos dois (`campos.atalho`, `campos.modelo`). |
+
+**Histórico:** `CRIACAO` (entidade `atlas_relatorio`) quando o atalho cria o relatório.
+
+## 43. `GET /api/parcerias/{id}/atlas/conversas`  · Atlas 2
+
+**Quem chama:** Admin Patrocinador da parceria. Lista as conversas **deste usuário** nesta parceria, da mexida há menos tempo para a mais antiga, **até 20**. Antes de listar, descarta o relatório que ficou parado (veja "Descarte").
+
+**200**
+
+```json
+{ "llmDisponivel": false,
+  "conversas": [ { "id": 12, "criadaEm": "2026-10-30T10:00:00-03:00", "atualizadaEm": "2026-10-30T10:05:00-03:00",
+                   "relatorio": { "id": 7, "status": "PRONTO" } } ] }
+```
+
+`relatorio` é o relatório mais novo da conversa, ou `null` se ela ainda não tem um. `atualizadaEm` é a hora da última mensagem (ou a criação, se não há mensagem). Conversa de outro usuário da mesma parceria não aparece.
+
+**Erros:** 401; 403 (RBS, ou aba fechada); 404 (parceria).
+
+## 44. `POST /api/atlas/conversas/{id}/mensagens`  · Atlas 2
+
+**Quem chama:** só o dono da conversa (exige o token CSRF). A RBS recebe **403**; conversa que não existe, é de outra parceria ou de outro usuário da mesma parceria recebe **404** (`"Não encontramos esta conversa."`).
+
+**Corpo:** **ou** `{"texto": "..."}` **ou** `{"atalho": "MONTAR_RELATORIO", "modelo": "ATIVACAO_EVENTO"}`.
+
+- **Com o atalho**, roda o plano B nesta conversa. Se já há um relatório **em montagem** nela (por exemplo, depois de um cartão cancelado), continua **dele** em vez de criar outro: reabre o cartão com as lacunas que faltam. Depois de um relatório pronto, o atalho começa um relatório novo.
+- **Com texto**, hoje responde **503** (`"O Atlas está sem o modelo de linguagem agora. Use o botão Montar relatório."`). A etapa seguinte troca isso pela conversa com o modelo.
+
+**200**: o objeto Conversa, só com os itens do turno (`usuario`, `texto` e o `cartao`; ou `usuario`, `texto` e `relatorio_pronto`).
+
+**Erros**
+
+| Status | Quando |
+| --- | --- |
+| 400 | Corpo vazio ou que não é JSON. |
+| 403 | RBS; aba fechada; falta o token CSRF. |
+| 404 | Conversa que não é sua (inexistente, de outra parceria ou de outro usuário). |
+| 409 | Há um cartão aberto na conversa (`"Este relatório está esperando a resposta do cartão. Responda ou feche o cartão antes de montar de novo."`), ou um turno em andamento. |
+| 422 | Texto vazio ou com mais de 1.000 caracteres (`campos.texto`); nem texto nem atalho, ou os dois; atalho ou modelo desconhecido. |
+| 503 | Texto sem modelo de linguagem. |
+
+## 45. `GET /api/atlas/conversas/{id}`  · Atlas 2
+
+**Quem chama:** só o dono da conversa. Devolve a **conversa inteira** (o objeto Conversa com todos os itens), com cada cartão no estado de agora e o valor vigente de cada campo dele. Antes de abrir, descarta o relatório dela que ficou parado (veja "Descarte").
+
+**Erros:** 401; 403 (RBS, ou aba fechada); 404 (conversa que não é sua).
+
+## 46. `POST /api/atlas/solicitacoes/{id}/respostas`  · Atlas 2
+
+**Quem chama:** só o dono da conversa do cartão (exige o token CSRF). A RBS recebe **403**; cartão que não existe, é de outra parceria ou de outro usuário da mesma parceria recebe **404** (`"Não encontramos esta solicitação."`).
+
+**Corpo**
+
+```json
+{ "acao": "accept", "valores": [ { "chave": "ativacao.visitantes_total", "valor": 1200 }, { "chave": "ativacao.cadastros_consentidos", "valor": 1072 } ] }
+```
+
+| `acao` | O que faz |
+| --- | --- |
+| `accept` | Grava os `valores` pelo mesmo caminho da rota 41, com origem **`ATLAS`** e as mesmas validações; o cartão vira `RESPONDIDA`. Depois o plano B preenche cada bloco redigível com a frase-modelo e **finaliza** o relatório (`PRONTO`). |
+| `decline` | O cartão vira `RECUSADA`; as lacunas pedidas contam como recusadas: os números que dependem delas saem **indisponíveis**, com o motivo, nunca zero. O plano B finaliza o relatório do mesmo jeito. `valores` é ignorado. |
+| `cancel` | O cartão vira `CANCELADA`, o relatório volta a **montando** e nada é gravado. O turno termina com um item `aviso` (`"Cartão fechado. Use Montar relatório para continuar."`); o botão continua o mesmo relatório. `valores` é ignorado. |
+
+**200**: o objeto Conversa, só com os itens do turno. Em `accept` e `decline`: `texto` (`"Pronto: o relatório de ativação está montado. A origem de cada número está em Fontes e cálculos."`) e `relatorio_pronto`. Em `cancel`: `aviso`.
+
+**Como funciona o `accept`** [VALIDACAO] [HISTORICO]
+
+1. Cada `chave` tem de ser um dos campos do cartão. Cada campo **obrigatório** do cartão precisa de valor: no pedido, ou já vigente.
+2. Os valores vão pelo `DadoInformadoService`, o mesmo da rota 41: tipo, mínimo, máximo e os limites entre campos (cadastros não passam de visitantes). Valor igual ao vigente não grava linha nova. Tudo ou nada: com qualquer erro, nada é gravado e o cartão continua aberto.
+3. Cada valor gravado entra no histórico como `CRIACAO` (entidade `dado_informado`), com `(Atlas)` no detalhe.
+
+**Erros**
+
+| Status | Quando |
+| --- | --- |
+| 400 | Corpo vazio ou que não é JSON. |
+| 403 | RBS; aba fechada; falta o token CSRF. |
+| 404 | Cartão que não é seu. |
+| 409 | `"Este cartão já foi respondido."` (o cartão não está `PENDENTE`), ou um turno em andamento na conversa. |
+| 422 | `acao` que não é `accept`, `decline` ou `cancel` (`campos.acao`); mais de 20 valores. No `accept`, `campos` pela **chave do campo**: chave fora do cartão (`"Este campo não está no cartão."`), obrigatória sem valor (`"Informe este número."`) e as frases da rota 41 (`"Informe um número inteiro."`, `"O valor mínimo é 0."`, `"Não pode passar de Visitantes no espaço (1.200)."`...). |
+
+## 47. `GET /api/atlas/relatorios/{id}`  · Atlas 2
+
+**Quem chama:** qualquer usuário da parceria do relatório (o relatório é da parceria, não de quem o criou) e a RBS. Relatório de outra parceria ou que não existe: **404** (`"Não encontramos este relatório."`). Aba `APLICACOES` fechada: **403** para a marca, **inclusive no relatório pronto**; a RBS lê sempre.
+
+**200**: o relatório. Se está `PRONTO`, é o **snapshot** gravado na hora em que ficou pronto (congelado: nada muda depois). Se ainda está montando (ou foi descartado), é a resolução ao vivo, com o perfil de quem pede; um parágrafo ainda sem texto mostra a frase-modelo.
+
+```json
+{
+  "id": 7, "parceriaId": 2, "patrocinador": "Cliente Amarelo", "modelo": "ATIVACAO_EVENTO", "titulo": "Ativação no evento", "status": "PRONTO",
+  "criadoPor": { "id": 3, "nome": "Marketing Amarelo", "perfil": "ADMIN_PATROCINADOR" },
+  "criadoEm": "2026-10-30T10:00:00-03:00", "finalizadoEm": "2026-10-30T10:05:00-03:00",
+  "selo": "Documento de trabalho da marca, montado pelo Atlas. Não validado pela RBS.",
+  "secoes": [
+    { "id": "aplicacoes", "titulo": "Aplicações de marca", "blocos": [
+      { "id": "b-kpi-aplic", "tipo": "kpi_grade", "itens": [
+        { "rotulo": "Previstas", "valor": "19", "indisponivel": null, "ref": "cons:aplicacoes.previstas" },
+        { "rotulo": "Comprovação", "valor": "89,4%", "indisponivel": null, "ref": "cons:aplicacoes.percentual" } ] },
+      { "id": "b-tab-aplic", "tipo": "tabela", "colunas": ["Aplicação", "Previsto", "Comprovadas", "Fotos"],
+        "linhas": [["Elemento na Arena", "1", "1", "2"]], "ref": "lista:aplicacoes" } ] } ] }
+```
+
+`status`: `MONTANDO`, `AGUARDANDO_RESPOSTA` (um cartão espera), `PRONTO` ou `DESCARTADO`. `secoes` traz as seis seções do modelo (capa, resumo, aplicações, público e engajamento, comprovações, fontes e cálculos), cada uma com blocos de um **catálogo fechado**; o tipo vai em `tipo`:
+
+| `tipo` | Campos (além de `id`) |
+| --- | --- |
+| `capa` | `titulo`, `subtitulo` (a marca), `edicao` (`"Planeta Atlântida 2027"`) |
+| `titulo` | `texto` |
+| `paragrafo` | `texto`, `redigidoPor`: `"ATLAS"` (o modelo de linguagem escreveu) ou `"MODELO"` (a frase-modelo do arquivo do modelo) |
+| `kpi` | `item` |
+| `kpi_grade` | `itens` |
+| `tabela` | `colunas`, `linhas` (todas as células já formatadas), `ref` |
+| `galeria_comprovacoes` | `itens`: `{arquivoId, nomeOriginal, aplicacao, descricao, registradoEm}` (o `arquivoId` é o que a rota 18 baixa) |
+| `campo_informado` | `rotulo`, `valor`, `origem` |
+| `aviso_indisponivel` | `motivo` |
+| `fontes` | `itens`: `{ref, rotulo, valor, origem}` |
+
+**Os números** saem como texto, no padrão do portal e **cortados** na primeira casa como em todo o portal: `"1.200"`, `"89,3%"` (1.072 de 1.200). Um item de KPI sem valor traz `valor: null` e `indisponivel` com o motivo (`"Não informado pela marca."`, `"Faltam dados para o cálculo: ..."`, `"Não dá para calcular: Visitantes no espaço é zero."`, `"Esta parceria não tem aplicações de marca no plano comercial."`). **Nunca zero no lugar de "sem dado".** Um parágrafo cuja frase tem uma referência sem valor sai como `aviso_indisponivel` (`"Sem os dados para escrever este texto: Visitantes no espaço e Taxa de cadastro."`); uma tabela ou galeria vazia, também.
+
+**Fontes e cálculos.** Cada número usado no relatório aparece em `fontes` com a origem: `cons:...` &rarr; `"Consolidação do portal: plano comercial e fotos de comprovação"`; `dado:...` &rarr; `"Informado por Marketing Amarelo em 30/10/2026"` (mais `", pelo Atlas"` quando o valor veio do cartão); `calc:...` &rarr; a conta com os valores que entraram, `"pct(cadastros, visitantes) com cadastros = 1.072 e visitantes = 1.200"`. As contas do P0 são as fórmulas fixas do modelo (`pct`); ficam gravadas em `atlas_calculo` e no snapshot.
+
+**Erros:** 401; 403 (aba fechada, só para a marca); 404 (relatório que não existe ou é de outra parceria).
+
+## 48. `GET /api/parcerias/{id}/atlas/relatorios`  · Atlas 2
+
+**Quem chama:** qualquer usuário da parceria e a RBS. A marca de outra parceria recebe **404**; com a aba `APLICACOES` fechada, a marca recebe **403** (a RBS lê sempre).
+
+**200**: os relatórios do Atlas da parceria (de todos os usuários dela, em qualquer status), do mais novo para o mais antigo.
+
+```json
+[ { "id": 7, "modelo": "ATIVACAO_EVENTO", "titulo": "Ativação no evento", "status": "PRONTO",
+    "criadoPor": { "id": 3, "nome": "Marketing Amarelo", "perfil": "ADMIN_PATROCINADOR" },
+    "criadoEm": "2026-10-30T10:00:00-03:00", "finalizadoEm": "2026-10-30T10:05:00-03:00" } ]
+```
+
+`finalizadoEm` é `null` enquanto o relatório não está pronto. Sem relatório nenhum: `[]`.
+
+**Erros:** 401; 403 (aba fechada, só para a marca); 404 (parceria que não existe ou é de outra).
+
+## Descarte do relatório parado
+
+Um relatório `MONTANDO` ou `AGUARDANDO_RESPOSTA` sem nenhuma mensagem nova na conversa há **mais de 7 dias** vira `DESCARTADO` quando a pessoa **lista** (rota 43) ou **abre** (rota 45) as conversas. O cartão pendente dele vira `CANCELADA` e a chamada que ele deixou aberta é fechada com `cancel` no histórico (a conversa mostra o `aviso` de cartão fechado). O botão, depois disso, começa um relatório novo. Relatório pronto nunca é descartado. Descartar pela tela fica para depois.
+
+**Histórico (rotas 42 a 46):** `CRIACAO` com a entidade `atlas_relatorio` quando o relatório nasce (`valorNovo` = `MONTANDO`), `EDICAO` quando fica pronto (`valorAnterior` = `MONTANDO`, `valorNovo` = `PRONTO`), e `CRIACAO` na entidade `dado_informado` por valor que o cartão gravou. Aparecem no histórico da parceria (rota 20) como as demais ações da marca.
+
+---
+
 # Regras que valem para todas as rotas
 
 ## Isolamento entre parcerias
@@ -1414,8 +1632,8 @@ Os números das frases saem no padrão brasileiro (`1.200`). Sem valor vigente n
 
 | Quem | Pode |
 | --- | --- |
-| **Admin RBS** | Tudo: criar parcerias, autorizar e revogar e-mails, criar entregas, mudar status, mandar retorno, aprovar perguntas, subir cargas (inclusive o plano comercial), anexar as fotos de comprovação das aplicações, informar os dados da ativação no lugar da marca, gerar e disponibilizar relatórios, ver o histórico geral e o painel. |
-| **Admin Patrocinador** | Ver a própria parceria, as entregas das abas liberadas, enviar materiais, baixar arquivos da parceria, ver o histórico dela, enviar as perguntas da pesquisa, ver a consolidação, o plano de aplicações com as fotos e informar os dados da ativação (aba `APLICACOES` aberta) e o relatório disponibilizado. **Nunca** vê outra parceria nem as rotas da RBS. |
+| **Admin RBS** | Quase tudo: criar parcerias, autorizar e revogar e-mails, criar entregas, mudar status, mandar retorno, aprovar perguntas, subir cargas (inclusive o plano comercial), anexar as fotos de comprovação das aplicações, informar os dados da ativação no lugar da marca, gerar e disponibilizar relatórios, ver o histórico geral e o painel. **Não** conversa com o Atlas (rotas 42 a 46 dão 403), mas lê os relatórios que ele montou (rotas 47 e 48). |
+| **Admin Patrocinador** | Ver a própria parceria, as entregas das abas liberadas, enviar materiais, baixar arquivos da parceria, ver o histórico dela, enviar as perguntas da pesquisa, ver a consolidação, o plano de aplicações com as fotos e informar os dados da ativação (aba `APLICACOES` aberta), conversar com o Atlas e montar o relatório de ativação pelo botão (rotas 42 a 46, só ela; a conversa é de quem a abriu), ver os relatórios do Atlas da parceria (rotas 47 e 48) e o relatório disponibilizado. **Nunca** vê outra parceria nem as rotas da RBS. |
 
 ## O que a API grava no histórico
 
@@ -1438,4 +1656,5 @@ Nenhuma nas rotas de autenticação. Três observações:
 - **[PENDENTE]** Se os dados que a marca informa (rota 41) precisam de aprovação da RBS antes de aparecer. Hoje entram direto, com autor, data e origem à vista.
 - **[PENDENTE]** Limite de tentativas de login por IP e por e-mail. Hoje a falha só fica registrada no histórico.
 - **[PENDENTE]** Em produção (HTTPS): marcar o cookie de sessão como `Secure` e enviar o token CSRF só por conexão segura.
-- **[ATLAS-DEPOIS]** O assistente com IA (Atlas) fica fora desta versão: não há rota para ele aqui.
+- **[ATLAS-DEPOIS]** O modelo de linguagem do Atlas (texto livre no chat, redação dos parágrafos, teto diário de chamadas) fica para a etapa seguinte: hoje a rota 44 com `texto` responde 503 e o relatório sai pelo botão, com as frases-modelo.
+- **[PENDENTE]** Se a RBS precisa aprovar o relatório do Atlas antes de a marca usá-lo (hoje é documento de trabalho da marca, com o selo "Não validado pela RBS") e se a RBS também conversa com o Atlas (hoje só lê).
