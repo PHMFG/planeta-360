@@ -4,6 +4,7 @@ import { useEffect, useEffectEvent, useState } from 'react'
 import { NavLink, useNavigate } from 'react-router'
 import type { ParceriaResumo, UsuarioLogado } from '../api/tipos'
 import { useSessao } from '../sessao/Sessao'
+import { estadoAbaNaParceria } from './AbaFechada'
 import { GESTAO_RBS, SECOES, type Secao } from './secoes'
 
 const NOME_COTA: Record<ParceriaResumo['cota']['codigo'], string> = {
@@ -35,8 +36,8 @@ function classeItem(ativo: boolean) {
 }
 
 function ItemSecao({ secao, parceria }: { secao: Secao; parceria: ParceriaResumo }) {
-  const aba = secao.aba ? parceria.abas.find((item) => item.codigo === secao.aba) : null
-  const bloqueada = aba ? !aba.liberada : false
+  const estado = estadoAbaNaParceria(parceria, secao.aba)
+  const motivo = estado === 'FORA_DA_COTA' ? 'Não incluída na sua cota' : 'Fechada pela RBS por enquanto'
   const destino = `/parceria/${parceria.id}${secao.caminho ? `/${secao.caminho}` : ''}`
 
   return (
@@ -46,13 +47,9 @@ function ItemSecao({ secao, parceria }: { secao: Secao; parceria: ParceriaResumo
           <>
             <i className={`${secao.icone} text-xl ${isActive ? 'text-white' : 'text-secao'}`} aria-hidden="true" />
             <span className="flex-1">{secao.nome}</span>
-            {/* [PERMISSAO] A aba aparece para todos; o cadeado avisa que a cota não a libera. */}
-            {bloqueada && (
-              <i
-                className={`ri-lock-line text-base ${isActive ? 'text-white' : 'text-cinza-400'}`}
-                aria-label="não incluída na sua cota"
-                title="Não incluída na sua cota"
-              />
+            {/* [PERMISSAO] A aba aparece para todos; o cadeado diz se a cota não a inclui ou se a RBS a fechou. */}
+            {estado !== 'LIBERADA' && (
+              <i className={`ri-lock-line text-base ${isActive ? 'text-white' : 'text-cinza-400'}`} aria-label={motivo.toLowerCase()} title={motivo} />
             )}
           </>
         )}
@@ -65,7 +62,7 @@ function ChipConta({ usuario, parceria }: { usuario: UsuarioLogado; parceria: Pa
   const navegar = useNavigate()
   const rbs = usuario.perfil === 'ADMIN_RBS'
   const varias = !rbs && usuario.parcerias.length > 1
-  const nome = parceria?.patrocinador ?? (rbs ? 'Nenhuma parceria' : usuario.nome)
+  const nome = parceria?.patrocinador ?? (rbs ? 'Todas as parcerias' : usuario.nome)
 
   return (
     <div className="mt-5 flex items-center gap-2.5 rounded-xl bg-cinza-100 p-2.5">

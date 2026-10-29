@@ -2,6 +2,7 @@
 import type { ReactNode } from 'react'
 import { Navigate, Route, Routes } from 'react-router'
 import { Aviso } from './componentes/Aviso'
+import { LinkBotao } from './componentes/Botao'
 import { Layout } from './componentes/Layout'
 import { SECOES, type ChaveSecao } from './componentes/secoes'
 import { Ativar } from './paginas/acesso/Ativar'
@@ -39,9 +40,14 @@ function Inicio() {
 function TelaAviso({ titulo, texto }: { titulo: string; texto: string }) {
   return (
     <div className="grid min-h-screen place-items-center p-8">
-      <Aviso tipo="restrito" titulo={titulo} className="max-w-lg">
-        {texto}
-      </Aviso>
+      <div className="flex max-w-lg flex-col items-start gap-4">
+        <Aviso tipo="restrito" titulo={titulo}>
+          {texto}
+        </Aviso>
+        <LinkBotao to="/" variante="secundario">
+          Voltar para a tela inicial
+        </LinkBotao>
+      </div>
     </div>
   )
 }

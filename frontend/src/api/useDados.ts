@@ -8,6 +8,8 @@ export type Dados<T> = {
   pronto: boolean
   carregando: boolean
   erro: string | null
+  /** Status HTTP da falha (ex.: 403 quando a RBS fechou a aba depois que a tela abriu). */
+  erroStatus: number | null
   recarregar: () => void
 }
 
@@ -16,6 +18,7 @@ export function useDados<T>(buscar: () => Promise<T>, dependencias: unknown[]): 
   const [pronto, setPronto] = useState(false)
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState<string | null>(null)
+  const [erroStatus, setErroStatus] = useState<number | null>(null)
   const [versao, setVersao] = useState(0)
 
   // A busca muda só quando as dependências informadas mudam (ex.: o id da parceria).
@@ -24,14 +27,19 @@ export function useDados<T>(buscar: () => Promise<T>, dependencias: unknown[]): 
   useEffect(() => {
     let ativo = true
     setCarregando(true)
-    setErro(null)
     executar()
       .then((resultado) => {
         if (!ativo) return
         setDado(resultado)
         setPronto(true)
+        setErro(null)
+        setErroStatus(null)
       })
-      .catch((falha: unknown) => ativo && setErro(falha instanceof ErroApi ? falha.message : 'Não foi possível carregar.'))
+      .catch((falha: unknown) => {
+        if (!ativo) return
+        setErro(falha instanceof ErroApi ? falha.message : 'Não foi possível carregar.')
+        setErroStatus(falha instanceof ErroApi ? falha.status : null)
+      })
       .finally(() => ativo && setCarregando(false))
     return () => {
       ativo = false
@@ -39,5 +47,13 @@ export function useDados<T>(buscar: () => Promise<T>, dependencias: unknown[]): 
   }, [executar, versao])
 
   const recarregar = useCallback(() => setVersao((atual) => atual + 1), [])
-  return { dado, pronto, carregando, erro, recarregar }
+
+  // Quem volta para a aba do navegador vê o que a outra ponta mudou (a RBS aprovou, a marca reenviou), sem recarregar a página.
+  useEffect(() => {
+    const aoVoltar = () => document.visibilityState === 'visible' && recarregar()
+    document.addEventListener('visibilitychange', aoVoltar)
+    return () => document.removeEventListener('visibilitychange', aoVoltar)
+  }, [recarregar])
+
+  return { dado, pronto, carregando, erro, erroStatus, recarregar }
 }
