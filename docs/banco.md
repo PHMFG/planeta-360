@@ -2,7 +2,7 @@
 
 Este documento explica o banco da Entrega 2. É para quem vai ler, testar ou mexer nele.
 O banco é o PostgreSQL (rodamos na versão 18; a mínima é a 15). As tabelas são criadas pelo Flyway.
-Os números: **36 tabelas, 8 visões, 6 funções e 16 gatilhos de regra**. As funções são as 4 de carga e de relatório (`fn_carregar_veiculacoes`, `fn_carregar_pesquisa`, `fn_carregar_plano`, da V7, e `fn_gerar_relatorio`) mais as 2 que formatam números (`fn_numero_br` e `fn_pct_truncado`, da V4; a `fn_pct_arredondado` da V4 saiu na V6). Não contam aqui as funções `tg_*`, uma por gatilho.
+Os números: **43 tabelas, 8 visões, 6 funções e 17 gatilhos de regra**. As funções são as 4 de carga e de relatório (`fn_carregar_veiculacoes`, `fn_carregar_pesquisa`, `fn_carregar_plano`, da V7, e `fn_gerar_relatorio`) mais as 2 que formatam números (`fn_numero_br` e `fn_pct_truncado`, da V4; a `fn_pct_arredondado` da V4 saiu na V6). Não contam aqui as funções `tg_*`, uma por gatilho.
 
 ## Onde está cada coisa
 
@@ -15,6 +15,7 @@ Os números: **36 tabelas, 8 visões, 6 funções e 16 gatilhos de regra**. As f
 | `backend/src/main/resources/db/migration/V5__relatorio_completo.sql` | O relatório sempre completo: 6 seções e 17 indicadores, o que não tem dado sai indisponível (veja "O que a V5 e a V6 mudaram") | Todos os ambientes |
 | `backend/src/main/resources/db/migration/V6__percentuais_truncados.sql` | Um critério só para os percentuais: cortar na primeira casa (veja "O que a V5 e a V6 mudaram") | Todos os ambientes |
 | `backend/src/main/resources/db/migration/V7__plano_comprovacoes_dados_informados.sql` | A carga do plano comercial por CSV (`stg_plano` e `fn_carregar_plano`), o catálogo de campos e os dados informados pela marca, com a visão do valor vigente e o gatilho que os torna imutáveis (veja "O que a V7 mudou") | Todos os ambientes |
+| `backend/src/main/resources/db/migration/V8__atlas.sql` | As 7 tabelas do Atlas (conversa, mensagem, relatório, cartão de perguntas, cálculo, trilha das ferramentas e decisão do JEV) e o gatilho que congela o relatório pronto (veja "O que a V8 mudou") | Todos os ambientes |
 | `backend/src/main/resources/db/dev/R__amostra.sql` | A amostra: Amarelo, Roxo e Verde, usuários, planos, entregas com arquivos, cargas, relatórios | Só dev e test |
 | `backend/src/main/resources/dev/exemplos/` | Arquivos de exemplo (png, jpg, mp4, mp3, docx, xlsx, pptx, zip) que a API copia para o armazenamento no perfil dev | Só dev |
 | `backend/src/test/resources/db/verificacao.sql` | As conferências (contagens, órfãos, uma tentativa de violar cada regra) | Quando se quiser conferir |
@@ -22,7 +23,7 @@ Os números: **36 tabelas, 8 visões, 6 funções e 16 gatilhos de regra**. As f
 
 Duas regras de convivência:
 
-- Migração já aplicada não se edita. Mudança vira uma migração nova (V8, V9...).
+- Migração já aplicada não se edita. Mudança vira uma migração nova (V9, V10...).
 - A amostra é repetível (`R__`) e tem uma trava: se os dados de exemplo já estão no banco, ela não faz nada. Para recarregar, recrie o banco de dev. Quem criou o banco com uma versão antiga da amostra precisa recriá-lo para ver a nova (veja "Recomeçar do zero" no README).
 - Os horários da amostra não são datas fixas: são contados para trás a partir do dia em que o banco foi criado (veja "A amostra e as datas").
 
@@ -102,6 +103,24 @@ A V7 abre a primeira parte do MVP do Atlas: o plano comercial passa a entrar por
 | Dados informados | `dado_informado`: um valor por linha, com autor, data e origem (`PORTAL` = formulário da aba; `ATLAS` = cartão do chat). Exatamente um entre `valor_numero`, `valor_data` e `arquivo_id` (`ck_dado_informado_um_valor`). O arquivo, quando houver, é da mesma parceria (chave composta). **Corrigir é gravar uma linha nova**: a visão `vw_dado_vigente` devolve a mais recente de cada (parceria, campo) e as anteriores ficam como trilha |
 | Imutabilidade | O gatilho `rn_dado_informado_imutavel` recusa `UPDATE` e `DELETE` de `dado_informado`, como `rn_historico_imutavel`. Apagar um dado informado fica fora desta etapa |
 | Fotos de comprovação | Nada muda na tabela nem nos gatilhos (`rn_comprovacao_*`). Muda como a API grava o arquivo: com a parceria **e a aba Aplicações**, para o download (rota 18) conferir se a aba está aberta. O `ck_arquivo_entrega_completo` só exige parceria e aba quando há entrega, então o arquivo de parceria sem entrega é aceito |
+
+## O que a V8 mudou
+
+A V8 abre a segunda parte do MVP do Atlas: o relatório de ativação que a marca monta pelo botão "Montar relatório" (o caminho sem modelo de linguagem, chamado de plano B) e, depois, pelo chat com o LLM. Só acrescenta: nenhuma tabela, visão ou função que já existia muda, e a amostra fica como está (sem conversa nenhuma do Atlas).
+
+| Assunto | O que a V8 faz |
+| --- | --- |
+| Conversa | `atlas_conversa`: a conversa de uma pessoa da marca numa parceria. `turno_desde` marca o turno em andamento (nulo = livre): a API só aceita uma mensagem por vez em cada conversa e libera uma trava de 5 minutos parada |
+| Mensagens no formato de chat | `atlas_mensagem`: uma linha por mensagem, na ordem em que aconteceu (`ordem`, única na conversa), com `papel` `user`, `assistant` ou `tool`. O pedido de ferramenta do assistente fica em `tool_calls` (JSON no formato de chat completions) e a resposta, numa mensagem `tool` com o mesmo `tool_call_id`. O botão grava a conversa **do mesmo jeito que o LLM vai gravar**, como se o modelo tivesse chamado as ferramentas: assim o modelo continua uma conversa começada pelo botão sem quebrar a regra "toda chamada de ferramenta tem resposta". Os itens que a API mostra (rotas 42 a 46) são derivados desse histórico |
+| Relatório | `atlas_relatorio`: o relatório de trabalho da **parceria** (todos os usuários dela o veem). `status` `MONTANDO`, `AGUARDANDO_RESPOSTA`, `PRONTO` ou `DESCARTADO`. `especificacao` é o modelo-base com o texto de cada bloco redigível; `snapshot` guarda os valores resolvidos e é gravado na mesma operação que muda o status para `PRONTO`. `versao_especificacao` é a trava otimista de quem edita a especificação. Um índice parcial (`uq_atlas_relatorio_ativo`) garante **um relatório em montagem por conversa**: o botão continua o mesmo relatório em vez de abrir outro |
+| Cartão de perguntas | `atlas_solicitacao`: as chaves do catálogo (`campos`) que o Atlas pediu à pessoa, o `tool_call_id` do pedido que abriu o cartão e o estado (`PENDENTE`, `RESPONDIDA`, `RECUSADA`, `CANCELADA`). Um índice parcial (`uq_atlas_solicitacao_pendente`) deixa **um cartão aberto por relatório** |
+| Cálculos | `atlas_calculo`: as fórmulas fixas do modelo (`pct`) com as variáveis e os valores que entraram; `resultado` nulo significa indisponível. Um nome por relatório (`uq_atlas_calculo_nome`) |
+| Trilha e JEV | `atlas_tool_call` guarda cada ferramenta que rodou (argumentos, resultado ou erro, duração). `atlas_decisao` é a tabela do JEV em sombra (P1); entra agora e nada a escreve ainda |
+| Isolamento | Chaves compostas com a parceria: o relatório só se liga a uma conversa da própria parceria (`fk_atlas_relatorio_conversa`) e o cartão só a um relatório da própria parceria (`fk_atlas_solicitacao_relatorio`) |
+| Relatório pronto não muda | O gatilho `rn_atlas_relatorio_congelado` (função `tg_atlas_relatorio_congelado`) recusa `UPDATE` de `especificacao`, `snapshot` e `status` quando o relatório está `PRONTO` ou `DESCARTADO` (os dois são finais) e o `DELETE` de um relatório `PRONTO`. O que está montando muda à vontade e sai por `PRONTO` (com o snapshot, na mesma operação) ou `DESCARTADO` |
+| Histórico | Não muda: `CRIACAO` e `EDICAO` já existem e `historico.entidade` não tem `CHECK`, então o relatório do Atlas grava essas ações com a entidade `atlas_relatorio` |
+
+O que a V8 acrescentou além do desenho do plano: os nomes explícitos das chaves compostas e dos limites (para a conferência e a API se referirem a eles), os dois índices parciais acima e os índices de apoio das consultas por parceria, conversa e relatório.
 
 ## Tabelas por área
 
@@ -192,6 +211,18 @@ Na pesquisa geral o resultado não tem parceria nem pergunta. Na pesquisa da ati
 | `campo_catalogo` | O catálogo fixo do que a marca pode informar. `limite_campo` é o campo cujo valor vigente este não pode passar | chave, aba_id, ordem, rotulo, tipo (`INTEIRO`, `DECIMAL`, `DATA`, `ARQUIVO`), unidade, minimo, maximo, ajuda, limite_campo |
 | `dado_informado` | Cada valor informado, com autor, data e origem. **Só aceita INSERT**; corrigir é gravar de novo | id, parceria_id, campo_chave, valor_numero, valor_data, arquivo_id, origem (`PORTAL` ou `ATLAS`), informado_por, informado_em |
 
+### 9. Atlas (V8)
+
+| Tabela | Para que serve | Colunas |
+| --- | --- | --- |
+| `atlas_conversa` | A conversa de uma pessoa da marca numa parceria. `turno_desde` marca o turno em andamento | id, parceria_id, usuario_id, criada_em, turno_desde |
+| `atlas_mensagem` | O histórico no formato de chat completions (`user`, `assistant`, `tool`) | id, conversa_id, ordem, papel, conteudo, tool_calls (JSON), tool_call_id, reasoning_content, criada_em |
+| `atlas_relatorio` | O relatório de trabalho da parceria. Pronto ou descartado não muda mais | id, parceria_id, conversa_id, modelo, status (`MONTANDO`, `AGUARDANDO_RESPOSTA`, `PRONTO`, `DESCARTADO`), especificacao (JSON), versao_especificacao, snapshot (JSON), criado_por, criado_em, finalizado_em |
+| `atlas_solicitacao` | O cartão de perguntas: as chaves do catálogo pedidas e o que a pessoa fez com ele | id, relatorio_id, parceria_id, tool_call_id, mensagem, campos (JSON), status (`PENDENTE`, `RESPONDIDA`, `RECUSADA`, `CANCELADA`), criada_em, respondida_em |
+| `atlas_calculo` | As fórmulas fixas do modelo, com as variáveis e os valores que entraram | id, relatorio_id, nome, script, variaveis (JSON), resultado, unidade, criado_em |
+| `atlas_tool_call` | Cada ferramenta que rodou, para auditoria | id, mensagem_id, ferramenta, argumentos (JSON), resultado (JSON), erro, duracao_ms |
+| `atlas_decisao` | O que o JEV decidiria, em sombra (P1). Ninguém a escreve ainda | id, mensagem_id, pergunta, escolha, confianca, probabilidades, modelo, decisao_llm, latencia_ms, erro |
+
 As **8 visões** somam os números sem misturar unidades: `vw_midia_veiculo`, `vw_midia_unidade`, `vw_entregas_resumo`,
 `vw_aplicacoes`, `vw_cortesias`, `vw_indicadores_parceria` (todos os números do relatório) e `vw_faltantes` (o que impede ou enfraquece o relatório), mais a `vw_dado_vigente`, que devolve o valor mais recente de cada campo informado de cada parceria.
 
@@ -257,6 +288,7 @@ Os itens 1, 2 e 4 não são "recusas": a conferência mostra o comportamento esp
 | Fonte da pesquisa | `rn_pesquisa_fonte_geral` | O arquivo-fonte da pesquisa é geral da RBS, nunca de uma marca |
 | Pesquisa e edição | `rn_pergunta_*`, `rn_resultado_*` | Pergunta, pesquisa e resultado são da mesma edição |
 | Relatório não se apaga | `rn_relatorio_nao_apaga` | Só o rascunho pode ser apagado |
+| Relatório do Atlas pronto não muda | `rn_atlas_relatorio_congelado` | Relatório pronto ou descartado não muda a especificação, o snapshot nem o status, e o pronto não se apaga. O que está montando sai por `PRONTO` (com o snapshot) ou `DESCARTADO` |
 
 ## Diagrama das tabelas
 
@@ -312,6 +344,16 @@ erDiagram
     parceria ||--o{ dado_informado : "informa"
     usuario ||--o{ dado_informado : "autor"
     arquivo |o--o{ dado_informado : "anexo"
+    parceria ||--o{ atlas_conversa : "conversa"
+    usuario ||--o{ atlas_conversa : "dona"
+    atlas_conversa ||--o{ atlas_mensagem : "historico"
+    atlas_conversa ||--o{ atlas_relatorio : "monta"
+    parceria ||--o{ atlas_relatorio : "dona_de"
+    usuario ||--o{ atlas_relatorio : "criou"
+    atlas_relatorio ||--o{ atlas_solicitacao : "pede"
+    atlas_relatorio ||--o{ atlas_calculo : "calcula"
+    atlas_mensagem ||--o{ atlas_tool_call : "chama"
+    atlas_mensagem ||--o{ atlas_decisao : "decide"
 ```
 
 ## Formatos dos CSV
@@ -385,6 +427,7 @@ for f in backend/src/main/resources/db/migration/V1__estrutura.sql \
          backend/src/main/resources/db/migration/V5__relatorio_completo.sql \
          backend/src/main/resources/db/migration/V6__percentuais_truncados.sql \
          backend/src/main/resources/db/migration/V7__plano_comprovacoes_dados_informados.sql \
+         backend/src/main/resources/db/migration/V8__atlas.sql \
          backend/src/main/resources/db/dev/R__amostra.sql; do
   psql -X -h localhost -U portal -d portal_verificacao -v ON_ERROR_STOP=1 -1 -f "$f"
 done
@@ -392,7 +435,7 @@ psql -X -P pager=off -h localhost -U portal -d portal_verificacao -v ON_ERROR_ST
 psql -X -h localhost -U portal -d postgres -c "DROP DATABASE portal_verificacao"
 ```
 
-O `verificacao.sql` imprime uma tabela com cada conferência e termina com erro se alguma falhar. Hoje são **208 conferências, todas ok**. As 164 de antes seguem iguais (as contagens de estrutura passaram a 36 tabelas, 8 visões, 4 funções de carga e relatório e 16 gatilhos). As 44 novas são da V7: o catálogo, a carga do plano (15 linhas numa parceria criada só para a conferência, com cada motivo de rejeição, o reenvio e o `btrim`), o `CHECK` de um valor só, a chave composta do anexo, a imutabilidade, o valor vigente depois de uma correção e 5 verificações de órfãos.
+O `verificacao.sql` imprime uma tabela com cada conferência e termina com erro se alguma falhar. Hoje são **240 conferências, todas ok**. As 164 de antes seguem iguais (as contagens de estrutura passaram a 43 tabelas, 8 visões, 4 funções de carga e relatório e 17 gatilhos). As 44 seguintes são da V7: o catálogo, a carga do plano (15 linhas numa parceria criada só para a conferência, com cada motivo de rejeição, o reenvio e o `btrim`), o `CHECK` de um valor só, a chave composta do anexo, a imutabilidade, o valor vigente depois de uma correção e 5 verificações de órfãos. As 32 da V8: as 7 tabelas do Atlas, as chaves compostas por parceria, a conversa no formato de chat (papel, ordem, um relatório em montagem e um cartão aberto por vez, nome de cálculo único), o relatório que congela (cada coluna protegida, o descartado, o apagar, e o que ainda pode mudar) e 6 verificações de órfãos.
 Nada fica gravado: as tentativas de violar regras são desfeitas.
 Rodar o `R__amostra.sql` uma segunda vez não muda nada: a trava avisa "Amostra já carregada".
 
@@ -407,7 +450,7 @@ Os números que a conferência exige:
 | Carga do plano (parceria criada na própria conferência) | 15 lidas, 3 inseridas, 2 duplicadas, 10 rejeitadas, uma por motivo. O reenvio do mesmo arquivo: 15 lidas, 0 inseridas, 5 duplicadas, 10 rejeitadas |
 | Relatórios | 3, um por parceria de 2027, em rascunho |
 | Números dos relatórios | 83 no total, 14 indisponíveis |
-| Órfãos | 0 em todas as 23 verificações (18 de antes e 5 das tabelas da V7) |
+| Órfãos | 0 em todas as 29 verificações (18 de antes, 5 das tabelas da V7 e 6 das da V8) |
 
 Sobre os relatórios: na Sprint 1 eram 72 números e 6 indisponíveis. Agora são 83: a pesquisa do Amarelo ganhou 3 faixas de nota (75) e a V5 passou a registrar os indicadores sem dado (mais 8), porque todo relatório traz os 17 indicadores do catálogo (3 relatórios, 51 indicadores).
 Os 14 indisponíveis são: "O festival em números" e a pesquisa geral das 3 marcas (6; esses números existem só para 2026, os de 2027 ainda não foram carregados); a pesquisa da ativação do Roxo e da Verde, que ficam fora da cota (4); e as aplicações de marca do Roxo, que não tem aplicação no plano comercial (4).
