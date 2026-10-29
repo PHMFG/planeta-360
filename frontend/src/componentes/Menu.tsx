@@ -35,9 +35,17 @@ function classeItem(ativo: boolean) {
     : `${ITEM} font-semibold text-tinta hover:bg-cinza-100`
 }
 
-function ItemSecao({ secao, parceria }: { secao: Secao; parceria: ParceriaResumo }) {
+function ItemSecao({ secao, parceria, rbs }: { secao: Secao; parceria: ParceriaResumo; rbs: boolean }) {
   const estado = estadoAbaNaParceria(parceria, secao.aba)
-  const motivo = estado === 'FORA_DA_COTA' ? 'Não incluída na sua cota' : 'Fechada pela RBS por enquanto'
+  // A RBS olha a parceria de fora: "sua cota" é texto para a marca.
+  const motivo =
+    estado === 'FORA_DA_COTA'
+      ? rbs
+        ? 'Não incluída na cota desta parceria'
+        : 'Não incluída na sua cota'
+      : rbs
+        ? 'Fechada para esta parceria'
+        : 'Fechada pela RBS por enquanto'
   const destino = `/parceria/${parceria.id}${secao.caminho ? `/${secao.caminho}` : ''}`
 
   return (
@@ -49,7 +57,7 @@ function ItemSecao({ secao, parceria }: { secao: Secao; parceria: ParceriaResumo
             <span className="flex-1">{secao.nome}</span>
             {/* [PERMISSAO] A aba aparece para todos; o cadeado diz se a cota não a inclui ou se a RBS a fechou. */}
             {estado !== 'LIBERADA' && (
-              <i className={`ri-lock-line text-base ${isActive ? 'text-white' : 'text-cinza-400'}`} aria-label={motivo.toLowerCase()} title={motivo} />
+              <i className={`ri-lock-line text-base ${isActive ? 'text-white' : 'text-cinza-400'}`} aria-label={motivo} title={motivo} />
             )}
           </>
         )}
@@ -201,7 +209,7 @@ export function Menu({ parceria, aberto, aoFechar }: PropsMenu) {
           {parceria && (
             <ul className="flex flex-col gap-1">
               {SECOES.map((secao) => (
-                <ItemSecao key={secao.chave} secao={secao} parceria={parceria} />
+                <ItemSecao key={secao.chave} secao={secao} parceria={parceria} rbs={rbs} />
               ))}
             </ul>
           )}

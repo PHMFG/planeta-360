@@ -87,8 +87,8 @@ export function Cargas() {
       cargas.recarregar()
     } catch (erro) {
       if (erro instanceof ErroApi) {
-        const colunas = erro.campos.arquivo ? ` ${erro.campos.arquivo}` : ''
-        setFalha(`${erro.message}${colunas}`)
+        // Erro do arquivo inteiro (vazio, fora de UTF-8): a frase do campo "arquivo" já diz tudo, sem o "Confira os campos".
+        setFalha(erro.campos.arquivo ?? erro.message)
       } else setFalha('Não foi possível enviar a planilha.')
     } finally {
       setEnviando(false)

@@ -111,17 +111,18 @@ function Formulario({ aoFechar, aoCriar, eventos }: Omit<Props, 'aberto'>) {
             Autorize os e-mails da marca e da agência no Perfil da parceria; o código de cada um aparece lá.
           </Aviso>
         )}
-        <Tabela
-          colunas={[
-            { titulo: 'E-mail', celula: (linha) => linha.email },
-            { titulo: 'Vínculo', celula: (linha) => (linha.vinculo === 'MARCA' ? 'Marca' : 'Agência') },
-            { titulo: 'Código', celula: (linha) => <CodigoAtivacao codigo={linha.codigoAtivacao} /> },
-            { titulo: 'Vale até', celula: (linha) => dataHora(linha.codigoExpiraEm) },
-          ]}
-          linhas={criada.emailsAutorizados}
-          chave={(linha) => linha.id}
-          vazio="Nenhum e-mail autorizado ainda. Dá para autorizar depois, no Perfil da parceria."
-        />
+        {criada.emailsAutorizados.length > 0 && (
+          <Tabela
+            colunas={[
+              { titulo: 'E-mail', celula: (linha) => linha.email },
+              { titulo: 'Vínculo', celula: (linha) => (linha.vinculo === 'MARCA' ? 'Marca' : 'Agência') },
+              { titulo: 'Código', celula: (linha) => <CodigoAtivacao codigo={linha.codigoAtivacao} /> },
+              { titulo: 'Vale até', celula: (linha) => dataHora(linha.codigoExpiraEm) },
+            ]}
+            linhas={criada.emailsAutorizados}
+            chave={(linha) => linha.id}
+          />
+        )}
         <Aviso titulo="Próximo passo: abrir as entregas">
           A parceria nasce sem entregas, e a marca só consegue enviar material para uma entrega aberta pela RBS. Abra as entregas da
           cota em cada aba da parceria, pelo botão “Nova entrega”.

@@ -112,7 +112,7 @@ function AbasLiberadas({ detalhe, rbs, aoSalvar }: { detalhe: ParceriaDetalhe; r
     try {
       aoSalvar(await alterarParceria(detalhe.id, { abas: [{ codigo, liberada }] }))
       const nome = SECOES.find((item) => item.aba === codigo)?.nome ?? codigo
-      setFeito(liberada ? `${nome} liberada para a marca.` : `${nome} fechada para a marca. As entregas dela ficam guardadas.`)
+      setFeito(liberada ? `A aba ${nome} foi liberada para a marca.` : `A aba ${nome} foi fechada para a marca. As entregas e os arquivos ficam guardados.`)
     } catch (erro) {
       setFalha(erro instanceof ErroApi ? erro.message : 'Não foi possível mudar a aba.')
     } finally {
@@ -242,10 +242,10 @@ function AcessosRbs({ parceriaId }: { parceriaId: number }) {
               { titulo: 'Situação', celula: (item) => SITUACOES_EMAIL[item.situacao] },
               { titulo: 'Autorizado em', celula: (item) => dataHora(item.autorizadoEm) },
               {
-                titulo: '',
+                titulo: 'Ações',
                 celula: (item) =>
                   item.situacao === 'REVOGADO' ? (
-                    <span className="text-xs text-texto-2">{dataHora(item.revogadoEm)}</span>
+                    <span className="text-xs text-texto-2">Revogado em {dataHora(item.revogadoEm)}</span>
                   ) : (
                     <div className="flex justify-end gap-3 text-xs font-bold">
                       {item.situacao === 'PENDENTE' && (

@@ -66,11 +66,12 @@ export function Painel() {
                 valor={dado.parcerias.ativas}
                 legenda={`${dado.parcerias.total} cadastradas na edição ${dado.evento.edicao}${dado.parcerias.semUsuario ? ` · ${dado.parcerias.semUsuario} sem usuário` : ''}`}
               />
-              <Indicador rotulo="Esperando análise" valor={dado.entregas.esperandoAnalise} legenda={`${dado.entregas.atrasadas} entregas com prazo vencido`} />
+              <Indicador rotulo="Esperando análise" valor={dado.entregas.esperandoAnalise} legenda={`${dado.entregas.atrasadas} ${dado.entregas.atrasadas === 1 ? 'entrega' : 'entregas'} com prazo vencido`} />
+              {/* O número grande é o que as marcas veem; a legenda é a situação da versão mais nova e fecha com o total. */}
               <Indicador
-                rotulo="Relatórios disponibilizados"
+                rotulo="Relatórios com a marca"
                 valor={dado.relatorios.marcaVe ?? dado.relatorios.disponibilizado}
-                legenda={`${dado.relatorios.rascunho} em rascunho · ${dado.relatorios.validado} validados · ${dado.relatorios.semRelatorio} sem relatório`}
+                legenda={`Versão mais nova: ${dado.relatorios.disponibilizado} disponibilizada · ${dado.relatorios.validado} validada · ${dado.relatorios.rascunho} em rascunho · ${dado.relatorios.semRelatorio} sem relatório`}
               />
             </Grade3>
 

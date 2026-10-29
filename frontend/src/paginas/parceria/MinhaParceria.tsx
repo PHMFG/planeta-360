@@ -116,15 +116,29 @@ export function MinhaParceria() {
                   </div>
                 ) : lista.length === 0 && !fechadas.length ? (
                   <p className="text-sm">A RBS ainda está preparando as entregas da sua parceria. Elas aparecem aqui assim que forem abertas.</p>
+                ) : fechadas.length ? (
+                  <p className="text-sm">Nada pendente nas abas abertas agora.</p>
                 ) : (
                   <p className="text-sm">Tudo em dia: nenhuma entrega esperando a sua empresa.</p>
                 )}
               </Cartao>
 
-              {pendentes.length > 1 && (
+              {/* Tudo o que a marca tem a fazer, além da próxima ação: as outras entregas e a pesquisa devolvida. */}
+              {aFazer > 1 && (
                 <Cartao titulo="Pendências por módulo">
                   <Grade2>
-                    {pendentes.slice(1, 7).map((entrega) => (
+                    {!pesquisaPrimeiro && ajustesPesquisa.length > 0 && (
+                      <div data-secao="pesquisa">
+                        <LinhaArquivo
+                          titulo={`Pesquisa · ${ajustesPesquisa.length === 1 ? `pergunta ${ajustesPesquisa[0].ordem}` : `${ajustesPesquisa.length} perguntas`}`}
+                          icone={SECOES.find((secao) => secao.aba === 'PESQUISA')?.icone ?? 'ri-survey-line'}
+                          meta={`RBS: ${ajustesPesquisa[0].observacaoRbs ?? 'pediu ajuste'}`}
+                          rodape={<span className="text-xs font-bold text-[#c8203f]">Ajuste pedido pela RBS</span>}
+                          onClick={() => navegar(`${base}/pesquisa`)}
+                        />
+                      </div>
+                    )}
+                    {pendentes.slice(pesquisaPrimeiro ? 0 : 1, 7).map((entrega) => (
                       <div key={entrega.id} data-secao={secaoDa(entrega).chave}>
                         <LinhaArquivo
                           titulo={`${secaoDa(entrega).nome} · ${entrega.titulo}`}

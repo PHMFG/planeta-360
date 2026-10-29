@@ -49,7 +49,7 @@ export const SECOES: Secao[] = [
     caminho: 'aplicacoes',
     icone: 'ri-palette-line',
     aba: 'APLICACOES',
-    subtitulo: 'Logo, manual de identidade visual e evidências pós-evento. Funcionalidade desejável.',
+    subtitulo: 'Logo, manual de identidade visual e evidências pós-evento.',
     desejavel: true,
   },
   {
@@ -67,7 +67,7 @@ export const SECOES: Secao[] = [
     caminho: 'cortesias',
     icone: 'ri-ticket-2-line',
     aba: 'CORTESIAS',
-    subtitulo: 'Regras e destinação das cortesias da sua cota. Funcionalidade desejável.',
+    subtitulo: 'Regras e destinação das cortesias da sua cota.',
     desejavel: true,
   },
   {
@@ -76,7 +76,7 @@ export const SECOES: Secao[] = [
     caminho: 'credenciamento',
     icone: 'ri-profile-line',
     aba: 'CREDENCIAMENTO',
-    subtitulo: 'Credenciais da equipe da marca no festival. Funcionalidade desejável.',
+    subtitulo: 'Credenciais da equipe da marca no festival.',
     desejavel: true,
   },
   {
@@ -94,7 +94,7 @@ export const SECOES: Secao[] = [
     caminho: 'contrato',
     icone: 'ri-file-shield-2-line',
     aba: 'CONTRATO',
-    subtitulo: 'Contrato assinado e signatários da parceria. Funcionalidade desejável.',
+    subtitulo: 'Contrato assinado e signatários da parceria.',
     desejavel: true,
   },
 ]

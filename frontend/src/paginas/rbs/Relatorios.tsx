@@ -84,10 +84,15 @@ export function Relatorios() {
       />
 
       <div className="grid gap-4 md:grid-cols-4">
+        {/* Contagem pela versão mais nova (a mesma do filtro); a legenda lembra quantas marcas já veem uma versão anterior. */}
         <Indicador rotulo="Sem relatório" valor={contar('SEM_RELATORIO')} />
-        <Indicador rotulo="Rascunho" valor={contar('RASCUNHO')} legenda="A marca ainda não vê a versão mais nova" />
-        <Indicador rotulo="Validado" valor={contar('VALIDADO')} legenda="Números conferidos" />
-        <Indicador rotulo="Disponibilizado" valor={contar('DISPONIBILIZADO')} legenda="Liberado para a marca" />
+        <Indicador rotulo="Rascunho" valor={contar('RASCUNHO')} legenda="Versão mais nova ainda não vista pela marca" />
+        <Indicador rotulo="Validado" valor={contar('VALIDADO')} legenda="Números conferidos, falta disponibilizar" />
+        <Indicador
+          rotulo="Disponibilizado"
+          valor={contar('DISPONIBILIZADO')}
+          legenda={`Versão mais nova com a marca · ${todas.filter((linha) => linha.disponibilizada).length} marcas veem algum relatório`}
+        />
       </div>
 
       <Cartao>

@@ -138,7 +138,8 @@ function Perguntas({ dados, rbs, aoEnviar, aoDecidir }: PropsPerguntas) {
                 {status && (
                   <span className="text-xs font-bold" style={{ color: status.cor }}>
                     {status.nome}
-                    {pergunta?.enviadaEm && ` · ${dataHora(pergunta.enviadaEm)}`}
+                    {/* A API guarda só a data do envio: ela vale para "Enviada"; a data da decisão da RBS fica no Histórico. */}
+                    {pergunta?.status === 'ENVIADA' && pergunta.enviadaEm && ` · ${dataHora(pergunta.enviadaEm)}`}
                   </span>
                 )}
               </div>
