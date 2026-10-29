@@ -20,7 +20,8 @@ Os números: **33 tabelas, 7 visões, 6 funções e 15 gatilhos de regra**. As f
 Duas regras de convivência:
 
 - Migração já aplicada não se edita. Mudança vira uma migração nova (V4, V5...).
-- A amostra é repetível (`R__`) e tem uma trava: se os dados de exemplo já estão no banco, ela não faz nada. Para recarregar, recrie o banco de dev.
+- A amostra é repetível (`R__`) e tem uma trava: se os dados de exemplo já estão no banco, ela não faz nada. Para recarregar, recrie o banco de dev. Quem criou o banco com uma versão antiga da amostra precisa recriá-lo para ver a nova (veja "Recomeçar do zero" no README).
+- Os horários da amostra não são datas fixas: são contados para trás a partir do dia em que o banco foi criado (veja "A amostra e as datas").
 
 ## Sprint 1 x Entrega 2
 
@@ -318,7 +319,7 @@ psql -X -P pager=off -h localhost -U portal -d portal_verificacao -v ON_ERROR_ST
 psql -X -h localhost -U portal -d postgres -c "DROP DATABASE portal_verificacao"
 ```
 
-O `verificacao.sql` imprime uma tabela com cada conferência e termina com erro se alguma falhar. Hoje são **159 conferências, todas ok**.
+O `verificacao.sql` imprime uma tabela com cada conferência e termina com erro se alguma falhar. Hoje são **163 conferências, todas ok** (as 4 últimas a entrar olham a amostra: nenhum horário no futuro, nenhuma entrega Enviado, Em análise ou Aprovado sem arquivo, nenhum pedido de ajuste sem recado da RBS e o ajuste aberto com o envio da marca e o pedido da RBS no histórico).
 Nada fica gravado: as tentativas de violar regras são desfeitas.
 Rodar o `R__amostra.sql` uma segunda vez não muda nada: a trava avisa "Amostra já carregada".
 
@@ -336,6 +337,22 @@ Os números que a conferência exige:
 
 Sobre os relatórios: na Sprint 1 eram 72 números e 6 indisponíveis. Agora são 75 porque a pesquisa do Amarelo ganhou 3 faixas de nota; sem elas, 72.
 Os 6 indisponíveis são "O festival em números" e a pesquisa geral das 3 marcas. Esses números existem só para 2026; os de 2027 ainda não foram carregados.
+
+**A amostra e as datas.** Nenhum horário da amostra é uma data fixa. O script conta tudo para trás a partir da meia-noite (Brasília) do dia em que o banco é criado, com a função temporária `pg_temp.quando(dias, hora)`, e usa sempre 1 dia ou mais: assim nada fica no futuro e a ordem dos acontecimentos se mantém. A história, do mais antigo para o mais novo:
+
+| Quando (dias atrás) | O que aconteceu |
+| --- | --- |
+| 240 a 147 | Usuários, patrocinadores, parcerias, plano comercial e e-mails autorizados |
+| 130 a 35 | As entregas da pré-produção: cada arquivo que a marca enviou, com autor, data e (às vezes) uma observação, e a decisão da RBS. O ciclo do logo do Amarelo (envio, análise, ajuste pedido com recado, nova versão, aprovado) acontece entre 94 e 91 |
+| 60 a 40 | As exibições de mídia da planilha de veiculação |
+| 46 a 24 | Perguntas da pesquisa, fotos de comprovação e o contrato assinado do Amarelo |
+| 12 e 11 | As duas cargas de veiculação (a segunda é o reenvio) e a carga de pesquisa |
+| 10 | Os três relatórios, versão 1, em rascunho |
+| 6 a 2 | Três entregas em aberto: o VT do Roxo em **Ajuste solicitado** (com o envio da marca e o recado da RBS no histórico), a peça de 30" do Amarelo **Em análise** e a destinação das cortesias da Verde **Enviada** |
+
+Toda entrega Enviado, Em análise ou Aprovado tem o arquivo que a marca mandou; as duas que esperam a RBS (peça de 30" do Amarelo e cortesias da Verde) aparecem na fila de materiais. O histórico conta a mesma história que as versões: o envio, o status que muda sozinho com ele e a decisão da RBS.
+
+**Os arquivos da amostra** existem só como linhas da tabela `arquivo`. No perfil `dev`, ao subir, a API cria no armazenamento (`backend/armazenamento/`) um arquivo pequeno e válido para cada um que falta (PDF e CSV montados na hora com o nome do arquivo; os outros vêm de `backend/src/main/resources/dev/exemplos/`) e acerta o tamanho e o hash da linha. Assim o botão "Baixar" funciona na demonstração. Nunca mexe em arquivo enviado de verdade (nome gerado com UUID) nem sobrescreve um arquivo que já exista.
 
 **Usuários da amostra** (senha `senha123` para todos): `b2b@rbs.example` e `pesquisa@rbs.example` (Admin RBS);
 `marketing@amarelo.example`, `atendimento@agencia-x.example`, `marketing@roxo.example` e `marketing@verde.example` (Admin Patrocinador).

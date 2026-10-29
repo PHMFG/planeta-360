@@ -135,7 +135,7 @@ class PesquisaControllerTest {
         assertThat(lerJson(resposta, "$.abaLiberada")).isEqualTo(true);
         assertThat(lerJson(resposta, "$.limitePerguntas")).isEqualTo(3);
         assertThat(lerJson(resposta, "$.pesquisa.escopo")).isEqualTo("ATIVACAO");
-        assertThat(lerJson(resposta, "$.pesquisa.nome")).isEqualTo("Pesquisa nos espaços de ativação 2027 (simulada)");
+        assertThat(lerJson(resposta, "$.pesquisa.nome")).isEqualTo("Pesquisa nos espaços de ativação 2027");
         assertThat(lerJson(resposta, "$.pesquisa.baseRespondentes")).isEqualTo(412);
         assertThat(lerJson(resposta, "$.pesquisa.nivelConfianca")).isNull();
         assertThat(lerLista(resposta, "$.perguntas[*].ordem")).containsExactly(1, 2, 3);
@@ -513,8 +513,8 @@ class PesquisaControllerTest {
         assertThat(resposta).hasStatus(HttpStatus.OK);
         assertThat(lerJson(resposta, "$.status")).isEqualTo("APROVADA");
         assertThat(lerJson(resposta, "$.observacaoRbs")).isEqualTo("Ótima pergunta.");
-        assertThat(jdbc.sql("SELECT detalhe FROM historico WHERE acao = 'ALTERACAO_STATUS' AND entidade_id = :id")
-                .param("id", pergunta).query(String.class).single()).isEqualTo("Ótima pergunta.");
+        assertThat(jdbc.sql("SELECT detalhe FROM historico WHERE acao = 'ALTERACAO_STATUS' AND entidade = 'pesquisa_pergunta' "
+                + "AND entidade_id = :id").param("id", pergunta).query(String.class).single()).isEqualTo("Ótima pergunta.");
     }
 
     // ---------------------------------------------------------------------
