@@ -33,10 +33,25 @@ class HistoricoTest extends ApoioDeMateriais {
         return "/api/parcerias/" + parceriaId + "/historico";
     }
 
-    /** Quantas linhas da parceria o patrocinador pode ver: tudo, menos login, falha de login e logout. */
+    /**
+     * Quantas linhas da parceria o patrocinador pode ver: tudo, menos login, falha de login, logout e as etapas internas do
+     * relatório (geração e validação).
+     */
     long linhasVisiveisDaParceria(long parceriaId) {
-        return contar("SELECT count(*) FROM historico WHERE parceria_id = ? AND acao NOT IN ('LOGIN', 'LOGIN_FALHOU', 'LOGOUT')",
-                parceriaId);
+        return contar("""
+                SELECT count(*) FROM historico WHERE parceria_id = ?
+                AND acao NOT IN ('LOGIN', 'LOGIN_FALHOU', 'LOGOUT', 'GERACAO_RELATORIO', 'VALIDACAO')""", parceriaId);
+    }
+
+    /**
+     * O dia (AAAA-MM-DD, em Brasília) em que a amostra grava a NOVA_VERSAO do logo do Amarelo. A amostra conta as datas para
+     * trás a partir do dia em que o banco é criado, então os testes de período partem deste dia em vez de uma data fixa.
+     */
+    String diaDaNovaVersaoDoLogo() {
+        return jdbc.sql("""
+                        SELECT to_char(ocorrido_em AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM-DD') FROM historico
+                        WHERE acao = 'NOVA_VERSAO' AND parceria_id = :p
+                        """).param("p", amarelo()).query(String.class).single();
     }
 
     // ---------------------------------------------------------------------
@@ -175,6 +190,47 @@ class HistoricoTest extends ApoioDeMateriais {
                 .containsExactlyInAnyOrder("CRIACAO", "ENVIO_ARQUIVO", "ALTERACAO_STATUS");
         assertThat(lerLista(resposta, "$.itens[?(@.acao == 'ENVIO_ARQUIVO' && @.entidadeId == " + entrega + ")].detalhe"))
                 .containsExactly("Segue o VT.");
+    }
+
+    @Test
+    void patrocinadorNaoVeGeracaoNemValidacaoDoRelatorioMasVeADisponibilizacaoERbsVeTudo() {
+        SessaoDeApi rbs = entrar(RBS);
+        // A amostra já tem a GERACAO_RELATORIO da v1 do Amarelo. A RBS valida e disponibiliza a v1 e gera a v2.
+        long v1 = contar("SELECT id FROM relatorio WHERE parceria_id = ? AND versao = 1", amarelo());
+        assertThat(rbs.patch("/api/relatorios/" + v1 + "/status", "{\"status\":\"VALIDADO\"}")).hasStatus(HttpStatus.OK);
+        assertThat(rbs.patch("/api/relatorios/" + v1 + "/status", "{\"status\":\"DISPONIBILIZADO\"}")).hasStatus(HttpStatus.OK);
+        assertThat(rbs.post("/api/parcerias/" + amarelo() + "/relatorios", null)).hasStatus(HttpStatus.CREATED);
+
+        MvcTestResult daMarca = entrar(AMARELO).get(historicoDe(amarelo()) + "?tamanho=200");
+        MvcTestResult daRbs = rbs.get(historicoDe(amarelo()) + "?tamanho=200");
+
+        assertThat(daMarca).hasStatus(HttpStatus.OK);
+        List<String> acoesDaMarca = lerLista(daMarca, "$.itens[*].acao");
+        assertThat(acoesDaMarca).doesNotContain("GERACAO_RELATORIO", "VALIDACAO").contains("DISPONIBILIZACAO");
+        assertThat(lerJson(daMarca, "$.total")).as("o total também não conta as etapas internas").isEqualTo(acoesDaMarca.size())
+                .isEqualTo((int) linhasVisiveisDaParceria(amarelo()));
+        assertThat(lerLista(daMarca, "$.itens[?(@.acao == 'DISPONIBILIZACAO')].valorNovo")).containsExactly("DISPONIBILIZADO");
+        assertThat(corpo(daMarca)).doesNotContain("RASCUNHO");
+        // A RBS continua vendo tudo.
+        assertThat(lerLista(daRbs, "$.itens[*].acao")).contains("GERACAO_RELATORIO", "VALIDACAO", "DISPONIBILIZACAO");
+        assertThat(lerLista(daRbs, "$.itens[?(@.acao == 'GERACAO_RELATORIO')].valorNovo")).contains("versão 1 (RASCUNHO)", "versão 2 (RASCUNHO)");
+        assertThat((long) (Integer) lerJson(daRbs, "$.total")).isGreaterThan(acoesDaMarca.size());
+    }
+
+    @Test
+    void filtrarPorGeracaoOuValidacaoNaoTrazNadaParaAMarcaEBuscaPorAcaoSeguePaginada() {
+        SessaoDeApi rbs = entrar(RBS);
+        long v1 = contar("SELECT id FROM relatorio WHERE parceria_id = ? AND versao = 1", amarelo());
+        rbs.patch("/api/relatorios/" + v1 + "/status", "{\"status\":\"VALIDADO\"}");
+
+        MvcTestResult geracao = entrar(AMARELO).get(historicoDe(amarelo()) + "?acao=GERACAO_RELATORIO,VALIDACAO");
+        MvcTestResult misto = entrar(AMARELO).get(historicoDe(amarelo()) + "?acao=VALIDACAO,ENVIO_ARQUIVO&tamanho=3");
+        MvcTestResult daRbs = rbs.get(historicoDe(amarelo()) + "?acao=GERACAO_RELATORIO,VALIDACAO");
+
+        assertThat(lerJson(geracao, "$.total")).isEqualTo(0);
+        assertThat(lerLista(geracao, "$.itens")).isEmpty();
+        assertThat(lerLista(misto, "$.itens[*].acao")).containsOnly("ENVIO_ARQUIVO").hasSize(3);
+        assertThat(lerJson(daRbs, "$.total")).isEqualTo(2);
     }
 
     /** Grava uma linha de histórico direto no banco, com data e hora escolhidas (a tabela aceita INSERT). */

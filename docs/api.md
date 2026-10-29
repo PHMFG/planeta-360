@@ -702,6 +702,8 @@ O `filename*` leva o nome original em UTF-8 (com acentos e espaços codificados)
 
 **Filtros (opcionais):** `acao` (uma ou várias, separadas por vírgula), `entidade` (`entrega`, `arquivo`, `parceria`...), `de`, `ate`, `pagina`, `tamanho`. A ordem é da ação mais nova para a mais antiga.
 
+**O que o patrocinador não vê** [PERMISSAO]: além do IP e do navegador, as etapas internas de trabalho da RBS no relatório: `GERACAO_RELATORIO` e `VALIDACAO`. Elas não aparecem nas linhas, nem no `total`, nem num filtro por `acao` (pedir `acao=VALIDACAO` devolve lista vazia). A `DISPONIBILIZACAO`, que é quando o relatório passa a existir para a marca, continua aparecendo. A RBS vê tudo.
+
 **200**: uma página.
 
 ```json
