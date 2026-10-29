@@ -36,6 +36,16 @@ class RelatorioControllerTest {
     private static final String RBS = "b2b@rbs.example";
     private static final String AMARELO = "marketing@amarelo.example";
     private static final String ROXO = "marketing@roxo.example";
+    /** As 6 seções do modelo do relatório, na ordem do modelo. */
+    private static final List<String> SECOES_DO_MODELO = List.of("Cumprimento das entregas", "Mídia: previsto x exibido",
+            "Ativação no evento", "Pesquisa da ativação", "Cortesias e credenciamento", "O festival em números");
+    /** Os 17 indicadores do catálogo, na ordem do modelo. */
+    private static final List<String> INDICADORES_DO_MODELO = List.of("ENTREGAS_CONCLUIDAS_PCT", "ENTREGAS_PENDENTES",
+            "MIDIA_PREVISTO", "MIDIA_EXIBIDO", "MIDIA_ENTREGA_PCT", "MIDIA_VEICULO_PCT",
+            "APLICACOES_PREVISTAS", "APLICACOES_COMPROVADAS", "APLICACOES_COMPROVADAS_PCT", "COMPROVACOES_ENVIADAS",
+            "PESQUISA_BASE", "PESQUISA_RESULTADO",
+            "CORTESIAS_DISPONIVEIS", "CORTESIAS_DESTINADAS_PCT", "CREDENCIAIS_DIA",
+            "FESTIVAL_NUMERO", "FESTIVAL_PESQUISA");
     private static final String FRASE_DE_PULO =
             "O relatório não pode ir de RASCUNHO para DISPONIBILIZADO. A ordem é RASCUNHO, VALIDADO, DISPONIBILIZADO.";
 
@@ -545,14 +555,23 @@ class RelatorioControllerTest {
     }
 
     @Test
-    void indicadorQueNaoValeParaACotaNaoApareceNoRelatorio() {
+    void indicadorQueNaoValeParaACotaOuNaoTemPlanoApareceIndisponivelComOMotivo() {
         MockHttpSession rbs = entrar(RBS);
 
         MvcTestResult roxo = ler(rbs, "/api/parcerias/" + parceria("Cliente Roxo") + "/relatorio");
 
         assertThat(roxo).hasStatus(HttpStatus.OK);
-        assertThat(lerLista(roxo, "$.secoes[*].secao")).as("a pesquisa da ativação é só da Master")
-                .doesNotContain("Pesquisa da ativação").contains("Cumprimento das entregas", "O festival em números");
+        assertThat(lerLista(roxo, "$.secoes[*].secao")).as("o Roxo (Subcota G) também traz a pesquisa da ativação, indisponível")
+                .containsExactlyElementsOf(SECOES_DO_MODELO);
+        Map<String, Object> base = indicador(roxo, "PESQUISA_BASE", "");
+        assertThat(base).containsEntry("disponivel", false).containsEntry("baseCalculo", "não se aplica a esta cota");
+        assertThat(base.get("valor")).isNull();
+        assertThat(indicador(roxo, "PESQUISA_RESULTADO", "")).containsEntry("disponivel", false);
+        // O Roxo não tem aplicações de marca no plano comercial: a seção "Ativação no evento" vem indisponível, com o motivo.
+        Map<String, Object> aplicacoes = indicador(roxo, "APLICACOES_PREVISTAS", "");
+        assertThat(aplicacoes).containsEntry("disponivel", false).containsEntry("baseCalculo", "sem aplicações de marca no plano comercial");
+        // O que tem dado continua com dado.
+        assertThat(indicador(roxo, "MIDIA_PREVISTO", "INSERCAO")).containsEntry("disponivel", true);
     }
 
     // ---------------------------------------------------------------------
@@ -859,5 +878,134 @@ class RelatorioControllerTest {
         assertThat(jdbc.sql("SELECT fn_pct_arredondado(99.96)").query(BigDecimal.class).single()).as("abaixo de 100 nunca chega a 100").isEqualByComparingTo("99.9");
         assertThat(jdbc.sql("SELECT fn_pct_arredondado(66.666)").query(BigDecimal.class).single()).as("fora disso, arredonda").isEqualByComparingTo("66.7");
         assertThat(jdbc.sql("SELECT fn_pct_arredondado(100)").query(BigDecimal.class).single()).isEqualByComparingTo("100");
+    }
+
+    // ---------------------------------------------------------------------
+    // Relatório completo: todas as seções do modelo, mesmo sem nenhum dado
+    // ---------------------------------------------------------------------
+
+    /** Uma parceria cadastrada ao vivo (edição 2027): sem plano comercial, sem entrega, sem cortesia e sem usuário. */
+    long parceriaAoVivo(int cotaTipoId) {
+        long patrocinador = jdbc.sql("INSERT INTO patrocinador (nome_canonico) VALUES ('Cliente Ao Vivo') RETURNING id")
+                .query(Long.class).single();
+        long evento = jdbc.sql("SELECT id FROM evento WHERE edicao = 2027").query(Long.class).single();
+        return jdbc.sql("INSERT INTO parceria (evento_id, patrocinador_id, cota_tipo_id) VALUES (:e, :p, :c) RETURNING id")
+                .param("e", evento).param("p", patrocinador).param("c", cotaTipoId).query(Long.class).single();
+    }
+
+    @Test
+    void parceriaSemNenhumDadoGeraRelatorioComAsSeisSecoesEOs17IndicadoresIndisponiveis() {
+        long aoVivo = parceriaAoVivo(1);   // Master
+        MockHttpSession rbs = entrar(RBS);
+
+        MvcTestResult resposta = gerar(rbs, aoVivo);
+
+        assertThat(resposta).hasStatus(HttpStatus.CREATED);
+        assertThat(lerLista(resposta, "$.secoes[*].secao")).as("as 6 seções, na ordem do modelo")
+                .containsExactlyElementsOf(SECOES_DO_MODELO);
+        assertThat(lerLista(resposta, "$.secoes[*].indicadores[*].codigo")).as("os 17 indicadores, na ordem do modelo")
+                .containsExactlyElementsOf(INDICADORES_DO_MODELO);
+        List<Map<String, Object>> todos = lerLista(resposta, "$.secoes[*].indicadores[*]");
+        assertThat(todos).as("sem dado nenhum, tudo indisponível, sem valor e sem recorte").allSatisfy(i -> {
+            assertThat(i.get("disponivel")).isEqualTo(false);
+            assertThat(i.get("valor")).isNull();
+            assertThat(i.get("recorte")).isEqualTo("");
+        });
+        // O motivo vem em baseCalculo: sem mídia no plano, sem aplicações no plano, ou simplesmente sem registro.
+        assertThat(indicador(resposta, "MIDIA_PREVISTO", "").get("baseCalculo")).isEqualTo("sem mídia no plano comercial");
+        assertThat(indicador(resposta, "MIDIA_VEICULO_PCT", "").get("baseCalculo")).isEqualTo("sem mídia no plano comercial");
+        assertThat(indicador(resposta, "COMPROVACOES_ENVIADAS", "").get("baseCalculo")).isEqualTo("sem aplicações de marca no plano comercial");
+        assertThat(indicador(resposta, "PESQUISA_BASE", "").get("baseCalculo")).as("Master: a pesquisa vale, só falta registro")
+                .isEqualTo("sem registro na base");
+        assertThat(indicador(resposta, "ENTREGAS_PENDENTES", "").get("baseCalculo")).isEqualTo("sem registro na base");
+        assertThat(indicador(resposta, "FESTIVAL_NUMERO", "").get("baseCalculo")).isEqualTo("sem registro na base");
+
+        // A fotografia gravada tem as mesmas 17 linhas (a geração registra todas, não só a leitura).
+        long id = ((Number) lerJson(resposta, "$.id")).longValue();
+        assertThat(jdbc.sql("SELECT count(*) FROM relatorio_indicador WHERE relatorio_id = :id AND NOT disponivel")
+                .param("id", id).query(Long.class).single()).isEqualTo(17);
+        // A rota da RBS ler a versão devolve o mesmo.
+        assertThat(lerLista(ler(rbs, "/api/parcerias/" + aoVivo + "/relatorio"), "$.secoes[*].indicadores[*].codigo"))
+                .containsExactlyElementsOf(INDICADORES_DO_MODELO);
+        // A lista (rota 31) conta os 17 como indisponíveis.
+        MvcTestResult lista = ler(rbs, "/api/relatorios");
+        assertThat(lerLista(lista, "$[?(@.parceriaId==" + aoVivo + ")].relatorio.indicadoresDisponiveis")).containsExactly(0);
+        assertThat(lerLista(lista, "$[?(@.parceriaId==" + aoVivo + ")].relatorio.indicadoresIndisponiveis")).containsExactly(17);
+
+        // O CSV também traz as 17 linhas, todas "nao", valor em branco.
+        List<String> linhas = List.of(texto(ler(rbs, "/api/relatorios/" + id + "/csv")).substring(1).split("\r\n"));
+        assertThat(linhas).hasSize(18);
+        assertThat(linhas.subList(1, 18)).allSatisfy(linha -> assertThat(linha).endsWith(";nao"));
+        assertThat(linhas).contains(
+                "Mídia: previsto x exibido;MIDIA_PREVISTO;Mídia prevista;;;por unidade;sem mídia no plano comercial;nao",
+                "Pesquisa da ativação;PESQUISA_RESULTADO;Resultado por pergunta;;;% ou nota;sem registro na base;nao");
+    }
+
+    @Test
+    void cotaSemPesquisaTrazASecaoDePesquisaIndisponivelComOMotivo() {
+        long subcota = parceriaAoVivo(3);   // Subcota: a pesquisa da ativação não faz parte da cota
+        MockHttpSession rbs = entrar(RBS);
+
+        MvcTestResult resposta = gerar(rbs, subcota);
+
+        assertThat(lerLista(resposta, "$.secoes[*].secao")).containsExactlyElementsOf(SECOES_DO_MODELO);
+        assertThat(indicador(resposta, "PESQUISA_BASE", "")).containsEntry("disponivel", false)
+                .containsEntry("baseCalculo", "não se aplica a esta cota");
+        assertThat(lerLista(resposta, "$.secoes[3].indicadores[*].codigo")).containsExactly("PESQUISA_BASE", "PESQUISA_RESULTADO");
+    }
+
+    @Test
+    void indicadorPorRecorteComDadoMantemUmaLinhaPorRecorteESemDadoTemUmaSemRecorte() {
+        long aoVivo = parceriaAoVivo(1);
+        // Só mídia em CPM, com uma veiculação: o plano tem recorte por unidade (CPM) e por veículo, mas não tem inserções.
+        long linha = jdbc.sql("""
+                        INSERT INTO aproveitamento_previsto (parceria_id, categoria, bloco, veiculo, formato, tipo_midia, quantidade_prevista, unidade)
+                        VALUES (:p, 'MIDIA', 'Mídia', 'atl.la', 'Display CPM de teste', 'PROPRIA', 1000, 'CPM') RETURNING id
+                        """).param("p", aoVivo).query(Long.class).single();
+        jdbc.sql("INSERT INTO veiculacao (aproveitamento_id, exibido_em, quantidade) VALUES (:a, now() - interval '1 day', 400)")
+                .param("a", linha).update();
+        MockHttpSession rbs = entrar(RBS);
+
+        MvcTestResult resposta = gerar(rbs, aoVivo);
+
+        assertThat(lerLista(resposta, "$.secoes[1].indicadores[*].codigo")).containsExactly("MIDIA_PREVISTO", "MIDIA_EXIBIDO",
+                "MIDIA_ENTREGA_PCT", "MIDIA_VEICULO_PCT");
+        assertThat(indicador(resposta, "MIDIA_ENTREGA_PCT", "CPM")).containsEntry("disponivel", true);
+        assertThat(numero(indicador(resposta, "MIDIA_ENTREGA_PCT", "CPM").get("valor"))).isEqualByComparingTo("40");
+        assertThat(indicador(resposta, "MIDIA_VEICULO_PCT", "atl.la · CPM")).containsEntry("disponivel", true);
+        // Não sobra linha "indisponível sem recorte" ao lado de quem já tem recorte.
+        assertThat(lerLista(resposta, "$.secoes[1].indicadores[*]")).hasSize(4);
+        // As outras seções continuam inteiras e indisponíveis.
+        assertThat(lerLista(resposta, "$.secoes[*].secao")).containsExactlyElementsOf(SECOES_DO_MODELO);
+        assertThat(indicador(resposta, "APLICACOES_PREVISTAS", "")).containsEntry("disponivel", false);
+    }
+
+    @Test
+    void relatorioGeradoAntesDaV5ChegaCompletoNaLeituraENoCsv() {
+        long roxo = parceria("Cliente Roxo");
+        long relatorio = relatorioDaAmostra(roxo);
+        // Simula uma versão antiga: sem as linhas de pesquisa e de aplicações (o rascunho aceita a alteração).
+        jdbc.sql("""
+                        DELETE FROM relatorio_indicador WHERE relatorio_id = :id
+                        AND indicador_codigo IN ('PESQUISA_BASE', 'PESQUISA_RESULTADO', 'APLICACOES_PREVISTAS', 'APLICACOES_COMPROVADAS',
+                                                 'APLICACOES_COMPROVADAS_PCT', 'COMPROVACOES_ENVIADAS')
+                        """).param("id", relatorio).update();
+        MockHttpSession rbs = entrar(RBS);
+
+        MvcTestResult lido = ler(rbs, "/api/parcerias/" + roxo + "/relatorio?versao=1");
+
+        assertThat(lerLista(lido, "$.secoes[*].secao")).containsExactlyElementsOf(SECOES_DO_MODELO);
+        List<Object> codigos = lerLista(lido, "$.secoes[*].indicadores[*].codigo");
+        assertThat(codigos.stream().distinct().toList()).as("os 17 do modelo, na ordem (o Roxo tem mais de um recorte na mídia)")
+                .containsExactlyElementsOf(INDICADORES_DO_MODELO);
+        assertThat(indicador(lido, "PESQUISA_BASE", "")).containsEntry("disponivel", false).containsEntry("baseCalculo", "sem registro na base");
+        assertThat(indicador(lido, "PESQUISA_BASE", "").get("valor")).isNull();
+        List<String> csv = List.of(texto(ler(rbs, "/api/relatorios/" + relatorio + "/csv")).substring(1).split("\r\n"));
+        assertThat(csv).contains("Pesquisa da ativação;PESQUISA_BASE;Base da pesquisa da ativação;;;respondentes;sem registro na base;nao");
+        // A lista da RBS conta o que falta como indisponível, igual ao que a leitura mostra.
+        long indisponiveisNaLeitura = lerLista(lido, "$.secoes[*].indicadores[?(@.disponivel==false)]").size();
+        MvcTestResult lista = ler(rbs, "/api/relatorios");
+        assertThat(lerLista(lista, "$[?(@.parceriaId==" + roxo + ")].relatorio.indicadoresIndisponiveis"))
+                .containsExactly((int) indisponiveisNaLeitura);
     }
 }

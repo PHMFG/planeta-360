@@ -186,21 +186,24 @@ BEGIN
     PERFORM pg_temp.confere('RELATÓRIOS', 'parcerias de 2027 com relatório (um cada)', 3,
         (SELECT count(DISTINCT r.parceria_id) FROM relatorio r JOIN parceria pa ON pa.id = r.parceria_id JOIN evento e ON e.id = pa.evento_id WHERE e.edicao = 2027));
     PERFORM pg_temp.afirma('RELATÓRIOS', 'todos na versão 1 e em RASCUNHO', (SELECT bool_and(versao = 1 AND status = 'RASCUNHO') FROM relatorio));
-    PERFORM pg_temp.confere('RELATÓRIOS', 'números nos 3 relatórios (72 de antes + 3 faixas de nota da pesquisa)', 75, (SELECT count(*) FROM relatorio_indicador));
-    PERFORM pg_temp.confere('RELATÓRIOS', 'números indisponíveis (festival em números e pesquisa geral, só existem em 2026)', 6,
+    -- [RELATORIO] O relatório traz sempre os 17 indicadores do catálogo (V5): 51 códigos nos 3 relatórios. O que não tem dado
+    -- entra como indisponível: festival em números e pesquisa geral (só existem em 2026: 2 por parceria = 6), a pesquisa da
+    -- ativação do Roxo e da Verde (fora da cota: 2 cada = 4) e as aplicações de marca do Roxo (sem plano de aplicações: 4).
+    PERFORM pg_temp.confere('RELATÓRIOS', 'números nos 3 relatórios (72 de antes + 8 indisponíveis que a V5 passou a registrar + 3 faixas de nota da pesquisa)', 83, (SELECT count(*) FROM relatorio_indicador));
+    PERFORM pg_temp.confere('RELATÓRIOS', 'números indisponíveis (festival 6 + pesquisa fora da cota 4 + aplicações do Roxo 4)', 14,
         (SELECT count(*) FROM relatorio_indicador WHERE NOT disponivel));
-    PERFORM pg_temp.confere('RELATÓRIOS', 'números do relatório sem as 3 faixas novas = total de antes', 72,
+    PERFORM pg_temp.confere('RELATÓRIOS', 'números do relatório sem as 3 faixas novas = total de antes mais os 8 indisponíveis novos', 80,
         (SELECT count(*) FROM relatorio_indicador WHERE NOT (indicador_codigo = 'PESQUISA_RESULTADO' AND recorte IN ('P2 · Notas 9 e 10', 'P2 · Notas 7 e 8', 'P2 · Notas de 0 a 6'))));
     PERFORM pg_temp.afirma('RELATÓRIOS', 'data da geração no passado e igual no relatório e no histórico, sem UPDATE',
         (SELECT bool_and(r.gerado_em < now()) FROM relatorio r)
         AND (SELECT count(*) = 3 AND bool_and(h.ocorrido_em < now() AND EXISTS (SELECT 1 FROM relatorio r WHERE r.id = h.entidade_id
                                                                                   AND r.gerado_em = h.ocorrido_em))
                FROM historico h WHERE h.acao = 'GERACAO_RELATORIO'));
-    PERFORM pg_temp.confere('RELATÓRIOS', 'indicadores disponíveis do catálogo que ficaram sem linha (nunca estimados)', 0,
-        (SELECT count(*) FROM relatorio r JOIN parceria pa ON pa.id = r.parceria_id JOIN cota_tipo ct ON ct.id = pa.cota_tipo_id
-          JOIN indicador i ON (i.cotas IS NULL OR ct.codigo = ANY (i.cotas))
-                          AND (i.requer_previsto IS NULL OR EXISTS (SELECT 1 FROM aproveitamento_previsto ap WHERE ap.parceria_id = pa.id AND ap.categoria = i.requer_previsto))
+    PERFORM pg_temp.confere('RELATÓRIOS', 'indicadores do catálogo que ficaram sem linha em algum relatório (todos entram, nunca estimados)', 0,
+        (SELECT count(*) FROM relatorio r CROSS JOIN indicador i
           WHERE NOT EXISTS (SELECT 1 FROM relatorio_indicador ri WHERE ri.relatorio_id = r.id AND ri.indicador_codigo = i.codigo)));
+    PERFORM pg_temp.confere('RELATÓRIOS', 'indicadores sem linha de dado ficam indisponíveis, com valor nulo e sem recorte', 0,
+        (SELECT count(*) FROM relatorio_indicador WHERE NOT disponivel AND (valor IS NOT NULL OR recorte <> '')));
 END $$;
 
 -- ---------------------------------------------------------------------

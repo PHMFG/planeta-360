@@ -23,7 +23,7 @@ import org.springframework.core.io.ClassPathResource;
 @TesteDeIntegracao
 class VerificacaoDoBancoTest {
 
-    private static final int CONFERENCIAS_ESPERADAS = 163;
+    private static final int CONFERENCIAS_ESPERADAS = 164;
     // Começo do bloco que encerra o script com erro quando alguma conferência falhou.
     private static final String MARCA_DO_ERRO_FINAL = "DO $$\nBEGIN\n    IF EXISTS (SELECT 1 FROM _ver WHERE NOT ok)";
 

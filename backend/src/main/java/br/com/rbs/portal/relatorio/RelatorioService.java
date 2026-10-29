@@ -42,9 +42,9 @@ public class RelatorioService {
     static final String AINDA_NAO_DISPONIVEL = "O relatório desta parceria ainda não está disponível.";
 
     /**
-     * Os 17 indicadores do catálogo (V3), na ordem em que o catálogo os lista. A tabela indicador não tem coluna de ordem, e
-     * as seções do relatório seguem a primeira aparição de cada uma aqui. Indicador novo que ainda não esteja nesta lista
-     * vai para o fim da sua seção, sem quebrar nada.
+     * Os 17 indicadores do catálogo (V3), na ordem em que o catálogo os lista: a ordem do modelo do relatório. A tabela
+     * indicador não tem coluna de ordem, e as 6 seções seguem a primeira aparição de cada uma aqui. Indicador novo que ainda
+     * não esteja nesta lista vai para o fim da sua seção, sem quebrar nada.
      */
     private static final List<String> ORDEM_DO_CATALOGO = List.of(
             "ENTREGAS_CONCLUIDAS_PCT", "ENTREGAS_PENDENTES",
@@ -229,7 +229,8 @@ public class RelatorioService {
     }
 
     /**
-     * Agrupa os números nas seções do catálogo, na ordem do catálogo. [RELATORIO] Número sem dado sai com
+     * Agrupa os números nas seções do catálogo, na ordem do catálogo. [RELATORIO] As linhas vêm do catálogo inteiro (veja
+     * RelatorioRepositorio.indicadores), então toda seção do modelo aparece, mesmo sem nenhum dado. Número sem dado sai com
      * {@code disponivel: false} e {@code valor: null}, nunca zero.
      */
     private List<SecaoDto> secoes(long relatorioId) {
