@@ -1,6 +1,7 @@
 package br.com.rbs.portal.parceria;
 
 import br.com.rbs.portal.comum.Datas;
+import br.com.rbs.portal.comum.EntregasDaMarca;
 import br.com.rbs.portal.parceria.ParceriaDtos.CotaDto;
 import br.com.rbs.portal.parceria.ParceriaDtos.EntregasResumoDto;
 import br.com.rbs.portal.parceria.ParceriaDtos.EventoCompletoDto;
@@ -219,7 +220,9 @@ public class ParceriaRepositorio {
     /**
      * As parcerias com o resumo de entregas, o número de usuários e a versão mais nova do relatório.
      * [ISOLAMENTO] Com usuarioId (patrocinador): só as parcerias em que ele tem vínculo, os usuários vêm nulos e o
-     * relatório só conta se a RBS o disponibilizou. Os filtros entram no SQL só quando vieram (parâmetro nulo no
+     * relatório só conta se a RBS o disponibilizou. [PERMISSAO] O resumo de entregas do patrocinador conta só as entregas
+     * de aba aberta (EntregasDaMarca.RESUMO, sem nenhuma vem zerado e sem percentual); o da RBS lê vw_entregas_resumo,
+     * com todas as abas. Os filtros entram no SQL só quando vieram (parâmetro nulo no
      * PostgreSQL pede CAST), e o texto da busca vai por position(), que não trata % e _ como curingas.
      */
     public List<ParceriaResumoDto> listar(FiltroDaLista filtro) {
@@ -236,7 +239,10 @@ public class ParceriaRepositorio {
                 JOIN patrocinador pat ON pat.id = pa.patrocinador_id
                 JOIN evento e ON e.id = pa.evento_id
                 JOIN cota_tipo ct ON ct.id = pa.cota_tipo_id
-                LEFT JOIN vw_entregas_resumo er ON er.parceria_id = pa.id
+                LEFT JOIN\s""");
+        sql.append(doPatrocinador ? "(" + EntregasDaMarca.RESUMO + ")" : "vw_entregas_resumo");
+        sql.append("""
+                 er ON er.parceria_id = pa.id
                 LEFT JOIN LATERAL (SELECT r.id, r.versao, r.status FROM relatorio r
                                    WHERE r.parceria_id = pa.id
                 """);
