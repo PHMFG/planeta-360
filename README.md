@@ -94,7 +94,7 @@ Abra <http://localhost:5173>. O Vite repassa as chamadas `/api` para a porta 808
 
 **Recomeçar do zero.** Para voltar à amostra original, pare a API, rode no `psql` o `DROP DATABASE portal;` e o `CREATE DATABASE portal OWNER portal;` e suba a API de novo. Os arquivos enviados ficam em `backend/armazenamento/`, que pode ser apagada junto (a API recria os arquivos de exemplo da amostra na subida).
 
-**Quem já tinha o banco `portal` criado precisa recomeçar do zero para ver a amostra nova.** A amostra só carrega num banco vazio e não roda de novo sobre um banco que já a tem. A versão atual traz: entregas Enviado, Em análise e Aprovado com o arquivo que a marca mandou, o VT do Roxo em "Ajuste solicitado" com o recado da RBS no histórico, horários sempre no passado (contados a partir do dia em que o banco é criado) e nenhum "(simulada)" no nome da pesquisa. Num banco criado antes, as migrações novas (V4) rodam sozinhas ao subir a API, mas a amostra antiga continua como estava.
+**Quem já tinha o banco `portal` criado precisa recomeçar do zero para ver a amostra nova.** A amostra só carrega num banco vazio e não roda de novo sobre um banco que já a tem. A versão atual traz: entregas Enviado, Em análise e Aprovado com o arquivo que a marca mandou, o VT do Roxo em "Ajuste solicitado" com o recado da RBS no histórico, horários sempre no passado (contados a partir do dia em que o banco é criado) e nenhum "(simulada)" no nome da pesquisa. Num banco criado antes, as migrações novas (V4 a V6) rodam sozinhas ao subir a API, mas a amostra antiga continua como estava.
 
 ## Se algo der errado
 
@@ -166,7 +166,7 @@ No front, `npm run build` confere os tipos e gera a versão de produção; `npm 
 
 ## Pendências registradas
 
-- Comprovações de marca, plano comercial (previsto) e números do festival entram só pela amostra. Uma parceria cadastrada ao vivo fica sem previsto, e a planilha dela é rejeitada com o motivo "aproveitamento não encontrado".
+- Comprovações de marca, plano comercial (previsto) e números do festival entram só pela amostra. Uma parceria cadastrada ao vivo fica sem previsto, e a planilha dela é rejeitada com o motivo "aproveitamento não encontrado"; o relatório dela sai com as 6 seções do modelo e os 17 indicadores, e os de mídia e de ativação aparecem como indisponíveis.
 - "O festival em números" sai como indisponível nos relatórios de 2027, porque só há números de 2026.
 - Telas próprias de Aplicações de marca, Cortesias, Credenciamento e Contrato: nesta versão cada aba mostra as próprias entregas.
 - E-mail automático do código de ativação; recuperação de senha.

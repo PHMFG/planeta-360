@@ -12,7 +12,7 @@ Este documento é o **contrato entre o back-end e o front-end**. Quem faz a tela
 | Endereço | Todas as rotas começam com `/api`. Em desenvolvimento a API roda em `http://localhost:8080` e o Vite repassa `/api` para ela, então front e API ficam na **mesma origem** (o cookie de sessão não precisa de CORS). |
 | Formato | JSON em UTF-8, nomes de campo em `camelCase`. Os únicos arquivos que não são JSON são os downloads, os CSV e os envios (`multipart/form-data`). |
 | Datas | Data e hora em ISO 8601 **com fuso**: `"2026-10-18T10:15:30-03:00"`. Data sem hora (prazo, início do evento): `"2026-12-16"`. |
-| Números | Números JSON. Dinheiro e quantidades têm até 2 casas decimais (`1000000.00`). Percentuais vão de 0 a 100, com 1 casa (`98.3`). O percentual de entrega de mídia é **cortado** na primeira casa, e não arredondado (459.900 de 460.000 é `99.9`, nunca `100`); os outros percentuais arredondam, mas abaixo de 100 nunca passam de `99.9`. Nos textos (`baseCalculo`, `detalhe`) os números saem no padrão brasileiro: `459.900 de 460.000`. |
+| Números | Números JSON. Dinheiro e quantidades têm até 2 casas decimais (`1000000.00`). Percentuais têm 1 casa (`98.3`) e **todos** são **cortados** na primeira casa, nunca arredondados, na tela, no CSV e na consolidação: 459.900 de 460.000 é `99.9` (nunca `100`) e 17 de 19 é `89.4` (não `89.5`). Só chega a `100` quem está completo. O percentual de **entrega de mídia** pode passar de 100 quando o exibido supera o previsto (907.300 de 460.000 é `197.2`): é informação válida, e nada na API corta o número em 100; quem desenha uma barra limita a largura, não o valor. Os demais percentuais calculados pela API (entregas concluídas, aplicações comprovadas, cortesias destinadas) não passam de 100 por construção. O percentual de **resultado de pesquisa** (`unidade: PERCENTUAL`, que vem da planilha da pesquisa) é outra coisa, a fatia dos respondentes, e continua de 0 a 100. Nos textos (`baseCalculo`, `detalhe`) os números saem no padrão brasileiro: `459.900 de 460.000`. |
 | Campos vazios | Um campo sem valor vem como `null`. As listas vêm sempre como `[]`, nunca `null`. |
 | Códigos | Cotas: `MASTER`, `SUBCOTA_G`, `SUBCOTA`. Abas: `PERFIL`, `APLICACOES`, `MIDIA`, `CORTESIAS`, `CREDENCIAMENTO`, `PESQUISA`, `CONTRATO`. Perfis: `ADMIN_RBS`, `ADMIN_PATROCINADOR`. |
 | Listas longas | Histórico, fila de entregas, cargas e rejeições são paginadas: `?pagina=0&tamanho=50` (pagina começa em 0; tamanho padrão 50, máximo 200; `pagina` negativa ou `tamanho` fora de 1 a 200 devolve 422). A resposta é `{"itens": [...], "pagina": 0, "tamanho": 50, "total": 137}`. As outras listas vêm inteiras, em array. |
@@ -60,7 +60,7 @@ Todo erro, sem exceção, vem como `application/problem+json` no formato `Proble
 | --- | --- | --- |
 | 400 | Requisição inválida | Corpo vazio ou que não é JSON, ou filtro da URL com o tipo errado (`?pagina=abc`, `?eventoId=abc`, `?atrasadas=talvez`): o `detail` diz qual, por exemplo `"O parâmetro pagina precisa ser um número inteiro."` ou `"O parâmetro atrasadas precisa ser true ou false."`. |
 | 401 | Não autenticado | Sem sessão (ou sessão vencida), e-mail/senha incorretos no login, ou sessão de uma conta que perdeu o acesso (veja "Sessão e CSRF"). |
-| 403 | Acesso negado | Logado, mas o perfil não pode fazer a operação (rota só da RBS), a aba ainda não foi liberada para a parceria, ou falta o token CSRF. |
+| 403 | Acesso negado | Logado, mas o perfil não pode fazer a operação (rota só da RBS), a aba está fechada para a parceria (duas frases diferentes, veja "Aba"), ou falta o token CSRF. |
 | 404 | Não encontrado | O recurso **não existe ou é de outra parceria**. Os dois casos têm a mesma resposta, de propósito. Vale também para rota inexistente e para **id na URL que não é número** (`GET /api/parcerias/abc`): um id que não pode existir é um id que não existe, e o `detail` é a frase de "não encontrado" do recurso da rota (`"Não encontramos esta parceria."`, `"... esta entrega."`, `"... este arquivo."`, `"... esta pergunta."`, `"... este relatório."`, `"... esta carga."`, `"Não encontramos este e-mail nesta parceria."`), igual à de um id numérico sem registro. |
 | 405 | Método não permitido | A rota existe, mas não aceita esse método HTTP. |
 | 409 | Conflito | Uma regra do negócio recusou: regra do banco (SQLSTATE da classe 23, com a frase do gatilho), transição de status que não é permitida, registro duplicado. |
@@ -157,6 +157,17 @@ Estes formatos aparecem em várias rotas.
 
 - `liberada: false` = a aba está **fechada** para esta parceria (a RBS ainda não abriu, fechou ou escondeu do menu); o front mostra o cadeado. Uma aba só conta como liberada se estiver liberada **e** visível no banco.
 - `incluidaNaCota: false` = a aba **não faz parte da cota** da parceria (vem de `cota_tipo_aba`; hoje a Pesquisa só está na cota Master). Aba fora da cota nunca abre: a RBS não consegue liberá-la (rota 10 devolve 422). Use este campo para mostrar "fora da sua cota" em vez de "aguardando liberação".
+
+**As duas frases do 403 de aba.** Toda rota que o patrocinador não pode usar por causa de uma aba fechada responde **403** com o mesmo `title` ("Acesso negado") e uma de duas frases em `detail`, escolhida pelo `incluidaNaCota` da aba:
+
+| Situação da aba | `detail` do 403 |
+| --- | --- |
+| A cota da parceria **não inclui** a aba (`incluidaNaCota: false`) | `"Esta aba não faz parte da cota da sua parceria."` |
+| A cota inclui a aba, mas a RBS ainda não a abriu, a fechou ou a escondeu do menu (`incluidaNaCota: true`, `liberada: false`) | `"Esta aba ainda não foi liberada para a sua parceria."` |
+
+A regra é uma só em toda a API (lista de entregas, envio de arquivo, download de arquivo, pesquisa): aba aberta = liberada **e** visível. A RBS nunca recebe esse 403.
+
+**O que sai quando a aba está fechada.** Para o patrocinador, nada que pertença a uma aba fechada sai por rota nenhuma: a lista de entregas (rota 14) e o download de arquivo de entrega (rota 18) respondem 403, o envio (rota 17) responde 403, e a consolidação (rota 29) não traz a parte daquela aba. A RBS continua vendo tudo.
 
 `incluidaNaCota` vem em toda lista de abas: `parcerias[].abas` do `UsuarioLogado` (login e `GET /api/auth/eu`) e `abas` da parceria (rotas 8, 9 e 10).
 
@@ -548,7 +559,7 @@ Na chamada seguinte da pessoa revogada, **qualquer rota** (`GET /api/auth/eu`, `
 
 **Filtros (opcionais):** `aba` (código da aba, ex.: `MIDIA`) e `status`. A ordem é a da aba e, dentro dela, a de criação.
 
-O patrocinador só enxerga as entregas das abas **liberadas** para a parceria dele. Pedir `aba=` de uma aba fechada devolve **403** (`"Esta aba ainda não foi liberada para a sua parceria."`). Sem `aba=`, vêm as de todas as abas liberadas. A RBS vê todas.
+O patrocinador só enxerga as entregas das abas **liberadas** para a parceria dele. Pedir `aba=` de uma aba fechada devolve **403**: `"Esta aba não faz parte da cota da sua parceria."` se a cota não inclui a aba, ou `"Esta aba ainda não foi liberada para a sua parceria."` se a cota inclui e a RBS ainda não a abriu (veja "Aba"). Sem `aba=`, vêm as de todas as abas liberadas. A RBS vê todas.
 
 **200**: array de **Entrega** (formato em "Objetos que se repetem").
 
@@ -641,7 +652,7 @@ O patrocinador só enxerga as entregas das abas **liberadas** para a parceria de
 
 | Status | Quando |
 | --- | --- |
-| 403 | Aba ainda não liberada, ou categoria que o patrocinador não pode usar. |
+| 403 | Aba fechada para a parceria (as duas frases de "Aba": fora da cota, ou ainda não liberada) ou categoria que o patrocinador não pode usar. |
 | 404 | Entrega que não existe ou é de outra parceria. |
 | 409 | A entrega não aceita mais envio no status em que está. |
 | 413 | Arquivo acima de 20 MB (20.971.520 bytes; exatamente 20 MB ainda passa). |
@@ -664,7 +675,9 @@ X-Content-Type-Options: nosniff
 
 O `filename*` leva o nome original em UTF-8 (com acentos e espaços codificados); o `filename` ao lado é a versão só com letras ASCII, para navegadores antigos. O PDF de um relatório que a RBS ainda não disponibilizou também dá 404 ao patrocinador.
 
-**Erros:** 404 (não existe, é de outra parceria, ou o arquivo sumiu do armazenamento). **Histórico:** `DOWNLOAD`, com quem baixou, de que IP e navegador.
+**Aba fechada.** O arquivo que pertence a uma aba (o arquivo de uma entrega, por exemplo) segue a mesma regra da lista de entregas: se a aba está fechada para a parceria do patrocinador, o download dá **403** com a mesma frase da lista (`"Esta aba não faz parte da cota da sua parceria."` ou `"Esta aba ainda não foi liberada para a sua parceria."`, veja "Aba"), e nada é gravado no histórico. A ordem é: 404 (arquivo que não existe, de outra parceria, geral da RBS ou relatório não disponibilizado) antes do 403 de aba. Arquivo que não é de nenhuma aba (sem `aba` no banco) não tem essa conferência. A RBS baixa qualquer arquivo, de aba aberta ou fechada.
+
+**Erros:** 403 (aba fechada); 404 (não existe, é de outra parceria, ou o arquivo sumiu do armazenamento). **Histórico:** `DOWNLOAD`, com quem baixou, de que IP e navegador.
 
 ## 19. `PATCH /api/entregas/{id}/status`  · etapa 5
 
@@ -772,7 +785,7 @@ Content-Disposition: attachment; filename="historico-2026-10-23.csv"
 
 ## 23. `GET /api/parcerias/{id}/pesquisa`  · etapa 6
 
-**Quem chama:** patrocinador da parceria, ou Admin RBS. O patrocinador só acessa se a aba `PESQUISA` estiver **liberada** para a parceria dele; senão recebe **403** (`"Esta aba ainda não foi liberada para a sua parceria."`).
+**Quem chama:** patrocinador da parceria, ou Admin RBS. O patrocinador só acessa se a aba `PESQUISA` estiver **liberada** para a parceria dele; senão recebe **403**: `"Esta aba não faz parte da cota da sua parceria."` quando a cota não inclui a Pesquisa (hoje, tudo o que não é Master), ou `"Esta aba ainda não foi liberada para a sua parceria."` quando a cota inclui e a RBS ainda não abriu.
 
 **200**
 
@@ -807,7 +820,7 @@ Content-Disposition: attachment; filename="historico-2026-10-23.csv"
 
 ## 24. `PUT /api/parcerias/{id}/pesquisa/perguntas`  · etapa 6
 
-**Quem chama:** o Admin Patrocinador da parceria (exige o token CSRF). A RBS recebe 403. Só com a aba `PESQUISA` liberada (senão 403).
+**Quem chama:** o Admin Patrocinador da parceria (exige o token CSRF). A RBS recebe 403. Só com a aba `PESQUISA` liberada (senão 403, com a frase de cota ou de aba ainda não liberada; veja "Aba").
 
 **Corpo.** A lista **completa** das perguntas que a marca quer (o `PUT` substitui o conjunto):
 
@@ -985,7 +998,8 @@ Linhas lidas = inseridas + duplicadas + rejeitadas. As rejeitadas, com o motivo,
 }
 ```
 
-- `percentual` é exibido ÷ previsto × 100 (pode passar de 100). Na mídia ele é **cortado** na primeira casa decimal, não arredondado: 459.900 de 460.000 vale `99.9`, porque `100` diria "completo" quando faltam exibições. Seções sem plano comercial (`midia` sem linhas, por exemplo) vêm com listas vazias e `null` nos totais: `aplicacoes`, `entregas` e `cortesias` continuam como objeto, com todos os campos `null` quando a parceria não tem dado naquela seção.
+- `percentual` é exibido ÷ previsto × 100 e **pode passar de 100** quando o exibido supera o previsto (no exemplo, o CPM: 5.200 de 5.000 é `104.0`; 907.300 de 460.000 é `197.2`). Todo percentual desta rota (mídia, aplicações, entregas, cortesias) é **cortado** na primeira casa decimal, não arredondado: 459.900 de 460.000 vale `99.9`, porque `100` diria "completo" quando faltam exibições, e 17 de 19 aplicações vale `89.4`. Seções sem plano comercial (`midia` sem linhas, por exemplo) vêm com listas vazias e `null` nos totais: `aplicacoes`, `entregas` e `cortesias` continuam como objeto, com todos os campos `null` quando a parceria não tem dado naquela seção.
+- **Aba fechada para o patrocinador.** A parte de cada aba só sai se a aba estiver aberta (liberada **e** visível) para a parceria dele. Com a aba `MIDIA` fechada, `midia` vem com as três listas **vazias** (`"porUnidade": []`, `"porVeiculo": []`, `"linhas": []`), a mesma forma de "sem plano comercial": o campo `midia` continua no corpo (nunca `null` nem omitido), mas não sai nenhuma linha de previsto nem de exibido. Com a aba `APLICACOES` fechada, `aplicacoes` vem com todos os campos `null`; com `CORTESIAS` fechada, `cortesias` vem com todos os campos `null`. `entregas` e `faltantes` não pertencem a uma aba só e seguem como estão. A resposta é 200 (a rota não nega a consolidação inteira). A RBS recebe tudo, de aba aberta ou fechada.
 - `porUnidade` e `porVeiculo` vêm em ordem de unidade (`INSERCAO`, `CPM`, `APLICACAO`); `porVeiculo` e `linhas`, por veículo e formato. Linha do plano ainda sem exibição traz `exibido` 0 e `percentual` 0, nunca `null`.
 - `faltantes` é o que impede ou enfraquece o relatório. Tipos: `MIDIA_SEM_EXIBICAO`, `MIDIA_ABAIXO_DO_PREVISTO`, `APLICACAO_SEM_COMPROVACAO`, `PESQUISA_SEM_PERGUNTAS`, `PERGUNTA_SEM_RESULTADO`, `ENTREGA_PENDENTE`, `PARCERIA_SEM_USUARIO`, `FESTIVAL_SEM_NUMEROS`.
 - Os `faltantes` vêm do mais para o menos importante, na ordem dos tipos listada acima. [PENDENTE] A RBS ainda não definiu uma ordem de importância; vale a ordem desta lista.
@@ -1051,7 +1065,7 @@ O relatório de uma parceria é uma **fotografia** dos números do momento em qu
     "relatorio": {
       "id": 1, "versao": 1, "status": "RASCUNHO", "geradoEm": "2026-11-22T10:00:00-03:00",
       "validadoEm": null, "disponibilizadoEm": null,
-      "indicadoresDisponiveis": 25, "indicadoresIndisponiveis": 3
+      "indicadoresDisponiveis": 35, "indicadoresIndisponiveis": 2
     },
     "disponibilizada": { "id": 1, "versao": 1, "disponibilizadoEm": "2026-11-23T11:00:00-03:00" },
     "faltantes": 4
@@ -1059,7 +1073,7 @@ O relatório de uma parceria é uma **fotografia** dos números do momento em qu
 ]
 ```
 
-`relatorio` é a **versão mais nova** (ou `null`, com `situacao: "SEM_RELATORIO"`). `faltantes` é quantos itens a consolidação (rota 29) ainda aponta para a parceria.
+`relatorio` é a **versão mais nova** (ou `null`, com `situacao: "SEM_RELATORIO"`). `indicadoresDisponiveis` e `indicadoresIndisponiveis` contam linhas de números do relatório (um indicador por recorte conta uma vez por recorte); o indicador do catálogo sem linha na versão conta como indisponível, como na leitura (rota 35). `faltantes` é quantos itens a consolidação (rota 29) ainda aponta para a parceria.
 
 `disponibilizada` é a **versão que a marca vê**: a disponibilizada mais nova, com o `id`, a `versao` e quando ela foi liberada (`disponibilizadoEm`). Fica `null` se nenhuma versão foi disponibilizada. Ela pode ser mais antiga que `relatorio`: com a v3 em rascunho e a v2 disponibilizada, a linha traz `relatorio.versao` 3 (`situacao` `RASCUNHO`) e `disponibilizada.versao` 2, e a tela da RBS deve mostrar as duas ("Rascunho · v3, a marca vê a v2"). Quando a versão mais nova é a própria disponibilizada, `disponibilizada` repete o mesmo `id` e `versao`.
 
@@ -1073,7 +1087,7 @@ Colunas: `parceria_id;patrocinador;cota;edicao;situacao;versao;gerado_em;validad
 
 **Quem chama:** Admin RBS (exige o token CSRF). **Corpo:** nenhum.
 
-Gera uma **nova versão** do relatório da parceria, em `RASCUNHO`, copiando os números da base (a função `fn_gerar_relatorio` do banco). Duas gerações ao mesmo tempo ganham versões diferentes.
+Gera uma **nova versão** do relatório da parceria, em `RASCUNHO`, copiando os números da base (a função `fn_gerar_relatorio` do banco). Duas gerações ao mesmo tempo ganham versões diferentes. O relatório sai sempre com as 6 seções e os 17 indicadores do modelo: o que não tem dado é gravado como indisponível, com o motivo em `baseCalculo` (veja a rota 35).
 
 **201** (com `Location: /api/relatorios/{id}`): o relatório completo (formato da rota 35).
 
@@ -1133,9 +1147,21 @@ Gera uma **nova versão** do relatório da parceria, em `RASCUNHO`, copiando os 
 }
 ```
 
-- As seções seguem o catálogo de 17 indicadores do banco: Cumprimento das entregas, Mídia: previsto x exibido, Ativação no evento, Pesquisa da ativação, Cortesias e credenciamento, O festival em números.
+- **O relatório sempre traz as 6 seções do modelo, na ordem do modelo, e os 17 indicadores do catálogo**, mesmo sem nenhum dado (tela, JSON e CSV). A ordem é esta, e o exemplo acima mostra só duas seções para ficar curto:
+
+  | Seção | Indicadores (`codigo`) |
+  | --- | --- |
+  | Cumprimento das entregas | `ENTREGAS_CONCLUIDAS_PCT`, `ENTREGAS_PENDENTES` |
+  | Mídia: previsto x exibido | `MIDIA_PREVISTO`, `MIDIA_EXIBIDO`, `MIDIA_ENTREGA_PCT`, `MIDIA_VEICULO_PCT` |
+  | Ativação no evento | `APLICACOES_PREVISTAS`, `APLICACOES_COMPROVADAS`, `APLICACOES_COMPROVADAS_PCT`, `COMPROVACOES_ENVIADAS` |
+  | Pesquisa da ativação | `PESQUISA_BASE`, `PESQUISA_RESULTADO` |
+  | Cortesias e credenciamento | `CORTESIAS_DISPONIVEIS`, `CORTESIAS_DESTINADAS_PCT`, `CREDENCIAIS_DIA` |
+  | O festival em números | `FESTIVAL_NUMERO`, `FESTIVAL_PESQUISA` |
+
+- Indicador do catálogo **sem dado** sai como `disponivel: false`, `valor: null` e `recorte: ""`, uma linha só, nunca zero e nunca estimado. Isso vale para a parceria sem plano comercial (cadastrada ao vivo), para a cota que não inclui a Pesquisa (a seção "Pesquisa da ativação" vem com os dois indicadores indisponíveis) e para o que a base ainda não tem. Quando há dado por recorte (por unidade, veículo, pergunta...), vêm as linhas dos recortes com dado e nenhuma linha "indisponível" ao lado; sem nenhum recorte, vem a linha única sem recorte. O `baseCalculo` da linha indisponível diz o motivo: `"sem mídia no plano comercial"`, `"sem aplicações de marca no plano comercial"`, `"não se aplica a esta cota"` ou `"sem registro na base"`.
+- A mesma regra vale na **leitura**: a versão gerada antes desta regra (que não tinha as linhas dos indicadores sem dado) também sai completa, com `"sem registro na base"` no que faltava; a fotografia gravada não é alterada. Os contadores `indicadoresDisponiveis` e `indicadoresIndisponiveis` da rota 31 contam o que falta como indisponível, igual ao que a leitura mostra.
 - `recorte` separa um indicador em vários números (por unidade, por veículo, por pergunta). Vem `""` quando é um número só.
-- `baseCalculo` é o texto "como foi calculado", com os números no padrão brasileiro: milhar com ponto e decimal com vírgula (`"459.900 de 460.000"`, `"1.105 de 1.113"`). O percentual de entrega de mídia (`MIDIA_ENTREGA_PCT`, `MIDIA_VEICULO_PCT`) é cortado na primeira casa: 459.900 de 460.000 sai `99.9`, e só chega a `100` quando está completo. Os relatórios já gerados antes desta regra mantêm o texto que tinham (cada versão é uma fotografia); a regra vale para as versões novas.
+- `baseCalculo` é o texto "como foi calculado", com os números no padrão brasileiro: milhar com ponto e decimal com vírgula (`"459.900 de 460.000"`, `"1.105 de 1.113"`). Todo percentual do relatório (entregas concluídas, mídia por unidade e por veículo, aplicações comprovadas, cortesias destinadas) é cortado na primeira casa: 459.900 de 460.000 sai `99.9` e só chega a `100` quando está completo; 17 de 19 sai `89.4`. O percentual de entrega de mídia (`MIDIA_ENTREGA_PCT`, `MIDIA_VEICULO_PCT`) **passa de 100** quando o exibido supera o previsto (`"907.300 de 460.000"` vale `197.2`). Os relatórios já gerados antes desta regra mantêm os números que tinham (cada versão é uma fotografia); a regra vale para as versões novas.
 - `valor` é `null` quando `disponivel` é `false`; o front mostra "indisponível", nunca um zero.
 - Para o patrocinador, `geradoPor` vem `null` (dado interno).
 
@@ -1147,7 +1173,7 @@ Gera uma **nova versão** do relatório da parceria, em `RASCUNHO`, copiando os 
 
 **200**: CSV do relatório, um número por linha, no mesmo formato de arquivo da rota 22 (`filename="relatorio-cliente-amarelo-v1.csv"`: o nome do patrocinador, sem acento e com hífens, e a versão).
 
-Colunas: `secao;indicador_codigo;indicador;recorte;valor;unidade;base_calculo;disponivel`. Número indisponível sai com `valor` em branco e `disponivel` igual a `nao`.
+Colunas: `secao;indicador_codigo;indicador;recorte;valor;unidade;base_calculo;disponivel`. Número indisponível sai com `valor` em branco e `disponivel` igual a `nao`. O CSV traz as mesmas linhas da rota 35: as 6 seções, na ordem do modelo, com os 17 indicadores (um relatório sem nenhum dado tem 17 linhas, todas `nao`). Percentual acima de 100 sai como número (`197,2`), sem corte.
 
 **Histórico:** `DOWNLOAD` (entidade `relatorio`).
 
@@ -1162,7 +1188,7 @@ Colunas: `secao;indicador_codigo;indicador;recorte;valor;unidade;base_calculo;di
 - Toda rota que recebe o id de uma parceria (ou de algo que pertence a uma: entrega, arquivo, pergunta, relatório) confere, **a cada chamada**, se o usuário tem vínculo vigente com ela. A conferência vai ao banco toda vez e não é guardada na sessão. Por isso, quando a RBS revoga um e-mail, o acesso some na hora, mesmo para quem já estava logado.
 - Quem não tem vínculo recebe **404**, o mesmo erro de um id que não existe. Assim um patrocinador não descobre, pelo código de erro, quais parcerias existem.
 - A RBS passa em qualquer parceria que exista. Id que não existe é 404 para todos.
-- O `403` é para outra situação: o usuário **tem** acesso à parceria, mas o perfil dele não pode fazer aquela operação (rota só da RBS), ou a aba ainda não foi liberada. Nas rotas só da RBS o perfil é conferido **primeiro**: o patrocinador recebe 403 com qualquer id (da parceria dele, de outra ou que não existe) e com **qualquer corpo ou filtro** (corpo vazio, JSON quebrado, campo inválido, `?tamanho=999`...). O 403 nunca revela se o id existe nem como é o formato do corpo da rota. As rotas só da RBS são as marcadas "Admin RBS" na tabela do início deste arquivo.
+- O `403` é para outra situação: o usuário **tem** acesso à parceria, mas o perfil dele não pode fazer aquela operação (rota só da RBS), ou a aba está fechada para a parceria (fora da cota, ou ainda não liberada; veja "Aba"). Nas rotas só da RBS o perfil é conferido **primeiro**: o patrocinador recebe 403 com qualquer id (da parceria dele, de outra ou que não existe) e com **qualquer corpo ou filtro** (corpo vazio, JSON quebrado, campo inválido, `?tamanho=999`...). O 403 nunca revela se o id existe nem como é o formato do corpo da rota. As rotas só da RBS são as marcadas "Admin RBS" na tabela do início deste arquivo.
 
 ## Permissões por perfil
 
