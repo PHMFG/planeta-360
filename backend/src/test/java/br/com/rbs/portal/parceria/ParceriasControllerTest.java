@@ -391,37 +391,38 @@ class ParceriasControllerTest {
     }
 
     @Test
-    void patchLiberaAAbaPesquisaParaORoxoEOEuPassaAMostrarLiberada() {
+    void patchFechaEReabreUmaAbaDaCotaDoRoxoEOEuPassaAMostrar() {
+        // A Pesquisa não é da cota do Roxo (Subcota G) e não se libera (AbasEDaCotaTest); a Cortesias é, então serve de exemplo.
         SessaoDeApi rbs = SessaoDeApi.entrar(mvc, RBS);
         SessaoDeApi roxo = SessaoDeApi.entrar(mvc, ROXO);
         long id = roxo();
-        assertThat(lerLista(roxo.get("/api/auth/eu"), "$.parcerias[0].abas[?(@.codigo=='PESQUISA')].liberada")).containsExactly(false);
+        String cortesias = "$.parcerias[0].abas[?(@.codigo=='CORTESIAS')].liberada";
+        assertThat(lerLista(roxo.get("/api/auth/eu"), cortesias)).containsExactly(true);
 
-        MvcTestResult resposta = rbs.patch("/api/parcerias/" + id, "{\"abas\":[{\"codigo\":\"PESQUISA\",\"liberada\":true}]}");
+        MvcTestResult fecha = rbs.patch("/api/parcerias/" + id, "{\"abas\":[{\"codigo\":\"CORTESIAS\",\"liberada\":false}]}");
 
-        assertThat(resposta).hasStatus(HttpStatus.OK);
-        assertThat(lerLista(resposta, "$.abas[?(@.codigo=='PESQUISA')].liberada")).containsExactly(true);
-        assertThat(lerLista(roxo.get("/api/auth/eu"), "$.parcerias[0].abas[?(@.codigo=='PESQUISA')].liberada"))
-                .as("a sessão já aberta do Roxo vê a aba liberada").containsExactly(true);
-        assertThat(lerLista(roxo.get("/api/parcerias/{id}", id), "$.abas[?(@.codigo=='PESQUISA')].liberada")).containsExactly(true);
+        assertThat(fecha).hasStatus(HttpStatus.OK);
+        assertThat(lerLista(fecha, "$.abas[?(@.codigo=='CORTESIAS')].liberada")).containsExactly(false);
+        assertThat(lerLista(roxo.get("/api/auth/eu"), cortesias)).as("a sessão já aberta do Roxo vê a aba fechada").containsExactly(false);
+        assertThat(lerLista(roxo.get("/api/parcerias/{id}", id), "$.abas[?(@.codigo=='CORTESIAS')].liberada")).containsExactly(false);
 
-        // [ISOLAMENTO] Só a parceria do Roxo mudou; as outras abas e a Pesquisa do Verde seguem como estavam.
-        assertThat(lerLista(resposta, "$.abas[?(@.codigo=='APLICACOES')].liberada")).containsExactly(true);
+        // [ISOLAMENTO] Só a parceria do Roxo mudou; as outras abas e a Cortesias do Verde seguem como estavam.
+        assertThat(lerLista(fecha, "$.abas[?(@.codigo=='APLICACOES')].liberada")).containsExactly(true);
         long verde = SessaoDeApi.parceriaDe2027(jdbc, "Cliente Verde");
-        assertThat(lerLista(rbs.get("/api/parcerias/{id}", verde), "$.abas[?(@.codigo=='PESQUISA')].liberada")).containsExactly(false);
+        assertThat(lerLista(rbs.get("/api/parcerias/{id}", verde), "$.abas[?(@.codigo=='CORTESIAS')].liberada")).containsExactly(true);
 
         // [HISTORICO] LIBERACAO_ABA com o estado de antes e o de depois, e nada de EDICAO (só a aba mudou).
         var linha = jdbc.sql("SELECT valor_anterior, valor_novo, detalhe, entidade FROM historico WHERE acao = 'LIBERACAO_ABA'")
                 .query().singleRow();
-        assertThat(linha.get("valor_anterior")).isEqualTo("fechada");
-        assertThat(linha.get("valor_novo")).isEqualTo("liberada");
-        assertThat(linha.get("detalhe")).isEqualTo("Pesquisa da ativação");
+        assertThat(linha.get("valor_anterior")).isEqualTo("liberada");
+        assertThat(linha.get("valor_novo")).isEqualTo("fechada");
+        assertThat(linha.get("detalhe")).isEqualTo("Cortesias");
         assertThat(contar("SELECT count(*) FROM historico WHERE acao = 'EDICAO'")).isZero();
 
-        // Fechar de novo e esconder do menu também funcionam; repetir o mesmo estado não grava nada.
-        assertThat(lerLista(rbs.patch("/api/parcerias/" + id, "{\"abas\":[{\"codigo\":\"PESQUISA\",\"liberada\":false}]}"),
-                "$.abas[?(@.codigo=='PESQUISA')].liberada")).containsExactly(false);
-        rbs.patch("/api/parcerias/" + id, "{\"abas\":[{\"codigo\":\"PESQUISA\",\"liberada\":false}]}");
+        // Reabrir (a cota inclui a aba) e esconder do menu também funcionam; repetir o mesmo estado não grava nada.
+        assertThat(lerLista(rbs.patch("/api/parcerias/" + id, "{\"abas\":[{\"codigo\":\"CORTESIAS\",\"liberada\":true}]}"),
+                "$.abas[?(@.codigo=='CORTESIAS')].liberada")).containsExactly(true);
+        rbs.patch("/api/parcerias/" + id, "{\"abas\":[{\"codigo\":\"CORTESIAS\",\"liberada\":true}]}");
         MvcTestResult escondida = rbs.patch("/api/parcerias/" + id, "{\"abas\":[{\"codigo\":\"PERFIL\",\"visivel\":false}]}");
         assertThat(lerLista(escondida, "$.abas[?(@.codigo=='PERFIL')].liberada")).as("aba oculta não conta como liberada").containsExactly(false);
         assertThat(contar("SELECT count(*) FROM historico WHERE acao = 'LIBERACAO_ABA'")).isEqualTo(3);

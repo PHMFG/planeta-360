@@ -72,8 +72,12 @@ public final class AcessoDtos {
     public record EventoDto(Long id, String nome, Integer edicao) {
     }
 
-    /** Uma das 7 abas do menu. liberada = false quando a cota ainda não libera a aba (o front mostra o cadeado). */
-    public record AbaDto(String codigo, String nome, int ordem, boolean liberada) {
+    /**
+     * Uma das 7 abas do menu. liberada = false quando a aba está fechada para a parceria (o front mostra o cadeado).
+     * incluidaNaCota = a cota da parceria inclui a aba (cota_tipo_aba): false quer dizer "fora da sua cota" (a RBS nem
+     * consegue liberar), diferente de uma aba da cota que a RBS ainda não abriu.
+     */
+    public record AbaDto(String codigo, String nome, int ordem, boolean liberada, boolean incluidaNaCota) {
     }
 
     public record ParceriaDoUsuarioDto(Long id, String patrocinador, CotaDto cota, EventoDto evento, List<AbaDto> abas) {

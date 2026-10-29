@@ -35,8 +35,12 @@ public class ParceriaRepositorio {
                                BigDecimal valorInvestimento, String baseValor, String situacao, OffsetDateTime criadoEm) {
     }
 
-    /** Estado de uma aba na parceria (o id e o nome servem ao histórico). */
-    public record AbaDaParceria(Integer abaId, String codigo, String nome, int ordem, boolean visivel, boolean liberada) {
+    /**
+     * Estado de uma aba na parceria (o id e o nome servem ao histórico). incluidaNaCota: a cota da parceria inclui a aba
+     * (cota_tipo_aba); só a aba incluída pode ser liberada pela RBS.
+     */
+    public record AbaDaParceria(Integer abaId, String codigo, String nome, int ordem, boolean visivel, boolean liberada,
+                                boolean incluidaNaCota) {
     }
 
     /** Filtros opcionais da lista (rota 7). usuarioId preenchido = só as parcerias deste usuário (o patrocinador). */
@@ -179,8 +183,12 @@ public class ParceriaRepositorio {
     /** As 7 abas da parceria, em ordem, com o estado cru (visivel e liberada separados). */
     public List<AbaDaParceria> abasDaParceria(long parceriaId) {
         return jdbc.sql("""
-                        SELECT a.id AS aba_id, a.codigo, a.nome, a.ordem, pab.visivel, pab.liberada
-                        FROM parceria_aba pab JOIN aba a ON a.id = pab.aba_id
+                        SELECT a.id AS aba_id, a.codigo, a.nome, a.ordem, pab.visivel, pab.liberada,
+                               EXISTS (SELECT 1 FROM cota_tipo_aba cta
+                                       WHERE cta.cota_tipo_id = pa.cota_tipo_id AND cta.aba_id = a.id) AS incluida_na_cota
+                        FROM parceria_aba pab
+                        JOIN parceria pa ON pa.id = pab.parceria_id
+                        JOIN aba a ON a.id = pab.aba_id
                         WHERE pab.parceria_id = :id
                         ORDER BY a.ordem
                         """)

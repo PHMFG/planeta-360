@@ -153,7 +153,12 @@ Estes formatos aparecem em várias rotas.
 
 **Evento**: `{ "id": 2, "nome": "Planeta Atlântida", "edicao": 2027 }`
 
-**Aba**: `{ "codigo": "PESQUISA", "nome": "Pesquisa da ativação", "ordem": 6, "liberada": true }`. Sempre as 7 abas, em ordem. `liberada: false` quando a cota ainda não libera a aba; o front mostra o cadeado. Uma aba só conta como liberada se estiver liberada **e** visível no banco.
+**Aba**: `{ "codigo": "PESQUISA", "nome": "Pesquisa da ativação", "ordem": 6, "liberada": true, "incluidaNaCota": true }`. Sempre as 7 abas, em ordem. Dois booleanos dizem coisas diferentes:
+
+- `liberada: false` = a aba está **fechada** para esta parceria (a RBS ainda não abriu, fechou ou escondeu do menu); o front mostra o cadeado. Uma aba só conta como liberada se estiver liberada **e** visível no banco.
+- `incluidaNaCota: false` = a aba **não faz parte da cota** da parceria (vem de `cota_tipo_aba`; hoje a Pesquisa só está na cota Master). Aba fora da cota nunca abre: a RBS não consegue liberá-la (rota 10 devolve 422). Use este campo para mostrar "fora da sua cota" em vez de "aguardando liberação".
+
+`incluidaNaCota` vem em toda lista de abas: `parcerias[].abas` do `UsuarioLogado` (login e `GET /api/auth/eu`) e `abas` da parceria (rotas 8, 9 e 10).
 
 **Arquivo** (um envio, uma versão):
 
@@ -204,13 +209,13 @@ Devolvido por `POST /api/auth/login` e `GET /api/auth/eu`:
       "cota": { "codigo": "MASTER", "nome": "Master" },
       "evento": { "id": 2, "nome": "Planeta Atlântida", "edicao": 2027 },
       "abas": [
-        { "codigo": "PERFIL", "nome": "Perfil do cliente", "ordem": 1, "liberada": true },
-        { "codigo": "APLICACOES", "nome": "Aplicações de marca no evento", "ordem": 2, "liberada": true },
-        { "codigo": "MIDIA", "nome": "Mídia e conteúdo", "ordem": 3, "liberada": true },
-        { "codigo": "CORTESIAS", "nome": "Cortesias", "ordem": 4, "liberada": true },
-        { "codigo": "CREDENCIAMENTO", "nome": "Credenciamento", "ordem": 5, "liberada": true },
-        { "codigo": "PESQUISA", "nome": "Pesquisa da ativação", "ordem": 6, "liberada": true },
-        { "codigo": "CONTRATO", "nome": "Contrato", "ordem": 7, "liberada": true }
+        { "codigo": "PERFIL", "nome": "Perfil do cliente", "ordem": 1, "liberada": true, "incluidaNaCota": true },
+        { "codigo": "APLICACOES", "nome": "Aplicações de marca no evento", "ordem": 2, "liberada": true, "incluidaNaCota": true },
+        { "codigo": "MIDIA", "nome": "Mídia e conteúdo", "ordem": 3, "liberada": true, "incluidaNaCota": true },
+        { "codigo": "CORTESIAS", "nome": "Cortesias", "ordem": 4, "liberada": true, "incluidaNaCota": true },
+        { "codigo": "CREDENCIAMENTO", "nome": "Credenciamento", "ordem": 5, "liberada": true, "incluidaNaCota": true },
+        { "codigo": "PESQUISA", "nome": "Pesquisa da ativação", "ordem": 6, "liberada": true, "incluidaNaCota": true },
+        { "codigo": "CONTRATO", "nome": "Contrato", "ordem": 7, "liberada": true, "incluidaNaCota": true }
       ]
     }
   ]
@@ -219,7 +224,7 @@ Devolvido por `POST /api/auth/login` e `GET /api/auth/eu`:
 
 - `perfil` é `ADMIN_PATROCINADOR` ou `ADMIN_RBS`.
 - `parcerias` lista as parcerias a que o usuário tem vínculo, da edição mais nova para a mais antiga. Para o `ADMIN_RBS` vem **vazia**, porque a RBS enxerga todas (use `GET /api/parcerias`).
-- `abas` traz sempre as 7 abas, em ordem; `liberada` é `false` quando a cota não libera a aba (por exemplo, a Pesquisa em cota que não é Master).
+- `abas` traz sempre as 7 abas, em ordem; `liberada` é `false` quando a aba está fechada para a parceria e `incluidaNaCota` é `false` quando a cota nem inclui a aba (por exemplo, a Pesquisa em cota que não é Master). Veja "Aba" em "Objetos que se repetem".
 - A resposta **nunca** traz senha nem hash.
 
 ## 1. `GET /api/auth/csrf`  · etapa 3
@@ -427,7 +432,7 @@ Os e-mails são guardados em minúsculas e sem espaços nas pontas. A parceria n
   "baseValor": "BRUTO_TABELA",
   "situacao": "ATIVA",
   "criadoEm": "2026-09-20T11:00:00-03:00",
-  "abas": [ { "codigo": "PERFIL", "nome": "Perfil do cliente", "ordem": 1, "liberada": true } ],
+  "abas": [ { "codigo": "PERFIL", "nome": "Perfil do cliente", "ordem": 1, "liberada": true, "incluidaNaCota": true } ],
   "emailsAutorizados": [
     { "id": 5, "email": "marketing@amarelo.example", "vinculo": "MARCA", "situacao": "ATIVO" },
     { "id": 6, "email": "atendimento@agencia-x.example", "vinculo": "AGENCIA", "situacao": "ATIVO" }
@@ -435,7 +440,7 @@ Os e-mails são guardados em minúsculas e sem espaços nas pontas. A parceria n
 }
 ```
 
-- `abas` traz as 7 abas, com `liberada` (o exemplo mostra uma só para ficar curto).
+- `abas` traz as 7 abas, com `liberada` e `incluidaNaCota` (o exemplo mostra uma só para ficar curto).
 - `emailsAutorizados` traz só os e-mails **não revogados**, com `situacao` `ATIVO` (já tem conta e vínculo) ou `PENDENTE` (autorizado, ainda sem primeiro acesso). Os detalhes (quem autorizou, revogados) estão na rota 11, só da RBS.
 
 ## 10. `PATCH /api/parcerias/{id}`  · etapa 4
@@ -457,7 +462,20 @@ Os e-mails são guardados em minúsculas e sem espaços nas pontas. A parceria n
 
 A cota e o evento **não mudam** por aqui (mudar a cota refaria as abas). `abas` liberam (`liberada: true`) ou fecham uma aba só nesta parceria; cada aba pode levar também `visivel`.
 
-**200**: o objeto da rota 9, já com as mudanças. **Erros:** 403, 404, 409 (nome de patrocinador repetido), 422 (`valorInvestimento` sem `baseValor`, aba que não existe, situação inválida).
+**Só se libera aba que a cota inclui.** A aba precisa estar em `cota_tipo_aba` para a cota da parceria (`incluidaNaCota: true`; a decisão do projeto é a Pesquisa só para a cota Master). Mandar `liberada: true` para uma aba fora da cota, que está fechada, devolve **422** e nada do `PATCH` é gravado (todo o corpo é recusado, como em qualquer outro 422). O `detail` traz a frase, e `campos` a repete na chave `abas[i].liberada` (`i` = posição da aba na lista enviada):
+
+```json
+{
+  "type": "about:blank", "title": "Dados inválidos", "status": 422,
+  "detail": "A cota Subcota G não inclui a aba Pesquisa da ativação.",
+  "instance": "/api/parcerias/3",
+  "campos": { "abas[0].liberada": "A cota Subcota G não inclui a aba Pesquisa da ativação." }
+}
+```
+
+Quando o 422 vem junto com outro erro de campo, o `detail` volta a ser `"Confira os campos destacados e tente de novo."` e a frase fica só em `campos`. **Fechar** (`liberada: false`) e ocultar (`visivel`) valem para qualquer aba. Repetir `liberada: true` numa aba que já estava aberta (dado de antes da regra) é um `PATCH` sem mudança e não dá erro; depois de fechada, ela não volta a abrir.
+
+**200**: o objeto da rota 9, já com as mudanças. **Erros:** 403, 404, 409 (nome de patrocinador repetido), 422 (`valorInvestimento` sem `baseValor`, aba que não existe, situação inválida, aba fora da cota que se tenta liberar).
 
 **Regras:** campo ausente ou `null` = não muda; texto em branco em `nomeProduto`, `patrocinador.segmento` limpa o campo. O `patrocinador.nome` é normalizado como na rota 8 (sem espaços nas pontas nem repetidos) e comparado com os outros patrocinadores sem diferença de maiúsculas ou de espaços; repetido dá 409 (`"Já existe um patrocinador com este nome."`). Mandar o nome atual com espaços a mais não muda nada e não grava histórico. O valor e a base vão sempre juntos (no estado final). O nome e o segmento do `patrocinador` valem para a marca inteira, em todas as edições. Mandar uma aba no estado em que ela já está não grava nada.
 

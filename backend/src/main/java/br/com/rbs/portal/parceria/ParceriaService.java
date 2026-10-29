@@ -173,7 +173,7 @@ public class ParceriaService {
 
     /** Como o contrato descreve: uma aba só conta como liberada se estiver liberada E visível. */
     static AbaDto paraAbaDto(AbaDaParceria aba) {
-        return new AbaDto(aba.codigo(), aba.nome(), aba.ordem(), aba.liberada() && aba.visivel());
+        return new AbaDto(aba.codigo(), aba.nome(), aba.ordem(), aba.liberada() && aba.visivel(), aba.incluidaNaCota());
     }
 
     /**

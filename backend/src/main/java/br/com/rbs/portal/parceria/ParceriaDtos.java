@@ -43,8 +43,11 @@ public final class ParceriaDtos {
     public record EventoCompletoDto(Long id, String nome, Integer edicao, LocalDate dataInicio, LocalDate dataFim, String local) {
     }
 
-    /** Uma das 7 abas. liberada = liberada E visível para esta parceria (o front mostra o cadeado quando é false). */
-    public record AbaDto(String codigo, String nome, int ordem, boolean liberada) {
+    /**
+     * Uma das 7 abas. liberada = liberada E visível para esta parceria (o front mostra o cadeado quando é false).
+     * incluidaNaCota = a cota da parceria inclui a aba (cota_tipo_aba); false = "fora da sua cota", e a RBS não consegue liberar.
+     */
+    public record AbaDto(String codigo, String nome, int ordem, boolean liberada, boolean incluidaNaCota) {
     }
 
     /** Quem fez algo (autorizou, revogou). */

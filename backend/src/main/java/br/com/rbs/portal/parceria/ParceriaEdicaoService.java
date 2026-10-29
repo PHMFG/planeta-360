@@ -80,14 +80,26 @@ public class ParceriaEdicaoService {
             campos.put("valorInvestimento", "Informe o valor junto com a base do valor.");
         }
         List<AbaEdicaoRequisicao> pedidosDeAba = corpo.abas() == null ? List.of() : corpo.abas();
+        Map<String, String> foraDaCota = new LinkedHashMap<>();
         for (int i = 0; i < pedidosDeAba.size(); i++) {
             String codigo = pedidosDeAba.get(i).codigo().trim();
-            if (abasAntes.stream().noneMatch(a -> a.codigo().equals(codigo))) {
+            AbaDaParceria aba = abasAntes.stream().filter(a -> a.codigo().equals(codigo)).findFirst().orElse(null);
+            if (aba == null) {
                 campos.put("abas[" + i + "].codigo", "Aba não encontrada. Use PERFIL, APLICACOES, MIDIA, CORTESIAS, "
                         + "CREDENCIAMENTO, PESQUISA ou CONTRATO.");
+            } else if (Boolean.TRUE.equals(pedidosDeAba.get(i).liberada()) && !aba.liberada() && !aba.incluidaNaCota()) {
+                // [PERMISSAO] Só se libera aba que a cota inclui (cota_tipo_aba: por exemplo, Pesquisa só para a Master). Fechar
+                // sempre pode; e repetir "liberada" numa aba que já estava aberta é um PATCH sem mudança, não uma liberação.
+                foraDaCota.put("abas[" + i + "].liberada",
+                        "A cota " + antes.cotaNome() + " não inclui a aba " + aba.nome() + ".");
             }
         }
-        if (!campos.isEmpty()) {
+        if (!campos.isEmpty() || !foraDaCota.isEmpty()) {
+            // Só o erro de cota: o front mostra o "detail" (o botão de liberar a aba não tem campo ao lado), então ele traz a frase.
+            if (campos.isEmpty()) {
+                throw new DadosInvalidosException(foraDaCota.values().iterator().next(), foraDaCota);
+            }
+            campos.putAll(foraDaCota);
             throw new DadosInvalidosException(campos);
         }
         if (!nomeDepois.equals(antes.patrocinadorNome())
@@ -126,7 +138,8 @@ public class ParceriaEdicaoService {
             repositorio.atualizarAba(parceriaId, atual.abaId(), liberada, visivel);
             historico.registrar(AcaoHistorico.LIBERACAO_ABA, usuario, parceriaId, "aba", atual.abaId().longValue(),
                     situacaoDaAba(atual.liberada(), atual.visivel()), situacaoDaAba(liberada, visivel), atual.nome(), requisicao);
-            estado.put(atual.codigo(), new AbaDaParceria(atual.abaId(), atual.codigo(), atual.nome(), atual.ordem(), visivel, liberada));
+            estado.put(atual.codigo(), new AbaDaParceria(atual.abaId(), atual.codigo(), atual.nome(), atual.ordem(), visivel, liberada,
+                    atual.incluidaNaCota()));
         }
 
         return parcerias.montar(parcerias.buscar(parceriaId, false), emails.vigentes(parceriaId));
