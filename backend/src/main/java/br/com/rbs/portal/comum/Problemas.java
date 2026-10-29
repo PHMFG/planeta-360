@@ -66,6 +66,7 @@ public final class Problemas {
             case 413 -> "Arquivo grande demais";
             case 415 -> "Tipo de conteúdo não aceito";
             case 422 -> "Dados inválidos";
+            case 429 -> "Limite de uso atingido";
             case 500 -> "Erro interno";
             case 503 -> "Serviço indisponível";
             default -> status.value() >= 500 ? "Erro no servidor" : "Erro na requisição";
@@ -84,6 +85,7 @@ public final class Problemas {
             case 413 -> "O arquivo passa do tamanho permitido.";
             case 415 -> "A API não aceita esse tipo de conteúdo.";
             case 422 -> "Confira os dados enviados e tente de novo.";
+            case 429 -> "Você chegou ao limite de uso por hoje. Tente de novo mais tarde.";
             default -> "Algo deu errado do nosso lado. Tente de novo em instantes; se continuar, avise a equipe.";
         };
     }

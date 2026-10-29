@@ -15,6 +15,7 @@ import br.com.rbs.portal.atlas.loop.DescarteDeRelatorios;
 import br.com.rbs.portal.atlas.loop.ItensDaConversa;
 import br.com.rbs.portal.atlas.loop.LoopDoAgente;
 import br.com.rbs.portal.atlas.loop.PlanoBSemLlm;
+import br.com.rbs.portal.atlas.loop.TetoDiario;
 import br.com.rbs.portal.atlas.provedor.DisponibilidadeDoLlm;
 import br.com.rbs.portal.atlas.relatorio.ModeloBase;
 import br.com.rbs.portal.atlas.relatorio.RelatorioAtlasDtos.RelatorioAtlasDto;
@@ -65,6 +66,7 @@ public class AtlasService {
     private final VerificadorDeAcesso verificador;
     private final PlanoBSemLlm planoB;
     private final LoopDoAgente loop;
+    private final TetoDiario teto;
     private final ItensDaConversa itens;
     private final DescarteDeRelatorios descarte;
     private final RelatorioAtlasService relatorios;
@@ -72,13 +74,14 @@ public class AtlasService {
     private final ModeloBase modelos;
 
     public AtlasService(AtlasRepositorio repositorio, AtlasContextoFabrica contextos, VerificadorDeAcesso verificador,
-                        PlanoBSemLlm planoB, LoopDoAgente loop, ItensDaConversa itens, DescarteDeRelatorios descarte,
+                        PlanoBSemLlm planoB, LoopDoAgente loop, TetoDiario teto, ItensDaConversa itens, DescarteDeRelatorios descarte,
                         RelatorioAtlasService relatorios, DisponibilidadeDoLlm llm, ModeloBase modelos) {
         this.repositorio = repositorio;
         this.contextos = contextos;
         this.verificador = verificador;
         this.planoB = planoB;
         this.loop = loop;
+        this.teto = teto;
         this.itens = itens;
         this.descarte = descarte;
         this.relatorios = relatorios;
@@ -140,7 +143,8 @@ public class AtlasService {
      * cartão com as lacunas que faltam); com cartão pendente, 409. Com {@code texto}: o loop do modelo de linguagem; sem modelo de
      * linguagem, 503 com a frase "use o botão"; com cartão aberto, a mensagem nova primeiro o fecha com {@code cancel}. Ordem das
      * respostas: 403 (RBS), 404 (conversa que não é sua), 403 (aba), 422 (texto vazio ou acima de 1.000 caracteres; nem texto nem
-     * atalho; os dois), 503, 409 (turno em andamento; cartão aberto no atalho).
+     * atalho; os dois), 503, 429 (teto diário da parceria; só o texto, o botão não conta), 409 (turno em andamento; cartão aberto
+     * no atalho).
      */
     public ConversaDto enviarMensagem(UsuarioAutenticado usuario, long conversaId, MensagemRequisicao corpo,
                                       HttpServletRequest requisicao) {
@@ -168,6 +172,7 @@ public class AtlasService {
             if (!llm.disponivel()) {
                 throw new ServicoIndisponivelException(DisponibilidadeDoLlm.SEM_MODELO);   // sem provedor, o botão é o caminho
             }
+            teto.exigirFolga(conversa.parceriaId());   // 429: o teto diário de mensagens do Atlas por parceria
             return conversarComOModelo(usuario, conversa, corpo.texto().strip(), requisicao);
         }
         return rodarPlanoB(usuario, conversa, modelo, requisicao);
@@ -191,7 +196,8 @@ public class AtlasService {
     /**
      * Rota 46. {@code accept}, {@code decline} ou {@code cancel}. Sem modelo de linguagem, em accept e decline o plano B preenche
      * as frases-modelo e finaliza o relatório no mesmo pedido. Com modelo, depois de gravar os valores a resposta da ferramenta
-     * pendente vai ao histórico, com o mesmo {@code tool_call_id}, e o loop retoma. Ordem das respostas: 403 (RBS), 404 (cartão que
+     * pendente vai ao histórico, com o mesmo {@code tool_call_id}, e o loop retoma (com o teto diário da parceria atingido, o
+     * cartão segue o plano B em vez de dar 429). Ordem das respostas: 403 (RBS), 404 (cartão que
      * não é seu), 403 (aba), 422 (ação), 409 (cartão já respondido; turno em andamento), 422 (valores).
      */
     public ConversaDto responderCartao(UsuarioAutenticado usuario, long solicitacaoId, RespostaDoCartaoRequisicao corpo,
@@ -215,9 +221,11 @@ public class AtlasService {
         int antes = repositorio.ultimaOrdem(conversa.id());
         AtlasContexto contexto = contextos.para(usuario, conversa.parceriaId(), conversa.id(), requisicao);
         comTurno(conversa.id(), () -> {
-            if (llm.disponivel()) {
+            if (llm.disponivel() && !teto.atingido(conversa.parceriaId())) {
                 loop.retomar(contexto, solicitacaoId, acao, valores);
             } else {
+                // Sem modelo, ou com o teto diário atingido: o cartão respondido segue o plano B (não gasta o modelo e a pessoa
+                // não fica presa a um cartão aberto).
                 planoB.responder(contexto, solicitacaoId, acao, valores);
             }
             return null;

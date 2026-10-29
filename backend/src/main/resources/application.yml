@@ -60,6 +60,11 @@ spring:
           thinking:
             type: disabled
 
+# [ATLAS] Teto diário de mensagens do assistente por parceria (do dia de Brasília, só as do modelo de linguagem; o botão não conta).
+# Com o teto atingido, a rota 44 com texto responde 429. Serve para uma rodada de testes não gastar o limite do provedor.
+atlas:
+  teto-diario-por-parceria: ${ATLAS_TETO_DIARIO:200}
+
 server:
   port: 8080
   servlet:

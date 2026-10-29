@@ -105,6 +105,12 @@ public class TratadorDeErros extends ResponseEntityExceptionHandler {
         return resposta(Problemas.de(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage()), request);
     }
 
+    /** Um limite de uso foi atingido (o teto diário do Atlas por parceria): 429 com a frase do que fazer no lugar. */
+    @ExceptionHandler(LimiteDeUsoException.class)
+    ResponseEntity<Object> limiteDeUso(LimiteDeUsoException ex, WebRequest request) {
+        return resposta(Problemas.de(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage()), request);
+    }
+
     /** [UPLOAD] Arquivo recusado pelo Armazenamento: 413 (acima do limite) ou 415 (extensão ou conteúdo fora da lista). */
     @ExceptionHandler(ArquivoRecusadoException.class)
     ResponseEntity<Object> arquivoRecusado(ArquivoRecusadoException ex, WebRequest request) {

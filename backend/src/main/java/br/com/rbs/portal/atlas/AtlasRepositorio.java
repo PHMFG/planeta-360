@@ -171,6 +171,22 @@ public class AtlasRepositorio {
                 .query(Long.class).single();
     }
 
+    /**
+     * Quantas mensagens do assistente que vieram do modelo de linguagem foram gravadas hoje (dia de Brasília) nas conversas da
+     * parceria. As do botão (plano B) têm id de pedido {@code botao_...} e não entram: não gastam o modelo. É o contador do
+     * teto diário.
+     */
+    public long mensagensDoModeloHoje(long parceriaId) {
+        return jdbc.sql("""
+                        SELECT count(*) FROM atlas_mensagem m JOIN atlas_conversa c ON c.id = m.conversa_id
+                        WHERE c.parceria_id = :parceria AND m.papel = 'assistant'
+                          AND m.criada_em >= (date_trunc('day', now() AT TIME ZONE 'America/Sao_Paulo') AT TIME ZONE 'America/Sao_Paulo')
+                          AND NOT coalesce(jsonb_path_exists(m.tool_calls, '$[*].id ? (@ like_regex "^botao_")'), false)
+                        """)
+                .param("parceria", parceriaId)
+                .query(Long.class).single();
+    }
+
     public List<LinhaDeMensagem> mensagens(long conversaId) {
         return jdbc.sql("""
                         SELECT id, ordem, papel, conteudo, CAST(tool_calls AS text) AS tool_calls, tool_call_id, criada_em,

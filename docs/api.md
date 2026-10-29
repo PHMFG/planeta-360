@@ -67,6 +67,7 @@ Todo erro, sem exceção, vem como `application/problem+json` no formato `Proble
 | 413 | Arquivo grande demais | Envio acima de 20 MB. |
 | 415 | Tipo de conteúdo não aceito | Extensão ou tipo de arquivo fora da lista permitida, ou `Content-Type` errado. |
 | 422 | Dados inválidos | Campo faltando ou fora do formato. Vem com `campos`. |
+| 429 | Limite de uso atingido | Um limite de uso foi atingido. Hoje só a rota 44: o teto diário de mensagens do Atlas por parceria. O `detail` diz o que fazer no lugar. |
 | 500 | Erro interno | Falha inesperada. O `detail` é sempre genérico. |
 | 503 | Serviço indisponível | Uma parte de que a rota depende está fora do ar. Hoje só a rota 44: mensagem de texto no Atlas sem o modelo de linguagem. O `detail` diz o que fazer no lugar. |
 
@@ -1420,7 +1421,7 @@ O relatório sai de dois jeitos, pelas mesmas rotas. Pelo **botão "Montar relat
 - **Aba.** A aba do modelo, `APLICACOES`, tem de estar aberta para a marca: fechada, todas as rotas 42 a 48 respondem **403** com as duas frases de "Aba". Vale **também para o relatório pronto**: fechar a aba esconde o documento da marca (rotas 47 e 48). A RBS lê o relatório sempre.
 - **POST** exige o token CSRF. Erros em `ProblemDetail`.
 - **Um turno por vez em cada conversa.** As rotas 42 (com atalho), 44 e 46 começam um turno; enquanto ele roda (com o modelo, uma conversa pode levar alguns segundos), outra chamada na mesma conversa recebe **409** (`"O Atlas ainda está respondendo nesta conversa. Espere a resposta."`). O turno termina sozinho, também em erro, e um turno parado há mais de 5 minutos deixa de valer.
-- **Ordem das conferências:** 403 (RBS) &rarr; 404 &rarr; 403 (aba) &rarr; 400 e 422 (formato do corpo) &rarr; 503 &rarr; 409 &rarr; 422 dos valores do cartão (que dependem do estado).
+- **Ordem das conferências:** 403 (RBS) &rarr; 404 &rarr; 403 (aba) &rarr; 400 e 422 (formato do corpo) &rarr; 503 &rarr; 429 (teto diário; só a mensagem de texto) &rarr; 409 &rarr; 422 dos valores do cartão (que dependem do estado).
 
 ## O modelo de linguagem (texto livre)
 
@@ -1433,6 +1434,7 @@ Com o modelo ligado, a mensagem de texto da rota 44 e a resposta do cartão da r
 - **O modelo não escreve número.** Texto de parágrafo (`relatorio_editar`) e texto de chat passam pela mesma checagem: sem algarismo fora de marcador `{{ref}}`, todo marcador existe e resolve nesta parceria, sem HTML, link, imagem nem URL e, no parágrafo, até 3 frases e 600 caracteres. A recusa de um parágrafo volta ao modelo, que tem mais uma tentativa; na **segunda recusa do mesmo bloco ele fica com a frase-modelo** (`redigidoPor` `MODELO`). No chat, com algarismo solto o servidor pede **uma** nova redação; se a segunda também tiver, a resposta vira o texto fixo `"Não trago números fora do relatório. Posso montar o relatório de ativação."`. O histórico guarda o texto com os marcadores; o item `texto` da conversa os traz resolvidos. Número por extenso escapa da regra e é proibido no prompt.
 - **O parágrafo redigido pelo modelo** sai com `redigidoPor: "ATLAS"` na rota 47 (e `"MODELO"` quando é a frase-modelo).
 - **Falha do modelo** (rede, limite do provedor, tempo esgotado): o turno termina com um texto fixo (`"Não consegui falar com o modelo de linguagem agora. O que já foi feito está salvo..."`) e resposta **200**; o histórico continua válido e o botão segue funcionando. Um turno que passa de **3 minutos** (`atlas.prazo-do-turno`) não começa outra ida ao modelo e termina do mesmo jeito (`"Esta resposta demorou mais do que o esperado e eu parei..."`), para não vencer a trava de 5 minutos do turno.
+- **Teto diário.** Para uma rodada de testes não gastar o limite do provedor, cada parceria tem um teto de mensagens do assistente por dia: contam as mensagens que o modelo escreveu e que ficaram gravadas hoje (dia de Brasília), em todas as conversas da parceria; o limite é configurável (`atlas.teto-diario-por-parceria`, padrão **200**). Com o teto atingido, a rota 44 com `texto` responde **429** (`"O Atlas atingiu o limite de uso de hoje desta parceria. Use o botão Montar relatório ou tente amanhã."`), sem gravar a mensagem nem chamar o modelo. O **botão não conta** e continua funcionando; a resposta do cartão (rota 46) com o teto atingido segue o plano B (frases-modelo) em vez de dar 429, para a marca não ficar presa a um cartão aberto. A conferência é no início do turno: um turno que começou abaixo do teto termina.
 - O **botão** (atalho) continua sendo o plano B, com ou sem modelo. Cartão aberto pelo botão e respondido com o modelo ligado é retomado pelo modelo.
 
 ## O objeto Conversa (rotas 42, 44, 45 e 46)
@@ -1522,6 +1524,7 @@ Cada item de `campos` do cartão é um campo do catálogo (rota 39) mais `obriga
 | 404 | Conversa que não é sua (inexistente, de outra parceria ou de outro usuário). |
 | 409 | Um turno em andamento na conversa; ou, no atalho, um cartão aberto (`"Este relatório está esperando a resposta do cartão. Responda ou feche o cartão antes de montar de novo."`). Mensagem de texto com cartão aberto não dá 409: fecha o cartão. |
 | 422 | Texto vazio ou com mais de 1.000 caracteres (`campos.texto`); nem texto nem atalho, ou os dois; atalho ou modelo desconhecido. |
+| 429 | O teto diário de mensagens do Atlas da parceria foi atingido (só no texto; o botão não conta): `"O Atlas atingiu o limite de uso de hoje desta parceria. Use o botão Montar relatório ou tente amanhã."` |
 | 503 | Texto sem modelo de linguagem. |
 
 ## 45. `GET /api/atlas/conversas/{id}`  · Atlas 2
