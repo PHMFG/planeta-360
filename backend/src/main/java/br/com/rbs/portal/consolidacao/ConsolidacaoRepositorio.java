@@ -102,13 +102,16 @@ public class ConsolidacaoRepositorio {
                 .list();
     }
 
-    /** Cada linha do plano de mídia com a soma das exibições dela. Mesma conta da visão, só que sem agrupar por veículo. */
+    /**
+     * Cada linha do plano de mídia com a soma das exibições dela. Mesma conta da visão, só que sem agrupar por veículo
+     * (e o mesmo percentual: cortado na primeira casa, para nunca mostrar 100 sem estar completo).
+     */
     public List<LinhaDoPlano> linhasDoPlano(long parceriaId) {
         return jdbc.sql("""
                         SELECT ap.id AS aproveitamento_id, ap.veiculo, ap.formato, ap.espaco_programa, ap.unidade,
                                ap.quantidade_prevista AS previsto,
                                CAST(coalesce(v.exibido, 0) AS numeric(14,2)) AS exibido,
-                               round(100 * coalesce(v.exibido, 0) / ap.quantidade_prevista, 1) AS percentual
+                               fn_pct_truncado(100 * coalesce(v.exibido, 0) / ap.quantidade_prevista) AS percentual
                         FROM aproveitamento_previsto ap
                         LEFT JOIN (SELECT aproveitamento_id, sum(quantidade) AS exibido
                                    FROM veiculacao GROUP BY aproveitamento_id) v ON v.aproveitamento_id = ap.id
@@ -123,7 +126,7 @@ public class ConsolidacaoRepositorio {
     public Optional<LinhaDeAplicacoes> aplicacoes(long parceriaId) {
         return jdbc.sql("""
                         SELECT CAST(previstas AS numeric(14,2)) AS previstas, CAST(comprovadas AS numeric(14,2)) AS comprovadas,
-                               CAST(fotos AS bigint) AS fotos, round(100 * comprovadas / previstas, 1) AS percentual
+                               CAST(fotos AS bigint) AS fotos, fn_pct_arredondado(100 * comprovadas / previstas) AS percentual
                         FROM vw_aplicacoes WHERE parceria_id = :parceriaId
                         """)
                 .param("parceriaId", parceriaId)
@@ -144,7 +147,7 @@ public class ConsolidacaoRepositorio {
     public Optional<LinhaDeCortesias> cortesias(long parceriaId) {
         return jdbc.sql("""
                         SELECT CAST(disponiveis AS bigint) AS disponiveis, CAST(destinadas AS bigint) AS destinadas,
-                               round(100.0 * destinadas / nullif(disponiveis, 0), 1) AS percentual
+                               fn_pct_arredondado(100.0 * destinadas / nullif(disponiveis, 0)) AS percentual
                         FROM vw_cortesias WHERE parceria_id = :parceriaId
                         """)
                 .param("parceriaId", parceriaId)

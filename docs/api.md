@@ -12,7 +12,7 @@ Este documento é o **contrato entre o back-end e o front-end**. Quem faz a tela
 | Endereço | Todas as rotas começam com `/api`. Em desenvolvimento a API roda em `http://localhost:8080` e o Vite repassa `/api` para ela, então front e API ficam na **mesma origem** (o cookie de sessão não precisa de CORS). |
 | Formato | JSON em UTF-8, nomes de campo em `camelCase`. Os únicos arquivos que não são JSON são os downloads, os CSV e os envios (`multipart/form-data`). |
 | Datas | Data e hora em ISO 8601 **com fuso**: `"2026-10-18T10:15:30-03:00"`. Data sem hora (prazo, início do evento): `"2026-12-16"`. |
-| Números | Números JSON. Dinheiro e quantidades têm até 2 casas decimais (`1000000.00`). Percentuais vão de 0 a 100, com 1 casa (`98.3`). |
+| Números | Números JSON. Dinheiro e quantidades têm até 2 casas decimais (`1000000.00`). Percentuais vão de 0 a 100, com 1 casa (`98.3`). O percentual de entrega de mídia é **cortado** na primeira casa, e não arredondado (459.900 de 460.000 é `99.9`, nunca `100`); os outros percentuais arredondam, mas abaixo de 100 nunca passam de `99.9`. Nos textos (`baseCalculo`, `detalhe`) os números saem no padrão brasileiro: `459.900 de 460.000`. |
 | Campos vazios | Um campo sem valor vem como `null`. As listas vêm sempre como `[]`, nunca `null`. |
 | Códigos | Cotas: `MASTER`, `SUBCOTA_G`, `SUBCOTA`. Abas: `PERFIL`, `APLICACOES`, `MIDIA`, `CORTESIAS`, `CREDENCIAMENTO`, `PESQUISA`, `CONTRATO`. Perfis: `ADMIN_RBS`, `ADMIN_PATROCINADOR`. |
 | Listas longas | Histórico, fila de entregas, cargas e rejeições são paginadas: `?pagina=0&tamanho=50` (pagina começa em 0; tamanho padrão 50, máximo 200; `pagina` negativa ou `tamanho` fora de 1 a 200 devolve 422). A resposta é `{"itens": [...], "pagina": 0, "tamanho": 50, "total": 137}`. As outras listas vêm inteiras, em array. |
@@ -963,7 +963,7 @@ Linhas lidas = inseridas + duplicadas + rejeitadas. As rejeitadas, com o motivo,
 }
 ```
 
-- `percentual` é exibido ÷ previsto × 100 (pode passar de 100). Seções sem plano comercial (`midia` sem linhas, por exemplo) vêm com listas vazias e `null` nos totais: `aplicacoes`, `entregas` e `cortesias` continuam como objeto, com todos os campos `null` quando a parceria não tem dado naquela seção.
+- `percentual` é exibido ÷ previsto × 100 (pode passar de 100). Na mídia ele é **cortado** na primeira casa decimal, não arredondado: 459.900 de 460.000 vale `99.9`, porque `100` diria "completo" quando faltam exibições. Seções sem plano comercial (`midia` sem linhas, por exemplo) vêm com listas vazias e `null` nos totais: `aplicacoes`, `entregas` e `cortesias` continuam como objeto, com todos os campos `null` quando a parceria não tem dado naquela seção.
 - `porUnidade` e `porVeiculo` vêm em ordem de unidade (`INSERCAO`, `CPM`, `APLICACAO`); `porVeiculo` e `linhas`, por veículo e formato. Linha do plano ainda sem exibição traz `exibido` 0 e `percentual` 0, nunca `null`.
 - `faltantes` é o que impede ou enfraquece o relatório. Tipos: `MIDIA_SEM_EXIBICAO`, `MIDIA_ABAIXO_DO_PREVISTO`, `APLICACAO_SEM_COMPROVACAO`, `PESQUISA_SEM_PERGUNTAS`, `PERGUNTA_SEM_RESULTADO`, `ENTREGA_PENDENTE`, `PARCERIA_SEM_USUARIO`, `FESTIVAL_SEM_NUMEROS`.
 - Os `faltantes` vêm do mais para o menos importante, na ordem dos tipos listada acima. [PENDENTE] A RBS ainda não definiu uma ordem de importância; vale a ordem desta lista.
@@ -1113,6 +1113,7 @@ Gera uma **nova versão** do relatório da parceria, em `RASCUNHO`, copiando os 
 
 - As seções seguem o catálogo de 17 indicadores do banco: Cumprimento das entregas, Mídia: previsto x exibido, Ativação no evento, Pesquisa da ativação, Cortesias e credenciamento, O festival em números.
 - `recorte` separa um indicador em vários números (por unidade, por veículo, por pergunta). Vem `""` quando é um número só.
+- `baseCalculo` é o texto "como foi calculado", com os números no padrão brasileiro: milhar com ponto e decimal com vírgula (`"459.900 de 460.000"`, `"1.105 de 1.113"`). O percentual de entrega de mídia (`MIDIA_ENTREGA_PCT`, `MIDIA_VEICULO_PCT`) é cortado na primeira casa: 459.900 de 460.000 sai `99.9`, e só chega a `100` quando está completo. Os relatórios já gerados antes desta regra mantêm o texto que tinham (cada versão é uma fotografia); a regra vale para as versões novas.
 - `valor` é `null` quando `disponivel` é `false`; o front mostra "indisponível", nunca um zero.
 - Para o patrocinador, `geradoPor` vem `null` (dado interno).
 

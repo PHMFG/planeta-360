@@ -475,6 +475,32 @@ class ConsolidacaoControllerTest {
         assertThat(lerJson(de2026, "$.relatorios.marcaVe")).isEqualTo(0);
     }
 
+    @Test
+    void percentualDeMidiaNuncaArredondaPara100SemEstarCompleto() {
+        long verde = parceria("Cliente Verde");
+        long linha = jdbc.sql("""
+                        INSERT INTO aproveitamento_previsto (parceria_id, categoria, bloco, veiculo, formato, tipo_midia, quantidade_prevista, unidade)
+                        VALUES (:p, 'MIDIA', 'Mídia', 'atl.la', 'Display CPM de teste', 'PROPRIA', 460000, 'CPM') RETURNING id
+                        """).param("p", verde).query(Long.class).single();
+        jdbc.sql("INSERT INTO veiculacao (aproveitamento_id, exibido_em, quantidade) VALUES (:a, now() - interval '1 day', 459900)")
+                .param("a", linha).update();   // 459.900 de 460.000 = 99,978%
+
+        MvcTestResult incompleto = consolidacao(entrar(VERDE), verde);
+
+        assertThat(incompleto).hasStatus(HttpStatus.OK);
+        Map<String, Object> cpm = unidade(incompleto, "CPM");
+        assertThat(numero(cpm.get("exibido"))).isEqualByComparingTo("459900");
+        assertThat(numero(cpm.get("percentual"))).as("cortado na 1ª casa: 99,9 e nunca 100").isEqualByComparingTo("99.9");
+        assertThat(numero(lerLista(incompleto, "$.midia.porVeiculo[?(@.unidade == 'CPM')].percentual").get(0))).isEqualByComparingTo("99.9");
+        assertThat(numero(lerLista(incompleto, "$.midia.linhas[?(@.aproveitamentoId == " + linha + ")].percentual").get(0)))
+                .isEqualByComparingTo("99.9");
+
+        jdbc.sql("INSERT INTO veiculacao (aproveitamento_id, exibido_em, quantidade) VALUES (:a, now() - interval '2 day', 100)")
+                .param("a", linha).update();
+        MvcTestResult completo = consolidacao(entrar(VERDE), verde);
+        assertThat(numero(unidade(completo, "CPM").get("percentual"))).as("completo: agora sim, 100").isEqualByComparingTo("100");
+    }
+
     @SuppressWarnings("unchecked")
     private static Map<String, Object> castMapa(Object mapa) {
         return (Map<String, Object>) mapa;

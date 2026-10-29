@@ -779,4 +779,85 @@ class RelatorioControllerTest {
         assertThat(colunas[12]).as("marca_ve_versao").isEqualTo("1");
         assertThat(colunas[13]).as("marca_ve_disponibilizado_em").endsWith("-03:00");
     }
+
+    // ---------------------------------------------------------------------
+    // Números do relatório em português: milhar com ponto e percentual de entrega que nunca vira 100 sem estar completo
+    // ---------------------------------------------------------------------
+
+    /** Uma linha de CPM nova no plano da Verde, com {@code exibido} já veiculado. A Verde só tinha inserções. */
+    void cpmDaVerde(int previsto, int exibido) {
+        long linha = jdbc.sql("""
+                        INSERT INTO aproveitamento_previsto (parceria_id, categoria, bloco, veiculo, formato, tipo_midia, quantidade_prevista, unidade)
+                        VALUES (:p, 'MIDIA', 'Mídia', 'atl.la', 'Display CPM de teste', 'PROPRIA', :previsto, 'CPM') RETURNING id
+                        """).param("p", parceria("Cliente Verde")).param("previsto", previsto).query(Long.class).single();
+        jdbc.sql("INSERT INTO veiculacao (aproveitamento_id, exibido_em, quantidade) VALUES (:a, now() - interval '1 day', :q)")
+                .param("a", linha).param("q", exibido).update();
+    }
+
+    @Test
+    void textoDeComoFoiCalculadoUsaMilharBrasileiroEPercentualDeEntregaNaoArredondaPara100() {
+        cpmDaVerde(460_000, 459_900);   // 99,978%: arredondado viraria 100,0
+        MockHttpSession rbs = entrar(RBS);
+
+        MvcTestResult resposta = gerar(rbs, parceria("Cliente Verde"));
+
+        assertThat(resposta).hasStatus(HttpStatus.CREATED);
+        Map<String, Object> entrega = indicador(resposta, "MIDIA_ENTREGA_PCT", "CPM");
+        assertThat(numero(entrega.get("valor"))).as("cortado na 1ª casa").isEqualByComparingTo("99.9");
+        assertThat(entrega.get("baseCalculo")).isEqualTo("459.900 de 460.000");
+        Map<String, Object> porVeiculo = indicador(resposta, "MIDIA_VEICULO_PCT", "atl.la · CPM");
+        assertThat(numero(porVeiculo.get("valor"))).isEqualByComparingTo("99.9");
+        assertThat(porVeiculo.get("baseCalculo")).isEqualTo("459.900 de 460.000");
+        // O valor continua sendo número (o front formata); o texto é o único que mudou de aparência.
+        assertThat(numero(indicador(resposta, "MIDIA_EXIBIDO", "CPM").get("valor"))).isEqualByComparingTo("459900");
+
+        // O CSV do relatório leva o mesmo texto, e o percentual com vírgula.
+        long relatorio = ((Number) lerJson(resposta, "$.id")).longValue();
+        String csv = texto(ler(rbs, "/api/relatorios/" + relatorio + "/csv"));
+        assertThat(csv).contains(";CPM;99,9;%;459.900 de 460.000;sim");
+    }
+
+    @Test
+    void percentualDeEntregaDeMidiaSoChegaA100QuandoEstaCompleto() {
+        cpmDaVerde(460_000, 460_000);
+        MockHttpSession rbs = entrar(RBS);
+
+        MvcTestResult resposta = gerar(rbs, parceria("Cliente Verde"));
+
+        Map<String, Object> entrega = indicador(resposta, "MIDIA_ENTREGA_PCT", "CPM");
+        assertThat(numero(entrega.get("valor"))).isEqualByComparingTo("100");
+        assertThat(entrega.get("baseCalculo")).isEqualTo("460.000 de 460.000");
+    }
+
+    @Test
+    void milharSoApareceNoTextoQuandoOsNumerosPassamDeMil() {
+        MockHttpSession rbs = entrar(RBS);
+
+        MvcTestResult resposta = gerar(rbs, parceria("Cliente Amarelo"));
+
+        // 1.105 de 1.113: o exemplo do QA. Antes saía "1105 de 1113".
+        assertThat(indicador(resposta, "MIDIA_ENTREGA_PCT", "INSERCAO").get("baseCalculo")).isEqualTo("1.105 de 1.113");
+        assertThat(numero(indicador(resposta, "MIDIA_ENTREGA_PCT", "INSERCAO").get("valor"))).isEqualByComparingTo("99.2");
+        // Abaixo de mil não muda nada.
+        assertThat(indicador(resposta, "ENTREGAS_CONCLUIDAS_PCT", "").get("baseCalculo")).isEqualTo("10 aprovadas de 11 aplicáveis");
+        assertThat(String.valueOf(indicador(resposta, "PESQUISA_RESULTADO", "P1 · Sim").get("baseCalculo")))
+                .isEqualTo("base de 412 respondentes (percentual)");
+    }
+
+    @Test
+    void asFuncoesDeNumeroDoBancoFormatamNoPadraoBrasileiro() {
+        assertThat(jdbc.sql("SELECT fn_numero_br(459900)").query(String.class).single()).isEqualTo("459.900");
+        assertThat(jdbc.sql("SELECT fn_numero_br(1234567.5)").query(String.class).single()).isEqualTo("1.234.567,5");
+        assertThat(jdbc.sql("SELECT fn_numero_br(12.50)").query(String.class).single()).isEqualTo("12,5");
+        assertThat(jdbc.sql("SELECT fn_numero_br(100.00)").query(String.class).single()).isEqualTo("100");
+        assertThat(jdbc.sql("SELECT fn_numero_br(0)").query(String.class).single()).isEqualTo("0");
+        assertThat(jdbc.sql("SELECT fn_numero_br(-1500.25)").query(String.class).single()).isEqualTo("-1.500,25");
+        assertThat(jdbc.sql("SELECT fn_numero_br(999)").query(String.class).single()).isEqualTo("999");
+        assertThat(jdbc.sql("SELECT fn_numero_br(1000)").query(String.class).single()).isEqualTo("1.000");
+        assertThat(jdbc.sql("SELECT fn_pct_truncado(99.978)").query(BigDecimal.class).single()).isEqualByComparingTo("99.9");
+        assertThat(jdbc.sql("SELECT fn_pct_truncado(104.06)").query(BigDecimal.class).single()).isEqualByComparingTo("104.0");
+        assertThat(jdbc.sql("SELECT fn_pct_arredondado(99.96)").query(BigDecimal.class).single()).as("abaixo de 100 nunca chega a 100").isEqualByComparingTo("99.9");
+        assertThat(jdbc.sql("SELECT fn_pct_arredondado(66.666)").query(BigDecimal.class).single()).as("fora disso, arredonda").isEqualByComparingTo("66.7");
+        assertThat(jdbc.sql("SELECT fn_pct_arredondado(100)").query(BigDecimal.class).single()).isEqualByComparingTo("100");
+    }
 }
