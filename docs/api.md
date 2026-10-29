@@ -1411,7 +1411,7 @@ Os números das frases saem no padrão brasileiro (`1.200`). Sem valor vigente n
 
 O Atlas monta o relatório de **Ativação no evento** da marca. Ele monta a estrutura e redige, mas **nunca escreve um número**: todo número do relatório vem do portal (a consolidação e o plano de aplicações), de um dado informado com autor e data (rotas 40 e 41) ou de uma conta registrada, e cada um aparece em "Fontes e cálculos". O relatório é um **documento de trabalho da marca**, com o selo "Não validado pela RBS": o relatório oficial (rotas 31 a 36) não muda.
 
-Nesta etapa o relatório sai pelo **botão "Montar relatório"** (o caminho sem modelo de linguagem, chamado de plano B): botão &rarr; base do relatório com os números do portal &rarr; cartão de perguntas com o que só a marca sabe &rarr; frases-modelo nos textos &rarr; relatório pronto. O modelo de linguagem (texto livre no chat) entra na etapa seguinte pelas mesmas rotas; enquanto não há provedor, `llmDisponivel` vem `false` e a mensagem de texto da rota 44 responde 503.
+O relatório sai de dois jeitos, pelas mesmas rotas. Pelo **botão "Montar relatório"** (o caminho sem modelo de linguagem, chamado de plano B): botão &rarr; base do relatório com os números do portal &rarr; cartão de perguntas com o que só a marca sabe &rarr; frases-modelo nos textos &rarr; relatório pronto. Ou pelo **texto livre no chat**, quando a API sobe com o modelo de linguagem ligado (`llmDisponivel` `true`; veja "O modelo de linguagem"): o modelo chama as mesmas operações como ferramentas, escreve os textos (`redigidoPor` `ATLAS`) e para no cartão para a marca responder. O modelo vem **desligado por padrão**: aí `llmDisponivel` é `false`, o botão continua funcionando e a mensagem de texto da rota 44 responde 503.
 
 **Regras que valem nas rotas 42 a 48**
 
@@ -1419,8 +1419,21 @@ Nesta etapa o relatório sai pelo **botão "Montar relatório"** (o caminho sem 
 - **Isolamento.** Recurso de outra parceria dá **404** com a mesma frase de um id que não existe (`"Não encontramos esta parceria."`, `"... esta conversa."`, `"... esta solicitação."`, `"... este relatório."`). A **conversa é de quem a abriu**: a conversa e o cartão de outro usuário da mesma parceria também dão 404. O **relatório é da parceria**: qualquer usuário dela (e a RBS) o vê nas rotas 47 e 48. A parceria é conferida a cada chamada (vínculo revogado vale na chamada seguinte).
 - **Aba.** A aba do modelo, `APLICACOES`, tem de estar aberta para a marca: fechada, todas as rotas 42 a 48 respondem **403** com as duas frases de "Aba". Vale **também para o relatório pronto**: fechar a aba esconde o documento da marca (rotas 47 e 48). A RBS lê o relatório sempre.
 - **POST** exige o token CSRF. Erros em `ProblemDetail`.
-- **Um turno por vez em cada conversa.** As rotas 42 (com atalho), 44 e 46 começam um turno; enquanto ele roda, outra chamada na mesma conversa recebe **409** (`"O Atlas ainda está respondendo nesta conversa. Espere a resposta."`). O turno termina sozinho, também em erro, e um turno parado há mais de 5 minutos deixa de valer.
+- **Um turno por vez em cada conversa.** As rotas 42 (com atalho), 44 e 46 começam um turno; enquanto ele roda (com o modelo, uma conversa pode levar alguns segundos), outra chamada na mesma conversa recebe **409** (`"O Atlas ainda está respondendo nesta conversa. Espere a resposta."`). O turno termina sozinho, também em erro, e um turno parado há mais de 5 minutos deixa de valer.
 - **Ordem das conferências:** 403 (RBS) &rarr; 404 &rarr; 403 (aba) &rarr; 400 e 422 (formato do corpo) &rarr; 503 &rarr; 409 &rarr; 422 dos valores do cartão (que dependem do estado).
+
+## O modelo de linguagem (texto livre)
+
+Com o modelo ligado, a mensagem de texto da rota 44 e a resposta do cartão da rota 46 rodam o **loop do agente**. O contrato para quem usa a API:
+
+- **Um turno** começa na mensagem da pessoa (ou na resposta do cartão). O modelo responde com texto, ou pede ferramentas; o servidor as executa **uma a uma, na ordem**, grava a resposta de cada uma e devolve o resultado ao modelo, até ele responder com texto. As ferramentas são `relatorio_iniciar`, `relatorio_solicitar_campos`, `relatorio_editar` (operação `definir_texto`) e `relatorio_finalizar`, as mesmas operações do botão. O modelo só recebe as ferramentas do estado do relatório (sem relatório, só `relatorio_iniciar`; em montagem, as outras três; com o cartão aberto, nenhuma).
+- **Nenhuma ferramenta recebe parceria.** A parceria, o usuário e a conversa vêm da sessão; um argumento que cite outra parceria (ou qualquer argumento fora do esquema) é recusado e volta ao modelo como erro. A marca só chega aos dados da própria parceria, por qualquer caminho.
+- **Até 8 chamadas de ferramenta por turno.** Erro de ferramenta (argumento inválido, relatório no estado errado, texto recusado) volta ao modelo como mensagem de ferramenta e nunca vira 500. Passado o limite, o turno termina com um texto fixo (`"Parei por aqui: ..."`).
+- **O cartão pausa o turno.** Ao pedir `relatorio_solicitar_campos`, o servidor grava o cartão, deixa essa chamada **sem resposta** e para: as chamadas seguintes da mesma rodada (inclusive outro `relatorio_solicitar_campos`) respondem erro (`"Aguardando a resposta do cartão..."`). A rota 46 grava os valores e a resposta da ferramenta (`{acao, campos:[{chave, ref, valor}]}`, com o mesmo id do pedido) e o loop retoma. **Mensagem de texto com o cartão aberto** (rota 44) primeiro fecha a chamada pendente com `{"acao":"cancel"}`, marca o cartão `CANCELADA` e só então entra; o `aviso` de cartão fechado abre os itens do turno.
+- **O modelo não escreve número.** Texto de parágrafo (`relatorio_editar`) e texto de chat passam pela mesma checagem: sem algarismo fora de marcador `{{ref}}`, todo marcador existe e resolve nesta parceria, sem HTML, link, imagem nem URL e, no parágrafo, até 3 frases e 600 caracteres. A recusa de um parágrafo volta ao modelo, que tem mais uma tentativa; na **segunda recusa do mesmo bloco ele fica com a frase-modelo** (`redigidoPor` `MODELO`). No chat, com algarismo solto o servidor pede **uma** nova redação; se a segunda também tiver, a resposta vira o texto fixo `"Não trago números fora do relatório. Posso montar o relatório de ativação."`. O histórico guarda o texto com os marcadores; o item `texto` da conversa os traz resolvidos. Número por extenso escapa da regra e é proibido no prompt.
+- **O parágrafo redigido pelo modelo** sai com `redigidoPor: "ATLAS"` na rota 47 (e `"MODELO"` quando é a frase-modelo).
+- **Falha do modelo** (rede, limite do provedor, tempo esgotado): o turno termina com um texto fixo (`"Não consegui falar com o modelo de linguagem agora. O que já foi feito está salvo..."`) e resposta **200**; o histórico continua válido e o botão segue funcionando. Um turno que passa de **3 minutos** (`atlas.prazo-do-turno`) não começa outra ida ao modelo e termina do mesmo jeito (`"Esta resposta demorou mais do que o esperado e eu parei..."`), para não vencer a trava de 5 minutos do turno.
+- O **botão** (atalho) continua sendo o plano B, com ou sem modelo. Cartão aberto pelo botão e respondido com o modelo ligado é retomado pelo modelo.
 
 ## O objeto Conversa (rotas 42, 44, 45 e 46)
 
@@ -1437,7 +1450,7 @@ Nesta etapa o relatório sai pelo **botão "Montar relatório"** (o caminho sem 
     { "tipo": "aviso", "texto": "Cartão fechado. Use Montar relatório para continuar." } ] }
 ```
 
-- `llmDisponivel` é `false` enquanto a API sobe sem modelo de linguagem. É o único lugar que a etapa seguinte liga.
+- `llmDisponivel` é `true` quando a API sobe com o modelo de linguagem ligado e `false` no padrão (sem ele o Atlas só oferece o botão). As rotas 42, 43, 44, 45 e 46 trazem o mesmo valor.
 - As rotas **42, 44 e 46 devolvem só os itens do turno**; a **45 devolve a conversa inteira**.
 - Os itens são **derivados do histórico** da conversa, que o servidor grava no formato de chat completions (`user`, `assistant` com `tool_calls`, `tool`), como se o modelo tivesse chamado as ferramentas: nada é guardado só para a tela.
 
@@ -1496,9 +1509,9 @@ Cada item de `campos` do cartão é um campo do catálogo (rota 39) mais `obriga
 **Corpo:** **ou** `{"texto": "..."}` **ou** `{"atalho": "MONTAR_RELATORIO", "modelo": "ATIVACAO_EVENTO"}`.
 
 - **Com o atalho**, roda o plano B nesta conversa. Se já há um relatório **em montagem** nela (por exemplo, depois de um cartão cancelado), continua **dele** em vez de criar outro: reabre o cartão com as lacunas que faltam. Depois de um relatório pronto, o atalho começa um relatório novo.
-- **Com texto**, hoje responde **503** (`"O Atlas está sem o modelo de linguagem agora. Use o botão Montar relatório."`). A etapa seguinte troca isso pela conversa com o modelo.
+- **Com texto**, roda o loop do modelo de linguagem (veja "O modelo de linguagem"). O texto é aparado dos espaços das pontas. Sem modelo de linguagem, responde **503** (`"O Atlas está sem o modelo de linguagem agora. Use o botão Montar relatório."`). Com um cartão aberto na conversa, a mensagem primeiro o fecha com `cancel`.
 
-**200**: o objeto Conversa, só com os itens do turno (`usuario`, `texto` e o `cartao`; ou `usuario`, `texto` e `relatorio_pronto`).
+**200**: o objeto Conversa, só com os itens do turno: `usuario`, o que o Atlas disse (`texto`), o `cartao` se ele pediu números (o turno para aí), e `relatorio_pronto` se fechou o relatório. Com cartão aberto antes da mensagem, o primeiro item é o `aviso` do cartão fechado.
 
 **Erros**
 
@@ -1507,7 +1520,7 @@ Cada item de `campos` do cartão é um campo do catálogo (rota 39) mais `obriga
 | 400 | Corpo vazio ou que não é JSON. |
 | 403 | RBS; aba fechada; falta o token CSRF. |
 | 404 | Conversa que não é sua (inexistente, de outra parceria ou de outro usuário). |
-| 409 | Há um cartão aberto na conversa (`"Este relatório está esperando a resposta do cartão. Responda ou feche o cartão antes de montar de novo."`), ou um turno em andamento. |
+| 409 | Um turno em andamento na conversa; ou, no atalho, um cartão aberto (`"Este relatório está esperando a resposta do cartão. Responda ou feche o cartão antes de montar de novo."`). Mensagem de texto com cartão aberto não dá 409: fecha o cartão. |
 | 422 | Texto vazio ou com mais de 1.000 caracteres (`campos.texto`); nem texto nem atalho, ou os dois; atalho ou modelo desconhecido. |
 | 503 | Texto sem modelo de linguagem. |
 
@@ -1533,7 +1546,7 @@ Cada item de `campos` do cartão é um campo do catálogo (rota 39) mais `obriga
 | `decline` | O cartão vira `RECUSADA`; as lacunas pedidas contam como recusadas: os números que dependem delas saem **indisponíveis**, com o motivo, nunca zero. O plano B finaliza o relatório do mesmo jeito. `valores` é ignorado. |
 | `cancel` | O cartão vira `CANCELADA`, o relatório volta a **montando** e nada é gravado. O turno termina com um item `aviso` (`"Cartão fechado. Use Montar relatório para continuar."`); o botão continua o mesmo relatório. `valores` é ignorado. |
 
-**200**: o objeto Conversa, só com os itens do turno. Em `accept` e `decline`: `texto` (`"Pronto: o relatório de ativação está montado. A origem de cada número está em Fontes e cálculos."`) e `relatorio_pronto`. Em `cancel`: `aviso`.
+**200**: o objeto Conversa, só com os itens do turno. **Sem modelo de linguagem**, em `accept` e `decline`: `texto` (`"Pronto: o relatório de ativação está montado. A origem de cada número está em Fontes e cálculos."`) e `relatorio_pronto`; em `cancel`: `aviso`. **Com o modelo ligado**, depois de gravar os valores a API põe no histórico a resposta da ferramenta pendente, com o mesmo id do pedido (`{"acao": "accept", "campos": [{"chave": "ativacao.visitantes_total", "ref": "dado:ativacao.visitantes_total", "valor": 1200}]}`; `decline` e `cancel` levam `campos` vazio) e **o loop retoma**: os itens do turno são o que o modelo fez a seguir (texto, outro cartão, `relatorio_pronto`), e em `cancel` o `aviso` vem primeiro. Isso vale para o cartão aberto pelo botão também.
 
 **Como funciona o `accept`** [VALIDACAO] [HISTORICO]
 
@@ -1633,7 +1646,7 @@ Um relatório `MONTANDO` ou `AGUARDANDO_RESPOSTA` sem nenhuma mensagem nova na c
 | Quem | Pode |
 | --- | --- |
 | **Admin RBS** | Quase tudo: criar parcerias, autorizar e revogar e-mails, criar entregas, mudar status, mandar retorno, aprovar perguntas, subir cargas (inclusive o plano comercial), anexar as fotos de comprovação das aplicações, informar os dados da ativação no lugar da marca, gerar e disponibilizar relatórios, ver o histórico geral e o painel. **Não** conversa com o Atlas (rotas 42 a 46 dão 403), mas lê os relatórios que ele montou (rotas 47 e 48). |
-| **Admin Patrocinador** | Ver a própria parceria, as entregas das abas liberadas, enviar materiais, baixar arquivos da parceria, ver o histórico dela, enviar as perguntas da pesquisa, ver a consolidação, o plano de aplicações com as fotos e informar os dados da ativação (aba `APLICACOES` aberta), conversar com o Atlas e montar o relatório de ativação pelo botão (rotas 42 a 46, só ela; a conversa é de quem a abriu), ver os relatórios do Atlas da parceria (rotas 47 e 48) e o relatório disponibilizado. **Nunca** vê outra parceria nem as rotas da RBS. |
+| **Admin Patrocinador** | Ver a própria parceria, as entregas das abas liberadas, enviar materiais, baixar arquivos da parceria, ver o histórico dela, enviar as perguntas da pesquisa, ver a consolidação, o plano de aplicações com as fotos e informar os dados da ativação (aba `APLICACOES` aberta), conversar com o Atlas e montar o relatório de ativação pelo botão ou, com o modelo de linguagem ligado, pelo texto livre (rotas 42 a 46, só ela; a conversa é de quem a abriu), ver os relatórios do Atlas da parceria (rotas 47 e 48) e o relatório disponibilizado. **Nunca** vê outra parceria nem as rotas da RBS. |
 
 ## O que a API grava no histórico
 
@@ -1656,5 +1669,5 @@ Nenhuma nas rotas de autenticação. Três observações:
 - **[PENDENTE]** Se os dados que a marca informa (rota 41) precisam de aprovação da RBS antes de aparecer. Hoje entram direto, com autor, data e origem à vista.
 - **[PENDENTE]** Limite de tentativas de login por IP e por e-mail. Hoje a falha só fica registrada no histórico.
 - **[PENDENTE]** Em produção (HTTPS): marcar o cookie de sessão como `Secure` e enviar o token CSRF só por conexão segura.
-- **[ATLAS-DEPOIS]** O modelo de linguagem do Atlas (texto livre no chat, redação dos parágrafos, teto diário de chamadas) fica para a etapa seguinte: hoje a rota 44 com `texto` responde 503 e o relatório sai pelo botão, com as frases-modelo.
+- **[PENDENTE]** O modelo de linguagem do Atlas (OpenCode Go) é para o ambiente de testes, com dados fictícios: os termos de uso do serviço (uso interno, não em benefício de terceiros) e a retenção de dados do modelo escolhido precisam ser confirmados antes de qualquer uso além do teste. Os testes da suíte nunca chamam o provedor; o teste com a chave de verdade é manual.
 - **[PENDENTE]** Se a RBS precisa aprovar o relatório do Atlas antes de a marca usá-lo (hoje é documento de trabalho da marca, com o selo "Não validado pela RBS") e se a RBS também conversa com o Atlas (hoje só lê).

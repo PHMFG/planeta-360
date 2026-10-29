@@ -93,12 +93,25 @@ public class PlanoBSemLlm {
      */
     @Transactional
     public void responder(AtlasContexto contexto, long solicitacaoId, AcaoDoCartao acao, List<ValorRequisicao> valores) {
-        RespostaDoCartao resposta = relatorios.responder(contexto, solicitacaoId, acao, valores);
-        historico.resultado(contexto.conversaId(), resposta.toolCallId(), resposta.resultadoJson());
-        repositorio.concluirChamada(contexto.conversaId(), resposta.toolCallId(), "relatorio_solicitar_campos", resposta.resultadoJson());
+        RespostaDoCartao resposta = registrarResposta(contexto, solicitacaoId, acao, valores);
         if (acao != AcaoDoCartao.CANCEL) {
             concluir(contexto, resposta.relatorioId());
         }
+    }
+
+    /**
+     * Só a metade do {@link #responder} que é de toda resposta de cartão, com ou sem modelo de linguagem: grava os valores (como
+     * dado informado com origem ATLAS), fecha o cartão e põe no histórico a resposta da ferramenta pendente, com o mesmo
+     * {@code tool_call_id}: {@code {acao, campos:[{chave, ref, valor}]}}. Quem continua é o plano B (frases-modelo e finalizar)
+     * ou o loop do modelo. Uma transação só: com erro (cartão já respondido, valor inválido), nada é gravado.
+     */
+    @Transactional
+    public RespostaDoCartao registrarResposta(AtlasContexto contexto, long solicitacaoId, AcaoDoCartao acao,
+                                              List<ValorRequisicao> valores) {
+        RespostaDoCartao resposta = relatorios.responder(contexto, solicitacaoId, acao, valores);
+        historico.resultado(contexto.conversaId(), resposta.toolCallId(), resposta.resultadoJson());
+        repositorio.concluirChamada(contexto.conversaId(), resposta.toolCallId(), "relatorio_solicitar_campos", resposta.resultadoJson());
+        return resposta;
     }
 
     // ---------------------------------------------------------------------

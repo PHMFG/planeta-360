@@ -5,8 +5,8 @@ import org.springframework.stereotype.Component;
 
 /**
  * Diz se há modelo de linguagem para conversar. [ATLAS] É o ponto único de {@code llmDisponivel}: verdadeiro quando existe um bean
- * {@link ProvedorDeLlm}, falso quando não existe (o caso desta etapa e da suíte de testes). As rotas 42 a 46 perguntam aqui; a
- * etapa seguinte liga o provedor registrando o bean, sem mexer em mais nenhum lugar.
+ * {@link ProvedorDeLlm}, falso quando não existe (o padrão: {@code ATLAS_LLM} desligado ou sem chave, e a suíte de testes). As
+ * rotas 42 a 46 perguntam aqui. O bean é do {@link LlmConfig} (Spring AI) ou, nos testes, de um roteiro.
  */
 @Component
 public class DisponibilidadeDoLlm {

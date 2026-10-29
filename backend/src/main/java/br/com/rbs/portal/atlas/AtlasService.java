@@ -13,6 +13,7 @@ import br.com.rbs.portal.atlas.contexto.AtlasContexto;
 import br.com.rbs.portal.atlas.contexto.AtlasContextoFabrica;
 import br.com.rbs.portal.atlas.loop.DescarteDeRelatorios;
 import br.com.rbs.portal.atlas.loop.ItensDaConversa;
+import br.com.rbs.portal.atlas.loop.LoopDoAgente;
 import br.com.rbs.portal.atlas.loop.PlanoBSemLlm;
 import br.com.rbs.portal.atlas.provedor.DisponibilidadeDoLlm;
 import br.com.rbs.portal.atlas.relatorio.ModeloBase;
@@ -43,8 +44,11 @@ import org.springframework.stereotype.Service;
  * é de outro usuário da mesma parceria. [PERMISSAO] Aba do modelo (APLICACOES) fechada dá 403 com as duas frases do projeto, em
  * todas as rotas, o relatório pronto incluído. A parceria é reconferida a cada pedido (vínculo revogado vale na chamada seguinte).
  * <p>
- * Este service NÃO abre transação: nenhuma fica aberta durante trabalho longo. O turno começa e termina com uma instrução cada
- * (confirmadas na hora), e o trabalho do plano B é uma transação curta própria. O turno termina também em erro ({@code finally}).
+ * Este service NÃO abre transação: nenhuma fica aberta durante trabalho longo (a chamada ao modelo de linguagem, em especial).
+ * O turno começa e termina com uma instrução cada (confirmadas na hora), e o trabalho do plano B e cada passo do loop do agente
+ * são uma transação curta própria. O turno termina também em erro ({@code finally}). Com um {@code ProvedorDeLlm} (o modelo de
+ * linguagem ligado), a mensagem de texto da rota 44 e a resposta do cartão da rota 46 vão para o {@link LoopDoAgente}; o botão
+ * continua sendo o plano B.
  */
 @Service
 public class AtlasService {
@@ -60,6 +64,7 @@ public class AtlasService {
     private final AtlasContextoFabrica contextos;
     private final VerificadorDeAcesso verificador;
     private final PlanoBSemLlm planoB;
+    private final LoopDoAgente loop;
     private final ItensDaConversa itens;
     private final DescarteDeRelatorios descarte;
     private final RelatorioAtlasService relatorios;
@@ -67,12 +72,13 @@ public class AtlasService {
     private final ModeloBase modelos;
 
     public AtlasService(AtlasRepositorio repositorio, AtlasContextoFabrica contextos, VerificadorDeAcesso verificador,
-                        PlanoBSemLlm planoB, ItensDaConversa itens, DescarteDeRelatorios descarte,
+                        PlanoBSemLlm planoB, LoopDoAgente loop, ItensDaConversa itens, DescarteDeRelatorios descarte,
                         RelatorioAtlasService relatorios, DisponibilidadeDoLlm llm, ModeloBase modelos) {
         this.repositorio = repositorio;
         this.contextos = contextos;
         this.verificador = verificador;
         this.planoB = planoB;
+        this.loop = loop;
         this.itens = itens;
         this.descarte = descarte;
         this.relatorios = relatorios;
@@ -131,9 +137,10 @@ public class AtlasService {
 
     /**
      * Rota 44. Com {@code atalho}: roda o plano B nesta conversa; se já há relatório MONTANDO nela, continua dele (reabre o
-     * cartão com as lacunas que faltam); com cartão pendente, 409. Com {@code texto} e sem modelo de linguagem: 503 com a frase
-     * "use o botão". Ordem das respostas: 403 (RBS), 404 (conversa que não é sua), 403 (aba), 422 (texto vazio ou acima de 1.000
-     * caracteres; nem texto nem atalho; os dois), 503, 409 (turno em andamento; cartão aberto).
+     * cartão com as lacunas que faltam); com cartão pendente, 409. Com {@code texto}: o loop do modelo de linguagem; sem modelo de
+     * linguagem, 503 com a frase "use o botão"; com cartão aberto, a mensagem nova primeiro o fecha com {@code cancel}. Ordem das
+     * respostas: 403 (RBS), 404 (conversa que não é sua), 403 (aba), 422 (texto vazio ou acima de 1.000 caracteres; nem texto nem
+     * atalho; os dois), 503, 409 (turno em andamento; cartão aberto no atalho).
      */
     public ConversaDto enviarMensagem(UsuarioAutenticado usuario, long conversaId, MensagemRequisicao corpo,
                                       HttpServletRequest requisicao) {
@@ -158,8 +165,10 @@ public class AtlasService {
             throw new DadosInvalidosException(erros);
         }
         if (temTexto) {
-            // [ATLAS] A etapa seguinte troca esta frase pelo loop do modelo de linguagem; sem provedor, o botão é o caminho.
-            throw new ServicoIndisponivelException(DisponibilidadeDoLlm.SEM_MODELO);
+            if (!llm.disponivel()) {
+                throw new ServicoIndisponivelException(DisponibilidadeDoLlm.SEM_MODELO);   // sem provedor, o botão é o caminho
+            }
+            return conversarComOModelo(usuario, conversa, corpo.texto().strip(), requisicao);
         }
         return rodarPlanoB(usuario, conversa, modelo, requisicao);
     }
@@ -180,9 +189,10 @@ public class AtlasService {
     // ---------------------------------------------------------------------
 
     /**
-     * Rota 46. {@code accept}, {@code decline} ou {@code cancel}. Em accept e decline o plano B preenche as frases-modelo e
-     * finaliza o relatório no mesmo pedido. Ordem das respostas: 403 (RBS), 404 (cartão que não é seu), 403 (aba), 422 (ação),
-     * 409 (cartão já respondido; turno em andamento), 422 (valores).
+     * Rota 46. {@code accept}, {@code decline} ou {@code cancel}. Sem modelo de linguagem, em accept e decline o plano B preenche
+     * as frases-modelo e finaliza o relatório no mesmo pedido. Com modelo, depois de gravar os valores a resposta da ferramenta
+     * pendente vai ao histórico, com o mesmo {@code tool_call_id}, e o loop retoma. Ordem das respostas: 403 (RBS), 404 (cartão que
+     * não é seu), 403 (aba), 422 (ação), 409 (cartão já respondido; turno em andamento), 422 (valores).
      */
     public ConversaDto responderCartao(UsuarioAutenticado usuario, long solicitacaoId, RespostaDoCartaoRequisicao corpo,
                                        HttpServletRequest requisicao) {
@@ -205,7 +215,11 @@ public class AtlasService {
         int antes = repositorio.ultimaOrdem(conversa.id());
         AtlasContexto contexto = contextos.para(usuario, conversa.parceriaId(), conversa.id(), requisicao);
         comTurno(conversa.id(), () -> {
-            planoB.responder(contexto, solicitacaoId, acao, valores);
+            if (llm.disponivel()) {
+                loop.retomar(contexto, solicitacaoId, acao, valores);
+            } else {
+                planoB.responder(contexto, solicitacaoId, acao, valores);
+            }
             return null;
         });
         return new ConversaDto(conversa.id(), llm.disponivel(), itens.itens(usuario, conversa, antes));
@@ -228,6 +242,18 @@ public class AtlasService {
     // ---------------------------------------------------------------------
     // Apoio
     // ---------------------------------------------------------------------
+
+    /** Roda o loop do modelo de linguagem no turno da conversa e devolve só os itens que ele produziu. */
+    private ConversaDto conversarComOModelo(UsuarioAutenticado usuario, LinhaDeConversa conversa, String texto,
+                                            HttpServletRequest requisicao) {
+        int antes = repositorio.ultimaOrdem(conversa.id());
+        AtlasContexto contexto = contextos.para(usuario, conversa.parceriaId(), conversa.id(), requisicao);
+        comTurno(conversa.id(), () -> {
+            loop.conversar(contexto, texto);
+            return null;
+        });
+        return new ConversaDto(conversa.id(), llm.disponivel(), itens.itens(usuario, conversa, antes));
+    }
 
     /** Roda o plano B no turno da conversa e devolve só os itens que ele produziu. */
     private ConversaDto rodarPlanoB(UsuarioAutenticado usuario, LinhaDeConversa conversa, String modelo,

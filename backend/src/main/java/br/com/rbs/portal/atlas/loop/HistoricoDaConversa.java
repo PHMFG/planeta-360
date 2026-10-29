@@ -3,12 +3,17 @@ package br.com.rbs.portal.atlas.loop;
 import br.com.rbs.portal.atlas.AtlasJson;
 import br.com.rbs.portal.atlas.AtlasRepositorio;
 import br.com.rbs.portal.atlas.AtlasRepositorio.LinhaDeMensagem;
+import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.ChamadaDeFerramenta;
+import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.MensagemDeChat;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
+import tools.jackson.core.type.TypeReference;
 
 /**
  * Grava a conversa em {@code atlas_mensagem} no formato de chat completions, o mesmo que o loop do modelo de linguagem usa.
@@ -17,6 +22,9 @@ import org.springframework.stereotype.Component;
  * com o resultado e textos fixos do assistente. Assim, quando o modelo entra, ele continua a mesma conversa sem quebrar a regra
  * "toda tool_call tem resposta" (a do cartão fica pendente até a rota 46). Cada gravação trava a linha da conversa primeiro:
  * as mensagens ganham a próxima {@code ordem} sem colidir. Chamar dentro da transação do passo que as escreve.
+ * <p>
+ * O loop do modelo de linguagem escreve no mesmo formato (ids {@code call_<uuid>}, gerados aqui para serem únicos na conversa,
+ * e o {@code reasoning_content} quando vier) e usa {@link #paraOProvedor} para remontar o histórico na ordem em que aconteceu.
  */
 @Component
 public class HistoricoDaConversa {
@@ -36,22 +44,36 @@ public class HistoricoDaConversa {
         return "botao_" + UUID.randomUUID();
     }
 
+    /**
+     * Um id para o pedido de ferramenta do modelo. O loop não usa o id que o modelo deu: não há garantia de que ele seja único na
+     * conversa (e {@code atlas_solicitacao.tool_call_id} é amarrado ao pedido), e o modelo aceita o histórico com os nossos.
+     */
+    public static String novoIdDoModelo() {
+        return "call_" + UUID.randomUUID().toString().replace("-", "");
+    }
+
     /** A mensagem da pessoa. Devolve o id da mensagem. */
     public long usuario(long conversaId, String texto) {
         repositorio.travarConversa(conversaId);
-        return repositorio.inserirMensagem(conversaId, "user", texto, null, null);
+        return repositorio.inserirMensagem(conversaId, "user", texto, null, null, null);
     }
 
     /** A mensagem do assistente: um texto, pedidos de ferramenta, ou os dois juntos. Devolve o id da mensagem. */
     public long assistente(long conversaId, String texto, List<Chamada> chamadas) {
+        return assistente(conversaId, texto, chamadas, null);
+    }
+
+    /** O mesmo, com o {@code reasoning_content} que o modelo mandou (nulo se não mandou). */
+    public long assistente(long conversaId, String texto, List<Chamada> chamadas, String raciocinio) {
         repositorio.travarConversa(conversaId);
-        return repositorio.inserirMensagem(conversaId, "assistant", texto, chamadas.isEmpty() ? null : paraJson(chamadas), null);
+        return repositorio.inserirMensagem(conversaId, "assistant", texto, chamadas.isEmpty() ? null : paraJson(chamadas), null,
+                raciocinio);
     }
 
     /** A resposta de uma ferramenta ao pedido {@code toolCallId}. */
     public long resultado(long conversaId, String toolCallId, String conteudoJson) {
         repositorio.travarConversa(conversaId);
-        return repositorio.inserirMensagem(conversaId, "tool", conteudoJson, null, toolCallId);
+        return repositorio.inserirMensagem(conversaId, "tool", conteudoJson, null, toolCallId, null);
     }
 
     public int ultimaOrdem(long conversaId) {
@@ -61,6 +83,62 @@ public class HistoricoDaConversa {
     /** O histórico na ordem em que aconteceu, para o loop remontar a conversa. */
     public List<LinhaDeMensagem> mensagens(long conversaId) {
         return repositorio.mensagens(conversaId);
+    }
+
+    /**
+     * O histórico para mandar ao modelo, na ordem em que aconteceu: a mensagem da pessoa, a do assistente (com os pedidos de
+     * ferramenta e o raciocínio que ele deu) e a resposta de cada ferramenta (com o nome dela). [ATLAS] Toda {@code tool_call}
+     * tem de ter resposta antes da próxima mensagem que não é de ferramenta, ou o provedor responde 400. Se alguma ficou sem
+     * (um turno que caiu no meio), esta remontagem completa a conta com um erro, só na memória; o cartão que espera a resposta
+     * não passa por aqui, porque o loop não chama o modelo enquanto há cartão aberto.
+     */
+    public List<MensagemDeChat> paraOProvedor(long conversaId) {
+        List<MensagemDeChat> remontado = new ArrayList<>();
+        Map<String, String> nomes = new LinkedHashMap<>();
+        Set<String> semResposta = new LinkedHashSet<>();
+        for (LinhaDeMensagem linha : repositorio.mensagens(conversaId)) {
+            if (!"tool".equals(linha.papel())) {
+                completarSemResposta(remontado, nomes, semResposta);
+            }
+            switch (linha.papel()) {
+                case "user" -> remontado.add(MensagemDeChat.usuario(linha.conteudo()));
+                case "assistant" -> {
+                    List<ChamadaDeFerramenta> chamadas = chamadasDe(linha.toolCalls());
+                    chamadas.forEach(c -> {
+                        nomes.put(c.id(), c.nome());
+                        semResposta.add(c.id());
+                    });
+                    remontado.add(MensagemDeChat.assistente(linha.conteudo(), chamadas, linha.reasoningContent()));
+                }
+                default -> {
+                    semResposta.remove(linha.toolCallId());
+                    remontado.add(MensagemDeChat.resultado(linha.toolCallId(), nomes.get(linha.toolCallId()), linha.conteudo()));
+                }
+            }
+        }
+        completarSemResposta(remontado, nomes, semResposta);
+        return remontado;
+    }
+
+    private static void completarSemResposta(List<MensagemDeChat> remontado, Map<String, String> nomes, Set<String> semResposta) {
+        for (String id : new ArrayList<>(semResposta)) {
+            remontado.add(MensagemDeChat.resultado(id, nomes.get(id), AtlasJson.escrever(Map.of("erro", "A ferramenta não chegou a responder."))));
+        }
+        semResposta.clear();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<ChamadaDeFerramenta> chamadasDe(String toolCallsJson) {
+        if (toolCallsJson == null) {
+            return List.of();
+        }
+        List<ChamadaDeFerramenta> chamadas = new ArrayList<>();
+        for (Map<String, Object> chamada : AtlasJson.ler(toolCallsJson, new TypeReference<List<Map<String, Object>>>() {
+        })) {
+            Map<String, Object> funcao = (Map<String, Object>) chamada.get("function");
+            chamadas.add(new ChamadaDeFerramenta((String) chamada.get("id"), (String) funcao.get("name"), (String) funcao.get("arguments")));
+        }
+        return chamadas;
     }
 
     /** {@code [{"id":..., "type":"function", "function":{"name":..., "arguments":"{...}"}}]}: o formato de chat completions. */

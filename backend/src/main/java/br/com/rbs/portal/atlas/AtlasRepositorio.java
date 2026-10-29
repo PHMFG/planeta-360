@@ -26,9 +26,12 @@ public class AtlasRepositorio {
                                         String relatorioStatus) {
     }
 
-    /** Uma mensagem do histórico. {@code toolCalls} é o JSON dos pedidos de ferramenta do assistente (ou nulo). */
+    /**
+     * Uma mensagem do histórico. {@code toolCalls} é o JSON dos pedidos de ferramenta do assistente (ou nulo) e
+     * {@code reasoningContent} o raciocínio que o modelo mandou com a mensagem, se mandou (volta ao modelo na retomada).
+     */
     public record LinhaDeMensagem(Long id, Integer ordem, String papel, String conteudo, String toolCalls, String toolCallId,
-                                  OffsetDateTime criadaEm) {
+                                  OffsetDateTime criadaEm, String reasoningContent) {
     }
 
     /**
@@ -156,20 +159,22 @@ public class AtlasRepositorio {
     }
 
     /** Grava a mensagem na próxima ordem da conversa e devolve o id. Chamar dentro da transação, com a conversa travada. */
-    public long inserirMensagem(long conversaId, String papel, String conteudo, String toolCallsJson, String toolCallId) {
+    public long inserirMensagem(long conversaId, String papel, String conteudo, String toolCallsJson, String toolCallId,
+                                String reasoningContent) {
         int ordem = ultimaOrdem(conversaId) + 1;
         return jdbc.sql("""
-                        INSERT INTO atlas_mensagem (conversa_id, ordem, papel, conteudo, tool_calls, tool_call_id)
-                        VALUES (:conversa, :ordem, :papel, :conteudo, CAST(:calls AS jsonb), :toolCallId) RETURNING id
+                        INSERT INTO atlas_mensagem (conversa_id, ordem, papel, conteudo, tool_calls, tool_call_id, reasoning_content)
+                        VALUES (:conversa, :ordem, :papel, :conteudo, CAST(:calls AS jsonb), :toolCallId, :raciocinio) RETURNING id
                         """)
                 .param("conversa", conversaId).param("ordem", ordem).param("papel", papel).param("conteudo", conteudo)
-                .param("calls", toolCallsJson).param("toolCallId", toolCallId)
+                .param("calls", toolCallsJson).param("toolCallId", toolCallId).param("raciocinio", reasoningContent)
                 .query(Long.class).single();
     }
 
     public List<LinhaDeMensagem> mensagens(long conversaId) {
         return jdbc.sql("""
-                        SELECT id, ordem, papel, conteudo, CAST(tool_calls AS text) AS tool_calls, tool_call_id, criada_em
+                        SELECT id, ordem, papel, conteudo, CAST(tool_calls AS text) AS tool_calls, tool_call_id, criada_em,
+                               reasoning_content
                         FROM atlas_mensagem WHERE conversa_id = :id ORDER BY ordem
                         """)
                 .param("id", conversaId)
@@ -365,6 +370,13 @@ public class AtlasRepositorio {
     // ---------------------------------------------------------------------
     // Apoio
     // ---------------------------------------------------------------------
+
+    /** O nome da marca da parceria, como o prompt do modelo o recebe (o nome, nunca o id). */
+    public String nomeDaMarca(long parceriaId) {
+        return jdbc.sql("SELECT p.nome_canonico FROM parceria pa JOIN patrocinador p ON p.id = pa.patrocinador_id WHERE pa.id = :id")
+                .param("id", parceriaId)
+                .query(String.class).single();
+    }
 
     /** O código da cota da parceria (MASTER, SUBCOTA_G ou SUBCOTA). */
     public String codigoDaCota(long parceriaId) {
