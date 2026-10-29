@@ -20,9 +20,21 @@ const ICONES: Record<string, string> = {
   DISPONIBILIZACAO: 'ri-file-chart-line',
 }
 
+// Status das perguntas da pesquisa; "RASCUNHO" de uma pergunta é a volta para a marca ajustar, não um relatório em rascunho.
+const STATUS_PERGUNTA: Record<string, string> = { RASCUNHO: 'Devolvida para ajuste', ENVIADA: 'Enviada', APROVADA: 'Aprovada' }
+// Vínculo do e-mail autorizado, que a API grava em minúscula ("(agencia)").
+const VINCULOS: [RegExp, string][] = [
+  [/\(agencia\)$/, '(Agência)'],
+  [/\(marca\)$/, '(Marca)'],
+]
+
 function mudanca(item: ItemHistorico) {
   if (!item.valorAnterior && !item.valorNovo) return null
-  const ler = (valor: string | null) => (valor ? nomeStatus(valor) : '—')
+  const ler = (valor: string | null) => {
+    if (!valor) return '—'
+    if (item.entidade === 'pesquisa_pergunta' && STATUS_PERGUNTA[valor]) return STATUS_PERGUNTA[valor]
+    return VINCULOS.reduce((texto, [padrao, nome]) => texto.replace(padrao, nome), nomeStatus(valor))
+  }
   return `${ler(item.valorAnterior)} → ${ler(item.valorNovo)}`
 }
 

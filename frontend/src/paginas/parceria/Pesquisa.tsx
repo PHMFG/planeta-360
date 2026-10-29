@@ -5,21 +5,27 @@ import { decidirPergunta, enviarPerguntas, obterPesquisa, type PesquisaDaParceri
 import { useDados } from '../../api/useDados'
 import { Aviso } from '../../componentes/Aviso'
 import { Botao } from '../../componentes/Botao'
+import { AvisoAbaFechada, estadoAbaNaParceria } from '../../componentes/AbaFechada'
 import { CabecalhoSecao } from '../../componentes/CabecalhoSecao'
 import { Cartao } from '../../componentes/Cartao'
 import { Carregando } from '../../componentes/Carregando'
 import { AreaTexto } from '../../componentes/Formulario'
-import { nomeCota } from '../../componentes/Menu'
 import { Tabela } from '../../componentes/Tabela'
 import { useSessao } from '../../sessao/Sessao'
 import { dataHora, numero } from '../../util/formatar'
 import { useParceria } from './ContextoParceria'
 
 const STATUS_PERGUNTA = {
-  RASCUNHO: { nome: 'Rascunho', cor: '#616161' },
+  RASCUNHO: { nome: 'Ainda não enviada', cor: '#616161' },
   ENVIADA: { nome: 'Enviada · aguardando a RBS', cor: '#073c89' },
   APROVADA: { nome: 'Aprovada pela RBS', cor: '#007a2a' },
 } as const
+
+/** Pergunta que a RBS devolveu volta a RASCUNHO com a observação: para a marca, é "ajuste pedido", não um rascunho. */
+function statusDa(pergunta: Pergunta) {
+  if (pergunta.status === 'RASCUNHO' && pergunta.observacaoRbs) return { nome: 'Ajuste pedido pela RBS', cor: '#c8203f' }
+  return STATUS_PERGUNTA[pergunta.status]
+}
 
 function valor(resultado: ResultadoPesquisa) {
   if (resultado.unidade === 'PERCENTUAL') return `${numero(resultado.valor)}%`
@@ -28,6 +34,8 @@ function valor(resultado: ResultadoPesquisa) {
 }
 
 function DecisaoRbs({ pergunta, aoDecidir }: { pergunta: Pergunta; aoDecidir: () => void }) {
+  // Pergunta aprovada não muda pela marca; a RBS pode reabri-la pedindo ajuste (a observação diz o quê).
+  const reabrir = pergunta.status === 'APROVADA'
   const [observacao, setObservacao] = useState('')
   const [falha, setFalha] = useState<string | null>(null)
   const [decidindo, setDecidindo] = useState(false)
@@ -48,14 +56,21 @@ function DecisaoRbs({ pergunta, aoDecidir }: { pergunta: Pergunta; aoDecidir: ()
 
   return (
     <div className="mt-3 flex flex-col gap-3">
-      <AreaTexto rotulo="Observação para a marca (obrigatória ao pedir ajuste)" rows={1} value={observacao} onChange={(evento) => setObservacao(evento.target.value)} />
+      <AreaTexto
+        rotulo={reabrir ? 'O que a marca precisa mudar' : 'Observação para a marca (obrigatória ao pedir ajuste)'}
+        rows={1}
+        value={observacao}
+        onChange={(evento) => setObservacao(evento.target.value)}
+      />
       {falha && <Aviso tipo="falha" titulo={falha} />}
       <div className="flex flex-wrap gap-3">
-        <Botao carregando={decidindo} onClick={() => decidir('APROVAR')}>
-          Aprovar pergunta
-        </Botao>
+        {!reabrir && (
+          <Botao carregando={decidindo} onClick={() => decidir('APROVAR')}>
+            Aprovar pergunta
+          </Botao>
+        )}
         <Botao variante="secundario" disabled={decidindo} onClick={() => decidir('PEDIR_AJUSTE')}>
-          Pedir ajuste
+          {reabrir ? 'Reabrir para ajuste' : 'Pedir ajuste'}
         </Botao>
       </div>
     </div>
@@ -78,8 +93,14 @@ function Perguntas({ dados, rbs, aoEnviar, aoDecidir }: PropsPerguntas) {
   const [erros, setErros] = useState<Record<string, string>>({})
   const [falha, setFalha] = useState<string | null>(null)
   const [enviando, setEnviando] = useState(false)
+  // Só as perguntas que a marca ainda pode mexer contam; aprovada não muda (a API recusa).
+  const editaveis = ordens.filter((ordem) => porOrdem(ordem)?.status !== 'APROVADA')
+  const mudou = editaveis.some((ordem) => (textos[ordem] ?? '').trim() !== (porOrdem(ordem)?.texto ?? ''))
+  const nuncaEnviadas = dados.perguntas.some((pergunta) => pergunta.status === 'RASCUNHO' && !pergunta.observacaoRbs)
+  const podeEnviar = editaveis.length > 0 && (mudou || nuncaEnviadas)
 
   async function enviar() {
+    if (!podeEnviar) return
     const lista = ordens.map((ordem) => ({ ordem, texto: (textos[ordem] ?? '').trim() })).filter((item) => item.texto)
     // [VALIDACAO] Mesmas regras da API: de 1 a 3 perguntas, de 10 a 300 caracteres.
     const novos: Record<string, string> = {}
@@ -108,7 +129,7 @@ function Perguntas({ dados, rbs, aoEnviar, aoDecidir }: PropsPerguntas) {
       <div className="flex flex-col gap-4">
         {ordens.map((ordem) => {
           const pergunta = porOrdem(ordem)
-          const status = pergunta ? STATUS_PERGUNTA[pergunta.status] : null
+          const status = pergunta ? statusDa(pergunta) : null
           const travada = pergunta?.status === 'APROVADA'
           return (
             <div key={ordem} className="rounded-2xl border border-borda p-4">
@@ -135,21 +156,28 @@ function Perguntas({ dados, rbs, aoEnviar, aoDecidir }: PropsPerguntas) {
                   value={textos[ordem] ?? ''}
                   onChange={(evento) => setTextos({ ...textos, [ordem]: evento.target.value })}
                   erro={erros[ordem]}
-                  ajuda="Entre 10 e 300 caracteres."
+                  ajuda={`${(textos[ordem] ?? '').length} de 300 caracteres · mínimo de 10.`}
                 />
               )}
-              {rbs && pergunta?.status === 'ENVIADA' && <DecisaoRbs pergunta={pergunta} aoDecidir={aoDecidir} />}
+              {rbs && (pergunta?.status === 'ENVIADA' || pergunta?.status === 'APROVADA') && <DecisaoRbs pergunta={pergunta} aoDecidir={aoDecidir} />}
             </div>
           )
         })}
       </div>
-      {!rbs && (
+      {!rbs && editaveis.length === 0 && (
+        <Aviso titulo="Todas as perguntas foram aprovadas" className="mt-4">
+          Pergunta aprovada não muda mais por aqui. Para trocar uma delas, fale com o time B2B da RBS: a RBS pode reabrir a pergunta para
+          ajuste.
+        </Aviso>
+      )}
+      {!rbs && editaveis.length > 0 && (
         <div className="mt-4 flex flex-col gap-3">
           {falha && <Aviso tipo="falha" titulo={falha} />}
-          <div>
-            <Botao carregando={enviando} onClick={enviar} icone="ri-send-plane-line">
+          <div className="flex flex-wrap items-center gap-3">
+            <Botao carregando={enviando} disabled={!podeEnviar} onClick={enviar} icone="ri-send-plane-line">
               Enviar perguntas
             </Botao>
+            {!podeEnviar && <span className="text-xs font-medium text-texto-2">Nada mudou desde o último envio.</span>}
           </div>
         </div>
       )}
@@ -161,8 +189,8 @@ export function Pesquisa() {
   const parceria = useParceria()
   const { usuario } = useSessao()
   const rbs = usuario?.perfil === 'ADMIN_RBS'
-  const aba = parceria.abas.find((item) => item.codigo === 'PESQUISA')
-  const bloqueada = !aba?.liberada
+  const estado = estadoAbaNaParceria(parceria, 'PESQUISA')
+  const bloqueada = estado !== 'LIBERADA'
   const dados = useDados(() => (bloqueada && !rbs ? Promise.resolve(null) : obterPesquisa(parceria.id)), [parceria.id, bloqueada, rbs])
   // Depois do envio vale a resposta da API; depois de uma decisão da RBS, a página busca de novo.
   const [atual, setAtual] = useState<PesquisaDaParceria | null>(null)
@@ -180,9 +208,7 @@ export function Pesquisa() {
         }
       />
       {bloqueada && !rbs ? (
-        <Aviso tipo="restrito" titulo="Esta aba não faz parte da sua cota">
-          A pesquisa da ativação é um benefício da cota Master; a cota {nomeCota(parceria)} não inclui esta aba. Para contratar, fale com o time B2B da RBS.
-        </Aviso>
+        <AvisoAbaFechada parceria={parceria} estado={estado} nome="Pesquisa" rbs={false} />
       ) : (
         <Carregando dados={dados}>
           {(buscado) => {
