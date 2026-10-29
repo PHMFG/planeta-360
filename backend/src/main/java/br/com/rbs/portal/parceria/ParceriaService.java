@@ -91,7 +91,7 @@ public class ParceriaService {
         // [VALIDACAO] Junta todos os erros de campo numa resposta só, para o front destacar tudo de uma vez.
         Map<String, String> campos = new LinkedHashMap<>();
         PatrocinadorRequisicao patrocinador = corpo.patrocinador();
-        String nomeNovo = patrocinador.nome() == null || patrocinador.nome().isBlank() ? null : patrocinador.nome().trim();
+        String nomeNovo = nomeNormalizado(patrocinador.nome());
         if ((patrocinador.id() != null) == (nomeNovo != null)) {
             campos.put("patrocinador", "Informe o patrocinador existente (id) ou o nome de um novo, um dos dois.");
         } else if (patrocinador.id() != null && !parcerias.patrocinadorExiste(patrocinador.id())) {
@@ -123,7 +123,8 @@ public class ParceriaService {
 
         // Conflitos (409): a API confere antes de gravar para devolver a frase clara; o banco é a segunda trava.
         if (nomeNovo != null && parcerias.nomeDePatrocinadorEmUso(nomeNovo, null)) {
-            throw new ConflitoException("Já existe um patrocinador com este nome. Use o id dele.");
+            // A RBS não vê ids: a saída é escolher o patrocinador que já existe na lista do formulário.
+            throw new ConflitoException("Já existe um patrocinador com este nome. Escolha-o na lista \"Patrocinador\".");
         }
         if (patrocinador.id() != null && parcerias.parceriaDaEdicaoExiste(corpo.eventoId(), patrocinador.id())) {
             throw new ConflitoException("Este patrocinador já tem parceria nesta edição do evento.");
@@ -172,7 +173,20 @@ public class ParceriaService {
 
     /** Como o contrato descreve: uma aba só conta como liberada se estiver liberada E visível. */
     static AbaDto paraAbaDto(AbaDaParceria aba) {
-        return new AbaDto(aba.codigo(), aba.nome(), aba.ordem(), aba.liberada() && aba.visivel());
+        return new AbaDto(aba.codigo(), aba.nome(), aba.ordem(), aba.liberada() && aba.visivel(), aba.incluidaNaCota());
+    }
+
+    /**
+     * [VALIDACAO] [DUPLICIDADE] O nome do patrocinador como é guardado e comparado: sem espaços nas pontas e com qualquer
+     * sequência de espaços, tabulações ou espaços não quebráveis juntada num espaço só. Em branco vale como "sem nome" (nulo).
+     * Sem isto, "Cliente  Verde" (dois espaços) passaria pela checagem de nome repetido ao lado de "Cliente Verde".
+     */
+    static String nomeNormalizado(String texto) {
+        if (texto == null) {
+            return null;
+        }
+        String nome = texto.replaceAll("(?U)\\s+", " ").trim();
+        return nome.isEmpty() ? null : nome;
     }
 
     /** Texto em branco vale como "sem valor" (nulo no banco). */

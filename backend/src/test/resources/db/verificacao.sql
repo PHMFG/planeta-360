@@ -159,13 +159,13 @@ END $$;
 -- ---------------------------------------------------------------------
 DO $$
 BEGIN
-    PERFORM pg_temp.confere('CONSOLIDAÇÃO', 'Roxo, inserções: exibido de previsto (%)', 97.1,
+    PERFORM pg_temp.confere('CONSOLIDAÇÃO', 'Roxo, inserções: exibido de previsto (%, cortado na 1ª casa)', 97.0,
         (SELECT u.pct_entrega FROM vw_midia_unidade u JOIN parceria pa ON pa.id = u.parceria_id JOIN patrocinador p ON p.id = pa.patrocinador_id
           WHERE p.nome_canonico = 'Cliente Roxo' AND u.unidade = 'INSERCAO'));
-    PERFORM pg_temp.confere('CONSOLIDAÇÃO', 'Roxo, CPM: exibido de previsto (%), sem somar com inserções', 97.3,
+    PERFORM pg_temp.confere('CONSOLIDAÇÃO', 'Roxo, CPM: exibido de previsto (%, cortado), sem somar com inserções', 97.2,
         (SELECT u.pct_entrega FROM vw_midia_unidade u JOIN parceria pa ON pa.id = u.parceria_id JOIN patrocinador p ON p.id = pa.patrocinador_id
           WHERE p.nome_canonico = 'Cliente Roxo' AND u.unidade = 'CPM'));
-    PERFORM pg_temp.confere('CONSOLIDAÇÃO', 'Amarelo, inserções: exibido de previsto (%)', 99.3,
+    PERFORM pg_temp.confere('CONSOLIDAÇÃO', 'Amarelo, inserções: exibido de previsto (%, cortado: 1105 de 1113 = 99,28)', 99.2,
         (SELECT u.pct_entrega FROM vw_midia_unidade u JOIN parceria pa ON pa.id = u.parceria_id JOIN patrocinador p ON p.id = pa.patrocinador_id
           WHERE p.nome_canonico = 'Cliente Amarelo' AND u.unidade = 'INSERCAO'));
     PERFORM pg_temp.confere('CONSOLIDAÇÃO', 'Verde, inserções: exibido de previsto (%)', 100,
@@ -186,19 +186,24 @@ BEGIN
     PERFORM pg_temp.confere('RELATÓRIOS', 'parcerias de 2027 com relatório (um cada)', 3,
         (SELECT count(DISTINCT r.parceria_id) FROM relatorio r JOIN parceria pa ON pa.id = r.parceria_id JOIN evento e ON e.id = pa.evento_id WHERE e.edicao = 2027));
     PERFORM pg_temp.afirma('RELATÓRIOS', 'todos na versão 1 e em RASCUNHO', (SELECT bool_and(versao = 1 AND status = 'RASCUNHO') FROM relatorio));
-    PERFORM pg_temp.confere('RELATÓRIOS', 'números nos 3 relatórios (72 de antes + 3 faixas de nota da pesquisa)', 75, (SELECT count(*) FROM relatorio_indicador));
-    PERFORM pg_temp.confere('RELATÓRIOS', 'números indisponíveis (festival em números e pesquisa geral, só existem em 2026)', 6,
+    -- [RELATORIO] O relatório traz sempre os 17 indicadores do catálogo (V5): 51 códigos nos 3 relatórios. O que não tem dado
+    -- entra como indisponível: festival em números e pesquisa geral (só existem em 2026: 2 por parceria = 6), a pesquisa da
+    -- ativação do Roxo e da Verde (fora da cota: 2 cada = 4) e as aplicações de marca do Roxo (sem plano de aplicações: 4).
+    PERFORM pg_temp.confere('RELATÓRIOS', 'números nos 3 relatórios (72 de antes + 8 indisponíveis que a V5 passou a registrar + 3 faixas de nota da pesquisa)', 83, (SELECT count(*) FROM relatorio_indicador));
+    PERFORM pg_temp.confere('RELATÓRIOS', 'números indisponíveis (festival 6 + pesquisa fora da cota 4 + aplicações do Roxo 4)', 14,
         (SELECT count(*) FROM relatorio_indicador WHERE NOT disponivel));
-    PERFORM pg_temp.confere('RELATÓRIOS', 'números do relatório sem as 3 faixas novas = total de antes', 72,
+    PERFORM pg_temp.confere('RELATÓRIOS', 'números do relatório sem as 3 faixas novas = total de antes mais os 8 indisponíveis novos', 80,
         (SELECT count(*) FROM relatorio_indicador WHERE NOT (indicador_codigo = 'PESQUISA_RESULTADO' AND recorte IN ('P2 · Notas 9 e 10', 'P2 · Notas 7 e 8', 'P2 · Notas de 0 a 6'))));
-    PERFORM pg_temp.afirma('RELATÓRIOS', 'data simulada (21/02/2027 11:00) no relatório e no histórico, sem UPDATE',
-        (SELECT bool_and(r.gerado_em = timestamptz '2027-02-21 11:00-03') FROM relatorio r)
-        AND (SELECT count(*) = 3 AND bool_and(h.ocorrido_em = timestamptz '2027-02-21 11:00-03') FROM historico h WHERE h.acao = 'GERACAO_RELATORIO'));
-    PERFORM pg_temp.confere('RELATÓRIOS', 'indicadores disponíveis do catálogo que ficaram sem linha (nunca estimados)', 0,
-        (SELECT count(*) FROM relatorio r JOIN parceria pa ON pa.id = r.parceria_id JOIN cota_tipo ct ON ct.id = pa.cota_tipo_id
-          JOIN indicador i ON (i.cotas IS NULL OR ct.codigo = ANY (i.cotas))
-                          AND (i.requer_previsto IS NULL OR EXISTS (SELECT 1 FROM aproveitamento_previsto ap WHERE ap.parceria_id = pa.id AND ap.categoria = i.requer_previsto))
+    PERFORM pg_temp.afirma('RELATÓRIOS', 'data da geração no passado e igual no relatório e no histórico, sem UPDATE',
+        (SELECT bool_and(r.gerado_em < now()) FROM relatorio r)
+        AND (SELECT count(*) = 3 AND bool_and(h.ocorrido_em < now() AND EXISTS (SELECT 1 FROM relatorio r WHERE r.id = h.entidade_id
+                                                                                  AND r.gerado_em = h.ocorrido_em))
+               FROM historico h WHERE h.acao = 'GERACAO_RELATORIO'));
+    PERFORM pg_temp.confere('RELATÓRIOS', 'indicadores do catálogo que ficaram sem linha em algum relatório (todos entram, nunca estimados)', 0,
+        (SELECT count(*) FROM relatorio r CROSS JOIN indicador i
           WHERE NOT EXISTS (SELECT 1 FROM relatorio_indicador ri WHERE ri.relatorio_id = r.id AND ri.indicador_codigo = i.codigo)));
+    PERFORM pg_temp.confere('RELATÓRIOS', 'indicadores sem linha de dado ficam indisponíveis, com valor nulo e sem recorte', 0,
+        (SELECT count(*) FROM relatorio_indicador WHERE NOT disponivel AND (valor IS NOT NULL OR recorte <> '')));
 END $$;
 
 -- ---------------------------------------------------------------------
@@ -236,6 +241,25 @@ BEGIN
 
     -- [UPLOAD] Todo material de uma parceria está numa aba (arquivo sem parceria é geral da RBS e não tem aba)
     PERFORM pg_temp.confere('ÓRFÃOS', 'materiais de parceria sem aba', 0, (SELECT count(*) FROM arquivo WHERE parceria_id IS NOT NULL AND aba_id IS NULL));
+    -- [DATAS] A amostra conta os horários para trás a partir do dia em que o banco nasce: nada fica no futuro
+    PERFORM pg_temp.confere('AMOSTRA', 'horários no futuro (histórico, arquivos, cargas, relatórios, entregas, perguntas, exibições)', 0,
+        (SELECT (SELECT count(*) FROM historico WHERE ocorrido_em > now()) + (SELECT count(*) FROM arquivo WHERE enviado_em > now())
+              + (SELECT count(*) FROM carga WHERE executada_em > now()) + (SELECT count(*) FROM relatorio WHERE gerado_em > now())
+              + (SELECT count(*) FROM entrega WHERE criado_em > now() OR atualizado_em > now())
+              + (SELECT count(*) FROM pesquisa_pergunta WHERE enviada_em > now()) + (SELECT count(*) FROM veiculacao WHERE exibido_em > now())));
+    -- [UPLOAD] Entrega enviada, em análise ou aprovada tem o arquivo que a marca mandou
+    PERFORM pg_temp.confere('AMOSTRA', 'entregas Enviado, Em análise ou Aprovado sem nenhum arquivo', 0,
+        (SELECT count(*) FROM entrega e WHERE e.status IN ('ENVIADO', 'EM_ANALISE', 'APROVADO')
+            AND NOT EXISTS (SELECT 1 FROM arquivo a WHERE a.entrega_id = e.id)));
+    -- [HISTORICO] Pedido de ajuste sempre leva o recado da RBS, e o ajuste que está aberto tem um envio da marca antes dele
+    PERFORM pg_temp.confere('AMOSTRA', 'pedidos de ajuste no histórico sem observação', 0,
+        (SELECT count(*) FROM historico WHERE acao = 'ALTERACAO_STATUS' AND entidade = 'entrega' AND valor_novo = 'AJUSTE_SOLICITADO'
+            AND nullif(btrim(detalhe), '') IS NULL));
+    PERFORM pg_temp.confere('AMOSTRA', 'entregas em Ajuste solicitado sem envio anterior da marca e sem pedido da RBS no histórico', 0,
+        (SELECT count(*) FROM entrega e WHERE e.status = 'AJUSTE_SOLICITADO'
+            AND NOT (EXISTS (SELECT 1 FROM arquivo a WHERE a.entrega_id = e.id)
+                     AND EXISTS (SELECT 1 FROM historico h WHERE h.entidade = 'entrega' AND h.entidade_id = e.id
+                                   AND h.acao = 'ALTERACAO_STATUS' AND h.valor_novo = 'AJUSTE_SOLICITADO'))));
     PERFORM pg_temp.confere('ÓRFÃOS', 'arquivos de uma entrega com outra parceria ou outra aba', 0,
         (SELECT count(*) FROM arquivo a JOIN entrega e ON e.id = a.entrega_id WHERE e.parceria_id <> a.parceria_id OR e.aba_id <> a.aba_id));
 

@@ -44,7 +44,8 @@ export function Ativar() {
     } catch (erro) {
       if (erro instanceof ErroApi) {
         setErros(erro.campos as Erros)
-        setFalha(erro.message)
+        // Erro já mostrado junto do campo não se repete no aviso geral.
+        setFalha(Object.values(erro.campos).includes(erro.message) ? null : erro.message)
       } else {
         setFalha('Não foi possível ativar o acesso agora.')
       }

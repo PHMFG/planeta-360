@@ -266,10 +266,11 @@ class EmailsAutorizadosTest {
 
         assertThat(revogacao).hasStatus(HttpStatus.NO_CONTENT);
         assertThat(corpo(revogacao)).isEmpty();
-        assertThat(amarelo.get("/api/parcerias/{id}", parceria)).as("a parceria some na chamada seguinte")
-                .hasStatus(HttpStatus.NOT_FOUND);
-        assertThat(lerLista(amarelo.get("/api/parcerias"), "$")).as("e a lista dele fica vazia").isEmpty();
-        assertThat(amarelo.get("/api/auth/eu")).as("o app descobre pelo /eu: a sessão terminou").hasStatus(HttpStatus.UNAUTHORIZED);
+        // Era o único vínculo dele: a sessão termina na chamada seguinte, em qualquer rota (não só no /eu).
+        MvcTestResult depois = amarelo.get("/api/parcerias/{id}", parceria);
+        assertThat(depois).hasStatus(HttpStatus.UNAUTHORIZED);
+        assertThat(lerJson(depois, "$.detail")).isEqualTo("Sua sessão terminou. Entre de novo.");
+        assertThat(amarelo.sessao().isInvalid()).isTrue();
         assertThat(SessaoDeApi.anonima(mvc).post("/api/auth/login", "{\"email\":\"" + AMARELO + "\",\"senha\":\"senha123\"}"))
                 .as("e ele não entra de novo").hasStatus(HttpStatus.UNAUTHORIZED);
         assertThat(historico("REVOGACAO", parceria)).isEqualTo(1);

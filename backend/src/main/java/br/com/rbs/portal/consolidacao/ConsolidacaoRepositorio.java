@@ -18,6 +18,9 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class ConsolidacaoRepositorio {
 
+    // [RELATORIO] Todo percentual deste repositório (e das visões que ele lê) é cortado na primeira casa por fn_pct_truncado,
+    // nunca arredondado: nenhum número parece maior do que é, e só chega a 100 quem está completo. Passar de 100 vale.
+
     public record LinhaDeUnidade(String unidade, BigDecimal previsto, BigDecimal exibido, BigDecimal percentual) {
     }
 
@@ -102,13 +105,15 @@ public class ConsolidacaoRepositorio {
                 .list();
     }
 
-    /** Cada linha do plano de mídia com a soma das exibições dela. Mesma conta da visão, só que sem agrupar por veículo. */
+    /**
+     * Cada linha do plano de mídia com a soma das exibições dela. Mesma conta da visão, só que sem agrupar por veículo.
+     */
     public List<LinhaDoPlano> linhasDoPlano(long parceriaId) {
         return jdbc.sql("""
                         SELECT ap.id AS aproveitamento_id, ap.veiculo, ap.formato, ap.espaco_programa, ap.unidade,
                                ap.quantidade_prevista AS previsto,
                                CAST(coalesce(v.exibido, 0) AS numeric(14,2)) AS exibido,
-                               round(100 * coalesce(v.exibido, 0) / ap.quantidade_prevista, 1) AS percentual
+                               fn_pct_truncado(100 * coalesce(v.exibido, 0) / ap.quantidade_prevista) AS percentual
                         FROM aproveitamento_previsto ap
                         LEFT JOIN (SELECT aproveitamento_id, sum(quantidade) AS exibido
                                    FROM veiculacao GROUP BY aproveitamento_id) v ON v.aproveitamento_id = ap.id
@@ -123,7 +128,7 @@ public class ConsolidacaoRepositorio {
     public Optional<LinhaDeAplicacoes> aplicacoes(long parceriaId) {
         return jdbc.sql("""
                         SELECT CAST(previstas AS numeric(14,2)) AS previstas, CAST(comprovadas AS numeric(14,2)) AS comprovadas,
-                               CAST(fotos AS bigint) AS fotos, round(100 * comprovadas / previstas, 1) AS percentual
+                               CAST(fotos AS bigint) AS fotos, fn_pct_truncado(100 * comprovadas / previstas) AS percentual
                         FROM vw_aplicacoes WHERE parceria_id = :parceriaId
                         """)
                 .param("parceriaId", parceriaId)
@@ -144,7 +149,7 @@ public class ConsolidacaoRepositorio {
     public Optional<LinhaDeCortesias> cortesias(long parceriaId) {
         return jdbc.sql("""
                         SELECT CAST(disponiveis AS bigint) AS disponiveis, CAST(destinadas AS bigint) AS destinadas,
-                               round(100.0 * destinadas / nullif(disponiveis, 0), 1) AS percentual
+                               fn_pct_truncado(100.0 * destinadas / nullif(disponiveis, 0)) AS percentual
                         FROM vw_cortesias WHERE parceria_id = :parceriaId
                         """)
                 .param("parceriaId", parceriaId)
@@ -231,7 +236,11 @@ public class ConsolidacaoRepositorio {
                 .single();
     }
 
-    /** Quantas parcerias da edição estão em cada situação do relatório mais novo (SEM_RELATORIO, RASCUNHO...). */
+    /**
+     * Quantas parcerias da edição estão em cada situação da versão MAIS NOVA do relatório (SEM_RELATORIO, RASCUNHO...).
+     * Não diz o que a marca vê: com a v3 em rascunho e a v2 disponibilizada, a parceria conta como RASCUNHO aqui
+     * (veja {@link #relatoriosQueAMarcaVe}).
+     */
     public List<Contagem> relatoriosPorSituacao(long eventoId) {
         return jdbc.sql("""
                         SELECT coalesce(r.status, 'SEM_RELATORIO') AS chave, count(*) AS total
@@ -243,6 +252,18 @@ public class ConsolidacaoRepositorio {
                 .param("eventoId", eventoId)
                 .query(Contagem.class)
                 .list();
+    }
+
+    /** Quantas parcerias da edição têm ao menos uma versão disponibilizada: o que a marca de fato consegue ver. */
+    public long relatoriosQueAMarcaVe(long eventoId) {
+        return jdbc.sql("""
+                        SELECT count(*) FROM parceria pa
+                        WHERE pa.evento_id = :eventoId
+                          AND EXISTS (SELECT 1 FROM relatorio r WHERE r.parceria_id = pa.id AND r.status = 'DISPONIBILIZADO')
+                        """)
+                .param("eventoId", eventoId)
+                .query(Long.class)
+                .single();
     }
 
     public Optional<LinhaDeCarga> ultimaCarga(long eventoId) {

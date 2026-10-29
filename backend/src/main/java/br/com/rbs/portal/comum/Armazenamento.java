@@ -3,6 +3,7 @@ package br.com.rbs.portal.comum;
 import br.com.rbs.portal.materiais.Arquivo;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
@@ -39,7 +40,7 @@ public class Armazenamento {
     private static final int LIMITE_NOME = 255;   // coluna arquivo.nome_original
     private static final String COLUNAS = """
             id, parceria_id, aba_id, entrega_id, categoria, nome_original, mime_type, tamanho_bytes, caminho,
-            hash_sha256, versao, enviado_por, enviado_em""";
+            hash_sha256, versao, enviado_por, enviado_em, observacao""";
 
     private final JdbcClient jdbc;
     private final Path pasta;
@@ -80,6 +81,15 @@ public class Armazenamento {
      * ao mesmo tempo não pegarem a mesma versão.
      */
     public Arquivo gravarNaEntrega(byte[] conteudo, String nomeOriginal, String categoria, long enviadoPor, long entregaId) {
+        return gravarNaEntrega(conteudo, nomeOriginal, categoria, enviadoPor, entregaId, null);
+    }
+
+    /**
+     * O mesmo, com a observação de quem enviou (pode ser nula): ela fica ligada a esta versão e aparece na lista de
+     * versões da entrega.
+     */
+    public Arquivo gravarNaEntrega(byte[] conteudo, String nomeOriginal, String categoria, long enviadoPor, long entregaId,
+                                   String observacao) {
         Preparado pronto = preparar(conteudo, nomeOriginal);
         Long parceriaId = jdbc.sql("SELECT parceria_id FROM entrega WHERE id = :id").param("id", entregaId)
                 .query(Long.class).optional().orElseThrow(() -> new NaoEncontradoException("Não encontramos esta entrega."));
@@ -87,14 +97,15 @@ public class Armazenamento {
         escrever(caminho, conteudo);
         return inserir("""
                         INSERT INTO arquivo (parceria_id, aba_id, entrega_id, categoria, nome_original, mime_type,
-                                             tamanho_bytes, caminho, hash_sha256, versao, enviado_por)
+                                             tamanho_bytes, caminho, hash_sha256, versao, enviado_por, observacao)
                         SELECT e.parceria_id, e.aba_id, e.id, :categoria, :nome, :mime, :tamanho, :caminho, :hash,
-                               coalesce((SELECT max(a.versao) FROM arquivo a WHERE a.entrega_id = e.id), 0) + 1, :enviadoPor
+                               coalesce((SELECT max(a.versao) FROM arquivo a WHERE a.entrega_id = e.id), 0) + 1, :enviadoPor,
+                               nullif(CAST(:observacao AS text), '')
                         FROM entrega e WHERE e.id = :entregaId
                         RETURNING\s""" + COLUNAS,
                 Map.of("categoria", categoria, "nome", pronto.nomeOriginal(), "mime", pronto.tipo().mime(),
                         "tamanho", (long) conteudo.length, "caminho", caminho, "hash", pronto.hash(),
-                        "enviadoPor", enviadoPor, "entregaId", entregaId),
+                        "enviadoPor", enviadoPor, "entregaId", entregaId, "observacao", observacao == null ? "" : observacao),
                 parceriaId, caminho);
     }
 
@@ -108,6 +119,27 @@ public class Armazenamento {
             return destino.startsWith(pasta) && Files.isRegularFile(destino) ? Optional.of(destino) : Optional.empty();
         } catch (InvalidPathException caminhoInvalido) {
             return Optional.empty();
+        }
+    }
+
+    /**
+     * Cria o arquivo no caminho dado SEM sobrescrever: se já existe um arquivo ali, não faz nada e devolve falso. Serve para
+     * dar conteúdo de exemplo aos arquivos da amostra de demonstração (veja ArquivosDaAmostra); o envio de verdade usa
+     * {@link #gravar} e {@link #gravarNaEntrega}. O caminho não pode sair da pasta de armazenamento.
+     */
+    boolean criarSeNaoExiste(String caminho, byte[] conteudo) {
+        Path destino = pasta.resolve(caminho).normalize();
+        if (!destino.startsWith(pasta)) {
+            throw new IllegalArgumentException("O caminho sai da pasta de armazenamento: " + caminho);
+        }
+        try {
+            Files.createDirectories(destino.getParent());
+            Files.write(destino, conteudo, StandardOpenOption.CREATE_NEW);
+            return true;
+        } catch (FileAlreadyExistsException jaExiste) {
+            return false;
+        } catch (IOException erro) {
+            throw new UncheckedIOException("Não consegui gravar o arquivo de exemplo no armazenamento", erro);
         }
     }
 
@@ -136,12 +168,23 @@ public class Armazenamento {
                 HttpStatus.UNSUPPORTED_MEDIA_TYPE,
                 "Este tipo de arquivo não é aceito. Envie um destes: " + TipoDeArquivo.listaDeExtensoes() + "."));
         if (!tipo.conteudoConfere(conteudo)) {
-            throw new ArquivoRecusadoException(HttpStatus.UNSUPPORTED_MEDIA_TYPE,
-                    "O conteúdo do arquivo não é um " + tipo.extensao().toUpperCase(Locale.ROOT) + " de verdade. "
-                            + (tipo == TipoDeArquivo.CSV ? "Salve a planilha como CSV em UTF-8."
-                            : "Confira se o arquivo não foi renomeado."));
+            throw new ArquivoRecusadoException(HttpStatus.UNSUPPORTED_MEDIA_TYPE, frasePorConteudo(tipo, conteudo));
         }
         return new Preparado(nome, tipo, sha256(conteudo), UUID.randomUUID() + "." + tipo.extensao());
+    }
+
+    /**
+     * A frase do 415 por conteúdo que não bate com a extensão. Planilha que é texto, mas não está em UTF-8 (o Excel grava
+     * em ANSI/Latin-1 ou em UTF-16 quando não se escolhe "CSV UTF-8"), recebe a instrução de como salvar de novo; o que não
+     * tem cara de texto (um PNG renomeado para .csv, por exemplo) recebe a frase de arquivo renomeado.
+     */
+    private static String frasePorConteudo(TipoDeArquivo tipo, byte[] conteudo) {
+        if (tipo == TipoDeArquivo.CSV && TipoDeArquivo.ehTextoQueNaoEUtf8(conteudo)) {
+            return "A planilha não está em UTF-8 (por isso os acentos não seriam lidos certo). No Excel, use Salvar como e "
+                    + "escolha \"CSV UTF-8 (separado por vírgulas)\"; depois envie de novo.";
+        }
+        return "O conteúdo do arquivo não é um " + tipo.extensao().toUpperCase(Locale.ROOT) + " de verdade. "
+                + "Confira se o arquivo não foi renomeado.";
     }
 
     /**
@@ -167,7 +210,7 @@ public class Armazenamento {
         return limiteBytes % mega == 0 ? limiteBytes / mega + " MB" : limiteBytes + " bytes";
     }
 
-    private static String sha256(byte[] conteudo) {
+    static String sha256(byte[] conteudo) {
         try {
             return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(conteudo));
         } catch (NoSuchAlgorithmException erro) {

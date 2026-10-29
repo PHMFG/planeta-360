@@ -8,6 +8,7 @@ import br.com.rbs.portal.comum.NaoEncontradoException;
 import br.com.rbs.portal.comum.UsuarioAutenticado;
 import br.com.rbs.portal.comum.VerificadorDeAcesso;
 import br.com.rbs.portal.relatorio.RelatorioDtos.CotaDto;
+import br.com.rbs.portal.relatorio.RelatorioDtos.DisponibilizadaDto;
 import br.com.rbs.portal.relatorio.RelatorioDtos.EventoDto;
 import br.com.rbs.portal.relatorio.RelatorioDtos.IndicadorDto;
 import br.com.rbs.portal.relatorio.RelatorioDtos.RelatorioDto;
@@ -41,9 +42,9 @@ public class RelatorioService {
     static final String AINDA_NAO_DISPONIVEL = "O relatório desta parceria ainda não está disponível.";
 
     /**
-     * Os 17 indicadores do catálogo (V3), na ordem em que o catálogo os lista. A tabela indicador não tem coluna de ordem, e
-     * as seções do relatório seguem a primeira aparição de cada uma aqui. Indicador novo que ainda não esteja nesta lista
-     * vai para o fim da sua seção, sem quebrar nada.
+     * Os 17 indicadores do catálogo (V3), na ordem em que o catálogo os lista: a ordem do modelo do relatório. A tabela
+     * indicador não tem coluna de ordem, e as 6 seções seguem a primeira aparição de cada uma aqui. Indicador novo que ainda
+     * não esteja nesta lista vai para o fim da sua seção, sem quebrar nada.
      */
     private static final List<String> ORDEM_DO_CATALOGO = List.of(
             "ENTREGAS_CONCLUIDAS_PCT", "ENTREGAS_PENDENTES",
@@ -92,19 +93,25 @@ public class RelatorioService {
             linhas.add(Csv.linha(s.parceriaId(), s.patrocinador(), s.cota().nome(), s.evento().edicao(), s.situacao(),
                     r != null ? r.versao() : null, r != null ? r.geradoEm() : null, r != null ? r.validadoEm() : null,
                     r != null ? r.disponibilizadoEm() : null, r != null ? r.indicadoresDisponiveis() : null,
-                    r != null ? r.indicadoresIndisponiveis() : null, s.faltantes()));
+                    r != null ? r.indicadoresIndisponiveis() : null, s.faltantes(),
+                    s.disponibilizada() != null ? s.disponibilizada().versao() : null,
+                    s.disponibilizada() != null ? s.disponibilizada().disponibilizadoEm() : null));
         }
         return new ArquivoCsv("relatorios-" + Datas.hoje() + ".csv", List.of(
                 "parceria_id", "patrocinador", "cota", "edicao", "situacao", "versao", "gerado_em", "validado_em",
-                "disponibilizado_em", "indicadores_disponiveis", "indicadores_indisponiveis", "faltantes"), linhas);
+                "disponibilizado_em", "indicadores_disponiveis", "indicadores_indisponiveis", "faltantes",
+                "marca_ve_versao", "marca_ve_disponibilizado_em"), linhas);
     }
 
     private static SituacaoDto paraSituacao(LinhaDeSituacao l) {
         ResumoDoRelatorioDto resumo = l.relatorioId() == null ? null : new ResumoDoRelatorioDto(l.relatorioId(), l.versao(),
                 l.status(), Datas.emBrasilia(l.geradoEm()), Datas.emBrasilia(l.validadoEm()),
                 Datas.emBrasilia(l.disponibilizadoEm()), l.disponiveis(), l.indisponiveis());
+        // [RELATORIO] O que a marca vê: a disponibilizada mais nova. A RBS precisa enxergar isso ao lado da versão mais nova.
+        DisponibilizadaDto marcaVe = l.marcaVeId() == null ? null
+                : new DisponibilizadaDto(l.marcaVeId(), l.marcaVeVersao(), Datas.emBrasilia(l.marcaVeEm()));
         return new SituacaoDto(l.parceriaId(), l.patrocinador(), new CotaDto(l.cotaCodigo(), l.cotaNome()),
-                new EventoDto(l.eventoId(), l.eventoNome(), l.edicao()), l.status(), resumo, l.faltantes());
+                new EventoDto(l.eventoId(), l.eventoNome(), l.edicao()), l.status(), resumo, marcaVe, l.faltantes());
     }
 
     // ---------------------------------------------------------------------
@@ -222,7 +229,8 @@ public class RelatorioService {
     }
 
     /**
-     * Agrupa os números nas seções do catálogo, na ordem do catálogo. [RELATORIO] Número sem dado sai com
+     * Agrupa os números nas seções do catálogo, na ordem do catálogo. [RELATORIO] As linhas vêm do catálogo inteiro (veja
+     * RelatorioRepositorio.indicadores), então toda seção do modelo aparece, mesmo sem nenhum dado. Número sem dado sai com
      * {@code disponivel: false} e {@code valor: null}, nunca zero.
      */
     private List<SecaoDto> secoes(long relatorioId) {

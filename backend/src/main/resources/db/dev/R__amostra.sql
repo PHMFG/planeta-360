@@ -7,13 +7,22 @@
 --  * [DUPLICIDADE] Trava: se a amostra já está no banco, nada é feito. Para recarregá-la, recrie o banco de dev.
 --  * [HISTORICO] Nenhum UPDATE ou DELETE em historico ou relatorio (o histórico é imutável e o relatório só avança de status): as
 --    datas simuladas entram no próprio INSERT, e fn_gerar_relatorio recebe a data em p_em.
+--  * [DATAS] Todo horário da amostra é contado para trás a partir do dia em que o banco é criado (pg_temp.quando), então nunca
+--    fica no futuro e a ordem dos acontecimentos se mantém: parceria e acessos, entregas e aprovações, exibições de mídia,
+--    cargas e, por último, os relatórios em rascunho. Nada usa uma data fixa.
 --  * Cada bloco DO começa pela trava, e as tabelas temporárias _amostra_* são apagadas no fim.
 -- Senha de todos os usuários: senha123 (hash BCrypt literal, sem pgcrypto; os hashes estão aqui só para dev e test).
 
 DROP TABLE IF EXISTS pg_temp._amostra_ctl;
 CREATE TEMP TABLE _amostra_ctl AS
 SELECT EXISTS (SELECT 1 FROM usuario WHERE lower(email) = 'b2b@rbs.example')
-    OR EXISTS (SELECT 1 FROM patrocinador WHERE nome_canonico IN ('Cliente Amarelo', 'Cliente Roxo', 'Cliente Verde')) AS pular;
+    OR EXISTS (SELECT 1 FROM patrocinador WHERE nome_canonico IN ('Cliente Amarelo', 'Cliente Roxo', 'Cliente Verde')) AS pular,
+       -- Meia-noite de hoje em Brasília: o ponto de partida de todos os horários da amostra.
+       (date_trunc('day', now() AT TIME ZONE 'America/Sao_Paulo') AT TIME ZONE 'America/Sao_Paulo') AS hoje;
+
+-- pg_temp.quando(30, '14:20') = há 30 dias, às 14:20 de Brasília. Use sempre 1 dia ou mais: assim o horário é sempre passado.
+CREATE OR REPLACE FUNCTION pg_temp.quando(p_dias INT, p_hora TIME DEFAULT '12:00') RETURNS TIMESTAMPTZ
+LANGUAGE sql STABLE AS $$ SELECT (SELECT hoje FROM _amostra_ctl) - p_dias * interval '1 day' + p_hora $$;
 
 -- ---------------------------------------------------------------------
 -- 1. Usuários, números reais da edição 2026 e a pesquisa geral do festival
@@ -26,17 +35,17 @@ BEGIN
     END IF;
 
     -- [PERMISSAO] Dois Admin RBS (time B2B e time de pesquisa) e quatro Admin Patrocinador (marca Amarelo, agência do Amarelo, Roxo, Verde)
-    INSERT INTO usuario (nome, email, senha_hash, perfil) VALUES
-     ('Equipe B2B RBS',         'b2b@rbs.example',               '$2a$10$0C4T.v3cVusBsIM8uDxib.R1lXGkiB0BgjEwQxAz6pQLY9Mh7mpx.', 'ADMIN_RBS'),
-     ('Equipe de Pesquisa RBS', 'pesquisa@rbs.example',          '$2a$10$6jlmhibUkxLaVG3JxRPK2OJ1mZVEqBf0RKOCyKOSp/LDeJXKkCF.K', 'ADMIN_RBS'),
-     ('Marketing Amarelo',      'marketing@amarelo.example',     '$2a$10$2AKvpS64jrj7bGghRHr7reHpsL26cNFZQRuGF1SzOfqJIAaQgDRH.', 'ADMIN_PATROCINADOR'),
-     ('Agência de ativação',    'atendimento@agencia-x.example', '$2a$10$b8pl2hU9wKG4TXSy1clv7uX3h82KH/pu/mA5ciNECN6HCuTvqI9SK', 'ADMIN_PATROCINADOR'),
-     ('Marketing Roxo',         'marketing@roxo.example',        '$2a$10$hWwkcoCPwGnkBQHjSUamZexA750NCiPngz6TjLfJFGCwCxiQ41uWW', 'ADMIN_PATROCINADOR'),
-     ('Marketing Verde',        'marketing@verde.example',       '$2a$10$k3/UaxBHvXnCA1w24CHsh.BBi69UvS2tf7/D/yenrnBwFCRGMn4LS', 'ADMIN_PATROCINADOR');
+    INSERT INTO usuario (nome, email, senha_hash, perfil, criado_em) VALUES
+     ('Equipe B2B RBS',         'b2b@rbs.example',               '$2a$10$0C4T.v3cVusBsIM8uDxib.R1lXGkiB0BgjEwQxAz6pQLY9Mh7mpx.', 'ADMIN_RBS',           pg_temp.quando(240, '09:00')),
+     ('Equipe de Pesquisa RBS', 'pesquisa@rbs.example',          '$2a$10$6jlmhibUkxLaVG3JxRPK2OJ1mZVEqBf0RKOCyKOSp/LDeJXKkCF.K', 'ADMIN_RBS',           pg_temp.quando(240, '09:05')),
+     ('Marketing Amarelo',      'marketing@amarelo.example',     '$2a$10$2AKvpS64jrj7bGghRHr7reHpsL26cNFZQRuGF1SzOfqJIAaQgDRH.', 'ADMIN_PATROCINADOR', pg_temp.quando(147, '09:00')),
+     ('Agência de ativação',    'atendimento@agencia-x.example', '$2a$10$b8pl2hU9wKG4TXSy1clv7uX3h82KH/pu/mA5ciNECN6HCuTvqI9SK', 'ADMIN_PATROCINADOR', pg_temp.quando(147, '09:10')),
+     ('Marketing Roxo',         'marketing@roxo.example',        '$2a$10$hWwkcoCPwGnkBQHjSUamZexA750NCiPngz6TjLfJFGCwCxiQ41uWW', 'ADMIN_PATROCINADOR', pg_temp.quando(147, '09:20')),
+     ('Marketing Verde',        'marketing@verde.example',       '$2a$10$k3/UaxBHvXnCA1w24CHsh.BBi69UvS2tf7/D/yenrnBwFCRGMn4LS', 'ADMIN_PATROCINADOR', pg_temp.quando(147, '09:30'));
 
     -- Arquivo geral da RBS (parceria nula): é a fonte dos números de 2026 e da pesquisa geral (regra rn_pesquisa_fonte_geral)
     INSERT INTO arquivo (categoria, nome_original, mime_type, tamanho_bytes, caminho, enviado_por, enviado_em)
-    SELECT 'PESQUISA', 'PV_PA_26_GERAL.pdf', 'application/pdf', 1893420, 'rbs/geral/PV_PA_26_GERAL.pdf', u.id, timestamptz '2026-03-10 15:00-03'
+    SELECT 'PESQUISA', 'PV_PA_26_GERAL.pdf', 'application/pdf', 1893420, 'rbs/geral/PV_PA_26_GERAL.pdf', u.id, pg_temp.quando(230, '15:00')
     FROM usuario u WHERE lower(u.email) = 'pesquisa@rbs.example';
 
     -- Números reais do Planeta Atlântida 2026 (piso: "mais de" não vira número exato)
@@ -77,8 +86,9 @@ DO $$
 BEGIN
     IF (SELECT pular FROM _amostra_ctl) THEN RETURN; END IF;
 
-    INSERT INTO patrocinador (nome_canonico, segmento) VALUES
-     ('Cliente Amarelo', NULL), ('Cliente Roxo', NULL), ('Cliente Verde', NULL);
+    INSERT INTO patrocinador (nome_canonico, segmento, criado_em) VALUES
+     ('Cliente Amarelo', NULL, pg_temp.quando(400, '10:00')), ('Cliente Roxo', NULL, pg_temp.quando(160, '10:00')),
+     ('Cliente Verde', NULL, pg_temp.quando(160, '10:10'));
 
     -- Grafias alternativas: a emissora escreve "Amarelo" no relatório de veiculação e a carga resolve pelo alias
     INSERT INTO patrocinador_alias (patrocinador_id, alias)
@@ -88,14 +98,14 @@ BEGIN
     -- [ISOLAMENTO] Uma parceria por marca por edição. O Amarelo também tem a de 2026 (encerrada), que fica sem usuários e sem
     -- cargas: serve para provar que o que é de uma edição não aparece na outra. O gatilho rn_parceria_abas_padrao cria as 7 abas
     -- de cada uma conforme cota_tipo_aba (V3): Pesquisa só para a Master.
-    INSERT INTO parceria (evento_id, patrocinador_id, cota_tipo_id, nome_produto, valor_investimento, base_valor, situacao)
-    SELECT e.id, p.id, v.cota, v.produto, v.valor, v.base, v.sit
+    INSERT INTO parceria (evento_id, patrocinador_id, cota_tipo_id, nome_produto, valor_investimento, base_valor, situacao, criado_em)
+    SELECT e.id, p.id, v.cota, v.produto, v.valor, v.base, v.sit, v.criada
     FROM (VALUES
-     (2027, 'Cliente Amarelo', 1, 'Cota Patrocínio Master',                   1000000, 'BRUTO_TABELA', 'ATIVA'),
-     (2027, 'Cliente Roxo',    2, 'Cota Apresenta (transmissão oficial)',      500000, 'LIQUIDO',      'ATIVA'),
-     (2027, 'Cliente Verde',   3, 'Cota Ativação Arena',                       100000, 'LIQUIDO',      'ATIVA'),
-     (2026, 'Cliente Amarelo', 1, 'Cota Patrocínio Master',                      NULL, NULL,           'ENCERRADA')
-    ) AS v(ed, pat, cota, produto, valor, base, sit)
+     (2027, 'Cliente Amarelo', 1, 'Cota Patrocínio Master',                   1000000, 'BRUTO_TABELA', 'ATIVA',     pg_temp.quando(150, '10:00')),
+     (2027, 'Cliente Roxo',    2, 'Cota Apresenta (transmissão oficial)',      500000, 'LIQUIDO',      'ATIVA',     pg_temp.quando(150, '10:20')),
+     (2027, 'Cliente Verde',   3, 'Cota Ativação Arena',                       100000, 'LIQUIDO',      'ATIVA',     pg_temp.quando(150, '10:40')),
+     (2026, 'Cliente Amarelo', 1, 'Cota Patrocínio Master',                      NULL, NULL,           'ENCERRADA', pg_temp.quando(400, '10:30'))
+    ) AS v(ed, pat, cota, produto, valor, base, sit, criada)
     JOIN evento e ON e.nome = 'Planeta Atlântida' AND e.edicao = v.ed
     JOIN patrocinador p ON p.nome_canonico = v.pat;
 
@@ -109,15 +119,15 @@ BEGIN
     -- [PERMISSAO] A RBS autoriza o e-mail; só então o usuário pode ser vinculado (gatilho rn_vinculo_exige_autorizacao).
     -- O vínculo é MARCA ou AGENCIA; a agência do Amarelo tem acesso à mesma parceria.
     INSERT INTO email_autorizado (parceria_id, email, vinculo, autorizado_por, autorizado_em)
-    SELECT pp.id, v.email, v.vinc, (SELECT id FROM usuario WHERE lower(email) = 'b2b@rbs.example'), timestamptz '2026-09-28 10:00-03'
+    SELECT pp.id, v.email, v.vinc, (SELECT id FROM usuario WHERE lower(email) = 'b2b@rbs.example'), pg_temp.quando(148, '10:00')
     FROM (VALUES ('Cliente Amarelo', 'marketing@amarelo.example',     'MARCA'),
                  ('Cliente Amarelo', 'atendimento@agencia-x.example', 'AGENCIA'),
                  ('Cliente Roxo',    'marketing@roxo.example',        'MARCA'),
                  ('Cliente Verde',   'marketing@verde.example',       'MARCA')) AS v(cli, email, vinc)
     JOIN _amostra_parc pp ON pp.cliente = v.cli;
 
-    INSERT INTO parceria_usuario (parceria_id, usuario_id, vinculo)
-    SELECT ea.parceria_id, u.id, ea.vinculo
+    INSERT INTO parceria_usuario (parceria_id, usuario_id, vinculo, criado_em)
+    SELECT ea.parceria_id, u.id, ea.vinculo, ea.autorizado_em + interval '1 day'
     FROM email_autorizado ea JOIN usuario u ON lower(u.email) = lower(ea.email);
 
     -- [UPLOAD] Plano comercial de cada parceria (PDF), guardado na aba Perfil do cliente (todo material de parceria fica numa aba).
@@ -126,7 +136,7 @@ BEGIN
     INSERT INTO arquivo (parceria_id, aba_id, categoria, nome_original, mime_type, tamanho_bytes, caminho, enviado_por, enviado_em)
     SELECT pp.id, (SELECT a.id FROM aba a WHERE a.codigo = 'PERFIL'), 'PLANO_COMERCIAL','plano_comercial_' || lower(replace(pp.cliente, ' ', '_')) || '_PA27.pdf', 'application/pdf',
            v.tam, 'parcerias/' || pp.id || '/plano/plano_comercial_PA27.pdf',
-           (SELECT id FROM usuario WHERE lower(email) = 'b2b@rbs.example'), timestamptz '2026-09-20 11:00-03'
+           (SELECT id FROM usuario WHERE lower(email) = 'b2b@rbs.example'), pg_temp.quando(149, '11:00')
     FROM (VALUES ('Cliente Amarelo', 2310441), ('Cliente Roxo', 1984127), ('Cliente Verde', 1102338)) AS v(cli, tam)
     JOIN _amostra_parc pp ON pp.cliente = v.cli;
 END $$;
@@ -253,14 +263,19 @@ BEGIN
 END $$;
 
 -- ---------------------------------------------------------------------
--- 5. Entregas (cenário pós-evento), o arquivo logo_final.pdf com 2 versões e o histórico
+-- 5. Entregas, os arquivos enviados, o ciclo do logo e o histórico de cada envio
 -- ---------------------------------------------------------------------
+-- Toda entrega Enviada, Em análise ou Aprovada tem o arquivo que a marca mandou, com autor, data e, às vezes, uma observação.
+-- O histórico conta a mesma história das versões: o envio, o status que muda com ele e a decisão da RBS. Três entregas
+-- seguem em aberto de propósito: o VT do Roxo (Ajuste solicitado, com o recado da RBS), a peça de 30" do Amarelo (Em
+-- análise) e a destinação das cortesias da Verde (Enviado). Os dois últimos esperam a RBS na fila de materiais.
 DO $$
 BEGIN
     IF (SELECT pular FROM _amostra_ctl) THEN RETURN; END IF;
 
-    INSERT INTO entrega (parceria_id, aba_id, titulo, status, prazo)
-    SELECT pp.id, (SELECT a.id FROM aba a WHERE a.codigo = v.aba), v.titulo, v.status, v.prazo::date
+    INSERT INTO entrega (parceria_id, aba_id, titulo, status, prazo, criado_em, atualizado_em)
+    SELECT pp.id, (SELECT a.id FROM aba a WHERE a.codigo = v.aba), v.titulo, v.status, v.prazo::date,
+           pg_temp.quando(145, '10:00'), pg_temp.quando(145, '10:00')
     FROM (VALUES
      ('Cliente Amarelo','PERFIL','Documento para compra de ingressos com valor de patrocinador','APROVADO',NULL),
      ('Cliente Amarelo','APLICACOES','Materiais de marca para a campanha de comunicação','APROVADO','2026-10-01'),
@@ -293,26 +308,113 @@ BEGIN
     ) AS v(cli, aba, titulo, status, prazo)
     JOIN _amostra_parc pp ON pp.cliente = v.cli;
 
-    -- [UPLOAD] Arquivo com versões (exemplo do documento do grupo): a mesma entrega, parceria e aba nas duas versões
-    INSERT INTO arquivo (parceria_id, aba_id, entrega_id, categoria, nome_original, mime_type, tamanho_bytes, caminho, versao, enviado_por, enviado_em)
+    -- [UPLOAD] Arquivo com versões (exemplo do documento do grupo): a mesma entrega, parceria e aba nas duas versões.
+    -- Cada versão guarda a observação que a marca escreveu ao enviar (aparece na lista de versões da entrega).
+    INSERT INTO arquivo (parceria_id, aba_id, entrega_id, categoria, nome_original, mime_type, tamanho_bytes, caminho, versao, enviado_por, enviado_em, observacao)
     SELECT e.parceria_id, e.aba_id, e.id, 'MATERIAL_MARCA', 'logo_final.pdf', 'application/pdf', v.tam,
            'parcerias/' || e.parceria_id || '/aplicacoes/logo_final_v' || v.ver || '.pdf', v.ver,
-           (SELECT id FROM usuario WHERE lower(email) = 'marketing@amarelo.example'), v.quando::timestamptz
-    FROM entrega e, (VALUES (1, 482113, '2026-10-15 14:20-03'), (2, 501877, '2026-10-17 18:03-03')) AS v(ver, tam, quando)
+           (SELECT id FROM usuario WHERE lower(email) = 'marketing@amarelo.example'), v.quando, v.obs
+    FROM entrega e, (VALUES (1, 482113, pg_temp.quando(94, '14:20'), 'Primeira versão do logo, em PDF.'),
+                            (2, 501877, pg_temp.quando(92, '18:03'), 'Logo em vetor, como pedido.')) AS v(ver, tam, quando, obs)
     WHERE e.titulo = 'Logo final para aplicações no evento';
 
-    -- [HISTORICO] Ciclo do logo: envio, ajuste pedido, nova versão, aprovado. As datas entram no próprio INSERT.
-    INSERT INTO historico (parceria_id, entidade, entidade_id, acao, valor_anterior, valor_novo, usuario_id, ocorrido_em, ip, user_agent)
-    SELECT e.parceria_id, 'entrega', e.id, v.acao, v.ant, v.novo, u.id, v.quando::timestamptz, v.ip::inet,
+    -- [HISTORICO] Ciclo do logo: envio, análise, ajuste pedido (com o recado da RBS), nova versão, aprovado. As datas entram no
+    -- próprio INSERT. O pedido de ajuste sempre leva a observação (a API exige).
+    INSERT INTO historico (parceria_id, entidade, entidade_id, acao, valor_anterior, valor_novo, detalhe, usuario_id, ocorrido_em, ip, user_agent)
+    SELECT e.parceria_id, 'entrega', e.id, v.acao, v.ant, v.novo, v.detalhe, u.id, v.quando, v.ip::inet,
            'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15'
     FROM entrega e,
-     (VALUES ('ENVIO_ARQUIVO',    NULL,                'logo_final.pdf (versão 1)', 'marketing@amarelo.example', '2026-10-15 14:20-03', '200.0.2.10'),
-             ('ALTERACAO_STATUS', 'EM_ANALISE',        'AJUSTE_SOLICITADO',         'b2b@rbs.example',           '2026-10-16 09:42-03', '10.0.0.5'),
-             ('NOVA_VERSAO',      'versão 1',          'logo_final.pdf (versão 2)', 'marketing@amarelo.example', '2026-10-17 18:03-03', '200.0.2.10'),
-             ('ALTERACAO_STATUS', 'AJUSTE_SOLICITADO', 'APROVADO',                  'b2b@rbs.example',           '2026-10-18 10:15-03', '10.0.0.5')
-     ) AS v(acao, ant, novo, email, quando, ip)
+     (VALUES ('ENVIO_ARQUIVO',    NULL,                'logo_final.pdf (versão 1)', 'Primeira versão do logo, em PDF.',                'marketing@amarelo.example', pg_temp.quando(94, '14:20'), '200.0.2.10'),
+             ('ALTERACAO_STATUS', 'AGUARDANDO_ENVIO',  'ENVIADO',                   'envio automático: logo_final.pdf (versão 1)',     'marketing@amarelo.example', pg_temp.quando(94, '14:21'), '200.0.2.10'),
+             ('ALTERACAO_STATUS', 'ENVIADO',           'EM_ANALISE',                NULL,                                              'b2b@rbs.example',           pg_temp.quando(94, '16:30'), '10.0.0.5'),
+             ('ALTERACAO_STATUS', 'EM_ANALISE',        'AJUSTE_SOLICITADO',         'Enviar o logo em vetor, com fundo transparente.', 'b2b@rbs.example',           pg_temp.quando(93, '09:42'), '10.0.0.5'),
+             ('NOVA_VERSAO',      'versão 1',          'logo_final.pdf (versão 2)', 'Logo em vetor, como pedido.',                     'marketing@amarelo.example', pg_temp.quando(92, '18:03'), '200.0.2.10'),
+             ('ALTERACAO_STATUS', 'AJUSTE_SOLICITADO', 'ENVIADO',                   'envio automático: logo_final.pdf (versão 2)',     'marketing@amarelo.example', pg_temp.quando(92, '18:04'), '200.0.2.10'),
+             ('ALTERACAO_STATUS', 'ENVIADO',           'APROVADO',                  NULL,                                              'b2b@rbs.example',           pg_temp.quando(91, '10:15'), '10.0.0.5')
+     ) AS v(acao, ant, novo, detalhe, email, quando, ip)
     JOIN usuario u ON lower(u.email) = v.email
     WHERE e.titulo = 'Logo final para aplicações no evento';
+
+    UPDATE entrega SET atualizado_em = pg_temp.quando(91, '10:15') WHERE titulo = 'Logo final para aplicações no evento';
+
+    -- [UPLOAD] [HISTORICO] Os demais arquivos que as marcas enviaram. Uma linha por entrega: o arquivo, quando e com que recado
+    -- a marca enviou, e a decisão da RBS (decisao nula = ainda espera a RBS, status Enviado). O recado da RBS só vai no pedido
+    -- de ajuste. O IP é o de cada marca.
+    DROP TABLE IF EXISTS pg_temp._amostra_envio;
+    CREATE TEMP TABLE _amostra_envio (
+        cli TEXT, titulo TEXT, nome TEXT, categoria TEXT, tamanho INT, dias INT, hora TIME, obs_marca TEXT,
+        decisao TEXT, dias_decisao INT, hora_decisao TIME, obs_rbs TEXT, ip TEXT);
+    INSERT INTO _amostra_envio VALUES
+     -- Amarelo
+     ('Cliente Amarelo', 'Documento para compra de ingressos com valor de patrocinador', 'documento_ingressos_valor_patrocinador.pdf', 'DOCUMENTO_INGRESSOS',  184320, 130, '10:15', NULL, 'APROVADO', 129, '15:40', NULL, '200.0.2.10'),
+     ('Cliente Amarelo', 'Materiais de marca para a campanha de comunicação', 'kit_marca_campanha.zip', 'MATERIAL_MARCA', 3145728, 120, '11:00', 'Manual de marca e logos em alta resolução.', 'APROVADO', 118, '09:30', NULL, '200.0.2.10'),
+     ('Cliente Amarelo', 'Projeto de ativação da marca (Arena e Camarote)', 'projeto_ativacao_arena_camarote.pdf', 'MATERIAL_MARCA', 5242880, 75, '16:20', 'Projeto com as medidas da Arena e do Camarote.', 'APROVADO', 72, '11:10', NULL, '200.0.2.10'),
+     ('Cliente Amarelo', 'Briefing completo para ações de conteúdo', 'briefing_conteudo.docx', 'MATERIAL_MIDIA', 96256, 110, '09:50', NULL, 'APROVADO', 108, '14:00', NULL, '200.0.2.10'),
+     ('Cliente Amarelo', 'Peça de 30" para mídia própria', 'peca_30s_midia_propria.mp4', 'MATERIAL_MIDIA', 18874368, 3, '15:30', 'Versão final, com a locução aprovada pelo jurídico.', 'EM_ANALISE', 2, '10:00', NULL, '200.0.2.10'),
+     ('Cliente Amarelo', 'Destinação das cortesias', 'destinacao_cortesias.xlsx', 'OUTRO', 48230, 60, '17:05', 'Lista fechada das cortesias do Camarote e do Lounge.', 'APROVADO', 59, '09:00', NULL, '200.0.2.10'),
+     ('Cliente Amarelo', 'Cadastro dos profissionais no Open Staff', 'profissionais_open_staff.csv', 'OUTRO', 3120, 55, '13:25', NULL, 'APROVADO', 54, '10:30', NULL, '200.0.2.10'),
+     ('Cliente Amarelo', 'Três perguntas personalizadas', 'perguntas_personalizadas.docx', 'OUTRO', 41200, 46, '16:00', 'As três perguntas para a pesquisa nos espaços da marca.', 'APROVADO', 45, '10:00', NULL, '200.0.2.10'),
+     ('Cliente Amarelo', 'Dados do signatário', 'ficha_do_signatario.pdf', 'OUTRO', 128000, 40, '10:20', NULL, 'APROVADO', 39, '16:45', NULL, '200.0.2.10'),
+     -- Roxo
+     ('Cliente Roxo', 'Documento para compra de ingressos com valor de patrocinador', 'documento_ingressos_valor_patrocinador.pdf', 'DOCUMENTO_INGRESSOS', 176640, 125, '14:30', NULL, 'APROVADO', 124, '10:05', NULL, '200.0.2.20'),
+     ('Cliente Roxo', 'Logo para vinhetas e assinatura da transmissão', 'logo_vinhetas_transmissao.png', 'MATERIAL_MARCA', 212480, 100, '14:10', 'Logo com fundo transparente.', 'APROVADO', 99, '10:00', NULL, '200.0.2.20'),
+     ('Cliente Roxo', 'Textos das citações de 5"', 'textos_citacoes_5s.docx', 'MATERIAL_MIDIA', 38912, 85, '11:30', NULL, 'APROVADO', 84, '09:10', NULL, '200.0.2.20'),
+     ('Cliente Roxo', 'VT para os telões dos palcos', 'vt_telao_palcos.mp4', 'MATERIAL_MIDIA', 27262976, 6, '16:20', 'Primeira versão do VT, com a trilha original da campanha.', 'AJUSTE_SOLICITADO', 5, '11:15',
+      'O VT tem 34 segundos e o limite é 30. A trilha também precisa de autorização de uso. Envie uma nova versão de até 30 segundos, com trilha liberada.', '200.0.2.20'),
+     ('Cliente Roxo', 'Destinação das cortesias', 'destinacao_cortesias.xlsx', 'OUTRO', 41984, 50, '17:00', NULL, 'APROVADO', 49, '09:40', NULL, '200.0.2.20'),
+     ('Cliente Roxo', 'Cadastro dos profissionais no Open Staff', 'profissionais_open_staff.csv', 'OUTRO', 2870, 48, '13:00', NULL, 'APROVADO', 47, '11:20', NULL, '200.0.2.20'),
+     ('Cliente Roxo', 'Dados do signatário', 'ficha_do_signatario.pdf', 'OUTRO', 121344, 38, '10:40', NULL, 'APROVADO', 37, '15:10', NULL, '200.0.2.20'),
+     -- Verde
+     ('Cliente Verde', 'Documento para compra de ingressos com valor de patrocinador', 'documento_ingressos_valor_patrocinador.pdf', 'DOCUMENTO_INGRESSOS', 168960, 128, '09:45', NULL, 'APROVADO', 127, '14:20', NULL, '200.0.2.30'),
+     ('Cliente Verde', 'Projeto de ativação na Arena', 'projeto_ativacao_arena.pdf', 'MATERIAL_MARCA', 3670016, 80, '15:50', 'Projeto da ativação, com a planta da Arena.', 'APROVADO', 78, '10:30', NULL, '200.0.2.30'),
+     ('Cliente Verde', 'Fotos de comprovação da ativação', 'fotos_ativacao_arena.zip', 'OUTRO', 6291456, 28, '15:00', 'Fotos da ativação durante o evento.', 'APROVADO', 27, '10:00', NULL, '200.0.2.30'),
+     ('Cliente Verde', 'Logo para conteúdos assinados no Instagram', 'logo_instagram_assinado.png', 'MATERIAL_MARCA', 187392, 70, '12:15', NULL, 'APROVADO', 69, '09:20', NULL, '200.0.2.30'),
+     ('Cliente Verde', 'VT de 30" para o telão', 'vt_30s_telao.mp4', 'MATERIAL_MIDIA', 16252928, 65, '16:40', NULL, 'APROVADO', 63, '11:05', NULL, '200.0.2.30'),
+     ('Cliente Verde', 'Destinação das cortesias', 'destinacao_cortesias.xlsx', 'OUTRO', 39936, 2, '09:40', 'Destinamos 8 das 12 cortesias; as demais saem na semana do evento.', NULL, NULL, NULL, NULL, '200.0.2.30'),
+     ('Cliente Verde', 'Cadastro dos profissionais no Open Staff', 'profissionais_open_staff.csv', 'OUTRO', 2540, 52, '14:10', NULL, 'APROVADO', 51, '10:50', NULL, '200.0.2.30'),
+     ('Cliente Verde', 'Dados do signatário', 'ficha_do_signatario.pdf', 'OUTRO', 119808, 36, '11:00', NULL, 'APROVADO', 35, '16:00', NULL, '200.0.2.30');
+
+    INSERT INTO arquivo (parceria_id, aba_id, entrega_id, categoria, nome_original, mime_type, tamanho_bytes, caminho, versao, enviado_por, enviado_em, observacao)
+    SELECT e.parceria_id, e.aba_id, e.id, v.categoria, v.nome,
+           CASE lower(substring(v.nome FROM '[.]([^.]+)$'))
+                WHEN 'pdf' THEN 'application/pdf' WHEN 'png' THEN 'image/png' WHEN 'mp4' THEN 'video/mp4'
+                WHEN 'csv' THEN 'text/csv' WHEN 'zip' THEN 'application/zip'
+                WHEN 'docx' THEN 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                WHEN 'xlsx' THEN 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' END,
+           v.tamanho, 'parcerias/' || e.parceria_id || '/entregas/' || e.id || '_' || v.nome, 1,
+           (SELECT pu.usuario_id FROM parceria_usuario pu WHERE pu.parceria_id = e.parceria_id AND pu.vinculo = 'MARCA'),
+           pg_temp.quando(v.dias, v.hora), v.obs_marca
+    FROM _amostra_envio v
+    JOIN _amostra_parc pp ON pp.cliente = v.cli
+    JOIN entrega e ON e.parceria_id = pp.id AND e.titulo = v.titulo;
+
+    -- O envio e o status que muda com ele (a API grava as duas linhas; aqui a segunda vem um minuto depois, para a ordem ser certa)
+    INSERT INTO historico (parceria_id, entidade, entidade_id, acao, valor_anterior, valor_novo, detalhe, usuario_id, ocorrido_em, ip, user_agent)
+    SELECT a.parceria_id, 'entrega', a.entrega_id, x.acao, x.ant, x.novo, x.detalhe, a.enviado_por, a.enviado_em + x.depois, v.ip::inet,
+           'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15'
+    FROM _amostra_envio v
+    JOIN _amostra_parc pp ON pp.cliente = v.cli
+    JOIN entrega e ON e.parceria_id = pp.id AND e.titulo = v.titulo
+    JOIN arquivo a ON a.entrega_id = e.id AND a.versao = 1
+    CROSS JOIN LATERAL (VALUES
+        ('ENVIO_ARQUIVO',    NULL,               a.nome_original || ' (versão 1)', a.observacao,                                        interval '0 minutes'),
+        ('ALTERACAO_STATUS', 'AGUARDANDO_ENVIO', 'ENVIADO',                        'envio automático: ' || a.nome_original || ' (versão 1)', interval '1 minute')
+    ) AS x(acao, ant, novo, detalhe, depois);
+
+    -- A decisão da RBS: aprovou, está analisando ou pediu ajuste (o pedido de ajuste leva o recado)
+    INSERT INTO historico (parceria_id, entidade, entidade_id, acao, valor_anterior, valor_novo, detalhe, usuario_id, ocorrido_em, ip, user_agent)
+    SELECT e.parceria_id, 'entrega', e.id, 'ALTERACAO_STATUS', 'ENVIADO', v.decisao, v.obs_rbs,
+           (SELECT id FROM usuario WHERE lower(email) = 'b2b@rbs.example'), pg_temp.quando(v.dias_decisao, v.hora_decisao), '10.0.0.5'::inet,
+           'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15'
+    FROM _amostra_envio v
+    JOIN _amostra_parc pp ON pp.cliente = v.cli
+    JOIN entrega e ON e.parceria_id = pp.id AND e.titulo = v.titulo
+    WHERE v.decisao IS NOT NULL;
+
+    -- A entrega foi atualizada pela última vez no último acontecimento dela (a decisão da RBS, ou o envio quando ela ainda espera)
+    UPDATE entrega e SET atualizado_em = coalesce(pg_temp.quando(v.dias_decisao, v.hora_decisao), pg_temp.quando(v.dias, v.hora) + interval '1 minute')
+    FROM _amostra_envio v JOIN _amostra_parc pp ON pp.cliente = v.cli
+    WHERE e.parceria_id = pp.id AND e.titulo = v.titulo;
 
     -- [HISTORICO] [ITEM-5] Acesso, download e autorização (ações novas). A tentativa de login com e-mail errado não tem usuário:
     -- usuario_id e entidade_id ficam nulos e o e-mail tentado vai no detalhe.
@@ -323,17 +425,17 @@ BEGIN
 
     INSERT INTO historico (parceria_id, entidade, entidade_id, acao, detalhe, usuario_id, ocorrido_em, ip, user_agent)
     VALUES (NULL, 'usuario', NULL, 'LOGIN_FALHOU', 'e-mail tentado: amarelo.marketing@amarelo.example', NULL,
-            timestamptz '2026-10-15 14:08-03', '200.0.2.10', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/605.1.15 Safari/605.1.15');
+            pg_temp.quando(94, '14:08'), '200.0.2.10', 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/605.1.15 Safari/605.1.15');
 
     INSERT INTO historico (parceria_id, entidade, entidade_id, acao, usuario_id, ocorrido_em, ip, user_agent)
-    SELECT pu.parceria_id, 'usuario', u.id, 'LOGIN', u.id, timestamptz '2026-10-15 14:10-03', '200.0.2.10'::inet,
+    SELECT pu.parceria_id, 'usuario', u.id, 'LOGIN', u.id, pg_temp.quando(94, '14:10'), '200.0.2.10'::inet,
            'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/605.1.15 Safari/605.1.15'
     FROM usuario u JOIN parceria_usuario pu ON pu.usuario_id = u.id
     WHERE lower(u.email) = 'marketing@amarelo.example';
 
     INSERT INTO historico (parceria_id, entidade, entidade_id, acao, valor_novo, usuario_id, ocorrido_em, ip, user_agent)
     SELECT a.parceria_id, 'arquivo', a.id, 'DOWNLOAD', a.nome_original || ' (versão ' || a.versao || ')', u.id,
-           timestamptz '2026-10-18 10:05-03', '10.0.0.5'::inet, 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/605.1.15 Safari/605.1.15'
+           pg_temp.quando(91, '10:05'), '10.0.0.5'::inet, 'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/605.1.15 Safari/605.1.15'
     FROM arquivo a, usuario u
     WHERE a.nome_original = 'logo_final.pdf' AND a.versao = 2 AND lower(u.email) = 'b2b@rbs.example';
 END $$;
@@ -369,10 +471,12 @@ BEGIN
 
     -- [ITEM-6] As destinações respeitam a cota de cada setor e dia (o gatilho rn_cortesia_limite confere): a Amarelo usa 25 de 25
     -- na Arena de sexta, e a Verde só 2 de 4 na Arena de sábado.
-    INSERT INTO cortesia_destinacao (cortesia_cota_id, destinatario_nome, quantidade, registrado_por)
+    INSERT INTO cortesia_destinacao (cortesia_cota_id, destinatario_nome, quantidade, registrado_por, registrado_em)
     SELECT cc.id, 'Convidados da marca (lote)', v.qtd,
            (SELECT u.id FROM parceria_usuario pu JOIN usuario u ON u.id = pu.usuario_id
-             WHERE pu.parceria_id = cc.parceria_id AND pu.vinculo = 'MARCA')
+             WHERE pu.parceria_id = cc.parceria_id AND pu.vinculo = 'MARCA'),
+           -- A lista da destinação é registrada um dia antes de a marca enviar o arquivo da entrega (Amarelo 60, Roxo 50, Verde 2 dias atrás)
+           pg_temp.quando(CASE pp.cliente WHEN 'Cliente Amarelo' THEN 61 WHEN 'Cliente Roxo' THEN 51 ELSE 3 END, '16:00')
     FROM cortesia_cota cc JOIN _amostra_parc pp ON pp.id = cc.parceria_id
     JOIN (VALUES ('Cliente Amarelo', 'ARENA',    'SEXTA',  25), ('Cliente Amarelo', 'ARENA',    'SABADO', 22),
                  ('Cliente Amarelo', 'CAMAROTE', 'SEXTA',  40), ('Cliente Amarelo', 'CAMAROTE', 'SABADO', 38),
@@ -384,18 +488,34 @@ BEGIN
       ON v.cli = pp.cliente AND v.setor = cc.setor AND v.dia = cc.dia;
 
     -- Contrato assinado do Amarelo: arquivo da categoria CONTRATO na entrega "Contrato final assinado" (mesma parceria e aba)
-    INSERT INTO arquivo (parceria_id, aba_id, entrega_id, categoria, nome_original, mime_type, tamanho_bytes, caminho, enviado_por, enviado_em)
+    INSERT INTO arquivo (parceria_id, aba_id, entrega_id, categoria, nome_original, mime_type, tamanho_bytes, caminho, enviado_por, enviado_em, observacao)
     SELECT e.parceria_id, e.aba_id, e.id, 'CONTRATO', 'contrato_assinado_cliente_amarelo_PA27.pdf', 'application/pdf', 734210,
            'parcerias/' || e.parceria_id || '/contrato/contrato_assinado_PA27.pdf',
-           (SELECT id FROM usuario WHERE lower(email) = 'b2b@rbs.example'), timestamptz '2026-10-05 16:30-03'
+           (SELECT id FROM usuario WHERE lower(email) = 'b2b@rbs.example'), pg_temp.quando(24, '16:30'),
+           'Contrato assinado pelas duas partes.'
     FROM entrega e JOIN _amostra_parc pp ON pp.id = e.parceria_id
     WHERE pp.cliente = 'Cliente Amarelo' AND e.titulo = 'Contrato final assinado';
+
+    -- [HISTORICO] O contrato assinado é um retorno da RBS: ela envia o arquivo e dá a entrega por aprovada.
+    INSERT INTO historico (parceria_id, entidade, entidade_id, acao, valor_anterior, valor_novo, detalhe, usuario_id, ocorrido_em, ip, user_agent)
+    SELECT a.parceria_id, 'entrega', a.entrega_id, v.acao, v.ant, v.novo, v.detalhe, a.enviado_por, a.enviado_em + v.depois, '10.0.0.5'::inet,
+           'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15'
+    FROM arquivo a
+    CROSS JOIN LATERAL (VALUES
+        ('ENVIO_ARQUIVO',    NULL,               a.nome_original || ' (versão 1)', 'Contrato assinado pelas duas partes.', interval '0 minutes'),
+        ('ALTERACAO_STATUS', 'AGUARDANDO_ENVIO', 'APROVADO',                      NULL,                                   interval '5 minutes')
+    ) AS v(acao, ant, novo, detalhe, depois)
+    WHERE a.categoria = 'CONTRATO';
+
+    UPDATE entrega SET atualizado_em = pg_temp.quando(24, '16:35')
+    WHERE id = (SELECT entrega_id FROM arquivo WHERE categoria = 'CONTRATO');
 
     -- Um contrato (e um signatário) por parceria: a pessoa de marketing da marca informa os dados
     INSERT INTO contrato (parceria_id, signatario_nome, signatario_email, signatario_cargo, informado_por, arquivo_id, assinado_em)
     SELECT pu.parceria_id, 'Signatário ' || p.nome_canonico, u.email, 'Diretor(a) de Marketing', u.id,
            (SELECT a.id FROM arquivo a WHERE a.parceria_id = pu.parceria_id AND a.categoria = 'CONTRATO'),
-           CASE WHEN p.nome_canonico = 'Cliente Amarelo' THEN date '2026-10-05' END
+           CASE WHEN p.nome_canonico = 'Cliente Amarelo'
+                THEN (SELECT (hoje AT TIME ZONE 'America/Sao_Paulo')::date - 24 FROM _amostra_ctl) END
     FROM parceria_usuario pu JOIN usuario u ON u.id = pu.usuario_id
     JOIN parceria pa ON pa.id = pu.parceria_id JOIN patrocinador p ON p.id = pa.patrocinador_id
     WHERE pu.vinculo = 'MARCA';
@@ -409,13 +529,13 @@ BEGIN
     IF (SELECT pular FROM _amostra_ctl) THEN RETURN; END IF;
 
     INSERT INTO pesquisa (evento_id, nome, escopo, metodologia, base_respondentes)
-    SELECT id, 'Pesquisa nos espaços de ativação 2027 (simulada)', 'ATIVACAO', 'Entrevistas nos espaços da marca (Arena e Camarote)', 412
+    SELECT id, 'Pesquisa nos espaços de ativação 2027', 'ATIVACAO', 'Entrevistas nos espaços da marca (Arena e Camarote)', 412
     FROM evento WHERE nome = 'Planeta Atlântida' AND edicao = 2027;
 
     -- A RBS aprova as perguntas por uma rota da API, e só pergunta APROVADA recebe resultado; na amostra as 3 já chegam APROVADAS.
     INSERT INTO pesquisa_pergunta (parceria_id, pesquisa_id, ordem, texto, status, enviada_por, enviada_em)
     SELECT pp.id, (SELECT id FROM pesquisa WHERE escopo = 'ATIVACAO'), v.ordem, v.texto, 'APROVADA',
-           (SELECT id FROM usuario WHERE lower(email) = 'marketing@amarelo.example'), timestamptz '2026-11-20 16:00-03'
+           (SELECT id FROM usuario WHERE lower(email) = 'marketing@amarelo.example'), pg_temp.quando(46, '16:00')
     FROM _amostra_parc pp, (VALUES
      (1, 'Você visitou o espaço da marca na Arena ou no Camarote?'),
      (2, 'De 0 a 10, quanto você recomendaria a marca a um amigo?'),
@@ -446,7 +566,7 @@ BEGIN
     INSERT INTO arquivo (parceria_id, aba_id, categoria, nome_original, mime_type, tamanho_bytes, caminho, enviado_por, enviado_em)
     SELECT f.parceria_id, (SELECT id FROM aba WHERE codigo = 'APLICACOES'), 'COMPROVACAO',
            'foto_' || f.aproveitamento_id || '_' || f.g || '.jpg', 'image/jpeg', 2400000 + f.g, f.caminho,
-           (SELECT id FROM usuario WHERE lower(email) = 'b2b@rbs.example'), timestamptz '2027-02-05 12:00-03'
+           (SELECT id FROM usuario WHERE lower(email) = 'b2b@rbs.example'), pg_temp.quando(30, '12:00')
     FROM _amostra_foto f;
 
     INSERT INTO comprovacao_marca (aproveitamento_id, arquivo_id, descricao, registrado_por, registrado_em)
@@ -468,10 +588,10 @@ BEGIN
 
     INSERT INTO arquivo (categoria, nome_original, mime_type, tamanho_bytes, caminho, enviado_por, enviado_em)
     SELECT 'RELATORIO_VEICULACAO', v.nome, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 184220, v.caminho,
-           u.id, v.quando::timestamptz
+           u.id, v.quando
     FROM usuario u, (VALUES
-     ('veiculacao_consolidada_PA27.xlsx',           'rbs/cargas/veiculacao_consolidada_PA27.xlsx',         '2027-02-20 10:00-03'),
-     ('veiculacao_consolidada_PA27 (reenvio).xlsx', 'rbs/cargas/veiculacao_consolidada_PA27_reenvio.xlsx', '2027-02-21 09:30-03')
+     ('veiculacao_consolidada_PA27.xlsx',           'rbs/cargas/veiculacao_consolidada_PA27.xlsx',         pg_temp.quando(12, '10:00')),
+     ('veiculacao_consolidada_PA27 (reenvio).xlsx', 'rbs/cargas/veiculacao_consolidada_PA27_reenvio.xlsx', pg_temp.quando(11, '09:30'))
     ) AS v(nome, caminho, quando)
     WHERE lower(u.email) = 'b2b@rbs.example';
 
@@ -514,7 +634,7 @@ BEGIN
            CASE WHEN a.nome_canonico = 'Cliente Amarelo' AND a.veiculo = 'Rádio 92' THEN 'Amarelo' ELSE a.nome_canonico END,
            a.veiculo, a.formato,
            CASE WHEN a.espaco_programa = 'IG @prede_atlantida' THEN 'IG @rede_atlantida' ELSE a.espaco_programa END,
-           timestamptz '2026-11-02 06:00-03' + g * interval '97 minutes' + a.id * interval '1 minute',
+           pg_temp.quando(60, '06:00') + g * interval '97 minutes' + a.id * interval '1 minute',
            CASE WHEN a.unidade = 'CPM' THEN a.exibir / 10 ELSE 1 END
     FROM _amostra_alvo a
     CROSS JOIN LATERAL generate_series(1, CASE WHEN a.unidade = 'CPM' THEN 10 ELSE a.exibir::int END) AS g;
@@ -524,7 +644,7 @@ BEGIN
     SELECT v_c1, m + 1, 'Cliente Verde', 'atl.la', 'Story próprio de até 1'' (ativação do cotista)', 'IG do evento', NULL, 1
     FROM (SELECT max(linha) AS m FROM stg_veiculacao WHERE carga_id = v_c1) x
     UNION ALL
-    SELECT v_c1, m + 2, 'Cliente Azul', 'Rede Atlântida RS', 'Chamadas assinadas 5"', 'Indeterminado', timestamptz '2026-12-01 10:00-03', 1
+    SELECT v_c1, m + 2, 'Cliente Azul', 'Rede Atlântida RS', 'Chamadas assinadas 5"', 'Indeterminado', pg_temp.quando(55, '10:00'), 1
     FROM (SELECT max(linha) AS m FROM stg_veiculacao WHERE carga_id = v_c1) x;
 
     -- (e) linhas repetidas dentro do próprio arquivo (as 2 exibições do VT de telão da Verde, com número de linha novo)
@@ -564,7 +684,7 @@ BEGIN
     -- ("quem carrega os resultados" é decisão a confirmar com a RBS). Duas linhas de propósito: uma repetida, escrita com o alias
     -- "Amarelo" (duplicada), e uma com percentual de 140 (rejeitada).
     INSERT INTO arquivo (categoria, nome_original, mime_type, tamanho_bytes, caminho, enviado_por, enviado_em)
-    SELECT 'PESQUISA', 'pesquisa.csv', 'text/csv', 568,'rbs/cargas/pesquisa_ativacao_2027.csv', u.id, timestamptz '2027-02-21 10:30-03'
+    SELECT 'PESQUISA', 'pesquisa.csv', 'text/csv', 568,'rbs/cargas/pesquisa_ativacao_2027.csv', u.id, pg_temp.quando(11, '10:30')
     FROM usuario u WHERE lower(u.email) = 'pesquisa@rbs.example';
 
     INSERT INTO carga (tipo, arquivo_id, executada_por, executada_em)
@@ -593,8 +713,10 @@ BEGIN
 
     -- [RELATORIO] [ITEM-7] Versão 1 (rascunho) do relatório das três parcerias de 2027. A data simulada vai em p_em, que fn_gerar_relatorio
     -- grava em relatorio.gerado_em e no histórico: assim a amostra não precisa de UPDATE em tabela imutável.
-    PERFORM fn_gerar_relatorio(pa.id, v_b2b, timestamptz '2027-02-21 11:00-03')
+    PERFORM fn_gerar_relatorio(pa.id, v_b2b, pg_temp.quando(10, '11:00'))
     FROM parceria pa WHERE pa.evento_id = v_ev ORDER BY pa.id;
 END $$;
 
-DROP TABLE IF EXISTS pg_temp._amostra_foto, pg_temp._amostra_alvo, pg_temp._amostra_carga, pg_temp._amostra_parc, pg_temp._amostra_ctl;
+DROP TABLE IF EXISTS pg_temp._amostra_foto, pg_temp._amostra_alvo, pg_temp._amostra_carga, pg_temp._amostra_envio, pg_temp._amostra_parc;
+DROP FUNCTION IF EXISTS pg_temp.quando(INT, TIME);
+DROP TABLE IF EXISTS pg_temp._amostra_ctl;

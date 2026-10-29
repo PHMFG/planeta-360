@@ -18,6 +18,7 @@ import { Aviso } from '../../componentes/Aviso'
 import { Botao } from '../../componentes/Botao'
 import { CabecalhoSecao } from '../../componentes/CabecalhoSecao'
 import { Campo } from '../../componentes/Campo'
+import { CodigoAtivacao } from '../../componentes/CodigoAtivacao'
 import { Cartao, Grade2 } from '../../componentes/Cartao'
 import { Carregando } from '../../componentes/Carregando'
 import { Seletor } from '../../componentes/Formulario'
@@ -102,12 +103,16 @@ function EdicaoEmpresa({ detalhe, aoSalvar }: { detalhe: ParceriaDetalhe; aoSalv
 function AbasLiberadas({ detalhe, rbs, aoSalvar }: { detalhe: ParceriaDetalhe; rbs: boolean; aoSalvar: (novo: ParceriaDetalhe) => void }) {
   const [mudando, setMudando] = useState<string | null>(null)
   const [falha, setFalha] = useState<string | null>(null)
+  const [feito, setFeito] = useState<string | null>(null)
 
   async function alternar(codigo: ParceriaDetalhe['abas'][number]['codigo'], liberada: boolean) {
     setMudando(codigo)
     setFalha(null)
+    setFeito(null)
     try {
       aoSalvar(await alterarParceria(detalhe.id, { abas: [{ codigo, liberada }] }))
+      const nome = SECOES.find((item) => item.aba === codigo)?.nome ?? codigo
+      setFeito(liberada ? `A aba ${nome} foi liberada para a marca.` : `A aba ${nome} foi fechada para a marca. As entregas e os arquivos ficam guardados.`)
     } catch (erro) {
       setFalha(erro instanceof ErroApi ? erro.message : 'Não foi possível mudar a aba.')
     } finally {
@@ -120,6 +125,7 @@ function AbasLiberadas({ detalhe, rbs, aoSalvar }: { detalhe: ParceriaDetalhe; r
       <ul className="grid gap-2 md:grid-cols-2">
         {detalhe.abas.map((aba) => {
           const secao = SECOES.find((item) => item.aba === aba.codigo)
+          const foraDaCota = aba.incluidaNaCota === false
           return (
             <li key={aba.codigo} data-secao={secao?.chave} className="flex items-center gap-3 rounded-xl border border-borda px-4 py-3">
               <i className={`${secao?.icone ?? 'ri-folder-line'} text-xl text-secao`} aria-hidden="true" />
@@ -131,20 +137,26 @@ function AbasLiberadas({ detalhe, rbs, aoSalvar }: { detalhe: ParceriaDetalhe; r
                     aria-label={`Liberar a aba ${secao?.nome ?? aba.nome}`}
                     className="size-4 accent-[var(--secao-cor)]"
                     checked={aba.liberada}
-                    disabled={mudando !== null}
+                    // [PERMISSAO] Aba fora da cota não pode ser liberada (a API recusa); dá para fechar se estiver aberta.
+                    disabled={mudando !== null || (foraDaCota && !aba.liberada)}
                     onChange={(evento) => alternar(aba.codigo, evento.target.checked)}
                   />
-                  {aba.liberada ? 'Liberada' : 'Fechada'}
+                  {aba.liberada ? 'Liberada' : foraDaCota ? 'Fora da cota' : 'Fechada'}
                 </label>
               ) : (
                 <span className={`text-xs font-bold ${aba.liberada ? 'text-secao-texto' : 'text-texto-2'}`}>
-                  {aba.liberada ? 'Liberada' : 'Não incluída na cota'}
+                  {aba.liberada ? 'Liberada' : foraDaCota ? 'Não incluída na cota' : 'Fechada pela RBS'}
                 </span>
               )}
             </li>
           )
         })}
       </ul>
+      {feito && (
+        <p className="mt-4 text-xs font-semibold text-texto-2" role="status">
+          {feito}
+        </p>
+      )}
       {falha && <Aviso tipo="falha" titulo={falha} className="mt-4" />}
     </Cartao>
   )
@@ -185,6 +197,8 @@ function AcessosRbs({ parceriaId }: { parceriaId: number }) {
     if (!window.confirm(`Revogar o acesso de ${item.email}? A pessoa perde o acesso imediatamente.`)) return
     try {
       await revogarEmail(parceriaId, item.id)
+      // O código mostrado para esse e-mail foi invalidado junto: tirar da tela para ninguém repassar.
+      if (codigo?.email === item.email) setCodigo(null)
       emails.recarregar()
     } catch (falhaApi) {
       setFalha(falhaApi instanceof ErroApi ? falhaApi.message : 'Não foi possível revogar.')
@@ -204,10 +218,15 @@ function AcessosRbs({ parceriaId }: { parceriaId: number }) {
         </Botao>
       </form>
       {codigo && (
-        <Aviso titulo={codigo.codigoAtivacao ? `Código de ativação de ${codigo.email}: ${codigo.codigoAtivacao}` : `${codigo.email} voltou a ter acesso`} className="mb-4">
-          {codigo.codigoAtivacao
-            ? `Repasse agora: o código não aparece de novo e vale até ${dataHora(codigo.codigoExpiraEm)}.`
-            : 'A pessoa já tinha conta, então o vínculo voltou sem precisar de código.'}
+        <Aviso titulo={codigo.codigoAtivacao ? `Código de ativação de ${codigo.email}` : `${codigo.email} voltou a ter acesso`} className="mb-4">
+          {codigo.codigoAtivacao ? (
+            <span className="flex flex-col gap-1">
+              <CodigoAtivacao codigo={codigo.codigoAtivacao} />
+              <span>Repasse agora: o código não aparece de novo e vale até {dataHora(codigo.codigoExpiraEm)}.</span>
+            </span>
+          ) : (
+            'A pessoa já tinha conta, então o vínculo voltou sem precisar de código.'
+          )}
         </Aviso>
       )}
       {falha && <Aviso tipo="falha" titulo={falha} className="mb-4" />}
@@ -223,10 +242,10 @@ function AcessosRbs({ parceriaId }: { parceriaId: number }) {
               { titulo: 'Situação', celula: (item) => SITUACOES_EMAIL[item.situacao] },
               { titulo: 'Autorizado em', celula: (item) => dataHora(item.autorizadoEm) },
               {
-                titulo: '',
+                titulo: 'Ações',
                 celula: (item) =>
                   item.situacao === 'REVOGADO' ? (
-                    <span className="text-xs text-texto-2">{dataHora(item.revogadoEm)}</span>
+                    <span className="text-xs text-texto-2">Revogado em {dataHora(item.revogadoEm)}</span>
                   ) : (
                     <div className="flex justify-end gap-3 text-xs font-bold">
                       {item.situacao === 'PENDENTE' && (

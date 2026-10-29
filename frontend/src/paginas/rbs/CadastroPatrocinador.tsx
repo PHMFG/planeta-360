@@ -2,10 +2,12 @@
 // O código de ativação de cada e-mail aparece só aqui, uma vez; a RBS repassa ao patrocinador.
 import { useState, type FormEvent } from 'react'
 import { ErroApi } from '../../api/cliente'
-import { criarParceria, type Evento, type ParceriaCriada, type ParceriaNaLista, type Vinculo } from '../../api/parcerias'
+import { criarParceria, listarParcerias, type Evento, type ParceriaCriada, type Vinculo } from '../../api/parcerias'
+import { useDados } from '../../api/useDados'
 import { Aviso } from '../../componentes/Aviso'
 import { Botao, LinkBotao } from '../../componentes/Botao'
 import { Campo } from '../../componentes/Campo'
+import { CodigoAtivacao } from '../../componentes/CodigoAtivacao'
 import { AreaTexto, Seletor } from '../../componentes/Formulario'
 import { Modal } from '../../componentes/Modal'
 import { Tabela } from '../../componentes/Tabela'
@@ -19,7 +21,6 @@ type Props = {
   aoFechar: () => void
   aoCriar: () => void
   eventos: Evento[]
-  parcerias: ParceriaNaLista[]
 }
 
 function linhas(texto: string) {
@@ -29,8 +30,15 @@ function linhas(texto: string) {
     .filter(Boolean)
 }
 
-export function CadastroPatrocinador({ aberto, aoFechar, aoCriar, eventos, parcerias }: Props) {
-  const existentes = [...new Map(parcerias.map((item) => [item.patrocinador.id, item.patrocinador])).values()].sort((a, b) =>
+// Fechado, o formulário sai da tela inteiro: cada abertura começa vazia, sem o cadastro anterior.
+export function CadastroPatrocinador({ aberto, ...resto }: Props) {
+  return aberto ? <Formulario {...resto} /> : null
+}
+
+function Formulario({ aoFechar, aoCriar, eventos }: Omit<Props, 'aberto'>) {
+  // A lista "Patrocinador" traz todas as marcas cadastradas, sem depender do filtro de edição da tela.
+  const todas = useDados(() => listarParcerias(), [])
+  const existentes = [...new Map((todas.dado ?? []).map((item) => [item.patrocinador.id, item.patrocinador])).values()].sort((a, b) =>
     a.nome.localeCompare(b.nome),
   )
   const [patrocinadorId, setPatrocinadorId] = useState('novo')
@@ -46,12 +54,7 @@ export function CadastroPatrocinador({ aberto, aoFechar, aoCriar, eventos, parce
   const [enviando, setEnviando] = useState(false)
   const [criada, setCriada] = useState<ParceriaCriada | null>(null)
 
-  function fechar() {
-    setCriada(null)
-    setFalha(null)
-    setErros({})
-    aoFechar()
-  }
+  const fechar = aoFechar
 
   async function enviar(evento: FormEvent) {
     evento.preventDefault()
@@ -62,7 +65,7 @@ export function CadastroPatrocinador({ aberto, aoFechar, aoCriar, eventos, parce
     if (patrocinadorId === 'novo' && nome.trim().length < 2) novos.nome = 'Informe o nome do patrocinador.'
     if (!eventoId) novos.eventoId = 'Escolha a edição.'
     const invalidos = [...marca, ...agencia].filter((email) => !EMAIL_VALIDO.test(email))
-    if (invalidos.length) novos.emails = `Confira: ${invalidos.join(', ')}`
+    if (invalidos.length) novos.emails = `E-mail inválido: ${invalidos.join(', ')}. Use o formato nome@empresa.com.br.`
     if (marca.length + agencia.length > LIMITE_EMAILS) novos.emails = `No máximo ${LIMITE_EMAILS} e-mails por parceria.`
     setErros(novos)
     setFalha(null)
@@ -97,22 +100,33 @@ export function CadastroPatrocinador({ aberto, aoFechar, aoCriar, eventos, parce
 
   if (criada) {
     return (
-      <Modal titulo="Parceria cadastrada" legenda={`${criada.patrocinador.nome} · ${criada.cota.nome} · ${criada.evento.edicao}`} aberto={aberto} aoFechar={fechar} largura="max-w-[720px]">
-        <Aviso titulo="Repasse os códigos de ativação agora">
-          Cada pessoa usa o código no primeiro acesso para criar a própria senha. Os códigos não aparecem de novo; se perder,
-          gere outro em Perfil.
+      <Modal titulo="Parceria cadastrada" legenda={`${criada.patrocinador.nome} · ${criada.cota.nome} · ${criada.evento.edicao}`} aberto aoFechar={fechar} largura="max-w-[720px]">
+        {criada.emailsAutorizados.length ? (
+          <Aviso titulo="Repasse os códigos de ativação agora">
+            Cada pessoa usa o código no primeiro acesso para criar a própria senha. Os códigos não aparecem de novo; se perder,
+            gere outro em Perfil.
+          </Aviso>
+        ) : (
+          <Aviso tipo="ausente" titulo="Nenhum e-mail autorizado ainda">
+            Autorize os e-mails da marca e da agência no Perfil da parceria; o código de cada um aparece lá.
+          </Aviso>
+        )}
+        {criada.emailsAutorizados.length > 0 && (
+          <Tabela
+            colunas={[
+              { titulo: 'E-mail', celula: (linha) => linha.email },
+              { titulo: 'Vínculo', celula: (linha) => (linha.vinculo === 'MARCA' ? 'Marca' : 'Agência') },
+              { titulo: 'Código', celula: (linha) => <CodigoAtivacao codigo={linha.codigoAtivacao} /> },
+              { titulo: 'Vale até', celula: (linha) => dataHora(linha.codigoExpiraEm) },
+            ]}
+            linhas={criada.emailsAutorizados}
+            chave={(linha) => linha.id}
+          />
+        )}
+        <Aviso titulo="Próximo passo: abrir as entregas">
+          A parceria nasce sem entregas, e a marca só consegue enviar material para uma entrega aberta pela RBS. Abra as entregas da
+          cota em cada aba da parceria, pelo botão “Nova entrega”.
         </Aviso>
-        <Tabela
-          colunas={[
-            { titulo: 'E-mail', celula: (linha) => linha.email },
-            { titulo: 'Vínculo', celula: (linha) => (linha.vinculo === 'MARCA' ? 'Marca' : 'Agência') },
-            { titulo: 'Código', celula: (linha) => <code className="font-bold">{linha.codigoAtivacao ?? '—'}</code> },
-            { titulo: 'Vale até', celula: (linha) => dataHora(linha.codigoExpiraEm) },
-          ]}
-          linhas={criada.emailsAutorizados}
-          chave={(linha) => linha.id}
-          vazio="Nenhum e-mail autorizado ainda. Dá para autorizar depois, no Perfil da parceria."
-        />
         <div className="flex flex-wrap justify-end gap-4">
           <Botao variante="secundario" onClick={fechar}>
             Fechar
@@ -124,7 +138,7 @@ export function CadastroPatrocinador({ aberto, aoFechar, aoCriar, eventos, parce
   }
 
   return (
-    <Modal titulo="Cadastrar patrocinador" legenda="Patrocinador, cota, edição e e-mails autorizados" aberto={aberto} aoFechar={fechar} largura="max-w-[720px]">
+    <Modal titulo="Cadastrar patrocinador" legenda="Patrocinador, cota, edição e e-mails autorizados" aberto aoFechar={fechar} largura="max-w-[720px]">
       <form className="flex flex-col gap-4" onSubmit={enviar} noValidate>
         <Seletor rotulo="Patrocinador" value={patrocinadorId} onChange={(evento) => setPatrocinadorId(evento.target.value)}>
           <option value="novo">Novo patrocinador</option>
@@ -172,7 +186,7 @@ export function CadastroPatrocinador({ aberto, aoFechar, aoCriar, eventos, parce
           />
         </div>
         <Aviso titulo="Abas que abrem com a cota">
-          Todas as cotas liberam as sete abas; a Pesquisa da ativação só abre para a cota Master. Dá para ajustar depois no Perfil.
+          Cada cota abre as abas que ela inclui: a Pesquisa da ativação é só da cota Master. Dá para fechar e reabrir abas depois, no Perfil.
         </Aviso>
         {falha && <Aviso tipo="falha" titulo={falha} />}
         <div className="flex flex-wrap justify-end gap-4">

@@ -5,12 +5,12 @@ import { ErroApi } from '../../api/cliente'
 import { Aviso } from '../../componentes/Aviso'
 import { Botao, LinkBotao } from '../../componentes/Botao'
 import { Campo } from '../../componentes/Campo'
-import { telaInicial, useSessao } from '../../sessao/Sessao'
+import { destinoPermitido, telaInicial, useSessao } from '../../sessao/Sessao'
 import { MolduraAcesso } from './MolduraAcesso'
 
 const EMAIL_VALIDO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
-type Estado = { destino?: string; email?: string } | null
+type Estado = { destino?: string; email?: string; sessaoTerminou?: boolean } | null
 
 export function Login() {
   const { usuario, entrar } = useSessao()
@@ -23,7 +23,7 @@ export function Login() {
   const [enviando, setEnviando] = useState(false)
 
   // Quem já está logado (ou acabou de entrar) segue para a tela que tentou abrir, ou para a inicial do perfil.
-  if (usuario) return <Navigate to={estado?.destino ?? telaInicial(usuario)} replace />
+  if (usuario) return <Navigate to={destinoPermitido(estado?.destino, usuario) ?? telaInicial(usuario)} replace />
 
   async function enviar(evento: FormEvent) {
     evento.preventDefault()
@@ -57,6 +57,11 @@ export function Login() {
       }
     >
       <form className="flex w-full max-w-[640px] flex-col gap-6" onSubmit={enviar} noValidate>
+        {estado?.sessaoTerminou && (
+          <Aviso tipo="restrito" titulo="Sua sessão terminou">
+            Entre de novo para continuar. Se o seu acesso foi revogado pela RBS, fale com o time B2B.
+          </Aviso>
+        )}
         <Campo
           rotulo="E-mail corporativo"
           type="email"
@@ -65,8 +70,9 @@ export function Login() {
           value={email}
           onChange={(evento) => setEmail(evento.target.value)}
           erro={erros.email}
-          autoFocus
+          autoFocus={!estado?.email}
         />
+        {/* Vindo do primeiro acesso, o e-mail já está preenchido: o cursor começa na senha. */}
         <Campo
           rotulo="Senha"
           type="password"
@@ -75,6 +81,7 @@ export function Login() {
           value={senha}
           onChange={(evento) => setSenha(evento.target.value)}
           erro={erros.senha}
+          autoFocus={Boolean(estado?.email)}
         />
 
         {falha && (

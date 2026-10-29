@@ -1,7 +1,6 @@
 package br.com.rbs.portal.materiais;
 
 import br.com.rbs.portal.comum.NaoEncontradoException;
-import br.com.rbs.portal.comum.SemPermissaoException;
 import br.com.rbs.portal.comum.UsuarioAutenticado;
 import br.com.rbs.portal.comum.VerificadorDeAcesso;
 import br.com.rbs.portal.materiais.EntregaRepositorio.EntregaBase;
@@ -14,8 +13,6 @@ import org.springframework.stereotype.Component;
  */
 @Component
 class AcessoAEntregas {
-
-    static final String ABA_FECHADA = "Esta aba ainda não foi liberada para a sua parceria.";
 
     private final EntregaRepositorio entregas;
     private final VerificadorDeAcesso verificador;
@@ -39,11 +36,12 @@ class AcessoAEntregas {
         return entrega;
     }
 
-    /** [PERMISSAO] 403 para o patrocinador numa aba que a RBS ainda não liberou; a RBS passa em qualquer aba. */
+    /**
+     * [PERMISSAO] 403 para o patrocinador numa aba fechada (a frase diz se é a cota que não a inclui ou a RBS que ainda não
+     * a liberou); a RBS passa em qualquer aba.
+     */
     void exigirAbaLiberada(UsuarioAutenticado usuario, EntregaBase entrega) {
-        if (!usuario.ehRbs() && !entregas.abaLiberada(entrega.parceriaId(), entrega.abaId())) {
-            throw new SemPermissaoException(ABA_FECHADA);
-        }
+        verificador.exigirAbaLiberada(usuario, entrega.parceriaId(), entrega.abaCodigo());
     }
 
     static NaoEncontradoException naoEncontrada() {

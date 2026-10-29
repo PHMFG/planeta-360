@@ -1,5 +1,6 @@
 // Linha do tempo do histórico: quem fez o quê e quando, da ação mais nova para a mais antiga. [ITEM-4] [HISTORICO]
 import { NOMES_ACAO, type ItemHistorico } from '../api/materiais'
+import { SECOES } from './secoes'
 import { nomeStatus } from './Status'
 import { dataHora } from '../util/formatar'
 
@@ -20,9 +21,34 @@ const ICONES: Record<string, string> = {
   DISPONIBILIZACAO: 'ri-file-chart-line',
 }
 
+// Status das perguntas da pesquisa; "RASCUNHO" de uma pergunta é a volta para a marca ajustar, não um relatório em rascunho.
+const STATUS_PERGUNTA: Record<string, string> = { RASCUNHO: 'Devolvida para ajuste', ENVIADA: 'Enviada', APROVADA: 'Aprovada' }
+// Situação da parceria, que a API grava em código ("ATIVA → CANCELADA").
+const SITUACOES: Record<string, string> = { EM_NEGOCIACAO: 'Em negociação', ATIVA: 'Ativa', ENCERRADA: 'Encerrada', CANCELADA: 'Cancelada' }
+// Vínculo do e-mail autorizado, que a API grava em minúscula ("(agencia)").
+const VINCULOS: [RegExp, string][] = [
+  [/\(agencia\)$/, '(Agência)'],
+  [/\(marca\)$/, '(Marca)'],
+]
+
+/** "(aba MIDIA)" no texto gravado pela API vira "(aba Mídia e conteúdo)". */
+function semCodigoDeAba(texto: string) {
+  return texto.replace(/\(aba ([A-Z_]+)\)/g, (trecho, codigo: string) => {
+    const secao = SECOES.find((item) => item.aba === codigo)
+    return secao ? `(aba ${secao.nome})` : trecho
+  })
+}
+
 function mudanca(item: ItemHistorico) {
   if (!item.valorAnterior && !item.valorNovo) return null
-  const ler = (valor: string | null) => (valor ? nomeStatus(valor) : '—')
+  const ler = (valor: string | null) => {
+    if (!valor) return '—'
+    if (item.entidade === 'pesquisa_pergunta' && STATUS_PERGUNTA[valor]) return STATUS_PERGUNTA[valor]
+    if (SITUACOES[valor]) return SITUACOES[valor]
+    return semCodigoDeAba(VINCULOS.reduce((texto, [padrao, nome]) => texto.replace(padrao, nome), nomeStatus(valor)))
+  }
+  // Sem valor anterior (envio, download, criação), a linha diz só o que entrou, sem "— →".
+  if (!item.valorAnterior) return ler(item.valorNovo)
   return `${ler(item.valorAnterior)} → ${ler(item.valorNovo)}`
 }
 
@@ -35,12 +61,12 @@ export function LinhaDoTempo({ itens, comParceria = false }: { itens: ItemHistor
             <i className={`${ICONES[item.acao] ?? 'ri-time-line'} text-lg`} aria-hidden="true" />
           </span>
           <div className="min-w-0 flex-1 text-sm">
-            <p>
+            <p className="[overflow-wrap:anywhere]">
               <span className="font-bold">{NOMES_ACAO[item.acao] ?? item.acao}</span>
               {comParceria && item.parceria && <span className="font-semibold text-texto-2"> · {item.parceria.patrocinador}</span>}
               {mudanca(item) && <span className="font-semibold"> · {mudanca(item)}</span>}
             </p>
-            {item.detalhe && <p className="mt-0.5 break-words">{item.detalhe}</p>}
+            {item.detalhe && <p className="mt-0.5 [overflow-wrap:anywhere]">{semCodigoDeAba(item.detalhe)}</p>}
             <p className="mt-0.5 text-xs font-medium text-texto-2">
               {item.usuario ? `${item.usuario.nome}${item.usuario.perfil === 'ADMIN_RBS' ? ' (RBS)' : ''}` : 'Sistema ou e-mail desconhecido'} ·{' '}
               {dataHora(item.ocorridoEm)}

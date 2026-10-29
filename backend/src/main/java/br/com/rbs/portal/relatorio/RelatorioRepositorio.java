@@ -27,11 +27,15 @@ public class RelatorioRepositorio {
                                    String unidade, String baseCalculo, boolean disponivel) {
     }
 
-    /** Uma linha da rota 31, ainda sem a montagem do JSON. {@code relatorioId} é nulo quando a parceria não tem versão. */
+    /**
+     * Uma linha da rota 31, ainda sem a montagem do JSON. {@code relatorioId} é nulo quando a parceria não tem versão;
+     * os campos "marcaVe" são da versão disponibilizada mais nova e ficam nulos quando nenhuma foi disponibilizada.
+     */
     public record LinhaDeSituacao(Long parceriaId, String patrocinador, String cotaCodigo, String cotaNome, Long eventoId,
                                   String eventoNome, Integer edicao, Long relatorioId, Integer versao, String status,
                                   OffsetDateTime geradoEm, OffsetDateTime validadoEm, OffsetDateTime disponibilizadoEm,
-                                  int disponiveis, int indisponiveis, int faltantes) {
+                                  int disponiveis, int indisponiveis, Long marcaVeId, Integer marcaVeVersao,
+                                  OffsetDateTime marcaVeEm, int faltantes) {
     }
 
     /** O estado de um relatório com a linha travada (SELECT ... FOR UPDATE), para a mudança de status. */
@@ -65,8 +69,10 @@ public class RelatorioRepositorio {
 
     /**
      * Uma linha por parceria da edição, com a versão MAIS NOVA do relatório (LATERAL com ORDER BY versao DESC), quantos números
-     * dela estão disponíveis e indisponíveis, e quantos itens a visão vw_faltantes aponta. [RELATORIO] "Sem relatório" é
-     * a situação de quem não tem nenhuma versão.
+     * dela estão disponíveis e indisponíveis (o indicador do catálogo sem linha na versão conta como indisponível, como na
+     * leitura do relatório), a versão que a marca vê (a disponibilizada mais nova, que pode ser anterior à
+     * mais nova) e quantos itens a visão vw_faltantes aponta. [RELATORIO] "Sem relatório" é a situação de quem não tem
+     * nenhuma versão.
      */
     public List<LinhaDeSituacao> situacoes(long eventoId, String statusFiltro) {
         return jdbc.sql("""
@@ -76,6 +82,7 @@ public class RelatorioRepositorio {
                                r.gerado_em, r.validado_em, r.disponibilizado_em,
                                coalesce(ri.disponiveis, 0)::int AS disponiveis,
                                coalesce(ri.indisponiveis, 0)::int AS indisponiveis,
+                               d.id AS marca_ve_id, d.versao AS marca_ve_versao, d.disponibilizado_em AS marca_ve_em,
                                coalesce(f.itens, 0)::int AS faltantes
                         FROM parceria pa
                         JOIN patrocinador pat ON pat.id = pa.patrocinador_id
@@ -83,9 +90,16 @@ public class RelatorioRepositorio {
                         JOIN evento e ON e.id = pa.evento_id
                         LEFT JOIN LATERAL (SELECT * FROM relatorio WHERE parceria_id = pa.id
                                            ORDER BY versao DESC LIMIT 1) r ON TRUE
-                        LEFT JOIN LATERAL (SELECT count(*) FILTER (WHERE disponivel) AS disponiveis,
-                                                  count(*) FILTER (WHERE NOT disponivel) AS indisponiveis
-                                           FROM relatorio_indicador WHERE relatorio_id = r.id) ri ON TRUE
+                        LEFT JOIN LATERAL (SELECT id, versao, disponibilizado_em FROM relatorio
+                                           WHERE parceria_id = pa.id AND status = 'DISPONIBILIZADO'
+                                           ORDER BY versao DESC LIMIT 1) d ON TRUE
+                        LEFT JOIN LATERAL (
+                               SELECT (SELECT count(*) FROM relatorio_indicador WHERE relatorio_id = r.id AND disponivel) AS disponiveis,
+                                      (SELECT count(*) FROM relatorio_indicador WHERE relatorio_id = r.id AND NOT disponivel)
+                                      + (SELECT count(*) FROM indicador i WHERE NOT EXISTS (
+                                             SELECT 1 FROM relatorio_indicador x
+                                             WHERE x.relatorio_id = r.id AND x.indicador_codigo = i.codigo)) AS indisponiveis
+                               WHERE r.id IS NOT NULL) ri ON TRUE
                         LEFT JOIN (SELECT parceria_id, count(*) AS itens FROM vw_faltantes GROUP BY parceria_id) f
                                ON f.parceria_id = pa.id
                         WHERE pa.evento_id = :eventoId
@@ -134,14 +148,19 @@ public class RelatorioRepositorio {
                 .optional();
     }
 
-    /** Os números da versão, com seção, nome e unidade do catálogo. A ordem é montada pelo RelatorioService. */
+    /**
+     * Os números da versão, com seção, nome e unidade do catálogo. [RELATORIO] Parte do catálogo (tabela indicador), não das
+     * linhas gravadas: o indicador sem linha nesta versão sai como indisponível (sem recorte, valor nulo), então a leitura
+     * sempre traz as 6 seções e os 17 indicadores, até de versões geradas antes de a geração registrar todos eles. A ordem
+     * é montada pelo RelatorioService.
+     */
     public List<LinhaDeIndicador> indicadores(long relatorioId) {
         return jdbc.sql("""
-                        SELECT i.secao, ri.indicador_codigo AS codigo, i.nome, ri.recorte, ri.valor, i.unidade,
-                               ri.base_calculo, ri.disponivel
-                        FROM relatorio_indicador ri
-                        JOIN indicador i ON i.codigo = ri.indicador_codigo
-                        WHERE ri.relatorio_id = :relatorioId
+                        SELECT i.secao, i.codigo, i.nome, coalesce(ri.recorte, '') AS recorte, ri.valor, i.unidade,
+                               CASE WHEN ri.indicador_codigo IS NULL THEN 'sem registro na base' ELSE ri.base_calculo END AS base_calculo,
+                               coalesce(ri.disponivel, FALSE) AS disponivel
+                        FROM indicador i
+                        LEFT JOIN relatorio_indicador ri ON ri.indicador_codigo = i.codigo AND ri.relatorio_id = :relatorioId
                         """)
                 .param("relatorioId", relatorioId)
                 .query(LinhaDeIndicador.class)

@@ -68,11 +68,14 @@ public class AcessoRepositorio {
         }
 
         List<Long> ids = linhas.stream().map(LinhaParceria::id).toList();
-        record LinhaAba(Long parceriaId, String codigo, String nome, int ordem, boolean liberada) {
+        record LinhaAba(Long parceriaId, String codigo, String nome, int ordem, boolean liberada, boolean incluidaNaCota) {
         }
         List<LinhaAba> abas = jdbc.sql("""
-                        SELECT pab.parceria_id, a.codigo, a.nome, a.ordem, (pab.liberada AND pab.visivel) AS liberada
+                        SELECT pab.parceria_id, a.codigo, a.nome, a.ordem, (pab.liberada AND pab.visivel) AS liberada,
+                               EXISTS (SELECT 1 FROM cota_tipo_aba cta
+                                       WHERE cta.cota_tipo_id = pa.cota_tipo_id AND cta.aba_id = pab.aba_id) AS incluida_na_cota
                         FROM parceria_aba pab
+                        JOIN parceria pa ON pa.id = pab.parceria_id
                         JOIN aba a ON a.id = pab.aba_id
                         WHERE pab.parceria_id IN (:ids)
                         ORDER BY pab.parceria_id, a.ordem
@@ -84,7 +87,7 @@ public class AcessoRepositorio {
         Map<Long, List<AbaDto>> abasPorParceria = new LinkedHashMap<>();
         for (LinhaAba aba : abas) {
             abasPorParceria.computeIfAbsent(aba.parceriaId(), k -> new ArrayList<>())
-                    .add(new AbaDto(aba.codigo(), aba.nome(), aba.ordem(), aba.liberada()));
+                    .add(new AbaDto(aba.codigo(), aba.nome(), aba.ordem(), aba.liberada(), aba.incluidaNaCota()));
         }
         return linhas.stream()
                 .map(l -> new ParceriaDoUsuarioDto(l.id(), l.patrocinador(), new CotaDto(l.cotaCodigo(), l.cotaNome()),

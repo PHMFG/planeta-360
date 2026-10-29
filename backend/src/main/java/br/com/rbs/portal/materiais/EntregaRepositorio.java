@@ -62,18 +62,6 @@ public class EntregaRepositorio {
         return jdbc.sql("SELECT id FROM aba WHERE codigo = :codigo").param("codigo", codigo).query(Integer.class).optional();
     }
 
-    /** Como no contrato, uma aba só conta como liberada se estiver liberada E visível para a parceria. */
-    public boolean abaLiberada(long parceriaId, int abaId) {
-        return jdbc.sql("""
-                        SELECT EXISTS (SELECT 1 FROM parceria_aba WHERE parceria_id = :parceriaId AND aba_id = :abaId
-                                       AND liberada AND visivel)
-                        """)
-                .param("parceriaId", parceriaId)
-                .param("abaId", abaId)
-                .query(Boolean.class)
-                .single();
-    }
-
     public long inserir(long parceriaId, int abaId, String titulo, String descricao, String status, LocalDate prazo) {
         return jdbc.sql("""
                         INSERT INTO entrega (parceria_id, aba_id, titulo, descricao, status, prazo)
@@ -139,8 +127,8 @@ public class EntregaRepositorio {
     // ---------------------------------------------------------------------
 
     private record LinhaDeArquivo(Long id, Long entregaId, String nomeOriginal, String mimeType, Long tamanhoBytes,
-                                  Integer versao, String categoria, OffsetDateTime enviadoEm, Long usuarioId,
-                                  String usuarioNome, String usuarioPerfil) {
+                                  Integer versao, String categoria, OffsetDateTime enviadoEm, String observacao,
+                                  Long usuarioId, String usuarioNome, String usuarioPerfil) {
     }
 
     /** Os arquivos de cada entrega, da versão mais nova para a mais antiga (inclui o retorno da RBS). */
@@ -151,7 +139,7 @@ public class EntregaRepositorio {
         }
         jdbc.sql("""
                         SELECT a.id, a.entrega_id, a.nome_original, a.mime_type, a.tamanho_bytes, a.versao, a.categoria,
-                               a.enviado_em, u.id AS usuario_id, u.nome AS usuario_nome, u.perfil AS usuario_perfil
+                               a.enviado_em, a.observacao, u.id AS usuario_id, u.nome AS usuario_nome, u.perfil AS usuario_perfil
                         FROM arquivo a JOIN usuario u ON u.id = a.enviado_por
                         WHERE a.entrega_id IN (:ids)
                         ORDER BY a.entrega_id, a.versao DESC, a.id DESC
@@ -162,7 +150,7 @@ public class EntregaRepositorio {
                 .forEach(l -> porEntrega.computeIfAbsent(l.entregaId(), k -> new ArrayList<>()).add(
                         new ArquivoDto(l.id(), l.entregaId(), l.nomeOriginal(), l.mimeType(), l.tamanhoBytes(), l.versao(),
                                 l.categoria(), new UsuarioResumoDto(l.usuarioId(), l.usuarioNome(), l.usuarioPerfil()),
-                                Datas.emBrasilia(l.enviadoEm()))));
+                                Datas.emBrasilia(l.enviadoEm()), l.observacao())));
         return porEntrega;
     }
 

@@ -1,5 +1,6 @@
 package br.com.rbs.portal.comum;
 
+import java.nio.charset.StandardCharsets;
 import java.sql.SQLException;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -7,6 +8,7 @@ import org.postgresql.util.PSQLException;
 import org.postgresql.util.ServerErrorMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.TypeMismatchException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
@@ -20,11 +22,15 @@ import org.springframework.validation.method.ParameterErrors;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.ServletWebRequest;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
+import org.springframework.web.util.UriUtils;
 
 /**
  * Transforma qualquer erro da API em ProblemDetail (application/problem+json), em português. Atende o item 3 da Entrega 2.
@@ -130,6 +136,59 @@ public class TratadorDeErros extends ResponseEntityExceptionHandler {
             }
         });
         return createResponseEntity(Problemas.validacao(campos), headers, HttpStatus.UNPROCESSABLE_CONTENT, request);
+    }
+
+    /**
+     * Valor que não vira o tipo do parâmetro. Antes saía o 400 cru do Spring, em inglês ("Failed to convert 'id' with value:
+     * 'abc'"). [ISOLAMENTO] Id da URL que não é número é um id que não existe: 404, com a frase de "não encontrado" da rota
+     * (a mesma de um id numérico sem registro). Filtro da URL com o tipo errado (?pagina=abc, ?eventoId=abc) segue 400, como
+     * o contrato já dizia para o painel, mas com a frase em português dizendo qual parâmetro está errado.
+     */
+    @Override
+    protected ResponseEntity<Object> handleTypeMismatch(TypeMismatchException ex, HttpHeaders headers, HttpStatusCode status,
+                                                        WebRequest request) {
+        if (ex instanceof MethodArgumentTypeMismatchException deArgumento) {
+            if (deArgumento.getParameter().hasParameterAnnotation(PathVariable.class)) {
+                String frase = fraseDeNaoEncontrado(request, deArgumento.getValue());
+                return createResponseEntity(Problemas.de(HttpStatus.NOT_FOUND, frase), headers, HttpStatus.NOT_FOUND, request);
+            }
+            String frase = "O parâmetro " + deArgumento.getName() + " " + exigenciaDoTipo(deArgumento.getRequiredType());
+            return createResponseEntity(Problemas.de(HttpStatus.BAD_REQUEST, frase), headers, HttpStatus.BAD_REQUEST, request);
+        }
+        return createResponseEntity(Problemas.padrao(HttpStatus.BAD_REQUEST), headers, HttpStatus.BAD_REQUEST, request);
+    }
+
+    /** A frase de 404 do recurso, pelo trecho da URL logo antes do valor (/parcerias/abc, /arquivos/abc...). */
+    private static String fraseDeNaoEncontrado(WebRequest request, Object valor) {
+        if (request instanceof ServletWebRequest servlet && valor != null) {
+            String[] trechos = servlet.getRequest().getRequestURI().split("/");
+            for (int i = 1; i < trechos.length; i++) {
+                if (UriUtils.decode(trechos[i], StandardCharsets.UTF_8).equals(valor.toString())) {
+                    return switch (trechos[i - 1]) {
+                        case "parcerias" -> "Não encontramos esta parceria.";
+                        case "emails" -> "Não encontramos este e-mail nesta parceria.";
+                        case "entregas" -> "Não encontramos esta entrega.";
+                        case "arquivos" -> "Não encontramos este arquivo.";
+                        case "perguntas" -> "Não encontramos esta pergunta.";
+                        case "relatorios" -> "Não encontramos este relatório.";
+                        case "cargas" -> "Não encontramos esta carga.";
+                        default -> Problemas.detalhePadrao(HttpStatus.NOT_FOUND);
+                    };
+                }
+            }
+        }
+        return Problemas.detalhePadrao(HttpStatus.NOT_FOUND);
+    }
+
+    /** O fim da frase do 400 de parâmetro: o que o parâmetro precisa ser, pelo tipo que o controller espera. */
+    private static String exigenciaDoTipo(Class<?> tipo) {
+        if (tipo != null && (Number.class.isAssignableFrom(tipo) || tipo == int.class || tipo == long.class || tipo == short.class)) {
+            return "precisa ser um número inteiro.";
+        }
+        if (tipo != null && (tipo == Boolean.class || tipo == boolean.class)) {
+            return "precisa ser true ou false.";
+        }
+        return "tem um valor inválido.";
     }
 
     @Override

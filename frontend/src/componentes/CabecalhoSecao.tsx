@@ -11,14 +11,14 @@ type PropsCabecalho = {
 
 export function CabecalhoSecao({ trilha, titulo, subtitulo, acoes }: PropsCabecalho) {
   return (
-    <header className="padrao-diagonal relative overflow-hidden rounded-3xl bg-secao px-9 pt-7 pb-[30px] text-white">
-      <div className="flex items-end justify-between gap-6">
-        <div className="flex flex-col gap-3.5">
+    <header className="padrao-diagonal relative overflow-hidden rounded-3xl bg-secao px-5 pt-5 pb-6 text-white sm:px-9 sm:pt-7 sm:pb-[30px]">
+      <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-end sm:justify-between sm:gap-6">
+        <div className="flex min-w-0 flex-col gap-3.5">
           <p className="texto-sobretitulo">{trilha}</p>
-          <h1 className="texto-display">{titulo}</h1>
+          <h1 className="texto-display break-words max-sm:text-[44px]">{titulo}</h1>
           {subtitulo && <p className="text-sm font-medium">{subtitulo}</p>}
         </div>
-        {acoes && <div className="flex shrink-0 gap-3">{acoes}</div>}
+        {acoes && <div className="flex flex-wrap gap-3 sm:shrink-0">{acoes}</div>}
       </div>
     </header>
   )

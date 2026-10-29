@@ -84,10 +84,15 @@ export function Relatorios() {
       />
 
       <div className="grid gap-4 md:grid-cols-4">
+        {/* Contagem pela versão mais nova (a mesma do filtro); a legenda lembra quantas marcas já veem uma versão anterior. */}
         <Indicador rotulo="Sem relatório" valor={contar('SEM_RELATORIO')} />
-        <Indicador rotulo="Rascunho" valor={contar('RASCUNHO')} legenda="A marca ainda não vê" />
-        <Indicador rotulo="Validado" valor={contar('VALIDADO')} legenda="Números conferidos" />
-        <Indicador rotulo="Disponibilizado" valor={contar('DISPONIBILIZADO')} legenda="Liberado para a marca" />
+        <Indicador rotulo="Rascunho" valor={contar('RASCUNHO')} legenda="Versão mais nova ainda não vista pela marca" />
+        <Indicador rotulo="Validado" valor={contar('VALIDADO')} legenda="Números conferidos, falta disponibilizar" />
+        <Indicador
+          rotulo="Disponibilizado"
+          valor={contar('DISPONIBILIZADO')}
+          legenda={`Versão mais nova com a marca · ${todas.filter((linha) => linha.disponibilizada).length} marcas veem algum relatório`}
+        />
       </div>
 
       <Cartao>
@@ -127,7 +132,16 @@ export function Relatorios() {
                 {
                   titulo: 'Situação',
                   celula: (linha) =>
-                    linha.relatorio ? <Status codigo={linha.relatorio.status} complemento={`v${linha.relatorio.versao}`} /> : <span className="text-xs text-texto-2">Sem relatório</span>,
+                    linha.relatorio ? (
+                      <>
+                        <Status codigo={linha.relatorio.status} complemento={`v${linha.relatorio.versao}`} />
+                        {linha.disponibilizada && linha.disponibilizada.versao !== linha.relatorio.versao && (
+                          <span className="mt-0.5 block text-xs font-medium text-texto-2">A marca vê a v{linha.disponibilizada.versao}</span>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-xs text-texto-2">Sem relatório</span>
+                    ),
                 },
                 { titulo: 'Gerado em', celula: (linha) => dataHora(linha.relatorio?.geradoEm) },
                 {

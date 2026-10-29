@@ -2,8 +2,9 @@
 import { Link, useNavigate } from 'react-router'
 import { ErroApi } from '../../api/cliente'
 import { listarEntregas, type Entrega } from '../../api/materiais'
-import { obterRelatorio } from '../../api/resultados'
+import { obterPesquisa, obterRelatorio } from '../../api/resultados'
 import { useDados } from '../../api/useDados'
+import { estadoDaAba } from '../../componentes/AbaFechada'
 import { LinhaArquivo } from '../../componentes/Arquivo'
 import { Aviso } from '../../componentes/Aviso'
 import { LinkBotao } from '../../componentes/Botao'
@@ -33,9 +34,19 @@ function porUrgencia(a: Entrega, b: Entrega) {
 export function MinhaParceria() {
   const parceria = useParceria()
   const { usuario } = useSessao()
+  const rbs = usuario?.perfil === 'ADMIN_RBS'
   const navegar = useNavigate()
   const base = `/parceria/${parceria.id}`
   const entregas = useDados(() => listarEntregas(parceria.id), [parceria.id])
+  // Pergunta devolvida pela RBS também é ação da marca, como uma entrega com ajuste pedido.
+  const pesquisaLiberada = estadoDaAba(parceria.abas.find((aba) => aba.codigo === 'PESQUISA')) === 'LIBERADA'
+  const pesquisa = useDados(
+    () => (pesquisaLiberada && !rbs ? obterPesquisa(parceria.id) : Promise.resolve(null)),
+    [parceria.id, pesquisaLiberada, rbs],
+  )
+  const ajustesPesquisa = (pesquisa.dado?.perguntas ?? []).filter((pergunta) => pergunta.status === 'RASCUNHO' && pergunta.observacaoRbs)
+  // Abas que a RBS fechou por enquanto: as entregas delas somem da lista até a aba reabrir, e a tela precisa dizer isso.
+  const fechadas = parceria.abas.filter((aba) => estadoDaAba(aba) === 'FECHADA')
   // O patrocinador recebe 404 enquanto a RBS não disponibiliza o relatório: aqui isso é "ainda não", não erro.
   const relatorio = useDados(
     () => obterRelatorio(parceria.id).catch((erro: unknown) => (erro instanceof ErroApi && erro.status === 404 ? null : Promise.reject(erro))),
@@ -56,16 +67,41 @@ export function MinhaParceria() {
           const comRbs = lista.filter((entrega) => COM_A_RBS.includes(entrega.status))
           const aprovadas = lista.filter((entrega) => entrega.status === 'APROVADO')
           const proxima = pendentes[0]
+          // Ajuste pedido em entrega vem primeiro; depois, pergunta da pesquisa devolvida; depois, o prazo mais próximo.
+          const pesquisaPrimeiro = ajustesPesquisa.length > 0 && proxima?.status !== 'AJUSTE_SOLICITADO'
+          const aFazer = pendentes.length + ajustesPesquisa.length
           return (
             <>
+              {fechadas.length > 0 && !rbs && (
+                <Aviso tipo="restrito" titulo={`A RBS fechou por enquanto: ${fechadas.map((aba) => SECOES.find((secao) => secao.aba === aba.codigo)?.nome ?? aba.nome).join(', ')}`}>
+                  As entregas dessas abas não entram nas contas abaixo até a aba reabrir. Dúvidas: fale com o time B2B da RBS.
+                </Aviso>
+              )}
               <Grade3>
-                <Indicador rotulo="A fazer" valor={String(pendentes.length).padStart(2, '0')} legenda="Pendências da marca" />
+                <Indicador rotulo="A fazer" valor={String(aFazer).padStart(2, '0')} legenda="Pendências da marca" />
                 <Indicador rotulo="Com a RBS" valor={String(comRbs.length).padStart(2, '0')} legenda="Enviados, aguardando análise" />
-                <Indicador rotulo="Aprovados" valor={String(aprovadas.length).padStart(2, '0')} legenda={`De ${lista.length} entregas da parceria`} />
+                <Indicador
+                  rotulo="Aprovados"
+                  valor={String(aprovadas.length).padStart(2, '0')}
+                  legenda={lista.length ? `De ${lista.length} ${lista.length === 1 ? 'entrega' : 'entregas'} da parceria` : 'Nenhuma entrega aberta ainda'}
+                />
               </Grade3>
 
               <Cartao titulo="Sua próxima ação">
-                {proxima ? (
+                {pesquisaPrimeiro ? (
+                  <div className="flex flex-wrap items-center justify-between gap-4" data-secao="pesquisa">
+                    <div>
+                      <p className="text-sm">
+                        <span className="font-semibold">
+                          {ajustesPesquisa.length === 1 ? `Pergunta ${ajustesPesquisa[0].ordem}` : `${ajustesPesquisa.length} perguntas`} da pesquisa
+                        </span>{' '}
+                        · a RBS pediu ajuste
+                      </p>
+                      {ajustesPesquisa[0].observacaoRbs && <p className="mt-1 text-xs text-texto-2">RBS: {ajustesPesquisa[0].observacaoRbs}</p>}
+                    </div>
+                    <LinkBotao to={`${base}/pesquisa`}>Abrir Pesquisa</LinkBotao>
+                  </div>
+                ) : proxima ? (
                   <div className="flex flex-wrap items-center justify-between gap-4">
                     <div>
                       <p className="text-sm">
@@ -78,15 +114,31 @@ export function MinhaParceria() {
                     </div>
                     <LinkBotao to={`${base}/${secaoDa(proxima).caminho}`}>Abrir {secaoDa(proxima).nome}</LinkBotao>
                   </div>
+                ) : lista.length === 0 && !fechadas.length ? (
+                  <p className="text-sm">A RBS ainda está preparando as entregas da sua parceria. Elas aparecem aqui assim que forem abertas.</p>
+                ) : fechadas.length ? (
+                  <p className="text-sm">Nada pendente nas abas abertas agora.</p>
                 ) : (
                   <p className="text-sm">Tudo em dia: nenhuma entrega esperando a sua empresa.</p>
                 )}
               </Cartao>
 
-              {pendentes.length > 1 && (
+              {/* Tudo o que a marca tem a fazer, além da próxima ação: as outras entregas e a pesquisa devolvida. */}
+              {aFazer > 1 && (
                 <Cartao titulo="Pendências por módulo">
                   <Grade2>
-                    {pendentes.slice(1, 7).map((entrega) => (
+                    {!pesquisaPrimeiro && ajustesPesquisa.length > 0 && (
+                      <div data-secao="pesquisa">
+                        <LinhaArquivo
+                          titulo={`Pesquisa · ${ajustesPesquisa.length === 1 ? `pergunta ${ajustesPesquisa[0].ordem}` : `${ajustesPesquisa.length} perguntas`}`}
+                          icone={SECOES.find((secao) => secao.aba === 'PESQUISA')?.icone ?? 'ri-survey-line'}
+                          meta={`RBS: ${ajustesPesquisa[0].observacaoRbs ?? 'pediu ajuste'}`}
+                          rodape={<span className="text-xs font-bold text-[#c8203f]">Ajuste pedido pela RBS</span>}
+                          onClick={() => navegar(`${base}/pesquisa`)}
+                        />
+                      </div>
+                    )}
+                    {pendentes.slice(pesquisaPrimeiro ? 0 : 1, 7).map((entrega) => (
                       <div key={entrega.id} data-secao={secaoDa(entrega).chave}>
                         <LinhaArquivo
                           titulo={`${secaoDa(entrega).nome} · ${entrega.titulo}`}

@@ -8,7 +8,6 @@ import br.com.rbs.portal.comum.DadosInvalidosException;
 import br.com.rbs.portal.comum.Datas;
 import br.com.rbs.portal.comum.HistoricoService;
 import br.com.rbs.portal.comum.NaoEncontradoException;
-import br.com.rbs.portal.comum.SemPermissaoException;
 import br.com.rbs.portal.comum.UsuarioAutenticado;
 import br.com.rbs.portal.comum.VerificadorDeAcesso;
 import br.com.rbs.portal.pesquisa.PesquisaDtos.DecisaoRequisicao;
@@ -43,8 +42,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class PesquisaService {
 
-    static final String ABA_NAO_LIBERADA = "Esta aba ainda não foi liberada para a sua parceria.";
-
     private static final String ENTIDADE = "pesquisa_pergunta";
 
     private final PesquisaRepositorio repositorio;
@@ -63,16 +60,14 @@ public class PesquisaService {
 
     /**
      * Rota 23. [ISOLAMENTO] Parceria de outro patrocinador: 404. [PERMISSAO] O patrocinador só entra se a aba PESQUISA
-     * estiver liberada para a parceria dele (senão 403); a RBS vê sempre, e {@code abaLiberada} diz como a aba está.
+     * estiver liberada para a parceria dele (senão 403, com a frase da cota ou a da aba ainda fechada); a RBS vê sempre, e
+     * {@code abaLiberada} diz como a aba está.
      */
     @Transactional(readOnly = true)
     public PesquisaDaParceriaDto ver(UsuarioAutenticado usuario, long parceriaId) {
         verificador.exigirParceria(usuario, parceriaId);
-        boolean liberada = repositorio.abaLiberada(parceriaId);
-        if (!usuario.ehRbs() && !liberada) {
-            throw new SemPermissaoException(ABA_NAO_LIBERADA);
-        }
-        return montar(parceriaId, liberada);
+        verificador.exigirAbaLiberada(usuario, parceriaId, "PESQUISA");
+        return montar(parceriaId, repositorio.abaLiberada(parceriaId));
     }
 
     // ---------------------------------------------------------------------
@@ -95,13 +90,10 @@ public class PesquisaService {
     @Transactional
     public PesquisaDaParceriaDto enviarPerguntas(UsuarioAutenticado usuario, long parceriaId,
                                                  EnviarPerguntasRequisicao corpo, HttpServletRequest requisicao) {
-        if (usuario.ehRbs()) {
-            throw new SemPermissaoException("Só o Admin Patrocinador da parceria envia as perguntas da pesquisa.");
-        }
+        // Estas três conferências também rodam antes de o corpo ser lido (PermissaoAntesDoCorpo); ficam aqui por segurança.
+        verificador.exigirPatrocinador(usuario, "Só o Admin Patrocinador da parceria envia as perguntas da pesquisa.");
         verificador.exigirParceria(usuario, parceriaId);
-        if (!repositorio.abaLiberada(parceriaId)) {
-            throw new SemPermissaoException(ABA_NAO_LIBERADA);
-        }
+        verificador.exigirAbaLiberada(usuario, parceriaId, "PESQUISA");
         conferirOrdensDiferentes(corpo.perguntas());
 
         repositorio.travarParceria(parceriaId);
@@ -157,6 +149,11 @@ public class PesquisaService {
                 if ("APROVADA".equals(atual.status())) {
                     throw jaAprovada(atual.ordem());
                 }
+                if (atual.temResultados()) {
+                    // Pergunta reaberta pela RBS que já teve resultados: apagá-la apagaria os resultados junto (ON DELETE CASCADE).
+                    throw new ConflitoException("A pergunta " + atual.ordem() + " já tem resultados carregados e não pode ser "
+                            + "retirada da lista. Altere o texto dela ou fale com a RBS.");
+                }
                 plano.add(new Passo(Acao.APAGAR, atual, atual.ordem(), null));
             }
         });
@@ -197,9 +194,13 @@ public class PesquisaService {
     // ---------------------------------------------------------------------
 
     /**
-     * Rota 25. [PERMISSAO] Só a RBS (o patrocinador recebe 403, antes de qualquer consulta). [VALIDACAO] A decisão vale
-     * só para pergunta ENVIADA (senão 409); pedir ajuste exige a observação, que a marca lê em observacaoRbs.
-     * [HISTORICO] ALTERACAO_STATUS com a observação em "detalhe", na mesma transação.
+     * Rota 25. [PERMISSAO] Só a RBS (o patrocinador recebe 403, antes de qualquer consulta). [VALIDACAO] Aprovar vale só para
+     * pergunta ENVIADA. Pedir ajuste vale para a ENVIADA (devolve à marca) e para a APROVADA (reabre: a marca volta a poder
+     * editar; é o único caminho para mudar uma pergunta aprovada, já que a marca não altera nem retira a aprovada). Nos dois
+     * casos a observação é obrigatória e a marca a lê em observacaoRbs. Em outro status, 409.
+     * [HISTORICO] ALTERACAO_STATUS (de APROVADA para RASCUNHO, no caso da reabertura) com a observação em "detalhe", na mesma
+     * transação. Os resultados já carregados da pergunta reaberta ficam guardados, mas só aparecem de novo quando ela voltar
+     * a ser aprovada (a rota 23 mostra resultado só de pergunta APROVADA).
      * [PENDENTE] Hoje qualquer Admin RBS decide; a RBS ainda vai dizer se é só o time de pesquisa.
      */
     @Transactional
@@ -213,9 +214,13 @@ public class PesquisaService {
         PerguntaTravada atual = repositorio.travarPergunta(perguntaId)
                 .orElseThrow(() -> new NaoEncontradoException("Não encontramos esta pergunta."));
         verificador.exigirParceria(usuario, atual.parceriaId());
-        if (!"ENVIADA".equals(atual.status())) {
-            throw new ConflitoException("A RBS só decide sobre pergunta enviada, e a pergunta " + atual.ordem()
-                    + " está " + situacaoPorExtenso(atual.status()) + ".");
+        boolean reabertura = !aprovar && "APROVADA".equals(atual.status());
+        if (!"ENVIADA".equals(atual.status()) && !reabertura) {
+            throw new ConflitoException(aprovar
+                    ? "A RBS só decide sobre pergunta enviada, e a pergunta " + atual.ordem() + " está "
+                            + situacaoPorExtenso(atual.status()) + "."
+                    : "A RBS só pede ajuste de pergunta enviada ou aprovada, e a pergunta " + atual.ordem() + " está "
+                            + situacaoPorExtenso(atual.status()) + ".");
         }
 
         String novoStatus = aprovar ? "APROVADA" : "RASCUNHO";

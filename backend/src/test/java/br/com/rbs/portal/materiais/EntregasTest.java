@@ -8,6 +8,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import br.com.rbs.portal.TesteDeIntegracao;
 import br.com.rbs.portal.acesso.SessaoDeApi;
 import br.com.rbs.portal.comum.Datas;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -141,10 +142,28 @@ class EntregasTest extends ApoioDeMateriais {
         assertThat(arquivos).as("as duas versões, da mais nova para a mais antiga").extracting(a -> a.get("versao"))
                 .containsExactly(2, 1);
         assertThat(arquivos.getFirst()).containsEntry("nomeOriginal", "logo_final.pdf").containsEntry("mimeType", "application/pdf")
-                .containsEntry("tamanhoBytes", 501877).containsEntry("categoria", "MATERIAL_MARCA")
-                .containsEntry("enviadoEm", "2026-10-17T18:03:00-03:00");
+                .containsEntry("tamanhoBytes", 501877).containsEntry("categoria", "MATERIAL_MARCA");
+        assertThat((String) arquivos.getFirst().get("enviadoEm")).endsWith("-03:00");
+        assertThat(OffsetDateTime.parse((String) arquivos.getFirst().get("enviadoEm")))
+                .as("a v2 foi enviada depois da v1, e as duas no passado")
+                .isAfter(OffsetDateTime.parse((String) arquivos.get(1).get("enviadoEm"))).isBefore(OffsetDateTime.now());
         assertThat((Map<String, Object>) arquivos.getFirst().get("enviadoPor")).containsEntry("nome", "Marketing Amarelo")
                 .containsEntry("perfil", "ADMIN_PATROCINADOR");
+    }
+
+    @Test
+    void cadaVersaoDoArquivoTrazAObservacaoQueAMarcaEscreveuNaquelaVersao() {
+        MvcTestResult resposta = entrar(AMARELO).get("/api/parcerias/" + amarelo() + "/entregas");
+
+        Map<String, Object> logo = lerLista(resposta, "$[?(@.titulo == 'Logo final para aplicações no evento')]").stream()
+                .map(o -> (Map<String, Object>) o).findFirst().orElseThrow();
+        List<Map<String, Object>> arquivos = (List<Map<String, Object>>) logo.get("arquivos");
+        assertThat(arquivos.get(0)).containsEntry("versao", 2).containsEntry("observacao", "Logo em vetor, como pedido.");
+        assertThat(arquivos.get(1)).containsEntry("versao", 1).containsEntry("observacao", "Primeira versão do logo, em PDF.");
+        // Quem não escreveu nada recebe null, e o campo existe em toda versão.
+        List<Object> todas = lerLista(resposta, "$[*].arquivos[*].observacao");
+        assertThat(todas).contains("Manual de marca e logos em alta resolução.").containsNull();
+        assertThat(lerLista(resposta, "$[*].arquivos[*].versao")).hasSameSizeAs(todas);
     }
 
     @Test
@@ -182,7 +201,7 @@ class EntregasTest extends ApoioDeMateriais {
         MvcTestResult todas = roxo.get("/api/parcerias/" + roxo() + "/entregas");
 
         assertThat(fechada).hasStatus(HttpStatus.FORBIDDEN);
-        assertThat(lerJson(fechada, "$.detail")).isEqualTo("Esta aba ainda não foi liberada para a sua parceria.");
+        assertThat(lerJson(fechada, "$.detail")).isEqualTo("Esta aba não faz parte da cota da sua parceria.");
         assertThat(todas).hasStatus(HttpStatus.OK);
         assertThat(lerLista(todas, "$[*].abaCodigo")).as("a aba fechada some da lista geral").doesNotContain("PESQUISA").isNotEmpty();
         // A RBS vê a aba fechada normalmente.

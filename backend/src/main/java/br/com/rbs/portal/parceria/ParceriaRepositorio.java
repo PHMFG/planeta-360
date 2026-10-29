@@ -35,8 +35,12 @@ public class ParceriaRepositorio {
                                BigDecimal valorInvestimento, String baseValor, String situacao, OffsetDateTime criadoEm) {
     }
 
-    /** Estado de uma aba na parceria (o id e o nome servem ao histórico). */
-    public record AbaDaParceria(Integer abaId, String codigo, String nome, int ordem, boolean visivel, boolean liberada) {
+    /**
+     * Estado de uma aba na parceria (o id e o nome servem ao histórico). incluidaNaCota: a cota da parceria inclui a aba
+     * (cota_tipo_aba); só a aba incluída pode ser liberada pela RBS.
+     */
+    public record AbaDaParceria(Integer abaId, String codigo, String nome, int ordem, boolean visivel, boolean liberada,
+                                boolean incluidaNaCota) {
     }
 
     /** Filtros opcionais da lista (rota 7). usuarioId preenchido = só as parcerias deste usuário (o patrocinador). */
@@ -74,10 +78,15 @@ public class ParceriaRepositorio {
         return existe("SELECT EXISTS (SELECT 1 FROM patrocinador WHERE id = :id)", patrocinadorId);
     }
 
-    /** Mesma comparação do índice uq_patrocinador_nome (sem diferenciar maiúsculas); ignora o próprio id na edição. */
+    /**
+     * O nome já é de outro patrocinador? Sem diferenciar maiúsculas (como o índice uq_patrocinador_nome) E sem diferença de
+     * espaços: o nome recebido já vem normalizado (ParceriaService.nomeNormalizado) e o do banco é normalizado aqui na
+     * consulta, para pegar também nomes antigos gravados com espaços repetidos. Ignora o próprio id na edição.
+     */
     public boolean nomeDePatrocinadorEmUso(String nome, Long exceto) {
         return jdbc.sql("""
-                        SELECT EXISTS (SELECT 1 FROM patrocinador WHERE lower(nome_canonico) = lower(:nome)
+                        SELECT EXISTS (SELECT 1 FROM patrocinador
+                                       WHERE lower(btrim(regexp_replace(nome_canonico, '\\s+', ' ', 'g'))) = lower(:nome)
                                        AND (CAST(:exceto AS BIGINT) IS NULL OR id <> :exceto))
                         """)
                 .param("nome", nome)
@@ -174,8 +183,12 @@ public class ParceriaRepositorio {
     /** As 7 abas da parceria, em ordem, com o estado cru (visivel e liberada separados). */
     public List<AbaDaParceria> abasDaParceria(long parceriaId) {
         return jdbc.sql("""
-                        SELECT a.id AS aba_id, a.codigo, a.nome, a.ordem, pab.visivel, pab.liberada
-                        FROM parceria_aba pab JOIN aba a ON a.id = pab.aba_id
+                        SELECT a.id AS aba_id, a.codigo, a.nome, a.ordem, pab.visivel, pab.liberada,
+                               EXISTS (SELECT 1 FROM cota_tipo_aba cta
+                                       WHERE cta.cota_tipo_id = pa.cota_tipo_id AND cta.aba_id = a.id) AS incluida_na_cota
+                        FROM parceria_aba pab
+                        JOIN parceria pa ON pa.id = pab.parceria_id
+                        JOIN aba a ON a.id = pab.aba_id
                         WHERE pab.parceria_id = :id
                         ORDER BY a.ordem
                         """)

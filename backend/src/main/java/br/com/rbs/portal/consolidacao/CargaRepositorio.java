@@ -26,14 +26,19 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class CargaRepositorio {
 
-    /** Uma linha da planilha de veiculação já convertida; o que não converteu está nulo (a função do banco rejeita). */
+    /**
+     * Uma linha da planilha de veiculação já convertida; o que não converteu está nulo (a função do banco rejeita). Os
+     * campos "Texto" guardam o texto original só do que não converteu: com eles a rejeição diz o formato esperado.
+     */
     record LinhaDeVeiculacao(int linha, String patrocinador, String veiculo, String formato, String espacoPrograma,
-                             OffsetDateTime exibidoEm, BigDecimal quantidade, String link) {
+                             OffsetDateTime exibidoEm, BigDecimal quantidade, String link, String exibidoEmTexto,
+                             String quantidadeTexto) {
     }
 
-    /** Uma linha da planilha de pesquisa já convertida; o que não converteu está nulo (a função do banco rejeita). */
+    /** O mesmo para a planilha de pesquisa: o que não converteu está nulo e o texto original vai nos campos "Texto". */
     record LinhaDePesquisa(int linha, String patrocinador, Integer pergunta, String indicador, String alternativa,
-                           BigDecimal valor, String unidade, Integer baseRespondentes) {
+                           BigDecimal valor, String unidade, Integer baseRespondentes, String perguntaTexto,
+                           String valorTexto, String baseRespondentesTexto) {
     }
 
     private static final String COLUNAS_DA_CARGA = """
@@ -87,8 +92,8 @@ public class CargaRepositorio {
     public void gravarVeiculacoes(long cargaId, List<LinhaDeVeiculacao> linhas) {
         lote.batchUpdate("""
                 INSERT INTO stg_veiculacao (carga_id, linha, patrocinador, veiculo, formato, espaco_programa, exibido_em,
-                                            quantidade, link)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""", new BatchPreparedStatementSetter() {
+                                            quantidade, link, exibido_em_texto, quantidade_texto)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", new BatchPreparedStatementSetter() {
             @Override
             public void setValues(PreparedStatement ps, int i) throws SQLException {
                 LinhaDeVeiculacao l = linhas.get(i);
@@ -105,6 +110,8 @@ public class CargaRepositorio {
                 }
                 decimal(ps, 8, l.quantidade());
                 texto(ps, 9, l.link());
+                texto(ps, 10, l.exibidoEmTexto());
+                texto(ps, 11, l.quantidadeTexto());
             }
 
             @Override
@@ -118,8 +125,8 @@ public class CargaRepositorio {
     public void gravarPesquisa(long cargaId, List<LinhaDePesquisa> linhas) {
         lote.batchUpdate("""
                 INSERT INTO stg_pesquisa (carga_id, linha, patrocinador, pergunta, indicador, alternativa, valor, unidade,
-                                          base_respondentes)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""", new BatchPreparedStatementSetter() {
+                                          base_respondentes, pergunta_texto, valor_texto, base_respondentes_texto)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", new BatchPreparedStatementSetter() {
             @Override
             public void setValues(PreparedStatement ps, int i) throws SQLException {
                 LinhaDePesquisa l = linhas.get(i);
@@ -132,6 +139,9 @@ public class CargaRepositorio {
                 decimal(ps, 7, l.valor());
                 texto(ps, 8, l.unidade());
                 inteiro(ps, 9, l.baseRespondentes());
+                texto(ps, 10, l.perguntaTexto());
+                texto(ps, 11, l.valorTexto());
+                texto(ps, 12, l.baseRespondentesTexto());
             }
 
             @Override
@@ -167,10 +177,7 @@ public class CargaRepositorio {
                 .query(Long.class).single();
     }
 
-    /**
-     * Uma página, da carga mais nova para a mais antiga. A ordem é pelo id, que cresce a cada carga: a data de execução
-     * da amostra é fictícia (2027) e jogaria as cargas feitas hoje para baixo delas.
-     */
+    /** Uma página, da carga mais nova para a mais antiga. A ordem é pelo id, que cresce a cada carga. */
     public List<CargaDto> pagina(String tipo, Long eventoId, int pagina, int tamanho) {
         return jdbc.sql(COLUNAS_DA_CARGA + FILTRO + " ORDER BY c.id DESC LIMIT :limite OFFSET :deslocamento")
                 .param("tipo", tipo).param("eventoId", eventoId)

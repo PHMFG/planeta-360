@@ -74,7 +74,8 @@ public class ArquivoService {
      * "arquivo" ausente ou vazia, categoria ou observação inválida), 403 (categoria só da RBS), 409 (status que não aceita
      * envio), 413/415 (tamanho, extensão ou conteúdo, conferidos pelo Armazenamento).
      * [HISTORICO] ENVIO_ARQUIVO no primeiro envio, NOVA_VERSAO nos seguintes e ALTERACAO_STATUS quando o status muda,
-     * tudo na mesma transação do arquivo: se algo falhar, nem o registro nem o arquivo em disco ficam.
+     * tudo na mesma transação do arquivo: se algo falhar, nem o registro nem o arquivo em disco ficam. A observação
+     * fica ligada à versão (aparece na lista de versões da entrega) e também no detalhe do histórico.
      */
     @Transactional
     public ArquivoEnviadoDto enviar(UsuarioAutenticado usuario, long entregaId, MultipartFile arquivo, String categoriaInformada,
@@ -90,7 +91,9 @@ public class ArquivoService {
         String categoria = categoriaInformada == null || categoriaInformada.isBlank()
                 ? (usuario.ehRbs() ? "OUTRO" : "MATERIAL_MARCA") : categoriaInformada.trim();
         if (!CATEGORIAS.contains(categoria)) {
-            campos.put("categoria", "Categoria inválida. Use uma destas: " + String.join(", ", new TreeSet<>(CATEGORIAS)) + ".");
+            // Só as categorias que ESTE perfil pode usar: a marca não precisa saber que existem as que são só da RBS.
+            Set<String> doPerfil = usuario.ehRbs() ? CATEGORIAS : CATEGORIAS_DO_PATROCINADOR;
+            campos.put("categoria", "Categoria inválida. Use uma destas: " + String.join(", ", new TreeSet<>(doPerfil)) + ".");
         }
         String observacao = observacaoInformada == null || observacaoInformada.isBlank() ? null : observacaoInformada.trim();
         if (observacao != null && observacao.length() > LIMITE_OBSERVACAO) {
@@ -111,7 +114,7 @@ public class ArquivoService {
         }
 
         var gravado = armazenamento.gravarNaEntrega(bytesDe(arquivo), arquivo.getOriginalFilename(), categoria, usuario.id(),
-                entregaId);
+                entregaId, observacao);
 
         int versao = gravado.versao();
         String novo = gravado.nomeOriginal() + " (versão " + versao + ")";
@@ -131,13 +134,13 @@ public class ArquivoService {
 
         return new ArquivoEnviadoDto(gravado.id(), entregaId, gravado.nomeOriginal(), gravado.mimeType(), gravado.tamanhoBytes(),
                 versao, gravado.categoria(), new UsuarioResumoDto(usuario.id(), usuario.nome(), usuario.perfil().name()),
-                Datas.emBrasilia(gravado.enviadoEm()), status);
+                Datas.emBrasilia(gravado.enviadoEm()), gravado.observacao(), status);
     }
 
     /**
      * Rota 18. [ISOLAMENTO] Arquivo que não existe, de outra parceria ou geral da RBS (sem parceria) dá 404 ao patrocinador,
-     * sempre com a mesma frase. O arquivo que sumiu do armazenamento também dá 404. [HISTORICO] DOWNLOAD só quando o
-     * arquivo existe e vai ser entregue.
+     * sempre com a mesma frase. [PERMISSAO] Arquivo de uma aba fechada para a parceria dá 403 ao patrocinador. O arquivo
+     * que sumiu do armazenamento dá 404. [HISTORICO] DOWNLOAD só quando o arquivo existe e vai ser entregue.
      */
     @Transactional
     public ArquivoBaixado baixar(UsuarioAutenticado usuario, long arquivoId, HttpServletRequest requisicao) {
@@ -156,6 +159,11 @@ public class ArquivoService {
         // [RELATORIO] O PDF de um relatório só chega ao patrocinador depois de disponibilizado.
         if (!usuario.ehRbs() && arquivo.relatorioNaoDisponibilizado()) {
             throw naoEncontrado();
+        }
+        // [PERMISSAO] O arquivo de uma aba fechada não sai pelo download, como a entrega dele não sai pela lista: 403 com a
+        // mesma regra e as mesmas frases (cota que não inclui a aba, ou aba que a RBS ainda não liberou). A RBS baixa tudo.
+        if (arquivo.parceriaId() != null && arquivo.abaCodigo() != null) {
+            verificador.exigirAbaLiberada(usuario, arquivo.parceriaId(), arquivo.abaCodigo());
         }
         Path caminho = armazenamento.localizar(arquivo.caminho()).orElseThrow(
                 () -> new NaoEncontradoException("Este arquivo não está mais disponível. Avise a equipe da RBS."));

@@ -36,6 +36,16 @@ class RelatorioControllerTest {
     private static final String RBS = "b2b@rbs.example";
     private static final String AMARELO = "marketing@amarelo.example";
     private static final String ROXO = "marketing@roxo.example";
+    /** As 6 seções do modelo do relatório, na ordem do modelo. */
+    private static final List<String> SECOES_DO_MODELO = List.of("Cumprimento das entregas", "Mídia: previsto x exibido",
+            "Ativação no evento", "Pesquisa da ativação", "Cortesias e credenciamento", "O festival em números");
+    /** Os 17 indicadores do catálogo, na ordem do modelo. */
+    private static final List<String> INDICADORES_DO_MODELO = List.of("ENTREGAS_CONCLUIDAS_PCT", "ENTREGAS_PENDENTES",
+            "MIDIA_PREVISTO", "MIDIA_EXIBIDO", "MIDIA_ENTREGA_PCT", "MIDIA_VEICULO_PCT",
+            "APLICACOES_PREVISTAS", "APLICACOES_COMPROVADAS", "APLICACOES_COMPROVADAS_PCT", "COMPROVACOES_ENVIADAS",
+            "PESQUISA_BASE", "PESQUISA_RESULTADO",
+            "CORTESIAS_DISPONIVEIS", "CORTESIAS_DESTINADAS_PCT", "CREDENCIAIS_DIA",
+            "FESTIVAL_NUMERO", "FESTIVAL_PESQUISA");
     private static final String FRASE_DE_PULO =
             "O relatório não pode ir de RASCUNHO para DISPONIBILIZADO. A ordem é RASCUNHO, VALIDADO, DISPONIBILIZADO.";
 
@@ -319,13 +329,20 @@ class RelatorioControllerTest {
         assertThat(bytes).startsWith((byte) 0xEF, (byte) 0xBB, (byte) 0xBF);
         String[] linhas = texto(resposta).substring(1).split("\r\n");
         assertThat(linhas[0]).isEqualTo("parceria_id;patrocinador;cota;edicao;situacao;versao;gerado_em;validado_em;"
-                + "disponibilizado_em;indicadores_disponiveis;indicadores_indisponiveis;faltantes");
+                + "disponibilizado_em;indicadores_disponiveis;indicadores_indisponiveis;faltantes;marca_ve_versao;"
+                + "marca_ve_disponibilizado_em");
         assertThat(linhas).hasSize(4);
-        assertThat(linhas[1]).startsWith(parceria("Cliente Amarelo") + ";Cliente Amarelo;Master;2027;RASCUNHO;1;"
-                + "2027-02-21T11:00:00-03:00;;;");
-        assertThat(linhas[1].split(";", -1)).as("12 colunas, com validado_em e disponibilizado_em em branco").hasSize(12);
-        assertThat(linhas[1].split(";", -1)[9]).isEqualTo("35");
-        assertThat(linhas[1].split(";", -1)[10]).isEqualTo("2");
+        assertThat(linhas[1]).startsWith(parceria("Cliente Amarelo") + ";Cliente Amarelo;Master;2027;RASCUNHO;1;");
+        String[] amarelo = linhas[1].split(";", -1);
+        assertThat(amarelo).as("14 colunas, com validado_em, disponibilizado_em e as duas da marca em branco").hasSize(14);
+        assertThat(amarelo[6]).as("gerado_em: um horário de Brasília no passado").endsWith("-03:00");
+        assertThat(java.time.OffsetDateTime.parse(amarelo[6])).isBefore(java.time.OffsetDateTime.now());
+        assertThat(amarelo[7]).isEmpty();
+        assertThat(amarelo[8]).isEmpty();
+        assertThat(amarelo[9]).isEqualTo("35");
+        assertThat(amarelo[10]).isEqualTo("2");
+        assertThat(amarelo[12]).as("nenhuma versão disponibilizada: a marca não vê nada").isEmpty();
+        assertThat(amarelo[13]).isEmpty();
     }
 
     @Test
@@ -538,14 +555,23 @@ class RelatorioControllerTest {
     }
 
     @Test
-    void indicadorQueNaoValeParaACotaNaoApareceNoRelatorio() {
+    void indicadorQueNaoValeParaACotaOuNaoTemPlanoApareceIndisponivelComOMotivo() {
         MockHttpSession rbs = entrar(RBS);
 
         MvcTestResult roxo = ler(rbs, "/api/parcerias/" + parceria("Cliente Roxo") + "/relatorio");
 
         assertThat(roxo).hasStatus(HttpStatus.OK);
-        assertThat(lerLista(roxo, "$.secoes[*].secao")).as("a pesquisa da ativação é só da Master")
-                .doesNotContain("Pesquisa da ativação").contains("Cumprimento das entregas", "O festival em números");
+        assertThat(lerLista(roxo, "$.secoes[*].secao")).as("o Roxo (Subcota G) também traz a pesquisa da ativação, indisponível")
+                .containsExactlyElementsOf(SECOES_DO_MODELO);
+        Map<String, Object> base = indicador(roxo, "PESQUISA_BASE", "");
+        assertThat(base).containsEntry("disponivel", false).containsEntry("baseCalculo", "não se aplica a esta cota");
+        assertThat(base.get("valor")).isNull();
+        assertThat(indicador(roxo, "PESQUISA_RESULTADO", "")).containsEntry("disponivel", false);
+        // O Roxo não tem aplicações de marca no plano comercial: a seção "Ativação no evento" vem indisponível, com o motivo.
+        Map<String, Object> aplicacoes = indicador(roxo, "APLICACOES_PREVISTAS", "");
+        assertThat(aplicacoes).containsEntry("disponivel", false).containsEntry("baseCalculo", "sem aplicações de marca no plano comercial");
+        // O que tem dado continua com dado.
+        assertThat(indicador(roxo, "MIDIA_PREVISTO", "INSERCAO")).containsEntry("disponivel", true);
     }
 
     // ---------------------------------------------------------------------
@@ -706,5 +732,347 @@ class RelatorioControllerTest {
                         """).param("id", relatorio).query().singleRow();
         assertThat(((Number) download.get("usuario_id")).longValue()).isEqualTo(usuarioId(AMARELO));
         assertThat(((Number) download.get("parceria_id")).longValue()).isEqualTo(amarelo);
+    }
+
+    // ---------------------------------------------------------------------
+    // Rota 31: a RBS vê o que a marca vê (campo disponibilizada)
+    // ---------------------------------------------------------------------
+
+    @Test
+    void listaTrazAVersaoQueAMarcaVeMesmoQuandoAMaisNovaEstaEmRascunhoOuValidada() {
+        MockHttpSession rbs = entrar(RBS);
+        long amarelo = parceria("Cliente Amarelo");
+        MvcTestResult semNada = ler(rbs, "/api/relatorios");
+        assertThat(lerLista(semNada, "$[*].disponibilizada")).as("nenhuma versão disponibilizada: null nas três").hasSize(3).containsOnlyNulls();
+
+        // A v1 vai até DISPONIBILIZADO; depois a RBS gera a v2 (rascunho) e a valida. A marca continua vendo a v1.
+        long v1 = relatorioDaAmostra(amarelo);
+        assertThat(mudarStatus(rbs, v1, "VALIDADO")).hasStatus(HttpStatus.OK);
+        assertThat(mudarStatus(rbs, v1, "DISPONIBILIZADO")).hasStatus(HttpStatus.OK);
+        long v2 = ((Number) lerJson(gerar(rbs, amarelo), "$.id")).longValue();
+
+        MvcTestResult comRascunho = ler(rbs, "/api/relatorios");
+        assertThat(lerJson(comRascunho, "$[0].situacao")).as("a versão mais nova é um rascunho").isEqualTo("RASCUNHO");
+        assertThat(lerJson(comRascunho, "$[0].relatorio.versao")).isEqualTo(2);
+        assertThat(lerJson(comRascunho, "$[0].disponibilizada.versao")).as("mas a marca vê a v1").isEqualTo(1);
+        assertThat(((Number) lerJson(comRascunho, "$[0].disponibilizada.id")).longValue()).isEqualTo(v1);
+        String quando = (String) lerJson(comRascunho, "$[0].disponibilizada.disponibilizadoEm");
+        assertThat(quando).endsWith("-03:00");
+        assertThat(java.time.OffsetDateTime.parse(quando)).isBetween(java.time.OffsetDateTime.now().minusMinutes(5),
+                java.time.OffsetDateTime.now().plusMinutes(5));
+        assertThat(lerJson(comRascunho, "$[0].disponibilizada")).isInstanceOf(Map.class);
+        assertThat(new java.util.TreeSet<Object>(((Map<?, ?>) lerJson(comRascunho, "$[0].disponibilizada")).keySet()))
+                .containsExactly("disponibilizadoEm", "id", "versao");
+        assertThat(lerJson(comRascunho, "$[1].disponibilizada")).as("o Roxo não tem nada disponibilizado").isNull();
+        // O que a RBS lê aqui é o que a marca recebe na rota 35.
+        MvcTestResult daMarca = ler(entrar(AMARELO), "/api/parcerias/" + amarelo + "/relatorio");
+        assertThat(lerJson(daMarca, "$.versao")).isEqualTo(lerJson(comRascunho, "$[0].disponibilizada.versao"));
+
+        assertThat(mudarStatus(rbs, v2, "VALIDADO")).hasStatus(HttpStatus.OK);
+        MvcTestResult validada = ler(rbs, "/api/relatorios");
+        assertThat(lerJson(validada, "$[0].situacao")).isEqualTo("VALIDADO");
+        assertThat(lerJson(validada, "$[0].disponibilizada.versao")).isEqualTo(1);
+
+        // Quando a mais nova passa a ser a disponibilizada, a linha repete a mesma versão nos dois campos.
+        assertThat(mudarStatus(rbs, v2, "DISPONIBILIZADO")).hasStatus(HttpStatus.OK);
+        MvcTestResult nova = ler(rbs, "/api/relatorios");
+        assertThat(lerJson(nova, "$[0].situacao")).isEqualTo("DISPONIBILIZADO");
+        assertThat(lerJson(nova, "$[0].disponibilizada.versao")).isEqualTo(2);
+        assertThat(((Number) lerJson(nova, "$[0].disponibilizada.id")).longValue()).isEqualTo(v2);
+    }
+
+    @Test
+    void csvDaListaTrazAVersaoQueAMarcaVe() {
+        MockHttpSession rbs = entrar(RBS);
+        long amarelo = parceria("Cliente Amarelo");
+        long v1 = relatorioDaAmostra(amarelo);
+        mudarStatus(rbs, v1, "VALIDADO");
+        mudarStatus(rbs, v1, "DISPONIBILIZADO");
+        gerar(rbs, amarelo);
+
+        String[] linhas = texto(ler(rbs, "/api/relatorios.csv")).substring(1).split("\r\n");
+
+        String[] colunas = linhas[1].split(";", -1);
+        assertThat(colunas[5]).as("versão mais nova").isEqualTo("2");
+        assertThat(colunas[4]).isEqualTo("RASCUNHO");
+        assertThat(colunas[12]).as("marca_ve_versao").isEqualTo("1");
+        assertThat(colunas[13]).as("marca_ve_disponibilizado_em").endsWith("-03:00");
+    }
+
+    // ---------------------------------------------------------------------
+    // Números do relatório em português: milhar com ponto e percentual de entrega que nunca vira 100 sem estar completo
+    // ---------------------------------------------------------------------
+
+    /** Uma linha de CPM nova no plano da Verde, com {@code exibido} já veiculado. A Verde só tinha inserções. */
+    void cpmDaVerde(int previsto, int exibido) {
+        long linha = jdbc.sql("""
+                        INSERT INTO aproveitamento_previsto (parceria_id, categoria, bloco, veiculo, formato, tipo_midia, quantidade_prevista, unidade)
+                        VALUES (:p, 'MIDIA', 'Mídia', 'atl.la', 'Display CPM de teste', 'PROPRIA', :previsto, 'CPM') RETURNING id
+                        """).param("p", parceria("Cliente Verde")).param("previsto", previsto).query(Long.class).single();
+        jdbc.sql("INSERT INTO veiculacao (aproveitamento_id, exibido_em, quantidade) VALUES (:a, now() - interval '1 day', :q)")
+                .param("a", linha).param("q", exibido).update();
+    }
+
+    @Test
+    void textoDeComoFoiCalculadoUsaMilharBrasileiroEPercentualDeEntregaNaoArredondaPara100() {
+        cpmDaVerde(460_000, 459_900);   // 99,978%: arredondado viraria 100,0
+        MockHttpSession rbs = entrar(RBS);
+
+        MvcTestResult resposta = gerar(rbs, parceria("Cliente Verde"));
+
+        assertThat(resposta).hasStatus(HttpStatus.CREATED);
+        Map<String, Object> entrega = indicador(resposta, "MIDIA_ENTREGA_PCT", "CPM");
+        assertThat(numero(entrega.get("valor"))).as("cortado na 1ª casa").isEqualByComparingTo("99.9");
+        assertThat(entrega.get("baseCalculo")).isEqualTo("459.900 de 460.000");
+        Map<String, Object> porVeiculo = indicador(resposta, "MIDIA_VEICULO_PCT", "atl.la · CPM");
+        assertThat(numero(porVeiculo.get("valor"))).isEqualByComparingTo("99.9");
+        assertThat(porVeiculo.get("baseCalculo")).isEqualTo("459.900 de 460.000");
+        // O valor continua sendo número (o front formata); o texto é o único que mudou de aparência.
+        assertThat(numero(indicador(resposta, "MIDIA_EXIBIDO", "CPM").get("valor"))).isEqualByComparingTo("459900");
+
+        // O CSV do relatório leva o mesmo texto, e o percentual com vírgula.
+        long relatorio = ((Number) lerJson(resposta, "$.id")).longValue();
+        String csv = texto(ler(rbs, "/api/relatorios/" + relatorio + "/csv"));
+        assertThat(csv).contains(";CPM;99,9;%;459.900 de 460.000;sim");
+    }
+
+    @Test
+    void percentualDeEntregaDeMidiaSoChegaA100QuandoEstaCompleto() {
+        cpmDaVerde(460_000, 460_000);
+        MockHttpSession rbs = entrar(RBS);
+
+        MvcTestResult resposta = gerar(rbs, parceria("Cliente Verde"));
+
+        Map<String, Object> entrega = indicador(resposta, "MIDIA_ENTREGA_PCT", "CPM");
+        assertThat(numero(entrega.get("valor"))).isEqualByComparingTo("100");
+        assertThat(entrega.get("baseCalculo")).isEqualTo("460.000 de 460.000");
+    }
+
+    @Test
+    void milharSoApareceNoTextoQuandoOsNumerosPassamDeMil() {
+        MockHttpSession rbs = entrar(RBS);
+
+        MvcTestResult resposta = gerar(rbs, parceria("Cliente Amarelo"));
+
+        // 1.105 de 1.113: o exemplo do QA. Antes saía "1105 de 1113".
+        assertThat(indicador(resposta, "MIDIA_ENTREGA_PCT", "INSERCAO").get("baseCalculo")).isEqualTo("1.105 de 1.113");
+        assertThat(numero(indicador(resposta, "MIDIA_ENTREGA_PCT", "INSERCAO").get("valor"))).isEqualByComparingTo("99.2");
+        // Abaixo de mil não muda nada.
+        assertThat(indicador(resposta, "ENTREGAS_CONCLUIDAS_PCT", "").get("baseCalculo")).isEqualTo("10 aprovadas de 11 aplicáveis");
+        assertThat(String.valueOf(indicador(resposta, "PESQUISA_RESULTADO", "P1 · Sim").get("baseCalculo")))
+                .isEqualTo("base de 412 respondentes (percentual)");
+    }
+
+    @Test
+    void asFuncoesDeNumeroDoBancoFormatamNoPadraoBrasileiro() {
+        assertThat(jdbc.sql("SELECT fn_numero_br(459900)").query(String.class).single()).isEqualTo("459.900");
+        assertThat(jdbc.sql("SELECT fn_numero_br(1234567.5)").query(String.class).single()).isEqualTo("1.234.567,5");
+        assertThat(jdbc.sql("SELECT fn_numero_br(12.50)").query(String.class).single()).isEqualTo("12,5");
+        assertThat(jdbc.sql("SELECT fn_numero_br(100.00)").query(String.class).single()).isEqualTo("100");
+        assertThat(jdbc.sql("SELECT fn_numero_br(0)").query(String.class).single()).isEqualTo("0");
+        assertThat(jdbc.sql("SELECT fn_numero_br(-1500.25)").query(String.class).single()).isEqualTo("-1.500,25");
+        assertThat(jdbc.sql("SELECT fn_numero_br(999)").query(String.class).single()).isEqualTo("999");
+        assertThat(jdbc.sql("SELECT fn_numero_br(1000)").query(String.class).single()).isEqualTo("1.000");
+        // Um critério só: todo percentual corta na 1ª casa. Passar de 100 vale (exibido acima do previsto).
+        assertThat(jdbc.sql("SELECT fn_pct_truncado(99.978)").query(BigDecimal.class).single()).isEqualByComparingTo("99.9");
+        assertThat(jdbc.sql("SELECT fn_pct_truncado(104.06)").query(BigDecimal.class).single()).isEqualByComparingTo("104.0");
+        assertThat(jdbc.sql("SELECT fn_pct_truncado(66.666)").query(BigDecimal.class).single()).as("corta, não arredonda para 66,7").isEqualByComparingTo("66.6");
+        assertThat(jdbc.sql("SELECT fn_pct_truncado(197.26)").query(BigDecimal.class).single()).as("acima de 100").isEqualByComparingTo("197.2");
+        assertThat(jdbc.sql("SELECT fn_pct_truncado(100)").query(BigDecimal.class).single()).isEqualByComparingTo("100");
+        assertThat(jdbc.sql("SELECT count(*) FROM pg_proc WHERE proname = 'fn_pct_arredondado'").query(Long.class).single())
+                .as("o arredondamento saiu de cena (V5)").isZero();
+    }
+
+    // ---------------------------------------------------------------------
+    // Relatório completo: todas as seções do modelo, mesmo sem nenhum dado
+    // ---------------------------------------------------------------------
+
+    /** Uma parceria cadastrada ao vivo (edição 2027): sem plano comercial, sem entrega, sem cortesia e sem usuário. */
+    long parceriaAoVivo(int cotaTipoId) {
+        long patrocinador = jdbc.sql("INSERT INTO patrocinador (nome_canonico) VALUES ('Cliente Ao Vivo') RETURNING id")
+                .query(Long.class).single();
+        long evento = jdbc.sql("SELECT id FROM evento WHERE edicao = 2027").query(Long.class).single();
+        return jdbc.sql("INSERT INTO parceria (evento_id, patrocinador_id, cota_tipo_id) VALUES (:e, :p, :c) RETURNING id")
+                .param("e", evento).param("p", patrocinador).param("c", cotaTipoId).query(Long.class).single();
+    }
+
+    @Test
+    void parceriaSemNenhumDadoGeraRelatorioComAsSeisSecoesEOs17IndicadoresIndisponiveis() {
+        long aoVivo = parceriaAoVivo(1);   // Master
+        MockHttpSession rbs = entrar(RBS);
+
+        MvcTestResult resposta = gerar(rbs, aoVivo);
+
+        assertThat(resposta).hasStatus(HttpStatus.CREATED);
+        assertThat(lerLista(resposta, "$.secoes[*].secao")).as("as 6 seções, na ordem do modelo")
+                .containsExactlyElementsOf(SECOES_DO_MODELO);
+        assertThat(lerLista(resposta, "$.secoes[*].indicadores[*].codigo")).as("os 17 indicadores, na ordem do modelo")
+                .containsExactlyElementsOf(INDICADORES_DO_MODELO);
+        List<Map<String, Object>> todos = lerLista(resposta, "$.secoes[*].indicadores[*]");
+        assertThat(todos).as("sem dado nenhum, tudo indisponível, sem valor e sem recorte").allSatisfy(i -> {
+            assertThat(i.get("disponivel")).isEqualTo(false);
+            assertThat(i.get("valor")).isNull();
+            assertThat(i.get("recorte")).isEqualTo("");
+        });
+        // O motivo vem em baseCalculo: sem mídia no plano, sem aplicações no plano, ou simplesmente sem registro.
+        assertThat(indicador(resposta, "MIDIA_PREVISTO", "").get("baseCalculo")).isEqualTo("sem mídia no plano comercial");
+        assertThat(indicador(resposta, "MIDIA_VEICULO_PCT", "").get("baseCalculo")).isEqualTo("sem mídia no plano comercial");
+        assertThat(indicador(resposta, "COMPROVACOES_ENVIADAS", "").get("baseCalculo")).isEqualTo("sem aplicações de marca no plano comercial");
+        assertThat(indicador(resposta, "PESQUISA_BASE", "").get("baseCalculo")).as("Master: a pesquisa vale, só falta registro")
+                .isEqualTo("sem registro na base");
+        assertThat(indicador(resposta, "ENTREGAS_PENDENTES", "").get("baseCalculo")).isEqualTo("sem registro na base");
+        assertThat(indicador(resposta, "FESTIVAL_NUMERO", "").get("baseCalculo")).isEqualTo("sem registro na base");
+
+        // A fotografia gravada tem as mesmas 17 linhas (a geração registra todas, não só a leitura).
+        long id = ((Number) lerJson(resposta, "$.id")).longValue();
+        assertThat(jdbc.sql("SELECT count(*) FROM relatorio_indicador WHERE relatorio_id = :id AND NOT disponivel")
+                .param("id", id).query(Long.class).single()).isEqualTo(17);
+        // A rota da RBS ler a versão devolve o mesmo.
+        assertThat(lerLista(ler(rbs, "/api/parcerias/" + aoVivo + "/relatorio"), "$.secoes[*].indicadores[*].codigo"))
+                .containsExactlyElementsOf(INDICADORES_DO_MODELO);
+        // A lista (rota 31) conta os 17 como indisponíveis.
+        MvcTestResult lista = ler(rbs, "/api/relatorios");
+        assertThat(lerLista(lista, "$[?(@.parceriaId==" + aoVivo + ")].relatorio.indicadoresDisponiveis")).containsExactly(0);
+        assertThat(lerLista(lista, "$[?(@.parceriaId==" + aoVivo + ")].relatorio.indicadoresIndisponiveis")).containsExactly(17);
+
+        // O CSV também traz as 17 linhas, todas "nao", valor em branco.
+        List<String> linhas = List.of(texto(ler(rbs, "/api/relatorios/" + id + "/csv")).substring(1).split("\r\n"));
+        assertThat(linhas).hasSize(18);
+        assertThat(linhas.subList(1, 18)).allSatisfy(linha -> assertThat(linha).endsWith(";nao"));
+        assertThat(linhas).contains(
+                "Mídia: previsto x exibido;MIDIA_PREVISTO;Mídia prevista;;;por unidade;sem mídia no plano comercial;nao",
+                "Pesquisa da ativação;PESQUISA_RESULTADO;Resultado por pergunta;;;% ou nota;sem registro na base;nao");
+    }
+
+    @Test
+    void cotaSemPesquisaTrazASecaoDePesquisaIndisponivelComOMotivo() {
+        long subcota = parceriaAoVivo(3);   // Subcota: a pesquisa da ativação não faz parte da cota
+        MockHttpSession rbs = entrar(RBS);
+
+        MvcTestResult resposta = gerar(rbs, subcota);
+
+        assertThat(lerLista(resposta, "$.secoes[*].secao")).containsExactlyElementsOf(SECOES_DO_MODELO);
+        assertThat(indicador(resposta, "PESQUISA_BASE", "")).containsEntry("disponivel", false)
+                .containsEntry("baseCalculo", "não se aplica a esta cota");
+        assertThat(lerLista(resposta, "$.secoes[3].indicadores[*].codigo")).containsExactly("PESQUISA_BASE", "PESQUISA_RESULTADO");
+    }
+
+    @Test
+    void indicadorPorRecorteComDadoMantemUmaLinhaPorRecorteESemDadoTemUmaSemRecorte() {
+        long aoVivo = parceriaAoVivo(1);
+        // Só mídia em CPM, com uma veiculação: o plano tem recorte por unidade (CPM) e por veículo, mas não tem inserções.
+        long linha = jdbc.sql("""
+                        INSERT INTO aproveitamento_previsto (parceria_id, categoria, bloco, veiculo, formato, tipo_midia, quantidade_prevista, unidade)
+                        VALUES (:p, 'MIDIA', 'Mídia', 'atl.la', 'Display CPM de teste', 'PROPRIA', 1000, 'CPM') RETURNING id
+                        """).param("p", aoVivo).query(Long.class).single();
+        jdbc.sql("INSERT INTO veiculacao (aproveitamento_id, exibido_em, quantidade) VALUES (:a, now() - interval '1 day', 400)")
+                .param("a", linha).update();
+        MockHttpSession rbs = entrar(RBS);
+
+        MvcTestResult resposta = gerar(rbs, aoVivo);
+
+        assertThat(lerLista(resposta, "$.secoes[1].indicadores[*].codigo")).containsExactly("MIDIA_PREVISTO", "MIDIA_EXIBIDO",
+                "MIDIA_ENTREGA_PCT", "MIDIA_VEICULO_PCT");
+        assertThat(indicador(resposta, "MIDIA_ENTREGA_PCT", "CPM")).containsEntry("disponivel", true);
+        assertThat(numero(indicador(resposta, "MIDIA_ENTREGA_PCT", "CPM").get("valor"))).isEqualByComparingTo("40");
+        assertThat(indicador(resposta, "MIDIA_VEICULO_PCT", "atl.la · CPM")).containsEntry("disponivel", true);
+        // Não sobra linha "indisponível sem recorte" ao lado de quem já tem recorte.
+        assertThat(lerLista(resposta, "$.secoes[1].indicadores[*]")).hasSize(4);
+        // As outras seções continuam inteiras e indisponíveis.
+        assertThat(lerLista(resposta, "$.secoes[*].secao")).containsExactlyElementsOf(SECOES_DO_MODELO);
+        assertThat(indicador(resposta, "APLICACOES_PREVISTAS", "")).containsEntry("disponivel", false);
+    }
+
+    @Test
+    void relatorioGeradoAntesDaV5ChegaCompletoNaLeituraENoCsv() {
+        long roxo = parceria("Cliente Roxo");
+        long relatorio = relatorioDaAmostra(roxo);
+        // Simula uma versão antiga: sem as linhas de pesquisa e de aplicações (o rascunho aceita a alteração).
+        jdbc.sql("""
+                        DELETE FROM relatorio_indicador WHERE relatorio_id = :id
+                        AND indicador_codigo IN ('PESQUISA_BASE', 'PESQUISA_RESULTADO', 'APLICACOES_PREVISTAS', 'APLICACOES_COMPROVADAS',
+                                                 'APLICACOES_COMPROVADAS_PCT', 'COMPROVACOES_ENVIADAS')
+                        """).param("id", relatorio).update();
+        MockHttpSession rbs = entrar(RBS);
+
+        MvcTestResult lido = ler(rbs, "/api/parcerias/" + roxo + "/relatorio?versao=1");
+
+        assertThat(lerLista(lido, "$.secoes[*].secao")).containsExactlyElementsOf(SECOES_DO_MODELO);
+        List<Object> codigos = lerLista(lido, "$.secoes[*].indicadores[*].codigo");
+        assertThat(codigos.stream().distinct().toList()).as("os 17 do modelo, na ordem (o Roxo tem mais de um recorte na mídia)")
+                .containsExactlyElementsOf(INDICADORES_DO_MODELO);
+        assertThat(indicador(lido, "PESQUISA_BASE", "")).containsEntry("disponivel", false).containsEntry("baseCalculo", "sem registro na base");
+        assertThat(indicador(lido, "PESQUISA_BASE", "").get("valor")).isNull();
+        List<String> csv = List.of(texto(ler(rbs, "/api/relatorios/" + relatorio + "/csv")).substring(1).split("\r\n"));
+        assertThat(csv).contains("Pesquisa da ativação;PESQUISA_BASE;Base da pesquisa da ativação;;;respondentes;sem registro na base;nao");
+        // A lista da RBS conta o que falta como indisponível, igual ao que a leitura mostra.
+        long indisponiveisNaLeitura = lerLista(lido, "$.secoes[*].indicadores[?(@.disponivel==false)]").size();
+        MvcTestResult lista = ler(rbs, "/api/relatorios");
+        assertThat(lerLista(lista, "$[?(@.parceriaId==" + roxo + ")].relatorio.indicadoresIndisponiveis"))
+                .containsExactly((int) indisponiveisNaLeitura);
+    }
+
+    // ---------------------------------------------------------------------
+    // Percentuais: um critério só (cortar na 1ª casa) e acima de 100 quando o exibido passa do previsto
+    // ---------------------------------------------------------------------
+
+    @Test
+    void percentualDeEntregaPassaDe100QuandoOExibidoSuperaOPrevistoEOCsvAcompanha() {
+        cpmDaVerde(460_000, 907_300);   // 197,23%
+        MockHttpSession rbs = entrar(RBS);
+
+        MvcTestResult resposta = gerar(rbs, parceria("Cliente Verde"));
+
+        Map<String, Object> entrega = indicador(resposta, "MIDIA_ENTREGA_PCT", "CPM");
+        assertThat(numero(entrega.get("valor"))).as("não corta em 100").isEqualByComparingTo("197.2");
+        assertThat(entrega.get("baseCalculo")).isEqualTo("907.300 de 460.000");
+        assertThat(entrega).containsEntry("disponivel", true);
+        assertThat(numero(indicador(resposta, "MIDIA_VEICULO_PCT", "atl.la · CPM").get("valor"))).isEqualByComparingTo("197.2");
+        long relatorio = ((Number) lerJson(resposta, "$.id")).longValue();
+        assertThat(texto(ler(rbs, "/api/relatorios/" + relatorio + "/csv"))).contains(";CPM;197,2;%;907.300 de 460.000;sim");
+        // A consolidação (mesma conta) também passa de 100, na unidade, no veículo e na linha do plano.
+        MvcTestResult consolidacao = ler(rbs, "/api/parcerias/" + parceria("Cliente Verde") + "/consolidacao");
+        assertThat(numero(lerLista(consolidacao, "$.midia.porUnidade[?(@.unidade=='CPM')].percentual").getFirst()))
+                .isEqualByComparingTo("197.2");
+        assertThat(numero(lerLista(consolidacao, "$.midia.porVeiculo[?(@.unidade=='CPM')].percentual").getFirst()))
+                .isEqualByComparingTo("197.2");
+        assertThat(numero(lerLista(consolidacao, "$.midia.linhas[?(@.unidade=='CPM')].percentual").getFirst()))
+                .isEqualByComparingTo("197.2");
+    }
+
+    @Test
+    void todoPercentualCortaNaPrimeiraCasaNoRelatorioENaConsolidacao() {
+        // Aplicações do Amarelo: 17 de 19 = 89,47%. Arredondado saía 89,5; cortado sai 89,4, como a mídia (99,28% = 99,2).
+        long amarelo = parceria("Cliente Amarelo");
+        MockHttpSession rbs = entrar(RBS);
+        MvcTestResult relatorio = gerar(rbs, amarelo);
+        assertThat(numero(indicador(relatorio, "APLICACOES_COMPROVADAS_PCT", "").get("valor"))).isEqualByComparingTo("89.4");
+        assertThat(indicador(relatorio, "APLICACOES_COMPROVADAS_PCT", "").get("baseCalculo")).isEqualTo("17 de 19");
+        assertThat(numero(indicador(relatorio, "MIDIA_ENTREGA_PCT", "INSERCAO").get("valor"))).isEqualByComparingTo("99.2");
+        long id = ((Number) lerJson(relatorio, "$.id")).longValue();
+        assertThat(texto(ler(rbs, "/api/relatorios/" + id + "/csv"))).contains(";89,4;%;17 de 19;sim");
+
+        // Entregas e cortesias: 2 de 3 = 66,67%. Arredondado saía 66,7; cortado sai 66,6.
+        long aoVivo = parceriaAoVivo(1);
+        for (String status : List.of("APROVADO", "APROVADO", "ENVIADO")) {
+            jdbc.sql("""
+                            INSERT INTO entrega (parceria_id, aba_id, titulo, status)
+                            SELECT :p, a.id, 'Entrega de teste', :s FROM aba a WHERE a.codigo = 'PERFIL'
+                            """).param("p", aoVivo).param("s", status).update();
+        }
+        long cota = jdbc.sql("INSERT INTO cortesia_cota (parceria_id, setor, dia, quantidade) VALUES (:p, 'ARENA', 'SEXTA', 3) RETURNING id")
+                .param("p", aoVivo).query(Long.class).single();
+        jdbc.sql("INSERT INTO cortesia_destinacao (cortesia_cota_id, destinatario_nome, quantidade, registrado_por) VALUES (:c, 'Fulana', 2, :u)")
+                .param("c", cota).param("u", usuarioId(RBS)).update();
+
+        MvcTestResult doAoVivo = gerar(rbs, aoVivo);
+        assertThat(numero(indicador(doAoVivo, "ENTREGAS_CONCLUIDAS_PCT", "").get("valor"))).isEqualByComparingTo("66.6");
+        assertThat(numero(indicador(doAoVivo, "CORTESIAS_DESTINADAS_PCT", "").get("valor"))).isEqualByComparingTo("66.6");
+        MvcTestResult consolidacao = ler(rbs, "/api/parcerias/" + aoVivo + "/consolidacao");
+        assertThat(numero(lerJson(consolidacao, "$.entregas.percentualConcluido"))).isEqualByComparingTo("66.6");
+        assertThat(numero(lerJson(consolidacao, "$.cortesias.percentual"))).isEqualByComparingTo("66.6");
+        MvcTestResult lista = ler(rbs, "/api/parcerias");
+        assertThat(numero(lerLista(lista, "$[?(@.id==" + aoVivo + ")].entregas.percentualConcluido").getFirst()))
+                .as("o resumo da lista de parcerias usa a mesma visão").isEqualByComparingTo("66.6");
     }
 }

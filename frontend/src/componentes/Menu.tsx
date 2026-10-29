@@ -1,9 +1,10 @@
 // Menu lateral flutuante do Figma (P360/Navegação): marca, conta, as oito seções e o rodapé. [ITEM-7]
 // A RBS vê também os atalhos de gestão e escolhe a parceria que está consultando.
-import { useState } from 'react'
+import { useEffect, useEffectEvent, useState } from 'react'
 import { NavLink, useNavigate } from 'react-router'
 import type { ParceriaResumo, UsuarioLogado } from '../api/tipos'
 import { useSessao } from '../sessao/Sessao'
+import { estadoAbaNaParceria } from './AbaFechada'
 import { GESTAO_RBS, SECOES, type Secao } from './secoes'
 
 const NOME_COTA: Record<ParceriaResumo['cota']['codigo'], string> = {
@@ -34,9 +35,17 @@ function classeItem(ativo: boolean) {
     : `${ITEM} font-semibold text-tinta hover:bg-cinza-100`
 }
 
-function ItemSecao({ secao, parceria }: { secao: Secao; parceria: ParceriaResumo }) {
-  const aba = secao.aba ? parceria.abas.find((item) => item.codigo === secao.aba) : null
-  const bloqueada = aba ? !aba.liberada : false
+function ItemSecao({ secao, parceria, rbs }: { secao: Secao; parceria: ParceriaResumo; rbs: boolean }) {
+  const estado = estadoAbaNaParceria(parceria, secao.aba)
+  // A RBS olha a parceria de fora: "sua cota" é texto para a marca.
+  const motivo =
+    estado === 'FORA_DA_COTA'
+      ? rbs
+        ? 'Não incluída na cota desta parceria'
+        : 'Não incluída na sua cota'
+      : rbs
+        ? 'Fechada para esta parceria'
+        : 'Fechada pela RBS por enquanto'
   const destino = `/parceria/${parceria.id}${secao.caminho ? `/${secao.caminho}` : ''}`
 
   return (
@@ -46,13 +55,9 @@ function ItemSecao({ secao, parceria }: { secao: Secao; parceria: ParceriaResumo
           <>
             <i className={`${secao.icone} text-xl ${isActive ? 'text-white' : 'text-secao'}`} aria-hidden="true" />
             <span className="flex-1">{secao.nome}</span>
-            {/* [PERMISSAO] A aba aparece para todos; o cadeado avisa que a cota não a libera. */}
-            {bloqueada && (
-              <i
-                className={`ri-lock-line text-base ${isActive ? 'text-white' : 'text-cinza-400'}`}
-                aria-label="não incluída na sua cota"
-                title="Não incluída na sua cota"
-              />
+            {/* [PERMISSAO] A aba aparece para todos; o cadeado diz se a cota não a inclui ou se a RBS a fechou. */}
+            {estado !== 'LIBERADA' && (
+              <i className={`ri-lock-line text-base ${isActive ? 'text-white' : 'text-cinza-400'}`} aria-label={motivo} title={motivo} />
             )}
           </>
         )}
@@ -65,7 +70,7 @@ function ChipConta({ usuario, parceria }: { usuario: UsuarioLogado; parceria: Pa
   const navegar = useNavigate()
   const rbs = usuario.perfil === 'ADMIN_RBS'
   const varias = !rbs && usuario.parcerias.length > 1
-  const nome = parceria?.patrocinador ?? (rbs ? 'Nenhuma parceria' : usuario.nome)
+  const nome = parceria?.patrocinador ?? (rbs ? 'Todas as parcerias' : usuario.nome)
 
   return (
     <div className="mt-5 flex items-center gap-2.5 rounded-xl bg-cinza-100 p-2.5">
@@ -124,10 +129,26 @@ function BotaoAtlas() {
   )
 }
 
-export function Menu({ parceria }: { parceria: ParceriaResumo | null }) {
+type PropsMenu = {
+  parceria: ParceriaResumo | null
+  /** Abaixo de 1024 px o menu é uma gaveta: fechada até a pessoa tocar em "Menu". */
+  aberto: boolean
+  aoFechar: () => void
+}
+
+export function Menu({ parceria, aberto, aoFechar }: PropsMenu) {
   const { usuario, sair } = useSessao()
   const navegar = useNavigate()
   const [ajudaAberta, setAjudaAberta] = useState(false)
+  const fecharComEsc = useEffectEvent((evento: KeyboardEvent) => evento.key === 'Escape' && aoFechar())
+
+  useEffect(() => {
+    if (!aberto) return
+    const aoTeclar = (evento: KeyboardEvent) => fecharComEsc(evento)
+    document.addEventListener('keydown', aoTeclar)
+    return () => document.removeEventListener('keydown', aoTeclar)
+  }, [aberto])
+
   if (!usuario) return null
   const rbs = usuario.perfil === 'ADMIN_RBS'
 
@@ -136,69 +157,88 @@ export function Menu({ parceria }: { parceria: ParceriaResumo | null }) {
     navegar('/entrar', { replace: true })
   }
 
+  // Na gaveta fechada, o menu sai da tela e do Tab (invisible); de 1024 px para cima ele fica sempre à vista.
+  // Escolher um destino na gaveta (link ou a parceria no seletor) já fecha o menu.
+  const gaveta = aberto ? 'max-lg:visible max-lg:translate-x-0' : 'max-lg:invisible max-lg:-translate-x-full'
+
   return (
-    <aside className="fixed top-4 bottom-4 left-4 z-20 flex w-[264px] flex-col print:hidden rounded-[20px] border border-borda-menu bg-white px-5 pt-6 pb-5 shadow-menu">
-      <div>
-        <p className="font-display text-[56px] leading-[0.9] tracking-[-0.01em] whitespace-nowrap text-parceria uppercase">
-          Planeta 360
-        </p>
-        <p className="mt-1.5 text-[10px] font-bold tracking-[0.14em] text-texto-2 uppercase">
-          {rbs ? 'RBS · Gestão' : 'Patrocinador'}
-        </p>
-      </div>
+    <>
+      {aberto && <div className="fixed inset-0 z-40 bg-tinta/45 lg:hidden" onClick={aoFechar} aria-hidden="true" />}
+      <aside
+        id="menu-principal"
+        onClick={(evento) => (evento.target as HTMLElement).closest('a') && aoFechar()}
+        onChange={aoFechar}
+        className={`fixed top-0 bottom-0 left-0 z-50 flex w-[280px] max-w-[85vw] flex-col overflow-y-auto border border-borda-menu bg-white px-5 pt-12 pb-5 shadow-menu lg:pt-6 transition-[translate,visibility] duration-200 lg:top-4 lg:bottom-4 lg:left-4 lg:z-20 lg:w-[264px] lg:rounded-[20px] print:hidden ${gaveta}`}
+      >
+        <button
+          type="button"
+          onClick={aoFechar}
+          className="absolute top-3 right-3 flex items-center gap-1 text-[13px] font-semibold lg:hidden"
+        >
+          Fechar <i className="ri-close-line text-lg" aria-hidden="true" />
+        </button>
+        <div>
+          <p className="font-display text-[56px] leading-[0.9] tracking-[-0.01em] whitespace-nowrap text-parceria uppercase">
+            Planeta 360
+          </p>
+          <p className="mt-1.5 text-[10px] font-bold tracking-[0.14em] text-texto-2 uppercase">
+            {rbs ? 'RBS · Gestão' : 'Patrocinador'}
+          </p>
+        </div>
 
-      <ChipConta usuario={usuario} parceria={parceria} />
+        <ChipConta usuario={usuario} parceria={parceria} />
 
-      <nav className="-mx-1 mt-5 flex-1 overflow-y-auto px-1" aria-label="Menu principal">
-        {rbs && (
-          <>
-            <ul className="flex flex-col gap-1" data-secao="neutro">
-              {GESTAO_RBS.map((atalho) => (
-                <li key={atalho.caminho}>
-                  <NavLink to={atalho.caminho} end className={({ isActive }) => classeItem(isActive)}>
-                    <i className={`${atalho.icone} text-xl`} aria-hidden="true" />
-                    {atalho.nome}
-                  </NavLink>
-                </li>
+        <nav className="-mx-1 mt-5 flex-1 overflow-y-auto px-1" aria-label="Menu principal">
+          {rbs && (
+            <>
+              <ul className="flex flex-col gap-1" data-secao="neutro">
+                {GESTAO_RBS.map((atalho) => (
+                  <li key={atalho.caminho}>
+                    <NavLink to={atalho.caminho} end className={({ isActive }) => classeItem(isActive)}>
+                      <i className={`${atalho.icone} text-xl`} aria-hidden="true" />
+                      {atalho.nome}
+                    </NavLink>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-4 mb-2 px-3 text-[10px] font-bold tracking-[0.14em] text-texto-2 uppercase">
+                {parceria ? 'Parceria aberta' : 'Abra uma parceria em Patrocinadores'}
+              </p>
+            </>
+          )}
+          {parceria && (
+            <ul className="flex flex-col gap-1">
+              {SECOES.map((secao) => (
+                <ItemSecao key={secao.chave} secao={secao} parceria={parceria} rbs={rbs} />
               ))}
             </ul>
-            <p className="mt-4 mb-2 px-3 text-[10px] font-bold tracking-[0.14em] text-texto-2 uppercase">
-              {parceria ? 'Parceria aberta' : 'Abra uma parceria em Patrocinadores'}
-            </p>
-          </>
-        )}
-        {parceria && (
-          <ul className="flex flex-col gap-1">
-            {SECOES.map((secao) => (
-              <ItemSecao key={secao.chave} secao={secao} parceria={parceria} />
-            ))}
-          </ul>
-        )}
-      </nav>
-
-      <div className="mt-4 flex flex-col gap-4">
-        <BotaoAtlas />
-        <div className="relative flex items-center justify-between border-t border-borda pt-4 text-[13px] font-semibold">
-          <button
-            type="button"
-            className="flex items-center gap-1.5 hover:text-parceria"
-            aria-expanded={ajudaAberta}
-            onClick={() => setAjudaAberta((aberta) => !aberta)}
-          >
-            <i className="ri-question-line text-lg" aria-hidden="true" />
-            Ajuda
-          </button>
-          <button type="button" className="flex items-center gap-1.5 hover:text-parceria" onClick={encerrar}>
-            <i className="ri-logout-box-r-line text-lg" aria-hidden="true" />
-            Sair
-          </button>
-          {ajudaAberta && (
-            <p className="absolute right-0 bottom-full left-0 mb-2 rounded-xl border border-borda bg-white p-3 text-xs font-medium shadow-menu">
-              Dúvidas sobre a parceria, acessos ou prazos: fale com o time B2B da RBS.
-            </p>
           )}
+        </nav>
+
+        <div className="mt-4 flex flex-col gap-4">
+          <BotaoAtlas />
+          <div className="relative flex items-center justify-between border-t border-borda pt-4 text-[13px] font-semibold">
+            <button
+              type="button"
+              className="flex items-center gap-1.5 hover:text-parceria"
+              aria-expanded={ajudaAberta}
+              onClick={() => setAjudaAberta((aberta) => !aberta)}
+            >
+              <i className="ri-question-line text-lg" aria-hidden="true" />
+              Ajuda
+            </button>
+            <button type="button" className="flex items-center gap-1.5 hover:text-parceria" onClick={encerrar}>
+              <i className="ri-logout-box-r-line text-lg" aria-hidden="true" />
+              Sair
+            </button>
+            {ajudaAberta && (
+              <p className="absolute right-0 bottom-full left-0 mb-2 rounded-xl border border-borda bg-white p-3 text-xs font-medium shadow-menu">
+                Dúvidas sobre a parceria, acessos ou prazos: fale com o time B2B da RBS.
+              </p>
+            )}
+          </div>
         </div>
-      </div>
-    </aside>
+      </aside>
+    </>
   )
 }

@@ -34,6 +34,7 @@ class ConsolidacaoControllerTest {
     private static final String AMARELO = "marketing@amarelo.example";
     private static final String AGENCIA_DO_AMARELO = "atendimento@agencia-x.example";
     private static final String ROXO = "marketing@roxo.example";
+    private static final String VERDE = "marketing@verde.example";
 
     @Autowired
     JdbcClient jdbc;
@@ -138,7 +139,7 @@ class ConsolidacaoControllerTest {
         assertThat(lerJson(resposta, "$.midia.porUnidade[0].unidade")).isEqualTo("INSERCAO");
         assertThat(numero(lerJson(resposta, "$.midia.porUnidade[0].previsto"))).isEqualByComparingTo(previstoNoBanco);
         assertThat(numero(lerJson(resposta, "$.midia.porUnidade[0].exibido"))).isEqualByComparingTo(exibidoNoBanco);
-        assertThat(numero(lerJson(resposta, "$.midia.porUnidade[0].percentual"))).isEqualByComparingTo("99.3");
+        assertThat(numero(lerJson(resposta, "$.midia.porUnidade[0].percentual"))).isEqualByComparingTo("99.2");   // 1105 de 1113 = 99,28%: cortado, e não arredondado
 
         // Aplicações de marca, entregas e cortesias, também conferidas nas tabelas.
         BigDecimal previstas = jdbc.sql("SELECT sum(quantidade_prevista) FROM aproveitamento_previsto "
@@ -155,7 +156,7 @@ class ConsolidacaoControllerTest {
         assertThat(numero(lerJson(resposta, "$.aplicacoes.previstas"))).isEqualByComparingTo(previstas).isEqualByComparingTo("19");
         assertThat(numero(lerJson(resposta, "$.aplicacoes.comprovadas"))).isEqualByComparingTo(comprovadas).isEqualByComparingTo("17");
         assertThat(((Number) lerJson(resposta, "$.aplicacoes.fotos")).longValue()).isEqualTo(fotos);
-        assertThat(numero(lerJson(resposta, "$.aplicacoes.percentual"))).isEqualByComparingTo("89.5");
+        assertThat(numero(lerJson(resposta, "$.aplicacoes.percentual"))).isEqualByComparingTo("89.4");   // 17 de 19 = 89,47%: cortado, como a mídia
 
         long aprovadas = jdbc.sql("SELECT count(*) FROM entrega WHERE parceria_id = :p AND status = 'APROVADO'")
                 .param("p", amarelo).query(Long.class).single();
@@ -194,7 +195,7 @@ class ConsolidacaoControllerTest {
         }
         assertThat(numero(unidade(resposta, "INSERCAO").get("previsto"))).isEqualByComparingTo("343");
         assertThat(numero(unidade(resposta, "CPM").get("previsto"))).isEqualByComparingTo("460000");
-        assertThat(numero(unidade(resposta, "CPM").get("percentual"))).isEqualByComparingTo("97.3");
+        assertThat(numero(unidade(resposta, "CPM").get("percentual"))).isEqualByComparingTo("97.2");
 
         // Por veículo: cada par (veículo, unidade) bate com o banco, e a soma de cada unidade fecha com o total dela.
         Map<String, BigDecimal> previstoPorVeiculo = new LinkedHashMap<>();
@@ -346,7 +347,8 @@ class ConsolidacaoControllerTest {
         jdbc.sql("DELETE FROM parceria_usuario WHERE parceria_id = :p AND usuario_id = (SELECT id FROM usuario WHERE email = :e)")
                 .param("p", amarelo).param("e", AGENCIA_DO_AMARELO).update();
 
-        assertThat(consolidacao(sessao, amarelo)).hasStatus(HttpStatus.NOT_FOUND);
+        // Era o único vínculo da agência: a sessão termina (401 em qualquer rota).
+        assertThat(consolidacao(sessao, amarelo)).hasStatus(HttpStatus.UNAUTHORIZED);
     }
 
     @Test
@@ -405,6 +407,7 @@ class ConsolidacaoControllerTest {
         assertThat(lerJson(resposta, "$.relatorios.rascunho")).isEqualTo(3);
         assertThat(lerJson(resposta, "$.relatorios.validado")).isEqualTo(0);
         assertThat(lerJson(resposta, "$.relatorios.disponibilizado")).isEqualTo(0);
+        assertThat(lerJson(resposta, "$.relatorios.marcaVe")).as("nenhuma marca vê relatório ainda").isEqualTo(0);
 
         // Última carga: a de pesquisa, que é a mais nova da edição; o tipo e os totais vêm da própria linha.
         var carga = jdbc.sql("SELECT id, tipo, linhas_inseridas, linhas_rejeitadas FROM carga WHERE evento_id = :e "
@@ -426,6 +429,76 @@ class ConsolidacaoControllerTest {
                 "Destinação das cortesias (enviado)");
         Map<String, Object> primeira = castMapa(lerLista(resposta, "$.pendencias").get(0));
         assertThat(primeira).containsOnlyKeys("parceriaId", "patrocinador", "tipo", "detalhe");
+    }
+
+    /** Põe o relatório na ordem RASCUNHO, VALIDADO, DISPONIBILIZADO direto no banco (o gatilho confere a ordem). */
+    void disponibilizar(long relatorioId, long usuarioId) {
+        jdbc.sql("UPDATE relatorio SET status = 'VALIDADO', validado_por = :u, validado_em = now() WHERE id = :id")
+                .param("u", usuarioId).param("id", relatorioId).update();
+        jdbc.sql("UPDATE relatorio SET status = 'DISPONIBILIZADO', disponibilizado_por = :u, disponibilizado_em = now() WHERE id = :id")
+                .param("u", usuarioId).param("id", relatorioId).update();
+    }
+
+    @Test
+    void marcaVeContaAParceriaComVersaoDisponibilizadaMesmoQuandoAMaisNovaEstaEmRascunho() {
+        long amarelo = parceria("Cliente Amarelo");
+        long rbsId = jdbc.sql("SELECT id FROM usuario WHERE email = :e").param("e", RBS).query(Long.class).single();
+        long v1 = jdbc.sql("SELECT id FROM relatorio WHERE parceria_id = :p AND versao = 1").param("p", amarelo).query(Long.class).single();
+        disponibilizar(v1, rbsId);
+        jdbc.sql("SELECT fn_gerar_relatorio(:p, :u)").param("p", amarelo).param("u", rbsId).query(Long.class).single();   // v2, rascunho
+
+        MvcTestResult resposta = painel(entrar(RBS), "");
+
+        assertThat(resposta).hasStatus(HttpStatus.OK);
+        // Pela versão mais nova, o Amarelo é um rascunho (v2): o card "disponibilizados" não o conta.
+        assertThat(lerJson(resposta, "$.relatorios.rascunho")).isEqualTo(3);
+        assertThat(lerJson(resposta, "$.relatorios.disponibilizado")).isEqualTo(0);
+        // Mas a marca continua vendo a v1: é isso que marcaVe conta.
+        assertThat(lerJson(resposta, "$.relatorios.marcaVe")).isEqualTo(1);
+        assertThat(lerJson(resposta, "$.relatorios.semRelatorio")).isEqualTo(0);
+        assertThat(entrar(AMARELO).get("/api/parcerias/" + amarelo + "/relatorio")).hasStatus(HttpStatus.OK);
+    }
+
+    @Test
+    void marcaVeSomaTodasAsParceriasDaEdicaoEIgnoraOutraEdicao() {
+        long rbsId = jdbc.sql("SELECT id FROM usuario WHERE email = :e").param("e", RBS).query(Long.class).single();
+        for (String cliente : List.of("Cliente Amarelo", "Cliente Roxo")) {
+            disponibilizar(jdbc.sql("SELECT id FROM relatorio WHERE parceria_id = :p AND versao = 1").param("p", parceria(cliente))
+                    .query(Long.class).single(), rbsId);
+        }
+
+        MvcTestResult daEdicaoNova = painel(entrar(RBS), "");
+        MvcTestResult de2026 = painel(entrar(RBS), "?eventoId=" + evento(2026));
+
+        assertThat(lerJson(daEdicaoNova, "$.relatorios.marcaVe")).isEqualTo(2);
+        assertThat(lerJson(daEdicaoNova, "$.relatorios.disponibilizado")).isEqualTo(2);
+        assertThat(lerJson(de2026, "$.relatorios.marcaVe")).isEqualTo(0);
+    }
+
+    @Test
+    void percentualDeMidiaNuncaArredondaPara100SemEstarCompleto() {
+        long verde = parceria("Cliente Verde");
+        long linha = jdbc.sql("""
+                        INSERT INTO aproveitamento_previsto (parceria_id, categoria, bloco, veiculo, formato, tipo_midia, quantidade_prevista, unidade)
+                        VALUES (:p, 'MIDIA', 'Mídia', 'atl.la', 'Display CPM de teste', 'PROPRIA', 460000, 'CPM') RETURNING id
+                        """).param("p", verde).query(Long.class).single();
+        jdbc.sql("INSERT INTO veiculacao (aproveitamento_id, exibido_em, quantidade) VALUES (:a, now() - interval '1 day', 459900)")
+                .param("a", linha).update();   // 459.900 de 460.000 = 99,978%
+
+        MvcTestResult incompleto = consolidacao(entrar(VERDE), verde);
+
+        assertThat(incompleto).hasStatus(HttpStatus.OK);
+        Map<String, Object> cpm = unidade(incompleto, "CPM");
+        assertThat(numero(cpm.get("exibido"))).isEqualByComparingTo("459900");
+        assertThat(numero(cpm.get("percentual"))).as("cortado na 1ª casa: 99,9 e nunca 100").isEqualByComparingTo("99.9");
+        assertThat(numero(lerLista(incompleto, "$.midia.porVeiculo[?(@.unidade == 'CPM')].percentual").get(0))).isEqualByComparingTo("99.9");
+        assertThat(numero(lerLista(incompleto, "$.midia.linhas[?(@.aproveitamentoId == " + linha + ")].percentual").get(0)))
+                .isEqualByComparingTo("99.9");
+
+        jdbc.sql("INSERT INTO veiculacao (aproveitamento_id, exibido_em, quantidade) VALUES (:a, now() - interval '2 day', 100)")
+                .param("a", linha).update();
+        MvcTestResult completo = consolidacao(entrar(VERDE), verde);
+        assertThat(numero(unidade(completo, "CPM").get("percentual"))).as("completo: agora sim, 100").isEqualByComparingTo("100");
     }
 
     @SuppressWarnings("unchecked")

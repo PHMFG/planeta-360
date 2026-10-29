@@ -25,15 +25,18 @@ public final class MateriaisDtos {
     public record UsuarioResumoDto(Long id, String nome, String perfil) {
     }
 
-    /** Uma versão de um arquivo da entrega (objeto "Arquivo" do contrato). */
+    /**
+     * Uma versão de um arquivo da entrega (objeto "Arquivo" do contrato). {@code observacao} é o recado que quem enviou
+     * escreveu junto com esta versão (nulo quando não escreveu nada).
+     */
     public record ArquivoDto(Long id, Long entregaId, String nomeOriginal, String mimeType, Long tamanhoBytes, Integer versao,
-                             String categoria, UsuarioResumoDto enviadoPor, OffsetDateTime enviadoEm) {
+                             String categoria, UsuarioResumoDto enviadoPor, OffsetDateTime enviadoEm, String observacao) {
     }
 
     /** A resposta da rota 17: o Arquivo mais o status em que a entrega ficou depois do envio. */
     public record ArquivoEnviadoDto(Long id, Long entregaId, String nomeOriginal, String mimeType, Long tamanhoBytes,
                                     Integer versao, String categoria, UsuarioResumoDto enviadoPor, OffsetDateTime enviadoEm,
-                                    String statusDaEntrega) {
+                                    String observacao, String statusDaEntrega) {
     }
 
     /** O recado que a RBS escreveu na última mudança de status que tinha texto (vem do histórico). */

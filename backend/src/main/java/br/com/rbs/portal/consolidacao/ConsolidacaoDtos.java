@@ -9,6 +9,8 @@ import java.util.Map;
  * Objetos de saída das rotas 29 (consolidação da parceria) e 30 (painel da RBS), todos em record. Atende os itens 5 e 7
  * da Entrega 2. O formato é o contrato com o front (docs/api.md). [RELATORIO] Unidades de mídia (INSERCAO, CPM,
  * APLICACAO) nunca são somadas entre si: cada total traz a sua unidade. Seção sem dado vem com listas vazias e totais nulos.
+ * [PERMISSAO] A seção de uma aba fechada para o patrocinador (mídia, aplicações, cortesias) também vem assim: mídia com as
+ * três listas vazias, aplicações e cortesias com todos os totais nulos.
  */
 public final class ConsolidacaoDtos {
 
@@ -71,8 +73,11 @@ public final class ConsolidacaoDtos {
     public record EntregasDoPainelDto(Map<String, Long> porStatus, long esperandoAnalise, long atrasadas) {
     }
 
-    /** A situação da versão mais nova do relatório de cada parceria da edição. */
-    public record RelatoriosDoPainelDto(long semRelatorio, long rascunho, long validado, long disponibilizado) {
+    /**
+     * A situação da versão mais nova do relatório de cada parceria da edição. {@code marcaVe} é outra conta: as parcerias
+     * com pelo menos uma versão disponibilizada, mesmo que a mais nova seja rascunho ou validada (a marca vê a anterior).
+     */
+    public record RelatoriosDoPainelDto(long semRelatorio, long rascunho, long validado, long disponibilizado, long marcaVe) {
     }
 
     /** {@code tipo} usa o nome da API: o MIDIA do banco sai como VEICULACAO. */

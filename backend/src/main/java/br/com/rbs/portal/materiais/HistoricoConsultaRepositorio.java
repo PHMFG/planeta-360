@@ -17,10 +17,11 @@ public class HistoricoConsultaRepositorio {
     /**
      * Filtros opcionais. {@code acoes} vazio = qualquer ação. {@code de} (inclusive) e {@code ateExclusivo} (o dia seguinte
      * ao filtro "ate", à meia-noite de Brasília) limitam {@code ocorrido_em}. {@code semAcessos} esconde LOGIN, LOGIN_FALHOU e
-     * LOGOUT: eles são da conta, não da parceria, e só aparecem no histórico geral.
+     * LOGOUT: eles são da conta, não da parceria, e só aparecem no histórico geral. {@code semEtapasInternas} esconde
+     * GERACAO_RELATORIO e VALIDACAO: são etapas de trabalho da RBS (a marca só deve ver a DISPONIBILIZACAO).
      */
     public record Filtro(Long parceriaId, Long usuarioId, List<String> acoes, String entidade, OffsetDateTime de,
-                         OffsetDateTime ateExclusivo, String texto, boolean semAcessos) {
+                         OffsetDateTime ateExclusivo, String texto, boolean semAcessos, boolean semEtapasInternas) {
     }
 
     /** Uma linha do histórico como o banco entrega, com a parceria e o usuário já ligados pelo nome. */
@@ -90,6 +91,9 @@ public class HistoricoConsultaRepositorio {
         }
         if (f.semAcessos()) {
             onde.append(" AND h.acao NOT IN ('LOGIN', 'LOGIN_FALHOU', 'LOGOUT')");
+        }
+        if (f.semEtapasInternas()) {
+            onde.append(" AND h.acao NOT IN ('GERACAO_RELATORIO', 'VALIDACAO')");
         }
         if (f.entidade() != null) {
             onde.append(" AND h.entidade = :entidade");

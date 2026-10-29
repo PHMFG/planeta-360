@@ -33,10 +33,25 @@ class HistoricoTest extends ApoioDeMateriais {
         return "/api/parcerias/" + parceriaId + "/historico";
     }
 
-    /** Quantas linhas da parceria o patrocinador pode ver: tudo, menos login, falha de login e logout. */
+    /**
+     * Quantas linhas da parceria o patrocinador pode ver: tudo, menos login, falha de login, logout e as etapas internas do
+     * relatório (geração e validação).
+     */
     long linhasVisiveisDaParceria(long parceriaId) {
-        return contar("SELECT count(*) FROM historico WHERE parceria_id = ? AND acao NOT IN ('LOGIN', 'LOGIN_FALHOU', 'LOGOUT')",
-                parceriaId);
+        return contar("""
+                SELECT count(*) FROM historico WHERE parceria_id = ?
+                AND acao NOT IN ('LOGIN', 'LOGIN_FALHOU', 'LOGOUT', 'GERACAO_RELATORIO', 'VALIDACAO')""", parceriaId);
+    }
+
+    /**
+     * O dia (AAAA-MM-DD, em Brasília) em que a amostra grava a NOVA_VERSAO do logo do Amarelo. A amostra conta as datas para
+     * trás a partir do dia em que o banco é criado, então os testes de período partem deste dia em vez de uma data fixa.
+     */
+    String diaDaNovaVersaoDoLogo() {
+        return jdbc.sql("""
+                        SELECT to_char(ocorrido_em AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM-DD') FROM historico
+                        WHERE acao = 'NOVA_VERSAO' AND parceria_id = :p
+                        """).param("p", amarelo()).query(String.class).single();
     }
 
     // ---------------------------------------------------------------------
@@ -67,8 +82,9 @@ class HistoricoTest extends ApoioDeMateriais {
         MvcTestResult resposta = entrar(RBS).get(historicoDe(amarelo()) + "?tamanho=200&acao=ENVIO_ARQUIVO");
 
         assertThat(resposta).hasStatus(HttpStatus.OK);
-        assertThat(lerLista(resposta, "$.itens[*].ip")).containsExactly("200.0.2.10");
-        assertThat(lerLista(resposta, "$.itens[*].userAgent")).containsExactly(AGENTE_DA_AMOSTRA);
+        assertThat(lerLista(resposta, "$.itens[*].ip")).as("os envios da marca (200.0.2.10) e o contrato que a RBS mandou (10.0.0.5)")
+                .contains("200.0.2.10").containsOnly("200.0.2.10", "10.0.0.5");
+        assertThat(lerLista(resposta, "$.itens[*].userAgent")).contains(AGENTE_DA_AMOSTRA);
         List<String> todas = lerLista(entrar(RBS).get(historicoDe(amarelo()) + "?tamanho=200"), "$.itens[*].acao");
         assertThat(todas).doesNotContain("LOGIN", "LOGIN_FALHOU", "LOGOUT");
     }
@@ -80,12 +96,18 @@ class HistoricoTest extends ApoioDeMateriais {
         assertThat(resposta).hasStatus(HttpStatus.OK);
         assertThat(lerJson(resposta, "$.pagina")).isEqualTo(0);
         assertThat(lerJson(resposta, "$.tamanho")).isEqualTo(50);
-        assertThat(lerJson(resposta, "$.total")).isEqualTo(2);
-        assertThat(lerLista(resposta, "$.itens[*].ocorridoEm")).containsExactly("2026-10-18T10:15:00-03:00", "2026-10-16T09:42:00-03:00");
+        assertThat(lerJson(resposta, "$.total")).as("as mudanças de status de todas as entregas do Amarelo").isEqualTo(
+                (int) contar("SELECT count(*) FROM historico WHERE parceria_id = ? AND acao = 'ALTERACAO_STATUS' AND entidade = 'entrega'",
+                        amarelo()));
+        List<String> datas = lerLista(resposta, "$.itens[*].ocorridoEm");
+        assertThat(datas).hasSizeGreaterThan(2).isSortedAccordingTo(
+                (a, b) -> java.time.OffsetDateTime.parse(b).compareTo(java.time.OffsetDateTime.parse(a)));
+        assertThat(datas).allSatisfy(d -> assertThat(java.time.OffsetDateTime.parse(d)).isBefore(java.time.OffsetDateTime.now()));
         Map<String, Object> ajuste = lerLista(resposta, "$.itens[?(@.valorNovo == 'AJUSTE_SOLICITADO')]").stream()
                 .map(o -> (Map<String, Object>) o).findFirst().orElseThrow();
         assertThat(ajuste).containsEntry("acao", "ALTERACAO_STATUS").containsEntry("entidade", "entrega")
-                .containsEntry("valorAnterior", "EM_ANALISE").containsEntry("detalhe", null)
+                .containsEntry("valorAnterior", "EM_ANALISE")
+                .containsEntry("detalhe", "Enviar o logo em vetor, com fundo transparente.")
                 .containsKeys("id", "entidadeId", "usuario", "ocorridoEm", "ip", "userAgent");
         assertThat((Map<String, Object>) ajuste.get("usuario")).containsEntry("nome", "Equipe B2B RBS").containsEntry("perfil", "ADMIN_RBS");
     }
@@ -93,22 +115,25 @@ class HistoricoTest extends ApoioDeMateriais {
     @Test
     void filtrosPorAcaoMultiplaEntidadeEPeriodoNoHorarioDeBrasilia() {
         SessaoDeApi amarelo = entrar(AMARELO);
-        // Uma ação às 23:30 de Brasília do dia 17 (02:30 UTC do dia 18) ainda é do dia 17.
-        gravarHistorico(amarelo(), "2026-10-17 23:30-03", "EDICAO", "Noite do dia 17");
-        gravarHistorico(amarelo(), "2026-10-18 00:10-03", "EDICAO", "Madrugada do dia 18");
+        // Parte do dia em que a amostra grava a NOVA_VERSAO do logo. Uma ação às 23:30 de Brasília desse dia (02:30 UTC do dia
+        // seguinte) ainda é do dia dela, e a das 00:10 do dia seguinte já é do outro.
+        java.time.LocalDate dia = java.time.LocalDate.parse(diaDaNovaVersaoDoLogo());
+        gravarHistorico(amarelo(), dia + " 23:30-03", "EDICAO", "Noite do dia");
+        gravarHistorico(amarelo(), dia.plusDays(1) + " 00:10-03", "EDICAO", "Madrugada do dia seguinte");
 
-        MvcTestResult duas = amarelo.get(historicoDe(amarelo()) + "?acao=NOVA_VERSAO,ENVIO_ARQUIVO");
+        MvcTestResult duas = amarelo.get(historicoDe(amarelo()) + "?acao=NOVA_VERSAO,ENVIO_ARQUIVO&tamanho=200");
         MvcTestResult arquivo = amarelo.get(historicoDe(amarelo()) + "?entidade=arquivo");
-        MvcTestResult dia17 = amarelo.get(historicoDe(amarelo()) + "?de=2026-10-17&ate=2026-10-17");
-        MvcTestResult aPartirDe18 = amarelo.get(historicoDe(amarelo()) + "?de=2026-10-18&acao=EDICAO");
-        MvcTestResult ateOntem = amarelo.get(historicoDe(amarelo()) + "?ate=2026-10-15");
+        MvcTestResult odia = amarelo.get(historicoDe(amarelo()) + "?de=" + dia + "&ate=" + dia);
+        MvcTestResult aPartirDoDiaSeguinte = amarelo.get(historicoDe(amarelo()) + "?de=" + dia.plusDays(1) + "&acao=EDICAO");
+        MvcTestResult ateODiaAnterior = amarelo.get(historicoDe(amarelo()) + "?ate=" + dia.minusDays(1) + "&tamanho=200");
 
-        assertThat(lerLista(duas, "$.itens[*].acao")).containsExactly("NOVA_VERSAO", "ENVIO_ARQUIVO");
+        assertThat(lerLista(duas, "$.itens[*].acao")).containsOnly("NOVA_VERSAO", "ENVIO_ARQUIVO").contains("NOVA_VERSAO");
         assertThat(lerLista(arquivo, "$.itens[*].acao")).containsOnly("DOWNLOAD");
-        assertThat(lerLista(dia17, "$.itens[*].detalhe")).contains("Noite do dia 17").doesNotContain("Madrugada do dia 18");
-        assertThat(lerLista(dia17, "$.itens[*].acao")).contains("NOVA_VERSAO");
-        assertThat(lerLista(aPartirDe18, "$.itens[*].detalhe")).contains("Madrugada do dia 18").doesNotContain("Noite do dia 17");
-        assertThat(lerLista(ateOntem, "$.itens[*].acao")).as("até o fim do dia 15").contains("ENVIO_ARQUIVO").doesNotContain("NOVA_VERSAO");
+        assertThat(lerLista(odia, "$.itens[*].detalhe")).contains("Noite do dia").doesNotContain("Madrugada do dia seguinte");
+        assertThat(lerLista(odia, "$.itens[*].acao")).contains("NOVA_VERSAO");
+        assertThat(lerLista(aPartirDoDiaSeguinte, "$.itens[*].detalhe")).contains("Madrugada do dia seguinte").doesNotContain("Noite do dia");
+        assertThat(lerLista(ateODiaAnterior, "$.itens[*].acao")).as("até o fim do dia anterior: o primeiro envio do logo, ainda sem a nova versão")
+                .contains("ENVIO_ARQUIVO").doesNotContain("NOVA_VERSAO");
     }
 
     @Test
@@ -177,6 +202,47 @@ class HistoricoTest extends ApoioDeMateriais {
                 .containsExactly("Segue o VT.");
     }
 
+    @Test
+    void patrocinadorNaoVeGeracaoNemValidacaoDoRelatorioMasVeADisponibilizacaoERbsVeTudo() {
+        SessaoDeApi rbs = entrar(RBS);
+        // A amostra já tem a GERACAO_RELATORIO da v1 do Amarelo. A RBS valida e disponibiliza a v1 e gera a v2.
+        long v1 = contar("SELECT id FROM relatorio WHERE parceria_id = ? AND versao = 1", amarelo());
+        assertThat(rbs.patch("/api/relatorios/" + v1 + "/status", "{\"status\":\"VALIDADO\"}")).hasStatus(HttpStatus.OK);
+        assertThat(rbs.patch("/api/relatorios/" + v1 + "/status", "{\"status\":\"DISPONIBILIZADO\"}")).hasStatus(HttpStatus.OK);
+        assertThat(rbs.post("/api/parcerias/" + amarelo() + "/relatorios", null)).hasStatus(HttpStatus.CREATED);
+
+        MvcTestResult daMarca = entrar(AMARELO).get(historicoDe(amarelo()) + "?tamanho=200");
+        MvcTestResult daRbs = rbs.get(historicoDe(amarelo()) + "?tamanho=200");
+
+        assertThat(daMarca).hasStatus(HttpStatus.OK);
+        List<String> acoesDaMarca = lerLista(daMarca, "$.itens[*].acao");
+        assertThat(acoesDaMarca).doesNotContain("GERACAO_RELATORIO", "VALIDACAO").contains("DISPONIBILIZACAO");
+        assertThat(lerJson(daMarca, "$.total")).as("o total também não conta as etapas internas").isEqualTo(acoesDaMarca.size())
+                .isEqualTo((int) linhasVisiveisDaParceria(amarelo()));
+        assertThat(lerLista(daMarca, "$.itens[?(@.acao == 'DISPONIBILIZACAO')].valorNovo")).containsExactly("DISPONIBILIZADO");
+        assertThat(corpo(daMarca)).doesNotContain("RASCUNHO");
+        // A RBS continua vendo tudo.
+        assertThat(lerLista(daRbs, "$.itens[*].acao")).contains("GERACAO_RELATORIO", "VALIDACAO", "DISPONIBILIZACAO");
+        assertThat(lerLista(daRbs, "$.itens[?(@.acao == 'GERACAO_RELATORIO')].valorNovo")).contains("versão 1 (RASCUNHO)", "versão 2 (RASCUNHO)");
+        assertThat((long) (Integer) lerJson(daRbs, "$.total")).isGreaterThan(acoesDaMarca.size());
+    }
+
+    @Test
+    void filtrarPorGeracaoOuValidacaoNaoTrazNadaParaAMarcaEBuscaPorAcaoSeguePaginada() {
+        SessaoDeApi rbs = entrar(RBS);
+        long v1 = contar("SELECT id FROM relatorio WHERE parceria_id = ? AND versao = 1", amarelo());
+        rbs.patch("/api/relatorios/" + v1 + "/status", "{\"status\":\"VALIDADO\"}");
+
+        MvcTestResult geracao = entrar(AMARELO).get(historicoDe(amarelo()) + "?acao=GERACAO_RELATORIO,VALIDACAO");
+        MvcTestResult misto = entrar(AMARELO).get(historicoDe(amarelo()) + "?acao=VALIDACAO,ENVIO_ARQUIVO&tamanho=3");
+        MvcTestResult daRbs = rbs.get(historicoDe(amarelo()) + "?acao=GERACAO_RELATORIO,VALIDACAO");
+
+        assertThat(lerJson(geracao, "$.total")).isEqualTo(0);
+        assertThat(lerLista(geracao, "$.itens")).isEmpty();
+        assertThat(lerLista(misto, "$.itens[*].acao")).containsOnly("ENVIO_ARQUIVO").hasSize(3);
+        assertThat(lerJson(daRbs, "$.total")).isEqualTo(2);
+    }
+
     /** Grava uma linha de histórico direto no banco, com data e hora escolhidas (a tabela aceita INSERT). */
     void gravarHistorico(long parceriaId, String quando, String acao, String detalhe) {
         jdbc.sql("""
@@ -216,7 +282,7 @@ class HistoricoTest extends ApoioDeMateriais {
         assertThat(lerJson(resposta, "$.itens[0].ip")).isEqualTo("200.0.2.10");
         assertThat(lerJson(resposta, "$.itens[0].userAgent")).isEqualTo(AGENTE_DO_LOGIN_DA_AMOSTRA);
 
-        MvcTestResult doAmarelo = entrar(RBS).get("/api/historico?acao=ENVIO_ARQUIVO");
+        MvcTestResult doAmarelo = entrar(RBS).get("/api/historico?acao=ENVIO_ARQUIVO&parceriaId=" + amarelo());
         assertThat(lerJson(doAmarelo, "$.itens[0].parceria.id")).isEqualTo((int) amarelo());
         assertThat(lerJson(doAmarelo, "$.itens[0].parceria.patrocinador")).isEqualTo("Cliente Amarelo");
     }
@@ -238,9 +304,9 @@ class HistoricoTest extends ApoioDeMateriais {
         SessaoDeApi rbs = entrar(RBS);
 
         MvcTestResult daParceria = rbs.get("/api/historico?parceriaId=" + roxo() + "&tamanho=200");
-        MvcTestResult doUsuario = rbs.get("/api/historico?usuarioId=" + usuarioId(AMARELO) + "&acao=ENVIO_ARQUIVO,NOVA_VERSAO");
+        MvcTestResult doUsuario = rbs.get("/api/historico?usuarioId=" + usuarioId(AMARELO) + "&acao=ENVIO_ARQUIVO,NOVA_VERSAO&q=logo_final.pdf");
         MvcTestResult daEntidade = rbs.get("/api/historico?entidade=arquivo&tamanho=200");
-        MvcTestResult porTexto = rbs.get("/api/historico?q=LOGO_FINAL.PDF (versão 2)");
+        MvcTestResult porTexto = rbs.get("/api/historico?q=LOGO_FINAL.PDF (versão 2)&acao=NOVA_VERSAO,DOWNLOAD");
         MvcTestResult noDetalhe = rbs.get("/api/historico?q=amarelo.marketing");
         MvcTestResult curinga = rbs.get("/api/historico?q=%");
 
@@ -307,15 +373,16 @@ class HistoricoTest extends ApoioDeMateriais {
     void csvTemAsMesmasLinhasDaRota21ComOMesmoFiltroEQuoteDoQueTemPontoEVirgula() {
         SessaoDeApi rbs = entrar(RBS);
 
-        MvcTestResult csv = rbs.get("/api/historico.csv?acao=ENVIO_ARQUIVO&parceriaId=" + amarelo());
-        MvcTestResult json = rbs.get("/api/historico?acao=ENVIO_ARQUIVO&parceriaId=" + amarelo());
+        MvcTestResult csv = rbs.get("/api/historico.csv?acao=ENVIO_ARQUIVO&parceriaId=" + amarelo() + "&q=logo_final.pdf (versão 1)");
+        MvcTestResult json = rbs.get("/api/historico?acao=ENVIO_ARQUIVO&parceriaId=" + amarelo() + "&q=logo_final.pdf (versão 1)");
 
         String[] linhas = texto(csv).substring(1).split("\r\n");
         assertThat(linhas).hasSize(2);
         long entrega = entregaDaAmostra(amarelo(), "Logo final para aplicações no evento");
         // O navegador do exemplo tem ";" no texto: a célula vem entre aspas, como manda a RFC 4180.
-        assertThat(linhas[1]).isEqualTo(lerJson(json, "$.itens[0].id") + ";2026-10-15T14:20:00-03:00;ENVIO_ARQUIVO;entrega;" + entrega
-                + ";Cliente Amarelo;Marketing Amarelo;ADMIN_PATROCINADOR;;logo_final.pdf (versão 1);;200.0.2.10;\"" + AGENTE_DA_AMOSTRA.replace("\"", "\"\"") + "\"");
+        assertThat(linhas[1]).isEqualTo(lerJson(json, "$.itens[0].id") + ";" + lerJson(json, "$.itens[0].ocorridoEm")
+                + ";ENVIO_ARQUIVO;entrega;" + entrega + ";Cliente Amarelo;Marketing Amarelo;ADMIN_PATROCINADOR;;logo_final.pdf (versão 1);"
+                + "Primeira versão do logo, em PDF.;200.0.2.10;\"" + AGENTE_DA_AMOSTRA.replace("\"", "\"\"") + "\"");
     }
 
     @Test
@@ -341,7 +408,8 @@ class HistoricoTest extends ApoioDeMateriais {
         SessaoDeApi rbs = entrar(RBS);
 
         MvcTestResult grande = rbs.get("/api/historico.csv");
-        MvcTestResult filtrado = rbs.get("/api/historico.csv?de=2026-10-15&ate=2026-10-15");
+        String dia = diaDaNovaVersaoDoLogo();
+        MvcTestResult filtrado = rbs.get("/api/historico.csv?de=" + dia + "&ate=" + dia);
 
         assertThat(grande).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat((String) lerJson(grande, "$.detail")).contains("50000").contains("de e ate");

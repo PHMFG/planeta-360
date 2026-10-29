@@ -26,8 +26,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Leitura do histórico: o da parceria (rota 20), o geral da RBS (21) e o geral em CSV (22). Atende os itens 4 e 5 da Entrega 2.
- * [HISTORICO] [ISOLAMENTO] O patrocinador só lê o histórico da parceria dele, sem IP e sem navegador (dados internos da RBS) e
- * sem login/logout, que pertencem à conta. [PERMISSAO] O geral e o CSV são só da RBS.
+ * [HISTORICO] [ISOLAMENTO] O patrocinador só lê o histórico da parceria dele, sem IP e sem navegador (dados internos da RBS),
+ * sem login/logout, que pertencem à conta, e sem a geração e a validação do relatório, que são etapas internas da RBS (ele
+ * vê a disponibilização). [PERMISSAO] O geral e o CSV são só da RBS.
  */
 @Service
 public class HistoricoConsultaService {
@@ -50,12 +51,15 @@ public class HistoricoConsultaService {
         this.verificador = verificador;
     }
 
-    /** Rota 20. [ISOLAMENTO] Parceria de outro dá 404. Login, logout e falha de login nunca entram aqui. */
+    /**
+     * Rota 20. [ISOLAMENTO] Parceria de outro dá 404. Login, logout e falha de login nunca entram aqui. [PERMISSAO] Para o
+     * patrocinador também ficam de fora GERACAO_RELATORIO e VALIDACAO (as linhas, o total e o filtro por ação); a RBS vê tudo.
+     */
     @Transactional(readOnly = true)
     public PaginaDto<HistoricoDto> daParceria(UsuarioAutenticado usuario, long parceriaId, String acao, String entidade,
                                               String de, String ate, int pagina, int tamanho) {
         verificador.exigirParceria(usuario, parceriaId);
-        Filtro filtro = filtro(parceriaId, null, acao, entidade, de, ate, null, true);
+        Filtro filtro = filtro(parceriaId, null, acao, entidade, de, ate, null, true, !usuario.ehRbs());
         List<HistoricoDto> itens = repositorio.pagina(filtro, pagina, tamanho).stream()
                 .map(l -> paraHistorico(l, usuario.ehRbs())).toList();
         return new PaginaDto<>(itens, pagina, tamanho, repositorio.contar(filtro));
@@ -66,7 +70,7 @@ public class HistoricoConsultaService {
     public PaginaDto<HistoricoGeralDto> geral(UsuarioAutenticado usuario, Long parceriaId, Long usuarioId, String acao,
                                               String entidade, String de, String ate, String texto, int pagina, int tamanho) {
         verificador.exigirRbs(usuario);
-        Filtro filtro = filtro(parceriaId, usuarioId, acao, entidade, de, ate, texto, false);
+        Filtro filtro = filtro(parceriaId, usuarioId, acao, entidade, de, ate, texto, false, false);
         List<HistoricoGeralDto> itens = repositorio.pagina(filtro, pagina, tamanho).stream().map(HistoricoConsultaService::paraGeral).toList();
         return new PaginaDto<>(itens, pagina, tamanho, repositorio.contar(filtro));
     }
@@ -79,7 +83,7 @@ public class HistoricoConsultaService {
     public ArquivoCsv csv(UsuarioAutenticado usuario, Long parceriaId, Long usuarioId, String acao, String entidade, String de,
                           String ate, String texto) {
         verificador.exigirRbs(usuario);
-        Filtro filtro = filtro(parceriaId, usuarioId, acao, entidade, de, ate, texto, false);
+        Filtro filtro = filtro(parceriaId, usuarioId, acao, entidade, de, ate, texto, false, false);
         long total = repositorio.contar(filtro);
         if (total > LIMITE_DE_LINHAS_DO_CSV) {
             String dica = "Restrinja o período com de e ate.";
@@ -101,7 +105,7 @@ public class HistoricoConsultaService {
 
     /** [VALIDACAO] Ação que não existe, data fora do formato AAAA-MM-DD e período invertido viram 422 com o campo. */
     private static Filtro filtro(Long parceriaId, Long usuarioId, String acao, String entidade, String de, String ate,
-                                 String texto, boolean semAcessos) {
+                                 String texto, boolean semAcessos, boolean semEtapasInternas) {
         Map<String, String> campos = new LinkedHashMap<>();
         List<String> acoes = new ArrayList<>();
         if (acao != null) {
@@ -129,7 +133,7 @@ public class HistoricoConsultaService {
         OffsetDateTime fim = dia2 == null ? null : dia2.plusDays(1).atStartOfDay(Datas.BRASILIA).toOffsetDateTime();
         String entidadeLimpa = entidade == null || entidade.isBlank() ? null : entidade.trim().toLowerCase(Locale.ROOT);
         String textoLimpo = texto == null || texto.isBlank() ? null : texto.trim();
-        return new Filtro(parceriaId, usuarioId, acoes, entidadeLimpa, inicio, fim, textoLimpo, semAcessos);
+        return new Filtro(parceriaId, usuarioId, acoes, entidadeLimpa, inicio, fim, textoLimpo, semAcessos, semEtapasInternas);
     }
 
     private static LocalDate data(String campo, String valor, Map<String, String> campos) {

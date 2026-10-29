@@ -16,6 +16,8 @@ export type AbaLiberada = {
   nome: string
   ordem: number
   liberada: boolean
+  /** Falso quando a cota não inclui a aba (aí ela não pode ser liberada); verdadeiro quando a RBS só fechou por enquanto. */
+  incluidaNaCota?: boolean
 }
 
 export type ParceriaResumo = {

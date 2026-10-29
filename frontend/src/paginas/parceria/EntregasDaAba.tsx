@@ -15,7 +15,7 @@ import { Modal } from '../../componentes/Modal'
 import { Status } from '../../componentes/Status'
 import { useSessao } from '../../sessao/Sessao'
 import { data, dataHora } from '../../util/formatar'
-import { useParceria } from './ContextoParceria'
+import { useParceria, useRecarregarSeAbaFechou } from './ContextoParceria'
 import { DetalheEntrega } from './DetalheEntrega'
 
 export function NovaEntrega({ aba, aberto, aoFechar, aoCriar }: { aba: CodigoAba; aberto: boolean; aoFechar: () => void; aoCriar: () => void }) {
@@ -110,6 +110,7 @@ export function EntregasDaAba({ aba, titulo = 'Entregas', vazio = 'A RBS ainda n
   const { usuario } = useSessao()
   const rbs = usuario?.perfil === 'ADMIN_RBS'
   const entregas = useDados(() => listarEntregas(parceria.id, aba), [parceria.id, aba])
+  useRecarregarSeAbaFechou(entregas)
   const [aberta, setAberta] = useState<Entrega | null>(null)
   const [criando, setCriando] = useState(false)
 

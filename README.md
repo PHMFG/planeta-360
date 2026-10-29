@@ -72,7 +72,7 @@ cd backend
 .\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=dev"
 ```
 
-A API está pronta quando aparece `Started PortalApplication`. O perfil `dev` carrega a amostra de demonstração; sem perfil, sobe só a estrutura (como em produção). A 8080 é só a API: as telas ficam no front (passo 3).
+A API está pronta quando aparece `Started PortalApplication`. O perfil `dev` carrega a amostra de demonstração e, ao subir, cria em `backend/armazenamento/` um arquivo de exemplo para cada arquivo da amostra (é o que faz o botão "Baixar" funcionar na demonstração); sem perfil, sobe só a estrutura (como em produção, sem amostra e sem arquivos de exemplo). A 8080 é só a API: as telas ficam no front (passo 3).
 
 **PostgreSQL em outra porta** (a Sprint 1 usava a 5433)? Informe a URL do banco no mesmo terminal, antes de subir a API:
 
@@ -92,7 +92,9 @@ npm run dev
 
 Abra <http://localhost:5173>. O Vite repassa as chamadas `/api` para a porta 8080, então front e API funcionam como um site só.
 
-**Recomeçar do zero.** Para voltar à amostra original, pare a API, rode no `psql` o `DROP DATABASE portal;` e o `CREATE DATABASE portal OWNER portal;` e suba a API de novo. Os arquivos enviados ficam em `backend/armazenamento/`, que pode ser apagada junto.
+**Recomeçar do zero.** Para voltar à amostra original, pare a API, rode no `psql` o `DROP DATABASE portal;` e o `CREATE DATABASE portal OWNER portal;` e suba a API de novo. Os arquivos enviados ficam em `backend/armazenamento/`, que pode ser apagada junto (a API recria os arquivos de exemplo da amostra na subida).
+
+**Quem já tinha o banco `portal` criado precisa recomeçar do zero para ver a amostra nova.** A amostra só carrega num banco vazio e não roda de novo sobre um banco que já a tem. A versão atual traz: entregas Enviado, Em análise e Aprovado com o arquivo que a marca mandou, o VT do Roxo em "Ajuste solicitado" com o recado da RBS no histórico, horários sempre no passado (contados a partir do dia em que o banco é criado) e nenhum "(simulada)" no nome da pesquisa. Num banco criado antes, as migrações novas (V4 a V6) rodam sozinhas ao subir a API, mas a amostra antiga continua como estava.
 
 ## Se algo der errado
 
@@ -128,7 +130,7 @@ Todos usam a senha `senha123`. O sistema detecta o perfil pela conta: a RBS cai 
 
 Com o banco recém-criado (amostra original):
 
-1. Entre como `marketing@roxo.example`. "Minha parceria" mostra a próxima ação: o "VT para os telões dos palcos", com o ajuste pedido pela RBS.
+1. Entre como `marketing@roxo.example`. "Minha parceria" mostra a próxima ação: o "VT para os telões dos palcos", em "Ajuste solicitado", com o recado da RBS (o VT passa de 30 segundos e a trilha precisa de autorização). Em **Mídia e conteúdo**, a entrega mostra o envio anterior da marca, com a observação que ela escreveu, e o **Histórico** traz o envio e o pedido de ajuste, com autor e data.
 2. Em **Mídia e conteúdo**, solte um PDF (ou JPG, PNG, MP4) na área de envio, escolha a entrega e envie. O arquivo vira uma nova versão, com autor, data e status "Enviado".
 3. Isolamento: ainda como Roxo, abra <http://localhost:5173/parceria/2> (a parceria do Amarelo). A tela diz "Parceria não encontrada" e a API responde 404, igual a um id que não existe.
 4. Saia e entre como `b2b@rbs.example`. Em **Fila de materiais**, abra o envio do Roxo e aprove (ou peça ajuste com uma observação). Tudo fica no **Histórico**, com autor e data.
@@ -136,7 +138,7 @@ Com o banco recém-criado (amostra original):
 6. Em **Relatórios**, gere uma nova versão do relatório do Roxo, valide e disponibilize.
 7. Volte como Roxo: o relatório aparece em **Relatório**, com as seções do modelo, e pode ser impresso ou exportado em CSV.
 
-**Regras de envio.** Arquivos de até 20 MB nos formatos PDF, PNG, JPG, DOCX, XLSX, PPTX, CSV, MP4, MP3 e ZIP. A API confere o conteúdo, e não só o nome. O download sai sempre como anexo. As planilhas de carga são CSV em UTF-8 com vírgula como separador; as colunas estão em `docs/banco.md` e há exemplos em `docs/exemplos/`.
+**Regras de envio.** Arquivos de até 20 MB nos formatos PDF, PNG, JPG, DOCX, XLSX, PPTX, CSV, MP4, MP3 e ZIP. A API confere o conteúdo, e não só o nome. O download sai sempre como anexo. Cada envio aceita uma observação (até 500 caracteres), que fica na versão e no histórico. As planilhas de carga são CSV em UTF-8 com vírgula como separador (no Excel, "Salvar como" e "CSV UTF-8"); as colunas estão em `docs/banco.md` e há exemplos em `docs/exemplos/`. Linha com data ou quantidade ilegível é rejeitada com o motivo e o formato esperado, e o resto do arquivo entra.
 
 ## Testes
 
@@ -164,7 +166,7 @@ No front, `npm run build` confere os tipos e gera a versão de produção; `npm 
 
 ## Pendências registradas
 
-- Comprovações de marca, plano comercial (previsto) e números do festival entram só pela amostra. Uma parceria cadastrada ao vivo fica sem previsto, e a planilha dela é rejeitada com o motivo "aproveitamento não encontrado".
+- Comprovações de marca, plano comercial (previsto) e números do festival entram só pela amostra. Uma parceria cadastrada ao vivo fica sem previsto, e a planilha dela é rejeitada com o motivo "aproveitamento não encontrado"; o relatório dela sai com as 6 seções do modelo e os 17 indicadores, e os de mídia e de ativação aparecem como indisponíveis.
 - "O festival em números" sai como indisponível nos relatórios de 2027, porque só há números de 2026.
 - Telas próprias de Aplicações de marca, Cortesias, Credenciamento e Contrato: nesta versão cada aba mostra as próprias entregas.
 - E-mail automático do código de ativação; recuperação de senha.
