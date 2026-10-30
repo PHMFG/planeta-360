@@ -58,7 +58,7 @@ export function CaixaDoAtlas({ parceriaId }: { parceriaId: number }) {
                 value={texto}
                 onChange={(evento) => setTexto(evento.target.value)}
                 maxLength={1000}
-                placeholder={estado.relatorio ? 'Pergunte ao Atlas sobre o relatório da ativação…' : 'Pergunte ao Atlas sobre os números da sua parceria…'}
+                placeholder={estado.relatorio ? 'Pergunte ao Atlas sobre o relatório da ativação…' : 'Pergunte ao Atlas…'}
                 className="w-full bg-transparent py-1 text-sm leading-normal text-white outline-none placeholder:text-white/64"
               />
             </label>

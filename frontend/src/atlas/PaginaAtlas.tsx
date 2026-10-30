@@ -323,9 +323,11 @@ export function PaginaAtlas() {
   }
   const acoesDaConversa = (
     <>
-      <ChipLink to={`${base}/relatorio`} className="max-sm:hidden">
-        Documentos
-      </ChipLink>
+      {relatorioDisponivel && (
+        <ChipLink to={`${base}/relatorio`} className="max-sm:hidden">
+          Documentos
+        </ChipLink>
+      )}
       <ChipLink to={`${base}/atlas`} icone="ri-add-line" onClick={() => setTexto('')}>
         Nova conversa
       </ChipLink>

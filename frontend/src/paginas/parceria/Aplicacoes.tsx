@@ -273,8 +273,8 @@ function DadosDaAtivacao({ rbs }: { rbs: boolean }) {
     <Cartao titulo="Números da ativação">
       <p className="mb-4 text-sm font-medium text-texto-2">
         {rbs
-          ? `Os números que só a marca sabe informar. Eles entram no relatório do Atlas de ${parceria.patrocinador} com o nome de quem informou e a data.`
-          : 'Números que só a sua equipe ou a agência sabem. Eles entram no relatório do Atlas com o nome de quem informou e a data. Para corrigir, informe o valor novo: o anterior fica no histórico.'}
+          ? `Os números que só a marca sabe informar. O Atlas de ${parceria.patrocinador} os usa nas respostas, e eles ficam com o nome de quem informou e a data.`
+          : 'Números que só a sua equipe ou a agência sabem. O Atlas os usa nas respostas, e eles ficam com o nome de quem informou e a data. Para corrigir, informe o valor novo: o anterior fica no histórico.'}
       </p>
       <Carregando dados={dados} vazio={(dado) => dado.campos.length === 0} textoVazio="Nenhum número para informar nesta aba.">
         {(dado) => (
