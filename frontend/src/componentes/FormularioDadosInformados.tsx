@@ -1,6 +1,6 @@
 // Os números que só a marca sabe (visitantes, cadastros, brindes): o mesmo formulário na aba Aplicações e no cartão do Atlas.
 // [VALIDACAO] Aqui só se avisa antes do envio; a API confere tudo de novo (catálogo, limites e o limite entre campos).
-import { useState, type FormEvent, type ReactNode } from 'react'
+import { useId, useState, type FormEvent, type InputHTMLAttributes, type ReactNode } from 'react'
 import { ErroApi } from '../api/cliente'
 import type { CampoCatalogo, ValorInformado, ValorVigente } from '../api/dados'
 import { data, numero } from '../util/formatar'
@@ -19,8 +19,35 @@ type Props = {
   /** Botões ao lado do enviar (ex.: "Agora não" no cartão do Atlas). */
   extra?: ReactNode
   desabilitado?: boolean
-  /** Uma coluna e botões na largura toda, para caber no painel do Atlas. */
-  compacto?: boolean
+  /** No cartão do Atlas: campos de vidro sobre o grafite e o enviar como chip branco, como no Figma. */
+  escuro?: boolean
+}
+
+/** Campo do cartão do Atlas: rótulo em caixa alta, vidro translúcido e a mensagem logo abaixo, em branco. */
+function CampoEscuro({ rotulo, erro, ajuda, ...resto }: InputHTMLAttributes<HTMLInputElement> & { rotulo: string; erro?: string; ajuda?: string }) {
+  const id = useId()
+  return (
+    <div>
+      <label
+        htmlFor={id}
+        className={`flex cursor-text flex-col gap-1 rounded-[14px] border bg-white/8 px-4 py-2.5 transition-colors ${erro ? 'border-[#ff8aa1]' : 'border-white/16 focus-within:border-white/50'}`}
+      >
+        <span className="text-[11px] font-bold tracking-[0.12em] text-white/64 uppercase">{rotulo}</span>
+        <input
+          id={id}
+          className="w-full bg-transparent text-[15px] font-semibold text-white outline-none placeholder:font-medium placeholder:text-white/45"
+          aria-invalid={erro ? true : undefined}
+          aria-describedby={erro || ajuda ? `${id}-d` : undefined}
+          {...resto}
+        />
+      </label>
+      {(erro || ajuda) && (
+        <p id={`${id}-d`} className={`mt-1.5 px-1 text-xs font-medium ${erro ? 'text-[#ff8aa1]' : 'text-white/60'}`}>
+          {erro ?? ajuda}
+        </p>
+      )}
+    </div>
+  )
 }
 
 /** "1.200" e "1200" valem 1200; vírgula, letra ou sinal não são número inteiro. */
@@ -42,7 +69,7 @@ export function FormularioDadosInformados({
   somenteMudados = false,
   extra,
   desabilitado = false,
-  compacto = false,
+  escuro = false,
 }: Props) {
   const [textos, setTextos] = useState<Record<string, string>>({})
   const [erros, setErros] = useState<Record<string, string>>({})
@@ -103,29 +130,50 @@ export function FormularioDadosInformados({
 
   return (
     <form onSubmit={enviar} className="flex flex-col gap-4" noValidate>
-      <div className={compacto ? 'grid gap-3' : 'grid gap-4 md:grid-cols-2'}>
-        {campos.map((campo) => (
-          <Campo
-            key={campo.chave}
-            rotulo={campo.unidade ? `${campo.rotulo} (${campo.unidade})` : campo.rotulo}
-            inputMode="numeric"
-            autoComplete="off"
-            placeholder={campo.vigente ? numero(campo.vigente.valor) : 'Não informado'}
-            value={textos[campo.chave] ?? ''}
-            onChange={(evento) => setTextos((atuais) => ({ ...atuais, [campo.chave]: evento.target.value }))}
-            erro={erros[campo.chave]}
-            ajuda={campo.vigente ? seloDoValor(campo.vigente) : (campo.ajuda ?? undefined)}
-            disabled={desabilitado || enviando}
-          />
+      <div className={escuro ? 'grid gap-3 @md:grid-cols-2' : 'grid gap-4 md:grid-cols-2'}>
+        {campos.map((campo) => {
+          const propriedades = {
+            rotulo: campo.unidade ? `${campo.rotulo} (${campo.unidade})` : campo.rotulo,
+            inputMode: 'numeric' as const,
+            autoComplete: 'off',
+            placeholder: campo.vigente ? numero(campo.vigente.valor) : 'Não informado',
+            value: textos[campo.chave] ?? '',
+            onChange: (evento: { target: { value: string } }) => setTextos((atuais) => ({ ...atuais, [campo.chave]: evento.target.value })),
+            erro: erros[campo.chave],
+            ajuda: campo.vigente ? seloDoValor(campo.vigente) : (campo.ajuda ?? undefined),
+            disabled: desabilitado || enviando,
+          }
+          return escuro ? <CampoEscuro key={campo.chave} {...propriedades} /> : <Campo key={campo.chave} {...propriedades} />
+        })}
+      </div>
+      {falha &&
+        (escuro ? (
+          <p className="text-sm font-semibold text-[#ff8aa1]" role="alert">
+            {falha}
+          </p>
+        ) : (
+          <Aviso tipo="falha" titulo={falha} />
         ))}
-      </div>
-      {falha && <Aviso tipo="falha" titulo={falha} />}
-      <div className={compacto ? 'flex flex-col-reverse gap-2' : 'flex flex-col-reverse gap-3 sm:flex-row'}>
-        {extra}
-        <Botao type="submit" carregando={enviando} disabled={desabilitado} icone="ri-save-line" className={compacto ? 'w-full min-w-0' : ''}>
-          {textoEnviar}
-        </Botao>
-      </div>
+      {escuro ? (
+        <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            type="submit"
+            disabled={desabilitado || enviando}
+            className="inline-flex h-[38px] items-center gap-2 rounded-full bg-white pr-[18px] pl-4 text-[13px] font-bold text-atlas-azul hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <i className={enviando ? 'ri-loader-4-line animate-spin text-base' : 'ri-send-plane-2-line text-base'} aria-hidden="true" />
+            {textoEnviar}
+          </button>
+          {extra}
+        </div>
+      ) : (
+        <div className="flex flex-col-reverse gap-3 sm:flex-row">
+          {extra}
+          <Botao type="submit" carregando={enviando} disabled={desabilitado} icone="ri-save-line">
+            {textoEnviar}
+          </Botao>
+        </div>
+      )}
     </form>
   )
 }

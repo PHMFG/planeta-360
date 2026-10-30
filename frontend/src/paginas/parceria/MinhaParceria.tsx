@@ -1,5 +1,6 @@
 // Minha parceria (Figma P00): o que falta fazer, o que está com a RBS e o atalho para o relatório. [ITEM-7]
 import { Link, useNavigate } from 'react-router'
+import { CaixaDoAtlas } from '../../atlas/CaixaDoAtlas'
 import { ErroApi } from '../../api/cliente'
 import { listarEntregas, type Entrega } from '../../api/materiais'
 import { obterPesquisa, obterRelatorio } from '../../api/resultados'
@@ -60,6 +61,9 @@ export function MinhaParceria() {
         titulo={usuario?.perfil === 'ADMIN_RBS' ? parceria.patrocinador : 'Minha parceria'}
         subtitulo={`${nomeCota(parceria)} · ${parceria.evento.nome} ${parceria.evento.edicao} · próximas ações e entregas da empresa.`}
       />
+
+      {/* [ATLAS] A entrada do Atlas (Figma P00): só para a marca, que é quem conversa com ele. */}
+      {!rbs && <CaixaDoAtlas parceriaId={parceria.id} />}
 
       <Carregando dados={entregas}>
         {(lista) => {
