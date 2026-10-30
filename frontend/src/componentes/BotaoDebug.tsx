@@ -121,7 +121,7 @@ export function BotaoDebug() {
       <Modal titulo="Debug · chaves de IA" legenda="Temporário, só no ambiente de desenvolvimento" aberto={aberto} aoFechar={() => setAberto(false)}>
         <form onSubmit={salvar} className="flex flex-col gap-4" noValidate>
           <Aviso tipo={estado.llmDisponivel ? 'info' : 'ausente'} titulo={estado.llmDisponivel ? 'Modelo de linguagem ligado' : 'Modelo de linguagem desligado'}>
-            {descrever(estado)} Modelo {estado.modelo}, {estado.raciocinio === false ? 'sem' : 'com'} linha de pensamento.
+            {descrever(estado)} Modelo {estado.modelo}, {estado.raciocinio === false ? 'sem' : 'com'} raciocínio.
           </Aviso>
           <Seletor rotulo="Provedor e modelo" value={provedor} onChange={(evento) => setProvedor(evento.target.value as Provedor)}>
             <option value="go-deepseek">OpenCode Go · DeepSeek V4.1 Flash</option>
@@ -167,10 +167,11 @@ export function BotaoDebug() {
           <label className="flex items-start gap-2.5 text-sm font-semibold">
             <input type="checkbox" className="mt-0.5 size-4 shrink-0 accent-[var(--secao-cor)]" checked={raciocinio} onChange={(evento) => setRaciocinio(evento.target.checked)} />
             <span>
-              Linha de pensamento do modelo
+              Raciocínio do modelo
               <span className="block text-xs font-medium text-texto-2">
-                O modelo pensa antes de responder e a conversa mostra o pensamento numa caixa que abre e fecha. Cada resposta demora uns segundos a mais
-                e gasta mais do limite do provedor. Vale ao salvar a chave.
+                O modelo pensa antes de responder. O raciocínio fica só no servidor; a conversa mostra um resumo curto, numa caixa que abre e fecha.
+                Cada resposta demora uns segundos a mais e gasta mais do limite do provedor (o resumo é uma chamada curta a mais). Vale ao salvar a
+                chave.
               </span>
             </span>
           </label>

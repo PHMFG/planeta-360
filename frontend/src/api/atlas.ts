@@ -12,8 +12,8 @@ export type StatusCartao = 'PENDENTE' | 'RESPONDIDA' | 'RECUSADA' | 'CANCELADA'
 
 export type ItemDaConversa =
   | { tipo: 'usuario'; texto: string }
-  /** A linha de pensamento do modelo, crua: não passa pela checagem do texto e pode ter números e nomes internos. */
-  | { tipo: 'raciocinio'; texto: string }
+  /** O resumo do raciocínio do modelo, escrito no servidor e conferido como o texto. O raciocínio cru não sai do servidor. */
+  | { tipo: 'raciocinio'; resumo: string }
   /** {@code porModelo} falso: frase fixa do servidor (o botão, sem modelo), que a tela não apresenta como fala do Atlas. */
   | { tipo: 'texto'; texto: string; porModelo?: boolean }
   | { tipo: 'aviso'; texto: string }
@@ -51,7 +51,10 @@ export const obterConversa = (conversaId: number) => pedir<Conversa>(`/atlas/con
 
 /** O que chega enquanto o Atlas responde, nas rotas 44 e 46 em fluxo. O texto já vem filtrado e com os números resolvidos. */
 export type EventoDoTurno =
-  | { tipo: 'raciocinio'; delta: string }
+  /** O modelo começou a pensar nesta ida. */
+  | { tipo: 'pensando' }
+  /** O resumo do raciocínio de uma ida, quando fica pronto (pode chegar depois do texto dela). */
+  | { tipo: 'resumo'; texto: string }
   | { tipo: 'etapa'; texto: string }
   | { tipo: 'texto'; delta: string }
   /** A checagem recusou o texto desta ida ao modelo: a tela o descarta e espera a nova redação ou a frase fixa. */
@@ -69,8 +72,9 @@ async function turnoEmFluxo(caminho: string, corpo: unknown, aoEvento: AoEvento,
       const campos = (dados ?? {}) as { delta?: string; texto?: string; status?: number; detail?: string }
       if (nome === 'fim') desfecho.fim = dados as Conversa
       else if (nome === 'erro') desfecho.erro = new ErroApi(campos.status ?? 500, campos.detail ?? 'O Atlas não terminou a resposta. Tente de novo.')
-      else if (nome === 'raciocinio' || nome === 'texto') aoEvento({ tipo: nome, delta: campos.delta ?? '' })
-      else if (nome === 'etapa') aoEvento({ tipo: 'etapa', texto: campos.texto ?? '' })
+      else if (nome === 'texto') aoEvento({ tipo: 'texto', delta: campos.delta ?? '' })
+      else if (nome === 'pensando') aoEvento({ tipo: 'pensando' })
+      else if (nome === 'resumo' || nome === 'etapa') aoEvento({ tipo: nome, texto: campos.texto ?? '' })
       else if (nome === 'texto_recusado') aoEvento({ tipo: 'texto_recusado' })
     },
     sinal,

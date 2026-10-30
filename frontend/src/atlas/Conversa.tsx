@@ -3,8 +3,8 @@
 // lado da pré-visualização do documento (compacta). [ATLAS]
 // Só o que o modelo de linguagem escreveu aparece como fala do Atlas. O que o portal faz sozinho (o botão "Montar relatório",
 // sem modelo) aparece como passo do sistema, sem orbe; e, sem modelo, não há campo de chat.
-// A resposta do modelo chega em tempo real: a linha de pensamento, o texto e o que ele está fazendo; no fim do turno, a
-// conversa gravada toma o lugar da versão ao vivo.
+// A resposta do modelo chega em tempo real: o tempo pensando com o resumo do raciocínio, o texto e o que ele está fazendo; no
+// fim do turno, a conversa gravada toma o lugar da versão ao vivo.
 import { useEffect, useRef } from 'react'
 import type { ItemDaConversa, RespostaDoCartao } from '../api/atlas'
 import type { ParceriaResumo } from '../api/tipos'
@@ -15,7 +15,8 @@ import { Compositor } from './Compositor'
 import { AvisoAtlas, BlocoDoAtlas, BlocoDoSistema, Chip, LinhaBuscando, MensagemVoce, TextoDoAtlas, TextoDoSistema } from './Elementos'
 import { Raciocinio } from './Raciocinio'
 
-type ItemDaResposta = Exclude<ItemDaConversa, { tipo: 'usuario' }>
+/** Na tela, pensamentos seguidos viram uma caixa só, com o resumo de cada um. */
+type ItemDaResposta = Exclude<ItemDaConversa, { tipo: 'usuario' | 'raciocinio' }> | { tipo: 'raciocinio'; resumos: string[] }
 type Grupo = { tipo: 'voce'; texto: string } | { tipo: 'resposta'; itens: ItemDaResposta[] }
 
 /**
@@ -29,14 +30,15 @@ function agrupar(itens: ItemDaConversa[]): Grupo[] {
       grupos.push({ tipo: 'voce', texto: item.texto })
       continue
     }
+    const novo: ItemDaResposta = item.tipo === 'raciocinio' ? { tipo: 'raciocinio', resumos: [item.resumo] } : item
     const ultimo = grupos.at(-1)
     if (ultimo?.tipo !== 'resposta') {
-      grupos.push({ tipo: 'resposta', itens: [item] })
+      grupos.push({ tipo: 'resposta', itens: [novo] })
       continue
     }
     const anterior = ultimo.itens.at(-1)
-    if (item.tipo === 'raciocinio' && anterior?.tipo === 'raciocinio') ultimo.itens[ultimo.itens.length - 1] = { tipo: 'raciocinio', texto: `${anterior.texto}\n\n${item.texto}` }
-    else ultimo.itens.push(item)
+    if (novo.tipo === 'raciocinio' && anterior?.tipo === 'raciocinio') ultimo.itens[ultimo.itens.length - 1] = { tipo: 'raciocinio', resumos: [...anterior.resumos, ...novo.resumos] }
+    else ultimo.itens.push(novo)
   }
   return grupos
 }
@@ -108,7 +110,7 @@ export function AreaDaConversa({
   function conteudo(item: ItemDaResposta, posicao: number) {
     switch (item.tipo) {
       case 'raciocinio':
-        return <Raciocinio key={posicao} texto={item.texto} />
+        return <Raciocinio key={posicao} resumos={item.resumos} />
       case 'texto':
         return doModelo(item) ? <TextoDoAtlas key={posicao}>{item.texto}</TextoDoAtlas> : <TextoDoSistema key={posicao}>{item.texto}</TextoDoSistema>
       case 'aviso':
@@ -143,7 +145,7 @@ export function AreaDaConversa({
             <BlocoDoAtlas compacto={compacta}>
               {aoVivo.partes.map((parte, posicao) =>
                 parte.tipo === 'raciocinio' ? (
-                  <Raciocinio key={posicao} texto={parte.texto} desde={parte.desde} ate={parte.ate} />
+                  <Raciocinio key={posicao} resumos={parte.resumos} desde={parte.desde} ate={parte.ate} />
                 ) : (
                   <TextoDoAtlas key={posicao} digitando={posicao === aoVivo.partes.length - 1 && !aoVivo.etapa}>
                     {parte.texto}
