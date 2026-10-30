@@ -37,6 +37,12 @@ import org.springframework.ai.tool.definition.ToolDefinition;
  *   <li>Em fluxo ({@link #responderEmFluxo}), usa o {@code stream()} do mesmo modelo: o Spring AI 2.0.2 entrega o texto em
  *       pedaços, o {@code reasoning_content} acumulado nos metadados de cada pedaço (daqui sai só o que cresceu) e os pedidos de
  *       ferramenta já juntados, num pedaço só, quando chega o {@code finish_reason} deles.</li>
+ *   <li>Com o raciocínio desligado ({@code atlas.raciocinio=false}) o modelo não raciocina, e este provedor também não repassa
+ *       nenhum {@code reasoning_content} que chegue mesmo assim: sem raciocínio, não há o que gravar, transmitir nem resumir.</li>
+ *   <li>{@link #resumir} é a chamada à parte do resumo do raciocínio: o mesmo {@code ChatModel}, sem ferramentas, com
+ *       {@code "thinking": {"type": "disabled"}}, no máximo {@value #MAXIMO_DE_TOKENS_DO_RESUMO} tokens de saída e temperatura
+ *       baixa. Se falha, nem o log nem a exceção levam o texto do erro do provedor (só o nome da falha), para o raciocínio, que é
+ *       o que se manda nessa chamada, nunca parar em log.</li>
  *   <li>O {@code User-Agent} próprio é posto pelo {@link LlmConfig}: o {@code custom-headers} do Spring AI não troca o
  *       "spring-ai-openai" que ele manda por padrão, só acrescenta um segundo valor ao cabeçalho.</li>
  * </ul>
@@ -55,6 +61,10 @@ public class ProvedorSpringAi implements ProvedorDeLlm {
 
     /** O campo do corpo que liga ou desliga o raciocínio no DeepSeek (vai no topo do JSON, aninhado). */
     static final String THINKING = "thinking";
+    /** O teto de tokens de saída do resumo do raciocínio: uma ou duas frases curtas cabem folgadas. */
+    public static final int MAXIMO_DE_TOKENS_DO_RESUMO = 200;
+    /** O resumo tem de ser fiel ao raciocínio, não criativo. */
+    public static final double TEMPERATURA_DO_RESUMO = 0.1;
 
     private final ChatModel modelo;
     private final String chave;
@@ -82,9 +92,26 @@ public class ProvedorSpringAi implements ProvedorDeLlm {
     public RespostaDoLlm responder(PedidoAoLlm pedido) {
         try {
             ChatResponse resposta = modelo.call(new Prompt(mensagens(pedido.mensagens()), opcoes(pedido)));
-            return resposta(resposta);
+            RespostaDoLlm saida = resposta(resposta);
+            return raciocinio ? saida : new RespostaDoLlm(saida.texto(), saida.chamadas(), null);
         } catch (RuntimeException erro) {
             throw falha(erro);
+        }
+    }
+
+    @Override
+    public String resumir(PedidoDeResumo pedido) {
+        try {
+            Prompt prompt = new Prompt(List.of(new SystemMessage(pedido.instrucoes()), new UserMessage(pedido.entrada())),
+                    opcoesDoResumo(pedido));
+            ChatResponse resposta = modelo.call(prompt);
+            Generation geracao = resposta == null ? null : resposta.getResult();
+            return geracao == null || geracao.getOutput() == null ? null : vazioViraNulo(geracao.getOutput().getText());
+        } catch (RuntimeException erro) {
+            // Nada do erro do provedor: nesta chamada vai o raciocínio, e o corpo de um erro pode devolver o que recebeu.
+            String nome = erro.getClass().getSimpleName();
+            log.warn("O modelo de linguagem não respondeu ao resumo do raciocínio ({})", nome);
+            throw new ProvedorIndisponivelException("O modelo de linguagem não respondeu ao resumo do raciocínio (" + nome + ").");
         }
     }
 
@@ -102,7 +129,7 @@ public class ProvedorSpringAi implements ProvedorDeLlm {
                         continue;
                     }
                     // O Spring AI põe nos metadados o raciocínio ACUMULADO até este pedaço: o que é novo é o que cresceu.
-                    if (saida.getMetadata().get(RACIOCINIO_NOS_METADADOS) instanceof String acumulado
+                    if (raciocinio && saida.getMetadata().get(RACIOCINIO_NOS_METADADOS) instanceof String acumulado
                             && acumulado.length() > raciocinioAcumulado.length() && acumulado.startsWith(raciocinioAcumulado)) {
                         ouvinte.raciocinio(acumulado.substring(raciocinioAcumulado.length()));
                         raciocinioAcumulado = acumulado;
@@ -139,21 +166,33 @@ public class ProvedorSpringAi implements ProvedorDeLlm {
     // ---------------------------------------------------------------------
 
     private OpenAiChatOptions opcoes(PedidoAoLlm pedido) {
+        List<ToolCallback> ferramentas = pedido.ferramentas().stream().map(ProvedorSpringAi::soDefinicao).toList();
+        return base(pedido.sessao(), raciocinio).toolCallbacks(ferramentas).build();
+    }
+
+    /** As opções do resumo: sem ferramentas, o raciocínio SEMPRE desligado, poucos tokens e temperatura baixa. */
+    private OpenAiChatOptions opcoesDoResumo(PedidoDeResumo pedido) {
+        return base(pedido.sessao(), false).toolCallbacks(List.of()).maxTokens(MAXIMO_DE_TOKENS_DO_RESUMO)
+                .temperature(TEMPERATURA_DO_RESUMO).build();
+    }
+
+    /**
+     * As opções padrão do modelo com o que muda a cada chamada: o cabeçalho da sessão e o {@code thinking}. As opções da chamada
+     * não se juntam às padrão no Spring AI 2.0: parte-se das padrão (modelo, temperatura e extra-body) e acrescenta-se o resto.
+     */
+    private OpenAiChatOptions.Builder base(String sessao, boolean comRaciocinio) {
         OpenAiChatOptions padrao = (OpenAiChatOptions) modelo.getOptions();
         Map<String, String> cabecalhos = new LinkedHashMap<>();
         if (padrao.getCustomHeaders() != null) {
             cabecalhos.putAll(padrao.getCustomHeaders());
         }
-        cabecalhos.put(CABECALHO_DA_SESSAO, pedido.sessao());
-        List<ToolCallback> ferramentas = pedido.ferramentas().stream().map(ProvedorSpringAi::soDefinicao).toList();
+        cabecalhos.put(CABECALHO_DA_SESSAO, sessao);
         Map<String, Object> corpoExtra = new LinkedHashMap<>();
         if (padrao.getExtraBody() != null) {
             corpoExtra.putAll(padrao.getExtraBody());
         }
-        corpoExtra.put(THINKING, Map.of("type", raciocinio ? "enabled" : "disabled"));
-        // As opções da chamada não se juntam às padrão no Spring AI 2.0: parte-se das padrão (modelo, temperatura e extra-body)
-        // e acrescenta-se o que muda a cada chamada.
-        return padrao.mutate().customHeaders(cabecalhos).toolCallbacks(ferramentas).extraBody(corpoExtra).build();
+        corpoExtra.put(THINKING, Map.of("type", comRaciocinio ? "enabled" : "disabled"));
+        return padrao.mutate().customHeaders(cabecalhos).extraBody(corpoExtra);
     }
 
     private static List<Message> mensagens(List<MensagemDeChat> mensagens) {

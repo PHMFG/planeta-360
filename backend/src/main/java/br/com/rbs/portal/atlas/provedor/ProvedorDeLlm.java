@@ -39,6 +39,27 @@ public interface ProvedorDeLlm {
         return resposta;
     }
 
+    /**
+     * Uma chamada à parte, que não é uma ida do loop: resume o raciocínio cru de uma mensagem do assistente para a tela. [ATLAS]
+     * O raciocínio nunca sai do servidor; a conversa recebe só este resumo, que o servidor ainda confere antes de guardar. É um
+     * pedido de chat simples, sem ferramentas, com o raciocínio do modelo desligado ({@code "thinking": {"type": "disabled"}}),
+     * poucos tokens de saída e temperatura baixa. Devolve o texto do modelo (ou nulo, se veio em branco). As mesmas regras de
+     * {@link #responder}: fora de transação, falha como {@link ProvedorIndisponivelException}, e, como o que se pede aqui é
+     * justamente o raciocínio, a mensagem da exceção nunca leva o corpo do erro do provedor. O padrão, para quem não resume, é
+     * falhar: o resumo é opcional e a mensagem fica sem ele.
+     */
+    default String resumir(PedidoDeResumo pedido) {
+        throw new ProvedorIndisponivelException("Este provedor não resume o raciocínio.");
+    }
+
+    /**
+     * O pedido de {@link #resumir}: a {@code sessao} (o id da conversa, no cabeçalho {@code x-opencode-session}), as
+     * {@code instrucoes} (a mensagem de sistema, o prompt do resumo) e a {@code entrada} (a mensagem do usuário, com o raciocínio
+     * a resumir, que é dado e nunca instrução).
+     */
+    record PedidoDeResumo(String sessao, String instrucoes, String entrada) {
+    }
+
     /** Quem recebe os pedaços de uma ida ao modelo em fluxo, na ordem em que chegam. Roda na thread de quem chamou. */
     interface OuvinteDoFluxo {
 

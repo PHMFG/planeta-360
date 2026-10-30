@@ -6,20 +6,26 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.ChamadaDeFerramenta;
 import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.DefinicaoDeFerramenta;
 import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.MensagemDeChat;
+import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.PedidoDeResumo;
 import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.PedidoAoLlm;
 import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.RespostaDoLlm;
 import com.jayway.jsonpath.JsonPath;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.model.openai.autoconfigure.OpenAiChatAutoConfiguration;
 import org.springframework.ai.model.tool.autoconfigure.ToolCallingAutoConfiguration;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 
 /**
  * [ATLAS] O {@link ProvedorSpringAi} contra um servidor HTTP falso e local, com a configuração REAL do application.yml e a
@@ -28,8 +34,12 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
  * a resposta em fluxo (os pedaços do raciocínio e do texto, a chamada de ferramenta montada), o {@code User-Agent} próprio (um só valor), o
  * {@code x-opencode-session} com o id da conversa, o {@code reasoning_content} gravado voltando na mensagem do assistente, as
  * ferramentas em JSON Schema e a mensagem de ferramenta; e o que vem de volta: texto, {@code tool_calls}, raciocínio, erro sem
- * chave. Também prova que {@code ATLAS_LLM=none} (o padrão) e a chave em branco deixam o portal sem modelo.
+ * chave. Também prova que {@code ATLAS_LLM=none} (o padrão) e a chave em branco deixam o portal sem modelo. E a chamada à parte do
+ * resumo do raciocínio ({@code resumir}): sem ferramentas, com o {@code thinking} desligado, poucos tokens e temperatura baixa, e
+ * uma falha que não leva o corpo do erro do provedor nem para a exceção nem para o log; e o raciocínio desligado
+ * ({@code atlas.raciocinio=false}), que não repassa nenhum {@code reasoning_content}.
  */
+@ExtendWith(OutputCaptureExtension.class)
 class ProvedorSpringAiTest {
 
     private static final String CHAVE = "chave-de-mentira-so-do-teste";
@@ -256,6 +266,123 @@ class ProvedorSpringAiTest {
                 .isEqualTo("A chave [omitido] não vale");
         assertThat(ProvedorSpringAi.limpar("a".repeat(500), "")).hasSize(303);
         assertThat(ProvedorSpringAi.limpar(null, null)).isEmpty();
+    }
+
+    // ---------------------------------------------------------------------
+    // O resumo do raciocínio e o raciocínio desligado
+    // ---------------------------------------------------------------------
+
+    static String promptDoResumo() {
+        try (var entrada = ProvedorSpringAiTest.class.getResourceAsStream("/atlas/prompts/resumo-do-raciocinio.txt")) {
+            return new String(entrada.readAllBytes(), StandardCharsets.UTF_8);
+        } catch (IOException erro) {
+            throw new java.io.UncheckedIOException(erro);
+        }
+    }
+
+    @Test
+    void oResumoVaiSemFerramentasComOThinkingDesligadoPoucosTokensETemperaturaBaixa() {
+        servidor.responderResumo("Conferi os números da parceria.");
+
+        ligado().run(contexto -> {
+            String resumo = contexto.getBean(ProvedorDeLlm.class)
+                    .resumir(new PedidoDeResumo("42", promptDoResumo(), "Vou consultar os números."));
+
+            assertThat(resumo).isEqualTo("Conferi os números da parceria.");
+            // a chamada de resumo não é uma ida do loop: o servidor falso a guarda à parte
+            assertThat(servidor.recebidas()).isEmpty();
+            assertThat(servidor.resumosRecebidos()).hasSize(1);
+            var recebida = servidor.resumosRecebidos().get(0);
+            String corpo = recebida.corpo();
+            assertThat(recebida.caminho()).isEqualTo("/inference/go/openai/v1/chat/completions");
+            assertThat(JsonPath.<Object>read(corpo, "$.thinking")).isEqualTo(Map.of("type", "disabled"));
+            assertThat(corpo).doesNotContain("\"tools\"").doesNotContain("\"stream\":true");
+            assertThat(JsonPath.<Integer>read(corpo, "$.max_tokens")).isEqualTo(ProvedorSpringAi.MAXIMO_DE_TOKENS_DO_RESUMO).isEqualTo(200);
+            assertThat(JsonPath.<Double>read(corpo, "$.temperature")).isEqualTo(ProvedorSpringAi.TEMPERATURA_DO_RESUMO).isLessThan(0.2);
+            assertThat(JsonPath.<String>read(corpo, "$.model")).isEqualTo("deepseek-v4.1-flash");
+            assertThat(JsonPath.<List<String>>read(corpo, "$.messages[*].role")).containsExactly("system", "user");
+            assertThat(JsonPath.<String>read(corpo, "$.messages[0].content")).isEqualTo(promptDoResumo());
+            assertThat(JsonPath.<String>read(corpo, "$.messages[1].content")).isEqualTo("Vou consultar os números.");
+            assertThat(recebida.cabecalho("user-agent")).containsExactly("PlanetaAtlas/0.1");
+            assertThat(recebida.cabecalho("x-opencode-session")).containsExactly("42");
+            assertThat(recebida.cabecalho("authorization")).containsExactly("Bearer " + CHAVE);
+        });
+    }
+
+    @Test
+    void oResumoVaiComOThinkingDesligadoMesmoComORaciocinioLigado() {
+        servidor.responder(ServidorDeLlmFalso.texto("Certo."));
+        servidor.responderResumo("Conferi tudo.");
+
+        ligado().run(contexto -> {
+            ProvedorDeLlm provedor = contexto.getBean(ProvedorDeLlm.class);
+            provedor.responder(pedido());
+            provedor.resumir(new PedidoDeResumo("42", promptDoResumo(), "Raciocínio."));
+
+            assertThat(JsonPath.<Object>read(servidor.recebidas().get(0).corpo(), "$.thinking")).isEqualTo(Map.of("type", "enabled"));
+            assertThat(JsonPath.<Object>read(servidor.resumosRecebidos().get(0).corpo(), "$.thinking")).isEqualTo(Map.of("type", "disabled"));
+        });
+    }
+
+    @Test
+    void resumoEmBrancoVoltaNulo() {
+        servidor.responderResumo("   ");
+
+        ligado().run(contexto -> assertThat(contexto.getBean(ProvedorDeLlm.class)
+                .resumir(new PedidoDeResumo("42", promptDoResumo(), "Raciocínio."))).isNull());
+    }
+
+    @Test
+    void falhaDoResumoNaoLevaOCorpoDoErroDoProvedorNemParaAExcecaoNemParaOLog(CapturedOutput saida) {
+        servidor.responderResumoComStatus(500, "{\"error\":{\"message\":\"ECO-DO-RACIOCINIO Vou consultar " + CHAVE + "\"}}");
+
+        ligado().run(contexto -> assertThatThrownBy(() -> contexto.getBean(ProvedorDeLlm.class)
+                .resumir(new PedidoDeResumo("42", promptDoResumo(), "Raciocínio secreto."))).isInstanceOf(ProvedorIndisponivelException.class)
+                .hasMessageStartingWith("O modelo de linguagem não respondeu ao resumo").hasNoCause()
+                .satisfies(erro -> assertThat(erro.getMessage()).doesNotContain("ECO-DO-RACIOCINIO").doesNotContain(CHAVE)));
+
+        assertThat(saida.getAll()).contains("não respondeu ao resumo do raciocínio").doesNotContain("ECO-DO-RACIOCINIO")
+                .doesNotContain("Raciocínio secreto").doesNotContain(CHAVE);
+    }
+
+    @Test
+    void umProvedorQueNaoResumeFalhaEOResumoFicaOpcional() {
+        ProvedorDeLlm semResumo = new ProvedorDeLlm() {
+            @Override
+            public RespostaDoLlm responder(PedidoAoLlm pedido) {
+                return new RespostaDoLlm("Oi.", List.of(), null);
+            }
+        };
+
+        assertThatThrownBy(() -> semResumo.resumir(new PedidoDeResumo("1", "regras", "entrada")))
+                .isInstanceOf(ProvedorIndisponivelException.class);
+    }
+
+    @Test
+    void semRaciocinioNaoRepassaReasoningContentAindaQueOProvedorMande() {
+        servidor.responder(ServidorDeLlmFalso.chamada("call_9", "relatorio_iniciar", "{\"modelo\":\"ATIVACAO_EVENTO\"}", "Pensamento que não devia vir."));
+        servidor.responderEmFluxo(new ServidorDeLlmFalso.Fluxo().raciocinio("Pensamento ").raciocinio("em fluxo.").texto("Pronto.").fim("stop"));
+
+        contexto("spring.ai.model.chat=openai", "spring.ai.openai.api-key=" + CHAVE, "spring.ai.openai.base-url=" + servidor.urlBase(),
+                "spring.ai.openai.max-retries=0", "atlas.raciocinio=false").run(contexto -> {
+            ProvedorDeLlm provedor = contexto.getBean(ProvedorDeLlm.class);
+            assertThat(provedor.responder(pedido()).raciocinio()).isNull();
+
+            List<String> raciocinio = new java.util.ArrayList<>();
+            RespostaDoLlm fluxo = provedor.responderEmFluxo(pedido(), new ProvedorDeLlm.OuvinteDoFluxo() {
+                @Override
+                public void raciocinio(String pedaco) {
+                    raciocinio.add(pedaco);
+                }
+
+                @Override
+                public void texto(String pedaco) {
+                }
+            });
+            assertThat(raciocinio).isEmpty();
+            assertThat(fluxo.raciocinio()).isNull();
+            assertThat(fluxo.texto()).isEqualTo("Pronto.");
+        });
     }
 
     // ---------------------------------------------------------------------

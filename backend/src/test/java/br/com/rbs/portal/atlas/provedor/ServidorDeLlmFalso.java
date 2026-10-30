@@ -8,12 +8,15 @@ import java.io.UncheckedIOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -25,8 +28,20 @@ import tools.jackson.databind.json.JsonMapper;
  * {@code data: {...choices[0].delta...}} e {@code data: [DONE]}; veja {@link Fluxo}). Com {@link #exigirRaciocinio}, faz como
  * o DeepSeek com o raciocínio ligado: responde 400 se uma mensagem do assistente com {@code tool_calls} vier sem o
  * {@code reasoning_content}. Nada sai da máquina. Não faz parte da API.
+ * <p>
+ * Responde também às chamadas do <b>resumo do raciocínio</b>, à parte da fila: reconhece-as pelo pedido sem ferramentas e com o
+ * prompt do resumo ({@code atlas/prompts/resumo-do-raciocinio.txt}) como mensagem de sistema. Elas não entram em
+ * {@link #recebidas} (que continua sendo só as idas do loop) nem consomem a fila: ficam em {@link #resumosRecebidos}, e a
+ * resposta é a que o teste enfileirou com {@link #responderResumo} ou, na falta dela, {@link #RESUMO_PADRAO}. Atende cada
+ * pedido numa thread própria, para um resumo lento ({@link #atrasarResumos}) não segurar a ida seguinte do loop.
  */
 public final class ServidorDeLlmFalso implements AutoCloseable {
+
+    /** O resumo que o servidor devolve quando o teste não enfileirou outro: passa na checagem do texto do chat. */
+    public static final String RESUMO_PADRAO = "Conferi o que foi pedido e decidi como responder.";
+
+    /** O prompt do resumo do raciocínio, o mesmo recurso que a API manda como mensagem de sistema. */
+    private static final String PROMPT_DO_RESUMO = lerOPromptDoResumo();
 
     /** A frase do 400 de quando falta o reasoning_content (a do DeepSeek). */
     public static final String SEM_RACIOCINIO = "The reasoning_content in the thinking mode must be passed back to the API.";
@@ -47,8 +62,12 @@ public final class ServidorDeLlmFalso implements AutoCloseable {
     private final HttpServer servidor;
     private final Deque<Resposta> respostas = new ArrayDeque<>();
     private final List<Recebida> recebidas = new CopyOnWriteArrayList<>();
+    private final Deque<Resposta> respostasDoResumo = new ArrayDeque<>();
+    private final List<Recebida> resumosRecebidos = new CopyOnWriteArrayList<>();
+    private final ExecutorService threads = Executors.newCachedThreadPool();
     private volatile Consumer<Recebida> aoReceber;
     private volatile boolean exigirRaciocinio;
+    private volatile Duration atrasoDoResumo = Duration.ZERO;
 
     private ServidorDeLlmFalso(HttpServer servidor) {
         this.servidor = servidor;
@@ -59,6 +78,7 @@ public final class ServidorDeLlmFalso implements AutoCloseable {
             HttpServer http = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
             ServidorDeLlmFalso falso = new ServidorDeLlmFalso(http);
             http.createContext("/", falso::atender);
+            http.setExecutor(falso.threads);
             http.start();
             return falso;
         } catch (IOException erro) {
@@ -97,9 +117,32 @@ public final class ServidorDeLlmFalso implements AutoCloseable {
         return recebidas.get(recebidas.size() - 1);
     }
 
+    /** Enfileira o resumo que a próxima chamada de resumo recebe (as seguintes, sem fila, recebem {@link #RESUMO_PADRAO}). */
+    public synchronized void responderResumo(String resumo) {
+        respostasDoResumo.add(new Resposta(200, texto(resumo), "application/json"));
+    }
+
+    /** Enfileira uma falha para a próxima chamada de resumo (por exemplo, 500). */
+    public synchronized void responderResumoComStatus(int status, String json) {
+        respostasDoResumo.add(new Resposta(status, json, "application/json"));
+    }
+
+    /** Faz cada chamada de resumo demorar este tanto para responder (a ida do loop não espera por ela). */
+    public void atrasarResumos(Duration atraso) {
+        this.atrasoDoResumo = atraso;
+    }
+
+    /** As chamadas de resumo do raciocínio que chegaram, na ordem. Não entram em {@link #recebidas}. */
+    public List<Recebida> resumosRecebidos() {
+        return List.copyOf(resumosRecebidos);
+    }
+
     public synchronized void limpar() {
         respostas.clear();
         recebidas.clear();
+        respostasDoResumo.clear();
+        resumosRecebidos.clear();
+        atrasoDoResumo = Duration.ZERO;
         aoReceber = null;
         exigirRaciocinio = false;
     }
@@ -115,6 +158,10 @@ public final class ServidorDeLlmFalso implements AutoCloseable {
         troca.getRequestHeaders().forEach((nome, valores) -> cabecalhos.put(nome.toLowerCase(), new ArrayList<>(valores)));
         Recebida recebida = new Recebida(troca.getRequestMethod(), troca.getRequestURI().getPath(), cabecalhos,
                 new String(corpo, StandardCharsets.UTF_8));
+        if (ehResumoDoRaciocinio(recebida.corpo())) {
+            atenderResumo(troca, recebida);
+            return;
+        }
         recebidas.add(recebida);
         Consumer<Recebida> gancho = aoReceber;
         if (gancho != null) {
@@ -132,6 +179,25 @@ public final class ServidorDeLlmFalso implements AutoCloseable {
         if (resposta == null) {
             resposta = new Resposta(500, "{\"error\":{\"message\":\"o teste não enfileirou resposta\"}}", "application/json");
         }
+        enviar(troca, resposta);
+    }
+
+    /** A chamada do resumo do raciocínio: guarda, espera o atraso do teste e responde pela fila própria (ou o resumo padrão). */
+    private void atenderResumo(HttpExchange troca, Recebida recebida) throws IOException {
+        resumosRecebidos.add(recebida);
+        try {
+            Thread.sleep(atrasoDoResumo.toMillis());
+        } catch (InterruptedException interrompido) {
+            Thread.currentThread().interrupt();
+        }
+        Resposta resposta;
+        synchronized (this) {
+            resposta = respostasDoResumo.poll();
+        }
+        enviar(troca, resposta != null ? resposta : new Resposta(200, texto(RESUMO_PADRAO), "application/json"));
+    }
+
+    private static void enviar(HttpExchange troca, Resposta resposta) throws IOException {
         byte[] saida = resposta.corpo().getBytes(StandardCharsets.UTF_8);
         troca.getResponseHeaders().add("Content-Type", resposta.tipo());
         if ("text/event-stream".equals(resposta.tipo())) {
@@ -150,6 +216,27 @@ public final class ServidorDeLlmFalso implements AutoCloseable {
         troca.close();
     }
 
+    /** Um pedido sem ferramentas cuja mensagem de sistema é o prompt do resumo do raciocínio. */
+    private static boolean ehResumoDoRaciocinio(String corpo) {
+        JsonNode raiz = JSON.readTree(corpo);
+        JsonNode ferramentas = raiz.path("tools");
+        if (ferramentas.isArray() && !ferramentas.isEmpty()) {
+            return false;
+        }
+        JsonNode primeira = raiz.path("messages").path(0);
+        return "system".equals(primeira.path("role").asString(""))
+                && PROMPT_DO_RESUMO.strip().equals(primeira.path("content").asString("").strip());
+    }
+
+    private static String lerOPromptDoResumo() {
+        try (var entrada = ServidorDeLlmFalso.class.getResourceAsStream("/atlas/prompts/resumo-do-raciocinio.txt")) {
+            return new String(java.util.Objects.requireNonNull(entrada, "falta o prompt do resumo do raciocínio").readAllBytes(),
+                    StandardCharsets.UTF_8);
+        } catch (IOException erro) {
+            throw new UncheckedIOException(erro);
+        }
+    }
+
     /** Alguma mensagem do assistente com tool_calls veio sem o reasoning_content? */
     private static boolean faltaRaciocinio(String corpo) {
         JsonNode mensagens = JSON.readTree(corpo).path("messages");
@@ -166,6 +253,7 @@ public final class ServidorDeLlmFalso implements AutoCloseable {
     @Override
     public void close() {
         servidor.stop(0);
+        threads.shutdownNow();
     }
 
     // ---------------------------------------------------------------------
