@@ -8,6 +8,7 @@ import br.com.rbs.portal.atlas.contexto.AtlasContexto;
 import br.com.rbs.portal.atlas.ferramentas.RelatorioFerramentas;
 import br.com.rbs.portal.atlas.ferramentas.RelatorioFerramentas.Execucao;
 import br.com.rbs.portal.atlas.loop.HistoricoDaConversa.Chamada;
+import br.com.rbs.portal.atlas.provedor.ProvedorAtual;
 import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm;
 import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.ChamadaDeFerramenta;
 import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.MensagemDeChat;
@@ -31,7 +32,6 @@ import java.util.List;
 import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
@@ -85,7 +85,7 @@ public class LoopDoAgente {
     private static final Logger log = LoggerFactory.getLogger(LoopDoAgente.class);
     private static final DateTimeFormatter DIA = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
-    private final ObjectProvider<ProvedorDeLlm> provedor;
+    private final ProvedorAtual provedor;
     private final RelatorioFerramentas ferramentas;
     private final HistoricoDaConversa historico;
     private final AtlasRepositorio repositorio;
@@ -98,7 +98,7 @@ public class LoopDoAgente {
     private final String prompt;
 
     /** {@code prazoDoTurno} vem de {@code atlas.prazo-do-turno} (padrão {@link #PRAZO_DO_TURNO}); os testes o encurtam. */
-    public LoopDoAgente(ObjectProvider<ProvedorDeLlm> provedor, RelatorioFerramentas ferramentas, HistoricoDaConversa historico,
+    public LoopDoAgente(ProvedorAtual provedor, RelatorioFerramentas ferramentas, HistoricoDaConversa historico,
                         AtlasRepositorio repositorio, PlanoBSemLlm planoB, ChecagemDeTexto checagem, ResolvedorDeReferencias resolvedor,
                         ModeloBase modelos, TransactionTemplate transacao,
                         @Value("${atlas.prazo-do-turno:PT3M}") Duration prazoDoTurno) {
@@ -165,7 +165,13 @@ public class LoopDoAgente {
     // ---------------------------------------------------------------------
 
     private void conduzir(AtlasContexto contexto) {
-        ProvedorDeLlm llm = provedor.getObject();
+        // O provedor é pego UMA vez: se a chave do debug mudar no meio, este turno termina com o que começou.
+        ProvedorDeLlm llm = provedor.provedor().orElse(null);
+        if (llm == null) {
+            // A chave do debug foi apagada entre a conferência do service e aqui: termina como uma falha do modelo.
+            gravarTexto(contexto, FRASE_DA_FALHA, null);
+            return;
+        }
         Turno turno = new Turno(prazoDoTurno);
         List<MensagemDeChat> transitorias = List.of();   // a nova redação pedida: vai ao modelo, não ao histórico
         while (true) {
