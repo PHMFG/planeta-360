@@ -1,7 +1,6 @@
-// A tela inicial do Atlas (Figma AT00, 199:1693): a saudação sobre o fundo fluido, o campo, "Por onde começamos?" e as
-// conversas recentes. As sugestões seguem o desenho, mas só oferecem o que o Atlas faz de verdade nesta versão: o relatório
-// da ativação, as perguntas sobre ele (com o modelo de linguagem ligado) e os atalhos para as telas do portal. [ATLAS]
-import type { ReactNode } from 'react'
+// A tela inicial do Atlas (Figma AT00, 199:1693): a saudação sobre o fundo fluido, o campo, as sugestões e as conversas
+// recentes. Só aparece o que funciona de verdade: o relatório da ativação sempre; o campo e as perguntas só com o modelo de
+// linguagem ligado. Atalhos que são só links para outras telas não se passam por sugestão do assistente. [ATLAS]
 import { Link } from 'react-router'
 import { NOME_STATUS_ATLAS, type ConversaResumo } from '../api/atlas'
 import type { ParceriaResumo } from '../api/tipos'
@@ -9,7 +8,7 @@ import { Compositor } from './Compositor'
 import { AvisoAtlas } from './Elementos'
 
 const CARTAO =
-  'flex w-full items-start gap-3 rounded-2xl border border-white/14 bg-white/8 p-3.5 text-left backdrop-blur-md transition-colors hover:bg-white/14 sm:w-[232px]'
+  'flex w-full items-start gap-3 rounded-2xl border border-white/14 bg-white/8 p-3.5 text-left backdrop-blur-md transition-colors hover:bg-white/14 disabled:cursor-not-allowed disabled:opacity-60 sm:w-[232px]'
 
 function ConteudoSugestao({ icone, titulo, assunto }: { icone: string; titulo: string; assunto: string }) {
   return (
@@ -47,58 +46,51 @@ type Props = {
   aoMontar: () => void
   pensando: boolean
   falha: string | null
-  avisos?: ReactNode
 }
 
-export function Inicio({ parceria, llm, conversas, texto, aoMudarTexto, aoEnviar, aoPerguntar, aoMontar, pensando, falha, avisos }: Props) {
+export function Inicio({ parceria, llm, conversas, texto, aoMudarTexto, aoEnviar, aoPerguntar, aoMontar, pensando, falha }: Props) {
   const base = `/parceria/${parceria.id}`
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-8 sm:px-8">
       <div className="m-auto flex w-full max-w-[720px] flex-col items-center gap-4">
         <h1 className="text-center text-[30px] leading-tight font-semibold tracking-[-0.01em] text-white sm:text-[40px]">Olá! Como posso ajudar?</h1>
-        <p className="text-center text-base text-white/80">Monte o relatório da sua ativação e entenda o que falta na sua parceria.</p>
-        <div className="mt-4 w-full">
-          <Compositor valor={texto} aoMudar={aoMudarTexto} aoEnviar={aoEnviar} rotuloEnviar="Iniciar chat" ocupado={pensando} habilitado={llm} focarAoAbrir />
-        </div>
-        {!llm && (
-          <div className="w-full">
-            <AvisoAtlas tipo="info" titulo="O chat está desligado agora">
-              O relatório da ativação sai do mesmo jeito: use “Gerar relatório da ativação”, logo abaixo.
-            </AvisoAtlas>
+        <p className="text-center text-base text-white/80">
+          {llm
+            ? 'Monte o relatório da sua ativação ou pergunte sobre os números da sua parceria.'
+            : 'Monte o relatório da sua ativação com os números do portal.'}
+        </p>
+        {llm && (
+          <div className="mt-4 w-full">
+            <Compositor valor={texto} aoMudar={aoMudarTexto} aoEnviar={aoEnviar} rotuloEnviar="Iniciar chat" ocupado={pensando} habilitado focarAoAbrir />
           </div>
         )}
-        {avisos}
         {falha && (
           <div className="w-full">
             <AvisoAtlas tipo="falha" titulo={falha} />
           </div>
         )}
 
-        <div className="mt-6 text-center">
-          <p className="text-[11px] font-bold tracking-[0.12em] text-white/72 uppercase">Por onde começamos?</p>
-          <p className="mt-1 text-xs text-white/72">Escolha um assunto ou escreva sua pergunta.</p>
-        </div>
-        <div className="flex w-full flex-wrap justify-center gap-3">
+        {llm && (
+          <div className="mt-6 text-center">
+            <p className="text-[11px] font-bold tracking-[0.12em] text-white/72 uppercase">Por onde começamos?</p>
+            <p className="mt-1 text-xs text-white/72">Escolha um assunto ou escreva sua pergunta.</p>
+          </div>
+        )}
+        <div className={`flex w-full flex-wrap justify-center gap-3 ${llm ? '' : 'mt-4'}`}>
           <button type="button" className={CARTAO} onClick={aoMontar} disabled={pensando}>
-            <ConteudoSugestao icone="ri-globe-fill" titulo="Gerar relatório da ativação" assunto="Documento para revisão" />
+            <ConteudoSugestao icone="ri-file-chart-line" titulo="Gerar relatório da ativação" assunto="Documento para revisão" />
           </button>
           {llm && (
             <>
-              <button type="button" className={CARTAO} onClick={() => aoPerguntar('O que falta para o relatório da nossa ativação?')} disabled={pensando}>
-                <ConteudoSugestao icone="ri-palette-line" titulo="O que falta para o relatório?" assunto="Aplicações da marca" />
-              </button>
               <button type="button" className={CARTAO} onClick={() => aoPerguntar('Quantas aplicações de marca já foram comprovadas?')} disabled={pensando}>
                 <ConteudoSugestao icone="ri-checkbox-circle-line" titulo="Quantas aplicações foram comprovadas?" assunto="Aplicações da marca" />
               </button>
+              <button type="button" className={CARTAO} onClick={() => aoPerguntar('Que números ainda faltam para o relatório da nossa ativação?')} disabled={pensando}>
+                <ConteudoSugestao icone="ri-question-line" titulo="O que falta para o relatório?" assunto="Aplicações da marca" />
+              </button>
             </>
           )}
-          <Link to={`${base}/aplicacoes`} className={CARTAO}>
-            <ConteudoSugestao icone="ri-edit-box-line" titulo="Informar visitantes e cadastros" assunto="Números da ativação" />
-          </Link>
-          <Link to={`${base}/relatorio`} className={CARTAO}>
-            <ConteudoSugestao icone="ri-file-text-line" titulo="Encontrar documentos" assunto="Relatórios do Atlas" />
-          </Link>
         </div>
 
         {conversas.length > 0 && (
@@ -116,7 +108,7 @@ export function Inicio({ parceria, llm, conversas, texto, aoMudarTexto, aoEnviar
                     <span className="truncate text-[13px] font-semibold text-white">
                       {conversa.relatorio ? `Relatório da ativação · ${NOME_STATUS_ATLAS[conversa.relatorio.status].toLowerCase()}` : 'Conversa com o Atlas'}
                     </span>
-                    <span className="truncate text-[11px] font-medium text-white/62">Aplicações da marca · {quando(conversa.atualizadaEm)}</span>
+                    <span className="truncate text-[11px] font-medium text-white/62">{quando(conversa.atualizadaEm)}</span>
                   </span>
                 </Link>
               ))}

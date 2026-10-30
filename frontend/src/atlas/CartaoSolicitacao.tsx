@@ -51,7 +51,7 @@ export function CartaoSolicitacao({ item, aoResponder }: { item: ItemCartao; aoR
           <i className="ri-edit-box-line text-xl text-white" aria-hidden="true" />
         </span>
         <div className="min-w-0">
-          <p className="text-[11px] font-bold tracking-[0.12em] text-atlas-lilas uppercase">Pergunta do Atlas</p>
+          <p className="text-[11px] font-bold tracking-[0.12em] text-atlas-lilas uppercase">Números que faltam</p>
           <p className="mt-0.5 text-base font-semibold text-white">{item.mensagem}</p>
           <p className="mt-0.5 text-xs text-white/62">Os números vão para a aba Aplicações da marca, com o seu nome e a data.</p>
         </div>

@@ -1,5 +1,5 @@
 // O cartão de anexo do Figma (AT04, 202:1769): o documento que o Atlas montou, dentro da conversa, com o atalho para a
-// pré-visualização ao lado do chat. [ATLAS]
+// pré-visualização ao lado do chat. As fontes de verdade ficam na aba "Fontes" e no fim do documento, não num texto fixo. [ATLAS]
 import type { ParceriaResumo } from '../api/tipos'
 import { Chip, ChipLink, PONTO_RASCUNHO, Tag } from './Elementos'
 
@@ -26,10 +26,6 @@ export function CartaoDocumento({ parceria, relatorioId, titulo, aoAbrir }: Prop
         </div>
         <Tag ponto={PONTO_RASCUNHO}>Documento de trabalho</Tag>
       </div>
-      <p className="text-[13px] font-medium text-white/90">
-        Fontes: <span className="text-atlas-lilas">[1]</span> Consolidação do portal · <span className="text-atlas-lilas">[2]</span> Plano de
-        aplicações · <span className="text-atlas-lilas">[3]</span> Números informados pela marca
-      </p>
       <p className="text-xs text-white/62">Somente registros desta parceria. A RBS não valida este documento.</p>
       <div className="flex flex-wrap gap-2.5">
         <Chip variante="primario" onClick={() => aoAbrir('conversa')}>

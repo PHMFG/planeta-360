@@ -367,14 +367,7 @@ export function PaginaAtlas() {
                 falha={falha}
               />
             ) : (
-              <AreaDaConversa
-                {...conversaProps}
-                topo={
-                  <p className="text-center text-xs text-white/55">
-                    {parceria.patrocinador} · Aplicações da marca · relatório assistido
-                  </p>
-                }
-              />
+              <AreaDaConversa {...conversaProps} />
             )}
           </>
         )}

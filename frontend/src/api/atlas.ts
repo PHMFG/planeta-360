@@ -12,7 +12,8 @@ export type StatusCartao = 'PENDENTE' | 'RESPONDIDA' | 'RECUSADA' | 'CANCELADA'
 
 export type ItemDaConversa =
   | { tipo: 'usuario'; texto: string }
-  | { tipo: 'texto'; texto: string }
+  /** {@code porModelo} falso: frase fixa do servidor (o botão, sem modelo), que a tela não apresenta como fala do Atlas. */
+  | { tipo: 'texto'; texto: string; porModelo?: boolean }
   | { tipo: 'aviso'; texto: string }
   | { tipo: 'cartao'; solicitacaoId: number; relatorioId: number; mensagem: string; status: StatusCartao; campos: CampoDoCartao[] }
   | { tipo: 'relatorio_pronto'; relatorioId: number; titulo: string }

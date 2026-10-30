@@ -83,19 +83,31 @@ export function MensagemVoce({ texto }: { texto: string }) {
   )
 }
 
-/** A resposta do Atlas: orbe, "atlas" com a tag de fontes e o conteúdo (texto, cartão, documento). */
+/** A resposta do modelo de linguagem: orbe, "atlas" e o conteúdo (texto, cartão, documento). */
 export function BlocoDoAtlas({ children, compacto = false }: { children: ReactNode; compacto?: boolean }) {
   return (
     <div className={`flex ${compacto ? 'gap-2.5' : 'gap-3.5'}`}>
       <Orbe tamanho={compacto ? 24 : 32} />
       <div className="flex min-w-0 flex-1 flex-col gap-3.5">
-        <div className="flex flex-wrap items-center gap-2.5">
-          <span className="text-[15px] font-semibold tracking-[-0.01em] text-white">atlas</span>
-          <Tag>Dados da parceria</Tag>
-        </div>
+        <span className="text-[15px] font-semibold tracking-[-0.01em] text-white">atlas</span>
         {children}
       </div>
     </div>
+  )
+}
+
+/** O que o portal faz sozinho, sem o modelo (o botão "Montar relatório"): sem orbe nem "atlas", para não parecer IA. */
+export function BlocoDoSistema({ children }: { children: ReactNode }) {
+  return <div className="flex flex-col gap-3.5">{children}</div>
+}
+
+/** Frase fixa do servidor: discreta, sem cara de resposta do assistente. */
+export function TextoDoSistema({ children }: { children: ReactNode }) {
+  return (
+    <p className="flex items-start gap-2 text-[13px] leading-normal text-white/64">
+      <i className="ri-information-line mt-px text-base" aria-hidden="true" />
+      <span>{children}</span>
+    </p>
   )
 }
 
