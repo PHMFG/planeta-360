@@ -634,7 +634,7 @@ class LoopDoAgenteTest {
         ConversaDto turno = falar(conversa, "Na verdade, outra pergunta: o que é o Atlas?");
 
         assertThat(tipos(turno)).containsExactly("aviso", "usuario", "texto");
-        assertThat(((ItemAviso) turno.itens().get(0)).texto()).isEqualTo("Cartão fechado. Use Montar relatório para continuar.");
+        assertThat(((ItemAviso) turno.itens().get(0)).texto()).isEqualTo("Cartão fechado. Quando tiver os números, peça para continuar.");
         assertThat(contar("SELECT count(*) FROM atlas_solicitacao WHERE id = ? AND status = 'CANCELADA'", cartao.solicitacaoId())).isEqualTo(1);
         assertThat(statusDoRelatorio(conversa)).isEqualTo("MONTANDO");
         List<Mensagem> historico = mensagens(conversa);
@@ -670,6 +670,8 @@ class LoopDoAgenteTest {
         ConversaDto turno = responder(cartao.solicitacaoId(), "cancel");
 
         assertThat(tipos(turno)).containsExactly("aviso", "texto");
+        // com o modelo ligado, o aviso manda continuar pelo chat (sem modelo, é "Use Montar relatório para continuar.")
+        assertThat(((ItemAviso) turno.itens().get(0)).texto()).isEqualTo("Cartão fechado. Quando tiver os números, peça para continuar.");
         assertThat(textoDoItem(turno, 1)).isEqualTo("Tudo bem, quando quiser a gente retoma.");
         assertThat(json(modelo.ultimoPedido().mensagens().get(modelo.ultimoPedido().mensagens().size() - 1).conteudo()))
                 .containsEntry("acao", "cancel");

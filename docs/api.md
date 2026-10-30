@@ -1465,7 +1465,7 @@ Com o modelo ligado (pelas variáveis de ambiente ou, no perfil `dev`, pela chav
 | `texto` | O que o Atlas disse. Os marcadores `{{...}}` já vêm trocados pelo valor; o que não tem valor vira "indisponível" | `texto` |
 | `cartao` | O cartão de perguntas, com o **estado de agora** | `solicitacaoId`, `relatorioId`, `mensagem`, `status` (`PENDENTE`, `RESPONDIDA`, `RECUSADA` ou `CANCELADA`), `campos` |
 | `relatorio_pronto` | O relatório ficou pronto; o front abre o A4 pela rota 47 | `relatorioId`, `titulo` |
-| `aviso` | Aviso do sistema: o cartão foi fechado (cancelado, ou o relatório foi descartado) | `texto` |
+| `aviso` | Aviso do sistema: o cartão foi fechado (cancelado, ou o relatório foi descartado). O texto segue o `llmDisponivel` da resposta: `"Cartão fechado. Use Montar relatório para continuar."` sem o modelo, `"Cartão fechado. Quando tiver os números, peça para continuar."` com ele | `texto` |
 
 Cada item de `campos` do cartão é um campo do catálogo (rota 39) mais `obrigatorio` e `vigente`, que usa o formato da rota 40 (`{valor, origem, informadoPor, informadoEm}`, ou `null` se ninguém informou). O cartão pede, de uma vez, o que o relatório precisa e ainda não tem valor: primeiro as obrigatórias (visitantes e cadastros), depois as opcionais (brindes disponíveis e distribuídos). Não há campo de arquivo no cartão.
 
@@ -1550,7 +1550,7 @@ Cada item de `campos` do cartão é um campo do catálogo (rota 39) mais `obriga
 | --- | --- |
 | `accept` | Grava os `valores` pelo mesmo caminho da rota 41, com origem **`ATLAS`** e as mesmas validações; o cartão vira `RESPONDIDA`. Depois o plano B preenche cada bloco redigível com a frase-modelo e **finaliza** o relatório (`PRONTO`). |
 | `decline` | O cartão vira `RECUSADA`; as lacunas pedidas contam como recusadas: os números que dependem delas saem **indisponíveis**, com o motivo, nunca zero. O plano B finaliza o relatório do mesmo jeito. `valores` é ignorado. |
-| `cancel` | O cartão vira `CANCELADA`, o relatório volta a **montando** e nada é gravado. O turno termina com um item `aviso` (`"Cartão fechado. Use Montar relatório para continuar."`); o botão continua o mesmo relatório. `valores` é ignorado. |
+| `cancel` | O cartão vira `CANCELADA`, o relatório volta a **montando** e nada é gravado. O turno termina com um item `aviso` (`"Cartão fechado. Use Montar relatório para continuar."`; com o modelo de linguagem ligado, `"Cartão fechado. Quando tiver os números, peça para continuar."`); o botão continua o mesmo relatório. `valores` é ignorado. |
 
 **200**: o objeto Conversa, só com os itens do turno. **Sem modelo de linguagem**, em `accept` e `decline`: `texto` (`"Pronto: o relatório de ativação está montado. A origem de cada número está em Fontes e cálculos."`) e `relatorio_pronto`; em `cancel`: `aviso`. **Com o modelo ligado**, depois de gravar os valores a API põe no histórico a resposta da ferramenta pendente, com o mesmo id do pedido (`{"acao": "accept", "campos": [{"chave": "ativacao.visitantes_total", "ref": "dado:ativacao.visitantes_total", "valor": 1200}]}`; `decline` e `cancel` levam `campos` vazio) e **o loop retoma**: os itens do turno são o que o modelo fez a seguir (texto, outro cartão, `relatorio_pronto`), e em `cancel` o `aviso` vem primeiro. Isso vale para o cartão aberto pelo botão também.
 

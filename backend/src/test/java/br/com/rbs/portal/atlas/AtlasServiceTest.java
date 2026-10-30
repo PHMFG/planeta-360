@@ -443,7 +443,7 @@ class AtlasServiceTest {
         ConversaDto resposta = responder(cartao.solicitacaoId(), "cancel");
 
         assertThat(tipos(resposta)).containsExactly("aviso");
-        assertThat(((ItemAviso) resposta.itens().get(0)).texto()).isEqualTo("Cartão fechado. Use Montar relatório para continuar.");
+        assertThat(((ItemAviso) resposta.itens().get(0)).texto()).isEqualTo("Cartão fechado. Use Montar relatório para continuar.");   // sem o modelo de linguagem
         assertThat(status("atlas_solicitacao", cartao.solicitacaoId())).isEqualTo("CANCELADA");
         assertThat(status("atlas_relatorio", cartao.relatorioId())).isEqualTo("MONTANDO");
         confereQueToolCallTemResposta(resposta.conversaId(), 0);

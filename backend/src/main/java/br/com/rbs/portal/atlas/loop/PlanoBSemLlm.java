@@ -45,6 +45,8 @@ public class PlanoBSemLlm {
     public static final String MENSAGEM_DO_CARTAO = "Para fechar a seção de público, preciso destes números.";
     public static final String TEXTO_PRONTO = "Pronto: o relatório de ativação está montado. A origem de cada número está em Fontes e cálculos.";
     public static final String AVISO_CARTAO_FECHADO = "Cartão fechado. Use Montar relatório para continuar.";
+    /** O mesmo aviso quando o modelo de linguagem está ligado: a pessoa pode continuar pelo chat. */
+    public static final String AVISO_CARTAO_FECHADO_COM_MODELO = "Cartão fechado. Quando tiver os números, peça para continuar.";
     public static final String CARTAO_ABERTO = "Este relatório está esperando a resposta do cartão. Responda ou feche o cartão antes de montar de novo.";
     static final String OBJETIVO = "Montar o relatório de ativação no evento, pelo botão";
 

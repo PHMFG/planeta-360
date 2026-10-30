@@ -13,6 +13,7 @@ import br.com.rbs.portal.atlas.AtlasRepositorio.LinhaDeConversa;
 import br.com.rbs.portal.atlas.AtlasRepositorio.LinhaDeMensagem;
 import br.com.rbs.portal.atlas.AtlasRepositorio.LinhaDeRelatorio;
 import br.com.rbs.portal.atlas.AtlasRepositorio.LinhaDeSolicitacao;
+import br.com.rbs.portal.atlas.provedor.DisponibilidadeDoLlm;
 import br.com.rbs.portal.atlas.relatorio.Especificacao;
 import br.com.rbs.portal.atlas.relatorio.ModeloBase;
 import br.com.rbs.portal.atlas.relatorio.ResolvedorDeReferencias;
@@ -40,7 +41,9 @@ import tools.jackson.core.type.TypeReference;
  *   <li>cada pedido {@code relatorio_solicitar_campos} &rarr; item {@code cartao}, com os dados de {@code atlas_solicitacao}
  *       (achada pelo {@code tool_call_id}) e o estado de agora, os campos do catálogo e o valor vigente de cada um;</li>
  *   <li>a resposta de {@code relatorio_finalizar} &rarr; item {@code relatorio_pronto};</li>
- *   <li>a resposta de {@code relatorio_solicitar_campos} com {@code cancel} &rarr; item {@code aviso} ("Cartão fechado...").</li>
+ *   <li>a resposta de {@code relatorio_solicitar_campos} com {@code cancel} &rarr; item {@code aviso} ("Cartão fechado..."): sem
+ *       modelo de linguagem, "Use Montar relatório para continuar"; com ele ligado agora (o mesmo {@code llmDisponivel} da
+ *       resposta), "Quando tiver os números, peça para continuar".</li>
  * </ul>
  * Só as mensagens depois de {@code desdeOrdem} viram item (o turno); com 0, a conversa inteira.
  */
@@ -51,13 +54,15 @@ public class ItensDaConversa {
     private final DadoInformadoService dados;
     private final ResolvedorDeReferencias resolvedor;
     private final ModeloBase modelos;
+    private final DisponibilidadeDoLlm llm;
 
     public ItensDaConversa(AtlasRepositorio repositorio, DadoInformadoService dados, ResolvedorDeReferencias resolvedor,
-                           ModeloBase modelos) {
+                           ModeloBase modelos, DisponibilidadeDoLlm llm) {
         this.repositorio = repositorio;
         this.dados = dados;
         this.resolvedor = resolvedor;
         this.modelos = modelos;
+        this.llm = llm;
     }
 
     /**
@@ -117,7 +122,8 @@ public class ItensDaConversa {
                     (String) resultado.get("titulo")));
         }
         if ("relatorio_solicitar_campos".equals(ferramenta) && "cancel".equals(resultado.get("acao"))) {
-            return Optional.of(new ItemAviso(PlanoBSemLlm.AVISO_CARTAO_FECHADO));
+            return Optional.of(new ItemAviso(llm.disponivel() ? PlanoBSemLlm.AVISO_CARTAO_FECHADO_COM_MODELO
+                    : PlanoBSemLlm.AVISO_CARTAO_FECHADO));
         }
         return Optional.empty();
     }
