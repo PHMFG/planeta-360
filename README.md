@@ -146,12 +146,16 @@ Com a API sem modelo de linguagem (o padrão), o Atlas monta o relatório pelo b
 
 1. Como `b2b@rbs.example`, em **Patrocinadores**, cadastre a parceria "Cliente Teste" na edição 2027. Em **Cargas**, escolha "Plano comercial" e envie `docs/exemplos/plano.csv`: 8 linhas entram, 1 é duplicada e 2 são rejeitadas, com o motivo (mídia sem tipo e uma marca sem parceria).
 2. Abra a parceria do Cliente Amarelo, em **Aplicações da marca**: o plano linha a linha, com as fotos de comprovação. Use "Anexar foto" numa linha sem foto, e o total de comprovadas sobe.
-3. Entre como `marketing@amarelo.example` e toque em **atlas**, no menu. Em "Montar relatório da ativação", o Atlas pede num cartão os números que só a marca sabe (visitantes, cadastros e brindes). Responda: os números vão para a aba Aplicações, com o seu nome e a data.
-4. Abra o relatório pronto: um A4 com o selo de documento de trabalho e, em "Fontes e cálculos", a origem de cada número. Ele também aparece em **Relatório**, abaixo do relatório oficial, para a marca e para a RBS.
+3. Entre como `marketing@amarelo.example` e toque em **atlas**, no menu (ou use a caixa "atlas · como posso ajudar?" em Minha parceria). O Atlas abre numa janela própria, com o menu à vista. Escolha "Gerar relatório da ativação": a conversa vai para um painel à direita e o documento aparece no centro, ainda em montagem. No cartão do painel, informe os números que só a marca sabe (visitantes, cadastros e brindes): eles vão para a aba Aplicações, com o seu nome e a data, e o documento se atualiza na hora.
+4. Com o documento pronto, a aba "Fontes" do painel mostra a origem de cada número, com a mesma numeração das citações do documento. "Imprimir ou salvar PDF" imprime o A4. O documento também aparece em **Relatório**, abaixo do relatório oficial, para a marca e para a RBS.
 
 ### Ligar o modelo de linguagem (opcional)
 
-Sem estas variáveis, o portal e os testes funcionam normalmente, e o Atlas usa só o botão. Com elas, a marca também conversa com o Atlas pelo chat:
+Sem estas variáveis, o portal e os testes funcionam normalmente, e o Atlas usa só o botão. Com elas, a marca também conversa com o Atlas pelo chat.
+
+**Pela tela, sem reiniciar (temporário, só no perfil `dev`).** O selo amarelo "Debug", no topo da tela, abre um formulário para colar a chave do provedor (e, se quiser, outro endereço ou modelo), testar a conexão e remover a chave. A bolinha do selo fica verde com o modelo ligado. A chave fica só na memória da API e some quando ela reinicia; nunca volta inteira para a tela. Fora do perfil `dev` as rotas de debug não existem e o selo não aparece.
+
+**Pelas variáveis de ambiente:**
 
 ```bash
 cd backend
