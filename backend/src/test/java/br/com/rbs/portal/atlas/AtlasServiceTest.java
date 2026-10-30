@@ -185,8 +185,9 @@ class AtlasServiceTest {
 
         assertThat(conversa.llmDisponivel()).isFalse();
         assertThat(tipos(conversa)).containsExactly("usuario", "texto", "cartao");
-        assertThat(((ItemUsuario) conversa.itens().get(0)).texto()).isEqualTo("Montar o relatório da ativação (botão)");
+        assertThat(((ItemUsuario) conversa.itens().get(0)).texto()).isEqualTo("Montar o relatório da ativação");
         assertThat(((ItemTexto) conversa.itens().get(1)).texto()).startsWith("Montei a base do relatório de ativação");
+        assertThat(((ItemTexto) conversa.itens().get(1)).porModelo()).isFalse();
         ItemCartao cartao = cartaoDe(conversa);
         assertThat(cartao.status()).isEqualTo("PENDENTE");
         assertThat(cartao.mensagem()).isEqualTo("Para fechar a seção de público, preciso destes números.");

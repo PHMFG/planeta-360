@@ -1445,8 +1445,8 @@ Com o modelo ligado (pelas variáveis de ambiente ou, no perfil `dev`, pela chav
 ```json
 { "conversaId": 12, "llmDisponivel": false,
   "itens": [
-    { "tipo": "usuario", "texto": "Montar o relatório da ativação (botão)" },
-    { "tipo": "texto", "texto": "Montei a base do relatório de ativação com os números do portal. Faltam números que só vocês sabem." },
+    { "tipo": "usuario", "texto": "Montar o relatório da ativação" },
+    { "tipo": "texto", "texto": "Montei a base do relatório de ativação com os números do portal. Faltam números que só vocês sabem.", "porModelo": false },
     { "tipo": "cartao", "solicitacaoId": 31, "relatorioId": 7, "mensagem": "Para fechar a seção de público, preciso destes números.", "status": "PENDENTE",
       "campos": [ { "chave": "ativacao.visitantes_total", "aba": "APLICACOES", "rotulo": "Visitantes no espaço", "tipo": "INTEIRO", "unidade": "pessoas",
                     "minimo": 0, "maximo": null, "ajuda": "Quantas pessoas passaram pelo espaço da marca durante o festival, segundo a contagem da agência.",
@@ -1461,8 +1461,8 @@ Com o modelo ligado (pelas variáveis de ambiente ou, no perfil `dev`, pela chav
 
 | `tipo` | Quando aparece | Campos |
 | --- | --- | --- |
-| `usuario` | O que a pessoa disse (o botão aparece como "Montar o relatório da ativação (botão)") | `texto` |
-| `texto` | O que o Atlas disse. Os marcadores `{{...}}` já vêm trocados pelo valor; o que não tem valor vira "indisponível" | `texto` |
+| `usuario` | O que a pessoa disse (o botão aparece como "Montar o relatório da ativação"; no histórico que vai ao modelo, a mensagem continua "Montar o relatório da ativação (botão)") | `texto` |
+| `texto` | O que o Atlas disse. Os marcadores `{{...}}` já vêm trocados pelo valor; o que não tem valor vira "indisponível". `porModelo` é `true` só quando o texto foi escrito pelo modelo de linguagem; é `false` nas frases fixas do servidor: as do botão (plano B: "Montei a base...", "Continuo o relatório...", "Pronto: ..."), a frase fixa que troca um texto recusado duas vezes e as de falha, limite e prazo do turno | `texto`, `porModelo` |
 | `cartao` | O cartão de perguntas, com o **estado de agora** | `solicitacaoId`, `relatorioId`, `mensagem`, `status` (`PENDENTE`, `RESPONDIDA`, `RECUSADA` ou `CANCELADA`), `campos` |
 | `relatorio_pronto` | O relatório ficou pronto; o front abre o A4 pela rota 47 | `relatorioId`, `titulo` |
 | `aviso` | Aviso do sistema: o cartão foi fechado (cancelado, ou o relatório foi descartado). O texto segue o `llmDisponivel` da resposta: `"Cartão fechado. Use Montar relatório para continuar."` sem o modelo, `"Cartão fechado. Quando tiver os números, peça para continuar."` com ele | `texto` |

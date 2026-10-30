@@ -298,6 +298,7 @@ class LoopDoAgenteTest {
 
         assertThat(tipos(turno)).containsExactly("usuario", "texto");
         assertThat(textoDoItem(turno, 1)).isEqualTo("Posso montar o relatório de ativação da sua marca. Quer que eu comece?");
+        assertThat(((ItemTexto) turno.itens().get(1)).porModelo()).isTrue();
         assertThat(nomesDasFerramentas(modelo.ultimoPedido())).containsExactly(CONSULTAR, INICIAR);
         assertThat(papeis(conversa)).containsExactly("user", "assistant");
     }
@@ -787,6 +788,7 @@ class LoopDoAgenteTest {
         assertThat(tipos(turno)).containsExactly("usuario", "texto");
         assertThat(textoDoItem(turno, 1)).isEqualTo("Não trago números fora do relatório. Posso montar o relatório de ativação.");
         assertThat(LoopDoAgente.FRASE_FIXA).isEqualTo(textoDoItem(turno, 1));
+        assertThat(((ItemTexto) turno.itens().get(1)).porModelo()).isFalse();   // a troca é do servidor, não do modelo
         assertThat(mensagens(conversa)).extracting(Mensagem::conteudo).doesNotContain("Deu 7 por visitante.", "Cerca de 7,5 por visitante.");
         assertThat(turno.itens()).noneMatch(i -> i instanceof ItemTexto t && t.texto().matches(".*\\d.*"));
     }

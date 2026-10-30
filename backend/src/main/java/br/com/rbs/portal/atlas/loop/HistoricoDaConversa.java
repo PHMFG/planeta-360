@@ -39,9 +39,12 @@ public class HistoricoDaConversa {
         this.repositorio = repositorio;
     }
 
+    /** O começo do id das chamadas que o plano B (o botão) escreve; as do modelo começam com {@code call_}. */
+    public static final String PREFIXO_DO_BOTAO = "botao_";
+
     /** Um id de pedido de ferramenta gerado pelo servidor (o botão), no lugar do que o modelo daria. */
     public static String novoIdDeChamada() {
-        return "botao_" + UUID.randomUUID();
+        return PREFIXO_DO_BOTAO + UUID.randomUUID();
     }
 
     /**

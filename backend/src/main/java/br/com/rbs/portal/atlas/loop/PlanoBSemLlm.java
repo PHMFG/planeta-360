@@ -39,7 +39,10 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 public class PlanoBSemLlm {
 
+    /** A mensagem {@code user} que o botão grava no histórico (o modelo lê "(botão)" e sabe que não foi uma frase da pessoa). */
     public static final String TEXTO_DO_BOTAO = "Montar o relatório da ativação (botão)";
+    /** Como o botão aparece no item {@code usuario} da conversa. */
+    public static final String TEXTO_DO_BOTAO_NA_TELA = "Montar o relatório da ativação";
     public static final String TEXTO_NOVO = "Montei a base do relatório de ativação com os números do portal. Faltam números que só vocês sabem.";
     public static final String TEXTO_CONTINUACAO = "Continuo o relatório de ativação que você já começou. Ainda faltam números que só vocês sabem.";
     public static final String MENSAGEM_DO_CARTAO = "Para fechar a seção de público, preciso destes números.";

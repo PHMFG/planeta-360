@@ -105,8 +105,10 @@ class AtlasControllerTest {
         assertThat(lerJson(resposta, "$.llmDisponivel")).isEqualTo(false);
         assertThat(lerLista(resposta, "$.itens")).hasSize(3);
         assertThat(lerJson(resposta, "$.itens[0].tipo")).isEqualTo("usuario");
-        assertThat(lerJson(resposta, "$.itens[0].texto")).isEqualTo("Montar o relatório da ativação (botão)");
+        assertThat(lerJson(resposta, "$.itens[0].texto")).isEqualTo("Montar o relatório da ativação");
         assertThat(lerJson(resposta, "$.itens[1].tipo")).isEqualTo("texto");
+        assertThat(chaves(resposta, "$.itens[1]")).containsExactly("tipo", "texto", "porModelo");
+        assertThat(lerJson(resposta, "$.itens[1].porModelo")).isEqualTo(false);   // a frase fixa do plano B não é do modelo
         assertThat(lerJson(resposta, "$.itens[2].tipo")).isEqualTo("cartao");
         assertThat(chaves(resposta, "$.itens[2]")).containsExactly("tipo", "solicitacaoId", "relatorioId", "mensagem", "status", "campos");
         assertThat(lerJson(resposta, "$.itens[2].status")).isEqualTo("PENDENTE");

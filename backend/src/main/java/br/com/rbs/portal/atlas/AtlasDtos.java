@@ -45,12 +45,16 @@ public final class AtlasDtos {
     public sealed interface ItemDaConversa permits ItemUsuario, ItemTexto, ItemAviso, ItemCartao, ItemRelatorioPronto {
     }
 
-    /** O que a pessoa disse. */
+    /** O que a pessoa disse (o botão aparece como "Montar o relatório da ativação"). */
     public record ItemUsuario(String texto) implements ItemDaConversa {
     }
 
-    /** O que o Atlas disse, com os marcadores {@code {{ref}}} já trocados pelos valores. */
-    public record ItemTexto(String texto) implements ItemDaConversa {
+    /**
+     * O que o Atlas disse, com os marcadores {@code {{ref}}} já trocados pelos valores. {@code porModelo} é verdadeiro só quando o
+     * texto foi escrito pelo modelo de linguagem; falso nas frases fixas do servidor (o plano B do botão, a troca de um texto
+     * recusado, a falha do modelo, o limite e o prazo do turno).
+     */
+    public record ItemTexto(String texto, boolean porModelo) implements ItemDaConversa {
     }
 
     /** Um aviso do sistema (por exemplo, o cartão que foi fechado). */

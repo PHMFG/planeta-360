@@ -35,9 +35,11 @@ import tools.jackson.core.type.TypeReference;
  * Deriva os itens da conversa que a API devolve (rotas 42 a 46) do histórico gravado em {@code atlas_mensagem}. [ATLAS] Nada é
  * guardado só para a tela:
  * <ul>
- *   <li>mensagem {@code user} &rarr; item {@code usuario};</li>
+ *   <li>mensagem {@code user} &rarr; item {@code usuario} (a do botão sai como "Montar o relatório da ativação");</li>
  *   <li>mensagem {@code assistant} com texto &rarr; item {@code texto}, com os marcadores {@code {{ref}}} trocados pelos valores
- *       (o que não tem valor vira "indisponível"); nunca sai marcador cru nem número inventado;</li>
+ *       (o que não tem valor vira "indisponível"); nunca sai marcador cru nem número inventado. {@code porModelo} é falso nas
+ *       frases do servidor: a mensagem do plano B (as chamadas dela têm id {@code botao_}) e as frases fixas do loop
+ *       ({@link LoopDoAgente#FRASES_DO_SERVIDOR}); verdadeiro no resto, que só o modelo escreve;</li>
  *   <li>cada pedido {@code relatorio_solicitar_campos} &rarr; item {@code cartao}, com os dados de {@code atlas_solicitacao}
  *       (achada pelo {@code tool_call_id}) e o estado de agora, os campos do catálogo e o valor vigente de cada um;</li>
  *   <li>a resposta de {@code relatorio_finalizar} &rarr; item {@code relatorio_pronto};</li>
@@ -84,14 +86,17 @@ public class ItensDaConversa {
             switch (mensagem.papel()) {
                 case "user" -> {
                     if (doTurno) {
-                        itens.add(new ItemUsuario(mensagem.conteudo()));
+                        itens.add(new ItemUsuario(PlanoBSemLlm.TEXTO_DO_BOTAO.equals(mensagem.conteudo())
+                                ? PlanoBSemLlm.TEXTO_DO_BOTAO_NA_TELA : mensagem.conteudo()));
                     }
                 }
                 case "assistant" -> {
+                    List<Map<String, Object>> chamadas = chamadasDe(mensagem);
                     if (doTurno && mensagem.conteudo() != null && !mensagem.conteudo().isBlank()) {
-                        itens.add(new ItemTexto(contexto.resolucao(modelos, resolvedor).paraExibicao(mensagem.conteudo())));
+                        itens.add(new ItemTexto(contexto.resolucao(modelos, resolvedor).paraExibicao(mensagem.conteudo()),
+                                escritoPeloModelo(mensagem.conteudo(), chamadas)));
                     }
-                    for (Map<String, Object> chamada : chamadasDe(mensagem)) {
+                    for (Map<String, Object> chamada : chamadas) {
                         String id = (String) chamada.get("id");
                         String nome = nomeDaFerramenta(chamada);
                         ferramentas.put(id, nome);
@@ -145,6 +150,16 @@ public class ItensDaConversa {
             }
         }
         return new ItemCartao(cartao.id(), cartao.relatorioId(), cartao.mensagem(), cartao.status(), campos);
+    }
+
+    /**
+     * O texto foi escrito pelo modelo de linguagem? Não, se a mensagem é do plano B (o servidor dá às chamadas dele o id
+     * {@code botao_}) ou se é uma das frases fixas que o loop grava sozinho.
+     */
+    private static boolean escritoPeloModelo(String conteudo, List<Map<String, Object>> chamadas) {
+        boolean doBotao = chamadas.stream().anyMatch(c -> c.get("id") instanceof String id
+                && id.startsWith(HistoricoDaConversa.PREFIXO_DO_BOTAO));
+        return !doBotao && !LoopDoAgente.FRASES_DO_SERVIDOR.contains(conteudo);
     }
 
     @SuppressWarnings("unchecked")
