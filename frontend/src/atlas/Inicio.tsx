@@ -38,6 +38,8 @@ function quando(iso: string) {
 type Props = {
   parceria: ParceriaResumo
   llm: boolean
+  /** Falso com o relatório desligado na API: o cartão aparece, desabilitado. */
+  relatorioDisponivel: boolean
   conversas: ConversaResumo[]
   texto: string
   aoMudarTexto: (texto: string) => void
@@ -48,7 +50,7 @@ type Props = {
   falha: string | null
 }
 
-export function Inicio({ parceria, llm, conversas, texto, aoMudarTexto, aoEnviar, aoPerguntar, aoMontar, pensando, falha }: Props) {
+export function Inicio({ parceria, llm, relatorioDisponivel, conversas, texto, aoMudarTexto, aoEnviar, aoPerguntar, aoMontar, pensando, falha }: Props) {
   const base = `/parceria/${parceria.id}`
 
   return (
@@ -56,9 +58,13 @@ export function Inicio({ parceria, llm, conversas, texto, aoMudarTexto, aoEnviar
       <div className="m-auto flex w-full max-w-[720px] flex-col items-center gap-4">
         <h1 className="text-center text-[30px] leading-tight font-semibold tracking-[-0.01em] text-white sm:text-[40px]">Olá! Como posso ajudar?</h1>
         <p className="text-center text-base text-white/80">
-          {llm
-            ? 'Monte o relatório da sua ativação ou pergunte sobre os números da sua parceria.'
-            : 'Monte o relatório da sua ativação com os números do portal.'}
+          {!relatorioDisponivel
+            ? llm
+              ? 'Pergunte sobre os números da sua parceria.'
+              : 'O Atlas está sem o modelo de linguagem agora. Tente de novo mais tarde.'
+            : llm
+              ? 'Monte o relatório da sua ativação ou pergunte sobre os números da sua parceria.'
+              : 'Monte o relatório da sua ativação com os números do portal.'}
         </p>
         {llm && (
           <div className="mt-4 w-full">
@@ -78,17 +84,23 @@ export function Inicio({ parceria, llm, conversas, texto, aoMudarTexto, aoEnviar
           </div>
         )}
         <div className={`flex w-full flex-wrap justify-center gap-3 ${llm ? '' : 'mt-4'}`}>
-          <button type="button" className={CARTAO} onClick={aoMontar} disabled={pensando}>
-            <ConteudoSugestao icone="ri-file-chart-line" titulo="Gerar relatório da ativação" assunto="Documento para revisão" />
+          <button type="button" className={CARTAO} onClick={aoMontar} disabled={pensando || !relatorioDisponivel}>
+            <ConteudoSugestao icone="ri-file-chart-line" titulo="Gerar relatório da ativação" assunto={relatorioDisponivel ? 'Documento para revisão' : 'Em breve'} />
           </button>
           {llm && (
             <>
               <button type="button" className={CARTAO} onClick={() => aoPerguntar('Quantas aplicações de marca já foram comprovadas?')} disabled={pensando}>
                 <ConteudoSugestao icone="ri-checkbox-circle-line" titulo="Quantas aplicações foram comprovadas?" assunto="Aplicações da marca" />
               </button>
-              <button type="button" className={CARTAO} onClick={() => aoPerguntar('Que números ainda faltam para o relatório da nossa ativação?')} disabled={pensando}>
-                <ConteudoSugestao icone="ri-question-line" titulo="O que falta para o relatório?" assunto="Aplicações da marca" />
-              </button>
+              {relatorioDisponivel ? (
+                <button type="button" className={CARTAO} onClick={() => aoPerguntar('Que números ainda faltam para o relatório da nossa ativação?')} disabled={pensando}>
+                  <ConteudoSugestao icone="ri-question-line" titulo="O que falta para o relatório?" assunto="Aplicações da marca" />
+                </button>
+              ) : (
+                <button type="button" className={CARTAO} onClick={() => aoPerguntar('Que números da nossa ativação ainda não foram informados?')} disabled={pensando}>
+                  <ConteudoSugestao icone="ri-question-line" titulo="Que números ainda faltam?" assunto="Aplicações da marca" />
+                </button>
+              )}
             </>
           )}
         </div>

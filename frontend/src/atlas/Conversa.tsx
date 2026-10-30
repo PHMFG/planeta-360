@@ -4,7 +4,8 @@
 // Só o que o modelo de linguagem escreveu aparece como fala do Atlas. O que o portal faz sozinho (o botão "Montar relatório",
 // sem modelo) aparece como passo do sistema, sem orbe; e, sem modelo, não há campo de chat.
 // A resposta do modelo chega em tempo real: o tempo pensando com o resumo do raciocínio, o texto e o que ele está fazendo; no
-// fim do turno, a conversa gravada toma o lugar da versão ao vivo.
+// fim do turno, a conversa gravada toma o lugar da versão ao vivo. Com o debug ligado no servidor, as ferramentas que o modelo
+// usou aparecem na ordem em que rodaram. Com o relatório desligado na API, o botão dele aparece desabilitado.
 import { useEffect, useRef } from 'react'
 import type { ItemDaConversa, RespostaDoCartao } from '../api/atlas'
 import type { ParceriaResumo } from '../api/tipos'
@@ -13,6 +14,7 @@ import { CartaoDocumento } from './CartaoDocumento'
 import { CartaoSolicitacao } from './CartaoSolicitacao'
 import { Compositor } from './Compositor'
 import { AvisoAtlas, BlocoDoAtlas, BlocoDoSistema, Chip, LinhaBuscando, MensagemVoce, TextoDoAtlas, TextoDoSistema } from './Elementos'
+import { FerramentaDebug, SemFerramentaDebug } from './FerramentaDebug'
 import { Raciocinio } from './Raciocinio'
 
 /** Na tela, pensamentos seguidos viram uma caixa só, com o resumo de cada um. */
@@ -44,7 +46,7 @@ function agrupar(itens: ItemDaConversa[]): Grupo[] {
 }
 
 /** Sem o campo, o servidor é de antes da marcação e todo texto conta como do modelo. O pensamento só existe com o modelo. */
-const doModelo = (item: ItemDaResposta) => item.tipo === 'raciocinio' || (item.tipo === 'texto' && item.porModelo !== false)
+const doModelo = (item: ItemDaResposta) => item.tipo === 'raciocinio' || item.tipo === 'ferramenta' || (item.tipo === 'texto' && item.porModelo !== false)
 
 type Props = {
   parceria: ParceriaResumo
@@ -56,6 +58,10 @@ type Props = {
   aoVivo: RespostaAoVivo | null
   falha: string | null
   llm: boolean
+  /** Falso com o relatório desligado na API: o botão aparece, desabilitado. */
+  relatorioDisponivel: boolean
+  /** Com o debug ligado no servidor, a resposta sem ferramenta também diz isso. */
+  debugDeFerramentas: boolean
   texto: string
   aoMudarTexto: (texto: string) => void
   aoEnviar: () => void
@@ -73,6 +79,8 @@ export function AreaDaConversa({
   aoVivo,
   falha,
   llm,
+  relatorioDisponivel,
+  debugDeFerramentas,
   texto,
   aoMudarTexto,
   aoEnviar,
@@ -111,6 +119,8 @@ export function AreaDaConversa({
     switch (item.tipo) {
       case 'raciocinio':
         return <Raciocinio key={posicao} resumos={item.resumos} />
+      case 'ferramenta':
+        return <FerramentaDebug key={posicao} ferramenta={item} />
       case 'texto':
         return doModelo(item) ? <TextoDoAtlas key={posicao}>{item.texto}</TextoDoAtlas> : <TextoDoSistema key={posicao}>{item.texto}</TextoDoSistema>
       case 'aviso':
@@ -134,6 +144,7 @@ export function AreaDaConversa({
               ) : grupo.itens.some(doModelo) ? (
                 <BlocoDoAtlas key={indice} compacto={compacta}>
                   {grupo.itens.map(conteudo)}
+                  {debugDeFerramentas && !grupo.itens.some((item) => item.tipo === 'ferramenta') && <SemFerramentaDebug />}
                 </BlocoDoAtlas>
               ) : (
                 <BlocoDoSistema key={indice}>{grupo.itens.map(conteudo)}</BlocoDoSistema>
@@ -146,6 +157,8 @@ export function AreaDaConversa({
               {aoVivo.partes.map((parte, posicao) =>
                 parte.tipo === 'raciocinio' ? (
                   <Raciocinio key={posicao} resumos={parte.resumos} desde={parte.desde} ate={parte.ate} />
+                ) : parte.tipo === 'ferramenta' ? (
+                  <FerramentaDebug key={posicao} ferramenta={parte} />
                 ) : (
                   <TextoDoAtlas key={posicao} digitando={posicao === aoVivo.partes.length - 1 && !aoVivo.etapa}>
                     {parte.texto}
@@ -164,11 +177,18 @@ export function AreaDaConversa({
 
       <div className={`${largura} flex flex-col gap-2.5 ${compacta ? 'pt-3' : 'px-4 pb-1 sm:px-0'}`}>
         <div>
-          <Chip icone="ri-file-chart-line" carregando={pensando && !aoVivo} disabled={pensando || cartaoAberto} onClick={aoMontar}>
-            Montar relatório da ativação
+          <Chip
+            icone="ri-file-chart-line"
+            carregando={pensando && !aoVivo}
+            disabled={!relatorioDisponivel || pensando || cartaoAberto}
+            title={relatorioDisponivel ? undefined : 'O relatório não está disponível nesta versão'}
+            onClick={aoMontar}
+          >
+            Montar relatório da ativação{!relatorioDisponivel && ' · em breve'}
           </Chip>
         </div>
         {llm && <Compositor valor={texto} aoMudar={aoMudarTexto} aoEnviar={aoEnviar} rotuloEnviar="Enviar" ocupado={pensando} habilitado compacto={compacta} />}
+        {!llm && !relatorioDisponivel && <AvisoAtlas titulo="O Atlas está sem o modelo de linguagem agora">Dá para ler a conversa, mas não enviar mensagens. Tente de novo mais tarde.</AvisoAtlas>}
         <p className="pb-1 text-center text-xs text-white/55 max-sm:hidden">Só os dados desta parceria · o Atlas não escreve números por conta própria</p>
       </div>
     </div>

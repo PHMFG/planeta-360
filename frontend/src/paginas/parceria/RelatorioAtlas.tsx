@@ -79,8 +79,8 @@ export function RelatorioAtlas() {
 export function RelatoriosDoAtlas() {
   const parceria = useParceria()
   const lista = useDados(
-    // Aba do modelo fechada para a marca: a lista não sai (403) e o cartão some em vez de mostrar erro.
-    () => listarRelatoriosAtlas(parceria.id).catch((erro: unknown) => (erro instanceof ErroApi && erro.status === 403 ? null : Promise.reject(erro))),
+    // Aba do modelo fechada para a marca (403) ou relatório do Atlas desligado na API (404): o cartão some em vez de mostrar erro.
+    () => listarRelatoriosAtlas(parceria.id).catch((erro: unknown) => (erro instanceof ErroApi && (erro.status === 403 || erro.status === 404) ? null : Promise.reject(erro))),
     [parceria.id],
   )
   if (lista.pronto && lista.dado === null) return null

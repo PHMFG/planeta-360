@@ -10,6 +10,15 @@ export type CampoDoCartao = CampoCatalogo & { obrigatorio: boolean; vigente: Val
 
 export type StatusCartao = 'PENDENTE' | 'RESPONDIDA' | 'RECUSADA' | 'CANCELADA'
 
+/** Uma ferramenta que o modelo usou, para o debug: argumentos e resultado em JSON cru, como ele enviou e como recebeu. */
+export type FerramentaUsada = {
+  nome: string
+  argumentos: string
+  resultado: string | null
+  erro: boolean
+  duracaoMs: number | null
+}
+
 export type ItemDaConversa =
   | { tipo: 'usuario'; texto: string }
   /** O resumo do raciocínio do modelo, escrito no servidor e conferido como o texto. O raciocínio cru não sai do servidor. */
@@ -19,12 +28,18 @@ export type ItemDaConversa =
   | { tipo: 'aviso'; texto: string }
   | { tipo: 'cartao'; solicitacaoId: number; relatorioId: number; mensagem: string; status: StatusCartao; campos: CampoDoCartao[] }
   | { tipo: 'relatorio_pronto'; relatorioId: number; titulo: string }
+  /** Só com o debug das ferramentas ligado no servidor. */
+  | ({ tipo: 'ferramenta' } & FerramentaUsada)
 
 /** A conversa inteira (rota 45) ou só o que um turno produziu (rotas 42, 44 e 46). */
 export type Conversa = {
   conversaId: number
-  /** Falso quando a API sobe sem modelo de linguagem: aí o Atlas só monta o relatório pelo botão (plano B). */
+  /** Falso quando a API sobe sem modelo de linguagem: aí não há chat. */
   llmDisponivel: boolean
+  /** Falso com atlas.relatorio.ligado desligado: o relatório fica desabilitado, e a tela não o oferece. */
+  relatorioDisponivel: boolean
+  /** Verdadeiro com atlas.debug.ferramentas ligado no servidor: a tela mostra as ferramentas que o modelo usou. */
+  debugDeFerramentas: boolean
   itens: ItemDaConversa[]
 }
 
@@ -35,7 +50,7 @@ export type ConversaResumo = {
   relatorio: { id: number; status: StatusRelatorioAtlas } | null
 }
 
-export type ConversasDaParceria = { llmDisponivel: boolean; conversas: ConversaResumo[] }
+export type ConversasDaParceria = { llmDisponivel: boolean; relatorioDisponivel: boolean; conversas: ConversaResumo[] }
 
 export type RespostaDoCartao = { acao: 'accept' | 'decline' | 'cancel'; valores?: ValorInformado[] }
 
@@ -59,6 +74,8 @@ export type EventoDoTurno =
   | { tipo: 'texto'; delta: string }
   /** A checagem recusou o texto desta ida ao modelo: a tela o descarta e espera a nova redação ou a frase fixa. */
   | { tipo: 'texto_recusado' }
+  /** Só com o debug das ferramentas ligado no servidor: uma ferramenta acabou de rodar. */
+  | ({ tipo: 'ferramenta' } & FerramentaUsada)
 
 type AoEvento = (evento: EventoDoTurno) => void
 
@@ -76,6 +93,7 @@ async function turnoEmFluxo(caminho: string, corpo: unknown, aoEvento: AoEvento,
       else if (nome === 'pensando') aoEvento({ tipo: 'pensando' })
       else if (nome === 'resumo' || nome === 'etapa') aoEvento({ tipo: nome, texto: campos.texto ?? '' })
       else if (nome === 'texto_recusado') aoEvento({ tipo: 'texto_recusado' })
+      else if (nome === 'ferramenta') aoEvento({ tipo: 'ferramenta', ...(dados as FerramentaUsada) })
     },
     sinal,
   )

@@ -114,6 +114,8 @@ export function PaginaAtlas() {
   const conversaDoTurno = useRef<number | null>(null)
 
   const llm = conversas?.llmDisponivel ?? false
+  // Até a lista chegar, nada é oferecido; com o relatório desligado na API, os botões aparecem desabilitados.
+  const relatorioDisponivel = conversas?.relatorioDisponivel ?? false
 
   /** Lê a conversa e o documento dela. Quem chama mostra os dois de uma vez, para a tela não piscar entre as leituras. */
   const lerConversa = useCallback(async (id: number, lista: ConversasDaParceria) => {
@@ -240,6 +242,7 @@ export function PaginaAtlas() {
   }
 
   function montar() {
+    if (!relatorioDisponivel) return
     turno(() => (conversa ? montarRelatorio(conversa.conversaId) : abrirConversa(parceria.id, true)), { emFluxo: false })
   }
 
@@ -309,6 +312,8 @@ export function PaginaAtlas() {
     aoVivo,
     falha,
     llm,
+    relatorioDisponivel,
+    debugDeFerramentas: conversa?.debugDeFerramentas ?? false,
     texto,
     aoMudarTexto: setTexto,
     aoEnviar: () => perguntar(texto),
@@ -396,7 +401,7 @@ export function PaginaAtlas() {
             ) : bloqueio ? (
               <div className="mx-auto flex w-full max-w-[640px] flex-1 flex-col justify-center gap-4 px-4">
                 <AvisoAtlas tipo="falha" titulo={bloqueio}>
-                  O Atlas monta o relatório da aba Aplicações da marca, e ela está fechada para a sua parceria. Dúvidas: fale com o time B2B
+                  O Atlas responde com os dados da aba Aplicações da marca, e ela está fechada para a sua parceria. Dúvidas: fale com o time B2B
                   da RBS.
                 </AvisoAtlas>
                 <Link to={base} className="self-start text-sm font-semibold text-white underline">
@@ -407,6 +412,7 @@ export function PaginaAtlas() {
               <Inicio
                 parceria={parceria}
                 llm={llm}
+                relatorioDisponivel={relatorioDisponivel}
                 conversas={conversas?.conversas ?? []}
                 texto={texto}
                 aoMudarTexto={setTexto}

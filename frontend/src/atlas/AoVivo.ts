@@ -1,12 +1,14 @@
 // A resposta do Atlas enquanto chega (rotas 44 e 46 em fluxo): o tempo pensando, os resumos do raciocínio, o texto e o que
 // ele está fazendo. O raciocínio cru não sai do servidor; chega só o resumo de cada ida ao modelo, quando fica pronto. [ATLAS]
 // É só a vista do momento: no fim do turno a tela relê a conversa gravada e esta versão some.
-import type { EventoDoTurno } from '../api/atlas'
+import type { EventoDoTurno, FerramentaUsada } from '../api/atlas'
 
 export type ParteAoVivo =
   /** {@code ate} nulo: o modelo ainda está pensando. */
   | { tipo: 'raciocinio'; resumos: string[]; desde: number; ate: number | null }
   | { tipo: 'texto'; texto: string }
+  /** Só com o debug das ferramentas ligado no servidor. */
+  | ({ tipo: 'ferramenta' } & FerramentaUsada)
 
 export type RespostaAoVivo = {
   partes: ParteAoVivo[]
@@ -43,6 +45,11 @@ export function aplicar(estado: RespostaAoVivo, evento: EventoDoTurno, agora = D
       return { partes, etapa: null }
     case 'etapa':
       return { partes, etapa: evento.texto }
+    case 'ferramenta':
+      // A ferramenta só roda depois que o modelo parou de pensar: fecha a caixa, para ela não contar o tempo da consulta.
+      if (ultima?.tipo === 'raciocinio') partes[partes.length - 1] = { ...ultima, ate: agora }
+      partes.push(evento)
+      return { ...estado, partes }
     case 'texto_recusado': {
       const indice = partes.findLastIndex((parte) => parte.tipo === 'texto')
       if (indice >= 0) partes.splice(indice, 1)

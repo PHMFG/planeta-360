@@ -1,5 +1,5 @@
 // "atlas · como posso ajudar?" (Figma P00, 173:219): a entrada do Atlas em Minha parceria, em grafite com o brilho fluido.
-// Só oferece o que funciona: o campo de pergunta aparece com o modelo de linguagem ligado; o relatório da ativação, sempre.
+// O campo de pergunta aparece com o modelo de linguagem ligado; o relatório da ativação, desabilitado se estiver desligado na API.
 // Com a aba Aplicações fechada para a marca (a API responde 403), a caixa não aparece. [ATLAS]
 import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router'
@@ -12,14 +12,14 @@ export function CaixaDoAtlas({ parceriaId }: { parceriaId: number }) {
   const navegar = useNavigate()
   const [texto, setTexto] = useState('')
   // null enquanto não se sabe; falso também quando o Atlas não está disponível para a parceria.
-  const [estado, setEstado] = useState<{ llm: boolean } | null | 'indisponivel'>(null)
+  const [estado, setEstado] = useState<{ llm: boolean; relatorio: boolean } | null | 'indisponivel'>(null)
   const destino = `/parceria/${parceriaId}/atlas`
 
   useEffect(() => {
     let ativo = true
     const ler = () =>
       listarConversas(parceriaId)
-        .then((lista) => ativo && setEstado({ llm: lista.llmDisponivel }))
+        .then((lista) => ativo && setEstado({ llm: lista.llmDisponivel, relatorio: lista.relatorioDisponivel }))
         .catch(() => ativo && setEstado('indisponivel'))
     ler()
     window.addEventListener(EVENTO_LLM_MUDOU, ler)
@@ -48,7 +48,7 @@ export function CaixaDoAtlas({ parceriaId }: { parceriaId: number }) {
       <div className="relative flex flex-col gap-3.5">
         <h2 className="flex items-center gap-3 text-xl font-semibold tracking-[-0.01em]">
           <Orbe tamanho={36} />
-          {estado.llm ? 'atlas · como posso ajudar?' : 'atlas · relatório da ativação'}
+          {estado.llm || !estado.relatorio ? 'atlas · como posso ajudar?' : 'atlas · relatório da ativação'}
         </h2>
         {estado.llm ? (
           <form onSubmit={perguntar} className="flex items-center gap-3 rounded-[14px] border border-white/16 bg-white/8 py-2 pr-4 pl-3 sm:pr-5">
@@ -58,7 +58,7 @@ export function CaixaDoAtlas({ parceriaId }: { parceriaId: number }) {
                 value={texto}
                 onChange={(evento) => setTexto(evento.target.value)}
                 maxLength={1000}
-                placeholder="Pergunte ao Atlas sobre o relatório da ativação…"
+                placeholder={estado.relatorio ? 'Pergunte ao Atlas sobre o relatório da ativação…' : 'Pergunte ao Atlas sobre os números da sua parceria…'}
                 className="w-full bg-transparent py-1 text-sm leading-normal text-white outline-none placeholder:text-white/64"
               />
             </label>
@@ -67,16 +67,20 @@ export function CaixaDoAtlas({ parceriaId }: { parceriaId: number }) {
             </button>
           </form>
         ) : (
-          <p className="text-sm text-white/80">Monte o relatório da ativação com os números do portal; o que faltar, o Atlas pede num cartão.</p>
+          <p className="text-sm text-white/80">
+            {estado.relatorio ? 'Monte o relatório da ativação com os números do portal; o que faltar, o Atlas pede num cartão.' : 'O Atlas está sem o modelo de linguagem agora. Tente de novo mais tarde.'}
+          </p>
         )}
         <div>
           <button
             type="button"
             onClick={montar}
-            className="inline-flex h-[38px] items-center gap-2 rounded-full bg-white pr-[18px] pl-4 text-[13px] font-bold text-atlas-azul hover:bg-white/90"
+            disabled={!estado.relatorio}
+            title={estado.relatorio ? undefined : 'O relatório não está disponível nesta versão'}
+            className="inline-flex h-[38px] items-center gap-2 rounded-full bg-white pr-[18px] pl-4 text-[13px] font-bold text-atlas-azul hover:bg-white/90 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <i className="ri-file-chart-line text-base" aria-hidden="true" />
-            Gerar relatório da ativação
+            Gerar relatório da ativação{!estado.relatorio && ' · em breve'}
           </button>
         </div>
       </div>
