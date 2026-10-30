@@ -48,10 +48,10 @@ class ModeloBaseTest {
         assertThat(capa.edicao()).isEqualTo(new Referencia("evento:edicao"));
         assertThat(capa.subtitulo()).isEqualTo(new Referencia("parc:patrocinador"));
         assertThat(resumo.fraseModelo()).contains("{{parc:patrocinador}}");
-        // o número sai do marcador: nenhuma palavra depois de um marcador de número concorda com ele
+        // o número sai do marcador: depois de um marcador de número só vem pontuação, nenhuma palavra que concorde com ele
         Paragrafo publico = (Paragrafo) ativacao().bloco("b-publico").orElseThrow();
         for (String frase : java.util.List.of(resumo.fraseModelo(), publico.fraseModelo())) {
-            assertThat(frase).doesNotContainPattern("\\}\\}\\s+(?:aplicações|visitantes|cadastros|pessoas|fotos)\\b");
+            assertThat(frase).doesNotContainPattern("\\{\\{(?:cons|dado|calc):[^}]*}}\\s*\\p{L}");
         }
     }
 

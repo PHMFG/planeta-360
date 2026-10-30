@@ -316,14 +316,14 @@ class LoopDoAgenteTest {
                     var resultado = pedido.mensagens().get(pedido.mensagens().size() - 1);
                     assertThat(resultado.papel()).isEqualTo("tool");
                     assertThat(resultado.ferramenta()).isEqualTo(CONSULTAR);
-                    return new br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.RespostaDoLlm("Aplicações de marca comprovadas: "
-                            + "{{cons:aplicacoes.comprovadas}} de {{cons:aplicacoes.previstas}} previstas.", List.of(), null);
+                    return new br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.RespostaDoLlm("Aplicações de marca previstas: "
+                            + "{{cons:aplicacoes.previstas}}; comprovadas no evento: {{cons:aplicacoes.comprovadas}}.", List.of(), null);
                 });
 
         ConversaDto turno = falar(conversa, "Quantas aplicações de marca já foram comprovadas?");
 
         assertThat(tipos(turno)).containsExactly("usuario", "texto");
-        assertThat(textoDoItem(turno, 1)).isEqualTo("Aplicações de marca comprovadas: 17 de 19 previstas.");
+        assertThat(textoDoItem(turno, 1)).isEqualTo("Aplicações de marca previstas: 19; comprovadas no evento: 17.");
         assertThat(nomesDasFerramentas(modelo.pedidos().get(0))).containsExactly(CONSULTAR, INICIAR);
         modelo.pedidos().forEach(ProvedorRoteirizado::exigirHistoricoValido);
         assertThat(modelo.sobraDoRoteiro()).isZero();
@@ -728,7 +728,7 @@ class LoopDoAgenteTest {
                 .map(ParagrafoDto.class::cast).toList();
         assertThat(paragrafos).extracting("id", "redigidoPor").containsExactly(
                 org.assertj.core.groups.Tuple.tuple("b-resumo", "MODELO"), org.assertj.core.groups.Tuple.tuple("b-publico", "ATLAS"));
-        assertThat(paragrafos.get(0).texto()).isEqualTo("Aplicações de marca comprovadas no evento por Cliente Amarelo: 17 de 19 previstas.");
+        assertThat(paragrafos.get(0).texto()).isEqualTo("Aplicações de marca de Cliente Amarelo previstas no plano: 19; comprovadas no evento: 17.");
     }
 
     @Test
@@ -763,14 +763,14 @@ class LoopDoAgenteTest {
                     assertThat(mensagens.get(mensagens.size() - 1).papel()).isEqualTo("user");
                     assertThat(mensagens.get(mensagens.size() - 1).conteudo()).contains("recusada").contains("algarismo \"7\"");
                     return new br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.RespostaDoLlm(
-                            "São {{cons:aplicacoes.comprovadas}} aplicações comprovadas de {{cons:aplicacoes.previstas}} previstas.", List.of(), null);
+                            "Aplicações previstas: {{cons:aplicacoes.previstas}}; comprovadas: {{cons:aplicacoes.comprovadas}}.", List.of(), null);
                 });
 
         ConversaDto turno = falar(conversa, "Quanto deu por visitante?");
 
         assertThat(modelo.pedidos()).hasSize(2);
         assertThat(tipos(turno)).containsExactly("usuario", "texto");
-        assertThat(textoDoItem(turno, 1)).isEqualTo("São 17 aplicações comprovadas de 19 previstas.");   // o servidor resolve os marcadores
+        assertThat(textoDoItem(turno, 1)).isEqualTo("Aplicações previstas: 19; comprovadas: 17.");   // o servidor resolve os marcadores
         List<Mensagem> historico = mensagens(conversa);
         assertThat(historico).extracting(Mensagem::papel).containsExactly("user", "assistant");
         assertThat(historico.get(1).conteudo()).contains("{{cons:aplicacoes.comprovadas}}").doesNotContain("Deu 7");   // grava com os marcadores
