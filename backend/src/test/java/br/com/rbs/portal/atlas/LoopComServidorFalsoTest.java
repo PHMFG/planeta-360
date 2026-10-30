@@ -83,6 +83,8 @@ class LoopComServidorFalsoTest {
         long amarelo = SessaoDeApi.parceriaDe2027(jdbc, "Cliente Amarelo");
         long conversa = atlas.abrirConversa(marca, amarelo, null, requisicao()).conversaId();
         // o servidor repete o mesmo id de pedido ("call_do_servidor"): quem o torna único na conversa é o loop
+        // como o DeepSeek com o raciocínio ligado: 400 se o reasoning_content de um assistente com ferramentas não voltar
+        SERVIDOR.exigirRaciocinio(true);
         SERVIDOR.responder(ServidorDeLlmFalso.chamada("call_do_servidor", "relatorio_iniciar", LoopDoAgenteTest.ARGS_INICIAR, "Preciso criar o relatório."));
         SERVIDOR.responder(ServidorDeLlmFalso.chamada("call_do_servidor", "relatorio_solicitar_campos", LoopDoAgenteTest.ARGS_CARTAO,
                 "Faltam dois números da agência."));
@@ -91,10 +93,10 @@ class LoopComServidorFalsoTest {
 
         ItemCartao cartao = aberta.itens().stream().filter(ItemCartao.class::isInstance).map(ItemCartao.class::cast).findFirst().orElseThrow();
         assertThat(SERVIDOR.recebidas()).hasSize(2);
-        // 1ª ida: só a ferramenta do estado "sem relatório", o thinking desligado e os cabeçalhos próprios
+        // 1ª ida: só a ferramenta do estado "sem relatório", o raciocínio ligado (thinking enabled) e os cabeçalhos próprios
         var primeira = SERVIDOR.recebidas().get(0);
         assertThat(JsonPath.<List<String>>read(primeira.corpo(), "$.tools[*].function.name")).containsExactly("parceria_consultar", "relatorio_iniciar");
-        assertThat(primeira.corpo()).contains("\"thinking\":{\"type\":\"disabled\"}");
+        assertThat(primeira.corpo()).contains("\"thinking\":{\"type\":\"enabled\"}");
         assertThat(JsonPath.<String>read(primeira.corpo(), "$.messages[0].role")).isEqualTo("system");
         assertThat(JsonPath.<String>read(primeira.corpo(), "$.messages[0].content")).contains("Cliente Amarelo");
         assertThat(JsonPath.<String>read(primeira.corpo(), "$.messages[1].content")).isEqualTo("Quero o relatório da ativação.");
@@ -120,12 +122,16 @@ class LoopComServidorFalsoTest {
 
         // a pessoa responde o cartão (rota 46): a retomada remonta tudo do banco, e o raciocínio da pausa volta
         String edicao = LoopDoAgenteTest.edicao("b-resumo", LoopDoAgenteTest.RESUMO, "b-publico", LoopDoAgenteTest.PUBLICO);
-        SERVIDOR.responder(ServidorDeLlmFalso.chamada("call_do_servidor", "relatorio_editar", edicao, null));
+        SERVIDOR.responder(ServidorDeLlmFalso.chamada("call_do_servidor", "relatorio_editar", edicao, "Vou redigir."));
         SERVIDOR.responder(ServidorDeLlmFalso.chamada("call_do_servidor", "relatorio_finalizar", "{}", null));
         ConversaDto pronta = atlas.responderCartao(marca, cartao.solicitacaoId(),
                 new RespostaDoCartaoRequisicao("accept", valores(VISITANTES, 1200L, CADASTROS, 1072L)), requisicao());
 
-        assertThat(pronta.itens()).hasSize(1).first().isInstanceOf(ItemRelatorioPronto.class);
+        assertThat(pronta.itens()).extracting(i -> i.getClass().getSimpleName()).containsExactly("ItemRaciocinio", "ItemRelatorioPronto");
+        assertThat(pronta.itens().get(1)).isInstanceOf(ItemRelatorioPronto.class);
+        // os itens do turno da pausa trazem o raciocínio de cada assistente antes do que ele fez
+        assertThat(aberta.itens()).extracting(i -> i.getClass().getSimpleName())
+                .containsExactly("ItemUsuario", "ItemRaciocinio", "ItemRaciocinio", "ItemCartao");
         assertThat(SERVIDOR.recebidas()).hasSize(4);
         var retomada = SERVIDOR.recebidas().get(2).corpo();
         assertThat(JsonPath.<List<String>>read(retomada, "$.messages[*].role"))
@@ -139,7 +145,7 @@ class LoopComServidorFalsoTest {
         assertThat(JsonPath.<List<String>>read(retomada, "$.tools[*].function.name"))
                 .containsExactly("parceria_consultar", "relatorio_solicitar_campos", "relatorio_editar", "relatorio_finalizar");
         for (var recebida : SERVIDOR.recebidas()) {
-            assertThat(recebida.corpo()).contains("\"thinking\":{\"type\":\"disabled\"}");
+            assertThat(recebida.corpo()).contains("\"thinking\":{\"type\":\"enabled\"}");
             assertThat(recebida.cabecalho("user-agent")).containsExactly("PlanetaAtlas/0.1");
         }
     }

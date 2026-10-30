@@ -1439,6 +1439,7 @@ Com o modelo ligado (pelas variáveis de ambiente ou, no perfil `dev`, pela chav
 - **Falha do modelo** (rede, limite do provedor, tempo esgotado): o turno termina com um texto fixo (`"Não consegui falar com o modelo de linguagem agora. O que já foi feito está salvo..."`) e resposta **200**; o histórico continua válido e o botão segue funcionando. Um turno que passa de **3 minutos** (`atlas.prazo-do-turno`) não começa outra ida ao modelo e termina do mesmo jeito (`"Esta resposta demorou mais do que o esperado e eu parei..."`), para não vencer a trava de 5 minutos do turno.
 - **Teto diário.** Para uma rodada de testes não gastar o limite do provedor, cada parceria tem um teto de mensagens do assistente por dia: contam as mensagens que o modelo escreveu e que ficaram gravadas hoje (dia de Brasília), em todas as conversas da parceria; o limite é configurável (`atlas.teto-diario-por-parceria`, padrão **200**). Com o teto atingido, a rota 44 com `texto` responde **429** (`"O Atlas atingiu o limite de uso de hoje desta parceria. Use o botão Montar relatório ou tente amanhã."`), sem gravar a mensagem nem chamar o modelo. O **botão não conta** e continua funcionando; a resposta do cartão (rota 46) com o teto atingido segue o plano B (frases-modelo) em vez de dar 429, para a marca não ficar presa a um cartão aberto. A conferência é no início do turno: um turno que começou abaixo do teto termina.
 - O **botão** (atalho) continua sendo o plano B, com ou sem modelo. Cartão aberto pelo botão e respondido com o modelo ligado é retomado pelo modelo.
+- **Raciocínio do modelo.** Vem **ligado** por padrão: cada ida ao modelo leva `"thinking": {"type": "enabled"}` (com `atlas.raciocinio=false`, variável `ATLAS_RACIOCINIO`, vai `"disabled"`; vale para o modelo das variáveis de ambiente e para o da chave do debug, que pode trocar). O `reasoning_content` de cada resposta é gravado com a mensagem do assistente e **volta ao modelo em todas as idas seguintes**, também depois da pausa do cartão (o histórico é remontado do banco): com ferramentas, o DeepSeek responde 400 sem ele. Na conversa, ele aparece como o item `raciocinio` (veja "O objeto Conversa"), **sem a checagem do texto**: é o pensamento do modelo, cru, e nunca vira a resposta para a marca.
 
 ## O objeto Conversa (rotas 42, 44, 45 e 46)
 
@@ -1462,6 +1463,7 @@ Com o modelo ligado (pelas variáveis de ambiente ou, no perfil `dev`, pela chav
 | `tipo` | Quando aparece | Campos |
 | --- | --- | --- |
 | `usuario` | O que a pessoa disse (o botão aparece como "Montar o relatório da ativação"; no histórico que vai ao modelo, a mensagem continua "Montar o relatório da ativação (botão)") | `texto` |
+| `raciocinio` | O raciocínio do modelo (`reasoning_content`) de uma mensagem do assistente, **antes** dos itens dela (`texto`, `cartao`, `relatorio_pronto`). Cru: **não passa pela checagem do texto** (pode ter número e termo interno); a tela o mostra numa caixa minimizável, como não verificado. Só aparece quando o modelo mandou raciocínio, e raciocínio vazio não gera item; o botão e as frases fixas do servidor não têm. | `texto` |
 | `texto` | O que o Atlas disse. Os marcadores `{{...}}` já vêm trocados pelo valor; o que não tem valor vira "indisponível". `porModelo` é `true` só quando o texto foi escrito pelo modelo de linguagem; é `false` nas frases fixas do servidor: as do botão (plano B: "Montei a base...", "Continuo o relatório...", "Pronto: ..."), a frase fixa que troca um texto recusado duas vezes e as de falha, limite e prazo do turno | `texto`, `porModelo` |
 | `cartao` | O cartão de perguntas, com o **estado de agora** | `solicitacaoId`, `relatorioId`, `mensagem`, `status` (`PENDENTE`, `RESPONDIDA`, `RECUSADA` ou `CANCELADA`), `campos` |
 | `relatorio_pronto` | O relatório ficou pronto; o front abre o A4 pela rota 47 | `relatorioId`, `titulo` |
@@ -1516,7 +1518,7 @@ Cada item de `campos` do cartão é um campo do catálogo (rota 39) mais `obriga
 - **Com o atalho**, roda o plano B nesta conversa. Se já há um relatório **em montagem** nela (por exemplo, depois de um cartão cancelado), continua **dele** em vez de criar outro: reabre o cartão com as lacunas que faltam. Depois de um relatório pronto, o atalho começa um relatório novo.
 - **Com texto**, roda o loop do modelo de linguagem (veja "O modelo de linguagem"). O texto é aparado dos espaços das pontas. Sem modelo de linguagem, responde **503** (`"O Atlas está sem o modelo de linguagem agora. Use o botão Montar relatório."`). Com um cartão aberto na conversa, a mensagem primeiro o fecha com `cancel`.
 
-**200**: o objeto Conversa, só com os itens do turno: `usuario`, o que o Atlas disse (`texto`), o `cartao` se ele pediu números (o turno para aí), e `relatorio_pronto` se fechou o relatório. Com cartão aberto antes da mensagem, o primeiro item é o `aviso` do cartão fechado.
+**200**: o objeto Conversa, só com os itens do turno: `usuario`, o raciocínio do modelo (`raciocinio`), o que o Atlas disse (`texto`), o `cartao` se ele pediu números (o turno para aí), e `relatorio_pronto` se fechou o relatório. Com cartão aberto antes da mensagem, o primeiro item é o `aviso` do cartão fechado.
 
 **Erros**
 
@@ -1552,7 +1554,7 @@ Cada item de `campos` do cartão é um campo do catálogo (rota 39) mais `obriga
 | `decline` | O cartão vira `RECUSADA`; as lacunas pedidas contam como recusadas: os números que dependem delas saem **indisponíveis**, com o motivo, nunca zero. O plano B finaliza o relatório do mesmo jeito. `valores` é ignorado. |
 | `cancel` | O cartão vira `CANCELADA`, o relatório volta a **montando** e nada é gravado. O turno termina com um item `aviso` (`"Cartão fechado. Use Montar relatório para continuar."`; com o modelo de linguagem ligado, `"Cartão fechado. Quando tiver os números, peça para continuar."`); o botão continua o mesmo relatório. `valores` é ignorado. |
 
-**200**: o objeto Conversa, só com os itens do turno. **Sem modelo de linguagem**, em `accept` e `decline`: `texto` (`"Pronto: o relatório de ativação está montado. A origem de cada número está em Fontes e cálculos."`) e `relatorio_pronto`; em `cancel`: `aviso`. **Com o modelo ligado**, depois de gravar os valores a API põe no histórico a resposta da ferramenta pendente, com o mesmo id do pedido (`{"acao": "accept", "campos": [{"chave": "ativacao.visitantes_total", "ref": "dado:ativacao.visitantes_total", "valor": 1200}]}`; `decline` e `cancel` levam `campos` vazio) e **o loop retoma**: os itens do turno são o que o modelo fez a seguir (texto, outro cartão, `relatorio_pronto`), e em `cancel` o `aviso` vem primeiro. Isso vale para o cartão aberto pelo botão também.
+**200**: o objeto Conversa, só com os itens do turno. **Sem modelo de linguagem**, em `accept` e `decline`: `texto` (`"Pronto: o relatório de ativação está montado. A origem de cada número está em Fontes e cálculos."`) e `relatorio_pronto`; em `cancel`: `aviso`. **Com o modelo ligado**, depois de gravar os valores a API põe no histórico a resposta da ferramenta pendente, com o mesmo id do pedido (`{"acao": "accept", "campos": [{"chave": "ativacao.visitantes_total", "ref": "dado:ativacao.visitantes_total", "valor": 1200}]}`; `decline` e `cancel` levam `campos` vazio) e **o loop retoma**: os itens do turno são o que o modelo fez a seguir (raciocínio, texto, outro cartão, `relatorio_pronto`), e em `cancel` o `aviso` vem primeiro. Isso vale para o cartão aberto pelo botão também.
 
 **Como funciona o `accept`** [VALIDACAO] [HISTORICO]
 
@@ -1643,9 +1645,9 @@ Um recurso **temporário**, para a equipe ligar o modelo de linguagem do Atlas p
 - **Só existem com `atlas.debug.chaves=true`.** A propriedade vem `false` por padrão, `true` no perfil `dev` e `false` no `test`. Sem ela, as quatro rotas respondem **404**, como uma rota que não existe.
 - **A chave fica só na memória da API.** Nunca vai ao banco, a arquivo ou ao log, e **some quando a API reinicia**. Nenhuma resposta devolve a chave inteira: só os 4 últimos caracteres (`finalDaChave`).
 - **Precedência:** a chave posta aqui &rarr; a das variáveis de ambiente (`ATLAS_LLM=openai` e `OPENCODE_API_KEY`) &rarr; nenhuma (o Atlas fica no botão "Montar relatório"). Pôr ou apagar a chave muda na hora o `llmDisponivel` das rotas 42 a 46; um turno que já começou termina com o modelo com que começou.
-- O modelo montado com a chave usa as mesmas opções do `application.yml` (temperatura 0.2, `thinking` desligado, 1 nova tentativa, 60 segundos de limite, o `User-Agent` `PlanetaAtlas/0.1` e o `x-opencode-session` por conversa).
+- O modelo montado com a chave usa as mesmas opções do `application.yml` (temperatura 0.2, 1 nova tentativa, 60 segundos de limite, o `User-Agent` `PlanetaAtlas/0.1` e o `x-opencode-session` por conversa) e o raciocínio (`thinking`) do `atlas.raciocinio` (`ATLAS_RACIOCINIO`, ligado por padrão), que o `PUT` pode trocar.
 - **Quem chama:** logado (qualquer perfil: é ferramenta da equipe em desenvolvimento). PUT, DELETE e POST exigem o token CSRF. Erros em `ProblemDetail`.
-- Cada troca grava uma linha de log (INFO) com quem trocou, a origem, a base URL, o modelo e o final da chave.
+- Cada troca grava uma linha de log (INFO) com quem trocou, a origem, a base URL, o modelo, o final da chave e o raciocínio.
 
 ## `GET /api/debug/llm`
 
@@ -1654,8 +1656,10 @@ Um recurso **temporário**, para a equipe ligar o modelo de linguagem do Atlas p
 ```json
 { "origem": "DEBUG", "baseUrl": "https://opencode.ai/inference/go/openai/v1", "modelo": "deepseek-v4.1-flash",
   "finalDaChave": "a1b2", "configuradoPor": { "id": 1, "nome": "Equipe B2B RBS", "perfil": "ADMIN_RBS" },
-  "configuradoEm": "2026-10-29T21:00:00-03:00", "llmDisponivel": true }
+  "configuradoEm": "2026-10-29T21:00:00-03:00", "llmDisponivel": true, "raciocinio": true }
 ```
+
+`raciocinio` diz se o modelo que vale agora vai com o raciocínio ligado (`"thinking": {"type": "enabled"}`): em `DEBUG`, o da chave posta; em `AMBIENTE` e `NENHUM`, o do `atlas.raciocinio`.
 
 | `origem` | Quando | O resto |
 | --- | --- | --- |
@@ -1667,7 +1671,7 @@ Um recurso **temporário**, para a equipe ligar o modelo de linguagem do Atlas p
 
 ## `PUT /api/debug/llm`
 
-**Corpo:** `{ "chave": "...", "baseUrl": "...", "modelo": "..." }`. `baseUrl` e `modelo` são opcionais: ausentes, `null` ou vazios, valem os padrões do `application.yml`. Troca a chave anterior, se houver. A API não chama o provedor ao receber a chave (use `/teste` para isso).
+**Corpo:** `{ "chave": "...", "baseUrl": "...", "modelo": "...", "raciocinio": true }`. `baseUrl` e `modelo` são opcionais: ausentes, `null` ou vazios, valem os padrões do `application.yml`. `raciocinio` (`true` ou `false`) também: ausente ou `null`, fica o que vale agora (o da chave do debug já posta ou, sem ela, o `atlas.raciocinio`). Troca a chave anterior, se houver. A API não chama o provedor ao receber a chave (use `/teste` para isso).
 
 **200**: o mesmo corpo do GET, já com `origem` `DEBUG`.
 
@@ -1675,7 +1679,7 @@ Um recurso **temporário**, para a equipe ligar o modelo de linguagem do Atlas p
 
 | Status | Quando |
 | --- | --- |
-| 400 | Corpo vazio ou que não é JSON. |
+| 400 | Corpo vazio ou que não é JSON; `raciocinio` que não é `true` nem `false`. |
 | 403 | Falta o token CSRF. |
 | 422 | `campos.chave`: ausente, com menos de 8 ou mais de 500 caracteres, ou com espaço (`"A chave precisa ter de 8 a 500 caracteres, sem espaços."`). `campos.baseUrl`: não começa com `https://` e não é `http://localhost` nem `http://127.0.0.1` (com porta e caminho opcionais), ou passa de 500 caracteres. `campos.modelo`: mais de 100 caracteres ou caractere fora de letras, números e `._:/-`. |
 

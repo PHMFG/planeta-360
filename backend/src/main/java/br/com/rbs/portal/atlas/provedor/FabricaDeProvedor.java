@@ -19,14 +19,17 @@ import org.springframework.stereotype.Component;
 /**
  * Monta, em tempo de execução, o {@link ProvedorSpringAi} de uma chave posta pela tela de debug. [ATLAS] Faz o mesmo caminho da
  * autoconfiguração do Spring AI 2.0.2 ({@code OpenAiChatAutoConfiguration}), mas com a chave, a base URL e o modelo informados:
- * lê as propriedades {@code spring.ai.openai.*} e {@code spring.ai.openai.chat.*} do application.yml (temperatura, o
- * {@code extra-body} com o {@code thinking} desligado, {@code max-retries}, {@code timeout}), monta os clientes HTTP com o
+ * lê as propriedades {@code spring.ai.openai.*} e {@code spring.ai.openai.chat.*} do application.yml (temperatura,
+ * {@code max-retries}, {@code timeout}) e o {@code atlas.raciocinio} (o {@code thinking}), monta os clientes HTTP com o
  * {@code User-Agent} próprio do {@link LlmConfig} e embrulha o {@code OpenAiChatModel} no {@link ProvedorSpringAi} de sempre (o
  * {@code x-opencode-session} por chamada e a chave riscada das mensagens de erro). Funciona também com
  * {@code spring.ai.model.chat=none}, porque não depende dos beans da autoconfiguração.
  */
 @Component
 public class FabricaDeProvedor {
+
+    /** Liga o raciocínio do modelo ({@code thinking}); padrão verdadeiro, variável {@code ATLAS_RACIOCINIO}. */
+    public static final String PROPRIEDADE_DO_RACIOCINIO = "atlas.raciocinio";
 
     private static final String PREFIXO = "spring.ai.openai";
     private static final String PREFIXO_DO_CHAT = "spring.ai.openai.chat";
@@ -55,8 +58,18 @@ public class FabricaDeProvedor {
         return chave == null || chave.isBlank() ? null : chave;
     }
 
-    /** Um provedor novo com esta chave, base URL e modelo, e as demais opções do application.yml. Não chama o provedor. */
+    /** O raciocínio do application.yml (ou de {@code ATLAS_RACIOCINIO}): o padrão quando a tela não diz. */
+    public boolean raciocinioPadrao() {
+        return ambiente.getProperty(PROPRIEDADE_DO_RACIOCINIO, Boolean.class, true);
+    }
+
+    /** Um provedor novo com esta chave, base URL e modelo, o raciocínio padrão e as demais opções. Não chama o provedor. */
     public ProvedorDeLlm montar(String chave, String baseUrl, String modelo) {
+        return montar(chave, baseUrl, modelo, raciocinioPadrao());
+    }
+
+    /** Um provedor novo com esta chave, base URL, modelo e raciocínio, e as demais opções do application.yml. Não o chama. */
+    public ProvedorDeLlm montar(String chave, String baseUrl, String modelo, boolean raciocinio) {
         ResolvedConnectionProperties conexao = resolvidas();
         ObservationRegistry registro = observacao.getIfUnique(() -> ObservationRegistry.NOOP);
         List<OpenAiHttpClientBuilderCustomizer> personalizacoes = List.of(LlmConfig.trocaDoUserAgent());
@@ -74,7 +87,7 @@ public class FabricaDeProvedor {
                 .options(chat().toOptions().mutate().model(modelo).build())
                 .observationRegistry(registro)
                 .build();
-        return new ProvedorSpringAi(modeloDeChat, chave);
+        return new ProvedorSpringAi(modeloDeChat, chave, raciocinio);
     }
 
     private OpenAiChatProperties chat() {

@@ -24,7 +24,8 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 /**
  * [ATLAS] O {@link ProvedorSpringAi} contra um servidor HTTP falso e local, com a configuração REAL do application.yml e a
  * autoconfiguração REAL do Spring AI 2.0.2 (sem chamar o provedor de verdade, sem chave de verdade). Confere o que sai pela rede:
- * o {@code thinking} aninhado ({@code "thinking": {"type": "disabled"}}), o {@code User-Agent} próprio (um só valor), o
+ * o {@code thinking} aninhado ({@code "thinking": {"type": "enabled"}}, ou {@code "disabled"} com {@code atlas.raciocinio=false}),
+ * o {@code User-Agent} próprio (um só valor), o
  * {@code x-opencode-session} com o id da conversa, o {@code reasoning_content} gravado voltando na mensagem do assistente, as
  * ferramentas em JSON Schema e a mensagem de ferramenta; e o que vem de volta: texto, {@code tool_calls}, raciocínio, erro sem
  * chave. Também prova que {@code ATLAS_LLM=none} (o padrão) e a chave em branco deixam o portal sem modelo.
@@ -87,10 +88,10 @@ class ProvedorSpringAiTest {
             assertThat(recebida.metodo()).isEqualTo("POST");
             assertThat(recebida.caminho()).isEqualTo("/inference/go/openai/v1/chat/completions");
 
-            // o thinking vai no topo do JSON, aninhado, e não achatado nem como texto
+            // o thinking vai no topo do JSON, aninhado, e não achatado nem como texto; ligado por padrão (atlas.raciocinio)
             String corpo = recebida.corpo();
-            assertThat(JsonPath.<Object>read(corpo, "$.thinking")).isEqualTo(Map.of("type", "disabled"));
-            assertThat(corpo).contains("\"thinking\":{\"type\":\"disabled\"}");
+            assertThat(JsonPath.<Object>read(corpo, "$.thinking")).isEqualTo(Map.of("type", "enabled"));
+            assertThat(corpo).contains("\"thinking\":{\"type\":\"enabled\"}");
             assertThat(JsonPath.<String>read(corpo, "$.model")).isEqualTo("deepseek-v4.1-flash");
             assertThat(JsonPath.<Double>read(corpo, "$.temperature")).isEqualTo(0.2);
             assertThat(corpo).doesNotContain("\"stream\":true");
@@ -114,6 +115,19 @@ class ProvedorSpringAiTest {
             assertThat(recebida.cabecalho("user-agent")).containsExactly("PlanetaAtlas/0.1");
             assertThat(recebida.cabecalho("x-opencode-session")).containsExactly("42");
             assertThat(recebida.cabecalho("authorization")).containsExactly("Bearer " + CHAVE);
+        });
+    }
+
+    @Test
+    void comAtlasRaciocinioFalsoOThinkingVaiDesligado() {
+        servidor.responder(ServidorDeLlmFalso.texto("Certo."));
+
+        contexto("spring.ai.model.chat=openai", "spring.ai.openai.api-key=" + CHAVE, "spring.ai.openai.base-url=" + servidor.urlBase(),
+                "spring.ai.openai.max-retries=0", "atlas.raciocinio=false").run(contexto -> {
+            ProvedorDeLlm provedor = contexto.getBean(ProvedorDeLlm.class);
+            assertThat(((ProvedorSpringAi) provedor).raciocinio()).isFalse();
+            provedor.responder(pedido());
+            assertThat(JsonPath.<Object>read(servidor.ultima().corpo(), "$.thinking")).isEqualTo(Map.of("type", "disabled"));
         });
     }
 

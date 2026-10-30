@@ -38,15 +38,23 @@ public final class AtlasDtos {
     @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.PROPERTY, property = "tipo")
     @JsonSubTypes({
             @JsonSubTypes.Type(value = ItemUsuario.class, name = "usuario"),
+            @JsonSubTypes.Type(value = ItemRaciocinio.class, name = "raciocinio"),
             @JsonSubTypes.Type(value = ItemTexto.class, name = "texto"),
             @JsonSubTypes.Type(value = ItemAviso.class, name = "aviso"),
             @JsonSubTypes.Type(value = ItemCartao.class, name = "cartao"),
             @JsonSubTypes.Type(value = ItemRelatorioPronto.class, name = "relatorio_pronto")})
-    public sealed interface ItemDaConversa permits ItemUsuario, ItemTexto, ItemAviso, ItemCartao, ItemRelatorioPronto {
+    public sealed interface ItemDaConversa permits ItemUsuario, ItemRaciocinio, ItemTexto, ItemAviso, ItemCartao, ItemRelatorioPronto {
     }
 
     /** O que a pessoa disse (o botão aparece como "Montar o relatório da ativação"). */
     public record ItemUsuario(String texto) implements ItemDaConversa {
+    }
+
+    /**
+     * O raciocínio do modelo ({@code reasoning_content}) de uma mensagem do assistente, cru: NÃO passa pela checagem do texto (a
+     * tela o mostra rotulado como não verificado). Vem antes dos itens da mesma mensagem; raciocínio vazio não gera item.
+     */
+    public record ItemRaciocinio(String texto) implements ItemDaConversa {
     }
 
     /**

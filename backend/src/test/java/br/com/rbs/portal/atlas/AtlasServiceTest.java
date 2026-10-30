@@ -133,6 +133,7 @@ class AtlasServiceTest {
     static List<String> tipos(ConversaDto conversa) {
         return conversa.itens().stream().map(i -> switch (i) {
             case ItemUsuario u -> "usuario";
+            case AtlasDtos.ItemRaciocinio r -> "raciocinio";
             case ItemTexto t -> "texto";
             case ItemAviso a -> "aviso";
             case ItemCartao c -> "cartao";

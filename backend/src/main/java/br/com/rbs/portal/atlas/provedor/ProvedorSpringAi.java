@@ -28,10 +28,12 @@ import org.springframework.ai.tool.definition.ToolDefinition;
  * ferramenta (devolve os {@code tool_calls}), e é isso que o loop do agente quer, porque ele executa as chamadas uma a uma e para
  * no cartão. As ferramentas vão ao modelo só como definição (nome, descrição e JSON Schema); quem as executa é o loop.
  * <ul>
- *   <li>O {@code thinking} desligado, o modelo e a temperatura vêm das opções padrão do modelo (application.yml); a cada chamada
- *       acrescentam-se as ferramentas e o cabeçalho {@code x-opencode-session} com o id da conversa.</li>
+ *   <li>O modelo e a temperatura vêm das opções padrão do modelo (application.yml); a cada chamada acrescentam-se as ferramentas,
+ *       o cabeçalho {@code x-opencode-session} com o id da conversa e o {@code thinking} ({@code {"type":"enabled"}} ou
+ *       {@code "disabled"}, pelo {@code atlas.raciocinio}), no topo do corpo.</li>
  *   <li>O {@code reasoning_content} que o modelo mandar volta na resposta, para o loop guardá-lo; e o que o loop remonta do
- *       banco entra nos metadados da mensagem do assistente (chave {@code reasoningContent}), que o Spring AI reenvia sozinho.</li>
+ *       banco entra nos metadados da mensagem do assistente (chave {@code reasoningContent}), que o Spring AI reenvia sozinho.
+ *       Com o raciocínio ligado e ferramentas, o DeepSeek responde 400 se ele não voltar em todas as idas seguintes.</li>
  *   <li>O {@code User-Agent} próprio é posto pelo {@link LlmConfig}: o {@code custom-headers} do Spring AI não troca o
  *       "spring-ai-openai" que ele manda por padrão, só acrescenta um segundo valor ao cabeçalho.</li>
  * </ul>
@@ -48,16 +50,29 @@ public class ProvedorSpringAi implements ProvedorDeLlm {
     private static final Logger log = LoggerFactory.getLogger(ProvedorSpringAi.class);
     private static final Pattern SEGREDO = Pattern.compile("(?i)(sk-[A-Za-z0-9_-]{6,}|bearer\\s+\\S+|api[_-]?key\\S*)");
 
+    /** O campo do corpo que liga ou desliga o raciocínio no DeepSeek (vai no topo do JSON, aninhado). */
+    static final String THINKING = "thinking";
+
     private final ChatModel modelo;
     private final String chave;
+    private final boolean raciocinio;
 
-    /** {@code chave} é a chave de API configurada, só para riscá-la de mensagens de erro e de log (pode ser nula). */
-    public ProvedorSpringAi(ChatModel modelo, String chave) {
+    /**
+     * {@code chave} é a chave de API configurada, só para riscá-la de mensagens de erro e de log (pode ser nula).
+     * {@code raciocinio} liga o {@code thinking} do modelo ({@code atlas.raciocinio}).
+     */
+    public ProvedorSpringAi(ChatModel modelo, String chave, boolean raciocinio) {
         if (!(modelo.getOptions() instanceof OpenAiChatOptions)) {
             throw new IllegalStateException("O Atlas espera o ChatModel da OpenAI (compatível com o OpenCode Go).");
         }
         this.modelo = modelo;
         this.chave = chave;
+        this.raciocinio = raciocinio;
+    }
+
+    /** O raciocínio do modelo está ligado neste provedor? */
+    public boolean raciocinio() {
+        return raciocinio;
     }
 
     @Override
@@ -66,12 +81,21 @@ public class ProvedorSpringAi implements ProvedorDeLlm {
             ChatResponse resposta = modelo.call(new Prompt(mensagens(pedido.mensagens()), opcoes(pedido)));
             return resposta(resposta);
         } catch (RuntimeException erro) {
-            // A mensagem do SDK pode trazer o corpo do erro do provedor: limpa, curta e sem chave. O que importa para quem
-            // depura (status e motivo) fica; o cabeçalho de autorização nunca entra aqui.
-            String motivo = limpar(erro.getClass().getSimpleName() + ": " + erro.getMessage(), chave);
-            log.warn("O modelo de linguagem não respondeu ({})", motivo);
-            throw new ProvedorIndisponivelException("O modelo de linguagem não respondeu (" + motivo + ").", erro);
+            throw falha(erro);
         }
+    }
+
+    /**
+     * A falha do provedor como {@link ProvedorIndisponivelException}. A mensagem do SDK pode trazer o corpo do erro do provedor:
+     * limpa, curta e sem chave. O que importa para quem depura (status e motivo) fica; o cabeçalho de autorização nunca entra.
+     */
+    private ProvedorIndisponivelException falha(RuntimeException erro) {
+        if (erro instanceof ProvedorIndisponivelException jaTratada) {
+            return jaTratada;
+        }
+        String motivo = limpar(erro.getClass().getSimpleName() + ": " + erro.getMessage(), chave);
+        log.warn("O modelo de linguagem não respondeu ({})", motivo);
+        return new ProvedorIndisponivelException("O modelo de linguagem não respondeu (" + motivo + ").", erro);
     }
 
     // ---------------------------------------------------------------------
@@ -86,9 +110,14 @@ public class ProvedorSpringAi implements ProvedorDeLlm {
         }
         cabecalhos.put(CABECALHO_DA_SESSAO, pedido.sessao());
         List<ToolCallback> ferramentas = pedido.ferramentas().stream().map(ProvedorSpringAi::soDefinicao).toList();
-        // As opções da chamada não se juntam às padrão no Spring AI 2.0: parte-se das padrão (modelo, temperatura e extra-body,
-        // com o thinking desligado) e acrescenta-se o que muda a cada chamada.
-        return padrao.mutate().customHeaders(cabecalhos).toolCallbacks(ferramentas).build();
+        Map<String, Object> corpoExtra = new LinkedHashMap<>();
+        if (padrao.getExtraBody() != null) {
+            corpoExtra.putAll(padrao.getExtraBody());
+        }
+        corpoExtra.put(THINKING, Map.of("type", raciocinio ? "enabled" : "disabled"));
+        // As opções da chamada não se juntam às padrão no Spring AI 2.0: parte-se das padrão (modelo, temperatura e extra-body)
+        // e acrescenta-se o que muda a cada chamada.
+        return padrao.mutate().customHeaders(cabecalhos).toolCallbacks(ferramentas).extraBody(corpoExtra).build();
     }
 
     private static List<Message> mensagens(List<MensagemDeChat> mensagens) {

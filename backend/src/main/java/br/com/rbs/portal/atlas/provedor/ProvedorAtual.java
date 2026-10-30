@@ -27,7 +27,7 @@ public class ProvedorAtual {
     public enum Origem { DEBUG, AMBIENTE, NENHUM }
 
     /** A chave posta pelo debug: o provedor montado com ela e o que se pode mostrar (nunca a chave inteira). */
-    public record ChaveDoDebug(ProvedorDeLlm provedor, String baseUrl, String modelo, String finalDaChave,
+    public record ChaveDoDebug(ProvedorDeLlm provedor, String baseUrl, String modelo, boolean raciocinio, String finalDaChave,
                                UsuarioAutenticado configuradoPor, OffsetDateTime configuradoEm) {
     }
 

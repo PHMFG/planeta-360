@@ -33,9 +33,10 @@ public class LlmConfig {
     static class Ligado {
 
         @Bean
-        ProvedorDeLlm provedorDeLlm(ChatModel modelo, @Value("${spring.ai.openai.api-key}") String chave) {
-            log.info("Atlas: modelo de linguagem ligado (ATLAS_LLM=openai).");
-            return new ProvedorSpringAi(modelo, chave);
+        ProvedorDeLlm provedorDeLlm(ChatModel modelo, @Value("${spring.ai.openai.api-key}") String chave,
+                                    @Value("${atlas.raciocinio:true}") boolean raciocinio) {
+            log.info("Atlas: modelo de linguagem ligado (ATLAS_LLM=openai), raciocínio {}.", raciocinio ? "ligado" : "desligado");
+            return new ProvedorSpringAi(modelo, chave, raciocinio);
         }
 
         /**

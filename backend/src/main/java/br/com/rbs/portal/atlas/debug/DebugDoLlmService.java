@@ -87,8 +87,9 @@ public class DebugDoLlmService {
         }
         String baseUrlUsada = baseUrl != null ? baseUrl : fabrica.baseUrlPadrao();
         String modeloUsado = modelo != null ? modelo : fabrica.modeloPadrao();
-        provedor.usarChaveDoDebug(new ChaveDoDebug(fabrica.montar(chave, baseUrlUsada, modeloUsado), baseUrlUsada, modeloUsado,
-                finalDa(chave), usuario, Datas.emBrasilia(OffsetDateTime.now())));
+        boolean raciocinio = corpo.raciocinio() != null ? corpo.raciocinio() : raciocinioAtual(provedor.escolha());
+        provedor.usarChaveDoDebug(new ChaveDoDebug(fabrica.montar(chave, baseUrlUsada, modeloUsado, raciocinio), baseUrlUsada,
+                modeloUsado, raciocinio, finalDa(chave), usuario, Datas.emBrasilia(OffsetDateTime.now())));
         return registrarTroca(usuario);
     }
 
@@ -129,26 +130,40 @@ public class DebugDoLlmService {
 
     private EstadoDto estado(Escolha escolha) {
         boolean disponivel = escolha.provedor() != null;
+        boolean raciocinio = raciocinioAtual(escolha);
         return switch (escolha.origem()) {
             case DEBUG -> {
                 ChaveDoDebug chave = escolha.debug();
                 UsuarioAutenticado quem = chave.configuradoPor();
                 yield new EstadoDto(Origem.DEBUG.name(), chave.baseUrl(), chave.modelo(), chave.finalDaChave(),
-                        new UsuarioResumoDto(quem.id(), quem.nome(), quem.perfil().name()), chave.configuradoEm(), disponivel);
+                        new UsuarioResumoDto(quem.id(), quem.nome(), quem.perfil().name()), chave.configuradoEm(), disponivel,
+                        raciocinio);
             }
             case AMBIENTE -> new EstadoDto(Origem.AMBIENTE.name(), fabrica.baseUrlPadrao(), fabrica.modeloPadrao(),
-                    finalDa(fabrica.chaveDoAmbiente()), null, null, disponivel);
+                    finalDa(fabrica.chaveDoAmbiente()), null, null, disponivel, raciocinio);
             case NENHUM -> new EstadoDto(Origem.NENHUM.name(), fabrica.baseUrlPadrao(), fabrica.modeloPadrao(), null, null, null,
-                    disponivel);
+                    disponivel, raciocinio);
         };
+    }
+
+    /** O raciocínio que vale agora: o da chave do debug, se houver; senão o {@code atlas.raciocinio}. */
+    private boolean raciocinioAtual(Escolha escolha) {
+        if (escolha.origem() == Origem.DEBUG) {
+            return escolha.debug().raciocinio();
+        }
+        if (escolha.provedor() instanceof ProvedorSpringAi doAmbiente) {
+            return doAmbiente.raciocinio();
+        }
+        return fabrica.raciocinioPadrao();
     }
 
     /** Uma linha em INFO por troca: quem trocou e o que vale agora (origem, base URL, modelo e o final da chave, nunca ela). */
     private EstadoDto registrarTroca(UsuarioAutenticado usuario) {
         EstadoDto agora = estado();
         log.info("Atlas (debug): {} (id {}) trocou a chave do modelo de linguagem. Agora: origem {}, base URL {}, modelo {}, "
-                        + "final da chave {}.", usuario.nome(), usuario.id(), agora.origem(), agora.baseUrl(), agora.modelo(),
-                agora.finalDaChave() == null ? "nenhum" : agora.finalDaChave());
+                        + "final da chave {}, raciocínio {}.", usuario.nome(), usuario.id(), agora.origem(), agora.baseUrl(),
+                agora.modelo(), agora.finalDaChave() == null ? "nenhum" : agora.finalDaChave(),
+                agora.raciocinio() ? "ligado" : "desligado");
         return agora;
     }
 

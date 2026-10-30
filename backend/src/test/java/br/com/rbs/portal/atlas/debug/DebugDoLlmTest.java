@@ -117,7 +117,45 @@ class DebugDoLlmTest {
         Map<String, Object> estado = JsonPath.read(corpo(resposta), "$");
         assertThat(estado).containsExactly(entry("origem", "NENHUM"), entry("baseUrl", BASE_URL_PADRAO),
                 entry("modelo", MODELO_PADRAO), entry("finalDaChave", null), entry("configuradoPor", null),
-                entry("configuradoEm", null), entry("llmDisponivel", false));
+                entry("configuradoEm", null), entry("llmDisponivel", false), entry("raciocinio", true));
+    }
+
+    @Test
+    void oRaciocinioDaChaveDoDebugVaiAoModeloEFicaQuandoOPutNaoODiz() {
+        SessaoDeApi rbs = entrar(RBS);
+        assertThat(fabrica.raciocinioPadrao()).as("atlas.raciocinio vem ligado por padrão").isTrue();
+
+        // desligado pela tela
+        MvcTestResult desligado = rbs.put("/api/debug/llm", "{\"chave\":\"" + CHAVE + "\",\"baseUrl\":\"" + SERVIDOR.urlBase()
+                + "\",\"raciocinio\":false}");
+        assertThat(desligado).hasStatus(HttpStatus.OK);
+        assertThat(lerJson(desligado, "$.raciocinio")).isEqualTo(false);
+        assertThat(lerJson(rbs.get("/api/debug/llm"), "$.raciocinio")).isEqualTo(false);
+        SessaoDeApi marca = entrar(AMARELO);
+        long conversa = abrirConversa(marca, true);
+        SERVIDOR.responder(ServidorDeLlmFalso.texto("Certo."));
+        assertThat(marca.post("/api/atlas/conversas/" + conversa + "/mensagens", "{\"texto\":\"Oi\"}")).hasStatus(HttpStatus.OK);
+        assertThat(JsonPath.<Object>read(SERVIDOR.ultima().corpo(), "$.thinking")).isEqualTo(Map.of("type", "disabled"));
+
+        // outra chave sem dizer o raciocínio: fica o que estava (desligado)
+        MvcTestResult outra = rbs.put("/api/debug/llm", json(OUTRA_CHAVE, SERVIDOR.urlBase(), null));
+        assertThat(lerJson(outra, "$.raciocinio")).isEqualTo(false);
+        assertThat(lerJson(outra, "$.finalDaChave")).isEqualTo("z9y8");
+
+        // ligado de novo
+        MvcTestResult ligado = rbs.put("/api/debug/llm", "{\"chave\":\"" + CHAVE + "\",\"baseUrl\":\"" + SERVIDOR.urlBase()
+                + "\",\"raciocinio\":true}");
+        assertThat(lerJson(ligado, "$.raciocinio")).isEqualTo(true);
+        SERVIDOR.responder(ServidorDeLlmFalso.texto("Certo."));
+        assertThat(marca.post("/api/atlas/conversas/" + conversa + "/mensagens", "{\"texto\":\"Oi de novo\"}")).hasStatus(HttpStatus.OK);
+        assertThat(JsonPath.<Object>read(SERVIDOR.ultima().corpo(), "$.thinking")).isEqualTo(Map.of("type", "enabled"));
+
+        // um valor que não é verdadeiro nem falso não passa; sem a chave do debug, volta o padrão
+        assertThat(rbs.put("/api/debug/llm", "{\"chave\":\"" + CHAVE + "\",\"raciocinio\":\"talvez\"}")).hasStatus(HttpStatus.BAD_REQUEST);
+        rbs.put("/api/debug/llm", "{\"chave\":\"" + CHAVE + "\",\"raciocinio\":false}");
+        assertThat(rbs.delete("/api/debug/llm")).hasStatus(HttpStatus.NO_CONTENT);
+        assertThat(lerJson(rbs.get("/api/debug/llm"), "$.raciocinio")).isEqualTo(true);
+        assertThat(corpo(rbs.get("/api/debug/llm"))).doesNotContain(CHAVE);
     }
 
     @Test
@@ -182,8 +220,8 @@ class DebugDoLlmTest {
         assertThat(recebida.cabecalho("authorization")).containsExactly("Bearer " + CHAVE);
         assertThat(recebida.cabecalho("user-agent")).containsExactly("PlanetaAtlas/0.1");
         assertThat(recebida.cabecalho("x-opencode-session")).containsExactly(String.valueOf(conversa));
-        // as mesmas opções do application.yml: thinking desligado, temperatura e modelo
-        assertThat(JsonPath.<Object>read(recebida.corpo(), "$.thinking")).isEqualTo(Map.of("type", "disabled"));
+        // as mesmas opções do application.yml: raciocínio ligado (atlas.raciocinio), temperatura e modelo
+        assertThat(JsonPath.<Object>read(recebida.corpo(), "$.thinking")).isEqualTo(Map.of("type", "enabled"));
         assertThat(JsonPath.<Double>read(recebida.corpo(), "$.temperature")).isEqualTo(0.2);
         assertThat(JsonPath.<String>read(recebida.corpo(), "$.model")).isEqualTo(MODELO_PADRAO);
         assertThat(corpo(resposta)).doesNotContain(CHAVE);
@@ -201,7 +239,7 @@ class DebugDoLlmTest {
         SERVIDOR.aoReceber(recebida -> {
             if (trocou.compareAndSet(false, true)) {
                 provedorAtual.usarChaveDoDebug(new ChaveDoDebug(fabrica.montar(OUTRA_CHAVE, SERVIDOR.urlBase(), MODELO_PADRAO),
-                        SERVIDOR.urlBase(), MODELO_PADRAO, "y8", null, OffsetDateTime.now()));
+                        SERVIDOR.urlBase(), MODELO_PADRAO, true, "y8", null, OffsetDateTime.now()));
             }
         });
 

@@ -54,16 +54,16 @@ spring:
       chat:
         model: ${ATLAS_LLM_MODELO:deepseek-v4.1-flash}
         temperature: 0.2
-        # O DeepSeek vem com raciocínio ligado e responde 400 com ferramentas se o reasoning_content não voltar.
-        # Desligado aqui (vai no topo do JSON, aninhado); o provedor ainda guarda e devolve o reasoning_content se vier.
-        extra-body:
-          thinking:
-            type: disabled
+        # O thinking (raciocínio) não fica aqui: é o atlas.raciocinio, abaixo, que o provedor põe no topo do corpo a cada chamada.
 
 # [ATLAS] Teto diário de mensagens do assistente por parceria (do dia de Brasília, só as do modelo de linguagem; o botão não conta).
 # Com o teto atingido, a rota 44 com texto responde 429. Serve para uma rodada de testes não gastar o limite do provedor.
 atlas:
   teto-diario-por-parceria: ${ATLAS_TETO_DIARIO:200}
+  # [ATLAS] O raciocínio do modelo (o "thinking" do DeepSeek, {"type":"enabled"} ou "disabled"). Ligado, o reasoning_content de cada
+  # resposta é gravado, volta ao modelo em todas as idas seguintes (com ferramentas, o DeepSeek responde 400 sem ele) e aparece na
+  # conversa como o item "raciocinio". Vale para o modelo das variáveis de ambiente e para o da chave do debug.
+  raciocinio: ${ATLAS_RACIOCINIO:true}
   debug:
     # [ATLAS] TEMPORÁRIO: as rotas /api/debug/llm (pôr a chave do modelo pela tela, só na memória da API). Desligado por padrão;
     # ligado só no perfil dev, abaixo. Sem esta propriedade, as rotas não existem (404).
