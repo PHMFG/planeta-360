@@ -15,7 +15,19 @@ import { dataHora } from '../util/formatar'
 import { Aviso } from './Aviso'
 import { Botao } from './Botao'
 import { Campo } from './Campo'
+import { Seletor } from './Formulario'
 import { Modal } from './Modal'
+
+/** O provedor do teste (decidido em 29/10): DeepSeek V4.1 Flash pelo OpenCode Go, que é compatível com a API da OpenAI. */
+const OPENCODE_GO_DEEPSEEK = { baseUrl: 'https://opencode.ai/inference/go/openai/v1', modelo: 'deepseek-v4.1-flash' }
+
+type Provedor = 'go-deepseek' | 'personalizado'
+
+function provedorDe(estado: EstadoDoLlm): Provedor {
+  return estado.origem === 'NENHUM' || (estado.baseUrl === OPENCODE_GO_DEEPSEEK.baseUrl && estado.modelo === OPENCODE_GO_DEEPSEEK.modelo)
+    ? 'go-deepseek'
+    : 'personalizado'
+}
 
 function descrever(estado: EstadoDoLlm) {
   const final = estado.finalDaChave ? ` terminando em …${estado.finalDaChave}` : ''
@@ -31,6 +43,7 @@ export function BotaoDebug() {
   const [chave, setChave] = useState('')
   const [baseUrl, setBaseUrl] = useState('')
   const [modelo, setModelo] = useState('')
+  const [provedor, setProvedor] = useState<Provedor>('go-deepseek')
   const [erros, setErros] = useState<Record<string, string>>({})
   const [falha, setFalha] = useState<string | null>(null)
   const [teste, setTeste] = useState<TesteDoLlm | null>(null)
@@ -40,7 +53,11 @@ export function BotaoDebug() {
     let ativo = true
     // Fora do perfil dev a rota não existe (404) e o botão some; qualquer outra falha também o esconde.
     obterEstadoDoLlm()
-      .then((lido) => ativo && setEstado(lido))
+      .then((lido) => {
+        if (!ativo) return
+        setEstado(lido)
+        if (lido) setProvedor(provedorDe(lido))
+      })
       .catch(() => ativo && setEstado(null))
     return () => {
       ativo = false
@@ -74,7 +91,9 @@ export function BotaoDebug() {
     evento.preventDefault()
     if (!chave.trim()) return setErros({ chave: 'Cole a chave do provedor.' })
     executar('salvar', async () => {
-      mudou(await definirChaveDoLlm({ chave: chave.trim(), baseUrl: baseUrl.trim() || undefined, modelo: modelo.trim() || undefined }))
+      const destino =
+        provedor === 'go-deepseek' ? OPENCODE_GO_DEEPSEEK : { baseUrl: baseUrl.trim() || undefined, modelo: modelo.trim() || undefined }
+      mudou(await definirChaveDoLlm({ chave: chave.trim(), ...destino }))
       // A chave não fica na tela depois de enviada.
       setChave('')
       setTeste(null)
@@ -100,8 +119,12 @@ export function BotaoDebug() {
           <Aviso tipo={estado.llmDisponivel ? 'info' : 'ausente'} titulo={estado.llmDisponivel ? 'Modelo de linguagem ligado' : 'Modelo de linguagem desligado'}>
             {descrever(estado)} Modelo {estado.modelo}.
           </Aviso>
+          <Seletor rotulo="Provedor e modelo" value={provedor} onChange={(evento) => setProvedor(evento.target.value as Provedor)}>
+            <option value="go-deepseek">OpenCode Go · DeepSeek V4.1 Flash</option>
+            <option value="personalizado">Outro serviço compatível com a OpenAI</option>
+          </Seletor>
           <Campo
-            rotulo="Chave do provedor (OpenCode Go)"
+            rotulo={provedor === 'go-deepseek' ? 'Chave do OpenCode Go' : 'Chave do provedor'}
             type="password"
             autoComplete="off"
             spellCheck={false}
@@ -110,24 +133,33 @@ export function BotaoDebug() {
             onChange={(evento) => setChave(evento.target.value)}
             erro={erros.chave}
           />
-          <Campo
-            rotulo="Endereço do provedor (opcional)"
-            autoComplete="off"
-            spellCheck={false}
-            placeholder={estado.baseUrl}
-            value={baseUrl}
-            onChange={(evento) => setBaseUrl(evento.target.value)}
-            erro={erros.baseUrl}
-          />
-          <Campo
-            rotulo="Modelo (opcional)"
-            autoComplete="off"
-            spellCheck={false}
-            placeholder={estado.modelo}
-            value={modelo}
-            onChange={(evento) => setModelo(evento.target.value)}
-            erro={erros.modelo}
-          />
+          {provedor === 'go-deepseek' ? (
+            <p className="text-xs font-medium text-texto-2">
+              Endereço <code>{OPENCODE_GO_DEEPSEEK.baseUrl}</code> e modelo <code>{OPENCODE_GO_DEEPSEEK.modelo}</code>, sem raciocínio. No console do
+              OpenCode, o dono da conta precisa liberar a região Global (Settings › Privacy › Regions), que o DeepSeek exige.
+            </p>
+          ) : (
+            <>
+              <Campo
+                rotulo="Endereço do provedor"
+                autoComplete="off"
+                spellCheck={false}
+                placeholder={estado.baseUrl}
+                value={baseUrl}
+                onChange={(evento) => setBaseUrl(evento.target.value)}
+                erro={erros.baseUrl}
+              />
+              <Campo
+                rotulo="Modelo"
+                autoComplete="off"
+                spellCheck={false}
+                placeholder={estado.modelo}
+                value={modelo}
+                onChange={(evento) => setModelo(evento.target.value)}
+                erro={erros.modelo}
+              />
+            </>
+          )}
           <p className="text-xs font-medium text-texto-2">
             A chave vai uma vez para a API, fica só na memória dela e some quando a API reinicia. Nunca volta inteira para a tela. Use só com
             dados fictícios.
