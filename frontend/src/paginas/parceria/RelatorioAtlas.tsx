@@ -1,6 +1,7 @@
 // Relatório do Atlas: documento de trabalho da marca, em A4, com a origem de cada número em "Fontes e cálculos". [ATLAS]
 // Não é o relatório oficial: a RBS não valida este documento, e o selo diz isso em toda página.
-import { Link, useParams } from 'react-router'
+import { useEffect, useRef } from 'react'
+import { Link, useParams, useSearchParams } from 'react-router'
 import { ErroApi } from '../../api/cliente'
 import { NOME_STATUS_ATLAS, listarRelatoriosAtlas, obterRelatorioAtlas, type RelatorioAtlasResumo } from '../../api/atlas'
 import { useDados } from '../../api/useDados'
@@ -22,6 +23,16 @@ export function RelatorioAtlas() {
   const { relatorioId = '' } = useParams()
   const id = /^\d+$/.test(relatorioId) ? Number(relatorioId) : -1
   const relatorio = useDados(() => obterRelatorioAtlas(id), [id])
+  // "Imprimir ou salvar PDF" na janela do Atlas abre esta página com ?imprimir=1: a impressão sai daqui, sem o chat ao lado.
+  const [busca, setBusca] = useSearchParams()
+  const impresso = useRef(false)
+  const pronto = relatorio.pronto
+  useEffect(() => {
+    if (!pronto || impresso.current || busca.get('imprimir') !== '1') return
+    impresso.current = true
+    setBusca({}, { replace: true })
+    window.setTimeout(() => window.print(), 300)
+  }, [pronto, busca, setBusca])
   useRecarregarSeAbaFechou(relatorio)
 
   return (

@@ -1,67 +1,69 @@
-// O catálogo fechado de blocos do relatório do Atlas. [ATLAS] [RELATORIO]
+// O catálogo fechado de blocos do relatório do Atlas, no estilo do documento do Figma (AT05, 202:1863): sóbrio, sem elementos
+// da marca, tipografia neutra, divisores finos e referências numeradas. [ATLAS] [RELATORIO]
 // Cada bloco só desenha o que o servidor mandou, já resolvido e formatado: nada é buscado nem calculado aqui, e todo texto
 // entra como texto (o React escapa), nunca como HTML.
 import type { Bloco, ItemKpi } from '../../api/atlas'
 import { dataHora } from '../../util/formatar'
 
-function Indisponivel({ motivo }: { motivo: string }) {
-  return <span className="text-sm font-medium text-texto-2 italic">Indisponível · {motivo}</span>
+/** O número da referência de cada fonte ([1], [2]...), na ordem do bloco "fontes". */
+export type Referencias = Map<string, number>
+
+function Citacao({ ref_, referencias }: { ref_: string | null; referencias: Referencias }) {
+  const numero = ref_ ? referencias.get(ref_) : undefined
+  return numero ? <sup className="ml-0.5 text-[9px] font-medium text-[#8a8a8a]">[{numero}]</sup> : null
 }
 
-function Kpi({ item }: { item: ItemKpi }) {
+function Kpi({ item, referencias }: { item: ItemKpi; referencias: Referencias }) {
   return (
-    <div className="rel-bloco flex flex-col gap-1 rounded-2xl border border-borda p-4">
-      <p className="texto-sobretitulo text-texto-2">{item.rotulo}</p>
+    <div className="rel-bloco flex flex-col gap-1 border-t border-[#d9d9d9] pt-2">
+      <p className="text-[10px] font-medium tracking-[0.06em] text-[#6b6b6b] uppercase">{item.rotulo}</p>
       {item.valor === null ? (
-        <Indisponivel motivo={item.indisponivel ?? 'sem registro na base'} />
+        <p className="text-[11px] text-[#6b6b6b]">
+          <span className="italic">Indisponível.</span> {item.indisponivel ?? 'Sem registro na base.'}
+        </p>
       ) : (
-        <p className="font-display text-[44px] leading-[0.95] text-secao-texto">{item.valor}</p>
+        <p className="text-lg leading-tight font-semibold text-[#111]">
+          {item.valor}
+          <Citacao ref_={item.ref} referencias={referencias} />
+        </p>
       )}
     </div>
   )
 }
 
-export function BlocoDoRelatorio({ bloco }: { bloco: Bloco }) {
+export function BlocoDoRelatorio({ bloco, referencias }: { bloco: Bloco; referencias: Referencias }) {
   switch (bloco.tipo) {
     case 'capa':
-      return (
-        <header className="rel-bloco flex flex-col gap-2 border-b-4 border-secao pb-6">
-          <p className="texto-sobretitulo text-texto-2">Planeta 360 · relatório do Atlas</p>
-          <h2 className="font-display text-[52px] leading-none uppercase">{bloco.titulo}</h2>
-          {(bloco.subtitulo || bloco.edicao) && (
-            <p className="text-base font-semibold">{[bloco.subtitulo, bloco.edicao].filter(Boolean).join(' · ')}</p>
-          )}
-        </header>
-      )
+      // A capa vira o cabeçalho do documento (RenderizadorDeRelatorio); aqui não se repete.
+      return null
     case 'titulo':
-      return <h4 className="rel-bloco text-base font-bold">{bloco.texto}</h4>
+      return <h4 className="rel-bloco text-xs font-semibold text-[#111]">{bloco.texto}</h4>
     case 'paragrafo':
-      return <p className="rel-bloco text-sm leading-relaxed">{bloco.texto}</p>
+      return <p className="rel-bloco text-xs leading-[1.65] text-[#222]">{bloco.texto}</p>
     case 'kpi':
-      return <Kpi item={bloco.item} />
+      return <Kpi item={bloco.item} referencias={referencias} />
     case 'kpi_grade':
       return (
-        <div className="rel-bloco grid grid-cols-2 gap-3 md:grid-cols-4 print:grid-cols-4">
+        <div className="rel-bloco grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4 print:grid-cols-4">
           {bloco.itens.map((item) => (
-            <Kpi key={item.rotulo} item={item} />
+            <Kpi key={item.rotulo} item={item} referencias={referencias} />
           ))}
         </div>
       )
     case 'tabela':
       return (
         <div className="rel-bloco overflow-x-auto">
-          <table className="w-full border-separate border-spacing-0 text-sm">
+          <table className="w-full border-collapse text-[11px]">
             <thead>
               <tr>
                 {bloco.colunas.map((coluna, indice) => (
                   <th
                     key={coluna}
                     scope="col"
-                    className={`bg-cinza-100 px-3 py-2 text-left font-semibold ${indice === 0 ? 'rounded-l-[10px]' : 'text-right'} ${
-                      indice === bloco.colunas.length - 1 ? 'rounded-r-[10px]' : ''
-                    }`}
+                    className={`border-b border-[#bdbdbd] py-[7px] font-semibold text-[#444] ${indice === 0 ? 'text-left' : 'pl-3 text-right'}`}
                   >
                     {coluna}
+                    {indice === bloco.colunas.length - 1 && <Citacao ref_={bloco.ref} referencias={referencias} />}
                   </th>
                 ))}
               </tr>
@@ -69,15 +71,15 @@ export function BlocoDoRelatorio({ bloco }: { bloco: Bloco }) {
             <tbody>
               {bloco.linhas.length === 0 ? (
                 <tr>
-                  <td colSpan={bloco.colunas.length} className="px-3 py-4 text-center text-texto-2">
-                    Sem linhas no plano.
+                  <td colSpan={bloco.colunas.length} className="border-b border-[#e6e6e6] py-[7px] text-[#6b6b6b]">
+                    Sem linhas no plano comercial.
                   </td>
                 </tr>
               ) : (
                 bloco.linhas.map((linha, indiceLinha) => (
                   <tr key={indiceLinha}>
                     {linha.map((celula, indice) => (
-                      <td key={indice} className={`border-b border-borda px-3 py-2 ${indice === 0 ? 'font-semibold' : 'text-right whitespace-nowrap'}`}>
+                      <td key={indice} className={`border-b border-[#e6e6e6] py-[7px] text-[#222] ${indice === 0 ? '' : 'pl-3 text-right whitespace-nowrap'}`}>
                         {celula}
                       </td>
                     ))}
@@ -89,19 +91,16 @@ export function BlocoDoRelatorio({ bloco }: { bloco: Bloco }) {
         </div>
       )
     case 'galeria_comprovacoes':
-      // P0: a lista das fotos, sem a imagem. A foto em si fica na aba Aplicações (botão Baixar).
+      // A lista das fotos, sem a imagem: a foto em si fica na aba Aplicações (botão Baixar).
       return bloco.itens.length === 0 ? (
-        <p className="rel-bloco text-sm text-texto-2">Nenhuma foto de comprovação registrada.</p>
+        <p className="rel-bloco text-[11px] text-[#6b6b6b]">Nenhuma foto de comprovação registrada.</p>
       ) : (
-        <ul className="rel-bloco flex flex-col gap-2">
+        <ul className="rel-bloco flex flex-col text-[11px]">
           {bloco.itens.map((item) => (
-            <li key={item.arquivoId} className="flex items-start gap-3 rounded-[10px] border border-borda px-3 py-2 text-sm">
-              <i className="ri-image-line mt-0.5 text-lg text-secao-texto" aria-hidden="true" />
-              <span className="flex min-w-0 flex-col">
-                <span className="font-semibold break-words">{item.descricao || item.nomeOriginal}</span>
-                <span className="text-xs text-texto-2">
-                  {item.aplicacao} · {dataHora(item.registradoEm)}
-                </span>
+            <li key={item.arquivoId} className="flex gap-3 border-b border-[#e6e6e6] py-[7px] text-[#222]">
+              <span className="min-w-0 flex-1 break-words">{item.descricao || item.nomeOriginal}</span>
+              <span className="shrink-0 text-[#6b6b6b]">
+                {item.aplicacao} · {dataHora(item.registradoEm)}
               </span>
             </li>
           ))}
@@ -109,33 +108,35 @@ export function BlocoDoRelatorio({ bloco }: { bloco: Bloco }) {
       )
     case 'campo_informado':
       return (
-        <div className="rel-bloco flex flex-col gap-0.5 text-sm">
-          <span className="texto-sobretitulo text-texto-2">{bloco.rotulo}</span>
-          {bloco.valor === null ? <Indisponivel motivo="não informado pela marca" /> : <span className="font-semibold">{bloco.valor}</span>}
-          {bloco.origem && <span className="text-xs text-texto-2">{bloco.origem}</span>}
+        <div className="rel-bloco grid grid-cols-[90px_1fr] gap-x-3 text-[11px]">
+          <span className="font-medium text-[#444]">{bloco.rotulo}</span>
+          <span className="text-[#222]">
+            {bloco.valor ?? <span className="italic text-[#6b6b6b]">Indisponível · não informado pela marca</span>}
+            {bloco.origem && <span className="block text-[10px] text-[#8a8a8a]">{bloco.origem}</span>}
+          </span>
         </div>
       )
     case 'aviso_indisponivel':
       return (
-        <p className="rel-bloco rounded-[10px] bg-estado-ausente/14 px-4 py-3 text-sm">
-          <span className="font-bold">Indisponível.</span> {bloco.motivo}
-        </p>
+        <div className="rel-bloco rounded border border-[#bdbdbd] px-3 py-2.5 text-[11px] leading-normal text-[#222]">
+          <p className="font-semibold text-[#111]">Indisponível.</p>
+          <p>{bloco.motivo} O Atlas não estima valores para completar lacunas.</p>
+        </div>
       )
     case 'fontes':
       return (
-        <dl className="rel-bloco flex flex-col gap-3 text-sm">
-          {bloco.itens.map((item) => (
-            <div key={item.ref} className="border-b border-borda pb-3">
-              <dt className="font-semibold">
-                {item.rotulo}
+        <ol className="rel-bloco flex flex-col gap-1.5 text-[10px] leading-normal text-[#444]">
+          {bloco.itens.map((item, indice) => (
+            <li key={item.ref} className="flex gap-1.5">
+              <span className="shrink-0 font-semibold">[{indice + 1}]</span>
+              <span className="min-w-0">
+                <span className="font-semibold text-[#222]">{item.rotulo}</span>
                 {/* Uma lista (lista:aplicacoes) não tem um valor só: aparece com a origem, sem "indisponível". */}
-                {item.valor !== null ? `: ${item.valor}` : item.ref.startsWith('lista:') ? '' : ': indisponível'}
-              </dt>
-              <dd className="text-xs text-texto-2">{item.origem}</dd>
-              <dd className="font-mono text-[11px] text-cinza-400">{item.ref}</dd>
-            </div>
+                {item.valor !== null ? `: ${item.valor}` : item.ref.startsWith('lista:') ? '' : ': indisponível'} · {item.origem}
+              </span>
+            </li>
           ))}
-        </dl>
+        </ol>
       )
     default:
       // Catálogo fechado: tipo que este front não conhece não é desenhado.
