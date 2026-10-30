@@ -14,6 +14,7 @@ import br.com.rbs.portal.atlas.AtlasRepositorio.LinhaDeConversa;
 import br.com.rbs.portal.atlas.AtlasRepositorio.LinhaDeMensagem;
 import br.com.rbs.portal.atlas.AtlasRepositorio.LinhaDeRelatorio;
 import br.com.rbs.portal.atlas.AtlasRepositorio.LinhaDeSolicitacao;
+import br.com.rbs.portal.atlas.ModoDoAtlas;
 import br.com.rbs.portal.atlas.provedor.DisponibilidadeDoLlm;
 import br.com.rbs.portal.atlas.relatorio.Especificacao;
 import br.com.rbs.portal.atlas.relatorio.ModeloBase;
@@ -51,6 +52,8 @@ import tools.jackson.core.type.TypeReference;
  *       modelo de linguagem, "Use Montar relatório para continuar"; com ele ligado agora (o mesmo {@code llmDisponivel} da
  *       resposta), "Quando tiver os números, peça para continuar".</li>
  * </ul>
+ * Com o relatório desligado ({@code atlas.relatorio.ligado=false}) não sai {@code cartao}, {@code relatorio_pronto} nem
+ * {@code aviso}, nem de conversa antiga que os tenha; o histórico em si não muda.
  * Só as mensagens depois de {@code desdeOrdem} viram item (o turno); com 0, a conversa inteira.
  */
 @Component
@@ -61,14 +64,16 @@ public class ItensDaConversa {
     private final ResolvedorDeReferencias resolvedor;
     private final ModeloBase modelos;
     private final DisponibilidadeDoLlm llm;
+    private final ModoDoAtlas modo;
 
     public ItensDaConversa(AtlasRepositorio repositorio, DadoInformadoService dados, ResolvedorDeReferencias resolvedor,
-                           ModeloBase modelos, DisponibilidadeDoLlm llm) {
+                           ModeloBase modelos, DisponibilidadeDoLlm llm, ModoDoAtlas modo) {
         this.repositorio = repositorio;
         this.dados = dados;
         this.resolvedor = resolvedor;
         this.modelos = modelos;
         this.llm = llm;
+        this.modo = modo;
     }
 
     /**
@@ -108,7 +113,7 @@ public class ItensDaConversa {
                         String nome = nomeDaFerramenta(chamada);
                         ferramentas.put(id, nome);
                         LinhaDeSolicitacao cartao = cartoes.get(id);
-                        if (doTurno && "relatorio_solicitar_campos".equals(nome) && cartao != null) {
+                        if (doTurno && modo.relatorioLigado() && "relatorio_solicitar_campos".equals(nome) && cartao != null) {
                             itens.add(cartao(contexto, cartao, especificacoes));
                         }
                     }
@@ -124,8 +129,8 @@ public class ItensDaConversa {
     }
 
     private Optional<ItemDaConversa> itemDaResposta(LinhaDeMensagem mensagem, String ferramenta) {
-        if (ferramenta == null || mensagem.conteudo() == null) {
-            return Optional.empty();
+        if (ferramenta == null || mensagem.conteudo() == null || !modo.relatorioLigado()) {
+            return Optional.empty();   // só chat: o relatório pronto e o aviso do cartão de uma conversa antiga não saem
         }
         Map<String, Object> resultado = AtlasJson.ler(mensagem.conteudo(), new TypeReference<Map<String, Object>>() {
         });

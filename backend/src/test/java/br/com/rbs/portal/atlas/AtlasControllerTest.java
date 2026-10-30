@@ -249,8 +249,9 @@ class AtlasControllerTest {
 
         MvcTestResult lista = pessoa.get(urlDeConversas(amarelo()));
         assertThat(lista).hasStatus(HttpStatus.OK);
-        assertThat(chaves(lista, "$")).containsExactly("llmDisponivel", "conversas");
+        assertThat(chaves(lista, "$")).containsExactly("llmDisponivel", "relatorioDisponivel", "conversas");
         assertThat(lerJson(lista, "$.llmDisponivel")).isEqualTo(false);
+        assertThat(lerJson(lista, "$.relatorioDisponivel")).isEqualTo(true);
         assertThat(lerLista(lista, "$.conversas")).hasSize(1);
         assertThat(chaves(lista, "$.conversas[0]")).containsExactly("id", "criadaEm", "atualizadaEm", "relatorio");
         assertThat(numero(lista, "$.conversas[0].relatorio.id")).isEqualTo(relatorio);

@@ -93,10 +93,11 @@ public class AtlasService {
     private final RelatorioAtlasService relatorios;
     private final DisponibilidadeDoLlm llm;
     private final ModeloBase modelos;
+    private final ModoDoAtlas modo;
 
     public AtlasService(AtlasRepositorio repositorio, AtlasContextoFabrica contextos, VerificadorDeAcesso verificador,
                         PlanoBSemLlm planoB, LoopDoAgente loop, TetoDiario teto, ItensDaConversa itens, DescarteDeRelatorios descarte,
-                        RelatorioAtlasService relatorios, DisponibilidadeDoLlm llm, ModeloBase modelos) {
+                        RelatorioAtlasService relatorios, DisponibilidadeDoLlm llm, ModeloBase modelos, ModoDoAtlas modo) {
         this.repositorio = repositorio;
         this.contextos = contextos;
         this.verificador = verificador;
@@ -108,6 +109,7 @@ public class AtlasService {
         this.relatorios = relatorios;
         this.llm = llm;
         this.modelos = modelos;
+        this.modo = modo;
     }
 
     // ---------------------------------------------------------------------
@@ -117,7 +119,8 @@ public class AtlasService {
     /**
      * Rota 42. Corpo opcional: vazio abre uma conversa vazia (itens vazios); {@code atalho} MONTAR_RELATORIO com {@code modelo}
      * abre e já roda o plano B. Ordem das respostas: 403 (RBS), 404 (parceria), 403 (aba), 422 (atalho ou modelo
-     * desconhecido, ou só um dos dois).
+     * desconhecido, ou só um dos dois). Com o relatório desligado ({@code atlas.relatorio.ligado=false}), {@code atalho} ou
+     * {@code modelo} dão 422 em {@code campos.atalho}.
      */
     public ConversaDto abrirConversa(UsuarioAutenticado usuario, long parceriaId, AbrirConversaRequisicao corpo,
                                      HttpServletRequest requisicao) {
@@ -126,11 +129,12 @@ public class AtlasService {
         verificador.exigirAbaLiberada(usuario, parceriaId, relatorios.abaDoModeloPadrao());
         String modelo = null;
         if (corpo != null && (corpo.atalho() != null || corpo.modelo() != null)) {
+            exigirRelatorioLigado();
             modelo = validarAtalho(corpo.atalho(), corpo.modelo());
         }
         long conversaId = repositorio.criarConversa(parceriaId, usuario.id());
         if (modelo == null) {
-            return new ConversaDto(conversaId, llm.disponivel(), List.of());
+            return new ConversaDto(conversaId, llm.disponivel(), modo.relatorioLigado(), List.of());
         }
         return rodarPlanoB(usuario, repositorio.conversa(conversaId).orElseThrow(), modelo, requisicao);
     }
@@ -147,12 +151,15 @@ public class AtlasService {
         verificador.exigirPatrocinador(usuario, VerificadorDeAcesso.SO_PATROCINADOR_USA_O_ATLAS);
         verificador.exigirParceria(usuario, parceriaId);
         verificador.exigirAbaLiberada(usuario, parceriaId, relatorios.abaDoModeloPadrao());
-        descarte.varrer(repositorio.idsDasConversasDoUsuario(parceriaId, usuario.id()));
+        if (modo.relatorioLigado()) {
+            descarte.varrer(repositorio.idsDasConversasDoUsuario(parceriaId, usuario.id()));
+        }
         List<ConversaResumoDto> conversas = repositorio.conversasDoUsuario(parceriaId, usuario.id(), LIMITE_DE_CONVERSAS).stream()
                 .map(c -> new ConversaResumoDto(c.id(), Datas.emBrasilia(c.criadaEm()), Datas.emBrasilia(c.atualizadaEm()),
-                        c.relatorioId() == null ? null : new RelatorioDaConversaDto(c.relatorioId(), c.relatorioStatus())))
+                        c.relatorioId() == null || !modo.relatorioLigado() ? null
+                                : new RelatorioDaConversaDto(c.relatorioId(), c.relatorioStatus())))
                 .toList();
-        return new ConversasDaParceriaDto(llm.disponivel(), conversas);
+        return new ConversasDaParceriaDto(llm.disponivel(), modo.relatorioLigado(), conversas);
     }
 
     // ---------------------------------------------------------------------
@@ -165,7 +172,7 @@ public class AtlasService {
      * linguagem, 503 com a frase "use o botão"; com cartão aberto, a mensagem nova primeiro o fecha com {@code cancel}. Ordem das
      * respostas: 403 (RBS), 404 (conversa que não é sua), 403 (aba), 422 (texto vazio ou acima de 1.000 caracteres; nem texto nem
      * atalho; os dois), 503, 429 (teto diário da parceria; só o texto, o botão não conta), 409 (turno em andamento; cartão aberto
-     * no atalho).
+     * no atalho). Com o relatório desligado, {@code atalho} ou {@code modelo} dão 422 em {@code campos.atalho} e só o texto vale.
      */
     public ConversaDto enviarMensagem(UsuarioAutenticado usuario, long conversaId, MensagemRequisicao corpo,
                                       HttpServletRequest requisicao) {
@@ -188,10 +195,13 @@ public class AtlasService {
         Map<String, String> erros = new LinkedHashMap<>();
         boolean temTexto = corpo != null && corpo.texto() != null;
         boolean temAtalho = corpo != null && (corpo.atalho() != null || corpo.modelo() != null);
+        if (temAtalho) {
+            exigirRelatorioLigado();
+        }
         String modelo = null;
         if (temTexto == temAtalho) {
             erros.put(temTexto ? "atalho" : "texto", temTexto ? "Envie o texto ou o atalho, e não os dois."
-                    : "Escreva a mensagem ou use o botão Montar relatório.");
+                    : modo.relatorioLigado() ? "Escreva a mensagem ou use o botão Montar relatório." : "Escreva a mensagem.");
         } else if (temTexto) {
             if (corpo.texto().isBlank()) {
                 erros.put("texto", "Escreva a mensagem.");
@@ -206,7 +216,7 @@ public class AtlasService {
         }
         if (temTexto) {
             if (!llm.disponivel()) {
-                throw new ServicoIndisponivelException(DisponibilidadeDoLlm.SEM_MODELO);   // sem provedor, o botão é o caminho
+                throw new ServicoIndisponivelException(llm.semModelo());   // sem provedor, o botão é o caminho
             }
             teto.exigirFolga(conversa.parceriaId());   // 429: o teto diário de mensagens do Atlas por parceria
             String texto = corpo.texto().strip();
@@ -226,8 +236,10 @@ public class AtlasService {
     /** Rota 45. A conversa inteira, só para o dono. Antes de abrir, descarta o relatório dela parado há mais de 7 dias. */
     public ConversaDto verConversa(UsuarioAutenticado usuario, long conversaId) {
         LinhaDeConversa conversa = conversaDoUsuario(usuario, conversaId, CONVERSA_NAO_ENCONTRADA);
-        descarte.varrer(List.of(conversaId));
-        return new ConversaDto(conversaId, llm.disponivel(), itens.itens(usuario, conversa, 0));
+        if (modo.relatorioLigado()) {
+            descarte.varrer(List.of(conversaId));
+        }
+        return new ConversaDto(conversaId, llm.disponivel(), modo.relatorioLigado(), itens.itens(usuario, conversa, 0));
     }
 
     // ---------------------------------------------------------------------
@@ -330,7 +342,7 @@ public class AtlasService {
 
         /** Os itens que o turno produziu, no objeto Conversa. */
         ConversaDto conversa() {
-            return new ConversaDto(conversa.id(), llm.disponivel(), itens.itens(usuario, conversa, antes));
+            return new ConversaDto(conversa.id(), llm.disponivel(), modo.relatorioLigado(), itens.itens(usuario, conversa, antes));
         }
     }
 
@@ -410,7 +422,7 @@ public class AtlasService {
             planoB.montar(contexto, modelo);
             return null;
         });
-        return new ConversaDto(conversa.id(), llm.disponivel(), itens.itens(usuario, conversa, antes));
+        return new ConversaDto(conversa.id(), llm.disponivel(), modo.relatorioLigado(), itens.itens(usuario, conversa, antes));
     }
 
     /**
@@ -446,6 +458,13 @@ public class AtlasService {
         }
         verificador.exigirAbaLiberada(usuario, conversa.parceriaId(), relatorios.abaDoModeloPadrao());
         return conversa;
+    }
+
+    /** Com o relatório desligado, o atalho e o modelo não existem: 422 em {@code campos.atalho}. */
+    private void exigirRelatorioLigado() {
+        if (!modo.relatorioLigado()) {
+            throw new DadosInvalidosException(Map.of("atalho", ModoDoAtlas.RELATORIO_INDISPONIVEL));
+        }
     }
 
     /** O atalho do botão: MONTAR_RELATORIO com um modelo que existe. Devolve o modelo; senão 422. */

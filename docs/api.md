@@ -155,7 +155,7 @@ Todas prontas e testadas. A coluna "Etapa" mostra em que etapa do plano a rota e
 | 47 | `GET /api/atlas/relatorios/{id}` | Patrocinador da parceria | O relatório do Atlas, pronto ou em montagem | Atlas 2 |
 | 48 | `GET /api/parcerias/{id}/atlas/relatorios` | Patrocinador da parceria | Os relatórios do Atlas da parceria | Atlas 2 |
 
-São 48 operações (método + caminho). A rota 5 (`ativar`) faz parte do contrato de autenticação, mas só é implementada na etapa 4. As rotas 37 em diante vieram com o Atlas (MVP): a coluna "Etapa" diz `Atlas 1` (plano de aplicações e dados informados) ou `Atlas 2` (conversa, cartão de perguntas e relatório). Nas rotas 42 a 46 só o Admin Patrocinador chama (a RBS recebe **403** antes de o corpo ser lido); nas 47 e 48 chamam a marca da parceria e a RBS.
+São 48 operações (método + caminho). A rota 5 (`ativar`) faz parte do contrato de autenticação, mas só é implementada na etapa 4. As rotas 37 em diante vieram com o Atlas (MVP): a coluna "Etapa" diz `Atlas 1` (plano de aplicações e dados informados) ou `Atlas 2` (conversa, cartão de perguntas e relatório). Nas rotas 42 a 46 só o Admin Patrocinador chama (a RBS recebe **403** antes de o corpo ser lido); nas 47 e 48 chamam a marca da parceria e a RBS. **Neste MVP o relatório do Atlas está desligado** (`atlas.relatorio.ligado=false`, o padrão): as rotas **46, 47 e 48 não existem (404)**, e as rotas 42 e 44 só aceitam conversa por texto (`atalho` e `modelo` dão 422). Veja "Modo só chat". O contrato do relatório, nas rotas 42 a 48, vale com `atlas.relatorio.ligado=true`.
 
 As rotas de debug do modelo de linguagem (`/api/debug/llm`) são temporárias, só existem no perfil `dev` e ficam fora desta tabela e da conta das 48: veja "Rotas de debug (temporárias)", no fim.
 
@@ -1416,6 +1416,41 @@ O Atlas monta o relatório de **Ativação no evento** da marca. Ele monta a est
 
 O relatório sai de dois jeitos, pelas mesmas rotas. Pelo **botão "Montar relatório"** (o caminho sem modelo de linguagem, chamado de plano B): botão &rarr; base do relatório com os números do portal &rarr; cartão de perguntas com o que só a marca sabe &rarr; frases-modelo nos textos &rarr; relatório pronto. Ou pelo **texto livre no chat**, quando a API sobe com o modelo de linguagem ligado (`llmDisponivel` `true`; veja "O modelo de linguagem"): o modelo chama as mesmas operações como ferramentas, escreve os textos (`redigidoPor` `ATLAS`) e para no cartão para a marca responder. O modelo vem **desligado por padrão**: aí `llmDisponivel` é `false`, o botão continua funcionando e a mensagem de texto da rota 44 responde 503.
 
+> **Neste MVP o relatório está desligado.** Só o chat e a consulta aos números da parceria ficam; o relatório volta quando houver o JEV e as outras ferramentas. O código dele continua no projeto e é desligado pela propriedade `atlas.relatorio.ligado` (veja "Modo só chat"). O resto deste capítulo descreve o relatório e vale com a propriedade ligada, salvo onde o texto diz o contrário.
+
+## Modo só chat (`atlas.relatorio.ligado`)
+
+| Propriedade | Variável | Padrão | O que faz |
+| --- | --- | --- | --- |
+| `atlas.relatorio.ligado` | `ATLAS_RELATORIO` | `false` (também no perfil `dev`; `true` no perfil `test`, para os testes do relatório) | `false`: o Atlas é só o chat. `true`: o relatório de trabalho de sempre. |
+
+Com `atlas.relatorio.ligado=false`:
+
+- **Ferramentas.** O modelo recebe só `parceria_consultar` (a consulta de leitura de sempre, com os marcadores `{{ref}}`, a mesma checagem do texto, o filtro, o resumo do raciocínio e o teto diário). Se ele chamar uma `relatorio_*` mesmo assim (uma conversa antiga pode induzi-lo), a resposta da ferramenta é um erro (`{"erro": "Não existe a ferramenta relatorio_iniciar. Use só as ferramentas oferecidas."}`) e nada é criado.
+- **Prompt.** O modelo recebe `atlas/prompts/chat.txt`, sem o fluxo do relatório e sem oferecer montar relatório, com todas as regras de números, marcadores, isolamento e de tratar o retorno das ferramentas como dado. Se pedirem um relatório, o Atlas diz, sem números, que o relatório ainda não está disponível nesta versão e que pode responder perguntas sobre a parceria. Com a propriedade ligada, o prompt continua o de `relatorio.txt`.
+- **Rota 42.** Sem corpo ou `{}` abre a conversa vazia. Com `atalho` ou `modelo`: **422** com `campos.atalho` = `"O relatório não está disponível nesta versão."` (depois das conferências de 403 e 404; nenhuma conversa é aberta).
+- **Rota 44.** Só `{"texto": "..."}`. Com `atalho` ou `modelo` (também junto de `texto`): **422** com a mesma frase em `campos.atalho`. Sem `texto` nem atalho, o 422 de `campos.texto` é `"Escreva a mensagem."`.
+- **Rotas 46, 47 e 48.** Não são mapeadas: **404** em `ProblemDetail`, como qualquer rota que não existe (a RBS também recebe 404 na 46, e não 403).
+- **Itens da conversa.** Nenhum `cartao`, `relatorio_pronto` nem `aviso` de cartão, também em conversa antiga que os tenha (o histórico em si não muda e continua indo ao modelo como está). O `relatorio` de cada conversa da rota 43 vem `null`. Os relatórios já prontos ficam no banco, sem rota que os leia.
+- **Campo `relatorioDisponivel`.** O objeto Conversa (rotas 42, 44, 45 e 46, e o `fim` do fluxo) e a resposta da rota 43 trazem `relatorioDisponivel`, o valor da propriedade (`false` aqui). O front mantém os botões do relatório, desabilitados.
+- **Frases fixas do servidor** (nenhuma fala do botão):
+
+| Onde | Com o relatório ligado | Só chat |
+| --- | --- | --- |
+| 503 da rota 44 (sem modelo de linguagem) | `"O Atlas está sem o modelo de linguagem agora. Use o botão Montar relatório."` | `"O Atlas está sem o modelo de linguagem agora. Tente de novo mais tarde."` |
+| 429 da rota 44 (teto diário) | `"O Atlas atingiu o limite de uso de hoje desta parceria. Use o botão Montar relatório ou tente amanhã."` | `"O Atlas atingiu o limite de uso de hoje desta parceria. Tente amanhã."` |
+| 422 da rota 44 sem texto nem atalho | `"Escreva a mensagem ou use o botão Montar relatório."` | `"Escreva a mensagem."` |
+| Texto recusado duas vezes | `"Não consegui responder isso agora. Pergunte de outro jeito ou monte o relatório da ativação."` | `"Não consegui responder isso agora. Pergunte de outro jeito."` |
+| Limite de 8 chamadas por turno | `"Parei por aqui: esta resposta pediu passos demais. Diga de novo o que você quer, ou use o botão Montar relatório."` | `"Parei por aqui: esta resposta pediu passos demais. Diga de novo o que você quer."` |
+| Falha do modelo | `"Não consegui falar com o modelo de linguagem agora. O que já foi feito está salvo; tente de novo daqui a pouco ou use o botão Montar relatório."` | `"Não consegui falar com o modelo de linguagem agora. Tente de novo daqui a pouco."` |
+| Prazo do turno (3 min) | `"Esta resposta demorou mais do que o esperado e eu parei. O que já foi feito está salvo; tente de novo ou use o botão Montar relatório."` | `"Esta resposta demorou mais do que o esperado e eu parei. Tente de novo."` |
+| Resposta vazia do modelo | `"Não consegui responder agora. Tente de novo ou use o botão Montar relatório."` | `"Não consegui responder agora. Tente de novo."` |
+
+  O item `texto` com qualquer uma das frases acima (as dos dois modos) sai com `porModelo` `false`.
+- **Sem modelo de linguagem** não há plano B nem botão: a conversa abre (`llmDisponivel` `false`) e a mensagem de texto responde 503.
+- **Banco.** As tabelas do relatório (`atlas_relatorio`, `atlas_solicitacao`, `atlas_calculo`, `atlas_decisao`) ficam sem uso; nenhuma migração muda.
+
+
 **Regras que valem nas rotas 42 a 48**
 
 - **Perfil.** 42 a 46 são só do Admin Patrocinador; a RBS recebe **403** (`"Só o Admin Patrocinador da parceria conversa com o Atlas."`) antes de qualquer outra conferência e do corpo, com qualquer id e qualquer corpo. 47 e 48 são da marca da parceria e da RBS.
@@ -1429,7 +1464,7 @@ O relatório sai de dois jeitos, pelas mesmas rotas. Pelo **botão "Montar relat
 
 Com o modelo ligado (pelas variáveis de ambiente ou, no perfil `dev`, pela chave posta nas rotas de debug do fim deste arquivo), a mensagem de texto da rota 44 e a resposta do cartão da rota 46 rodam o **loop do agente**. O contrato para quem usa a API:
 
-- **Um turno** começa na mensagem da pessoa (ou na resposta do cartão). O modelo responde com texto, ou pede ferramentas; o servidor as executa **uma a uma, na ordem**, grava a resposta de cada uma e devolve o resultado ao modelo, até ele responder com texto. As ferramentas são `relatorio_iniciar`, `relatorio_solicitar_campos`, `relatorio_editar` (operação `definir_texto`) e `relatorio_finalizar`, as mesmas operações do botão, e a consulta `parceria_consultar`. O modelo só recebe as ferramentas do estado do relatório (sem relatório, `parceria_consultar` e `relatorio_iniciar`; em montagem, `parceria_consultar` e as outras três; com o cartão aberto, nenhuma: o turno para).
+- **Um turno** começa na mensagem da pessoa (ou na resposta do cartão). O modelo responde com texto, ou pede ferramentas; o servidor as executa **uma a uma, na ordem**, grava a resposta de cada uma e devolve o resultado ao modelo, até ele responder com texto. As ferramentas são `relatorio_iniciar`, `relatorio_solicitar_campos`, `relatorio_editar` (operação `definir_texto`) e `relatorio_finalizar`, as mesmas operações do botão, e a consulta `parceria_consultar`. O modelo só recebe as ferramentas do estado do relatório (sem relatório, `parceria_consultar` e `relatorio_iniciar`; em montagem, `parceria_consultar` e as outras três; com o cartão aberto, nenhuma: o turno para). **Com `atlas.relatorio.ligado=false`, só `parceria_consultar`** (veja "Modo só chat").
 - **Pergunta sobre os números sem relatório.** `parceria_consultar` (sem argumento) é **só de leitura**: não cria relatório e não grava nada além da trilha da chamada. Devolve as referências do modelo-base para a parceria da conversa, resolvidas com o perfil de quem pede (o filtro de aba da rota 29): `{abaFechada, aviso, dados:[{ref, rotulo, valor, unidade, origem}], indisponiveis:[{ref, rotulo, motivo}]}`, em que `dados` é o mesmo que `relatorio_iniciar` devolve em dados disponíveis mais os cálculos fixos (`calc:`) que já dá para resolver, e `indisponiveis` traz os que estão sem valor (dado não informado, conta sem a entrada). Com a aba `APLICACOES` fechada para a marca (conferida no banco na hora da chamada), vem `abaFechada: true`, o `aviso` e as listas vazias. O modelo responde citando o dado com o marcador (`"Aplicações de marca previstas: {{cons:aplicacoes.previstas}}; comprovadas no evento: {{cons:aplicacoes.comprovadas}}."`) e o item `texto` sai com os números (`"... previstas: 19; comprovadas no evento: 17."`). Os marcadores do chat, `calc:` incluído, resolvem contra a parceria da conversa com as fórmulas fixas do modelo-base, com ou sem relatório aberto.
 - **Nenhuma ferramenta recebe parceria.** A parceria, o usuário e a conversa vêm da sessão; um argumento que cite outra parceria (ou qualquer argumento fora do esquema) é recusado e volta ao modelo como erro. A marca só chega aos dados da própria parceria, por qualquer caminho.
 - **Até 8 chamadas de ferramenta por turno.** Erro de ferramenta (argumento inválido, relatório no estado errado, texto recusado) volta ao modelo como mensagem de ferramenta e nunca vira 500. Passado o limite, o turno termina com um texto fixo (`"Parei por aqui: ..."`).
@@ -1463,7 +1498,7 @@ Cada evento tem `event:` e `data:` com um JSON. Numa ida ao modelo a ordem é `p
 | `etapa` | `{"texto": "..."}` | Uma ferramenta começou a rodar. A frase, nunca o nome da ferramenta: `"Consultando os números da parceria…"` (`parceria_consultar`), `"Abrindo o relatório…"` (`relatorio_iniciar`), `"Preparando as perguntas…"` (`relatorio_solicitar_campos`), `"Redigindo o documento…"` (`relatorio_editar`), `"Finalizando o documento…"` (`relatorio_finalizar`). |
 | `texto` | `{"delta": "..."}` | Um pedaço da resposta para a marca, **já filtrado**: um marcador `{{...}}` fica retido até fechar e sai resolvido e formatado, igual ao item `texto` do `fim`; a última palavra espera o espaço seguinte. A cada pedaço, o que chegou até ali passa pela checagem do texto do chat. As frases fixas do servidor (a troca de um texto recusado duas vezes, a falha do modelo, o limite e o prazo do turno) também chegam como `texto`, inteiras. |
 | `texto_recusado` | `{}` | A checagem recusou o texto desta ida ao modelo (algarismo fora de marcador, chave crua, marcador que não existe ou sem valor, nome de ferramenta, "marcador"...), durante o fluxo ou na checagem do texto inteiro no fim da ida; ou o modelo falhou no meio de um texto. O servidor para de repassar: **a tela descarta o `texto` que recebeu nesta ida**. A seguir vêm a nova redação (novos `texto`) ou a frase fixa. |
-| `fim` | o objeto Conversa | O mesmo JSON que a rota devolve sem fluxo (`conversaId`, `llmDisponivel`, `itens` do turno). Fecha o fluxo. |
+| `fim` | o objeto Conversa | O mesmo JSON que a rota devolve sem fluxo (`conversaId`, `llmDisponivel`, `relatorioDisponivel`, `itens` do turno). Fecha o fluxo. |
 | `erro` | `{"status": 500, "detail": "..."}` | Uma falha inesperada depois de o fluxo abrir (a falha do modelo continua virando a frase fixa, com `fim`). Fecha o fluxo. |
 
 Exemplo (rota 44, o modelo consulta os números e responde):
@@ -1491,7 +1526,7 @@ event:resumo
 data:{"texto":"Conferi o que veio da consulta e montei a resposta."}
 
 event:fim
-data:{"conversaId":12,"llmDisponivel":true,"itens":[{"tipo":"usuario","texto":"Como estou?"},{"tipo":"raciocinio","resumo":"Conferi os números da parceria."},{"tipo":"raciocinio","resumo":"Conferi o que veio da consulta e montei a resposta."},{"tipo":"texto","texto":"Os números de Cliente Amarelo estão no portal.","porModelo":true}]}
+data:{"conversaId":12,"llmDisponivel":true,"relatorioDisponivel":false,"itens":[{"tipo":"usuario","texto":"Como estou?"},{"tipo":"raciocinio","resumo":"Conferi os números da parceria."},{"tipo":"raciocinio","resumo":"Conferi o que veio da consulta e montei a resposta."},{"tipo":"texto","texto":"Os números de Cliente Amarelo estão no portal.","porModelo":true}]}
 ```
 
 O `fim` é a referência: o que a tela montou com os pedaços dá lugar aos itens dele. No exemplo, o primeiro `resumo` chega durante a ida seguinte e o segundo depois do texto dela; o que não chegou antes do `fim` não aparece nele.
@@ -1499,7 +1534,7 @@ O `fim` é a referência: o que a tela montou com os pedaços dá lugar aos iten
 ## O objeto Conversa (rotas 42, 44, 45 e 46)
 
 ```json
-{ "conversaId": 12, "llmDisponivel": false,
+{ "conversaId": 12, "llmDisponivel": false, "relatorioDisponivel": true,
   "itens": [
     { "tipo": "usuario", "texto": "Montar o relatório da ativação" },
     { "tipo": "texto", "texto": "Montei a base do relatório de ativação com os números do portal. Faltam números que só vocês sabem.", "porModelo": false },
@@ -1511,7 +1546,8 @@ O `fim` é a referência: o que a tela montou com os pedaços dá lugar aos iten
     { "tipo": "aviso", "texto": "Cartão fechado. Use Montar relatório para continuar." } ] }
 ```
 
-- `llmDisponivel` é `true` quando a API sobe com o modelo de linguagem ligado e `false` no padrão (sem ele o Atlas só oferece o botão). As rotas 42, 43, 44, 45 e 46 trazem o mesmo valor.
+- `llmDisponivel` é `true` quando a API sobe com o modelo de linguagem ligado e `false` no padrão (sem ele o Atlas só oferece o botão, se o relatório estiver ligado). As rotas 42, 43, 44, 45 e 46 trazem o mesmo valor.
+- `relatorioDisponivel` é o valor de `atlas.relatorio.ligado`: `false` no Atlas só chat (o padrão), em que não saem `cartao`, `relatorio_pronto` nem `aviso`. As rotas 42, 43 (ao lado de `llmDisponivel`), 44, 45 e 46 trazem o mesmo valor. O exemplo abaixo é o de um Atlas com o relatório ligado.
 - As rotas **42, 44 e 46 devolvem só os itens do turno**; a **45 devolve a conversa inteira**.
 - Os itens são **derivados do histórico** da conversa, que o servidor grava no formato de chat completions (`user`, `assistant` com `tool_calls`, `tool`), como se o modelo tivesse chamado as ferramentas: nada é guardado só para a tela.
 
@@ -1521,7 +1557,7 @@ O `fim` é a referência: o que a tela montou com os pedaços dá lugar aos iten
 | `raciocinio` | O **resumo** do raciocínio do modelo de uma mensagem do assistente, **antes** dos itens dela (`texto`, `cartao`, `relatorio_pronto`). O raciocínio cru (`reasoning_content`) nunca aparece: o resumo é gerado no servidor (veja "Raciocínio do modelo") e já passou pela checagem do texto. Só aparece quando a mensagem tem resumo gravado: sem raciocínio, com resumo recusado, atrasado ou perdido, nas mensagens de antes da V9, no botão e nas frases fixas do servidor não há item. A tela o mostra numa caixa minimizável. | `resumo` |
 | `texto` | O que o Atlas disse. Os marcadores `{{...}}` já vêm trocados pelo valor; o que não tem valor vira "indisponível". `porModelo` é `true` só quando o texto foi escrito pelo modelo de linguagem; é `false` nas frases fixas do servidor: as do botão (plano B: "Montei a base...", "Continuo o relatório...", "Pronto: ..."), a frase fixa que troca um texto recusado duas vezes e as de falha, limite e prazo do turno | `texto`, `porModelo` |
 | `cartao` | O cartão de perguntas, com o **estado de agora** | `solicitacaoId`, `relatorioId`, `mensagem`, `status` (`PENDENTE`, `RESPONDIDA`, `RECUSADA` ou `CANCELADA`), `campos` |
-| `relatorio_pronto` | O relatório ficou pronto; o front abre o A4 pela rota 47 | `relatorioId`, `titulo` |
+| `relatorio_pronto` | O relatório ficou pronto; o front abre o A4 pela rota 47. **Só com `atlas.relatorio.ligado=true`**, como `cartao` e `aviso` | `relatorioId`, `titulo` |
 | `aviso` | Aviso do sistema: o cartão foi fechado (cancelado, ou o relatório foi descartado). O texto segue o `llmDisponivel` da resposta: `"Cartão fechado. Use Montar relatório para continuar."` sem o modelo, `"Cartão fechado. Quando tiver os números, peça para continuar."` com ele | `texto` |
 
 Cada item de `campos` do cartão é um campo do catálogo (rota 39) mais `obrigatorio` e `vigente`, que usa o formato da rota 40 (`{valor, origem, informadoPor, informadoEm}`, ou `null` se ninguém informou). O cartão pede, de uma vez, o que o relatório precisa e ainda não tem valor: primeiro as obrigatórias (visitantes e cadastros), depois as opcionais (brindes disponíveis e distribuídos). Não há campo de arquivo no cartão.
@@ -1533,7 +1569,7 @@ Cada item de `campos` do cartão é um campo do catálogo (rota 39) mais `obriga
 **Corpo (opcional)**
 
 - Sem corpo ou `{}`: abre uma conversa vazia.
-- `{"atalho": "MONTAR_RELATORIO", "modelo": "ATIVACAO_EVENTO"}`: abre a conversa e já roda o plano B (o botão "Montar relatório").
+- `{"atalho": "MONTAR_RELATORIO", "modelo": "ATIVACAO_EVENTO"}`: abre a conversa e já roda o plano B (o botão "Montar relatório"). **Só com `atlas.relatorio.ligado=true`**; com a propriedade desligada (o padrão), `atalho` ou `modelo` dão 422.
 
 **201**: o objeto Conversa. Conversa vazia: `itens: []`. Com o atalho, os itens do turno: `usuario`, `texto` e o `cartao` com as lacunas (status `PENDENTE`). Se a marca já informou tudo o que é obrigatório pelo formulário da aba (rota 41), não há cartão: os itens são `usuario`, `texto` ("Pronto: ...") e `relatorio_pronto`.
 
@@ -1544,23 +1580,23 @@ Cada item de `campos` do cartão é um campo do catálogo (rota 39) mais `obriga
 | 400 | Corpo que não é JSON. |
 | 403 | RBS; aba `APLICACOES` fechada; falta o token CSRF. |
 | 404 | Parceria que não existe ou é de outra. |
-| 422 | Atalho ou modelo desconhecido, ou só um dos dois (`campos.atalho`, `campos.modelo`). |
+| 422 | Atalho ou modelo desconhecido, ou só um dos dois (`campos.atalho`, `campos.modelo`). Com o relatório desligado, qualquer `atalho` ou `modelo`: `campos.atalho` = `"O relatório não está disponível nesta versão."`. |
 
 **Histórico:** `CRIACAO` (entidade `atlas_relatorio`) quando o atalho cria o relatório.
 
 ## 43. `GET /api/parcerias/{id}/atlas/conversas`  · Atlas 2
 
-**Quem chama:** Admin Patrocinador da parceria. Lista as conversas **deste usuário** nesta parceria, da mexida há menos tempo para a mais antiga, **até 20**. Antes de listar, descarta o relatório que ficou parado (veja "Descarte").
+**Quem chama:** Admin Patrocinador da parceria. Lista as conversas **deste usuário** nesta parceria, da mexida há menos tempo para a mais antiga, **até 20**. Antes de listar, descarta o relatório que ficou parado (veja "Descarte"; com o relatório desligado não descarta).
 
 **200**
 
 ```json
-{ "llmDisponivel": false,
+{ "llmDisponivel": false, "relatorioDisponivel": true,
   "conversas": [ { "id": 12, "criadaEm": "2026-10-30T10:00:00-03:00", "atualizadaEm": "2026-10-30T10:05:00-03:00",
                    "relatorio": { "id": 7, "status": "PRONTO" } } ] }
 ```
 
-`relatorio` é o relatório mais novo da conversa, ou `null` se ela ainda não tem um. `atualizadaEm` é a hora da última mensagem (ou a criação, se não há mensagem). Conversa de outro usuário da mesma parceria não aparece.
+`relatorioDisponivel` é o `atlas.relatorio.ligado`. `relatorio` é o relatório mais novo da conversa, ou `null` se ela ainda não tem um (**sempre `null` com o relatório desligado**). `atualizadaEm` é a hora da última mensagem (ou a criação, se não há mensagem). Conversa de outro usuário da mesma parceria não aparece.
 
 **Erros:** 401; 403 (RBS, ou aba fechada); 404 (parceria).
 
@@ -1568,10 +1604,10 @@ Cada item de `campos` do cartão é um campo do catálogo (rota 39) mais `obriga
 
 **Quem chama:** só o dono da conversa (exige o token CSRF). A RBS recebe **403**; conversa que não existe, é de outra parceria ou de outro usuário da mesma parceria recebe **404** (`"Não encontramos esta conversa."`).
 
-**Corpo:** **ou** `{"texto": "..."}` **ou** `{"atalho": "MONTAR_RELATORIO", "modelo": "ATIVACAO_EVENTO"}`.
+**Corpo:** **ou** `{"texto": "..."}` **ou** `{"atalho": "MONTAR_RELATORIO", "modelo": "ATIVACAO_EVENTO"}`. Com `atlas.relatorio.ligado=false` (o padrão), só `texto`: `atalho` ou `modelo` dão 422.
 
 - **Com o atalho**, roda o plano B nesta conversa. Se já há um relatório **em montagem** nela (por exemplo, depois de um cartão cancelado), continua **dele** em vez de criar outro: reabre o cartão com as lacunas que faltam. Depois de um relatório pronto, o atalho começa um relatório novo.
-- **Com texto**, roda o loop do modelo de linguagem (veja "O modelo de linguagem"). O texto é aparado dos espaços das pontas. Sem modelo de linguagem, responde **503** (`"O Atlas está sem o modelo de linguagem agora. Use o botão Montar relatório."`). Com um cartão aberto na conversa, a mensagem primeiro o fecha com `cancel`.
+- **Com texto**, roda o loop do modelo de linguagem (veja "O modelo de linguagem"). O texto é aparado dos espaços das pontas. Sem modelo de linguagem, responde **503** (`"O Atlas está sem o modelo de linguagem agora. Use o botão Montar relatório."`; com o relatório desligado, `"O Atlas está sem o modelo de linguagem agora. Tente de novo mais tarde."`). Com um cartão aberto na conversa, a mensagem primeiro o fecha com `cancel`.
 - **Com `Accept: text/event-stream`**, a resposta vem em fluxo (veja "Resposta em fluxo"): os erros abaixo continuam saindo antes, em `ProblemDetail`; com o atalho, o fluxo traz só o `fim`.
 
 **200**: o objeto Conversa, só com os itens do turno: `usuario`, o resumo do raciocínio do modelo (`raciocinio`), o que o Atlas disse (`texto`), o `cartao` se ele pediu números (o turno para aí), e `relatorio_pronto` se fechou o relatório. Com cartão aberto antes da mensagem, o primeiro item é o `aviso` do cartão fechado. Em fluxo: **200** `text/event-stream`, e o mesmo objeto no evento `fim`.
@@ -1584,17 +1620,19 @@ Cada item de `campos` do cartão é um campo do catálogo (rota 39) mais `obriga
 | 403 | RBS; aba fechada; falta o token CSRF. |
 | 404 | Conversa que não é sua (inexistente, de outra parceria ou de outro usuário). |
 | 409 | Um turno em andamento na conversa; ou, no atalho, um cartão aberto (`"Este relatório está esperando a resposta do cartão. Responda ou feche o cartão antes de montar de novo."`). Mensagem de texto com cartão aberto não dá 409: fecha o cartão. |
-| 422 | Texto vazio ou com mais de 1.000 caracteres (`campos.texto`); nem texto nem atalho, ou os dois; atalho ou modelo desconhecido. |
-| 429 | O teto diário de mensagens do Atlas da parceria foi atingido (só no texto; o botão não conta): `"O Atlas atingiu o limite de uso de hoje desta parceria. Use o botão Montar relatório ou tente amanhã."` |
+| 422 | Texto vazio ou com mais de 1.000 caracteres (`campos.texto`); nem texto nem atalho, ou os dois; atalho ou modelo desconhecido. Com o relatório desligado, qualquer `atalho` ou `modelo` (mesmo junto de `texto`): `campos.atalho` = `"O relatório não está disponível nesta versão."`. |
+| 429 | O teto diário de mensagens do Atlas da parceria foi atingido (só no texto; o botão não conta): `"O Atlas atingiu o limite de uso de hoje desta parceria. Use o botão Montar relatório ou tente amanhã."` (com o relatório desligado, `"... Tente amanhã."`) |
 | 503 | Texto sem modelo de linguagem. |
 
 ## 45. `GET /api/atlas/conversas/{id}`  · Atlas 2
 
-**Quem chama:** só o dono da conversa. Devolve a **conversa inteira** (o objeto Conversa com todos os itens), com cada cartão no estado de agora e o valor vigente de cada campo dele. Antes de abrir, descarta o relatório dela que ficou parado (veja "Descarte").
+**Quem chama:** só o dono da conversa. Devolve a **conversa inteira** (o objeto Conversa com todos os itens), com cada cartão no estado de agora e o valor vigente de cada campo dele. Antes de abrir, descarta o relatório dela que ficou parado (veja "Descarte"; com o relatório desligado não descarta).
 
 **Erros:** 401; 403 (RBS, ou aba fechada); 404 (conversa que não é sua).
 
 ## 46. `POST /api/atlas/solicitacoes/{id}/respostas`  · Atlas 2
+
+> **Só existe com `atlas.relatorio.ligado=true`.** Desligada (o padrão), a rota não é mapeada e responde **404** em `ProblemDetail`, como uma rota que não existe, para qualquer perfil.
 
 **Quem chama:** só o dono da conversa do cartão (exige o token CSRF). A RBS recebe **403**; cartão que não existe, é de outra parceria ou de outro usuário da mesma parceria recebe **404** (`"Não encontramos esta solicitação."`).
 
@@ -1631,6 +1669,8 @@ Cada item de `campos` do cartão é um campo do catálogo (rota 39) mais `obriga
 | 422 | `acao` que não é `accept`, `decline` ou `cancel` (`campos.acao`); mais de 20 valores. No `accept`, `campos` pela **chave do campo**: chave fora do cartão (`"Este campo não está no cartão."`), obrigatória sem valor (`"Informe este número."`) e as frases da rota 41 (`"Informe um número inteiro."`, `"O valor mínimo é 0."`, `"Não pode passar de Visitantes no espaço (1.200)."`...). |
 
 ## 47. `GET /api/atlas/relatorios/{id}`  · Atlas 2
+
+> **Só existe com `atlas.relatorio.ligado=true`**; desligada, responde **404** como rota que não existe.
 
 **Quem chama:** qualquer usuário da parceria do relatório (o relatório é da parceria, não de quem o criou) e a RBS. Relatório de outra parceria ou que não existe: **404** (`"Não encontramos este relatório."`). Aba `APLICACOES` fechada: **403** para a marca, **inclusive no relatório pronto**; a RBS lê sempre.
 
@@ -1673,6 +1713,8 @@ Cada item de `campos` do cartão é um campo do catálogo (rota 39) mais `obriga
 **Erros:** 401; 403 (aba fechada, só para a marca); 404 (relatório que não existe ou é de outra parceria).
 
 ## 48. `GET /api/parcerias/{id}/atlas/relatorios`  · Atlas 2
+
+> **Só existe com `atlas.relatorio.ligado=true`**; desligada, responde **404** como rota que não existe.
 
 **Quem chama:** qualquer usuário da parceria e a RBS. A marca de outra parceria recebe **404**; com a aba `APLICACOES` fechada, a marca recebe **403** (a RBS lê sempre).
 

@@ -1,6 +1,7 @@
 package br.com.rbs.portal.atlas.loop;
 
 import br.com.rbs.portal.atlas.AtlasRepositorio;
+import br.com.rbs.portal.atlas.ModoDoAtlas;
 import br.com.rbs.portal.comum.LimiteDeUsoException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -19,12 +20,18 @@ public class TetoDiario {
     public static final int PADRAO = 200;
     public static final String MENSAGEM = "O Atlas atingiu o limite de uso de hoje desta parceria. Use o botão Montar relatório ou tente amanhã.";
 
+    /** O mesmo 429 com o relatório desligado ({@code atlas.relatorio.ligado=false}): não há botão a oferecer. */
+    public static final String MENSAGEM_NO_CHAT = "O Atlas atingiu o limite de uso de hoje desta parceria. Tente amanhã.";
+
     private final AtlasRepositorio repositorio;
     private final int teto;
+    private final ModoDoAtlas modo;
 
-    public TetoDiario(AtlasRepositorio repositorio, @Value("${atlas.teto-diario-por-parceria:" + PADRAO + "}") int teto) {
+    public TetoDiario(AtlasRepositorio repositorio, @Value("${atlas.teto-diario-por-parceria:" + PADRAO + "}") int teto,
+                      ModoDoAtlas modo) {
         this.repositorio = repositorio;
         this.teto = teto;
+        this.modo = modo;
     }
 
     /** O limite em vigor. */
@@ -40,7 +47,7 @@ public class TetoDiario {
     /** 429 com a frase do contrato se o teto já foi atingido hoje. */
     public void exigirFolga(long parceriaId) {
         if (atingido(parceriaId)) {
-            throw new LimiteDeUsoException(MENSAGEM);
+            throw new LimiteDeUsoException(modo.relatorioLigado() ? MENSAGEM : MENSAGEM_NO_CHAT);
         }
     }
 }

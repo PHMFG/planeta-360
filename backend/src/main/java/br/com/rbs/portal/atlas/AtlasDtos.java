@@ -25,8 +25,11 @@ public final class AtlasDtos {
     // Saída
     // ---------------------------------------------------------------------
 
-    /** A resposta das rotas 42, 44, 45 e 46. 42, 44 e 46 trazem só os itens do turno; a 45, a conversa inteira. */
-    public record ConversaDto(Long conversaId, boolean llmDisponivel, List<ItemDaConversa> itens) {
+    /**
+     * A resposta das rotas 42, 44, 45 e 46. 42, 44 e 46 trazem só os itens do turno; a 45, a conversa inteira.
+     * {@code relatorioDisponivel} é o {@code atlas.relatorio.ligado}: falso, o Atlas é só o chat.
+     */
+    public record ConversaDto(Long conversaId, boolean llmDisponivel, boolean relatorioDisponivel, List<ItemDaConversa> itens) {
     }
 
     /** Um campo do cartão: o campo do catálogo (rota 39) mais se é obrigatório e o valor vigente (formato da rota 40). */
@@ -88,7 +91,7 @@ public final class AtlasDtos {
     }
 
     /** A resposta da rota 43. */
-    public record ConversasDaParceriaDto(boolean llmDisponivel, List<ConversaResumoDto> conversas) {
+    public record ConversasDaParceriaDto(boolean llmDisponivel, boolean relatorioDisponivel, List<ConversaResumoDto> conversas) {
     }
 
     // ---------------------------------------------------------------------

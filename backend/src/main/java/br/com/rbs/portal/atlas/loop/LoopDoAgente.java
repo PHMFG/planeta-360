@@ -4,6 +4,7 @@ import br.com.rbs.portal.atlas.AtlasJson;
 import br.com.rbs.portal.atlas.AtlasRepositorio;
 import br.com.rbs.portal.atlas.AtlasRepositorio.LinhaDeRelatorio;
 import br.com.rbs.portal.atlas.AtlasRepositorio.LinhaDeSolicitacao;
+import br.com.rbs.portal.atlas.ModoDoAtlas;
 import br.com.rbs.portal.atlas.contexto.AtlasContexto;
 import br.com.rbs.portal.atlas.ferramentas.RelatorioFerramentas;
 import br.com.rbs.portal.atlas.ferramentas.RelatorioFerramentas.Execucao;
@@ -93,9 +94,19 @@ public class LoopDoAgente {
     public static final String FRASE_DO_PRAZO = "Esta resposta demorou mais do que o esperado e eu parei. O que já foi feito está "
             + "salvo; tente de novo ou use o botão Montar relatório.";
     public static final String FRASE_SEM_RESPOSTA = "Não consegui responder agora. Tente de novo ou use o botão Montar relatório.";
-    /** As frases que o próprio loop grava como texto do assistente: no item {@code texto}, saem com {@code porModelo} falso. */
+    /** As mesmas frases com o relatório desligado ({@code atlas.relatorio.ligado=false}): nenhuma fala do botão. */
+    public static final String FRASE_FIXA_NO_CHAT = "Não consegui responder isso agora. Pergunte de outro jeito.";
+    public static final String FRASE_DO_LIMITE_NO_CHAT = "Parei por aqui: esta resposta pediu passos demais. Diga de novo o que você quer.";
+    public static final String FRASE_DA_FALHA_NO_CHAT = "Não consegui falar com o modelo de linguagem agora. Tente de novo daqui a pouco.";
+    public static final String FRASE_DO_PRAZO_NO_CHAT = "Esta resposta demorou mais do que o esperado e eu parei. Tente de novo.";
+    public static final String FRASE_SEM_RESPOSTA_NO_CHAT = "Não consegui responder agora. Tente de novo.";
+    /**
+     * As frases que o próprio loop grava como texto do assistente: no item {@code texto}, saem com {@code porModelo} falso. Entram
+     * as dos dois modos: a conversa guarda a frase que valia quando foi escrita.
+     */
     public static final Set<String> FRASES_DO_SERVIDOR = Set.of(FRASE_FIXA, FRASE_DO_LIMITE, FRASE_DA_FALHA, FRASE_DO_PRAZO,
-            FRASE_SEM_RESPOSTA);
+            FRASE_SEM_RESPOSTA, FRASE_FIXA_NO_CHAT, FRASE_DO_LIMITE_NO_CHAT, FRASE_DA_FALHA_NO_CHAT, FRASE_DO_PRAZO_NO_CHAT,
+            FRASE_SEM_RESPOSTA_NO_CHAT);
     public static final String ERRO_DO_LIMITE = "Limite de chamadas de ferramenta deste turno atingido. Não chame mais ferramentas.";
     /** A frase da etapa {@code etapa} da resposta em fluxo, por ferramenta: a marca lê o que está acontecendo, nunca o nome dela. */
     public static final Map<String, String> ETAPAS = Map.of(
@@ -118,13 +129,14 @@ public class LoopDoAgente {
     private final ModeloBase modelos;
     private final TransactionTemplate transacao;
     private final ResumoDoRaciocinio resumos;
+    private final ModoDoAtlas modo;
     private final Duration prazoDoTurno;
     private final String prompt;
 
     /** {@code prazoDoTurno} vem de {@code atlas.prazo-do-turno} (padrão {@link #PRAZO_DO_TURNO}); os testes o encurtam. */
     public LoopDoAgente(ProvedorAtual provedor, RelatorioFerramentas ferramentas, HistoricoDaConversa historico,
                         AtlasRepositorio repositorio, PlanoBSemLlm planoB, ChecagemDeTexto checagem, ResolvedorDeReferencias resolvedor,
-                        ModeloBase modelos, TransactionTemplate transacao, ResumoDoRaciocinio resumos,
+                        ModeloBase modelos, TransactionTemplate transacao, ResumoDoRaciocinio resumos, ModoDoAtlas modo,
                         @Value("${atlas.prazo-do-turno:PT3M}") Duration prazoDoTurno) {
         this.provedor = provedor;
         this.ferramentas = ferramentas;
@@ -136,8 +148,9 @@ public class LoopDoAgente {
         this.modelos = modelos;
         this.transacao = transacao;
         this.resumos = resumos;
+        this.modo = modo;
         this.prazoDoTurno = prazoDoTurno;
-        this.prompt = lerPrompt();
+        this.prompt = lerPrompt(modo.relatorioLigado() ? "relatorio" : "chat");
     }
 
     /**
@@ -220,7 +233,7 @@ public class LoopDoAgente {
         Turno turno = new Turno(prazoDoTurno);
         if (llm == null) {
             // A chave do debug foi apagada entre a conferência do service e aqui: termina como uma falha do modelo.
-            gravarFrase(contexto, turno, FRASE_DA_FALHA, null, ouvinte);
+            gravarFrase(contexto, turno, frase(FRASE_DA_FALHA, FRASE_DA_FALHA_NO_CHAT), null, ouvinte);
             return;
         }
         turno.resumos = resumos.abrir(contexto, llm, ouvinte);
@@ -233,12 +246,14 @@ public class LoopDoAgente {
     private void laco(AtlasContexto contexto, OuvinteDoTurno ouvinte, ProvedorDeLlm llm, Turno turno) {
         List<MensagemDeChat> transitorias = List.of();   // a nova redação pedida: vai ao modelo, não ao histórico
         while (true) {
-            Optional<LinhaDeRelatorio> ativo = repositorio.relatorioAtivoDaConversa(contexto.conversaId());
+            // Só chat: o relatório de uma conversa antiga fica onde está, e o modelo recebe só a consulta.
+            Optional<LinhaDeRelatorio> ativo = modo.relatorioLigado() ? repositorio.relatorioAtivoDaConversa(contexto.conversaId())
+                    : Optional.empty();
             if (ativo.isPresent() && "AGUARDANDO_RESPOSTA".equals(ativo.get().status())) {
                 return;   // cartão aberto: o turno para e espera a rota 46
             }
             if (turno.venceu()) {
-                gravarFrase(contexto, turno, FRASE_DO_PRAZO, null, ouvinte);
+                gravarFrase(contexto, turno, frase(FRASE_DO_PRAZO, FRASE_DO_PRAZO_NO_CHAT), null, ouvinte);
                 return;
             }
             PedidoAoLlm pedido = pedido(contexto, ativo, transitorias);
@@ -265,7 +280,7 @@ public class LoopDoAgente {
                 if (filtro != null && filtro.saiuAlgo()) {
                     filtro.recusar();   // o texto pela metade sai da tela; a frase da falha vem a seguir
                 }
-                gravarFrase(contexto, turno, FRASE_DA_FALHA, null, ouvinte);
+                gravarFrase(contexto, turno, frase(FRASE_DA_FALHA, FRASE_DA_FALHA_NO_CHAT), null, ouvinte);
                 return;
             }
             String texto = limpar(resposta.texto());
@@ -276,7 +291,7 @@ public class LoopDoAgente {
 
             if (resposta.chamadas().isEmpty()) {
                 if (texto == null) {
-                    gravarFrase(contexto, turno, FRASE_SEM_RESPOSTA, raciocinio, ouvinte);
+                    gravarFrase(contexto, turno, frase(FRASE_SEM_RESPOSTA, FRASE_SEM_RESPOSTA_NO_CHAT), raciocinio, ouvinte);
                     return;
                 }
                 Veredito veredito = checarDoChat(contexto, texto);
@@ -288,7 +303,7 @@ public class LoopDoAgente {
                     filtro.recusar();   // a checagem completa recusou o que o filtro deixou passar
                 }
                 if (turno.pediuNovaRedacao) {
-                    gravarFrase(contexto, turno, FRASE_FIXA, null, ouvinte);
+                    gravarFrase(contexto, turno, frase(FRASE_FIXA, FRASE_FIXA_NO_CHAT), null, ouvinte);
                     return;
                 }
                 turno.pediuNovaRedacao = true;
@@ -353,7 +368,7 @@ public class LoopDoAgente {
             return true;
         }
         if (turno.limiteAtingido) {
-            gravarFrase(contexto, turno, FRASE_DO_LIMITE, null, ouvinte);
+            gravarFrase(contexto, turno, frase(FRASE_DO_LIMITE, FRASE_DO_LIMITE_NO_CHAT), null, ouvinte);
             return true;
         }
         return false;
@@ -380,7 +395,7 @@ public class LoopDoAgente {
                 return execucao;
             });
         } catch (RuntimeException erro) {
-            String json = RelatorioFerramentas.erroComoJson(erro);
+            String json = RelatorioFerramentas.erroComoJson(erro, modo.relatorioLigado());
             transacao.executeWithoutResult(estado -> gravarErro(contexto, mensagemId, chamada, json, erro.getMessage(),
                     (int) ((System.nanoTime() - inicio) / 1_000_000)));
             return new Execucao(json, false, false);
@@ -417,12 +432,19 @@ public class LoopDoAgente {
         return prompt.replace("@DATA@", DIA.format(Datas.hoje())).replace("@MARCA@", repositorio.nomeDaMarca(contexto.parceriaId()));
     }
 
-    private static String lerPrompt() {
+    /** O prompt do modo: {@code relatorio.txt} com o relatório ligado, {@code chat.txt} (sem o fluxo do relatório) desligado. */
+    private static String lerPrompt(String nome) {
+        String caminho = "atlas/prompts/" + nome + ".txt";
         try {
-            return new String(new ClassPathResource("atlas/prompts/relatorio.txt").getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            return new String(new ClassPathResource(caminho).getInputStream().readAllBytes(), StandardCharsets.UTF_8);
         } catch (IOException erro) {
-            throw new UncheckedIOException("Não consegui ler o prompt do Atlas (resources/atlas/prompts/relatorio.txt).", erro);
+            throw new UncheckedIOException("Não consegui ler o prompt do Atlas (resources/" + caminho + ").", erro);
         }
+    }
+
+    /** A frase do modo: a antiga (com o botão) com o relatório ligado, a do chat desligado. */
+    private String frase(String comRelatorio, String noChat) {
+        return modo.relatorioLigado() ? comRelatorio : noChat;
     }
 
     // ---------------------------------------------------------------------

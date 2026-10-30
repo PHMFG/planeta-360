@@ -4,12 +4,8 @@ import br.com.rbs.portal.atlas.AtlasDtos.AbrirConversaRequisicao;
 import br.com.rbs.portal.atlas.AtlasDtos.ConversaDto;
 import br.com.rbs.portal.atlas.AtlasDtos.ConversasDaParceriaDto;
 import br.com.rbs.portal.atlas.AtlasDtos.MensagemRequisicao;
-import br.com.rbs.portal.atlas.AtlasDtos.RespostaDoCartaoRequisicao;
-import br.com.rbs.portal.atlas.relatorio.RelatorioAtlasDtos.RelatorioAtlasDto;
-import br.com.rbs.portal.atlas.relatorio.RelatorioAtlasDtos.RelatorioAtlasResumoDto;
 import br.com.rbs.portal.comum.UsuarioAutenticado;
 import jakarta.servlet.http.HttpServletRequest;
-import java.util.List;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.InvalidMediaTypeException;
@@ -23,7 +19,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Rotas 42 a 48 do contrato (docs/api.md): a conversa da marca com o Atlas, o cartão de perguntas e o relatório que ele monta.
+ * Rotas 42 a 45 do contrato (docs/api.md): a conversa da marca com o Atlas. O cartão de perguntas e o relatório (rotas 46 a 48)
+ * estão no {@link AtlasRelatorioController}, que só existe com {@code atlas.relatorio.ligado=true}.
  * [ATLAS] [PERMISSAO] As rotas 42 a 46 são só do Admin Patrocinador: o PermissaoAntesDoCorpo responde 403 à RBS antes de o corpo
  * ser lido (lista ROTAS_SO_DO_PATROCINADOR). As rotas 47 e 48 são de quem é da parceria e da RBS. [ISOLAMENTO] Recurso de outra
  * parceria dá 404, e conversa ou cartão de outro usuário da mesma parceria também. Todas as regras estão no AtlasService; aqui
@@ -39,7 +36,7 @@ public class AtlasController {
         this.servico = servico;
     }
 
-    /** 42. Corpo opcional: vazio abre uma conversa vazia; o atalho abre e já monta o relatório (plano B). Responde 201. */
+    /** 42. Corpo opcional: vazio abre uma conversa vazia; o atalho abre e já monta o relatório (plano B; 422 com o relatório desligado). Responde 201. */
     @PostMapping("/api/parcerias/{id}/atlas/conversas")
     public ResponseEntity<ConversaDto> abrirConversa(@AuthenticationPrincipal UsuarioAutenticado usuario, @PathVariable long id,
                                                      @RequestBody(required = false) AbrirConversaRequisicao corpo,
@@ -73,16 +70,6 @@ public class AtlasController {
         return servico.verConversa(usuario, id);
     }
 
-    /** 46. Em fluxo com {@code Accept: text/event-stream}, como a 44. */
-    @PostMapping("/api/atlas/solicitacoes/{id}/respostas")
-    public Object responderCartao(@AuthenticationPrincipal UsuarioAutenticado usuario, @PathVariable long id,
-                                  @RequestBody RespostaDoCartaoRequisicao corpo, HttpServletRequest requisicao) {
-        if (pedeFluxo(requisicao)) {
-            return servico.responderCartaoEmFluxo(usuario, id, corpo, requisicao);
-        }
-        return servico.responderCartao(usuario, id, corpo, requisicao);
-    }
-
     /** O pedido aceita {@code text/event-stream} pelo nome (o curinga não conta): {@code text/event-stream, application/json} também. */
     static boolean pedeFluxo(HttpServletRequest requisicao) {
         var aceitos = requisicao.getHeaders(HttpHeaders.ACCEPT);
@@ -98,17 +85,5 @@ public class AtlasController {
             }
         }
         return false;
-    }
-
-    /** 47. */
-    @GetMapping("/api/atlas/relatorios/{id}")
-    public RelatorioAtlasDto verRelatorio(@AuthenticationPrincipal UsuarioAutenticado usuario, @PathVariable long id) {
-        return servico.verRelatorio(usuario, id);
-    }
-
-    /** 48. */
-    @GetMapping("/api/parcerias/{id}/atlas/relatorios")
-    public List<RelatorioAtlasResumoDto> listarRelatorios(@AuthenticationPrincipal UsuarioAutenticado usuario, @PathVariable long id) {
-        return servico.listarRelatorios(usuario, id);
     }
 }

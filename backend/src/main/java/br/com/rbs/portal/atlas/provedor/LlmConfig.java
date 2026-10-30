@@ -59,7 +59,7 @@ public class LlmConfig {
                 cadeia -> cadeia.proceed(cadeia.request().newBuilder().header("User-Agent", USER_AGENT).build()));
     }
 
-    /** ATLAS_LLM=openai sem chave: avisa e deixa o Atlas no plano B. */
+    /** ATLAS_LLM=openai sem chave: avisa e deixa o Atlas sem modelo (com o relatório ligado, no plano B). */
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnProperty(name = "spring.ai.model.chat", havingValue = "openai")
     @ConditionalOnExpression("'${spring.ai.openai.api-key:}'.isBlank()")
@@ -68,7 +68,7 @@ public class LlmConfig {
         @Bean
         ApplicationRunner avisoDeModeloSemChave() {
             return argumentos -> log.warn("Atlas: ATLAS_LLM=openai, mas a variável OPENCODE_API_KEY está vazia. "
-                    + "O modelo de linguagem fica desligado e o Atlas só oferece o botão Montar relatório.");
+                    + "O modelo de linguagem fica desligado e a mensagem de texto do Atlas responde 503.");
         }
     }
 }

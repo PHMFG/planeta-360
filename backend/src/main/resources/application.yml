@@ -8,7 +8,7 @@
 # Usuário, senha e endereço do banco vêm de variáveis de ambiente; o padrão serve para a máquina de desenvolvimento.
 #
 # [ATLAS] O modelo de linguagem do Atlas vem DESLIGADO (spring.ai.model.chat=none): o portal e a suíte sobem para todo mundo,
-# sem chave, e o Atlas cai no plano B (o botão "Montar relatório"). Para ligar: ATLAS_LLM=openai e OPENCODE_API_KEY, e, se
+# sem chave, e a mensagem de texto do Atlas responde 503 (com atlas.relatorio.ligado, o botão "Montar relatório" é o plano B). Para ligar: ATLAS_LLM=openai e OPENCODE_API_KEY, e, se
 # quiser, ATLAS_LLM_BASE_URL e ATLAS_LLM_MODELO. Chave só em variável de ambiente, nunca neste arquivo.
 
 spring:
@@ -73,6 +73,10 @@ atlas:
     # [ATLAS] TEMPORÁRIO: as rotas /api/debug/llm (pôr a chave do modelo pela tela, só na memória da API). Desligado por padrão;
     # ligado só no perfil dev, abaixo. Sem esta propriedade, as rotas não existem (404).
     chaves: false
+  # [ATLAS] O relatório de trabalho (cartão de perguntas, relatório pronto, rotas 46 a 48, ferramentas relatorio_*). Desligado por
+  # padrão, no dev também: o Atlas é só o chat, com parceria_consultar. O código e as tabelas ficam, para o relatório voltar.
+  relatorio:
+    ligado: ${ATLAS_RELATORIO:false}
 
 server:
   port: 8080
@@ -116,6 +120,11 @@ spring:
     # Banco separado do de desenvolvimento, porque os testes o apagam por inteiro.
     # Variável própria (PORTAL_BD_TESTE_URL) para ninguém apagar o banco "portal" por engano.
     url: ${PORTAL_BD_TESTE_URL:jdbc:postgresql://localhost:5432/portal_teste}
+    hikari:
+      # Cada contexto de teste (um por conjunto de propriedades) fica em cache com o seu pool: sem isto, cada um segura 10 conexões
+      # abertas e a suíte esgota o PostgreSQL. Uma conexão de reserva basta; as que sobram fecham depois de 10 s parados.
+      minimum-idle: 1
+      idle-timeout: 10000
   flyway:
     locations: classpath:db/migration,classpath:db/dev
     # O clean só roda pela estratégia de migração que existe nos testes (src/test/java), nunca no código de produção.
@@ -126,9 +135,13 @@ spring:
       chat: none
 
 # [ATLAS] As rotas de debug ficam desligadas no contexto de teste normal; a classe de teste delas as liga.
+# [ATLAS] No teste o relatório fica ligado (os testes dele continuam valendo); as classes de teste do modo só chat o desligam com
+# @TestPropertySource.
 atlas:
   debug:
     chaves: false
+  relatorio:
+    ligado: true
 
 # [UPLOAD] Nos testes, os arquivos vão para dentro de target/ (apagado pelo "mvn clean"), nunca para a pasta de desenvolvimento.
 portal:

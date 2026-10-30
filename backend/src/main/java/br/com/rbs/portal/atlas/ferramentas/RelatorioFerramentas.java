@@ -3,6 +3,7 @@ package br.com.rbs.portal.atlas.ferramentas;
 import br.com.rbs.portal.atlas.AtlasJson;
 import br.com.rbs.portal.atlas.AtlasRepositorio;
 import br.com.rbs.portal.atlas.AtlasRepositorio.LinhaDeRelatorio;
+import br.com.rbs.portal.atlas.ModoDoAtlas;
 import br.com.rbs.portal.atlas.contexto.AtlasContexto;
 import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.DefinicaoDeFerramenta;
 import br.com.rbs.portal.atlas.relatorio.ConsultaDaParceria;
@@ -125,11 +126,14 @@ public class RelatorioFerramentas {
     private final RelatorioAtlasService relatorios;
     private final ConsultaDaParceria consulta;
     private final AtlasRepositorio repositorio;
+    private final ModoDoAtlas modo;
 
-    public RelatorioFerramentas(RelatorioAtlasService relatorios, ConsultaDaParceria consulta, AtlasRepositorio repositorio) {
+    public RelatorioFerramentas(RelatorioAtlasService relatorios, ConsultaDaParceria consulta, AtlasRepositorio repositorio,
+                                ModoDoAtlas modo) {
         this.relatorios = relatorios;
         this.consulta = consulta;
         this.repositorio = repositorio;
+        this.modo = modo;
     }
 
     // ---------------------------------------------------------------------
@@ -138,9 +142,13 @@ public class RelatorioFerramentas {
 
     /**
      * As ferramentas do estado atual (plano, seção 10.1). {@code ativo} é o relatório em montagem da conversa, se houver;
-     * {@code podePedirCartao} é falso quando ele já usou os três cartões que o modelo pode pedir.
+     * {@code podePedirCartao} é falso quando ele já usou os três cartões que o modelo pode pedir. Com o relatório desligado
+     * ({@code atlas.relatorio.ligado=false}), só {@code parceria_consultar}, qualquer que seja o estado.
      */
     public List<DefinicaoDeFerramenta> oferecidas(Optional<LinhaDeRelatorio> ativo, boolean podePedirCartao) {
+        if (!modo.relatorioLigado()) {
+            return List.of(DEFINICAO_CONSULTAR);
+        }
         if (ativo.isEmpty()) {
             return List.of(DEFINICAO_CONSULTAR, DEFINICAO_INICIAR);
         }
@@ -167,6 +175,10 @@ public class RelatorioFerramentas {
      * 409 (o relatório não está nesse estado), 403/404 (acesso).
      */
     public Execucao executar(AtlasContexto contexto, String nome, String argumentosJson, String chamadaId) {
+        if (!modo.relatorioLigado() && !CONSULTAR.equals(nome)) {
+            // Histórico antigo pode induzir o modelo a chamar uma ferramenta do relatório: erro de ferramenta, nada é criado.
+            throw new DadosInvalidosException(ferramentaInexistente(nome), Map.of());
+        }
         Map<String, Object> argumentos = lerArgumentos(argumentosJson);
         Optional<LinhaDeRelatorio> ativo = repositorio.relatorioAtivoDaConversa(contexto.conversaId());
         return switch (nome) {
@@ -175,9 +187,12 @@ public class RelatorioFerramentas {
             case SOLICITAR_CAMPOS -> solicitarCampos(contexto, argumentos, exigirMontando(ativo), chamadaId);
             case EDITAR -> editar(contexto, argumentos, exigirMontando(ativo));
             case FINALIZAR -> finalizar(contexto, argumentos, exigirMontando(ativo));
-            default -> throw new DadosInvalidosException("Não existe a ferramenta " + nome + ". Use só as ferramentas oferecidas.",
-                    Map.of());
+            default -> throw new DadosInvalidosException(ferramentaInexistente(nome), Map.of());
         };
+    }
+
+    private static String ferramentaInexistente(String nome) {
+        return "Não existe a ferramenta " + nome + ". Use só as ferramentas oferecidas.";
     }
 
     private Execucao consultar(AtlasContexto contexto, Map<String, Object> argumentos) {
@@ -341,7 +356,7 @@ public class RelatorioFerramentas {
      * O erro como mensagem de ferramenta ({@code {"erro": "...", "campos": {...}}}), no lugar de uma resposta HTTP de erro. [ATLAS]
      * Só sai a frase que o portal já mostraria à pessoa; erro inesperado vira uma frase genérica (o rastro fica no log).
      */
-    public static String erroComoJson(RuntimeException erro) {
+    public static String erroComoJson(RuntimeException erro, boolean relatorioLigado) {
         Map<String, Object> corpo = new LinkedHashMap<>();
         if (erro instanceof DadosInvalidosException invalidos) {
             corpo.put("erro", invalidos.getMessage());
@@ -353,8 +368,11 @@ public class RelatorioFerramentas {
             corpo.put("erro", erro.getMessage());
         } else {
             log.error("Atlas: uma ferramenta falhou por um motivo inesperado", erro);
-            corpo.put("erro", "A ferramenta falhou por um motivo interno. Tente de novo; se continuar, diga à pessoa para usar o botão "
-                    + "Montar relatório.");
+            corpo.put("erro", relatorioLigado
+                    ? "A ferramenta falhou por um motivo interno. Tente de novo; se continuar, diga à pessoa para usar o botão "
+                            + "Montar relatório."
+                    : "A ferramenta falhou por um motivo interno. Tente de novo; se continuar, diga à pessoa que não conseguiu "
+                            + "buscar esse dado agora.");
         }
         return AtlasJson.escrever(corpo);
     }
