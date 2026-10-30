@@ -298,7 +298,7 @@ class AtlasServiceTest {
                         org.assertj.core.groups.Tuple.tuple("Taxa de cadastro", "89,3%"),
                         org.assertj.core.groups.Tuple.tuple("Brindes distribuídos", "50%"));
         assertThat(((ParagrafoDto) bloco(relatorio, "b-publico")).texto())
-                .isEqualTo("O espaço recebeu 1.200 visitantes, e 89,3% deles deixaram cadastro com consentimento.");
+                .isEqualTo("Visitantes no espaço da marca: 1.200. Taxa de cadastro com consentimento: 89,3% dos visitantes.");
         assertThat(((ParagrafoDto) bloco(relatorio, "b-publico")).redigidoPor()).isEqualTo("MODELO");
         FontesDto fontes = (FontesDto) bloco(relatorio, "b-fontes");
         assertThat(fontes.itens()).extracting("ref").contains("dado:" + VISITANTES, "calc:taxa_cadastro", "cons:aplicacoes.percentual");

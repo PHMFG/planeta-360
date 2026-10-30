@@ -725,7 +725,7 @@ class LoopDoAgenteTest {
                 .map(ParagrafoDto.class::cast).toList();
         assertThat(paragrafos).extracting("id", "redigidoPor").containsExactly(
                 org.assertj.core.groups.Tuple.tuple("b-resumo", "MODELO"), org.assertj.core.groups.Tuple.tuple("b-publico", "ATLAS"));
-        assertThat(paragrafos.get(0).texto()).isEqualTo("A marca Cliente Amarelo teve 17 de 19 aplicações de marca comprovadas no evento.");
+        assertThat(paragrafos.get(0).texto()).isEqualTo("Aplicações de marca comprovadas no evento por Cliente Amarelo: 17 de 19 previstas.");
     }
 
     @Test

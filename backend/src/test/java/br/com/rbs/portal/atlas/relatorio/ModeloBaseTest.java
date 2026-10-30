@@ -41,13 +41,18 @@ class ModeloBaseTest {
     }
 
     @Test
-    void aCapaLevaAEdicaoEAFraseDoResumoComecaComAMarca() {
+    void aCapaLevaAEdicaoEAFraseDoResumoCitaAMarcaSemConcordarComONumero() {
         Capa capa = (Capa) ativacao().bloco("b-capa").orElseThrow();
         Paragrafo resumo = (Paragrafo) ativacao().bloco("b-resumo").orElseThrow();
 
         assertThat(capa.edicao()).isEqualTo(new Referencia("evento:edicao"));
         assertThat(capa.subtitulo()).isEqualTo(new Referencia("parc:patrocinador"));
-        assertThat(resumo.fraseModelo()).startsWith("A marca {{parc:patrocinador}} teve ");
+        assertThat(resumo.fraseModelo()).contains("{{parc:patrocinador}}");
+        // o número sai do marcador: nenhuma palavra depois de um marcador de número concorda com ele
+        Paragrafo publico = (Paragrafo) ativacao().bloco("b-publico").orElseThrow();
+        for (String frase : java.util.List.of(resumo.fraseModelo(), publico.fraseModelo())) {
+            assertThat(frase).doesNotContainPattern("\\}\\}\\s+(?:aplicações|visitantes|cadastros|pessoas|fotos)\\b");
+        }
     }
 
     @Test

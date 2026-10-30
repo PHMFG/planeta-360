@@ -9,7 +9,7 @@
         "subtitulo": { "ref": "parc:patrocinador" }, "edicao": { "ref": "evento:edicao" } } ] },
     { "id": "resumo", "titulo": "Resumo", "blocos": [
       { "id": "b-resumo", "tipo": "paragrafo", "redigivel": true,
-        "frase_modelo": "A marca {{parc:patrocinador}} teve {{cons:aplicacoes.comprovadas}} de {{cons:aplicacoes.previstas}} aplicações de marca comprovadas no evento." } ] },
+        "frase_modelo": "Aplicações de marca comprovadas no evento por {{parc:patrocinador}}: {{cons:aplicacoes.comprovadas}} de {{cons:aplicacoes.previstas}} previstas." } ] },
     { "id": "aplicacoes", "titulo": "Aplicações de marca", "blocos": [
       { "id": "b-kpi-aplic", "tipo": "kpi_grade", "itens": [
         { "rotulo": "Previstas",   "valor": { "ref": "cons:aplicacoes.previstas" } },
@@ -24,7 +24,7 @@
         { "rotulo": "Taxa de cadastro",      "valor": { "ref": "calc:taxa_cadastro" } },
         { "rotulo": "Brindes distribuídos",  "valor": { "ref": "calc:brindes_pct" } } ] },
       { "id": "b-publico", "tipo": "paragrafo", "redigivel": true,
-        "frase_modelo": "O espaço recebeu {{dado:ativacao.visitantes_total}} visitantes, e {{calc:taxa_cadastro}} deles deixaram cadastro com consentimento." } ] },
+        "frase_modelo": "Visitantes no espaço da marca: {{dado:ativacao.visitantes_total}}. Taxa de cadastro com consentimento: {{calc:taxa_cadastro}} dos visitantes." } ] },
     { "id": "comprovacoes", "titulo": "Comprovações", "blocos": [
       { "id": "b-galeria", "tipo": "galeria_comprovacoes", "fonte": { "ref": "lista:comprovacoes" } } ] },
     { "id": "fontes", "titulo": "Fontes e cálculos", "blocos": [

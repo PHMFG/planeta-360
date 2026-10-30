@@ -103,7 +103,7 @@ class MontadorDoRelatorioTest {
         assertThat(capa.edicao()).isEqualTo("Planeta Atlântida 2027");
 
         ParagrafoDto resumo = bloco(snapshot, "b-resumo", ParagrafoDto.class);
-        assertThat(resumo.texto()).isEqualTo("A marca Cliente Amarelo teve 17 de 19 aplicações de marca comprovadas no evento.");
+        assertThat(resumo.texto()).isEqualTo("Aplicações de marca comprovadas no evento por Cliente Amarelo: 17 de 19 previstas.");
         assertThat(resumo.redigidoPor()).isEqualTo("MODELO");
 
         KpiGradeDto aplicacoes = bloco(snapshot, "b-kpi-aplic", KpiGradeDto.class);
@@ -124,7 +124,7 @@ class MontadorDoRelatorioTest {
         assertThat(item(publico, "Taxa de cadastro").valor()).isEqualTo("89,3%");
         assertThat(item(publico, "Brindes distribuídos").valor()).isEqualTo("50%");
         assertThat(bloco(snapshot, "b-publico", ParagrafoDto.class).texto())
-                .isEqualTo("O espaço recebeu 1.200 visitantes, e 89,3% deles deixaram cadastro com consentimento.");
+                .isEqualTo("Visitantes no espaço da marca: 1.200. Taxa de cadastro com consentimento: 89,3% dos visitantes.");
         assertThat(bloco(snapshot, "b-galeria", GaleriaComprovacoesDto.class).itens()).hasSize(17);
     }
 

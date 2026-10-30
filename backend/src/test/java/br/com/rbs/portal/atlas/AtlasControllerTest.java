@@ -160,9 +160,9 @@ class AtlasControllerTest {
         assertThat(lerLista(doRelatorio, "$.secoes[2].blocos[0].itens[*].valor")).containsExactly("19", "17", "89,4%", "17");
         assertThat(lerLista(doRelatorio, "$.secoes[3].blocos[0].itens[*].valor")).containsExactly("1.200", "1.072", "89,3%", "50%");
         assertThat(lerJson(doRelatorio, "$.secoes[3].blocos[1].texto"))
-                .isEqualTo("O espaço recebeu 1.200 visitantes, e 89,3% deles deixaram cadastro com consentimento.");
+                .isEqualTo("Visitantes no espaço da marca: 1.200. Taxa de cadastro com consentimento: 89,3% dos visitantes.");
         assertThat(lerJson(doRelatorio, "$.secoes[1].blocos[0].texto"))
-                .isEqualTo("A marca Cliente Amarelo teve 17 de 19 aplicações de marca comprovadas no evento.");
+                .isEqualTo("Aplicações de marca comprovadas no evento por Cliente Amarelo: 17 de 19 previstas.");
 
         // formato dos blocos
         assertThat(chaves(doRelatorio, "$.secoes[0].blocos[0]")).containsExactly("tipo", "id", "titulo", "subtitulo", "edicao");
