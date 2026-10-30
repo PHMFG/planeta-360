@@ -21,6 +21,34 @@ public interface ProvedorDeLlm {
      */
     RespostaDoLlm responder(PedidoAoLlm pedido);
 
+    /**
+     * A mesma ida ao modelo, em fluxo: cada pedaço do {@code reasoning_content} e do texto vai ao {@code ouvinte} à medida que
+     * chega, e no fim volta a resposta inteira, igual à de {@link #responder} (os pedidos de ferramenta chegam em pedaços e só
+     * saem montados, na resposta). As mesmas regras de {@link #responder}: fora de transação, falha como
+     * {@link ProvedorIndisponivelException}. O padrão, para quem não transmite, chama {@link #responder} e passa cada parte
+     * inteira de uma vez.
+     */
+    default RespostaDoLlm responderEmFluxo(PedidoAoLlm pedido, OuvinteDoFluxo ouvinte) {
+        RespostaDoLlm resposta = responder(pedido);
+        if (resposta.raciocinio() != null) {
+            ouvinte.raciocinio(resposta.raciocinio());
+        }
+        if (resposta.texto() != null) {
+            ouvinte.texto(resposta.texto());
+        }
+        return resposta;
+    }
+
+    /** Quem recebe os pedaços de uma ida ao modelo em fluxo, na ordem em que chegam. Roda na thread de quem chamou. */
+    interface OuvinteDoFluxo {
+
+        /** Um pedaço do {@code reasoning_content}. */
+        void raciocinio(String pedaco);
+
+        /** Um pedaço do texto da resposta, cru (com os marcadores do jeito que o modelo os escreveu). */
+        void texto(String pedaco);
+    }
+
     /** Um pedido de ferramenta: o id (único na conversa), o nome e os argumentos como texto JSON, do jeito que o modelo mandou. */
     record ChamadaDeFerramenta(String id, String nome, String argumentos) {
     }

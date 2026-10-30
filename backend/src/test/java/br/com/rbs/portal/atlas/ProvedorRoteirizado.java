@@ -7,8 +7,10 @@ import br.com.rbs.portal.atlas.provedor.ProvedorIndisponivelException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -24,12 +26,22 @@ public class ProvedorRoteirizado implements ProvedorDeLlm {
     private final Deque<Function<PedidoAoLlm, RespostaDoLlm>> roteiro = new ArrayDeque<>();
     private final List<PedidoAoLlm> pedidos = new ArrayList<>();
     private final List<Boolean> transacaoAtiva = new ArrayList<>();
+    private final Map<Integer, Pedacos> pedacosDoPasso = new HashMap<>();
+    private final List<Integer> idasEmFluxo = new ArrayList<>();
+    private int registrados;
+
+    /** Os pedaços de um passo em fluxo. */
+    private record Pedacos(List<String> raciocinio, List<String> texto) {
+    }
 
     /** Zera o roteiro e o que foi recebido: cada teste começa daqui. */
     public ProvedorRoteirizado limpar() {
         roteiro.clear();
         pedidos.clear();
         transacaoAtiva.clear();
+        pedacosDoPasso.clear();
+        idasEmFluxo.clear();
+        registrados = 0;
         return this;
     }
 
@@ -77,6 +89,7 @@ public class ProvedorRoteirizado implements ProvedorDeLlm {
     /** Um passo à mão: recebe o pedido e devolve a resposta (para conferir o que o modelo recebeu na hora). */
     public ProvedorRoteirizado passo(Function<PedidoAoLlm, RespostaDoLlm> passo) {
         roteiro.add(passo);
+        registrados++;
         return this;
     }
 
@@ -87,6 +100,40 @@ public class ProvedorRoteirizado implements ProvedorDeLlm {
     // ---------------------------------------------------------------------
     // O provedor
     // ---------------------------------------------------------------------
+
+    /**
+     * O modelo responde só com texto, em fluxo, nestes pedaços (sem fluxo, a resposta é o texto inteiro). Com um raciocínio, ele
+     * chega antes, também em pedaços (um por palavra).
+     */
+    public ProvedorRoteirizado textoEmPedacos(String raciocinio, String... pedacos) {
+        pedacosDoPasso.put(registrados, new Pedacos(raciocinio == null ? List.of() : List.of(raciocinio.split("(?<= )")),
+                List.of(pedacos)));
+        return passo(pedido -> new RespostaDoLlm(String.join("", pedacos), List.of(), raciocinio));
+    }
+
+    @Override
+    public RespostaDoLlm responderEmFluxo(PedidoAoLlm pedido, OuvinteDoFluxo ouvinte) {
+        Pedacos pedacos = pedacosDoPasso.remove(pedidos.size());   // o passo que esta ida vai consumir
+        idasEmFluxo.add(pedidos.size());
+        RespostaDoLlm resposta = responder(pedido);
+        if (pedacos == null) {
+            if (resposta.raciocinio() != null) {
+                ouvinte.raciocinio(resposta.raciocinio());
+            }
+            if (resposta.texto() != null) {
+                ouvinte.texto(resposta.texto());
+            }
+        } else {
+            pedacos.raciocinio().forEach(ouvinte::raciocinio);
+            pedacos.texto().forEach(ouvinte::texto);
+        }
+        return resposta;
+    }
+
+    /** Quantas idas ao modelo foram em fluxo. */
+    public int idasEmFluxo() {
+        return idasEmFluxo.size();
+    }
 
     @Override
     public RespostaDoLlm responder(PedidoAoLlm pedido) {

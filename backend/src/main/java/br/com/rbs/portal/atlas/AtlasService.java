@@ -14,6 +14,7 @@ import br.com.rbs.portal.atlas.contexto.AtlasContextoFabrica;
 import br.com.rbs.portal.atlas.loop.DescarteDeRelatorios;
 import br.com.rbs.portal.atlas.loop.ItensDaConversa;
 import br.com.rbs.portal.atlas.loop.LoopDoAgente;
+import br.com.rbs.portal.atlas.loop.OuvinteDoTurno;
 import br.com.rbs.portal.atlas.loop.PlanoBSemLlm;
 import br.com.rbs.portal.atlas.loop.TetoDiario;
 import br.com.rbs.portal.atlas.provedor.DisponibilidadeDoLlm;
@@ -30,12 +31,20 @@ import br.com.rbs.portal.comum.ServicoIndisponivelException;
 import br.com.rbs.portal.comum.UsuarioAutenticado;
 import br.com.rbs.portal.comum.VerificadorDeAcesso;
 import br.com.rbs.portal.dados.DadosDtos.ValorRequisicao;
+import jakarta.annotation.PreDestroy;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
  * A conversa da marca com o Atlas e o cartão de perguntas (rotas 42 a 46), e a porta das rotas do relatório (47 e 48). [ATLAS]
@@ -50,6 +59,10 @@ import org.springframework.stereotype.Service;
  * são uma transação curta própria. O turno termina também em erro ({@code finally}). Com um {@code ProvedorDeLlm} (o modelo de
  * linguagem ligado), a mensagem de texto da rota 44 e a resposta do cartão da rota 46 vão para o {@link LoopDoAgente}; o botão
  * continua sendo o plano B.
+ * <p>
+ * As rotas 44 e 46 têm também a resposta em fluxo (SSE, {@link FluxoDoTurno}): as conferências, o turno e o que vem antes do
+ * modelo rodam no pedido, com os mesmos erros HTTP; o turno com o modelo roda numa thread própria (sem transação), transmitindo,
+ * e termina mesmo que o cliente vá embora.
  */
 @Service
 public class AtlasService {
@@ -60,6 +73,14 @@ public class AtlasService {
     public static final int LIMITE_DO_TEXTO = 1000;
     public static final int LIMITE_DE_CONVERSAS = 20;
     static final int LIMITE_DE_VALORES = 20;
+    /** O {@code detail} do evento {@code erro} da resposta em fluxo (a mesma frase do 500 de sempre). */
+    public static final String ERRO_NO_FLUXO = "Algo deu errado do nosso lado. Tente de novo em instantes; se continuar, avise a equipe.";
+
+    private static final Logger log = LoggerFactory.getLogger(AtlasService.class);
+
+    /** As threads dos turnos em fluxo: uma por turno, enquanto ele roda (cada conversa tem um turno por vez). */
+    private final ExecutorService turnosEmFluxo =
+            Executors.newCachedThreadPool(Thread.ofPlatform().name("atlas-fluxo-", 1).daemon().factory());
 
     private final AtlasRepositorio repositorio;
     private final AtlasContextoFabrica contextos;
@@ -148,6 +169,21 @@ public class AtlasService {
      */
     public ConversaDto enviarMensagem(UsuarioAutenticado usuario, long conversaId, MensagemRequisicao corpo,
                                       HttpServletRequest requisicao) {
+        return terminar(abrirTurnoDaMensagem(usuario, conversaId, corpo, requisicao));
+    }
+
+    /**
+     * Rota 44 em fluxo ({@code Accept: text/event-stream}). Tudo o que dá erro na rota 44 dá o mesmo erro aqui, antes de o fluxo
+     * abrir: as conferências, o turno (409) e o que vem antes do modelo (o cartão fechado e a mensagem gravada; o botão inteiro).
+     * Só então a resposta vira o fluxo, e o turno com o modelo roda em outra thread até o evento {@code fim}.
+     */
+    public SseEmitter enviarMensagemEmFluxo(UsuarioAutenticado usuario, long conversaId, MensagemRequisicao corpo,
+                                            HttpServletRequest requisicao) {
+        return transmitir(abrirTurnoDaMensagem(usuario, conversaId, corpo, new PedidoGuardado(requisicao)));
+    }
+
+    private TurnoAberto abrirTurnoDaMensagem(UsuarioAutenticado usuario, long conversaId, MensagemRequisicao corpo,
+                                             HttpServletRequest requisicao) {
         LinhaDeConversa conversa = conversaDoUsuario(usuario, conversaId, CONVERSA_NAO_ENCONTRADA);
         Map<String, String> erros = new LinkedHashMap<>();
         boolean temTexto = corpo != null && corpo.texto() != null;
@@ -173,9 +209,14 @@ public class AtlasService {
                 throw new ServicoIndisponivelException(DisponibilidadeDoLlm.SEM_MODELO);   // sem provedor, o botão é o caminho
             }
             teto.exigirFolga(conversa.parceriaId());   // 429: o teto diário de mensagens do Atlas por parceria
-            return conversarComOModelo(usuario, conversa, corpo.texto().strip(), requisicao);
+            String texto = corpo.texto().strip();
+            AtlasContexto contexto = contextos.para(usuario, conversa.parceriaId(), conversa.id(), requisicao);
+            return comecarTurno(usuario, conversa, () -> loop.prepararConversa(contexto, texto),
+                    ouvinte -> loop.conduzir(contexto, ouvinte));
         }
-        return rodarPlanoB(usuario, conversa, modelo, requisicao);
+        String modeloDoAtalho = modelo;
+        AtlasContexto contexto = contextos.para(usuario, conversa.parceriaId(), conversa.id(), requisicao);
+        return comecarTurno(usuario, conversa, () -> planoB.montar(contexto, modeloDoAtalho), null);
     }
 
     // ---------------------------------------------------------------------
@@ -202,6 +243,21 @@ public class AtlasService {
      */
     public ConversaDto responderCartao(UsuarioAutenticado usuario, long solicitacaoId, RespostaDoCartaoRequisicao corpo,
                                        HttpServletRequest requisicao) {
+        return terminar(abrirTurnoDoCartao(usuario, solicitacaoId, corpo, requisicao));
+    }
+
+    /**
+     * Rota 46 em fluxo ({@code Accept: text/event-stream}). Os mesmos erros da rota 46 antes de o fluxo abrir, inclusive o 422
+     * dos valores (gravados antes do fluxo); depois, o loop retoma em outra thread até o evento {@code fim}. Sem modelo ou com o
+     * teto atingido, o plano B roda inteiro antes e o fluxo só traz o {@code fim}.
+     */
+    public SseEmitter responderCartaoEmFluxo(UsuarioAutenticado usuario, long solicitacaoId, RespostaDoCartaoRequisicao corpo,
+                                             HttpServletRequest requisicao) {
+        return transmitir(abrirTurnoDoCartao(usuario, solicitacaoId, corpo, new PedidoGuardado(requisicao)));
+    }
+
+    private TurnoAberto abrirTurnoDoCartao(UsuarioAutenticado usuario, long solicitacaoId, RespostaDoCartaoRequisicao corpo,
+                                           HttpServletRequest requisicao) {
         verificador.exigirPatrocinador(usuario, VerificadorDeAcesso.SO_PATROCINADOR_USA_O_ATLAS);
         LinhaDeSolicitacao cartao = repositorio.solicitacao(solicitacaoId)
                 .orElseThrow(() -> new NaoEncontradoException(RelatorioAtlasService.SOLICITACAO_NAO_ENCONTRADA));
@@ -218,19 +274,14 @@ public class AtlasService {
         if (!"PENDENTE".equals(cartao.status())) {
             throw new ConflitoException(RelatorioAtlasService.CARTAO_JA_RESPONDIDO);
         }
-        int antes = repositorio.ultimaOrdem(conversa.id());
         AtlasContexto contexto = contextos.para(usuario, conversa.parceriaId(), conversa.id(), requisicao);
-        comTurno(conversa.id(), () -> {
-            if (llm.disponivel() && !teto.atingido(conversa.parceriaId())) {
-                loop.retomar(contexto, solicitacaoId, acao, valores);
-            } else {
-                // Sem modelo, ou com o teto diário atingido: o cartão respondido segue o plano B (não gasta o modelo e a pessoa
-                // não fica presa a um cartão aberto).
-                planoB.responder(contexto, solicitacaoId, acao, valores);
-            }
-            return null;
-        });
-        return new ConversaDto(conversa.id(), llm.disponivel(), itens.itens(usuario, conversa, antes));
+        if (llm.disponivel() && !teto.atingido(conversa.parceriaId())) {
+            return comecarTurno(usuario, conversa, () -> loop.prepararRetomada(contexto, solicitacaoId, acao, valores),
+                    ouvinte -> loop.conduzir(contexto, ouvinte));
+        }
+        // Sem modelo, ou com o teto diário atingido: o cartão respondido segue o plano B (não gasta o modelo e a pessoa não fica
+        // presa a um cartão aberto).
+        return comecarTurno(usuario, conversa, () -> planoB.responder(contexto, solicitacaoId, acao, valores), null);
     }
 
     // ---------------------------------------------------------------------
@@ -251,16 +302,103 @@ public class AtlasService {
     // Apoio
     // ---------------------------------------------------------------------
 
-    /** Roda o loop do modelo de linguagem no turno da conversa e devolve só os itens que ele produziu. */
-    private ConversaDto conversarComOModelo(UsuarioAutenticado usuario, LinhaDeConversa conversa, String texto,
-                                            HttpServletRequest requisicao) {
-        int antes = repositorio.ultimaOrdem(conversa.id());
-        AtlasContexto contexto = contextos.para(usuario, conversa.parceriaId(), conversa.id(), requisicao);
-        comTurno(conversa.id(), () -> {
-            loop.conversar(contexto, texto);
-            return null;
-        });
-        return new ConversaDto(conversa.id(), llm.disponivel(), itens.itens(usuario, conversa, antes));
+    /**
+     * Um turno já começado: a trava da conversa pega e o que vem antes do modelo já feito. Falta {@code resto} (o loop com o
+     * modelo; nulo no plano B, que roda inteiro antes) e encerrar o turno, uma vez só.
+     */
+    private final class TurnoAberto {
+
+        final UsuarioAutenticado usuario;
+        final LinhaDeConversa conversa;
+        final int antes;
+        final Consumer<OuvinteDoTurno> resto;
+        private final AtomicBoolean encerrado = new AtomicBoolean();
+
+        TurnoAberto(UsuarioAutenticado usuario, LinhaDeConversa conversa, int antes, Consumer<OuvinteDoTurno> resto) {
+            this.usuario = usuario;
+            this.conversa = conversa;
+            this.antes = antes;
+            this.resto = resto;
+        }
+
+        /** Solta a trava da conversa. Uma vez só: depois disso, outro pedido pode ter começado outro turno. */
+        void encerrar() {
+            if (encerrado.compareAndSet(false, true)) {
+                repositorio.encerrarTurno(conversa.id());
+            }
+        }
+
+        /** Os itens que o turno produziu, no objeto Conversa. */
+        ConversaDto conversa() {
+            return new ConversaDto(conversa.id(), llm.disponivel(), itens.itens(usuario, conversa, antes));
+        }
+    }
+
+    /**
+     * Começa o turno (409 se outro está em andamento) e faz {@code antes} nele; se {@code antes} falha (o 422 dos valores do
+     * cartão, por exemplo), o turno termina e o erro sobe, ainda antes de qualquer fluxo abrir.
+     */
+    private TurnoAberto comecarTurno(UsuarioAutenticado usuario, LinhaDeConversa conversa, Runnable antes,
+                                     Consumer<OuvinteDoTurno> resto) {
+        int ordem = repositorio.ultimaOrdem(conversa.id());
+        if (!repositorio.iniciarTurno(conversa.id())) {
+            throw new ConflitoException(TURNO_EM_ANDAMENTO);
+        }
+        TurnoAberto turno = new TurnoAberto(usuario, conversa, ordem, resto);
+        try {
+            antes.run();
+        } catch (RuntimeException | Error erro) {
+            turno.encerrar();
+            throw erro;
+        }
+        return turno;
+    }
+
+    /** A resposta JSON: o resto do turno aqui mesmo, o turno termina (também em erro) e saem os itens dele. */
+    private ConversaDto terminar(TurnoAberto turno) {
+        try {
+            if (turno.resto != null) {
+                turno.resto.accept(OuvinteDoTurno.NENHUM);
+            }
+        } finally {
+            turno.encerrar();
+        }
+        return turno.conversa();
+    }
+
+    /**
+     * A resposta em fluxo: o resto do turno roda em outra thread, transmitindo; no fim, o turno termina e vai o evento
+     * {@code fim} com os itens. Falha inesperada vira o evento {@code erro}. O cliente que sai no meio não para o turno.
+     */
+    private SseEmitter transmitir(TurnoAberto turno) {
+        FluxoDoTurno fluxo = new FluxoDoTurno();
+        try {
+            turnosEmFluxo.execute(() -> {
+                try {
+                    if (turno.resto != null) {
+                        turno.resto.accept(fluxo);
+                    }
+                    ConversaDto fim = turno.conversa();
+                    turno.encerrar();   // antes do fim: quem recebe o fim já pode mandar a próxima mensagem
+                    fluxo.fim(fim);
+                } catch (RuntimeException | Error erro) {
+                    log.error("Atlas: falha no turno em fluxo da conversa {}", turno.conversa.id(), erro);
+                    turno.encerrar();
+                    fluxo.erro(500, ERRO_NO_FLUXO);
+                } finally {
+                    turno.encerrar();
+                }
+            });
+        } catch (RuntimeException naoComecou) {
+            turno.encerrar();
+            throw naoComecou;
+        }
+        return fluxo.emissor();
+    }
+
+    @PreDestroy
+    void pararOsTurnosEmFluxo() {
+        turnosEmFluxo.shutdown();
     }
 
     /** Roda o plano B no turno da conversa e devolve só os itens que ele produziu. */

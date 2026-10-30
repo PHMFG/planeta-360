@@ -10,7 +10,10 @@ import br.com.rbs.portal.atlas.relatorio.RelatorioAtlasDtos.RelatorioAtlasResumo
 import br.com.rbs.portal.comum.UsuarioAutenticado;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.List;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.InvalidMediaTypeException;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -50,10 +53,17 @@ public class AtlasController {
         return servico.listarConversas(usuario, id);
     }
 
-    /** 44. */
+    /**
+     * 44. Com {@code Accept: text/event-stream} (sozinho ou com outros tipos), a resposta vem em fluxo ({@code SseEmitter});
+     * sem ele, o objeto Conversa no fim do turno. O tipo de retorno é {@code Object} porque o Spring escolhe quem escreve a
+     * resposta pelo valor devolvido: o emissor vira o fluxo, a Conversa vira JSON.
+     */
     @PostMapping("/api/atlas/conversas/{id}/mensagens")
-    public ConversaDto enviarMensagem(@AuthenticationPrincipal UsuarioAutenticado usuario, @PathVariable long id,
-                                      @RequestBody MensagemRequisicao corpo, HttpServletRequest requisicao) {
+    public Object enviarMensagem(@AuthenticationPrincipal UsuarioAutenticado usuario, @PathVariable long id,
+                                 @RequestBody MensagemRequisicao corpo, HttpServletRequest requisicao) {
+        if (pedeFluxo(requisicao)) {
+            return servico.enviarMensagemEmFluxo(usuario, id, corpo, requisicao);
+        }
         return servico.enviarMensagem(usuario, id, corpo, requisicao);
     }
 
@@ -63,11 +73,31 @@ public class AtlasController {
         return servico.verConversa(usuario, id);
     }
 
-    /** 46. */
+    /** 46. Em fluxo com {@code Accept: text/event-stream}, como a 44. */
     @PostMapping("/api/atlas/solicitacoes/{id}/respostas")
-    public ConversaDto responderCartao(@AuthenticationPrincipal UsuarioAutenticado usuario, @PathVariable long id,
-                                       @RequestBody RespostaDoCartaoRequisicao corpo, HttpServletRequest requisicao) {
+    public Object responderCartao(@AuthenticationPrincipal UsuarioAutenticado usuario, @PathVariable long id,
+                                  @RequestBody RespostaDoCartaoRequisicao corpo, HttpServletRequest requisicao) {
+        if (pedeFluxo(requisicao)) {
+            return servico.responderCartaoEmFluxo(usuario, id, corpo, requisicao);
+        }
         return servico.responderCartao(usuario, id, corpo, requisicao);
+    }
+
+    /** O pedido aceita {@code text/event-stream} pelo nome (o curinga não conta): {@code text/event-stream, application/json} também. */
+    static boolean pedeFluxo(HttpServletRequest requisicao) {
+        var aceitos = requisicao.getHeaders(HttpHeaders.ACCEPT);
+        while (aceitos != null && aceitos.hasMoreElements()) {
+            try {
+                for (MediaType tipo : MediaType.parseMediaTypes(aceitos.nextElement())) {
+                    if (MediaType.TEXT_EVENT_STREAM.equalsTypeAndSubtype(tipo) && tipo.getQualityValue() > 0) {
+                        return true;
+                    }
+                }
+            } catch (InvalidMediaTypeException malFormado) {
+                return false;
+            }
+        }
+        return false;
     }
 
     /** 47. */

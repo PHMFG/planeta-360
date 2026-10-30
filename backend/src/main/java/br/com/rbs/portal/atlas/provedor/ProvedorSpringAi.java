@@ -34,6 +34,9 @@ import org.springframework.ai.tool.definition.ToolDefinition;
  *   <li>O {@code reasoning_content} que o modelo mandar volta na resposta, para o loop guardá-lo; e o que o loop remonta do
  *       banco entra nos metadados da mensagem do assistente (chave {@code reasoningContent}), que o Spring AI reenvia sozinho.
  *       Com o raciocínio ligado e ferramentas, o DeepSeek responde 400 se ele não voltar em todas as idas seguintes.</li>
+ *   <li>Em fluxo ({@link #responderEmFluxo}), usa o {@code stream()} do mesmo modelo: o Spring AI 2.0.2 entrega o texto em
+ *       pedaços, o {@code reasoning_content} acumulado nos metadados de cada pedaço (daqui sai só o que cresceu) e os pedidos de
+ *       ferramenta já juntados, num pedaço só, quando chega o {@code finish_reason} deles.</li>
  *   <li>O {@code User-Agent} próprio é posto pelo {@link LlmConfig}: o {@code custom-headers} do Spring AI não troca o
  *       "spring-ai-openai" que ele manda por padrão, só acrescenta um segundo valor ao cabeçalho.</li>
  * </ul>
@@ -83,6 +86,39 @@ public class ProvedorSpringAi implements ProvedorDeLlm {
         } catch (RuntimeException erro) {
             throw falha(erro);
         }
+    }
+
+    @Override
+    public RespostaDoLlm responderEmFluxo(PedidoAoLlm pedido, OuvinteDoFluxo ouvinte) {
+        StringBuilder texto = new StringBuilder();
+        String raciocinioAcumulado = "";
+        List<ChamadaDeFerramenta> chamadas = new ArrayList<>();
+        try {
+            // toIterable consome o fluxo nesta thread (a do turno): o cliente HTTP enche a fila na dele, e nada fica em transação.
+            for (ChatResponse parte : modelo.stream(new Prompt(mensagens(pedido.mensagens()), opcoes(pedido))).toIterable()) {
+                for (Generation geracao : parte.getResults()) {
+                    AssistantMessage saida = geracao.getOutput();
+                    if (saida == null) {
+                        continue;
+                    }
+                    // O Spring AI põe nos metadados o raciocínio ACUMULADO até este pedaço: o que é novo é o que cresceu.
+                    if (saida.getMetadata().get(RACIOCINIO_NOS_METADADOS) instanceof String acumulado
+                            && acumulado.length() > raciocinioAcumulado.length() && acumulado.startsWith(raciocinioAcumulado)) {
+                        ouvinte.raciocinio(acumulado.substring(raciocinioAcumulado.length()));
+                        raciocinioAcumulado = acumulado;
+                    }
+                    String pedaco = saida.getText();
+                    if (pedaco != null && !pedaco.isEmpty()) {
+                        texto.append(pedaco);
+                        ouvinte.texto(pedaco);
+                    }
+                    saida.getToolCalls().forEach(c -> chamadas.add(new ChamadaDeFerramenta(c.id(), c.name(), c.arguments())));
+                }
+            }
+        } catch (RuntimeException erro) {
+            throw falha(erro);
+        }
+        return new RespostaDoLlm(vazioViraNulo(texto.toString()), chamadas, vazioViraNulo(raciocinioAcumulado));
     }
 
     /**
