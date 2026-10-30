@@ -1,6 +1,6 @@
--- Confere o banco depois de V1 a V8 e da amostra R__amostra.sql: contagens, cargas, relatórios, órfãos e uma tentativa de violar cada regra.
+-- Confere o banco depois de V1 a V9 e da amostra R__amostra.sql: contagens, cargas, relatórios, órfãos e uma tentativa de violar cada regra.
 -- Atende o item 1 da Entrega 2 (amostra e verificações), prova as 8 correções do item 8 e, na seção 8, o plano comercial, o
--- catálogo e os dados informados da V7 e, na seção 9, as tabelas do Atlas da V8. Nenhuma linha fica gravada: as tentativas são desfeitas (só as sequências avançam).
+-- catálogo e os dados informados da V7 e, na seção 9, as tabelas do Atlas da V8 e o resumo do raciocínio da V9. Nenhuma linha fica gravada: as tentativas são desfeitas (só as sequências avançam).
 
 -- Como rodar (banco de dev ou de teste com a amostra carregada; sem meta-comandos, serve também para JDBC com o texto inteiro):
 --   PGPASSWORD=portal psql -X -P pager=off -v ON_ERROR_STOP=1 -h localhost -U portal -d <banco> -f verificacao.sql
@@ -1089,6 +1089,29 @@ BEGIN
         format(c_novo, 'MONTANDO', $q$ DELETE FROM atlas_relatorio WHERE id = v_relatorio; $q$));
     PERFORM pg_temp.aceita('V8 CONGELADO', 'o relatório pronto aceita mexer no que não é congelado (finalizado_em)',
         format(c_novo, 'PRONTO', $q$ UPDATE atlas_relatorio SET finalizado_em = now() WHERE id = v_relatorio; $q$));
+END $$;
+
+-- O resumo do raciocínio (V9): só a mensagem do assistente tem, e o texto não é vazio.
+DO $$
+DECLARE
+    -- O molde de cada tentativa: uma conversa do Amarelo e, nela, uma mensagem com o papel dado (%1$s) e o resumo dado (%2$s, já entre aspas).
+    c_novo CONSTANT TEXT := $c$
+        DO $d$
+        DECLARE v_conversa BIGINT;
+        BEGIN
+            INSERT INTO atlas_conversa (parceria_id, usuario_id)
+            SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example')
+            RETURNING id INTO v_conversa;
+            INSERT INTO atlas_mensagem (conversa_id, ordem, papel, conteudo, reasoning_content, resumo_do_raciocinio)
+            VALUES (v_conversa, 1, '%1$s', 'a', 'Raciocínio.', %2$s);
+        END $d$ $c$;
+BEGIN
+    PERFORM pg_temp.recusa('V9 RESUMO', 'resumo do raciocínio numa mensagem que não é do assistente', 'ck_atlas_mensagem_resumo',
+        format(c_novo, 'user', quote_literal('Conferi os números.')));
+    PERFORM pg_temp.recusa('V9 RESUMO', 'resumo do raciocínio em branco', 'ck_atlas_mensagem_resumo',
+        format(c_novo, 'assistant', quote_literal('   ')));
+    PERFORM pg_temp.aceita('V9 RESUMO', 'resumo do raciocínio numa mensagem do assistente',
+        format(c_novo, 'assistant', quote_literal('Conferi os números.')));
 END $$;
 
 -- Órfãos das tabelas novas: esperado 0 em cada linha
