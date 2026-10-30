@@ -53,8 +53,9 @@ import tools.jackson.core.JacksonException;
  *       {@code ToolCallingManager}: ele responderia todas as chamadas da rodada de uma vez.</li>
  *   <li><b>Até {@value #LIMITE_DE_CHAMADAS_POR_TURNO} chamadas de ferramenta por turno</b> (contador nosso). Erro de ferramenta
  *       volta ao modelo como mensagem de ferramenta, nunca como 500.</li>
- *   <li><b>O modelo não escreve número.</b> O texto da resposta passa pela {@link ChecagemDeTexto} (a mesma do parágrafo do
- *       relatório): com algarismo solto, o servidor pede uma nova redação uma vez; se falhar de novo, troca pela frase fixa
+ *   <li><b>O modelo não escreve número nem termo interno.</b> O texto da resposta passa pela {@link ChecagemDeTexto} (a mesma
+ *       do parágrafo do relatório): com algarismo solto, chave crua ({@code dado:...}), nome de ferramenta, marcador que não
+ *       resolve ou sem valor, o servidor pede uma nova redação uma vez; se falhar de novo, troca pela frase fixa
  *       {@link #FRASE_FIXA}. O histórico guarda o texto com os marcadores; quem exibe os resolve.</li>
  *   <li><b>Falha do modelo não quebra o histórico</b>: o turno termina com uma frase fixa gravada, e tudo o que já foi feito
  *       fica salvo.</li>
@@ -211,7 +212,8 @@ public class LoopDoAgente {
                 turno.pediuNovaRedacao = true;
                 transitorias = List.of(MensagemDeChat.assistente(texto, List.of(), null), MensagemDeChat.usuario(
                         "Sua resposta foi recusada pelo servidor: " + veredito.motivo() + " Escreva a resposta de novo, sem "
-                                + "nenhum algarismo nem número por extenso, citando os dados só com marcadores {{ref}}."));
+                                + "nenhum algarismo nem número por extenso, citando os dados só com marcadores {{ref}}, e sem termo "
+                                + "interno (marcador, referência, ferramenta, chave ou nome de ferramenta)."));
                 continue;
             }
 

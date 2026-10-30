@@ -2,6 +2,7 @@ package br.com.rbs.portal.atlas.relatorio;
 
 import br.com.rbs.portal.atlas.relatorio.ResolvedorDeReferencias.ReferenciaDesconhecidaException;
 import br.com.rbs.portal.atlas.relatorio.ResolvedorDeReferencias.Resolucao;
+import br.com.rbs.portal.atlas.relatorio.ResolvedorDeReferencias.Valor;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.springframework.stereotype.Component;
@@ -16,7 +17,12 @@ import org.springframework.stereotype.Component;
  *   <li>todo marcador tem de resolver nesta parceria ({@link Resolucao#valor}): referência inventada, de campo fora do
  *       catálogo, de cálculo que o modelo não define ou de lista é recusada;</li>
  *   <li>(só parágrafo do relatório) até {@value #MAXIMO_DE_FRASES} frases e {@value #MAXIMO_DE_CARACTERES} caracteres;</li>
- *   <li>sem HTML, sem Markdown de link ou imagem e sem URL.</li>
+ *   <li>sem HTML, sem Markdown de link ou imagem e sem URL;</li>
+ *   <li>sem termo interno fora de marcador: chave crua de referência ({@code dado:}, {@code cons:}, {@code calc:},
+ *       {@code lista:}, {@code parc:}, {@code evento:}), nome de ferramenta, as palavras "marcador" e "tool" e "cartão de
+ *       solicitação". Quem lê o texto é a marca, e o funcionamento interno não é com ela;</li>
+ *   <li>(só chat) todo marcador tem valor agora. No relatório, o bloco com dado que falta sai como indisponível, com o motivo;
+ *       numa frase do chat, "indisponível" no lugar do número não faz sentido, então o modelo tem de dizer com palavras.</li>
  * </ol>
  * A quinta regra do plano (o bloco existe e é redigível) é do {@link RelatorioAtlasService}, que conhece o relatório. A checagem
  * não grava nada: devolve o texto limpo (espaços normalizados) ou o motivo da recusa, escrito para o modelo ler e corrigir.
@@ -32,6 +38,12 @@ public class ChecagemDeTexto {
     private static final Pattern URL = Pattern.compile("(?i)(?:\\b(?:https?|ftp|file|javascript|mailto)\\s*:|://|\\bdata:[a-z]+/|\\bwww\\.)");
     private static final Pattern ENDERECO_SEM_ESQUEMA = Pattern.compile(
             "(?i)\\b[a-z0-9][a-z0-9-]*(?:\\.[a-z0-9-]+)*\\.(?:com|org|net|edu|gov|io|dev|app|br|co|me|info|biz|xyz|ly|ai)\\b");
+    /** Chave de referência escrita fora de marcador ({@code dado:ativacao.visitantes_total}) ou nome de ferramenta. */
+    private static final Pattern CHAVE_INTERNA = Pattern.compile(
+            "(?iU)\\b(?:parc|evento|cons|lista|dado|calc):[a-z_]+(?:\\.[a-z0-9_]+)*|\\b(?:relatorio|parceria)_[a-z_]+");
+    /** Palavras do funcionamento interno que a marca não deve ler. */
+    private static final Pattern TERMO_INTERNO = Pattern.compile(
+            "(?iU)\\bmarcador(?:es)?\\b|\\btool(?:s|_calls?)?\\b|\\bcart[ãa]o de solicita[çc][ãa]o\\b");
     private static final Pattern FIM_DE_FRASE = Pattern.compile("(?<=[.!?…])\\s+(?=\\S)");
 
     /** O resultado: aprovado, com o texto limpo (espaços normalizados), ou recusado, com o motivo. */
@@ -73,13 +85,29 @@ public class ChecagemDeTexto {
             return Veredito.recusado("Sem endereço de internet nem URL no texto.");
         }
 
+        Matcher chave = CHAVE_INTERNA.matcher(semMarcadores);
+        if (chave.find()) {
+            return Veredito.recusado("O texto tem o termo interno \"" + chave.group() + "\" fora de um marcador. A marca não lê "
+                    + "chaves nem nomes de ferramenta: cite o dado com o marcador {{ref}}, entre chaves duplas, ou diga com palavras.");
+        }
+        Matcher termo = TERMO_INTERNO.matcher(semMarcadores);
+        if (termo.find()) {
+            return Veredito.recusado("O texto usa o termo interno \"" + termo.group() + "\". Não fale com a marca de marcador, "
+                    + "referência, ferramenta nem cartão de solicitação: diga o que ela precisa saber com palavras simples.");
+        }
+
         // Regra 2: todo marcador resolve nesta parceria. A resolução usa sempre a parceria da conversa, nunca a do texto.
         for (String ref : Referencias.marcadores(texto)) {
+            Valor valor;
             try {
-                resolucao.valor(ref);
+                valor = resolucao.valor(ref);
             } catch (ReferenciaDesconhecidaException desconhecida) {
                 return Veredito.recusado("O marcador {{" + ref + "}} não existe nesta parceria. Use só as referências (campo ref) "
                         + "que as ferramentas devolveram.");
+            }
+            if (!limitarTamanho && !valor.disponivel()) {
+                return Veredito.recusado("O dado {{" + ref + "}} (" + valor.rotulo() + ") não tem valor agora: " + valor.motivo()
+                        + " Não use o marcador dele; diga com palavras que o dado ainda não existe.");
             }
         }
 

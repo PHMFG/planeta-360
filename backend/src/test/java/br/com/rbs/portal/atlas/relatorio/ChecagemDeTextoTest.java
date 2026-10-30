@@ -197,4 +197,45 @@ class ChecagemDeTextoTest {
         assertThat(chat("Deu 7 por visitante.").motivo()).contains("algarismo \"7\"");
         assertThat(chat("Veja {{dado:ativacao.inventado}}.").motivo()).contains("não existe nesta parceria");
     }
+
+    // ---------------------------------------------------------------------
+    // Termo interno: a marca não lê chave, nome de ferramenta nem "marcador"
+    // ---------------------------------------------------------------------
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "O total de visitantes está em dado:ativacao.visitantes_total.",
+            "Veja cons:aplicacoes.comprovadas no portal.",
+            "A taxa sai de calc:taxa_cadastro.",
+            "As fotos estão em lista:comprovacoes.",
+            "A marca é parc:patrocinador.",
+            "A edição é evento:edicao.",
+            "Vou chamar relatorio_iniciar agora.",
+            "Consultei com parceria_consultar.",
+            "Esse dado fica no relatório, com o marcador próprio.",
+            "Use os marcadores do relatório.",
+            "A tool devolveu erro.",
+            "Vou abrir um cartão de solicitação."})
+    void recusaChaveCruaNomeDeFerramentaETermoInterno(String texto) {
+        assertThat(chat(texto).aprovado()).as("chat: " + texto).isFalse();
+        assertThat(chat(texto).motivo()).as("chat: " + texto).contains("termo interno");
+        assertThat(paragrafo(texto).aprovado()).as("parágrafo: " + texto).isFalse();
+    }
+
+    @Test
+    void palavrasComunsNaoSaoTermoInterno() {
+        assertThat(chat("No evento: a marca {{parc:patrocinador}} teve boa presença. Dado o resultado, vale repetir.").aprovado()).isTrue();
+        assertThat(chat("Esse número entra no relatório de ativação, com referência à edição {{evento:edicao}}.").aprovado()).isTrue();
+    }
+
+    @Test
+    void noChatOMarcadorSemValorERecusadoMasNoParagrafoPassa() {
+        String texto = "Visitantes no espaço: {{dado:ativacao.visitantes_total}}.";
+
+        Veredito noChat = chat(texto);
+
+        assertThat(noChat.aprovado()).isFalse();
+        assertThat(noChat.motivo()).contains("não tem valor agora").contains(ResolvedorDeReferencias.NAO_INFORMADO);
+        assertThat(paragrafo(texto).aprovado()).isTrue();   // no relatório, o bloco sai como indisponível, com o motivo
+    }
 }

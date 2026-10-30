@@ -803,6 +803,38 @@ class LoopDoAgenteTest {
     }
 
     @Test
+    void chatComChaveCruaPedeNovaRedacaoEDepoisFicaComAFraseFixa() {
+        long conversa = abrirConversa();
+        modelo.texto("O total está em dado:ativacao.visitantes_total.")
+                .texto("Esse dado fica no relatório, com o marcador próprio.");
+
+        ConversaDto turno = falar(conversa, "Quantos visitantes?");
+
+        assertThat(modelo.pedidos()).hasSize(2);
+        var pedidoDeNovaRedacao = modelo.ultimoPedido().mensagens().get(modelo.ultimoPedido().mensagens().size() - 1);
+        assertThat(pedidoDeNovaRedacao.conteudo()).contains("termo interno").contains("dado:ativacao.visitantes_total");
+        assertThat(tipos(turno)).containsExactly("usuario", "texto");
+        assertThat(textoDoItem(turno, 1)).isEqualTo(LoopDoAgente.FRASE_FIXA);
+        assertThat(mensagens(conversa)).extracting(Mensagem::conteudo).noneMatch(c -> c != null && (c.contains("dado:") || c.contains("marcador")));
+        exigirHistoricoValido(modelo.ultimoPedido());
+    }
+
+    @Test
+    void chatComMarcadorSemValorPedeNovaRedacaoEUsaASegunda() {
+        long conversa = abrirConversa();
+        modelo.texto("Visitantes no espaço: {{dado:ativacao.visitantes_total}}.")
+                .texto("O número de visitantes ainda não foi informado. Posso pedir esse número para o relatório.");
+
+        ConversaDto turno = falar(conversa, "Quantos visitantes?");
+
+        assertThat(modelo.pedidos()).hasSize(2);
+        assertThat(modelo.ultimoPedido().mensagens().get(modelo.ultimoPedido().mensagens().size() - 1).conteudo())
+                .contains("não tem valor agora");
+        assertThat(textoDoItem(turno, 1)).isEqualTo("O número de visitantes ainda não foi informado. Posso pedir esse número para o relatório.");
+        assertThat(turno.itens()).noneMatch(i -> i instanceof ItemTexto t && t.texto().contains("indisponível"));
+    }
+
+    @Test
     void textoComNumeroQueAcompanhaChamadaDeFerramentaESolto() {
         long conversa = abrirConversa();
         modelo.chamadaComTexto("Já são 17 aplicações, vou começar.", INICIAR, ARGS_INICIAR).texto("Relatório iniciado.");
