@@ -786,7 +786,7 @@ class LoopDoAgenteTest {
 
         assertThat(modelo.pedidos()).hasSize(2);
         assertThat(tipos(turno)).containsExactly("usuario", "texto");
-        assertThat(textoDoItem(turno, 1)).isEqualTo("Não trago números fora do relatório. Posso montar o relatório de ativação.");
+        assertThat(textoDoItem(turno, 1)).isEqualTo("Não consegui responder isso agora. Pergunte de outro jeito ou monte o relatório da ativação.");
         assertThat(LoopDoAgente.FRASE_FIXA).isEqualTo(textoDoItem(turno, 1));
         assertThat(((ItemTexto) turno.itens().get(1)).porModelo()).isFalse();   // a troca é do servidor, não do modelo
         assertThat(mensagens(conversa)).extracting(Mensagem::conteudo).doesNotContain("Deu 7 por visitante.", "Cerca de 7,5 por visitante.");

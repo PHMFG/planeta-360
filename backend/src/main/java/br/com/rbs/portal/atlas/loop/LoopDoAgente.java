@@ -74,7 +74,7 @@ public class LoopDoAgente {
     public static final Duration PRAZO_DO_TURNO = Duration.ofMinutes(3);
 
     /** A troca do texto do chat que levou número solto duas vezes (plano, seção 10.6). */
-    public static final String FRASE_FIXA = "Não trago números fora do relatório. Posso montar o relatório de ativação.";
+    public static final String FRASE_FIXA = "Não consegui responder isso agora. Pergunte de outro jeito ou monte o relatório da ativação.";
     public static final String FRASE_DO_LIMITE = "Parei por aqui: esta resposta pediu passos demais. Diga de novo o que você quer, "
             + "ou use o botão Montar relatório.";
     public static final String FRASE_DA_FALHA = "Não consegui falar com o modelo de linguagem agora. O que já foi feito está salvo; "
