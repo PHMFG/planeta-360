@@ -1439,21 +1439,27 @@ Com o modelo ligado (pelas variáveis de ambiente ou, no perfil `dev`, pela chav
 - **Falha do modelo** (rede, limite do provedor, tempo esgotado): o turno termina com um texto fixo (`"Não consegui falar com o modelo de linguagem agora. O que já foi feito está salvo..."`) e resposta **200**; o histórico continua válido e o botão segue funcionando. Um turno que passa de **3 minutos** (`atlas.prazo-do-turno`) não começa outra ida ao modelo e termina do mesmo jeito (`"Esta resposta demorou mais do que o esperado e eu parei..."`), para não vencer a trava de 5 minutos do turno.
 - **Teto diário.** Para uma rodada de testes não gastar o limite do provedor, cada parceria tem um teto de mensagens do assistente por dia: contam as mensagens que o modelo escreveu e que ficaram gravadas hoje (dia de Brasília), em todas as conversas da parceria; o limite é configurável (`atlas.teto-diario-por-parceria`, padrão **200**). Com o teto atingido, a rota 44 com `texto` responde **429** (`"O Atlas atingiu o limite de uso de hoje desta parceria. Use o botão Montar relatório ou tente amanhã."`), sem gravar a mensagem nem chamar o modelo. O **botão não conta** e continua funcionando; a resposta do cartão (rota 46) com o teto atingido segue o plano B (frases-modelo) em vez de dar 429, para a marca não ficar presa a um cartão aberto. A conferência é no início do turno: um turno que começou abaixo do teto termina.
 - O **botão** (atalho) continua sendo o plano B, com ou sem modelo. Cartão aberto pelo botão e respondido com o modelo ligado é retomado pelo modelo.
-- **Raciocínio do modelo.** Vem **ligado** por padrão: cada ida ao modelo leva `"thinking": {"type": "enabled"}` (com `atlas.raciocinio=false`, variável `ATLAS_RACIOCINIO`, vai `"disabled"`; vale para o modelo das variáveis de ambiente e para o da chave do debug, que pode trocar). O `reasoning_content` de cada resposta é gravado com a mensagem do assistente e **volta ao modelo em todas as idas seguintes**, também depois da pausa do cartão (o histórico é remontado do banco): com ferramentas, o DeepSeek responde 400 sem ele. Na conversa, ele aparece como o item `raciocinio` (veja "O objeto Conversa"), **sem a checagem do texto**: é o pensamento do modelo, cru, e nunca vira a resposta para a marca.
+- **Raciocínio do modelo.** Vem **ligado** por padrão: cada ida ao modelo leva `"thinking": {"type": "enabled"}` (com `atlas.raciocinio=false`, variável `ATLAS_RACIOCINIO`, vai `"disabled"` e não há raciocínio, `pensando`, resumo nem item; vale para o modelo das variáveis de ambiente e para o da chave do debug, que pode trocar). O `reasoning_content` de cada resposta é gravado com a mensagem do assistente e **volta ao modelo em todas as idas seguintes**, também depois da pausa do cartão (o histórico é remontado do banco): com ferramentas, o DeepSeek responde 400 sem ele. **O raciocínio cru nunca sai do servidor**: não vai em evento, em item, em resposta nenhuma da API nem no log. A conversa recebe só um **resumo** dele, gerado no servidor assim:
+  - Para cada mensagem do assistente gravada com `reasoning_content` não vazio, o servidor faz uma chamada **à parte** ao mesmo provedor: sem ferramentas, com `"thinking": {"type": "disabled"}`, no máximo 200 tokens de saída e temperatura baixa. A entrada é só o raciocínio daquela mensagem (o começo é cortado se passar de 12 mil caracteres), tratado como dado e nunca como instrução. O prompt fica em `atlas/prompts/resumo-do-raciocinio.txt` e pede até duas frases curtas, em português do Brasil, na primeira pessoa e no passado, sobre o que o Atlas conferiu e decidiu (`"Conferi os números da parceria e citei as aplicações previstas e comprovadas."`), sem número, nome de ferramenta, chave, marcador nem identificador.
+  - O resumo passa pela checagem do texto do chat (sem algarismo, chave crua, nome de ferramenta nem termo interno) e, além dela, não pode ter `{{`. **Recusado, com falha do provedor ou com tempo esgotado, a mensagem fica sem resumo**, sem segunda tentativa (para poupar o limite do provedor). O log diz só que o resumo foi recusado ou falhou, nunca o conteúdo.
+  - A chamada roda à parte (não atrasa a ida seguinte do loop), **sem transação aberta**, e o resumo é gravado com um `UPDATE` curto em `atlas_mensagem.resumo_do_raciocinio` (V9). Ele não é uma mensagem do histórico (o modelo nunca o recebe de volta) e não conta no teto diário.
+  - **Antes do `fim`** (e, sem fluxo, antes de responder o JSON), o turno espera os resumos pendentes por até **15 segundos** (`atlas.prazo-do-resumo`, variável `ATLAS_PRAZO_DO_RESUMO`). O que não ficou pronto sai sem resumo no `fim`; se ficar pronto depois, ainda é gravado e aparece na próxima leitura da conversa (rota 45). O turno (`turno_desde`) não fica preso por causa de resumo.
+  - Na conversa, o resumo é o item `raciocinio` (veja "O objeto Conversa"); no fluxo, o evento `pensando` avisa que o modelo está raciocinando e o evento `resumo` traz o resumo (veja "Resposta em fluxo"). Mensagem de antes da V9, com raciocínio e sem resumo, não gera item: não se gera resumo retroativo.
 
 ## Resposta em fluxo (rotas 44 e 46)
 
 As rotas **44** e **46** respondem **em fluxo** (Server-Sent Events) quando o pedido traz `Accept: text/event-stream`, sozinho ou junto de outros tipos (o front manda `Accept: text/event-stream, application/json`). Sem `text/event-stream` no `Accept` (ou só com `*/*`), elas respondem como sempre: o objeto Conversa em JSON no fim do turno. Não há rota nova.
 
 - **Erros antes do fluxo.** Tudo o que dá erro na rota dá o **mesmo erro HTTP**, em `ProblemDetail` (`application/problem+json`), antes de o fluxo abrir: 400, 403, 404, 409 (turno em andamento; cartão já respondido; cartão aberto no atalho), 422 (do corpo e, na 46, dos valores do cartão), 429 e 503. Só depois de passar por tudo isso (e de gravar a mensagem da pessoa, ou os valores do cartão) a resposta vira **200** `text/event-stream`.
-- **O turno** (`turno_desde`) dura até o evento `fim`: a trava é solta logo antes dele, e quem o recebe já pode mandar a próxima mensagem. Se o cliente fecha a conexão no meio, o turno **termina do mesmo jeito no servidor** e grava tudo o que gravaria; a conversa (rota 45) mostra o resultado. Nenhuma transação fica aberta durante o fluxo.
+- **O turno** (`turno_desde`) dura até o evento `fim`: antes dele o turno espera os resumos do raciocínio pendentes (até 15 s), e a trava é solta logo antes dele, de modo que quem o recebe já pode mandar a próxima mensagem. Se o cliente fecha a conexão no meio, o turno **termina do mesmo jeito no servidor** e grava tudo o que gravaria; a conversa (rota 45) mostra o resultado. Nenhuma transação fica aberta durante o fluxo.
 - **Com o botão** (atalho da rota 44) ou na rota 46 sem modelo (ou com o teto atingido), o plano B roda inteiro antes, e o fluxo traz só o `fim`.
 
-Cada evento tem `event:` e `data:` com um JSON. Numa ida ao modelo a ordem é `raciocinio`, depois `texto` ou `etapa`; o turno pode ter várias idas, e a sequência se repete. O fluxo termina sempre com `fim` ou `erro`.
+Cada evento tem `event:` e `data:` com um JSON. Numa ida ao modelo a ordem é `pensando` (só se o modelo raciocinar), depois `texto` ou `etapa`; o turno pode ter várias idas, e a sequência se repete. O `resumo` do raciocínio de uma ida chega quando fica pronto, em qualquer ponto depois do `pensando` dela: pode vir depois dos `texto` daquela ida ou durante a ida seguinte, e sempre antes do `fim`. O fluxo termina sempre com `fim` ou `erro`. O raciocínio cru não tem evento: nenhum pedaço dele vai ao cliente.
 
 | `event` | `data` | Quando |
 | --- | --- | --- |
-| `raciocinio` | `{"delta": "..."}` | Um pedaço do `reasoning_content`, à medida que chega. Cru: sem a checagem do texto. |
+| `pensando` | `{}` | O modelo começou a raciocinar nesta ida: **uma vez por ida ao modelo**, no primeiro pedaço de raciocínio que chega. Não leva nada do raciocínio; a tela mostra "Pensando…" com o tempo. Não há com `atlas.raciocinio=false`. |
+| `resumo` | `{"texto": "..."}` | O resumo do raciocínio de uma ida, já conferido e gravado (veja "Raciocínio do modelo"). Chega quando fica pronto, e sempre antes do `fim`. A ida cujo resumo foi recusado, falhou ou passou do prazo não tem `resumo` (nem item `raciocinio` no `fim`). |
 | `etapa` | `{"texto": "..."}` | Uma ferramenta começou a rodar. A frase, nunca o nome da ferramenta: `"Consultando os números da parceria…"` (`parceria_consultar`), `"Abrindo o relatório…"` (`relatorio_iniciar`), `"Preparando as perguntas…"` (`relatorio_solicitar_campos`), `"Redigindo o documento…"` (`relatorio_editar`), `"Finalizando o documento…"` (`relatorio_finalizar`). |
 | `texto` | `{"delta": "..."}` | Um pedaço da resposta para a marca, **já filtrado**: um marcador `{{...}}` fica retido até fechar e sai resolvido e formatado, igual ao item `texto` do `fim`; a última palavra espera o espaço seguinte. A cada pedaço, o que chegou até ali passa pela checagem do texto do chat. As frases fixas do servidor (a troca de um texto recusado duas vezes, a falha do modelo, o limite e o prazo do turno) também chegam como `texto`, inteiras. |
 | `texto_recusado` | `{}` | A checagem recusou o texto desta ida ao modelo (algarismo fora de marcador, chave crua, marcador que não existe ou sem valor, nome de ferramenta, "marcador"...), durante o fluxo ou na checagem do texto inteiro no fim da ida; ou o modelo falhou no meio de um texto. O servidor para de repassar: **a tela descarta o `texto` que recebeu nesta ida**. A seguir vêm a nova redação (novos `texto`) ou a frase fixa. |
@@ -1463,11 +1469,17 @@ Cada evento tem `event:` e `data:` com um JSON. Numa ida ao modelo a ordem é `r
 Exemplo (rota 44, o modelo consulta os números e responde):
 
 ```text
-event:raciocinio
-data:{"delta":"Vou consultar os números."}
+event:pensando
+data:{}
 
 event:etapa
 data:{"texto":"Consultando os números da parceria…"}
+
+event:pensando
+data:{}
+
+event:resumo
+data:{"texto":"Conferi os números da parceria."}
 
 event:texto
 data:{"delta":"Os números de "}
@@ -1475,11 +1487,14 @@ data:{"delta":"Os números de "}
 event:texto
 data:{"delta":"Cliente Amarelo estão no portal."}
 
+event:resumo
+data:{"texto":"Conferi o que veio da consulta e montei a resposta."}
+
 event:fim
-data:{"conversaId":12,"llmDisponivel":true,"itens":[{"tipo":"usuario","texto":"Como estou?"},{"tipo":"raciocinio","texto":"Vou consultar os números."},{"tipo":"texto","texto":"Os números de Cliente Amarelo estão no portal.","porModelo":true}]}
+data:{"conversaId":12,"llmDisponivel":true,"itens":[{"tipo":"usuario","texto":"Como estou?"},{"tipo":"raciocinio","resumo":"Conferi os números da parceria."},{"tipo":"raciocinio","resumo":"Conferi o que veio da consulta e montei a resposta."},{"tipo":"texto","texto":"Os números de Cliente Amarelo estão no portal.","porModelo":true}]}
 ```
 
-O `fim` é a referência: o que a tela montou com os pedaços dá lugar aos itens dele.
+O `fim` é a referência: o que a tela montou com os pedaços dá lugar aos itens dele. No exemplo, o primeiro `resumo` chega durante a ida seguinte e o segundo depois do texto dela; o que não chegou antes do `fim` não aparece nele.
 
 ## O objeto Conversa (rotas 42, 44, 45 e 46)
 
@@ -1503,7 +1518,7 @@ O `fim` é a referência: o que a tela montou com os pedaços dá lugar aos iten
 | `tipo` | Quando aparece | Campos |
 | --- | --- | --- |
 | `usuario` | O que a pessoa disse (o botão aparece como "Montar o relatório da ativação"; no histórico que vai ao modelo, a mensagem continua "Montar o relatório da ativação (botão)") | `texto` |
-| `raciocinio` | O raciocínio do modelo (`reasoning_content`) de uma mensagem do assistente, **antes** dos itens dela (`texto`, `cartao`, `relatorio_pronto`). Cru: **não passa pela checagem do texto** (pode ter número e termo interno); a tela o mostra numa caixa minimizável, como não verificado. Só aparece quando o modelo mandou raciocínio, e raciocínio vazio não gera item; o botão e as frases fixas do servidor não têm. | `texto` |
+| `raciocinio` | O **resumo** do raciocínio do modelo de uma mensagem do assistente, **antes** dos itens dela (`texto`, `cartao`, `relatorio_pronto`). O raciocínio cru (`reasoning_content`) nunca aparece: o resumo é gerado no servidor (veja "Raciocínio do modelo") e já passou pela checagem do texto. Só aparece quando a mensagem tem resumo gravado: sem raciocínio, com resumo recusado, atrasado ou perdido, nas mensagens de antes da V9, no botão e nas frases fixas do servidor não há item. A tela o mostra numa caixa minimizável. | `resumo` |
 | `texto` | O que o Atlas disse. Os marcadores `{{...}}` já vêm trocados pelo valor; o que não tem valor vira "indisponível". `porModelo` é `true` só quando o texto foi escrito pelo modelo de linguagem; é `false` nas frases fixas do servidor: as do botão (plano B: "Montei a base...", "Continuo o relatório...", "Pronto: ..."), a frase fixa que troca um texto recusado duas vezes e as de falha, limite e prazo do turno | `texto`, `porModelo` |
 | `cartao` | O cartão de perguntas, com o **estado de agora** | `solicitacaoId`, `relatorioId`, `mensagem`, `status` (`PENDENTE`, `RESPONDIDA`, `RECUSADA` ou `CANCELADA`), `campos` |
 | `relatorio_pronto` | O relatório ficou pronto; o front abre o A4 pela rota 47 | `relatorioId`, `titulo` |
@@ -1559,7 +1574,7 @@ Cada item de `campos` do cartão é um campo do catálogo (rota 39) mais `obriga
 - **Com texto**, roda o loop do modelo de linguagem (veja "O modelo de linguagem"). O texto é aparado dos espaços das pontas. Sem modelo de linguagem, responde **503** (`"O Atlas está sem o modelo de linguagem agora. Use o botão Montar relatório."`). Com um cartão aberto na conversa, a mensagem primeiro o fecha com `cancel`.
 - **Com `Accept: text/event-stream`**, a resposta vem em fluxo (veja "Resposta em fluxo"): os erros abaixo continuam saindo antes, em `ProblemDetail`; com o atalho, o fluxo traz só o `fim`.
 
-**200**: o objeto Conversa, só com os itens do turno: `usuario`, o raciocínio do modelo (`raciocinio`), o que o Atlas disse (`texto`), o `cartao` se ele pediu números (o turno para aí), e `relatorio_pronto` se fechou o relatório. Com cartão aberto antes da mensagem, o primeiro item é o `aviso` do cartão fechado. Em fluxo: **200** `text/event-stream`, e o mesmo objeto no evento `fim`.
+**200**: o objeto Conversa, só com os itens do turno: `usuario`, o resumo do raciocínio do modelo (`raciocinio`), o que o Atlas disse (`texto`), o `cartao` se ele pediu números (o turno para aí), e `relatorio_pronto` se fechou o relatório. Com cartão aberto antes da mensagem, o primeiro item é o `aviso` do cartão fechado. Em fluxo: **200** `text/event-stream`, e o mesmo objeto no evento `fim`.
 
 **Erros**
 
@@ -1595,7 +1610,7 @@ Cada item de `campos` do cartão é um campo do catálogo (rota 39) mais `obriga
 | `decline` | O cartão vira `RECUSADA`; as lacunas pedidas contam como recusadas: os números que dependem delas saem **indisponíveis**, com o motivo, nunca zero. O plano B finaliza o relatório do mesmo jeito. `valores` é ignorado. |
 | `cancel` | O cartão vira `CANCELADA`, o relatório volta a **montando** e nada é gravado. O turno termina com um item `aviso` (`"Cartão fechado. Use Montar relatório para continuar."`; com o modelo de linguagem ligado, `"Cartão fechado. Quando tiver os números, peça para continuar."`); o botão continua o mesmo relatório. `valores` é ignorado. |
 
-**200**: o objeto Conversa, só com os itens do turno. **Sem modelo de linguagem**, em `accept` e `decline`: `texto` (`"Pronto: o relatório de ativação está montado. A origem de cada número está em Fontes e cálculos."`) e `relatorio_pronto`; em `cancel`: `aviso`. **Com o modelo ligado**, depois de gravar os valores a API põe no histórico a resposta da ferramenta pendente, com o mesmo id do pedido (`{"acao": "accept", "campos": [{"chave": "ativacao.visitantes_total", "ref": "dado:ativacao.visitantes_total", "valor": 1200}]}`; `decline` e `cancel` levam `campos` vazio) e **o loop retoma**: os itens do turno são o que o modelo fez a seguir (raciocínio, texto, outro cartão, `relatorio_pronto`), e em `cancel` o `aviso` vem primeiro. Isso vale para o cartão aberto pelo botão também.
+**200**: o objeto Conversa, só com os itens do turno. **Sem modelo de linguagem**, em `accept` e `decline`: `texto` (`"Pronto: o relatório de ativação está montado. A origem de cada número está em Fontes e cálculos."`) e `relatorio_pronto`; em `cancel`: `aviso`. **Com o modelo ligado**, depois de gravar os valores a API põe no histórico a resposta da ferramenta pendente, com o mesmo id do pedido (`{"acao": "accept", "campos": [{"chave": "ativacao.visitantes_total", "ref": "dado:ativacao.visitantes_total", "valor": 1200}]}`; `decline` e `cancel` levam `campos` vazio) e **o loop retoma**: os itens do turno são o que o modelo fez a seguir (resumo do raciocínio, texto, outro cartão, `relatorio_pronto`), e em `cancel` o `aviso` vem primeiro. Isso vale para o cartão aberto pelo botão também.
 
 **Em fluxo** (`Accept: text/event-stream`; veja "Resposta em fluxo"): os valores são conferidos e gravados **antes** de o fluxo abrir (o 422 deles sai em `ProblemDetail`, sem gravar nada), e a retomada do modelo é transmitida até o `fim`. Sem o modelo, ou com o teto atingido, o fluxo traz só o `fim`.
 

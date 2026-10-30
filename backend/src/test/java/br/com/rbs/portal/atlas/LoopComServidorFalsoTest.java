@@ -36,7 +36,9 @@ import org.springframework.transaction.annotation.Transactional;
  * dá para ver, no corpo e nos cabeçalhos de cada ida ao modelo: o {@code thinking} aninhado, o {@code User-Agent} próprio, o
  * {@code x-opencode-session} com o id da conversa, as ferramentas do estado, os ids de pedido nossos e o
  * {@code reasoning_content} que o modelo mandou antes da pausa do cartão voltando na retomada, remontado do banco. Cada teste é
- * desfeito no fim (@Transactional).
+ * desfeito no fim (@Transactional). O resumo do raciocínio é pedido ao servidor falso, mas gravado por outra thread, que não
+ * enxerga as linhas ainda não confirmadas do teste: aqui não há item {@code raciocinio} (ele, com o {@code resumo}, está no
+ * AtlasFluxoTest), e o raciocínio cru nunca aparece nos itens.
  */
 @TesteDeIntegracao
 @Transactional
@@ -127,12 +129,14 @@ class LoopComServidorFalsoTest {
         ConversaDto pronta = atlas.responderCartao(marca, cartao.solicitacaoId(),
                 new RespostaDoCartaoRequisicao("accept", valores(VISITANTES, 1200L, CADASTROS, 1072L)), requisicao());
 
-        assertThat(pronta.itens()).extracting(i -> i.getClass().getSimpleName()).containsExactly("ItemRaciocinio", "ItemRelatorioPronto");
-        assertThat(pronta.itens().get(1)).isInstanceOf(ItemRelatorioPronto.class);
-        // os itens do turno da pausa trazem o raciocínio de cada assistente antes do que ele fez
-        assertThat(aberta.itens()).extracting(i -> i.getClass().getSimpleName())
-                .containsExactly("ItemUsuario", "ItemRaciocinio", "ItemRaciocinio", "ItemCartao");
+        assertThat(pronta.itens()).extracting(i -> i.getClass().getSimpleName()).containsExactly("ItemRelatorioPronto");
+        assertThat(pronta.itens().get(0)).isInstanceOf(ItemRelatorioPronto.class);
+        // o raciocínio cru não vira item (nem aqui, onde o resumo não chega a ser gravado, nem na rota 46)
+        assertThat(aberta.itens()).extracting(i -> i.getClass().getSimpleName()).containsExactly("ItemUsuario", "ItemCartao");
+        assertThat(aberta.toString() + pronta).doesNotContain("Preciso criar o relatório.").doesNotContain("Faltam dois números");
         assertThat(SERVIDOR.recebidas()).hasSize(4);
+        // um resumo por mensagem do assistente com raciocínio (as duas do 1º turno e a 1ª da retomada; a última veio sem), à parte
+        assertThat(SERVIDOR.resumosRecebidos()).hasSize(3);
         var retomada = SERVIDOR.recebidas().get(2).corpo();
         assertThat(JsonPath.<List<String>>read(retomada, "$.messages[*].role"))
                 .containsExactly("system", "user", "assistant", "tool", "assistant", "tool");

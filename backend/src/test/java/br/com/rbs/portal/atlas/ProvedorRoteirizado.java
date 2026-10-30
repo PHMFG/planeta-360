@@ -12,6 +12,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Function;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
@@ -28,7 +29,12 @@ public class ProvedorRoteirizado implements ProvedorDeLlm {
     private final List<Boolean> transacaoAtiva = new ArrayList<>();
     private final Map<Integer, Pedacos> pedacosDoPasso = new HashMap<>();
     private final List<Integer> idasEmFluxo = new ArrayList<>();
+    private final List<PedidoDeResumo> resumosPedidos = new CopyOnWriteArrayList<>();
+    private volatile Function<PedidoDeResumo, String> resumidor = pedido -> RESUMO_PADRAO;
     private int registrados;
+
+    /** O resumo do raciocínio que o roteiro devolve quando o teste não manda outro: passa na checagem do texto do chat. */
+    public static final String RESUMO_PADRAO = "Conferi o que foi pedido e decidi como responder.";
 
     /** Os pedaços de um passo em fluxo. */
     private record Pedacos(List<String> raciocinio, List<String> texto) {
@@ -41,6 +47,8 @@ public class ProvedorRoteirizado implements ProvedorDeLlm {
         transacaoAtiva.clear();
         pedacosDoPasso.clear();
         idasEmFluxo.clear();
+        resumosPedidos.clear();
+        resumidor = pedido -> RESUMO_PADRAO;
         registrados = 0;
         return this;
     }
@@ -90,6 +98,12 @@ public class ProvedorRoteirizado implements ProvedorDeLlm {
     public ProvedorRoteirizado passo(Function<PedidoAoLlm, RespostaDoLlm> passo) {
         roteiro.add(passo);
         registrados++;
+        return this;
+    }
+
+    /** O que o provedor devolve a cada pedido de resumo do raciocínio (por padrão, {@link #RESUMO_PADRAO}); pode lançar para falhar. */
+    public ProvedorRoteirizado resumindoCom(Function<PedidoDeResumo, String> resumidor) {
+        this.resumidor = resumidor;
         return this;
     }
 
@@ -146,9 +160,21 @@ public class ProvedorRoteirizado implements ProvedorDeLlm {
         return passo.apply(pedido);
     }
 
+    /** O resumo do raciocínio não é uma ida do loop: não consome o roteiro e fica à parte de {@link #pedidos}. */
+    @Override
+    public String resumir(PedidoDeResumo pedido) {
+        resumosPedidos.add(pedido);
+        return resumidor.apply(pedido);
+    }
+
     // ---------------------------------------------------------------------
     // O que o loop mandou
     // ---------------------------------------------------------------------
+
+    /** Os pedidos de resumo do raciocínio que o loop fez, na ordem em que chegaram. */
+    public List<PedidoDeResumo> resumosPedidos() {
+        return List.copyOf(resumosPedidos);
+    }
 
     public List<PedidoAoLlm> pedidos() {
         return List.copyOf(pedidos);

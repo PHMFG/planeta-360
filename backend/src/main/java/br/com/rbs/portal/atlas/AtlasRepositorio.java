@@ -28,10 +28,17 @@ public class AtlasRepositorio {
 
     /**
      * Uma mensagem do histórico. {@code toolCalls} é o JSON dos pedidos de ferramenta do assistente (ou nulo) e
-     * {@code reasoningContent} o raciocínio que o modelo mandou com a mensagem, se mandou (volta ao modelo na retomada).
+     * {@code reasoningContent} o raciocínio que o modelo mandou com a mensagem, se mandou (volta ao modelo na retomada; cru, nunca
+     * vai à API nem ao log). {@code resumoDoRaciocinio} é o resumo dele que a conversa mostra (V9), ou nulo.
      */
     public record LinhaDeMensagem(Long id, Integer ordem, String papel, String conteudo, String toolCalls, String toolCallId,
-                                  OffsetDateTime criadaEm, String reasoningContent) {
+                                  OffsetDateTime criadaEm, String reasoningContent, String resumoDoRaciocinio) {
+
+        /** Sem o raciocínio cru: um {@code toString} (de um log, de uma mensagem de erro) não pode levá-lo. */
+        @Override
+        public String toString() {
+            return "LinhaDeMensagem[id=" + id + ", ordem=" + ordem + ", papel=" + papel + "]";
+        }
     }
 
     /**
@@ -190,11 +197,24 @@ public class AtlasRepositorio {
     public List<LinhaDeMensagem> mensagens(long conversaId) {
         return jdbc.sql("""
                         SELECT id, ordem, papel, conteudo, CAST(tool_calls AS text) AS tool_calls, tool_call_id, criada_em,
-                               reasoning_content
+                               reasoning_content, resumo_do_raciocinio
                         FROM atlas_mensagem WHERE conversa_id = :id ORDER BY ordem
                         """)
                 .param("id", conversaId)
                 .query(LinhaDeMensagem.class).list();
+    }
+
+    /**
+     * Grava o resumo do raciocínio de uma mensagem do assistente (V9): um {@code UPDATE} curto, de quem gerou o resumo, fora de
+     * qualquer transação do turno. Falso se a mensagem não existe (ou não tem raciocínio): nada é gravado.
+     */
+    public boolean gravarResumoDoRaciocinio(long mensagemId, String resumo) {
+        return jdbc.sql("""
+                        UPDATE atlas_mensagem SET resumo_do_raciocinio = :resumo
+                        WHERE id = :id AND papel = 'assistant' AND reasoning_content IS NOT NULL
+                        """)
+                .param("resumo", resumo).param("id", mensagemId)
+                .update() == 1;
     }
 
     // ---------------------------------------------------------------------

@@ -51,10 +51,11 @@ public final class AtlasDtos {
     }
 
     /**
-     * O raciocínio do modelo ({@code reasoning_content}) de uma mensagem do assistente, cru: NÃO passa pela checagem do texto (a
-     * tela o mostra rotulado como não verificado). Vem antes dos itens da mesma mensagem; raciocínio vazio não gera item.
+     * O resumo do raciocínio do modelo ({@code reasoning_content}) de uma mensagem do assistente, gerado e conferido no servidor
+     * (o raciocínio cru nunca sai dele). Vem antes dos itens da mesma mensagem e só existe quando a mensagem tem resumo gravado:
+     * mensagem sem raciocínio, com resumo recusado, atrasado ou perdido, e a de antes do resumo, não geram item.
      */
-    public record ItemRaciocinio(String texto) implements ItemDaConversa {
+    public record ItemRaciocinio(String resumo) implements ItemDaConversa {
     }
 
     /**

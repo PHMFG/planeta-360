@@ -37,8 +37,9 @@ import tools.jackson.core.type.TypeReference;
  * guardado só para a tela:
  * <ul>
  *   <li>mensagem {@code user} &rarr; item {@code usuario} (a do botão sai como "Montar o relatório da ativação");</li>
- *   <li>mensagem {@code assistant} com {@code reasoning_content} &rarr; item {@code raciocinio}, cru (sem a checagem do texto),
- *       antes de todos os itens da mesma mensagem;</li>
+ *   <li>mensagem {@code assistant} com resumo do raciocínio gravado &rarr; item {@code raciocinio} com o {@code resumo}, antes de
+ *       todos os itens da mesma mensagem. O {@code reasoning_content} cru nunca vira item: mensagem com raciocínio e sem resumo
+ *       (recusado, atrasado, ou de antes da V9) fica sem ele;</li>
  *   <li>mensagem {@code assistant} com texto &rarr; item {@code texto}, com os marcadores {@code {{ref}}} trocados pelos valores
  *       (o que não tem valor vira "indisponível"); nunca sai marcador cru nem número inventado. {@code porModelo} é falso nas
  *       frases do servidor: a mensagem do plano B (as chamadas dela têm id {@code botao_}) e as frases fixas do loop
@@ -95,8 +96,8 @@ public class ItensDaConversa {
                 }
                 case "assistant" -> {
                     List<Map<String, Object>> chamadas = chamadasDe(mensagem);
-                    if (doTurno && mensagem.reasoningContent() != null && !mensagem.reasoningContent().isBlank()) {
-                        itens.add(new ItemRaciocinio(mensagem.reasoningContent()));
+                    if (doTurno && mensagem.resumoDoRaciocinio() != null && !mensagem.resumoDoRaciocinio().isBlank()) {
+                        itens.add(new ItemRaciocinio(mensagem.resumoDoRaciocinio()));
                     }
                     if (doTurno && mensagem.conteudo() != null && !mensagem.conteudo().isBlank()) {
                         itens.add(new ItemTexto(contexto.resolucao(modelos, resolvedor).paraExibicao(mensagem.conteudo()),

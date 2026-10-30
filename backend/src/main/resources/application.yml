@@ -61,9 +61,14 @@ spring:
 atlas:
   teto-diario-por-parceria: ${ATLAS_TETO_DIARIO:200}
   # [ATLAS] O raciocínio do modelo (o "thinking" do DeepSeek, {"type":"enabled"} ou "disabled"). Ligado, o reasoning_content de cada
-  # resposta é gravado, volta ao modelo em todas as idas seguintes (com ferramentas, o DeepSeek responde 400 sem ele) e aparece na
-  # conversa como o item "raciocinio". Vale para o modelo das variáveis de ambiente e para o da chave do debug.
+  # resposta é gravado e volta ao modelo em todas as idas seguintes (com ferramentas, o DeepSeek responde 400 sem ele), mas NUNCA
+  # sai do servidor: a conversa recebe só um resumo curto dele, gerado numa chamada à parte (o item "raciocinio" com "resumo", e os
+  # eventos "pensando" e "resumo" do fluxo). Desligado, não há raciocínio, nem "pensando", nem resumo. Vale para o modelo das
+  # variáveis de ambiente e para o da chave do debug.
   raciocinio: ${ATLAS_RACIOCINIO:true}
+  # [ATLAS] Quanto o turno espera, antes do "fim" (ou da resposta JSON), pelos resumos do raciocínio ainda pendentes. O que não
+  # ficou pronto sai sem resumo; se ficar pronto depois, ainda é gravado e aparece na próxima leitura da conversa.
+  prazo-do-resumo: ${ATLAS_PRAZO_DO_RESUMO:PT15S}
   debug:
     # [ATLAS] TEMPORÁRIO: as rotas /api/debug/llm (pôr a chave do modelo pela tela, só na memória da API). Desligado por padrão;
     # ligado só no perfil dev, abaixo. Sem esta propriedade, as rotas não existem (404).

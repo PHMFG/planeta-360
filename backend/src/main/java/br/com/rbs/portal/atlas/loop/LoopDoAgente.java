@@ -8,6 +8,7 @@ import br.com.rbs.portal.atlas.contexto.AtlasContexto;
 import br.com.rbs.portal.atlas.ferramentas.RelatorioFerramentas;
 import br.com.rbs.portal.atlas.ferramentas.RelatorioFerramentas.Execucao;
 import br.com.rbs.portal.atlas.loop.HistoricoDaConversa.Chamada;
+import br.com.rbs.portal.atlas.loop.ResumoDoRaciocinio.ResumosDoTurno;
 import br.com.rbs.portal.atlas.provedor.ProvedorAtual;
 import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm;
 import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.ChamadaDeFerramenta;
@@ -34,6 +35,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -64,6 +66,12 @@ import tools.jackson.core.JacksonException;
  *   <li><b>Falha do modelo não quebra o histórico</b>: o turno termina com uma frase fixa gravada, e tudo o que já foi feito
  *       fica salvo.</li>
  *   <li>O id de cada pedido de ferramenta é nosso ({@code call_<uuid>}), único na conversa.</li>
+ *   <li><b>O raciocínio cru nunca sai do servidor.</b> O {@code reasoning_content} de cada resposta é gravado com a mensagem do
+ *       assistente e volta ao modelo nas idas seguintes (o DeepSeek o exige com ferramentas), mas não vai à tela, nem no fluxo
+ *       nem na conversa. Para a tela, o loop só avisa {@code pensando} (uma vez por ida, no primeiro pedaço de raciocínio) e,
+ *       para cada mensagem gravada com raciocínio, pede ao {@link ResumoDoRaciocinio} um resumo, numa chamada à parte que não
+ *       atrasa a ida seguinte. No fim do turno (qualquer saída normal de {@link #conduzir}) espera os resumos pendentes por até
+ *       {@code atlas.prazo-do-resumo}; o que não ficou pronto sai sem resumo.</li>
  * </ul>
  */
 @Component
@@ -109,13 +117,14 @@ public class LoopDoAgente {
     private final ResolvedorDeReferencias resolvedor;
     private final ModeloBase modelos;
     private final TransactionTemplate transacao;
+    private final ResumoDoRaciocinio resumos;
     private final Duration prazoDoTurno;
     private final String prompt;
 
     /** {@code prazoDoTurno} vem de {@code atlas.prazo-do-turno} (padrão {@link #PRAZO_DO_TURNO}); os testes o encurtam. */
     public LoopDoAgente(ProvedorAtual provedor, RelatorioFerramentas ferramentas, HistoricoDaConversa historico,
                         AtlasRepositorio repositorio, PlanoBSemLlm planoB, ChecagemDeTexto checagem, ResolvedorDeReferencias resolvedor,
-                        ModeloBase modelos, TransactionTemplate transacao,
+                        ModeloBase modelos, TransactionTemplate transacao, ResumoDoRaciocinio resumos,
                         @Value("${atlas.prazo-do-turno:PT3M}") Duration prazoDoTurno) {
         this.provedor = provedor;
         this.ferramentas = ferramentas;
@@ -126,16 +135,21 @@ public class LoopDoAgente {
         this.resolvedor = resolvedor;
         this.modelos = modelos;
         this.transacao = transacao;
+        this.resumos = resumos;
         this.prazoDoTurno = prazoDoTurno;
         this.prompt = lerPrompt();
     }
 
-    /** O estado de um turno: quantas ferramentas já rodaram, se a nova redação do chat já foi pedida e até quando vale. */
+    /**
+     * O estado de um turno: quantas ferramentas já rodaram, se a nova redação do chat já foi pedida, até quando vale e os resumos
+     * do raciocínio que ele pediu (nulo até haver um provedor).
+     */
     private static final class Turno {
         final long prazo;
         int chamadas;
         boolean limiteAtingido;
         boolean pediuNovaRedacao;
+        ResumosDoTurno resumos;
 
         Turno(Duration prazoDoTurno) {
             this.prazo = System.nanoTime() + prazoDoTurno.toNanos();
@@ -203,12 +217,20 @@ public class LoopDoAgente {
     public void conduzir(AtlasContexto contexto, OuvinteDoTurno ouvinte) {
         // O provedor é pego UMA vez: se a chave do debug mudar no meio, este turno termina com o que começou.
         ProvedorDeLlm llm = provedor.provedor().orElse(null);
+        Turno turno = new Turno(prazoDoTurno);
         if (llm == null) {
             // A chave do debug foi apagada entre a conferência do service e aqui: termina como uma falha do modelo.
-            gravarFrase(contexto, FRASE_DA_FALHA, null, ouvinte);
+            gravarFrase(contexto, turno, FRASE_DA_FALHA, null, ouvinte);
             return;
         }
-        Turno turno = new Turno(prazoDoTurno);
+        turno.resumos = resumos.abrir(contexto, llm, ouvinte);
+        laco(contexto, ouvinte, llm, turno);
+        // Qualquer saída normal do laço passa por aqui: antes do fim (ou da resposta JSON), os resumos pendentes têm até o prazo.
+        // Em erro, o laço sobe a exceção e não espera: os resumos que já saíram terminam sozinhos.
+        turno.resumos.esperar();
+    }
+
+    private void laco(AtlasContexto contexto, OuvinteDoTurno ouvinte, ProvedorDeLlm llm, Turno turno) {
         List<MensagemDeChat> transitorias = List.of();   // a nova redação pedida: vai ao modelo, não ao histórico
         while (true) {
             Optional<LinhaDeRelatorio> ativo = repositorio.relatorioAtivoDaConversa(contexto.conversaId());
@@ -216,17 +238,21 @@ public class LoopDoAgente {
                 return;   // cartão aberto: o turno para e espera a rota 46
             }
             if (turno.venceu()) {
-                gravarFrase(contexto, FRASE_DO_PRAZO, null, ouvinte);
+                gravarFrase(contexto, turno, FRASE_DO_PRAZO, null, ouvinte);
                 return;
             }
             PedidoAoLlm pedido = pedido(contexto, ativo, transitorias);
             FiltroDoTexto filtro = ouvinte.emFluxo() ? new FiltroDoTexto(resolucao(contexto), checagem, ouvinte) : null;
             RespostaDoLlm resposta;
+            AtomicBoolean pensou = new AtomicBoolean();   // o aviso "pensando" sai uma vez por ida
             try {
                 resposta = filtro == null ? llm.responder(pedido) : llm.responderEmFluxo(pedido, new OuvinteDoFluxo() {
                     @Override
                     public void raciocinio(String pedaco) {
-                        ouvinte.raciocinio(pedaco);
+                        // O raciocínio cru fica no servidor: da tela só se avisa que o modelo começou a pensar.
+                        if (pensou.compareAndSet(false, true)) {
+                            ouvinte.pensando();
+                        }
                     }
 
                     @Override
@@ -239,7 +265,7 @@ public class LoopDoAgente {
                 if (filtro != null && filtro.saiuAlgo()) {
                     filtro.recusar();   // o texto pela metade sai da tela; a frase da falha vem a seguir
                 }
-                gravarFrase(contexto, FRASE_DA_FALHA, null, ouvinte);
+                gravarFrase(contexto, turno, FRASE_DA_FALHA, null, ouvinte);
                 return;
             }
             String texto = limpar(resposta.texto());
@@ -250,19 +276,19 @@ public class LoopDoAgente {
 
             if (resposta.chamadas().isEmpty()) {
                 if (texto == null) {
-                    gravarFrase(contexto, FRASE_SEM_RESPOSTA, raciocinio, ouvinte);
+                    gravarFrase(contexto, turno, FRASE_SEM_RESPOSTA, raciocinio, ouvinte);
                     return;
                 }
                 Veredito veredito = checarDoChat(contexto, texto);
                 if (veredito.aprovado()) {
-                    gravarTexto(contexto, texto, raciocinio);   // em fluxo, o texto já foi à tela pelo filtro
+                    gravarTexto(contexto, turno, texto, raciocinio);   // em fluxo, o texto já foi à tela pelo filtro
                     return;
                 }
                 if (filtro != null) {
                     filtro.recusar();   // a checagem completa recusou o que o filtro deixou passar
                 }
                 if (turno.pediuNovaRedacao) {
-                    gravarFrase(contexto, FRASE_FIXA, null, ouvinte);
+                    gravarFrase(contexto, turno, FRASE_FIXA, null, ouvinte);
                     return;
                 }
                 turno.pediuNovaRedacao = true;
@@ -301,6 +327,7 @@ public class LoopDoAgente {
         }).toList();
         long mensagemId = transacao.execute(estado -> historico.assistente(contexto.conversaId(), texto,
                 chamadas.stream().map(c -> new Chamada(c.id(), c.nome(), c.argumentos())).toList(), raciocinio));
+        turno.resumos.pedir(mensagemId, raciocinio);   // à parte: as ferramentas e a próxima ida não esperam por ele
 
         boolean pausa = false;
         boolean pronto = false;
@@ -326,7 +353,7 @@ public class LoopDoAgente {
             return true;
         }
         if (turno.limiteAtingido) {
-            gravarFrase(contexto, FRASE_DO_LIMITE, null, ouvinte);
+            gravarFrase(contexto, turno, FRASE_DO_LIMITE, null, ouvinte);
             return true;
         }
         return false;
@@ -411,13 +438,16 @@ public class LoopDoAgente {
         return resolvedor.abrir(contexto.usuario(), contexto.parceriaId(), modelos.obter(ModeloBase.ATIVACAO_EVENTO).orElseThrow());
     }
 
-    private void gravarTexto(AtlasContexto contexto, String texto, String raciocinio) {
-        transacao.executeWithoutResult(estado -> historico.assistente(contexto.conversaId(), texto, List.of(), raciocinio));
+    private void gravarTexto(AtlasContexto contexto, Turno turno, String texto, String raciocinio) {
+        long mensagemId = transacao.execute(estado -> historico.assistente(contexto.conversaId(), texto, List.of(), raciocinio));
+        if (turno.resumos != null) {
+            turno.resumos.pedir(mensagemId, raciocinio);   // sem raciocínio, não há o que resumir
+        }
     }
 
     /** Grava uma frase fixa do servidor e, em fluxo, a manda inteira à tela (ela não passa pelo filtro: é nossa). */
-    private void gravarFrase(AtlasContexto contexto, String frase, String raciocinio, OuvinteDoTurno ouvinte) {
-        gravarTexto(contexto, frase, raciocinio);
+    private void gravarFrase(AtlasContexto contexto, Turno turno, String frase, String raciocinio, OuvinteDoTurno ouvinte) {
+        gravarTexto(contexto, turno, frase, raciocinio);
         ouvinte.texto(frase);
     }
 

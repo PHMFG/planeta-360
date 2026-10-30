@@ -55,8 +55,13 @@ class FiltroDoTextoTest {
         final List<String> eventos = new ArrayList<>();
 
         @Override
-        public void raciocinio(String pedaco) {
-            eventos.add("raciocinio:" + pedaco);
+        public synchronized void pensando() {
+            eventos.add("pensando");
+        }
+
+        @Override
+        public synchronized void resumo(String texto) {
+            eventos.add("resumo:" + texto);
         }
 
         @Override
@@ -93,8 +98,9 @@ class FiltroDoTextoTest {
 
         List<String> eventos = turno("Oi");
 
-        assertThat(eventos).containsExactly("raciocinio:Penso ", "raciocinio:nisto.", "texto:A marca ", "texto:Cliente Amarelo tem ",
-                "texto:toolbox e ", "texto:relatório.");
+        // o raciocínio chega em dois pedaços, mas vira um aviso só (nada dele sai): "pensando", uma vez por ida
+        assertThat(eventos).containsExactly("pensando", "texto:A marca ", "texto:Cliente Amarelo tem ", "texto:toolbox e ",
+                "texto:relatório.");
     }
 
     @Test
