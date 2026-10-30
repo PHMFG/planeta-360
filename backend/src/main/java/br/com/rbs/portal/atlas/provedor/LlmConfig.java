@@ -45,9 +45,17 @@ public class LlmConfig {
          */
         @Bean
         OpenAiHttpClientBuilderCustomizer agenteDoAtlas() {
-            return construtor -> construtor.interceptor(
-                    cadeia -> cadeia.proceed(cadeia.request().newBuilder().header("User-Agent", USER_AGENT).build()));
+            return trocaDoUserAgent();
         }
+    }
+
+    /**
+     * O personalizador do cliente HTTP que reescreve o {@code User-Agent} para {@link #USER_AGENT}. É o mesmo no modelo das
+     * variáveis de ambiente (o bean acima) e no que a chave de debug monta em tempo de execução ({@link FabricaDeProvedor}).
+     */
+    public static OpenAiHttpClientBuilderCustomizer trocaDoUserAgent() {
+        return construtor -> construtor.interceptor(
+                cadeia -> cadeia.proceed(cadeia.request().newBuilder().header("User-Agent", USER_AGENT).build()));
     }
 
     /** ATLAS_LLM=openai sem chave: avisa e deixa o Atlas no plano B. */

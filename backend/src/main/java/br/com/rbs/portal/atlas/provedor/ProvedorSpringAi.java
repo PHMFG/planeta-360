@@ -156,8 +156,8 @@ public class ProvedorSpringAi implements ProvedorDeLlm {
         return texto == null || texto.isBlank() ? null : texto;
     }
 
-    /** A mensagem de erro sem a chave configurada nem trecho que pareça chave, e curta. */
-    static String limpar(String mensagem, String chave) {
+    /** A mensagem de erro sem a chave configurada (se não for nula) nem trecho que pareça chave, e curta. */
+    public static String limpar(String mensagem, String chave) {
         String texto = mensagem == null ? "" : mensagem;
         if (chave != null && !chave.isBlank()) {
             texto = texto.replace(chave, "[omitido]");

@@ -64,6 +64,10 @@ spring:
 # Com o teto atingido, a rota 44 com texto responde 429. Serve para uma rodada de testes não gastar o limite do provedor.
 atlas:
   teto-diario-por-parceria: ${ATLAS_TETO_DIARIO:200}
+  debug:
+    # [ATLAS] TEMPORÁRIO: as rotas /api/debug/llm (pôr a chave do modelo pela tela, só na memória da API). Desligado por padrão;
+    # ligado só no perfil dev, abaixo. Sem esta propriedade, as rotas não existem (404).
+    chaves: false
 
 server:
   port: 8080
@@ -93,6 +97,11 @@ spring:
     # [ITEM-1] A amostra (Amarelo, Roxo e Verde) mora em db/dev e só carrega neste perfil e no de teste.
     locations: classpath:db/migration,classpath:db/dev
 
+# [ATLAS] As rotas de debug da chave do modelo de linguagem (temporárias) só existem no desenvolvimento.
+atlas:
+  debug:
+    chaves: true
+
 ---
 spring:
   config:
@@ -110,6 +119,11 @@ spring:
     model:
       # [ATLAS] A suíte sobe sem chave e nunca chama o provedor: o loop usa o roteiro de teste.
       chat: none
+
+# [ATLAS] As rotas de debug ficam desligadas no contexto de teste normal; a classe de teste delas as liga.
+atlas:
+  debug:
+    chaves: false
 
 # [UPLOAD] Nos testes, os arquivos vão para dentro de target/ (apagado pelo "mvn clean"), nunca para a pasta de desenvolvimento.
 portal:

@@ -13,6 +13,7 @@ import java.util.Deque;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.function.Consumer;
 
 /**
  * Um servidor HTTP falso do provedor (compatível com chat completions), local, numa porta livre, só para os testes do Atlas:
@@ -35,6 +36,7 @@ public final class ServidorDeLlmFalso implements AutoCloseable {
     private final HttpServer servidor;
     private final Deque<Resposta> respostas = new ArrayDeque<>();
     private final List<Recebida> recebidas = new CopyOnWriteArrayList<>();
+    private volatile Consumer<Recebida> aoReceber;
 
     private ServidorDeLlmFalso(HttpServer servidor) {
         this.servidor = servidor;
@@ -76,14 +78,25 @@ public final class ServidorDeLlmFalso implements AutoCloseable {
     public synchronized void limpar() {
         respostas.clear();
         recebidas.clear();
+        aoReceber = null;
+    }
+
+    /** Roda a cada requisição, depois de guardá-la e antes de responder (na linha do servidor). Para mexer no meio de um turno. */
+    public void aoReceber(Consumer<Recebida> gancho) {
+        this.aoReceber = gancho;
     }
 
     private void atender(HttpExchange troca) throws IOException {
         byte[] corpo = troca.getRequestBody().readAllBytes();
         Map<String, List<String>> cabecalhos = new java.util.TreeMap<>();
         troca.getRequestHeaders().forEach((nome, valores) -> cabecalhos.put(nome.toLowerCase(), new ArrayList<>(valores)));
-        recebidas.add(new Recebida(troca.getRequestMethod(), troca.getRequestURI().getPath(), cabecalhos,
-                new String(corpo, StandardCharsets.UTF_8)));
+        Recebida recebida = new Recebida(troca.getRequestMethod(), troca.getRequestURI().getPath(), cabecalhos,
+                new String(corpo, StandardCharsets.UTF_8));
+        recebidas.add(recebida);
+        Consumer<Recebida> gancho = aoReceber;
+        if (gancho != null) {
+            gancho.accept(recebida);
+        }
         Resposta resposta;
         synchronized (this) {
             resposta = respostas.poll();

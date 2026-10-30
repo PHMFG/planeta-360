@@ -157,6 +157,8 @@ Todas prontas e testadas. A coluna "Etapa" mostra em que etapa do plano a rota e
 
 São 48 operações (método + caminho). A rota 5 (`ativar`) faz parte do contrato de autenticação, mas só é implementada na etapa 4. As rotas 37 em diante vieram com o Atlas (MVP): a coluna "Etapa" diz `Atlas 1` (plano de aplicações e dados informados) ou `Atlas 2` (conversa, cartão de perguntas e relatório). Nas rotas 42 a 46 só o Admin Patrocinador chama (a RBS recebe **403** antes de o corpo ser lido); nas 47 e 48 chamam a marca da parceria e a RBS.
 
+As rotas de debug do modelo de linguagem (`/api/debug/llm`) são temporárias, só existem no perfil `dev` e ficam fora desta tabela e da conta das 48: veja "Rotas de debug (temporárias)", no fim.
+
 ## Objetos que se repetem
 
 Estes formatos aparecem em várias rotas.
@@ -1425,7 +1427,7 @@ O relatório sai de dois jeitos, pelas mesmas rotas. Pelo **botão "Montar relat
 
 ## O modelo de linguagem (texto livre)
 
-Com o modelo ligado, a mensagem de texto da rota 44 e a resposta do cartão da rota 46 rodam o **loop do agente**. O contrato para quem usa a API:
+Com o modelo ligado (pelas variáveis de ambiente ou, no perfil `dev`, pela chave posta nas rotas de debug do fim deste arquivo), a mensagem de texto da rota 44 e a resposta do cartão da rota 46 rodam o **loop do agente**. O contrato para quem usa a API:
 
 - **Um turno** começa na mensagem da pessoa (ou na resposta do cartão). O modelo responde com texto, ou pede ferramentas; o servidor as executa **uma a uma, na ordem**, grava a resposta de cada uma e devolve o resultado ao modelo, até ele responder com texto. As ferramentas são `relatorio_iniciar`, `relatorio_solicitar_campos`, `relatorio_editar` (operação `definir_texto`) e `relatorio_finalizar`, as mesmas operações do botão. O modelo só recebe as ferramentas do estado do relatório (sem relatório, só `relatorio_iniciar`; em montagem, as outras três; com o cartão aberto, nenhuma).
 - **Nenhuma ferramenta recebe parceria.** A parceria, o usuário e a conversa vêm da sessão; um argumento que cite outra parceria (ou qualquer argumento fora do esquema) é recusado e volta ao modelo como erro. A marca só chega aos dados da própria parceria, por qualquer caminho.
@@ -1630,6 +1632,73 @@ Cada item de `campos` do cartão é um campo do catálogo (rota 39) mais `obriga
 Um relatório `MONTANDO` ou `AGUARDANDO_RESPOSTA` sem nenhuma mensagem nova na conversa há **mais de 7 dias** vira `DESCARTADO` quando a pessoa **lista** (rota 43) ou **abre** (rota 45) as conversas. O cartão pendente dele vira `CANCELADA` e a chamada que ele deixou aberta é fechada com `cancel` no histórico (a conversa mostra o `aviso` de cartão fechado). O botão, depois disso, começa um relatório novo. Relatório pronto nunca é descartado. Descartar pela tela fica para depois.
 
 **Histórico (rotas 42 a 46):** `CRIACAO` com a entidade `atlas_relatorio` quando o relatório nasce (`valorNovo` = `MONTANDO`), `EDICAO` quando fica pronto (`valorAnterior` = `MONTANDO`, `valorNovo` = `PRONTO`), e `CRIACAO` na entidade `dado_informado` por valor que o cartão gravou. Aparecem no histórico da parceria (rota 20) como as demais ações da marca.
+
+---
+
+# Rotas de debug (temporárias)
+
+Um recurso **temporário**, para a equipe ligar o modelo de linguagem do Atlas pela tela (o botão "Debug"), sem reiniciar a API e sem variável de ambiente. Não faz parte das 48 rotas do contrato e sai antes da entrega final.
+
+- **Só existem com `atlas.debug.chaves=true`.** A propriedade vem `false` por padrão, `true` no perfil `dev` e `false` no `test`. Sem ela, as quatro rotas respondem **404**, como uma rota que não existe.
+- **A chave fica só na memória da API.** Nunca vai ao banco, a arquivo ou ao log, e **some quando a API reinicia**. Nenhuma resposta devolve a chave inteira: só os 4 últimos caracteres (`finalDaChave`).
+- **Precedência:** a chave posta aqui &rarr; a das variáveis de ambiente (`ATLAS_LLM=openai` e `OPENCODE_API_KEY`) &rarr; nenhuma (o Atlas fica no botão "Montar relatório"). Pôr ou apagar a chave muda na hora o `llmDisponivel` das rotas 42 a 46; um turno que já começou termina com o modelo com que começou.
+- O modelo montado com a chave usa as mesmas opções do `application.yml` (temperatura 0.2, `thinking` desligado, 1 nova tentativa, 60 segundos de limite, o `User-Agent` `PlanetaAtlas/0.1` e o `x-opencode-session` por conversa).
+- **Quem chama:** logado (qualquer perfil: é ferramenta da equipe em desenvolvimento). PUT, DELETE e POST exigem o token CSRF. Erros em `ProblemDetail`.
+- Cada troca grava uma linha de log (INFO) com quem trocou, a origem, a base URL, o modelo e o final da chave.
+
+## `GET /api/debug/llm`
+
+**200**: o modelo que vale agora.
+
+```json
+{ "origem": "DEBUG", "baseUrl": "https://opencode.ai/inference/go/openai/v1", "modelo": "deepseek-v4.1-flash",
+  "finalDaChave": "a1b2", "configuradoPor": { "id": 1, "nome": "Equipe B2B RBS", "perfil": "ADMIN_RBS" },
+  "configuradoEm": "2026-10-29T21:00:00-03:00", "llmDisponivel": true }
+```
+
+| `origem` | Quando | O resto |
+| --- | --- | --- |
+| `DEBUG` | Há uma chave posta por esta rota. | Todos os campos preenchidos; `llmDisponivel` `true`. |
+| `AMBIENTE` | Sem chave de debug, mas a API subiu com o modelo das variáveis de ambiente. | `configuradoPor` e `configuradoEm` `null`; `baseUrl` e `modelo` os do `application.yml`; `llmDisponivel` `true`. |
+| `NENHUM` | Nenhum modelo. | `baseUrl` e `modelo` trazem os padrões do `application.yml`; `finalDaChave`, `configuradoPor` e `configuradoEm` `null`; `llmDisponivel` `false`. |
+
+**Erros:** 401.
+
+## `PUT /api/debug/llm`
+
+**Corpo:** `{ "chave": "...", "baseUrl": "...", "modelo": "..." }`. `baseUrl` e `modelo` são opcionais: ausentes, `null` ou vazios, valem os padrões do `application.yml`. Troca a chave anterior, se houver. A API não chama o provedor ao receber a chave (use `/teste` para isso).
+
+**200**: o mesmo corpo do GET, já com `origem` `DEBUG`.
+
+**Erros**
+
+| Status | Quando |
+| --- | --- |
+| 400 | Corpo vazio ou que não é JSON. |
+| 403 | Falta o token CSRF. |
+| 422 | `campos.chave`: ausente, com menos de 8 ou mais de 500 caracteres, ou com espaço (`"A chave precisa ter de 8 a 500 caracteres, sem espaços."`). `campos.baseUrl`: não começa com `https://` e não é `http://localhost` nem `http://127.0.0.1` (com porta e caminho opcionais), ou passa de 500 caracteres. `campos.modelo`: mais de 100 caracteres ou caractere fora de letras, números e `._:/-`. |
+
+## `DELETE /api/debug/llm`
+
+Esquece a chave do debug: volta ao modelo das variáveis de ambiente, ou a nenhum. **204** sem corpo, também quando não havia chave. **Erros:** 401; 403 (falta o token CSRF).
+
+## `POST /api/debug/llm/teste`
+
+Manda ao modelo que vale agora uma mensagem mínima, sem ferramentas (`"Responda só com a palavra ok."`), e diz se ele respondeu. Sem corpo. Não grava nada e **não conta para o teto diário** do Atlas.
+
+**200** sempre que a rota existe:
+
+```json
+{ "ok": true, "milissegundos": 812, "modelo": "deepseek-v4.1-flash", "resposta": "ok" }
+```
+
+```json
+{ "ok": false, "milissegundos": 1500, "modelo": "deepseek-v4.1-flash", "erro": "O modelo de linguagem não respondeu (UnauthorizedException: 401: ...)." }
+```
+
+`resposta` vem cortada em 200 caracteres. `erro` é o motivo, sempre sem a chave. Sem modelo nenhum: `{ "ok": false, "milissegundos": 0, "modelo": "<o padrão>", "erro": "Nenhuma chave configurada." }`. Com `ok` `true` não vem `erro`; com `false` não vem `resposta`.
+
+**Erros:** 401; 403 (falta o token CSRF).
 
 ---
 
