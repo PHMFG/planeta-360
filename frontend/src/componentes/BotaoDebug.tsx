@@ -1,0 +1,177 @@
+// [TEMPORARIO] Botão de debug para a equipe pôr a chave do modelo de linguagem do Atlas sem reiniciar a API. Só aparece quando
+// a API tem as rotas de debug (perfil dev). A chave vai uma vez para a API, fica só na memória dela e nunca volta inteira.
+import { useEffect, useState, type FormEvent } from 'react'
+import { ErroApi } from '../api/cliente'
+import {
+  EVENTO_LLM_MUDOU,
+  definirChaveDoLlm,
+  obterEstadoDoLlm,
+  removerChaveDoLlm,
+  testarLlm,
+  type EstadoDoLlm,
+  type TesteDoLlm,
+} from '../api/debug'
+import { dataHora } from '../util/formatar'
+import { Aviso } from './Aviso'
+import { Botao } from './Botao'
+import { Campo } from './Campo'
+import { Modal } from './Modal'
+
+function descrever(estado: EstadoDoLlm) {
+  const final = estado.finalDaChave ? ` terminando em …${estado.finalDaChave}` : ''
+  if (estado.origem === 'DEBUG')
+    return `Chave${final}, posta por ${estado.configuradoPor?.nome ?? '—'} em ${dataHora(estado.configuradoEm)}.`
+  if (estado.origem === 'AMBIENTE') return `Chave das variáveis de ambiente da API${final}.`
+  return 'Nenhuma chave: o Atlas monta o relatório só pelo botão, sem chat.'
+}
+
+export function BotaoDebug() {
+  const [estado, setEstado] = useState<EstadoDoLlm | null>(null)
+  const [aberto, setAberto] = useState(false)
+  const [chave, setChave] = useState('')
+  const [baseUrl, setBaseUrl] = useState('')
+  const [modelo, setModelo] = useState('')
+  const [erros, setErros] = useState<Record<string, string>>({})
+  const [falha, setFalha] = useState<string | null>(null)
+  const [teste, setTeste] = useState<TesteDoLlm | null>(null)
+  const [ocupado, setOcupado] = useState<'salvar' | 'testar' | 'remover' | null>(null)
+
+  useEffect(() => {
+    let ativo = true
+    // Fora do perfil dev a rota não existe (404) e o botão some; qualquer outra falha também o esconde.
+    obterEstadoDoLlm()
+      .then((lido) => ativo && setEstado(lido))
+      .catch(() => ativo && setEstado(null))
+    return () => {
+      ativo = false
+    }
+  }, [])
+
+  if (!estado) return null
+
+  function mudou(novo: EstadoDoLlm) {
+    setEstado(novo)
+    window.dispatchEvent(new Event(EVENTO_LLM_MUDOU))
+  }
+
+  async function executar(qual: 'salvar' | 'testar' | 'remover', fazer: () => Promise<void>) {
+    setOcupado(qual)
+    setFalha(null)
+    setErros({})
+    try {
+      await fazer()
+    } catch (erro) {
+      if (erro instanceof ErroApi) {
+        setErros(erro.campos)
+        if (!Object.keys(erro.campos).length) setFalha(erro.message)
+      } else setFalha('A API não respondeu.')
+    } finally {
+      setOcupado(null)
+    }
+  }
+
+  function salvar(evento: FormEvent) {
+    evento.preventDefault()
+    if (!chave.trim()) return setErros({ chave: 'Cole a chave do provedor.' })
+    executar('salvar', async () => {
+      mudou(await definirChaveDoLlm({ chave: chave.trim(), baseUrl: baseUrl.trim() || undefined, modelo: modelo.trim() || undefined }))
+      // A chave não fica na tela depois de enviada.
+      setChave('')
+      setTeste(null)
+    })
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setAberto(true)}
+        className="fixed top-2 left-1/2 z-[80] flex -translate-x-1/2 items-center gap-1.5 rounded-full border border-[#8a6a00]/40 bg-[#fff3c4] px-3 py-1.5 text-xs font-bold text-[#6b5200] shadow-menu print:hidden"
+        title="Debug temporário: chaves de IA"
+      >
+        <i className="ri-bug-line text-sm" aria-hidden="true" />
+        Debug
+        <span className={`size-2 rounded-full ${estado.llmDisponivel ? 'bg-[#1a9e4a]' : 'bg-cinza-400'}`} aria-hidden="true" />
+        <span className="sr-only">{estado.llmDisponivel ? 'modelo ligado' : 'modelo desligado'}</span>
+      </button>
+
+      <Modal titulo="Debug · chaves de IA" legenda="Temporário, só no ambiente de desenvolvimento" aberto={aberto} aoFechar={() => setAberto(false)}>
+        <form onSubmit={salvar} className="flex flex-col gap-4" noValidate>
+          <Aviso tipo={estado.llmDisponivel ? 'info' : 'ausente'} titulo={estado.llmDisponivel ? 'Modelo de linguagem ligado' : 'Modelo de linguagem desligado'}>
+            {descrever(estado)} Modelo {estado.modelo}.
+          </Aviso>
+          <Campo
+            rotulo="Chave do provedor (OpenCode Go)"
+            type="password"
+            autoComplete="off"
+            spellCheck={false}
+            placeholder={estado.finalDaChave ? `atual termina em …${estado.finalDaChave}` : 'cole a chave aqui'}
+            value={chave}
+            onChange={(evento) => setChave(evento.target.value)}
+            erro={erros.chave}
+          />
+          <Campo
+            rotulo="Endereço do provedor (opcional)"
+            autoComplete="off"
+            spellCheck={false}
+            placeholder={estado.baseUrl}
+            value={baseUrl}
+            onChange={(evento) => setBaseUrl(evento.target.value)}
+            erro={erros.baseUrl}
+          />
+          <Campo
+            rotulo="Modelo (opcional)"
+            autoComplete="off"
+            spellCheck={false}
+            placeholder={estado.modelo}
+            value={modelo}
+            onChange={(evento) => setModelo(evento.target.value)}
+            erro={erros.modelo}
+          />
+          <p className="text-xs font-medium text-texto-2">
+            A chave vai uma vez para a API, fica só na memória dela e some quando a API reinicia. Nunca volta inteira para a tela. Use só com
+            dados fictícios.
+          </p>
+          {teste && (
+            <Aviso tipo={teste.ok ? 'info' : 'falha'} titulo={teste.ok ? `Respondeu em ${teste.milissegundos} ms` : 'O provedor não respondeu'}>
+              {teste.ok ? `${teste.modelo}: “${teste.resposta ?? ''}”` : teste.erro}
+            </Aviso>
+          )}
+          {falha && <Aviso tipo="falha" titulo={falha} />}
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <Botao type="submit" carregando={ocupado === 'salvar'} disabled={ocupado !== null} icone="ri-key-2-line" className="min-w-0 flex-1">
+              Salvar chave
+            </Botao>
+            <Botao
+              variante="secundario"
+              carregando={ocupado === 'testar'}
+              disabled={ocupado !== null}
+              icone="ri-pulse-line"
+              className="min-w-0 flex-1"
+              onClick={() => executar('testar', async () => setTeste(await testarLlm()))}
+            >
+              Testar
+            </Botao>
+          </div>
+          {estado.origem === 'DEBUG' && (
+            <button
+              type="button"
+              disabled={ocupado !== null}
+              onClick={() =>
+                executar('remover', async () => {
+                  await removerChaveDoLlm()
+                  const lido = await obterEstadoDoLlm()
+                  if (lido) mudou(lido)
+                  setTeste(null)
+                })
+              }
+              className="self-start text-xs font-semibold text-[#c8203f] hover:underline disabled:opacity-60"
+            >
+              Remover a chave posta pela tela
+            </button>
+          )}
+        </form>
+      </Modal>
+    </>
+  )
+}
