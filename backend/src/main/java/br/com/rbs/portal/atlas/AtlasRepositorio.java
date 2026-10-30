@@ -41,6 +41,10 @@ public class AtlasRepositorio {
         }
     }
 
+    /** Uma linha da trilha das ferramentas ({@code atlas_tool_call}) de uma mensagem do assistente: só o que o debug precisa. */
+    public record LinhaDeChamada(Long mensagemId, String ferramenta, String erro, Integer duracaoMs) {
+    }
+
     /**
      * Um relatório com o autor e o patrocinador já resolvidos. {@code especificacao} e {@code snapshot} são o JSON como texto.
      */
@@ -231,6 +235,20 @@ public class AtlasRepositorio {
                 .param("mensagem", mensagemId).param("ferramenta", ferramenta).param("argumentos", argumentosJson)
                 .param("resultado", resultadoJson).param("erro", erro).param("duracao", duracaoMs)
                 .update();
+    }
+
+    /**
+     * A trilha das ferramentas da conversa, na ordem em que foram gravadas (o debug das ferramentas). A trilha tem uma linha por
+     * pedido de ferramenta de cada mensagem do assistente, na ordem do pedido.
+     */
+    public List<LinhaDeChamada> chamadasDaConversa(long conversaId) {
+        return jdbc.sql("""
+                        SELECT t.mensagem_id, t.ferramenta, t.erro, t.duracao_ms
+                        FROM atlas_tool_call t JOIN atlas_mensagem m ON m.id = t.mensagem_id
+                        WHERE m.conversa_id = :id ORDER BY t.id
+                        """)
+                .param("id", conversaId)
+                .query(LinhaDeChamada.class).list();
     }
 
     /** Põe o resultado numa ferramenta que esperava (o cartão respondido), achada pelo pedido que a abriu. */

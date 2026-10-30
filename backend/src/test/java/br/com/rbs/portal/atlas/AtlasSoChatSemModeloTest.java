@@ -26,7 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @TesteDeIntegracao
 @Transactional
-@TestPropertySource(properties = "atlas.relatorio.ligado=false")
+@TestPropertySource(properties = {"atlas.relatorio.ligado=false", "atlas.debug.ferramentas=false"})
 class AtlasSoChatSemModeloTest {
 
     private static final String FRASE_503 = "O Atlas está sem o modelo de linguagem agora. Tente de novo mais tarde.";

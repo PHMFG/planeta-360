@@ -134,7 +134,7 @@ public class AtlasService {
         }
         long conversaId = repositorio.criarConversa(parceriaId, usuario.id());
         if (modelo == null) {
-            return new ConversaDto(conversaId, llm.disponivel(), modo.relatorioLigado(), List.of());
+            return new ConversaDto(conversaId, llm.disponivel(), modo.relatorioLigado(), modo.debugDeFerramentas(), List.of());
         }
         return rodarPlanoB(usuario, repositorio.conversa(conversaId).orElseThrow(), modelo, requisicao);
     }
@@ -239,7 +239,8 @@ public class AtlasService {
         if (modo.relatorioLigado()) {
             descarte.varrer(List.of(conversaId));
         }
-        return new ConversaDto(conversaId, llm.disponivel(), modo.relatorioLigado(), itens.itens(usuario, conversa, 0));
+        return new ConversaDto(conversaId, llm.disponivel(), modo.relatorioLigado(), modo.debugDeFerramentas(),
+                itens.itens(usuario, conversa, 0));
     }
 
     // ---------------------------------------------------------------------
@@ -342,7 +343,8 @@ public class AtlasService {
 
         /** Os itens que o turno produziu, no objeto Conversa. */
         ConversaDto conversa() {
-            return new ConversaDto(conversa.id(), llm.disponivel(), modo.relatorioLigado(), itens.itens(usuario, conversa, antes));
+            return new ConversaDto(conversa.id(), llm.disponivel(), modo.relatorioLigado(), modo.debugDeFerramentas(),
+                itens.itens(usuario, conversa, antes));
         }
     }
 
@@ -422,7 +424,8 @@ public class AtlasService {
             planoB.montar(contexto, modelo);
             return null;
         });
-        return new ConversaDto(conversa.id(), llm.disponivel(), modo.relatorioLigado(), itens.itens(usuario, conversa, antes));
+        return new ConversaDto(conversa.id(), llm.disponivel(), modo.relatorioLigado(), modo.debugDeFerramentas(),
+                itens.itens(usuario, conversa, antes));
     }
 
     /**

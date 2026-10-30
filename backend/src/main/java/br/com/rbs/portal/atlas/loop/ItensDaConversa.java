@@ -3,13 +3,16 @@ package br.com.rbs.portal.atlas.loop;
 import br.com.rbs.portal.atlas.AtlasDtos.CampoDoCartaoDto;
 import br.com.rbs.portal.atlas.AtlasDtos.ItemAviso;
 import br.com.rbs.portal.atlas.AtlasDtos.ItemCartao;
+import br.com.rbs.portal.atlas.AtlasDtos.DadosDaFerramenta;
 import br.com.rbs.portal.atlas.AtlasDtos.ItemDaConversa;
+import br.com.rbs.portal.atlas.AtlasDtos.ItemFerramenta;
 import br.com.rbs.portal.atlas.AtlasDtos.ItemRaciocinio;
 import br.com.rbs.portal.atlas.AtlasDtos.ItemRelatorioPronto;
 import br.com.rbs.portal.atlas.AtlasDtos.ItemTexto;
 import br.com.rbs.portal.atlas.AtlasDtos.ItemUsuario;
 import br.com.rbs.portal.atlas.AtlasJson;
 import br.com.rbs.portal.atlas.AtlasRepositorio;
+import br.com.rbs.portal.atlas.AtlasRepositorio.LinhaDeChamada;
 import br.com.rbs.portal.atlas.AtlasRepositorio.LinhaDeConversa;
 import br.com.rbs.portal.atlas.AtlasRepositorio.LinhaDeMensagem;
 import br.com.rbs.portal.atlas.AtlasRepositorio.LinhaDeRelatorio;
@@ -52,6 +55,8 @@ import tools.jackson.core.type.TypeReference;
  *       modelo de linguagem, "Use Montar relatório para continuar"; com ele ligado agora (o mesmo {@code llmDisponivel} da
  *       resposta), "Quando tiver os números, peça para continuar".</li>
  * </ul>
+ * Com o debug das ferramentas ({@code atlas.debug.ferramentas}), cada pedido de ferramenta vira também um item {@code ferramenta},
+ * depois do {@code raciocinio} e do {@code texto} da mesma mensagem e na ordem em que rodou (antes do {@code cartao} dele).
  * Com o relatório desligado ({@code atlas.relatorio.ligado=false}) não sai {@code cartao}, {@code relatorio_pronto} nem
  * {@code aviso}, nem de conversa antiga que os tenha; o histórico em si não muda.
  * Só as mensagens depois de {@code desdeOrdem} viram item (o turno); com 0, a conversa inteira.
@@ -88,6 +93,13 @@ public class ItensDaConversa {
         Map<String, String> ferramentas = new HashMap<>();
         Map<Long, Especificacao> especificacoes = new HashMap<>();
         Contexto contexto = new Contexto(usuario, conversa);
+        Map<String, String> resultados = new HashMap<>();   // debug: toolCallId -> o que a ferramenta devolveu ao modelo
+        Map<Long, List<LinhaDeChamada>> trilha = new HashMap<>();   // debug: mensagemId -> a trilha dos pedidos dela, em ordem
+        if (modo.debugDeFerramentas()) {
+            mensagens.stream().filter(m -> "tool".equals(m.papel()) && m.toolCallId() != null)
+                    .forEach(m -> resultados.put(m.toolCallId(), m.conteudo()));
+            repositorio.chamadasDaConversa(conversa.id()).forEach(c -> trilha.computeIfAbsent(c.mensagemId(), id -> new ArrayList<>()).add(c));
+        }
 
         List<ItemDaConversa> itens = new ArrayList<>();
         for (LinhaDeMensagem mensagem : mensagens) {
@@ -108,10 +120,17 @@ public class ItensDaConversa {
                         itens.add(new ItemTexto(contexto.resolucao(modelos, resolvedor).paraExibicao(mensagem.conteudo()),
                                 escritoPeloModelo(mensagem.conteudo(), chamadas)));
                     }
+                    List<LinhaDeChamada> trilhaDaMensagem = trilha.getOrDefault(mensagem.id(), List.of());
+                    int posicao = 0;
                     for (Map<String, Object> chamada : chamadas) {
                         String id = (String) chamada.get("id");
                         String nome = nomeDaFerramenta(chamada);
                         ferramentas.put(id, nome);
+                        if (doTurno && modo.debugDeFerramentas()) {
+                            LinhaDeChamada registro = posicao < trilhaDaMensagem.size() ? trilhaDaMensagem.get(posicao) : null;
+                            itens.add(ferramentaDoDebug(chamada, nome, resultados.get(id), registro));
+                        }
+                        posicao++;
                         LinhaDeSolicitacao cartao = cartoes.get(id);
                         if (doTurno && modo.relatorioLigado() && "relatorio_solicitar_campos".equals(nome) && cartao != null) {
                             itens.add(cartao(contexto, cartao, especificacoes));
@@ -126,6 +145,36 @@ public class ItensDaConversa {
             }
         }
         return itens;
+    }
+
+    /**
+     * DEBUG: a ferramenta como o histórico a guarda. Os argumentos são o texto que o modelo enviou, o resultado é o que o modelo
+     * recebeu (nulo se ainda não respondeu). O tempo e o erro vêm da trilha ({@code atlas_tool_call}), que tem uma linha por pedido
+     * na ordem dele; se a linha não é desta ferramenta ou não existe, o tempo é nulo e o erro sai do próprio resultado.
+     */
+    private static ItemFerramenta ferramentaDoDebug(Map<String, Object> chamada, String nome, String resultado, LinhaDeChamada registro) {
+        String argumentos = argumentosDe(chamada);
+        boolean daTrilha = registro != null && registro.ferramenta().equals(nome);
+        boolean erro = daTrilha ? registro.erro() != null : resultadoEUmErro(resultado);
+        return ItemFerramenta.de(DadosDaFerramenta.cortando(nome, argumentos, resultado, erro, daTrilha ? registro.duracaoMs() : null));
+    }
+
+    @SuppressWarnings("unchecked")
+    private static String argumentosDe(Map<String, Object> chamada) {
+        return chamada.get("function") instanceof Map<?, ?> funcao ? (String) ((Map<String, Object>) funcao).get("arguments") : null;
+    }
+
+    /** O erro de ferramenta tem o formato {@code {"erro": "..."}} (RelatorioFerramentas.erroComoJson). */
+    private static boolean resultadoEUmErro(String resultado) {
+        if (resultado == null) {
+            return false;
+        }
+        try {
+            return AtlasJson.ler(resultado, new TypeReference<Map<String, Object>>() {
+            }).get("erro") instanceof String;
+        } catch (RuntimeException naoEObjeto) {
+            return false;
+        }
     }
 
     private Optional<ItemDaConversa> itemDaResposta(LinhaDeMensagem mensagem, String ferramenta) {

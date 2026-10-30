@@ -1,5 +1,6 @@
 package br.com.rbs.portal.atlas.loop;
 
+import br.com.rbs.portal.atlas.AtlasDtos.DadosDaFerramenta;
 import br.com.rbs.portal.atlas.AtlasJson;
 import br.com.rbs.portal.atlas.AtlasRepositorio;
 import br.com.rbs.portal.atlas.AtlasRepositorio.LinhaDeRelatorio;
@@ -348,20 +349,21 @@ public class LoopDoAgente {
         boolean pronto = false;
         for (ChamadaDeFerramenta chamada : chamadas) {
             if (pausa) {
-                responderComErro(contexto, mensagemId, chamada, RelatorioFerramentas.AGUARDANDO_O_CARTAO);
+                responderComErro(contexto, mensagemId, chamada, RelatorioFerramentas.AGUARDANDO_O_CARTAO, ouvinte);
             } else if (pronto) {
-                responderComErro(contexto, mensagemId, chamada, "O relatório já está pronto. Não chame mais ferramentas.");
+                responderComErro(contexto, mensagemId, chamada, "O relatório já está pronto. Não chame mais ferramentas.", ouvinte);
             } else if (++turno.chamadas > LIMITE_DE_CHAMADAS_POR_TURNO) {
                 turno.limiteAtingido = true;
-                responderComErro(contexto, mensagemId, chamada, ERRO_DO_LIMITE);
+                responderComErro(contexto, mensagemId, chamada, ERRO_DO_LIMITE, ouvinte);
             } else {
                 String etapa = ETAPAS.get(chamada.nome());
                 if (etapa != null) {
                     ouvinte.etapa(etapa);
                 }
-                Execucao execucao = executar(contexto, mensagemId, chamada);
-                pausa = execucao.pausa();
-                pronto = execucao.pronto();
+                Rodada rodada = executar(contexto, mensagemId, chamada);
+                pausa = rodada.execucao().pausa();
+                pronto = rodada.execucao().pronto();
+                avisarFerramenta(ouvinte, chamada, rodada.execucao().resultadoJson(), rodada.erro(), rodada.ms());
             }
         }
         if (pausa || pronto) {
@@ -378,12 +380,14 @@ public class LoopDoAgente {
      * Executa a ferramenta e grava a resposta (ou, no cartão, só a trilha) na MESMA transação: se a ferramenta falha, nada dela
      * fica, e a falha é gravada como a resposta da ferramenta, que volta ao modelo.
      */
-    private Execucao executar(AtlasContexto contexto, long mensagemId, ChamadaDeFerramenta chamada) {
+    private Rodada executar(AtlasContexto contexto, long mensagemId, ChamadaDeFerramenta chamada) {
         long inicio = System.nanoTime();
+        int[] medido = new int[1];   // o mesmo tempo que a trilha guarda, para o evento do debug dizer igual
         try {
-            return transacao.execute(estado -> {
+            Execucao feita = transacao.execute(estado -> {
                 Execucao execucao = ferramentas.executar(contexto, chamada.nome(), chamada.argumentos(), chamada.id());
                 int ms = (int) ((System.nanoTime() - inicio) / 1_000_000);
+                medido[0] = ms;
                 if (execucao.pausa()) {
                     // A resposta do cartão só existe quando a pessoa a mandar (rota 46): aqui fica só a trilha, sem resultado.
                     repositorio.registrarChamada(mensagemId, chamada.nome(), argumentosParaATrilha(chamada.argumentos()), null, null, ms);
@@ -394,17 +398,31 @@ public class LoopDoAgente {
                 }
                 return execucao;
             });
+            return new Rodada(feita, false, medido[0]);
         } catch (RuntimeException erro) {
             String json = RelatorioFerramentas.erroComoJson(erro, modo.relatorioLigado());
-            transacao.executeWithoutResult(estado -> gravarErro(contexto, mensagemId, chamada, json, erro.getMessage(),
-                    (int) ((System.nanoTime() - inicio) / 1_000_000)));
-            return new Execucao(json, false, false);
+            int ms = (int) ((System.nanoTime() - inicio) / 1_000_000);
+            transacao.executeWithoutResult(estado -> gravarErro(contexto, mensagemId, chamada, json, erro.getMessage(), ms));
+            return new Rodada(new Execucao(json, false, false), true, ms);
         }
     }
 
-    private void responderComErro(AtlasContexto contexto, long mensagemId, ChamadaDeFerramenta chamada, String frase) {
-        transacao.executeWithoutResult(estado -> gravarErro(contexto, mensagemId, chamada, RelatorioFerramentas.erroComoJson(frase),
-                frase, 0));
+    /** Uma ferramenta que rodou: o que fez, se deu erro e quanto levou (o mesmo número da trilha). */
+    private record Rodada(Execucao execucao, boolean erro, int ms) {
+    }
+
+    private void responderComErro(AtlasContexto contexto, long mensagemId, ChamadaDeFerramenta chamada, String frase,
+                                  OuvinteDoTurno ouvinte) {
+        String json = RelatorioFerramentas.erroComoJson(frase);
+        transacao.executeWithoutResult(estado -> gravarErro(contexto, mensagemId, chamada, json, frase, 0));
+        avisarFerramenta(ouvinte, chamada, json, true, 0);
+    }
+
+    /** DEBUG (atlas.debug.ferramentas): manda ao fluxo a ferramenta que acabou de terminar, com os argumentos e o resultado crus. */
+    private void avisarFerramenta(OuvinteDoTurno ouvinte, ChamadaDeFerramenta chamada, String resultado, boolean erro, int ms) {
+        if (modo.debugDeFerramentas()) {
+            ouvinte.ferramenta(DadosDaFerramenta.cortando(chamada.nome(), chamada.argumentos(), resultado, erro, ms));
+        }
     }
 
     private void gravarErro(AtlasContexto contexto, long mensagemId, ChamadaDeFerramenta chamada, String json, String motivo, int ms) {

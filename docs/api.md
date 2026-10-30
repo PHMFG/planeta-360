@@ -1450,6 +1450,7 @@ Com `atlas.relatorio.ligado=false`:
 - **Sem modelo de linguagem** não há plano B nem botão: a conversa abre (`llmDisponivel` `false`) e a mensagem de texto responde 503.
 - **Banco.** As tabelas do relatório (`atlas_relatorio`, `atlas_solicitacao`, `atlas_calculo`, `atlas_decisao`) ficam sem uso; nenhuma migração muda.
 
+**Debug das ferramentas** (`atlas.debug.ferramentas`): veja "Debug das ferramentas", em "Rotas de debug (temporárias)".
 
 **Regras que valem nas rotas 42 a 48**
 
@@ -1497,8 +1498,9 @@ Cada evento tem `event:` e `data:` com um JSON. Numa ida ao modelo a ordem é `p
 | `resumo` | `{"texto": "..."}` | O resumo do raciocínio de uma ida, já conferido e gravado (veja "Raciocínio do modelo"). Chega quando fica pronto, e sempre antes do `fim`. A ida cujo resumo foi recusado, falhou ou passou do prazo não tem `resumo` (nem item `raciocinio` no `fim`). |
 | `etapa` | `{"texto": "..."}` | Uma ferramenta começou a rodar. A frase, nunca o nome da ferramenta: `"Consultando os números da parceria…"` (`parceria_consultar`), `"Abrindo o relatório…"` (`relatorio_iniciar`), `"Preparando as perguntas…"` (`relatorio_solicitar_campos`), `"Redigindo o documento…"` (`relatorio_editar`), `"Finalizando o documento…"` (`relatorio_finalizar`). |
 | `texto` | `{"delta": "..."}` | Um pedaço da resposta para a marca, **já filtrado**: um marcador `{{...}}` fica retido até fechar e sai resolvido e formatado, igual ao item `texto` do `fim`; a última palavra espera o espaço seguinte. A cada pedaço, o que chegou até ali passa pela checagem do texto do chat. As frases fixas do servidor (a troca de um texto recusado duas vezes, a falha do modelo, o limite e o prazo do turno) também chegam como `texto`, inteiras. |
+| `ferramenta` | `{"nome": "parceria_consultar", "argumentos": "{}", "resultado": "{...}", "erro": false, "duracaoMs": 42}` | **Só com `atlas.debug.ferramentas=true`.** Uma ferramenta terminou: logo que ela termina, antes da ferramenta seguinte e da próxima ida ao modelo (depois da `etapa` dela). O mesmo corpo do item `ferramenta` do `fim`, sem o `tipo` (veja "Debug das ferramentas"). Desligado, o evento não existe. |
 | `texto_recusado` | `{}` | A checagem recusou o texto desta ida ao modelo (algarismo fora de marcador, chave crua, marcador que não existe ou sem valor, nome de ferramenta, "marcador"...), durante o fluxo ou na checagem do texto inteiro no fim da ida; ou o modelo falhou no meio de um texto. O servidor para de repassar: **a tela descarta o `texto` que recebeu nesta ida**. A seguir vêm a nova redação (novos `texto`) ou a frase fixa. |
-| `fim` | o objeto Conversa | O mesmo JSON que a rota devolve sem fluxo (`conversaId`, `llmDisponivel`, `relatorioDisponivel`, `itens` do turno). Fecha o fluxo. |
+| `fim` | o objeto Conversa | O mesmo JSON que a rota devolve sem fluxo (`conversaId`, `llmDisponivel`, `relatorioDisponivel`, `debugDeFerramentas`, `itens` do turno). Fecha o fluxo. |
 | `erro` | `{"status": 500, "detail": "..."}` | Uma falha inesperada depois de o fluxo abrir (a falha do modelo continua virando a frase fixa, com `fim`). Fecha o fluxo. |
 
 Exemplo (rota 44, o modelo consulta os números e responde):
@@ -1526,7 +1528,7 @@ event:resumo
 data:{"texto":"Conferi o que veio da consulta e montei a resposta."}
 
 event:fim
-data:{"conversaId":12,"llmDisponivel":true,"relatorioDisponivel":false,"itens":[{"tipo":"usuario","texto":"Como estou?"},{"tipo":"raciocinio","resumo":"Conferi os números da parceria."},{"tipo":"raciocinio","resumo":"Conferi o que veio da consulta e montei a resposta."},{"tipo":"texto","texto":"Os números de Cliente Amarelo estão no portal.","porModelo":true}]}
+data:{"conversaId":12,"llmDisponivel":true,"relatorioDisponivel":false,"debugDeFerramentas":false,"itens":[{"tipo":"usuario","texto":"Como estou?"},{"tipo":"raciocinio","resumo":"Conferi os números da parceria."},{"tipo":"raciocinio","resumo":"Conferi o que veio da consulta e montei a resposta."},{"tipo":"texto","texto":"Os números de Cliente Amarelo estão no portal.","porModelo":true}]}
 ```
 
 O `fim` é a referência: o que a tela montou com os pedaços dá lugar aos itens dele. No exemplo, o primeiro `resumo` chega durante a ida seguinte e o segundo depois do texto dela; o que não chegou antes do `fim` não aparece nele.
@@ -1534,7 +1536,7 @@ O `fim` é a referência: o que a tela montou com os pedaços dá lugar aos iten
 ## O objeto Conversa (rotas 42, 44, 45 e 46)
 
 ```json
-{ "conversaId": 12, "llmDisponivel": false, "relatorioDisponivel": true,
+{ "conversaId": 12, "llmDisponivel": false, "relatorioDisponivel": true, "debugDeFerramentas": false,
   "itens": [
     { "tipo": "usuario", "texto": "Montar o relatório da ativação" },
     { "tipo": "texto", "texto": "Montei a base do relatório de ativação com os números do portal. Faltam números que só vocês sabem.", "porModelo": false },
@@ -1548,6 +1550,7 @@ O `fim` é a referência: o que a tela montou com os pedaços dá lugar aos iten
 
 - `llmDisponivel` é `true` quando a API sobe com o modelo de linguagem ligado e `false` no padrão (sem ele o Atlas só oferece o botão, se o relatório estiver ligado). As rotas 42, 43, 44, 45 e 46 trazem o mesmo valor.
 - `relatorioDisponivel` é o valor de `atlas.relatorio.ligado`: `false` no Atlas só chat (o padrão), em que não saem `cartao`, `relatorio_pronto` nem `aviso`. As rotas 42, 43 (ao lado de `llmDisponivel`), 44, 45 e 46 trazem o mesmo valor. O exemplo abaixo é o de um Atlas com o relatório ligado.
+- `debugDeFerramentas` é o valor de `atlas.debug.ferramentas` (veja "Debug das ferramentas"): `true`, os itens trazem também `ferramenta`. Não vem na rota 43.
 - As rotas **42, 44 e 46 devolvem só os itens do turno**; a **45 devolve a conversa inteira**.
 - Os itens são **derivados do histórico** da conversa, que o servidor grava no formato de chat completions (`user`, `assistant` com `tool_calls`, `tool`), como se o modelo tivesse chamado as ferramentas: nada é guardado só para a tela.
 
@@ -1556,6 +1559,7 @@ O `fim` é a referência: o que a tela montou com os pedaços dá lugar aos iten
 | `usuario` | O que a pessoa disse (o botão aparece como "Montar o relatório da ativação"; no histórico que vai ao modelo, a mensagem continua "Montar o relatório da ativação (botão)") | `texto` |
 | `raciocinio` | O **resumo** do raciocínio do modelo de uma mensagem do assistente, **antes** dos itens dela (`texto`, `cartao`, `relatorio_pronto`). O raciocínio cru (`reasoning_content`) nunca aparece: o resumo é gerado no servidor (veja "Raciocínio do modelo") e já passou pela checagem do texto. Só aparece quando a mensagem tem resumo gravado: sem raciocínio, com resumo recusado, atrasado ou perdido, nas mensagens de antes da V9, no botão e nas frases fixas do servidor não há item. A tela o mostra numa caixa minimizável. | `resumo` |
 | `texto` | O que o Atlas disse. Os marcadores `{{...}}` já vêm trocados pelo valor; o que não tem valor vira "indisponível". `porModelo` é `true` só quando o texto foi escrito pelo modelo de linguagem; é `false` nas frases fixas do servidor: as do botão (plano B: "Montei a base...", "Continuo o relatório...", "Pronto: ..."), a frase fixa que troca um texto recusado duas vezes e as de falha, limite e prazo do turno | `texto`, `porModelo` |
+| `ferramenta` | **Debug, só com `atlas.debug.ferramentas=true`.** Uma ferramenta que o agente chamou, na ordem em que rodou, **depois** do `raciocinio` e do `texto` da mesma mensagem do assistente (e antes do `cartao` que ela abriu). Veja "Debug das ferramentas" | `nome`, `argumentos`, `resultado`, `erro`, `duracaoMs` |
 | `cartao` | O cartão de perguntas, com o **estado de agora** | `solicitacaoId`, `relatorioId`, `mensagem`, `status` (`PENDENTE`, `RESPONDIDA`, `RECUSADA` ou `CANCELADA`), `campos` |
 | `relatorio_pronto` | O relatório ficou pronto; o front abre o A4 pela rota 47. **Só com `atlas.relatorio.ligado=true`**, como `cartao` e `aviso` | `relatorioId`, `titulo` |
 | `aviso` | Aviso do sistema: o cartão foi fechado (cancelado, ou o relatório foi descartado). O texto segue o `llmDisponivel` da resposta: `"Cartão fechado. Use Montar relatório para continuar."` sem o modelo, `"Cartão fechado. Quando tiver os números, peça para continuar."` com ele | `texto` |
@@ -1748,6 +1752,7 @@ Um recurso **temporário**, para a equipe ligar o modelo de linguagem do Atlas p
 - O modelo montado com a chave usa as mesmas opções do `application.yml` (temperatura 0.2, 1 nova tentativa, 60 segundos de limite, o `User-Agent` `PlanetaAtlas/0.1` e o `x-opencode-session` por conversa) e o raciocínio (`thinking`) do `atlas.raciocinio` (`ATLAS_RACIOCINIO`, ligado por padrão), que o `PUT` pode trocar.
 - **Quem chama:** logado (qualquer perfil: é ferramenta da equipe em desenvolvimento). PUT, DELETE e POST exigem o token CSRF. Erros em `ProblemDetail`.
 - Cada troca grava uma linha de log (INFO) com quem trocou, a origem, a base URL, o modelo, o final da chave e o raciocínio.
+- Existe também o **debug das ferramentas** (`atlas.debug.ferramentas`), que não é uma rota: veja "Debug das ferramentas", no fim desta seção.
 
 ## `GET /api/debug/llm`
 
@@ -1804,6 +1809,31 @@ Manda ao modelo que vale agora uma mensagem mínima, sem ferramentas (`"Responda
 `resposta` vem cortada em 200 caracteres. `erro` é o motivo, sempre sem a chave. Sem modelo nenhum: `{ "ok": false, "milissegundos": 0, "modelo": "<o padrão>", "erro": "Nenhuma chave configurada." }`. Com `ok` `true` não vem `erro`; com `false` não vem `resposta`.
 
 **Erros:** 401; 403 (falta o token CSRF).
+
+## Debug das ferramentas (`atlas.debug.ferramentas`)
+
+Também **temporário**: mostra os comandos que o agente usa, para quem desenvolve ver o que ele consultou. Vale para os dois modos do relatório.
+
+| Propriedade | Variável | Padrão |
+| --- | --- | --- |
+| `atlas.debug.ferramentas` | `ATLAS_DEBUG_FERRAMENTAS` | `false`; `true` no perfil `dev`; `false` no `test` |
+
+Ligada:
+
+- **O objeto Conversa** (rotas 42, 44, 45 e 46, e o `fim` do fluxo) traz `"debugDeFerramentas": true`. Desligada: `false`.
+- **Item `ferramenta`** nas rotas 42, 44, 45 e 46 e no `fim`, um por pedido de ferramenta, na ordem em que a ferramenta rodou, **depois** do `raciocinio` e do `texto` da mesma mensagem do assistente:
+
+```json
+{ "tipo": "ferramenta", "nome": "parceria_consultar", "argumentos": "{}", "resultado": "{\"abaFechada\":false,...}", "erro": false, "duracaoMs": 42 }
+```
+
+  - `argumentos` e `resultado` são **strings** com o JSON cru, como o modelo enviou e como o modelo recebeu (o que o histórico guarda), cortadas em **20.000 caracteres**. `resultado` é `null` se a ferramenta ainda não respondeu (o cartão que espera a resposta). Uma ferramenta que deu erro mostra o erro cru (`{"erro": "..."}`) e `erro` `true`.
+  - `duracaoMs` vem da trilha `atlas_tool_call` (o mesmo tempo que a API grava); é `null` se a ferramenta não tem registro. As chamadas do botão (plano B) também aparecem, se estiverem no histórico da conversa.
+  - Com o relatório desligado, as chamadas `relatorio_*` que estão no histórico de uma conversa antiga aparecem do mesmo jeito, mas o `cartao` e o `relatorio_pronto` continuam sem sair.
+- **Evento `ferramenta` no fluxo** (rotas 44 e 46), com o mesmo corpo do item, sem o `tipo`: logo que a ferramenta termina e antes da próxima ida ao modelo. O evento `etapa` não muda.
+- Desligada: nenhum item nem evento `ferramenta`, e nada disso muda o que vai ao modelo.
+
+**O raciocínio cru continua nunca saindo do servidor**, também por aqui. O debug mostra só o que a própria ferramenta já devolveu para aquela conversa, que é só do usuário que a abriu, com a consulta limitada à parceria e ao perfil dele; a chave do modelo não aparece em lugar nenhum.
 
 ---
 

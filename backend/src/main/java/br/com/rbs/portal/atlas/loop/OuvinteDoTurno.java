@@ -1,5 +1,7 @@
 package br.com.rbs.portal.atlas.loop;
 
+import br.com.rbs.portal.atlas.AtlasDtos.DadosDaFerramenta;
+
 /**
  * Quem acompanha um turno do loop do agente enquanto ele roda: a resposta em fluxo das rotas 44 e 46 (docs/api.md, "Resposta em
  * fluxo"). [ATLAS] O loop chama, na thread do turno e na ordem em que as coisas acontecem: o aviso de que o modelo começou a
@@ -66,4 +68,11 @@ public interface OuvinteDoTurno {
 
     /** O texto desta ida ao modelo foi recusado: a tela descarta o que recebeu dela. */
     void textoRecusado();
+
+    /**
+     * DEBUG (só com {@code atlas.debug.ferramentas}): uma ferramenta terminou, com os argumentos e o resultado crus. Vem logo que
+     * ela termina, antes da ferramenta seguinte e da próxima ida ao modelo. O raciocínio cru não passa por aqui.
+     */
+    default void ferramenta(DadosDaFerramenta dados) {
+    }
 }

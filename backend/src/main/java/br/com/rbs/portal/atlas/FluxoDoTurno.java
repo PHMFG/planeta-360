@@ -1,6 +1,7 @@
 package br.com.rbs.portal.atlas;
 
 import br.com.rbs.portal.atlas.AtlasDtos.ConversaDto;
+import br.com.rbs.portal.atlas.AtlasDtos.DadosDaFerramenta;
 import br.com.rbs.portal.atlas.loop.OuvinteDoTurno;
 import java.time.Duration;
 import java.util.Map;
@@ -13,7 +14,8 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
  * A resposta em fluxo (SSE) de um turno das rotas 44 e 46 (docs/api.md, "Resposta em fluxo"). [ATLAS] Cada evento tem nome e um
  * JSON em {@code data}: {@code pensando} ({@code {}}, uma vez por ida ao modelo que raciocina; o raciocínio em si nunca sai do
  * servidor), {@code resumo} ({@code {"texto"}}, o resumo do raciocínio de uma ida, quando fica pronto), {@code texto}
- * ({@code {"delta"}}), {@code etapa} ({@code {"texto"}}), {@code texto_recusado} ({@code {}}), {@code fim} (o objeto Conversa, e
+ * ({@code {"delta"}}), {@code etapa} ({@code {"texto"}}), {@code texto_recusado} ({@code {}}), {@code ferramenta} (só com o debug das ferramentas:
+ * nome, argumentos, resultado, erro e duração), {@code fim} (o objeto Conversa, e
  * fecha) e {@code erro} ({@code {"status","detail"}}, e fecha). Quem chama é a thread do turno, e também a do resumo (que manda o
  * {@code resumo} quando fica pronto): por isso cada envio é um bloco só, sem intercalar dois eventos.
  * <p>
@@ -68,6 +70,11 @@ final class FluxoDoTurno implements OuvinteDoTurno {
     @Override
     public void textoRecusado() {
         enviar("texto_recusado", Map.of());
+    }
+
+    @Override
+    public void ferramenta(DadosDaFerramenta dados) {
+        enviar("ferramenta", dados);
     }
 
     /** O fim do turno: o mesmo objeto Conversa da resposta JSON. Fecha o fluxo. */

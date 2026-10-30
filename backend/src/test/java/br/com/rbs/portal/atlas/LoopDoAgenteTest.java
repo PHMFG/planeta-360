@@ -179,6 +179,7 @@ class LoopDoAgenteTest {
             case ItemUsuario u -> "usuario";
             case AtlasDtos.ItemRaciocinio r -> "raciocinio";
             case ItemTexto t -> "texto";
+            case AtlasDtos.ItemFerramenta f -> "ferramenta";
             case ItemAviso a -> "aviso";
             case ItemCartao c -> "cartao";
             case ItemRelatorioPronto p -> "relatorio_pronto";

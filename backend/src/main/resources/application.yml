@@ -73,6 +73,9 @@ atlas:
     # [ATLAS] TEMPORÁRIO: as rotas /api/debug/llm (pôr a chave do modelo pela tela, só na memória da API). Desligado por padrão;
     # ligado só no perfil dev, abaixo. Sem esta propriedade, as rotas não existem (404).
     chaves: false
+    # [ATLAS] TEMPORÁRIO: a conversa mostra cada ferramenta que o agente chamou (nome, argumentos e resultado crus; item "ferramenta" e
+    # evento "ferramenta" do fluxo). Desligado por padrão; ligado no perfil dev, abaixo. O raciocínio cru nunca sai, nem por aqui.
+    ferramentas: ${ATLAS_DEBUG_FERRAMENTAS:false}
   # [ATLAS] O relatório de trabalho (cartão de perguntas, relatório pronto, rotas 46 a 48, ferramentas relatorio_*). Desligado por
   # padrão, no dev também: o Atlas é só o chat, com parceria_consultar. O código e as tabelas ficam, para o relatório voltar.
   relatorio:
@@ -110,6 +113,7 @@ spring:
 atlas:
   debug:
     chaves: true
+    ferramentas: ${ATLAS_DEBUG_FERRAMENTAS:true}
 
 ---
 spring:
@@ -135,11 +139,12 @@ spring:
       chat: none
 
 # [ATLAS] As rotas de debug ficam desligadas no contexto de teste normal; a classe de teste delas as liga.
-# [ATLAS] No teste o relatório fica ligado (os testes dele continuam valendo); as classes de teste do modo só chat o desligam com
-# @TestPropertySource.
+# [ATLAS] No teste o relatório fica ligado (os testes dele continuam valendo) e o debug das ferramentas, desligado; as classes de
+# teste do modo só chat e do debug mudam isso com @TestPropertySource.
 atlas:
   debug:
     chaves: false
+    ferramentas: false
   relatorio:
     ligado: true
 

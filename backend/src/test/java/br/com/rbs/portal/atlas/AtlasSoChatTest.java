@@ -41,12 +41,12 @@ import org.springframework.transaction.annotation.Transactional;
  * só {@code parceria_consultar} e o prompt do chat; uma ferramenta {@code relatorio_*} chamada à força volta como erro e nada é
  * criado; {@code atalho} e {@code modelo} dão 422 nas rotas 42 e 44; as rotas 46 a 48 dão 404 como rota que não existe; a conversa
  * não devolve {@code cartao}, {@code relatorio_pronto} nem {@code aviso}, inclusive numa conversa antiga que os tenha, e o
- * {@code relatorio} das listas vem nulo; nenhuma frase do servidor fala do botão.
+ * {@code relatorio} das listas vem nulo; nenhuma frase do servidor fala do botão. O debug das ferramentas fica desligado aqui.
  * Contexto próprio por causa das propriedades; cada teste é desfeito no fim (@Transactional).
  */
 @TesteComLlmRoteirizado
 @Transactional
-@TestPropertySource(properties = "atlas.relatorio.ligado=false")
+@TestPropertySource(properties = {"atlas.relatorio.ligado=false", "atlas.debug.ferramentas=false"})
 class AtlasSoChatTest {
 
     private static final String FRASE_422 = "O relatório não está disponível nesta versão.";
@@ -130,6 +130,7 @@ class AtlasSoChatTest {
             assertThat(aberta).hasStatus(HttpStatus.CREATED);
             assertThat(lerJson(aberta, "$.llmDisponivel")).isEqualTo(true);
             assertThat(lerJson(aberta, "$.relatorioDisponivel")).isEqualTo(false);
+            assertThat(lerJson(aberta, "$.debugDeFerramentas")).isEqualTo(false);
             assertThat(lerLista(aberta, "$.itens")).isEmpty();
         }
     }

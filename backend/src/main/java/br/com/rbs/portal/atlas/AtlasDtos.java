@@ -27,9 +27,11 @@ public final class AtlasDtos {
 
     /**
      * A resposta das rotas 42, 44, 45 e 46. 42, 44 e 46 trazem só os itens do turno; a 45, a conversa inteira.
-     * {@code relatorioDisponivel} é o {@code atlas.relatorio.ligado}: falso, o Atlas é só o chat.
+     * {@code relatorioDisponivel} é o {@code atlas.relatorio.ligado}: falso, o Atlas é só o chat. {@code debugDeFerramentas} é o
+     * {@code atlas.debug.ferramentas}: verdadeiro, os itens trazem também cada ferramenta que rodou (temporário).
      */
-    public record ConversaDto(Long conversaId, boolean llmDisponivel, boolean relatorioDisponivel, List<ItemDaConversa> itens) {
+    public record ConversaDto(Long conversaId, boolean llmDisponivel, boolean relatorioDisponivel, boolean debugDeFerramentas,
+                              List<ItemDaConversa> itens) {
     }
 
     /** Um campo do cartão: o campo do catálogo (rota 39) mais se é obrigatório e o valor vigente (formato da rota 40). */
@@ -43,10 +45,12 @@ public final class AtlasDtos {
             @JsonSubTypes.Type(value = ItemUsuario.class, name = "usuario"),
             @JsonSubTypes.Type(value = ItemRaciocinio.class, name = "raciocinio"),
             @JsonSubTypes.Type(value = ItemTexto.class, name = "texto"),
+            @JsonSubTypes.Type(value = ItemFerramenta.class, name = "ferramenta"),
             @JsonSubTypes.Type(value = ItemAviso.class, name = "aviso"),
             @JsonSubTypes.Type(value = ItemCartao.class, name = "cartao"),
             @JsonSubTypes.Type(value = ItemRelatorioPronto.class, name = "relatorio_pronto")})
-    public sealed interface ItemDaConversa permits ItemUsuario, ItemRaciocinio, ItemTexto, ItemAviso, ItemCartao, ItemRelatorioPronto {
+    public sealed interface ItemDaConversa permits ItemUsuario, ItemRaciocinio, ItemTexto, ItemFerramenta, ItemAviso, ItemCartao,
+            ItemRelatorioPronto {
     }
 
     /** O que a pessoa disse (o botão aparece como "Montar o relatório da ativação"). */
@@ -67,6 +71,39 @@ public final class AtlasDtos {
      * recusado, a falha do modelo, o limite e o prazo do turno).
      */
     public record ItemTexto(String texto, boolean porModelo) implements ItemDaConversa {
+    }
+
+    /**
+     * DEBUG (temporário, {@code atlas.debug.ferramentas}): uma ferramenta que o agente chamou. Vem depois do {@code raciocinio} e
+     * do {@code texto} da mesma mensagem do assistente, na ordem em que rodou. {@code argumentos} e {@code resultado} são o JSON cru
+     * como texto (o que o modelo enviou e o que recebeu), cortados em {@value DadosDaFerramenta#LIMITE_DO_TEXTO} caracteres;
+     * {@code resultado} é nulo se a ferramenta ainda não respondeu e {@code duracaoMs} é nulo se não há registro dela.
+     */
+    public record ItemFerramenta(String nome, String argumentos, String resultado, boolean erro, Integer duracaoMs)
+            implements ItemDaConversa {
+
+        public static ItemFerramenta de(DadosDaFerramenta dados) {
+            return new ItemFerramenta(dados.nome(), dados.argumentos(), dados.resultado(), dados.erro(), dados.duracaoMs());
+        }
+    }
+
+    /** O corpo do evento {@code ferramenta} da resposta em fluxo: o mesmo do {@link ItemFerramenta}, sem o {@code tipo}. */
+    public record DadosDaFerramenta(String nome, String argumentos, String resultado, boolean erro, Integer duracaoMs) {
+
+        public static final int LIMITE_DO_TEXTO = 20_000;
+
+        /** Os dados com {@code argumentos} e {@code resultado} cortados no limite. */
+        public static DadosDaFerramenta cortando(String nome, String argumentos, String resultado, boolean erro, Integer duracaoMs) {
+            return new DadosDaFerramenta(nome, cortar(argumentos), cortar(resultado), erro, duracaoMs);
+        }
+
+        static String cortar(String texto) {
+            if (texto == null || texto.length() <= LIMITE_DO_TEXTO) {
+                return texto;
+            }
+            int fim = Character.isHighSurrogate(texto.charAt(LIMITE_DO_TEXTO - 1)) ? LIMITE_DO_TEXTO - 1 : LIMITE_DO_TEXTO;
+            return texto.substring(0, fim);
+        }
     }
 
     /** Um aviso do sistema (por exemplo, o cartão que foi fechado). */
