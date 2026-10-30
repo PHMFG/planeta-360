@@ -2,7 +2,7 @@
 
 Este documento explica o banco da Entrega 2. É para quem vai ler, testar ou mexer nele.
 O banco é o PostgreSQL (rodamos na versão 18; a mínima é a 15). As tabelas são criadas pelo Flyway.
-Os números: **43 tabelas, 8 visões, 6 funções e 17 gatilhos de regra**. As funções são as 4 de carga e de relatório (`fn_carregar_veiculacoes`, `fn_carregar_pesquisa`, `fn_carregar_plano`, da V7, e `fn_gerar_relatorio`) mais as 2 que formatam números (`fn_numero_br` e `fn_pct_truncado`, da V4; a `fn_pct_arredondado` da V4 saiu na V6). Não contam aqui as funções `tg_*`, uma por gatilho.
+Os números: **43 tabelas de negócio (mais a `flyway_schema_history`, do Flyway), 8 visões, 6 funções e 17 gatilhos de regra**. As funções são as 4 de carga e de relatório (`fn_carregar_veiculacoes`, `fn_carregar_pesquisa`, `fn_carregar_plano`, da V7, e `fn_gerar_relatorio`) mais as 2 que formatam números (`fn_numero_br` e `fn_pct_truncado`, da V4; a `fn_pct_arredondado` da V4 saiu na V6). Não contam aqui as funções `tg_*`, uma por gatilho.
 
 ## Onde está cada coisa
 
@@ -136,7 +136,7 @@ A V9 muda o que a conversa do Atlas mostra do raciocínio do modelo: o `reasonin
 
 ## Tabelas por área
 
-Colunas em **negrito** são novas desde a Sprint 1. `id` é sempre a chave primária. Colunas com sufixo `_id` apontam para outra tabela.
+Negrito marca a coluna acrescentada depois da Sprint 1 numa tabela que já existia nela; as tabelas novas (`cota_tipo_aba`, `codigo_ativacao`, `stg_pesquisa`, `stg_plano`, `campo_catalogo`, `dado_informado` e as do Atlas) não usam negrito. `id` é sempre a chave primária. Colunas com sufixo `_id` apontam para outra tabela.
 
 ### 1. Núcleo da parceria
 
@@ -184,8 +184,8 @@ O banco não limita as transições de status da entrega. Essa regra fica na API
 | `carga` | Cada planilha processada (mídia, pesquisa, comprovação, plano) e seus totais | id, tipo, arquivo_id, **evento_id**, executada_por, executada_em, **processada_em**, linhas_lidas, linhas_inseridas, linhas_duplicadas, linhas_rejeitadas |
 | `carga_rejeicao` | Linhas que não entraram, com o motivo | id, carga_id, linha, campo, motivo, conteudo |
 | `stg_veiculacao` | Área de carga: as linhas da planilha de veiculação como chegam | carga_id, linha, patrocinador, veiculo, formato, espaco_programa, exibido_em, quantidade, link, **exibido_em_texto**, **quantidade_texto** |
-| `stg_pesquisa` | Área de carga: as linhas do CSV de resultados da pesquisa | carga_id, linha, patrocinador, pergunta, indicador, alternativa, valor, unidade, base_respondentes, **pergunta_texto**, **valor_texto**, **base_respondentes_texto** |
-| `stg_plano` | Área de carga: as linhas do `plano.csv` (plano comercial) | carga_id, linha, patrocinador, categoria, bloco, veiculo, formato, espaco_programa, janela, tipo_midia, quantidade_prevista, **quantidade_texto**, unidade, fonte_pagina |
+| `stg_pesquisa` | Área de carga: as linhas do CSV de resultados da pesquisa | carga_id, linha, patrocinador, pergunta, indicador, alternativa, valor, unidade, base_respondentes, pergunta_texto, valor_texto, base_respondentes_texto |
+| `stg_plano` | Área de carga: as linhas do `plano.csv` (plano comercial) | carga_id, linha, patrocinador, categoria, bloco, veiculo, formato, espaco_programa, janela, tipo_midia, quantidade_prevista, quantidade_texto, unidade, fonte_pagina |
 
 Unidades de mídia: `INSERCAO`, `CPM` e `APLICACAO`. Elas nunca são somadas entre si.
 
@@ -235,13 +235,13 @@ Na pesquisa geral o resultado não tem parceria nem pergunta. Na pesquisa da ati
 | `atlas_tool_call` | Cada ferramenta que rodou, para auditoria | id, mensagem_id, ferramenta, argumentos (JSON), resultado (JSON), erro, duracao_ms |
 | `atlas_decisao` | O que o JEV decidiria, em sombra (P1). Ninguém a escreve ainda | id, mensagem_id, pergunta, escolha, confianca, probabilidades, modelo, decisao_llm, latencia_ms, erro |
 
-As **8 visões** somam os números sem misturar unidades: `vw_midia_veiculo`, `vw_midia_unidade`, `vw_entregas_resumo`,
-`vw_aplicacoes`, `vw_cortesias`, `vw_indicadores_parceria` (todos os números do relatório) e `vw_faltantes` (o que impede ou enfraquece o relatório), mais a `vw_dado_vigente`, que devolve o valor mais recente de cada campo informado de cada parceria.
+As **7 visões de número** somam sem misturar unidades: `vw_midia_veiculo`, `vw_midia_unidade`, `vw_entregas_resumo`,
+`vw_aplicacoes`, `vw_cortesias`, `vw_indicadores_parceria` (todos os números do relatório) e `vw_faltantes` (o que impede ou enfraquece o relatório), e a 8ª, `vw_dado_vigente`, devolve o valor mais recente de cada campo informado de cada parceria.
 
 ## Regras do banco
 
 Toda regra de negócio recusada sai com um erro da **classe 23** do PostgreSQL (`check_violation` ou `foreign_key_violation`) e uma mensagem em português.
-O nome da regra vem junto (por exemplo `rn_cortesia_limite`). A API traduz a classe 23 em erro 409 ou 422.
+O nome da regra vem junto (por exemplo `rn_cortesia_limite`). A API traduz a classe 23 em erro 409, com a frase da regra (ou uma frase genérica, em restrição sem frase própria). O 422 é a validação de campos feita pela própria API. A lista abaixo traz as regras principais; não é exaustiva.
 
 ### Como as cargas funcionam
 
@@ -252,7 +252,7 @@ O nome da regra vem junto (por exemplo `rn_cortesia_limite`). A API traduz a cla
 3. Insere sem duplicar. A chave é a **linha do plano + data e hora**.
 4. Grava os totais em `carga`: lidas, inseridas, duplicadas e rejeitadas.
 
-Reenviar o mesmo arquivo não insere nada: tudo conta como duplicada. Processar a mesma carga de novo devolve os totais já gravados.
+Reenviar o mesmo arquivo não insere as linhas que já estão na base: elas contam como duplicadas. Uma linha rejeitada antes entra se agora for válida; as que continuam inválidas seguem rejeitadas. Processar a mesma carga de novo devolve os totais já gravados.
 Se o reenvio traz uma quantidade corrigida, ela também conta como duplicada: a primeira versão prevalece.
 
 **Pesquisa** (`fn_carregar_pesquisa`). Funciona do mesmo jeito, com `stg_pesquisa`, e ligada a uma pesquisa. Na pesquisa da ativação:
@@ -295,6 +295,9 @@ Os itens 1, 2 e 4 não são "recusas": a conferência mostra o comportamento esp
 | Dado informado imutável | `rn_dado_informado_imutavel` | Não se altera nem se apaga um dado informado. Para corrigir, grava-se um valor novo (a visão `vw_dado_vigente` mostra o mais recente) |
 | Isolamento | chaves compostas e `rn_*` | Tudo o que uma marca vê é da parceria dela |
 | Vínculo exige autorização | `rn_vinculo_exige_autorizacao` | Ninguém é vinculado sem e-mail autorizado e não revogado |
+| Autorização não muda de dono | `rn_email_autorizado_imutavel` | Não se troca a parceria nem o e-mail de uma autorização |
+| Revogação | `rn_email_revogado` | Revogar remove o vínculo dessa parceria e invalida os códigos pendentes |
+| Comprovante de veiculação | `rn_veiculacao_comprovante` | O comprovante é um arquivo da mesma parceria da linha do plano |
 | Abas padrão | `rn_parceria_abas_padrao` | A parceria nasce com as 7 abas, abertas conforme `cota_tipo_aba` |
 | Comprovação | `rn_comprovacao_*` | Foto só vale para aplicação de marca, e o arquivo precisa ser da categoria `COMPROVACAO` |
 | Fonte da pesquisa | `rn_pesquisa_fonte_geral` | O arquivo-fonte da pesquisa é geral da RBS, nunca de uma marca |
@@ -475,7 +478,7 @@ Os 14 indisponíveis são: "O festival em números" e a pesquisa geral das 3 mar
 | 240 a 147 | Usuários, patrocinadores, parcerias, plano comercial e e-mails autorizados |
 | 130 a 35 | As entregas da pré-produção: cada arquivo que a marca enviou, com autor, data e (às vezes) uma observação, e a decisão da RBS. O ciclo do logo do Amarelo (envio, análise, ajuste pedido com recado, nova versão, aprovado) acontece entre 94 e 91 |
 | 60 a 40 | As exibições de mídia da planilha de veiculação |
-| 46 a 24 | Perguntas da pesquisa, fotos de comprovação e o contrato assinado do Amarelo |
+| 46 a 24 | Perguntas da pesquisa, fotos de comprovação e o contrato assinado do Amarelo (há um contrato por parceria; os de Roxo e Verde ainda sem assinatura nem arquivo) |
 | 12 e 11 | As duas cargas de veiculação (a segunda é o reenvio) e a carga de pesquisa |
 | 10 | Os três relatórios, versão 1, em rascunho |
 | 6 a 2 | Três entregas em aberto: o VT do Roxo em **Ajuste solicitado** (com o envio da marca e o recado da RBS no histórico), a peça de 30" do Amarelo **Em análise** e a destinação das cortesias da Verde **Enviada** |

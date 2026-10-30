@@ -169,7 +169,7 @@ No Windows (PowerShell): `$env:ATLAS_LLM="openai"; $env:OPENCODE_API_KEY="sua-ch
 | Variável | Padrão | Para quê |
 | --- | --- | --- |
 | `ATLAS_LLM` | `none` | `openai` liga o modelo (qualquer serviço compatível com a API da OpenAI) |
-| `OPENCODE_API_KEY` | — | A chave do provedor. Só em variável de ambiente, nunca no repositório. Sem ela, o Atlas não responde e a API avisa no log |
+| `OPENCODE_API_KEY` | — | A chave do provedor. Só em variável de ambiente, nunca no repositório. Com `ATLAS_LLM=openai` e sem ela, o Atlas não responde e a API avisa no log |
 | `ATLAS_LLM_BASE_URL` | `https://opencode.ai/inference/go/openai/v1` | O endereço do provedor |
 | `ATLAS_LLM_MODELO` | `deepseek-v4.1-flash` | O modelo |
 | `ATLAS_RACIOCINIO` | `true` | O raciocínio do modelo, com o resumo na conversa. Ligado, cada resposta demora uns segundos a mais e gasta mais do limite do provedor |
@@ -180,7 +180,7 @@ No Windows (PowerShell): `$env:ATLAS_LLM="openai"; $env:OPENCODE_API_KEY="sua-ch
 
 O Atlas nunca escreve um número: os números do chat vêm da base do portal ou do que a marca informou, sempre com a origem. Use só dados fictícios enquanto o provedor estiver em teste.
 
-**Regras de envio.** Arquivos de até 20 MB nos formatos PDF, PNG, JPG, DOCX, XLSX, PPTX, CSV, MP4, MP3 e ZIP. A API confere o conteúdo, e não só o nome. O download sai sempre como anexo. Cada envio aceita uma observação (até 500 caracteres), que fica na versão e no histórico. As planilhas de carga são CSV em UTF-8 com vírgula como separador (no Excel, "Salvar como" e "CSV UTF-8"); as colunas estão em `docs/banco.md` e há exemplos em `docs/exemplos/`. Linha com data ou quantidade ilegível é rejeitada com o motivo e o formato esperado, e o resto do arquivo entra.
+**Regras de envio.** Arquivos de até 20 MB nos formatos PDF, PNG, JPG (e JPEG), DOCX, XLSX, PPTX, CSV, MP4, MP3 e ZIP. A API confere o conteúdo, e não só o nome. O download sai sempre como anexo. Cada envio aceita uma observação (até 500 caracteres), que fica na versão e no histórico. As planilhas de carga são CSV em UTF-8 com vírgula como separador (no Excel, "Salvar como" e "CSV UTF-8"); as colunas estão em `docs/banco.md` e há exemplos em `docs/exemplos/`. Linha com data ou quantidade ilegível é rejeitada com o motivo e o formato esperado, e o resto do arquivo entra.
 
 ## Testes
 
@@ -213,7 +213,7 @@ No front, `npm run build` confere os tipos e gera a versão de produção; `npm 
 - Telas próprias de Cortesias, Credenciamento e Contrato: nesta versão cada uma dessas abas mostra as próprias entregas.
 - Relatório montado pelo Atlas: desabilitado nesta versão (`ATLAS_RELATORIO`), até entrarem o JEV e as outras ferramentas de que ele precisa. O código continua no projeto e as tabelas ficam sem uso.
 - Atlas com o modelo de linguagem: testado contra um servidor falso e com a chave de verdade do OpenCode Go. Para decidir com a equipe: os termos de uso do OpenCode, que falam em uso interno de quem assina, e o acordo de retenção zero do DeepSeek no Go, que vence em 31/10/2026 e é renovado mês a mês.
-- Dado pessoal no modelo: a consulta do Atlas leva ao modelo o nome de quem informou cada dado ("Informado por ... em ..."). Aceito enquanto o provedor só recebe dados fictícios; tirar antes de usar dados de verdade.
+- Dado pessoal no modelo: a consulta do Atlas leva ao modelo o nome de quem informou cada dado ("Informado por ... em ..."). Fica assim por decisão do dono do produto.
 - Dados informados pela marca entram sem aprovação da RBS, com o nome de quem informou e a data.
 - E-mail automático do código de ativação; recuperação de senha.
 - PDF do relatório: pela impressão do navegador.
@@ -229,7 +229,7 @@ backend/    API Spring Boot (pacotes comum, acesso, parceria, materiais, pesquis
             src/main/resources/db/migration  estrutura, regras e dados base (Flyway)
             src/main/resources/db/dev        amostra de demonstração
             src/main/resources/atlas         modelo do relatório do Atlas e o prompt
-frontend/   React + Vite (api, atlas, componentes, paginas/acesso, paginas/parceria, paginas/rbs)
+frontend/   React + Vite (api, atlas, componentes, estilos, paginas/acesso, paginas/parceria, paginas/rbs, sessao, util)
 docs/       banco.md, api.md, exemplos de CSV e a modelagem da Sprint 1
 ```
 

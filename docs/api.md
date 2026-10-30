@@ -83,7 +83,7 @@ Toda chamada que **altera** dados (`POST`, `PUT`, `PATCH`, `DELETE`) precisa de 
 2. O front copia o valor desse cookie para o cabeçalho `X-XSRF-TOKEN` em cada chamada que altera dados.
 3. Sem o cabeçalho, ou com valor diferente do cookie, a resposta é **403** com `detail` falando do token CSRF.
 
-O cookie nasce na primeira resposta da API. Se ele não existir (primeira visita, ou depois do logout, que o apaga), o front chama `GET /api/auth/csrf`, que devolve o token e grava o cookie. A resposta já traz o valor pronto para usar no cabeçalho.
+O cookie nasce no `GET /api/auth/csrf` ou no primeiro método que exige CSRF. Se ele não existir (primeira visita, ou depois do logout, que o apaga), o front chama `GET /api/auth/csrf`, que devolve o token e grava o cookie. A resposta já traz o valor pronto para usar no cabeçalho.
 
 Roteiro de uso:
 
@@ -114,46 +114,46 @@ Todas prontas e testadas. A coluna "Etapa" mostra em que etapa do plano a rota e
 | 6 | `GET /api/eventos` | Logado | Lista as edições do festival | 4 |
 | 7 | `GET /api/parcerias` | Logado | Lista as parcerias (RBS: todas, com resumo) | 4 |
 | 8 | `POST /api/parcerias` | Admin RBS | Cria uma parceria | 4 |
-| 9 | `GET /api/parcerias/{id}` | Patrocinador da parceria | Dados da parceria, abas e e-mails | 4 |
+| 9 | `GET /api/parcerias/{id}` | Patrocinador da parceria, ou Admin RBS | Dados da parceria, abas e e-mails | 4 |
 | 10 | `PATCH /api/parcerias/{id}` | Admin RBS | Edita o Perfil e libera abas | 4 |
 | 11 | `GET /api/parcerias/{id}/emails` | Admin RBS | Lista os e-mails autorizados | 4 |
 | 12 | `POST /api/parcerias/{id}/emails` | Admin RBS | Autoriza um e-mail e gera o código de ativação | 4 |
 | 13 | `DELETE /api/parcerias/{id}/emails/{emailId}` | Admin RBS | Revoga o e-mail e tira o acesso | 4 |
-| 14 | `GET /api/parcerias/{id}/entregas` | Patrocinador da parceria | Lista as entregas, por aba | 5 |
+| 14 | `GET /api/parcerias/{id}/entregas` | Patrocinador da parceria, ou Admin RBS | Lista as entregas, por aba | 5 |
 | 15 | `POST /api/parcerias/{id}/entregas` | Admin RBS | Cria uma entrega | 5 |
 | 16 | `GET /api/entregas` | Admin RBS | Fila de entregas de todas as parcerias, com filtros | 5 |
-| 17 | `POST /api/entregas/{id}/arquivos` | Patrocinador da parceria | Envia um arquivo (a RBS envia o retorno) | 5 |
-| 18 | `GET /api/arquivos/{id}` | Patrocinador da parceria | Baixa um arquivo, como anexo | 5 |
+| 17 | `POST /api/entregas/{id}/arquivos` | Patrocinador da parceria, ou Admin RBS | Envia um arquivo (a RBS envia o retorno) | 5 |
+| 18 | `GET /api/arquivos/{id}` | Patrocinador da parceria, ou Admin RBS | Baixa um arquivo, como anexo | 5 |
 | 19 | `PATCH /api/entregas/{id}/status` | Admin RBS | Muda o status da entrega, com observação | 5 |
-| 20 | `GET /api/parcerias/{id}/historico` | Patrocinador da parceria | Histórico da parceria | 5 |
+| 20 | `GET /api/parcerias/{id}/historico` | Patrocinador da parceria, ou Admin RBS | Histórico da parceria | 5 |
 | 21 | `GET /api/historico` | Admin RBS | Histórico geral, com filtros | 5 |
 | 22 | `GET /api/historico.csv` | Admin RBS | O mesmo histórico, em CSV | 5 |
-| 23 | `GET /api/parcerias/{id}/pesquisa` | Patrocinador da parceria | Perguntas e resultados da pesquisa | 6 |
+| 23 | `GET /api/parcerias/{id}/pesquisa` | Patrocinador da parceria, ou Admin RBS | Perguntas e resultados da pesquisa | 6 |
 | 24 | `PUT /api/parcerias/{id}/pesquisa/perguntas` | Admin Patrocinador da parceria | Envia as até 3 perguntas | 6 |
 | 25 | `PATCH /api/pesquisa/perguntas/{id}/status` | Admin RBS | Aprova a pergunta ou pede ajuste | 6 |
 | 26 | `POST /api/cargas` | Admin RBS | Envia um CSV de veiculação, de pesquisa ou do plano comercial | 6 |
 | 27 | `GET /api/cargas` | Admin RBS | Lista as cargas feitas | 6 |
 | 28 | `GET /api/cargas/{id}/rejeicoes` | Admin RBS | Linhas que não entraram na carga, com o motivo | 6 |
-| 29 | `GET /api/parcerias/{id}/consolidacao` | Patrocinador da parceria | Previsto x exibido e faltantes | 6 |
+| 29 | `GET /api/parcerias/{id}/consolidacao` | Patrocinador da parceria, ou Admin RBS | Previsto x exibido e faltantes | 6 |
 | 30 | `GET /api/painel` | Admin RBS | Números do painel da RBS | 6 |
 | 31 | `GET /api/relatorios` | Admin RBS | Situação do relatório de cada parceria | 7 |
 | 32 | `GET /api/relatorios.csv` | Admin RBS | A mesma lista, em CSV | 7 |
 | 33 | `POST /api/parcerias/{id}/relatorios` | Admin RBS | Gera uma nova versão do relatório | 7 |
 | 34 | `PATCH /api/relatorios/{id}/status` | Admin RBS | Valida ou disponibiliza o relatório | 7 |
-| 35 | `GET /api/parcerias/{id}/relatorio` | Patrocinador da parceria | Relatório da parceria (o patrocinador só vê o disponibilizado) | 7 |
-| 36 | `GET /api/relatorios/{id}/csv` | Patrocinador da parceria | Um relatório em CSV | 7 |
-| 37 | `GET /api/parcerias/{id}/aplicacoes` | Patrocinador da parceria | O plano de aplicações de marca, linha a linha, com as fotos | Atlas 1 |
+| 35 | `GET /api/parcerias/{id}/relatorio` | Patrocinador da parceria, ou Admin RBS | Relatório da parceria (o patrocinador só vê o disponibilizado) | 7 |
+| 36 | `GET /api/relatorios/{id}/csv` | Patrocinador da parceria, ou Admin RBS | Um relatório em CSV | 7 |
+| 37 | `GET /api/parcerias/{id}/aplicacoes` | Patrocinador da parceria, ou Admin RBS | O plano de aplicações de marca, linha a linha, com as fotos | Atlas 1 |
 | 38 | `POST /api/parcerias/{id}/aplicacoes/{aproveitamentoId}/comprovacoes` | Admin RBS | Anexa uma foto de comprovação a uma aplicação | Atlas 1 |
 | 39 | `GET /api/campos` | Logado | O catálogo dos campos que a marca pode informar | Atlas 1 |
-| 40 | `GET /api/parcerias/{id}/dados` | Patrocinador da parceria | Os valores vigentes dos campos de uma aba, com autor e data | Atlas 1 |
-| 41 | `POST /api/parcerias/{id}/dados` | Patrocinador da parceria | Grava de 1 a 20 valores novos de uma aba | Atlas 1 |
+| 40 | `GET /api/parcerias/{id}/dados` | Patrocinador da parceria, ou Admin RBS | Os valores vigentes dos campos de uma aba, com autor e data | Atlas 1 |
+| 41 | `POST /api/parcerias/{id}/dados` | Patrocinador da parceria, ou Admin RBS | Grava de 1 a 20 valores novos de uma aba | Atlas 1 |
 | 42 | `POST /api/parcerias/{id}/atlas/conversas` | Admin Patrocinador da parceria | Abre uma conversa com o Atlas; com o atalho, já monta o relatório | Atlas 2 |
 | 43 | `GET /api/parcerias/{id}/atlas/conversas` | Admin Patrocinador da parceria | As conversas de quem pede nesta parceria | Atlas 2 |
 | 44 | `POST /api/atlas/conversas/{id}/mensagens` | Dono da conversa | Manda uma mensagem, ou o atalho "Montar relatório" | Atlas 2 |
 | 45 | `GET /api/atlas/conversas/{id}` | Dono da conversa | A conversa inteira | Atlas 2 |
 | 46 | `POST /api/atlas/solicitacoes/{id}/respostas` | Dono da conversa | Responde o cartão de perguntas (accept, decline ou cancel) | Atlas 2 |
-| 47 | `GET /api/atlas/relatorios/{id}` | Patrocinador da parceria | O relatório do Atlas, pronto ou em montagem | Atlas 2 |
-| 48 | `GET /api/parcerias/{id}/atlas/relatorios` | Patrocinador da parceria | Os relatórios do Atlas da parceria | Atlas 2 |
+| 47 | `GET /api/atlas/relatorios/{id}` | Patrocinador da parceria, ou Admin RBS | O relatório do Atlas, pronto ou em montagem | Atlas 2 |
+| 48 | `GET /api/parcerias/{id}/atlas/relatorios` | Patrocinador da parceria, ou Admin RBS | Os relatórios do Atlas da parceria | Atlas 2 |
 
 São 48 operações (método + caminho). A rota 5 (`ativar`) faz parte do contrato de autenticação, mas só é implementada na etapa 4. As rotas 37 em diante vieram com o Atlas (MVP): a coluna "Etapa" diz `Atlas 1` (plano de aplicações e dados informados) ou `Atlas 2` (conversa, cartão de perguntas e relatório). Nas rotas 42 a 46 só o Admin Patrocinador chama (a RBS recebe **403** antes de o corpo ser lido); nas 47 e 48 chamam a marca da parceria e a RBS. **Neste MVP o relatório do Atlas está desligado** (`atlas.relatorio.ligado=false`, o padrão): as rotas **46, 47 e 48 não existem (404)**, e as rotas 42 e 44 só aceitam conversa por texto (`atalho` e `modelo` dão 422). Veja "Modo só chat". O contrato do relatório, nas rotas 42 a 48, vale com `atlas.relatorio.ligado=true`.
 
@@ -1137,6 +1137,7 @@ Gera uma **nova versão** do relatório da parceria, em `RASCUNHO`, copiando os 
 - `VALIDADO`: a RBS conferiu os números. Grava quem validou e quando; os números ficam congelados.
 - `DISPONIBILIZADO`: libera o relatório para o patrocinador. Grava quem liberou e quando. Só vale a partir de `VALIDADO`.
 - Pedir o status que o relatório já tem devolve **200** sem alterar nada e sem gravar histórico.
+- `RASCUNHO` passa na validação: em rascunho, é o caso acima (200 sem efeito); em relatório já validado, dá 409 pela ordem de status.
 
 **200**: o relatório (formato da rota 35).
 
@@ -1357,7 +1358,7 @@ Hoje são quatro campos, todos da aba `APLICACOES`, inteiros a partir de 0 e sem
 
 ## 41. `POST /api/parcerias/{id}/dados`  · Atlas 1
 
-**Quem chama:** patrocinador da parceria, ou Admin RBS (exige o token CSRF). A marca de outra parceria recebe **404**; a marca só grava com a aba dos campos aberta (**403**). Grava de 1 a 20 valores de uma aba só; a origem gravada é `PORTAL`.
+**Quem chama:** patrocinador da parceria, ou Admin RBS (exige o token CSRF). A marca de outra parceria recebe **404**; a marca só grava com a aba dos campos aberta (**403**). Grava de 1 a 20 valores de uma aba só; a origem gravada é `PORTAL`. O formato do corpo é conferido primeiro: lista ausente, vazia ou com mais de 20 itens, item nulo e chave em branco ou longa dão **422** antes do 404 e do 403, inclusive para a marca de outra parceria. Depois vêm 404, 403 e os erros de valor.
 
 **Corpo**
 
@@ -1395,7 +1396,9 @@ Hoje são quatro campos, todos da aba `APLICACOES`, inteiros a partir de 0 e sem
 | Mesma chave duas vezes no pedido | `Este campo aparece mais de uma vez no pedido.` |
 | Campos de abas diferentes no mesmo pedido | `campos.valores`: `Envie os campos de uma aba só.` |
 | Campo de arquivo (ainda não aceito por JSON) | `Este campo recebe um arquivo, que ainda não é aceito por aqui.` |
-| Valor ausente ou `null` | `Informe o valor.` |
+| Valor ausente ou `null` | `Informe o valor.` (em campo `DATA`: `Informe a data no formato AAAA-MM-DD.`) |
+| Item nulo na lista | `Valor vazio.` |
+| Chave com mais de 80 caracteres | `A chave do campo tem no máximo 80 caracteres.` |
 | Valor que não é número inteiro num campo `INTEIRO` (`12.5`, `"1200"`, `true`) | `Informe um número inteiro.` |
 | Valor que não é número num campo `DECIMAL`, ou com mais de 2 casas | `Informe um número.` / `Use no máximo 2 casas decimais.` |
 | Data fora de `AAAA-MM-DD` num campo `DATA` | `Informe a data no formato AAAA-MM-DD.` |
@@ -1465,15 +1468,15 @@ Com `atlas.relatorio.ligado=false`:
 
 Com o modelo ligado (pelas variáveis de ambiente ou, no perfil `dev`, pela chave posta nas rotas de debug do fim deste arquivo), a mensagem de texto da rota 44 e a resposta do cartão da rota 46 rodam o **loop do agente**. O contrato para quem usa a API:
 
-- **Um turno** começa na mensagem da pessoa (ou na resposta do cartão). O modelo responde com texto, ou pede ferramentas; o servidor as executa **uma a uma, na ordem**, grava a resposta de cada uma e devolve o resultado ao modelo, até ele responder com texto. As ferramentas são `relatorio_iniciar`, `relatorio_solicitar_campos`, `relatorio_editar` (operação `definir_texto`) e `relatorio_finalizar`, as mesmas operações do botão, e a consulta `parceria_consultar`. O modelo só recebe as ferramentas do estado do relatório (sem relatório, `parceria_consultar` e `relatorio_iniciar`; em montagem, `parceria_consultar` e as outras três; com o cartão aberto, nenhuma: o turno para). **Com `atlas.relatorio.ligado=false`, só `parceria_consultar`** (veja "Modo só chat").
-- **Pergunta sobre os números sem relatório.** `parceria_consultar` (sem argumento) é **só de leitura**: não cria relatório e não grava nada além da trilha da chamada. Devolve as referências do modelo-base para a parceria da conversa, resolvidas com o perfil de quem pede (o filtro de aba da rota 29): `{abaFechada, aviso, dados:[{ref, rotulo, valor, unidade, origem}], indisponiveis:[{ref, rotulo, motivo}]}`, em que `dados` é o mesmo que `relatorio_iniciar` devolve em dados disponíveis mais os cálculos fixos (`calc:`) que já dá para resolver, e `indisponiveis` traz os que estão sem valor (dado não informado, conta sem a entrada). Com a aba `APLICACOES` fechada para a marca (conferida no banco na hora da chamada), vem `abaFechada: true`, o `aviso` e as listas vazias. O modelo responde citando o dado com o marcador (`"Aplicações de marca previstas: {{cons:aplicacoes.previstas}}; comprovadas no evento: {{cons:aplicacoes.comprovadas}}."`) e o item `texto` sai com os números (`"... previstas: 19; comprovadas no evento: 17."`). Os marcadores do chat, `calc:` incluído, resolvem contra a parceria da conversa com as fórmulas fixas do modelo-base, com ou sem relatório aberto.
+- **Um turno** começa na mensagem da pessoa (ou na resposta do cartão). O modelo responde com texto, ou pede ferramentas; o servidor as executa **uma a uma, na ordem**, grava a resposta de cada uma e devolve o resultado ao modelo, até ele responder com texto. As ferramentas são `relatorio_iniciar`, `relatorio_solicitar_campos`, `relatorio_editar` (operação `definir_texto`) e `relatorio_finalizar`, as mesmas operações do botão, e a consulta `parceria_consultar`. O modelo só recebe as ferramentas do estado do relatório (sem relatório, `parceria_consultar` e `relatorio_iniciar`; em montagem, `parceria_consultar` e as outras três, menos `relatorio_solicitar_campos` depois de três cartões no mesmo relatório; com o cartão aberto, nenhuma: o turno para). **Com `atlas.relatorio.ligado=false`, só `parceria_consultar`** (veja "Modo só chat").
+- **Pergunta sobre os números sem relatório.** `parceria_consultar` (sem argumento) é **só de leitura**: não cria relatório e não grava nada além da trilha da chamada. Devolve as referências do modelo-base para a parceria da conversa, resolvidas com o perfil de quem pede (o filtro de aba da rota 29): `{abaFechada, aviso, dados:[{ref, rotulo, valor, unidade, origem}], indisponiveis:[{ref, rotulo, motivo}]}`, em que `dados` é o mesmo que `relatorio_iniciar` devolve em dados disponíveis mais os cálculos fixos (`calc:`) que já dá para resolver, e `indisponiveis` traz os que estão sem valor (dado não informado, conta sem a entrada). Com a aba `APLICACOES` fechada para a marca (conferida no banco na hora da chamada), vem `abaFechada: true`, o `aviso` (`"A aba Aplicações de marca no evento está fechada para esta parceria. Não há dados para consultar; diga isso à pessoa sem citar número."`) e as listas vazias. O modelo responde citando o dado com o marcador (`"Aplicações de marca previstas: {{cons:aplicacoes.previstas}}; comprovadas no evento: {{cons:aplicacoes.comprovadas}}."`) e o item `texto` sai com os números (`"... previstas: 19; comprovadas no evento: 17."`). Os marcadores do chat, `calc:` incluído, resolvem contra a parceria da conversa com as fórmulas fixas do modelo-base, com ou sem relatório aberto.
 - **Nenhuma ferramenta recebe parceria.** A parceria, o usuário e a conversa vêm da sessão; um argumento que cite outra parceria (ou qualquer argumento fora do esquema) é recusado e volta ao modelo como erro. A marca só chega aos dados da própria parceria, por qualquer caminho.
 - **Até 8 chamadas de ferramenta por turno.** Erro de ferramenta (argumento inválido, relatório no estado errado, texto recusado) volta ao modelo como mensagem de ferramenta e nunca vira 500. Passado o limite, o turno termina com um texto fixo (`"Parei por aqui: ..."`).
 - **O cartão pausa o turno.** Ao pedir `relatorio_solicitar_campos`, o servidor grava o cartão, deixa essa chamada **sem resposta** e para: as chamadas seguintes da mesma rodada (inclusive outro `relatorio_solicitar_campos`) respondem erro (`"Aguardando a resposta do cartão..."`). A rota 46 grava os valores e a resposta da ferramenta (`{acao, campos:[{chave, ref, valor}]}`, com o mesmo id do pedido) e o loop retoma. **Mensagem de texto com o cartão aberto** (rota 44) primeiro fecha a chamada pendente com `{"acao":"cancel"}`, marca o cartão `CANCELADA` e só então entra; o `aviso` de cartão fechado abre os itens do turno.
 - **O modelo não escreve número nem termo interno.** Texto de parágrafo (`relatorio_editar`) e texto de chat passam pela mesma checagem: sem algarismo fora de marcador `{{ref}}`, todo marcador existe e resolve nesta parceria, sem chave crua fora de marcador (`dado:`, `cons:`, `calc:`, `lista:`, `parc:`, `evento:`), sem nome de ferramenta (`relatorio_...`, `parceria_...`), sem as palavras "marcador", "tool" e "cartão de solicitação", sem HTML, link, imagem nem URL e, no parágrafo, até 3 frases e 600 caracteres. **No chat, todo marcador também precisa ter valor agora** (um dado não informado não vira "indisponível" no meio da frase: o modelo diz com palavras que ele ainda não existe). A recusa de um parágrafo volta ao modelo, que tem mais uma tentativa; na **segunda recusa do mesmo bloco ele fica com a frase-modelo** (`redigidoPor` `MODELO`). No chat, com texto recusado o servidor pede **uma** nova redação; se a segunda também for recusada, a resposta vira o texto fixo `"Não consegui responder isso agora. Pergunte de outro jeito ou monte o relatório da ativação."`. O histórico guarda o texto com os marcadores; o item `texto` da conversa os traz resolvidos. Número por extenso escapa da regra e é proibido no prompt.
 - **O parágrafo redigido pelo modelo** sai com `redigidoPor: "ATLAS"` na rota 47 (e `"MODELO"` quando é a frase-modelo).
 - **Falha do modelo** (rede, limite do provedor, tempo esgotado): o turno termina com um texto fixo (`"Não consegui falar com o modelo de linguagem agora. O que já foi feito está salvo..."`) e resposta **200**; o histórico continua válido e o botão segue funcionando. Um turno que passa de **3 minutos** (`atlas.prazo-do-turno`) não começa outra ida ao modelo e termina do mesmo jeito (`"Esta resposta demorou mais do que o esperado e eu parei..."`), para não vencer a trava de 5 minutos do turno.
-- **Teto diário.** Para uma rodada de testes não gastar o limite do provedor, cada parceria tem um teto de mensagens do assistente por dia: contam as mensagens que o modelo escreveu e que ficaram gravadas hoje (dia de Brasília), em todas as conversas da parceria; o limite é configurável (`atlas.teto-diario-por-parceria`, padrão **200**). Com o teto atingido, a rota 44 com `texto` responde **429** (`"O Atlas atingiu o limite de uso de hoje desta parceria. Use o botão Montar relatório ou tente amanhã."`), sem gravar a mensagem nem chamar o modelo. O **botão não conta** e continua funcionando; a resposta do cartão (rota 46) com o teto atingido segue o plano B (frases-modelo) em vez de dar 429, para a marca não ficar presa a um cartão aberto. A conferência é no início do turno: um turno que começou abaixo do teto termina.
+- **Teto diário.** Para uma rodada de testes não gastar o limite do provedor, cada parceria tem um teto de mensagens do assistente por dia: contam as mensagens do assistente gravadas hoje (dia de Brasília), em todas as conversas da parceria, menos as do botão: cada ida ao modelo que grava uma mensagem conta, inclusive a que só pede ferramentas, e as frases fixas do servidor também; o limite é configurável (`atlas.teto-diario-por-parceria`, padrão **200**). Com o teto atingido, a rota 44 com `texto` responde **429** (`"O Atlas atingiu o limite de uso de hoje desta parceria. Use o botão Montar relatório ou tente amanhã."`), sem gravar a mensagem nem chamar o modelo. O **botão não conta** e continua funcionando; a resposta do cartão (rota 46) com o teto atingido segue o plano B (frases-modelo) em vez de dar 429, para a marca não ficar presa a um cartão aberto. A conferência é no início do turno: um turno que começou abaixo do teto termina.
 - O **botão** (atalho) continua sendo o plano B, com ou sem modelo. Cartão aberto pelo botão e respondido com o modelo ligado é retomado pelo modelo.
 - **Raciocínio do modelo.** Vem **ligado** por padrão: cada ida ao modelo leva `"thinking": {"type": "enabled"}` (com `atlas.raciocinio=false`, variável `ATLAS_RACIOCINIO`, vai `"disabled"` e não há raciocínio, `pensando`, resumo nem item; vale para o modelo das variáveis de ambiente e para o da chave do debug, que pode trocar). O `reasoning_content` de cada resposta é gravado com a mensagem do assistente e **volta ao modelo em todas as idas seguintes**, também depois da pausa do cartão (o histórico é remontado do banco): com ferramentas, o DeepSeek responde 400 sem ele. **O raciocínio cru nunca sai do servidor**: não vai em evento, em item, em resposta nenhuma da API nem no log. A conversa recebe só um **resumo** dele, gerado no servidor assim:
   - Para cada mensagem do assistente gravada com `reasoning_content` não vazio, o servidor faz uma chamada **à parte** ao mesmo provedor: sem ferramentas, com `"thinking": {"type": "disabled"}`, no máximo 200 tokens de saída e temperatura baixa. A entrada é só o raciocínio daquela mensagem (o começo é cortado se passar de 12 mil caracteres), tratado como dado e nunca como instrução. O prompt fica em `atlas/prompts/resumo-do-raciocinio.txt` e pede até duas frases curtas, em português do Brasil, na primeira pessoa e no passado, sobre o que o Atlas conferiu e decidiu (`"Conferi os números da parceria e citei as aplicações previstas e comprovadas."`), sem número, nome de ferramenta, chave, marcador nem identificador.
@@ -1501,7 +1504,7 @@ Cada evento tem `event:` e `data:` com um JSON. Numa ida ao modelo a ordem é `p
 | `ferramenta` | `{"nome": "parceria_consultar", "argumentos": "{}", "resultado": "{...}", "erro": false, "duracaoMs": 42}` | **Só com `atlas.debug.ferramentas=true`.** Uma ferramenta terminou: logo que ela termina, antes da ferramenta seguinte e da próxima ida ao modelo (depois da `etapa` dela). O mesmo corpo do item `ferramenta` do `fim`, sem o `tipo` (veja "Debug das ferramentas"). Desligado, o evento não existe. |
 | `texto_recusado` | `{}` | A checagem recusou o texto desta ida ao modelo (algarismo fora de marcador, chave crua, marcador que não existe ou sem valor, nome de ferramenta, "marcador"...), durante o fluxo ou na checagem do texto inteiro no fim da ida; ou o modelo falhou no meio de um texto. O servidor para de repassar: **a tela descarta o `texto` que recebeu nesta ida**. A seguir vêm a nova redação (novos `texto`) ou a frase fixa. |
 | `fim` | o objeto Conversa | O mesmo JSON que a rota devolve sem fluxo (`conversaId`, `llmDisponivel`, `relatorioDisponivel`, `debugDeFerramentas`, `itens` do turno). Fecha o fluxo. |
-| `erro` | `{"status": 500, "detail": "..."}` | Uma falha inesperada depois de o fluxo abrir (a falha do modelo continua virando a frase fixa, com `fim`). Fecha o fluxo. |
+| `erro` | `{"status": 500, "detail": "Algo deu errado do nosso lado. Tente de novo em instantes; se continuar, avise a equipe."}` | Uma falha inesperada depois de o fluxo abrir (a falha do modelo continua virando a frase fixa, com `fim`). Fecha o fluxo. O fluxo também fecha sozinho depois de 6 minutos. |
 
 Exemplo (rota 44, o modelo consulta os números e responde):
 
@@ -1548,7 +1551,7 @@ O `fim` é a referência: o que a tela montou com os pedaços dá lugar aos iten
     { "tipo": "aviso", "texto": "Cartão fechado. Use Montar relatório para continuar." } ] }
 ```
 
-- `llmDisponivel` é `true` quando a API sobe com o modelo de linguagem ligado e `false` no padrão (sem ele o Atlas só oferece o botão, se o relatório estiver ligado). As rotas 42, 43, 44, 45 e 46 trazem o mesmo valor.
+- `llmDisponivel` é `true` quando há um modelo de linguagem agora (a chave posta pelo debug ou as variáveis de ambiente; muda na hora ao pôr ou apagar a chave) e `false` no padrão (sem ele o Atlas só oferece o botão, se o relatório estiver ligado). As rotas 42, 43, 44, 45 e 46 trazem o mesmo valor.
 - `relatorioDisponivel` é o valor de `atlas.relatorio.ligado`: `false` no Atlas só chat (o padrão), em que não saem `cartao`, `relatorio_pronto` nem `aviso`. As rotas 42, 43 (ao lado de `llmDisponivel`), 44, 45 e 46 trazem o mesmo valor. O exemplo abaixo é o de um Atlas com o relatório ligado.
 - `debugDeFerramentas` é o valor de `atlas.debug.ferramentas` (veja "Debug das ferramentas"): `true`, os itens trazem também `ferramenta`. Não vem na rota 43.
 - As rotas **42, 44 e 46 devolvem só os itens do turno**; a **45 devolve a conversa inteira**.
@@ -1557,7 +1560,7 @@ O `fim` é a referência: o que a tela montou com os pedaços dá lugar aos iten
 | `tipo` | Quando aparece | Campos |
 | --- | --- | --- |
 | `usuario` | O que a pessoa disse (o botão aparece como "Montar o relatório da ativação"; no histórico que vai ao modelo, a mensagem continua "Montar o relatório da ativação (botão)") | `texto` |
-| `raciocinio` | O **resumo** do raciocínio do modelo de uma mensagem do assistente, **antes** dos itens dela (`texto`, `cartao`, `relatorio_pronto`). O raciocínio cru (`reasoning_content`) nunca aparece: o resumo é gerado no servidor (veja "Raciocínio do modelo") e já passou pela checagem do texto. Só aparece quando a mensagem tem resumo gravado: sem raciocínio, com resumo recusado, atrasado ou perdido, nas mensagens de antes da V9, no botão e nas frases fixas do servidor não há item. A tela o mostra numa caixa minimizável. | `resumo` |
+| `raciocinio` | O **resumo** do raciocínio do modelo de uma mensagem do assistente, **antes** dos itens dela (`texto`, `cartao`, `relatorio_pronto`). O raciocínio cru (`reasoning_content`) nunca aparece: o resumo é gerado no servidor (veja "Raciocínio do modelo") e já passou pela checagem do texto. Só aparece quando a mensagem tem resumo gravado: sem raciocínio, com resumo recusado, atrasado ou perdido, nas mensagens de antes da V9, no botão e nas frases fixas do servidor não há item (a exceção é `Não consegui responder agora`, que pode ter um, quando o modelo raciocinou e não respondeu). A tela o mostra numa caixa minimizável. | `resumo` |
 | `texto` | O que o Atlas disse. Os marcadores `{{...}}` já vêm trocados pelo valor; o que não tem valor vira "indisponível". `porModelo` é `true` só quando o texto foi escrito pelo modelo de linguagem; é `false` nas frases fixas do servidor: as do botão (plano B: "Montei a base...", "Continuo o relatório...", "Pronto: ..."), a frase fixa que troca um texto recusado duas vezes e as de falha, limite e prazo do turno | `texto`, `porModelo` |
 | `ferramenta` | **Debug, só com `atlas.debug.ferramentas=true`.** Uma ferramenta que o agente chamou, na ordem em que rodou, **depois** do `raciocinio` e do `texto` da mesma mensagem do assistente (e antes do `cartao` que ela abriu). Veja "Debug das ferramentas" | `nome`, `argumentos`, `resultado`, `erro`, `duracaoMs` |
 | `cartao` | O cartão de perguntas, com o **estado de agora** | `solicitacaoId`, `relatorioId`, `mensagem`, `status` (`PENDENTE`, `RESPONDIDA`, `RECUSADA` ou `CANCELADA`), `campos` |
@@ -1584,7 +1587,7 @@ Cada item de `campos` do cartão é um campo do catálogo (rota 39) mais `obriga
 | 400 | Corpo que não é JSON. |
 | 403 | RBS; aba `APLICACOES` fechada; falta o token CSRF. |
 | 404 | Parceria que não existe ou é de outra. |
-| 422 | Atalho ou modelo desconhecido, ou só um dos dois (`campos.atalho`, `campos.modelo`). Com o relatório desligado, qualquer `atalho` ou `modelo`: `campos.atalho` = `"O relatório não está disponível nesta versão."`. |
+| 422 | Atalho ou modelo desconhecido, ou só um dos dois (`campos.atalho`: `"Atalho desconhecido. Use MONTAR_RELATORIO."`; `campos.modelo`: `"Informe o modelo."` / `"Modelo desconhecido. Use ATIVACAO_EVENTO."`). Com o relatório desligado, qualquer `atalho` ou `modelo`: `campos.atalho` = `"O relatório não está disponível nesta versão."`. |
 
 **Histórico:** `CRIACAO` (entidade `atlas_relatorio`) quando o atalho cria o relatório.
 
@@ -1611,7 +1614,7 @@ Cada item de `campos` do cartão é um campo do catálogo (rota 39) mais `obriga
 **Corpo:** **ou** `{"texto": "..."}` **ou** `{"atalho": "MONTAR_RELATORIO", "modelo": "ATIVACAO_EVENTO"}`. Com `atlas.relatorio.ligado=false` (o padrão), só `texto`: `atalho` ou `modelo` dão 422.
 
 - **Com o atalho**, roda o plano B nesta conversa. Se já há um relatório **em montagem** nela (por exemplo, depois de um cartão cancelado), continua **dele** em vez de criar outro: reabre o cartão com as lacunas que faltam. Depois de um relatório pronto, o atalho começa um relatório novo.
-- **Com texto**, roda o loop do modelo de linguagem (veja "O modelo de linguagem"). O texto é aparado dos espaços das pontas. Sem modelo de linguagem, responde **503** (`"O Atlas está sem o modelo de linguagem agora. Use o botão Montar relatório."`; com o relatório desligado, `"O Atlas está sem o modelo de linguagem agora. Tente de novo mais tarde."`). Com um cartão aberto na conversa, a mensagem primeiro o fecha com `cancel`.
+- **Com texto**, roda o loop do modelo de linguagem (veja "O modelo de linguagem"). O texto é aparado dos espaços das pontas depois de conferir o tamanho. Sem modelo de linguagem, responde **503** (`"O Atlas está sem o modelo de linguagem agora. Use o botão Montar relatório."`; com o relatório desligado, `"O Atlas está sem o modelo de linguagem agora. Tente de novo mais tarde."`). Com um cartão aberto na conversa, a mensagem primeiro o fecha com `cancel`.
 - **Com `Accept: text/event-stream`**, a resposta vem em fluxo (veja "Resposta em fluxo"): os erros abaixo continuam saindo antes, em `ProblemDetail`; com o atalho, o fluxo traz só o `fim`.
 
 **200**: o objeto Conversa, só com os itens do turno: `usuario`, o resumo do raciocínio do modelo (`raciocinio`), o que o Atlas disse (`texto`), o `cartao` se ele pediu números (o turno para aí), e `relatorio_pronto` se fechou o relatório. Com cartão aberto antes da mensagem, o primeiro item é o `aviso` do cartão fechado. Em fluxo: **200** `text/event-stream`, e o mesmo objeto no evento `fim`.
@@ -1624,7 +1627,7 @@ Cada item de `campos` do cartão é um campo do catálogo (rota 39) mais `obriga
 | 403 | RBS; aba fechada; falta o token CSRF. |
 | 404 | Conversa que não é sua (inexistente, de outra parceria ou de outro usuário). |
 | 409 | Um turno em andamento na conversa; ou, no atalho, um cartão aberto (`"Este relatório está esperando a resposta do cartão. Responda ou feche o cartão antes de montar de novo."`). Mensagem de texto com cartão aberto não dá 409: fecha o cartão. |
-| 422 | Texto vazio ou com mais de 1.000 caracteres (`campos.texto`); nem texto nem atalho, ou os dois; atalho ou modelo desconhecido. Com o relatório desligado, qualquer `atalho` ou `modelo` (mesmo junto de `texto`): `campos.atalho` = `"O relatório não está disponível nesta versão."`. |
+| 422 | Texto vazio ou com mais de 1.000 caracteres, contados antes de aparar os espaços (`campos.texto`: `"A mensagem tem no máximo 1.000 caracteres."`); nem texto nem atalho (`campos.texto`: `"Escreva a mensagem."`, ou `"Escreva a mensagem ou use o botão Montar relatório."` com o relatório ligado); os dois (`campos.atalho`: `"Envie o texto ou o atalho, e não os dois."`); atalho ou modelo desconhecido. Com o relatório desligado, qualquer `atalho` ou `modelo` (mesmo junto de `texto`): `campos.atalho` = `"O relatório não está disponível nesta versão."`. |
 | 429 | O teto diário de mensagens do Atlas da parceria foi atingido (só no texto; o botão não conta): `"O Atlas atingiu o limite de uso de hoje desta parceria. Use o botão Montar relatório ou tente amanhã."` (com o relatório desligado, `"... Tente amanhã."`) |
 | 503 | Texto sem modelo de linguagem. |
 
@@ -1670,7 +1673,7 @@ Cada item de `campos` do cartão é um campo do catálogo (rota 39) mais `obriga
 | 403 | RBS; aba fechada; falta o token CSRF. |
 | 404 | Cartão que não é seu. |
 | 409 | `"Este cartão já foi respondido."` (o cartão não está `PENDENTE`), ou um turno em andamento na conversa. |
-| 422 | `acao` que não é `accept`, `decline` ou `cancel` (`campos.acao`); mais de 20 valores. No `accept`, `campos` pela **chave do campo**: chave fora do cartão (`"Este campo não está no cartão."`), obrigatória sem valor (`"Informe este número."`) e as frases da rota 41 (`"Informe um número inteiro."`, `"O valor mínimo é 0."`, `"Não pode passar de Visitantes no espaço (1.200)."`...). |
+| 422 | `acao` que não é `accept`, `decline` ou `cancel` (`campos.acao`: `"Use accept, decline ou cancel."`); mais de 20 valores (`campos.valores`: `"Envie até 20 valores."`). No `accept`, `campos` pela **chave do campo**: chave fora do cartão (`"Este campo não está no cartão."`), obrigatória sem valor (`"Informe este número."`) e as frases da rota 41 (`"Informe um número inteiro."`, `"O valor mínimo é 0."`, `"Não pode passar de Visitantes no espaço (1.200)."`...). |
 
 ## 47. `GET /api/atlas/relatorios/{id}`  · Atlas 2
 
@@ -1786,7 +1789,7 @@ Um recurso **temporário**, para a equipe ligar o modelo de linguagem do Atlas p
 | --- | --- |
 | 400 | Corpo vazio ou que não é JSON; `raciocinio` que não é `true` nem `false`. |
 | 403 | Falta o token CSRF. |
-| 422 | `campos.chave`: ausente, com menos de 8 ou mais de 500 caracteres, ou com espaço (`"A chave precisa ter de 8 a 500 caracteres, sem espaços."`). `campos.baseUrl`: não começa com `https://` e não é `http://localhost` nem `http://127.0.0.1` (com porta e caminho opcionais), ou passa de 500 caracteres. `campos.modelo`: mais de 100 caracteres ou caractere fora de letras, números e `._:/-`. |
+| 422 | `campos.chave`: ausente, com menos de 8 ou mais de 500 caracteres, ou com espaço (`"A chave precisa ter de 8 a 500 caracteres, sem espaços."`). `campos.baseUrl`: não começa com `https://` e não é `http://localhost` nem `http://127.0.0.1` (com porta e caminho opcionais), ou passa de 500 caracteres (`"A base URL precisa começar com https:// (ou ser http://localhost ou http://127.0.0.1)."`). `campos.modelo`: mais de 100 caracteres ou caractere fora de letras, números e `._:/-` (`"O modelo tem até 100 caracteres: letras, números e . _ : / -"`). |
 
 ## `DELETE /api/debug/llm`
 
