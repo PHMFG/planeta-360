@@ -24,7 +24,7 @@ export function RenderizadorDeRelatorio({ relatorio, compacto = false }: { relat
 
   return (
     <article
-      className={`mx-auto flex w-full max-w-[680px] flex-col gap-3 rounded-md bg-white font-documento text-[#111] shadow-documento print:max-w-none print:rounded-none print:p-0 print:shadow-none ${
+      className={`@container mx-auto flex w-full max-w-[680px] flex-col gap-3 rounded-md bg-white font-documento text-[#111] shadow-documento print:max-w-none print:rounded-none print:p-0 print:shadow-none ${
         compacto ? 'px-6 pt-7 pb-6 sm:px-10 sm:pt-9 sm:pb-8' : 'px-6 pt-8 pb-7 sm:px-12 sm:pt-11 sm:pb-9'
       }`}
     >

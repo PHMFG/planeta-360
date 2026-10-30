@@ -44,7 +44,8 @@ export function BlocoDoRelatorio({ bloco, referencias }: { bloco: Bloco; referen
       return <Kpi item={bloco.item} referencias={referencias} />
     case 'kpi_grade':
       return (
-        <div className="rel-bloco grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4 print:grid-cols-4">
+        // A grade segue a largura do documento (@container), não a da tela: ao lado do chat, a página fica estreita.
+        <div className="rel-bloco grid grid-cols-2 gap-x-4 gap-y-3 @md:grid-cols-4 print:grid-cols-4">
           {bloco.itens.map((item) => (
             <Kpi key={item.rotulo} item={item} referencias={referencias} />
           ))}

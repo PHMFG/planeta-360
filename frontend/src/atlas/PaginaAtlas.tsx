@@ -385,7 +385,7 @@ export function PaginaAtlas() {
           sobretitulo={abaLateral === 'conversa' ? 'Atlas' : 'Fontes citadas'}
           titulo={abaLateral === 'conversa' ? tituloDa(conversa, relatorio) : 'Documentos usados na análise'}
           aoFechar={() => setDocumentoAberto(false)}
-          className={`w-full lg:w-[420px] ${vistaMovel === 'documento' ? 'max-lg:hidden' : ''}`}
+          className={`w-full shrink-0 lg:w-[360px] xl:w-[420px] ${vistaMovel === 'documento' ? 'max-lg:hidden' : ''}`}
           acoes={
             <div className="flex flex-wrap gap-2" role="tablist" aria-label="Painel do Atlas">
               <Chip role="tab" aria-selected={abaLateral === 'conversa'} variante={abaLateral === 'conversa' ? 'primario' : 'acao'} onClick={() => setAbaLateral('conversa')}>
