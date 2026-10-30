@@ -74,6 +74,8 @@ export function Cargas() {
   const [eventoId, setEventoId] = useState('')
   const [escopo, setEscopo] = useState<'ATIVACAO' | 'GERAL'>('ATIVACAO')
   const [arquivo, setArquivo] = useState<File | null>(null)
+  // O campo é recriado depois de cada envio: sem isso, escolher de novo o mesmo arquivo não dispara o onChange.
+  const [campoDoArquivo, setCampoDoArquivo] = useState(0)
   const [falha, setFalha] = useState<string | null>(null)
   const [enviando, setEnviando] = useState(false)
   const [ultima, setUltima] = useState<Carga | null>(null)
@@ -91,6 +93,7 @@ export function Cargas() {
       setUltima(carga)
       setSelecionada(carga)
       setArquivo(null)
+      setCampoDoArquivo((atual) => atual + 1)
       cargas.recarregar()
     } catch (erro) {
       if (erro instanceof ErroApi) {
@@ -135,7 +138,7 @@ export function Cargas() {
           <label className="flex cursor-pointer items-center gap-3 rounded-xl border-[1.5px] border-dashed border-tinta bg-cinza-100 px-4 py-4 text-sm">
             <i className="ri-file-excel-2-line text-2xl" aria-hidden="true" />
             <span className="flex-1 font-semibold">{arquivo ? `${arquivo.name} · ${tamanho(arquivo.size)}` : 'Escolher a planilha CSV (UTF-8, vírgula como separador)'}</span>
-            <input type="file" accept=".csv,text/csv" className="sr-only" onChange={(campo) => setArquivo(campo.target.files?.[0] ?? null)} />
+            <input key={campoDoArquivo} type="file" accept=".csv,text/csv" className="sr-only" onChange={(campo) => setArquivo(campo.target.files?.[0] ?? null)} />
           </label>
           <p className="text-xs text-texto-2">
             Colunas esperadas: <code>{COLUNAS[tipo]}</code>. Há exemplos em docs/exemplos no repositório.
