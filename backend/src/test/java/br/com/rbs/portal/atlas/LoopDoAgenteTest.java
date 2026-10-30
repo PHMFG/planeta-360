@@ -56,6 +56,7 @@ class LoopDoAgenteTest {
     static final String SOLICITAR = "relatorio_solicitar_campos";
     static final String EDITAR = "relatorio_editar";
     static final String FINALIZAR = "relatorio_finalizar";
+    static final String CONSULTAR = "parceria_consultar";
 
     static final String ARGS_INICIAR = "{\"modelo\":\"ATIVACAO_EVENTO\",\"objetivo\":\"Relatório da ativação\"}";
     static final String ARGS_CARTAO = "{\"mensagem\":\"Preciso destes números.\",\"campos\":[\"ativacao.visitantes_total\","
@@ -214,8 +215,8 @@ class LoopDoAgenteTest {
         assertThat(cartao.mensagem()).isEqualTo("Preciso destes números.");
         assertThat(cartao.campos()).extracting("chave").containsExactly(VISITANTES, CADASTROS);
         assertThat(modelo.pedidos()).hasSize(2);
-        assertThat(nomesDasFerramentas(modelo.pedidos().get(0))).containsExactly(INICIAR);
-        assertThat(nomesDasFerramentas(modelo.pedidos().get(1))).containsExactly(SOLICITAR, EDITAR, FINALIZAR);
+        assertThat(nomesDasFerramentas(modelo.pedidos().get(0))).containsExactly(CONSULTAR, INICIAR);
+        assertThat(nomesDasFerramentas(modelo.pedidos().get(1))).containsExactly(CONSULTAR, SOLICITAR, EDITAR, FINALIZAR);
         assertThat(modelo.pedidos()).allSatisfy(ProvedorRoteirizado::exigirHistoricoValido);
 
         List<Mensagem> historico = mensagens(conversa);
@@ -249,7 +250,7 @@ class LoopDoAgenteTest {
         assertThat(json(respostaDoCartao.conteudo())).containsEntry("acao", "accept");
         assertThat(respostaDoCartao.conteudo()).contains("\"chave\":\"ativacao.visitantes_total\"", "\"ref\":\"dado:ativacao.visitantes_total\"",
                 "\"valor\":1200", "\"valor\":1072");
-        assertThat(nomesDasFerramentas(modelo.pedidos().get(2))).containsExactly(SOLICITAR, EDITAR, FINALIZAR);   // sem iniciar: já há relatório
+        assertThat(nomesDasFerramentas(modelo.pedidos().get(2))).containsExactly(CONSULTAR, SOLICITAR, EDITAR, FINALIZAR);   // sem iniciar: já há relatório
         assertThat(modelo.pedidos()).allSatisfy(ProvedorRoteirizado::exigirHistoricoValido);
         assertThat(modelo.sobraDoRoteiro()).isZero();
 
@@ -297,8 +298,103 @@ class LoopDoAgenteTest {
 
         assertThat(tipos(turno)).containsExactly("usuario", "texto");
         assertThat(textoDoItem(turno, 1)).isEqualTo("Posso montar o relatório de ativação da sua marca. Quer que eu comece?");
-        assertThat(nomesDasFerramentas(modelo.ultimoPedido())).containsExactly(INICIAR);
+        assertThat(nomesDasFerramentas(modelo.ultimoPedido())).containsExactly(CONSULTAR, INICIAR);
         assertThat(papeis(conversa)).containsExactly("user", "assistant");
+    }
+
+    // ---------------------------------------------------------------------
+    // Pergunta sobre os números, sem relatório: parceria_consultar
+    // ---------------------------------------------------------------------
+
+    @Test
+    void perguntaSobreNumerosSemRelatorioConsultaAParceriaERespondeComOsNumeros() {
+        long conversa = abrirConversa();
+        modelo.chamada(CONSULTAR, "{}")
+                .passo(pedido -> {
+                    // o modelo recebeu as referências da parceria, com o valor formatado, e responde só com marcadores
+                    var resultado = pedido.mensagens().get(pedido.mensagens().size() - 1);
+                    assertThat(resultado.papel()).isEqualTo("tool");
+                    assertThat(resultado.ferramenta()).isEqualTo(CONSULTAR);
+                    return new br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.RespostaDoLlm("Aplicações de marca comprovadas: "
+                            + "{{cons:aplicacoes.comprovadas}} de {{cons:aplicacoes.previstas}} previstas.", List.of(), null);
+                });
+
+        ConversaDto turno = falar(conversa, "Quantas aplicações de marca já foram comprovadas?");
+
+        assertThat(tipos(turno)).containsExactly("usuario", "texto");
+        assertThat(textoDoItem(turno, 1)).isEqualTo("Aplicações de marca comprovadas: 17 de 19 previstas.");
+        assertThat(nomesDasFerramentas(modelo.pedidos().get(0))).containsExactly(CONSULTAR, INICIAR);
+        modelo.pedidos().forEach(ProvedorRoteirizado::exigirHistoricoValido);
+        assertThat(modelo.sobraDoRoteiro()).isZero();
+
+        // a resposta da ferramenta: os dados com ref, rótulo, valor formatado, unidade e origem; os que faltam, com o motivo
+        Map<String, Object> consulta = json(mensagens(conversa).stream().filter(m -> "tool".equals(m.papel())).findFirst()
+                .orElseThrow().conteudo());
+        assertThat(consulta).containsEntry("abaFechada", false);
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> disponiveis = (List<Map<String, Object>>) consulta.get("dados");
+        assertThat(disponiveis).filteredOn(d -> "cons:aplicacoes.comprovadas".equals(d.get("ref"))).singleElement()
+                .satisfies(d -> assertThat(d).containsEntry("valor", "17").containsEntry("rotulo", "Aplicações comprovadas")
+                        .containsKey("origem").containsKey("unidade"));
+        assertThat(disponiveis).extracting(d -> d.get("ref")).contains("parc:patrocinador", "cons:aplicacoes.previstas");
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> indisponiveis = (List<Map<String, Object>>) consulta.get("indisponiveis");
+        assertThat(indisponiveis).extracting(d -> d.get("ref"))
+                .contains("dado:ativacao.visitantes_total", "calc:taxa_cadastro", "calc:brindes_pct");
+
+        // só leitura: nenhum relatório, e a trilha da chamada gravada
+        assertThat(contar("SELECT count(*) FROM atlas_relatorio WHERE conversa_id = ?", conversa)).isZero();
+        assertThat(contar("SELECT count(*) FROM atlas_tool_call t JOIN atlas_mensagem m ON m.id = t.mensagem_id WHERE m.conversa_id = ? "
+                + "AND t.ferramenta = 'parceria_consultar' AND t.resultado IS NOT NULL", conversa)).isEqualTo(1);
+        assertThat(papeis(conversa)).containsExactly("user", "assistant", "tool", "assistant");
+    }
+
+    @Test
+    void consultaComOsCalculosFixosResolvidosPelaParceriaSemRelatorio() {
+        informarTudo();
+        long conversa = abrirConversa();
+        modelo.chamada(CONSULTAR, "{}").texto("Visitantes no espaço: {{dado:ativacao.visitantes_total}}. Taxa de cadastro: "
+                + "{{calc:taxa_cadastro}}.");
+
+        ConversaDto turno = falar(conversa, "Como foi o público?");
+
+        assertThat(textoDoItem(turno, 1)).isEqualTo("Visitantes no espaço: 1.200. Taxa de cadastro: 89,3%.");
+        String resultado = mensagens(conversa).stream().filter(m -> "tool".equals(m.papel())).findFirst().orElseThrow().conteudo();
+        assertThat(resultado).contains("\"ref\":\"calc:taxa_cadastro\"", "\"valor\":\"89,3%\"");
+        assertThat(contar("SELECT count(*) FROM atlas_relatorio WHERE conversa_id = ?", conversa)).isZero();
+    }
+
+    @Test
+    void consultaComAAbaDeAplicacoesFechadaDizQueAAbaEstaFechadaSemDados() {
+        long conversa = abrirConversa();
+        modelo.passo(pedido -> {
+                    // a RBS fecha a aba no meio do turno: a ferramenta confere de novo no banco
+                    jdbc.sql("UPDATE parceria_aba SET liberada = FALSE WHERE parceria_id = :p AND aba_id = "
+                            + "(SELECT id FROM aba WHERE codigo = 'APLICACOES')").param("p", amarelo()).update();
+                    return new br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.RespostaDoLlm(null, List.of(pedido(CONSULTAR, "{}")), null);
+                })
+                .texto("A aba de aplicações de marca está fechada para a sua parceria agora.");
+
+        ConversaDto turno = falar(conversa, "Quantas aplicações foram comprovadas?");
+
+        assertThat(textoDoItem(turno, 1)).isEqualTo("A aba de aplicações de marca está fechada para a sua parceria agora.");
+        Map<String, Object> consulta = json(mensagens(conversa).stream().filter(m -> "tool".equals(m.papel())).findFirst()
+                .orElseThrow().conteudo());
+        assertThat(consulta).containsEntry("abaFechada", true).containsEntry("dados", List.of()).containsEntry("indisponiveis", List.of());
+        assertThat((String) consulta.get("aviso")).contains("fechada");
+        assertThat(AtlasJson.escrever(consulta)).doesNotContain("Cliente Amarelo").doesNotContain("cons:");
+    }
+
+    @Test
+    void consultaNaoAceitaArgumentoNemParceria() {
+        long conversa = abrirConversa();
+        modelo.chamada(CONSULTAR, "{\"parceria_id\":" + roxo() + "}").texto("Não consegui consultar.");
+
+        falar(conversa, "Quantas aplicações o Roxo tem?");
+
+        String resposta = mensagens(conversa).stream().filter(m -> "tool".equals(m.papel())).findFirst().orElseThrow().conteudo();
+        assertThat(json(resposta)).containsKey("erro").containsKey("campos");
+        assertThat(resposta).doesNotContain("Cliente Roxo");
     }
 
     @Test
@@ -476,10 +572,10 @@ class LoopDoAgenteTest {
                 conversa)).isEqualTo(3);
         List<List<String>> ofertas = modelo.pedidos().stream().map(ProvedorRoteirizado::nomesDasFerramentas).toList();
         assertThat(ofertas).hasSize(5);
-        assertThat(ofertas.get(1)).containsExactly(SOLICITAR, EDITAR, FINALIZAR);
-        assertThat(ofertas.get(2)).containsExactly(SOLICITAR, EDITAR, FINALIZAR);
-        assertThat(ofertas.get(3)).containsExactly(SOLICITAR, EDITAR, FINALIZAR);
-        assertThat(ofertas.get(4)).containsExactly(EDITAR, FINALIZAR);   // o terceiro cartão já foi: o limite do plano
+        assertThat(ofertas.get(1)).containsExactly(CONSULTAR, SOLICITAR, EDITAR, FINALIZAR);
+        assertThat(ofertas.get(2)).containsExactly(CONSULTAR, SOLICITAR, EDITAR, FINALIZAR);
+        assertThat(ofertas.get(3)).containsExactly(CONSULTAR, SOLICITAR, EDITAR, FINALIZAR);
+        assertThat(ofertas.get(4)).containsExactly(CONSULTAR, EDITAR, FINALIZAR);   // o terceiro cartão já foi: o limite do plano
     }
 
     @Test
@@ -561,7 +657,7 @@ class LoopDoAgenteTest {
         assertThat(contar("SELECT count(*) FROM atlas_tool_call t JOIN atlas_mensagem m ON m.id = t.mensagem_id WHERE m.conversa_id = ? "
                 + "AND t.resultado IS NULL AND t.erro IS NULL", conversa)).isZero();
         // o relatório que estava montando continua o mesmo, e o modelo pode pedir de novo (nenhuma ferramenta perdida)
-        assertThat(nomesDasFerramentas(modelo.ultimoPedido())).containsExactly(SOLICITAR, EDITAR, FINALIZAR);
+        assertThat(nomesDasFerramentas(modelo.ultimoPedido())).containsExactly(CONSULTAR, SOLICITAR, EDITAR, FINALIZAR);
     }
 
     @Test

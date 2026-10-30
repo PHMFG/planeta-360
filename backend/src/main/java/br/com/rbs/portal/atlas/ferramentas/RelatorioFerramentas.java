@@ -5,6 +5,7 @@ import br.com.rbs.portal.atlas.AtlasRepositorio;
 import br.com.rbs.portal.atlas.AtlasRepositorio.LinhaDeRelatorio;
 import br.com.rbs.portal.atlas.contexto.AtlasContexto;
 import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.DefinicaoDeFerramenta;
+import br.com.rbs.portal.atlas.relatorio.ConsultaDaParceria;
 import br.com.rbs.portal.atlas.relatorio.RelatorioAtlasService;
 import br.com.rbs.portal.atlas.relatorio.RelatorioAtlasService.CartaoAberto;
 import br.com.rbs.portal.atlas.relatorio.RelatorioAtlasService.OperacaoDeTexto;
@@ -27,17 +28,20 @@ import tools.jackson.core.JacksonException;
 import tools.jackson.core.type.TypeReference;
 
 /**
- * As ferramentas {@code relatorio_*} que o modelo de linguagem chama (plano, seção 10.2): {@code relatorio_iniciar},
- * {@code relatorio_solicitar_campos}, {@code relatorio_editar} (só {@code definir_texto}) e {@code relatorio_finalizar}.
- * [ATLAS] [ISOLAMENTO] São um embrulho fino do {@link RelatorioAtlasService}, o mesmo que o plano B usa. Três regras:
+ * As ferramentas que o modelo de linguagem chama (plano, seção 10.2): {@code relatorio_iniciar},
+ * {@code relatorio_solicitar_campos}, {@code relatorio_editar} (só {@code definir_texto}) e {@code relatorio_finalizar}, e a
+ * consulta só de leitura {@code parceria_consultar}, que devolve os números da parceria sem abrir relatório.
+ * [ATLAS] [ISOLAMENTO] São um embrulho fino do {@link RelatorioAtlasService} (o mesmo que o plano B usa) e da
+ * {@link ConsultaDaParceria}. Três regras:
  * <ul>
  *   <li><b>Nenhuma recebe parceria.</b> A parceria, o usuário e a conversa vêm do {@link AtlasContexto} (sessão e
  *       VerificadorDeAcesso). O relatório sobre o qual a ferramenta age é o que está em montagem NESTA conversa. Argumento que
  *       não está no esquema (um {@code parceria_id}, por exemplo) é recusado, e o resultado não muda de parceria nunca.</li>
  *   <li><b>A validação dos argumentos é nossa</b>, em Java (o modo {@code strict} dos provedores é beta e não vale aqui): tipo,
  *       tamanho e argumento desconhecido. O JSON Schema que vai ao modelo só o orienta.</li>
- *   <li><b>O servidor oferece só as ferramentas do estado atual</b> (seção 10.1): sem relatório, só {@code relatorio_iniciar};
- *       em montagem, as outras três; com o cartão aberto, nenhuma.</li>
+ *   <li><b>O servidor oferece só as ferramentas do estado atual</b> (seção 10.1): sem relatório, {@code parceria_consultar} e
+ *       {@code relatorio_iniciar}; em montagem, {@code parceria_consultar} e as outras três; com o cartão aberto, nenhuma (o
+ *       loop nem chama o modelo).</li>
  * </ul>
  * Erro de ferramenta não é exceção para quem chama o modelo: {@link #erroComoJson} o transforma na mensagem de ferramenta que
  * volta ao modelo, e o loop nunca devolve 500 por causa dele.
@@ -49,6 +53,7 @@ public class RelatorioFerramentas {
     public static final String SOLICITAR_CAMPOS = "relatorio_solicitar_campos";
     public static final String EDITAR = "relatorio_editar";
     public static final String FINALIZAR = "relatorio_finalizar";
+    public static final String CONSULTAR = "parceria_consultar";
 
     /** O que uma ferramenta fez: o JSON do resultado; {@code pausa} se abriu o cartão (sem resultado até a pessoa responder). */
     public record Execucao(String resultadoJson, boolean pausa, boolean pronto) {
@@ -102,6 +107,15 @@ public class RelatorioFerramentas {
             """
             {"type":"object","properties":{},"additionalProperties":false}""");
 
+    private static final DefinicaoDeFerramenta DEFINICAO_CONSULTAR = new DefinicaoDeFerramenta(CONSULTAR,
+            "Só leitura: devolve os números que o portal já tem desta parceria, sem abrir relatório. Use para responder no chat "
+                    + "perguntas como quantas aplicações de marca foram comprovadas. Cada dado vem com a referência ref, o rótulo, "
+                    + "o valor, a unidade e a origem; os que ainda não têm valor vêm em indisponiveis, com o motivo. Na resposta, "
+                    + "cite o dado só com o marcador {{ref}} (o servidor o troca pelo valor), nunca com o valor escrito. Não recebe "
+                    + "argumento.",
+            """
+            {"type":"object","properties":{},"additionalProperties":false}""");
+
     private static final Set<String> ARGUMENTOS_DE_INICIAR = Set.of("modelo", "objetivo");
     private static final Set<String> ARGUMENTOS_DE_SOLICITAR = Set.of("mensagem", "campos");
     private static final Set<String> ARGUMENTOS_DE_EDITAR = Set.of("operacoes");
@@ -109,10 +123,12 @@ public class RelatorioFerramentas {
     private static final String OPERACAO_DEFINIR_TEXTO = "definir_texto";
 
     private final RelatorioAtlasService relatorios;
+    private final ConsultaDaParceria consulta;
     private final AtlasRepositorio repositorio;
 
-    public RelatorioFerramentas(RelatorioAtlasService relatorios, AtlasRepositorio repositorio) {
+    public RelatorioFerramentas(RelatorioAtlasService relatorios, ConsultaDaParceria consulta, AtlasRepositorio repositorio) {
         this.relatorios = relatorios;
+        this.consulta = consulta;
         this.repositorio = repositorio;
     }
 
@@ -126,12 +142,13 @@ public class RelatorioFerramentas {
      */
     public List<DefinicaoDeFerramenta> oferecidas(Optional<LinhaDeRelatorio> ativo, boolean podePedirCartao) {
         if (ativo.isEmpty()) {
-            return List.of(DEFINICAO_INICIAR);
+            return List.of(DEFINICAO_CONSULTAR, DEFINICAO_INICIAR);
         }
         if (!"MONTANDO".equals(ativo.get().status())) {
             return List.of();   // AGUARDANDO_RESPOSTA: nenhuma ferramenta do relatório roda até o cartão voltar
         }
         List<DefinicaoDeFerramenta> ferramentas = new ArrayList<>();
+        ferramentas.add(DEFINICAO_CONSULTAR);
         if (podePedirCartao) {
             ferramentas.add(DEFINICAO_SOLICITAR);
         }
@@ -153,6 +170,7 @@ public class RelatorioFerramentas {
         Map<String, Object> argumentos = lerArgumentos(argumentosJson);
         Optional<LinhaDeRelatorio> ativo = repositorio.relatorioAtivoDaConversa(contexto.conversaId());
         return switch (nome) {
+            case CONSULTAR -> consultar(contexto, argumentos);
             case INICIAR -> iniciar(contexto, argumentos);
             case SOLICITAR_CAMPOS -> solicitarCampos(contexto, argumentos, exigirMontando(ativo), chamadaId);
             case EDITAR -> editar(contexto, argumentos, exigirMontando(ativo));
@@ -160,6 +178,13 @@ public class RelatorioFerramentas {
             default -> throw new DadosInvalidosException("Não existe a ferramenta " + nome + ". Use só as ferramentas oferecidas.",
                     Map.of());
         };
+    }
+
+    private Execucao consultar(AtlasContexto contexto, Map<String, Object> argumentos) {
+        Map<String, String> erros = new LinkedHashMap<>();
+        desconhecidos(argumentos, Set.of(), erros);
+        exigirSemErros(erros);
+        return Execucao.resultado(AtlasJson.escrever(consulta.consultar(contexto)));
     }
 
     private Execucao iniciar(AtlasContexto contexto, Map<String, Object> argumentos) {

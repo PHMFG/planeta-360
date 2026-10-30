@@ -224,7 +224,7 @@ public class RelatorioAtlasService {
     }
 
     /** As referências de valor do modelo, sem repetir, na ordem em que os blocos as usam. */
-    private static Set<String> refsDeValor(Especificacao especificacao) {
+    static Set<String> refsDeValor(Especificacao especificacao) {
         Set<String> refs = new LinkedHashSet<>();
         for (Bloco bloco : especificacao.blocos()) {
             switch (bloco) {
