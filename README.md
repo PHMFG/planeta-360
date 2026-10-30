@@ -151,9 +151,9 @@ Com a API sem modelo de linguagem (o padrão), o Atlas monta o relatório pelo b
 
 ### Ligar o modelo de linguagem (opcional)
 
-Sem estas variáveis, o portal e os testes funcionam normalmente, e o Atlas usa só o botão. Com elas, a marca também conversa com o Atlas pelo chat.
+Sem estas variáveis, o portal e os testes funcionam normalmente, e o Atlas usa só o botão. Com elas, a marca também conversa com o Atlas pelo chat. A resposta aparece enquanto o modelo escreve, com a etapa do momento ("Consultando os números da parceria…"). Antes dela vem a linha de pensamento do modelo, numa caixa que fica aberta enquanto ele pensa e depois recolhe; dá para abrir de novo, inclusive nas conversas antigas. O pensamento é o rascunho cru do modelo, sem a checagem do texto, e a caixa avisa isso.
 
-**Pela tela, sem reiniciar (temporário, só no perfil `dev`).** O selo amarelo "Debug", no topo da tela, abre um formulário para colar a chave do provedor (e, se quiser, outro endereço ou modelo), testar a conexão e remover a chave. A bolinha do selo fica verde com o modelo ligado. A chave fica só na memória da API e some quando ela reinicia; nunca volta inteira para a tela. Fora do perfil `dev` as rotas de debug não existem e o selo não aparece.
+**Pela tela, sem reiniciar (temporário, só no perfil `dev`).** O selo amarelo "Debug", no topo da tela, abre um formulário para colar a chave do provedor (e, se quiser, outro endereço ou modelo), ligar ou desligar a linha de pensamento, testar a conexão e remover a chave. A bolinha do selo fica verde com o modelo ligado. A chave fica só na memória da API e some quando ela reinicia; nunca volta inteira para a tela. Fora do perfil `dev` as rotas de debug não existem e o selo não aparece.
 
 **Pelas variáveis de ambiente:**
 
@@ -170,6 +170,7 @@ No Windows (PowerShell): `$env:ATLAS_LLM="openai"; $env:OPENCODE_API_KEY="sua-ch
 | `OPENCODE_API_KEY` | — | A chave do provedor. Só em variável de ambiente, nunca no repositório. Sem ela, o Atlas fica no botão e a API avisa no log |
 | `ATLAS_LLM_BASE_URL` | `https://opencode.ai/inference/go/openai/v1` | O endereço do provedor |
 | `ATLAS_LLM_MODELO` | `deepseek-v4.1-flash` | O modelo |
+| `ATLAS_RACIOCINIO` | `true` | A linha de pensamento do modelo. Ligada, cada resposta demora uns segundos a mais e gasta mais do limite do provedor |
 | `ATLAS_TETO_DIARIO` | `200` | Mensagens do Atlas por parceria por dia; depois disso, o chat responde 429 e o botão continua funcionando |
 
 O Atlas nunca escreve um número: os números do relatório e do chat vêm da base do portal ou do que a marca informou, sempre com a origem. Use só dados fictícios enquanto o provedor estiver em teste.

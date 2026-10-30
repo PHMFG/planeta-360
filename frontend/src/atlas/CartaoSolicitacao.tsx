@@ -2,8 +2,9 @@
 // para os dados informados da parceria, com autor e data, e nunca ficam no texto da conversa. [ATLAS] [VALIDACAO]
 // As três respostas são as da elicitação do MCP: enviar (accept), não tenho (decline) e responder depois (cancel).
 // O Figma não desenha este cartão; ele segue o cartão de anexo do AT04 (vidro, raio 16, chips).
+// Quem responde é a página: a resposta retoma o turno do Atlas, que chega em tempo real na conversa abaixo do cartão.
 import { useState } from 'react'
-import { responderCartao, type Conversa, type ItemDaConversa, type RespostaDoCartao } from '../api/atlas'
+import type { ItemDaConversa, RespostaDoCartao } from '../api/atlas'
 import { ErroApi } from '../api/cliente'
 import { FormularioDadosInformados } from '../componentes/FormularioDadosInformados'
 import { Chip } from './Elementos'
@@ -16,7 +17,13 @@ const DESFECHO: Record<Exclude<ItemCartao['status'], 'PENDENTE'>, { texto: strin
   CANCELADA: { texto: 'Cartão fechado sem resposta.', icone: 'ri-close-circle-line' },
 }
 
-export function CartaoSolicitacao({ item, aoResponder }: { item: ItemCartao; aoResponder: (turno: Conversa) => void }) {
+type Props = {
+  item: ItemCartao
+  /** Recusa com ErroApi o que dá errado antes de o turno começar (número inválido, cartão já respondido). */
+  aoResponder: (solicitacaoId: number, resposta: RespostaDoCartao) => Promise<void>
+}
+
+export function CartaoSolicitacao({ item, aoResponder }: Props) {
   const [ocupado, setOcupado] = useState<'decline' | 'cancel' | null>(null)
   const [falha, setFalha] = useState<string | null>(null)
 
@@ -37,9 +44,10 @@ export function CartaoSolicitacao({ item, aoResponder }: { item: ItemCartao; aoR
     setOcupado(acao)
     setFalha(null)
     try {
-      aoResponder(await responderCartao(item.solicitacaoId, { acao }))
+      await aoResponder(item.solicitacaoId, { acao })
     } catch (erro) {
       setFalha(erro instanceof ErroApi ? erro.message : 'Não foi possível responder.')
+    } finally {
       setOcupado(null)
     }
   }
@@ -61,7 +69,7 @@ export function CartaoSolicitacao({ item, aoResponder }: { item: ItemCartao; aoR
         campos={item.campos}
         textoEnviar="Enviar números"
         desabilitado={ocupado !== null}
-        aoEnviar={async (valores) => aoResponder(await responderCartao(item.solicitacaoId, { acao: 'accept', valores }))}
+        aoEnviar={(valores) => aoResponder(item.solicitacaoId, { acao: 'accept', valores })}
         extra={
           <>
             <Chip carregando={ocupado === 'decline'} disabled={ocupado !== null} onClick={() => responderSemNumeros('decline')}>

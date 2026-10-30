@@ -2,7 +2,8 @@
 // (fundo fluido na tela inicial, grafite depois do primeiro pedido) e o documento abre ao lado da conversa. [ATLAS]
 // Quando a marca pede um documento (o botão, ou o modelo começando um relatório), a conversa vai para o painel à direita e o
 // centro mostra a pré-visualização do documento, que se atualiza a cada turno. Só a marca conversa; a RBS vê os relatórios na
-// tela Relatório. Sem streaming: cada pedido espera o turno inteiro.
+// tela Relatório. A resposta do modelo chega em fluxo (pensamento, texto e etapas); o botão do relatório, sem modelo, espera o
+// turno inteiro.
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import {
@@ -12,9 +13,12 @@ import {
   montarRelatorio,
   obterConversa,
   obterRelatorioAtlas,
+  responderCartao,
   type Conversa,
   type ConversasDaParceria,
+  type EventoDoTurno,
   type RelatorioAtlas,
+  type RespostaDoCartao,
   type StatusRelatorioAtlas,
 } from '../api/atlas'
 import { ErroApi } from '../api/cliente'
@@ -26,6 +30,7 @@ import { nomeCota } from '../componentes/Menu'
 import { RenderizadorDeRelatorio } from '../componentes/relatorio/RenderizadorDeRelatorio'
 import { useParceria } from '../paginas/parceria/ContextoParceria'
 import { useSessao } from '../sessao/Sessao'
+import { aplicar, SEM_RESPOSTA, type RespostaAoVivo } from './AoVivo'
 import { AreaDaConversa } from './Conversa'
 import { AvisoAtlas, Chip, ChipLink, LinhaBuscando, PainelLateral, PONTO_APLICACOES, PONTO_RASCUNHO, Tag } from './Elementos'
 import { Inicio } from './Inicio'
@@ -34,6 +39,9 @@ import { Inicio } from './Inicio'
 export type PedidoAoAtlas = { mensagem?: string; montar?: boolean }
 
 type AbaLateral = 'conversa' | 'fontes'
+
+/** Um turno: em fluxo, repassa cada evento; o botão do relatório, sem modelo, ignora os dois parâmetros. */
+type Turno = (aoEvento: (evento: EventoDoTurno) => void, sinal: AbortSignal) => Promise<Conversa>
 
 const SITUACAO: Record<StatusRelatorioAtlas, string> = {
   MONTANDO: 'Montando',
@@ -94,34 +102,25 @@ export function PaginaAtlas() {
   const [bloqueio, setBloqueio] = useState<string | null>(null)
   const [falha, setFalha] = useState<string | null>(null)
   const [pensando, setPensando] = useState(false)
+  const [aoVivo, setAoVivo] = useState<RespostaAoVivo | null>(null)
   const [enviada, setEnviada] = useState<string | null>(null)
   const [texto, setTexto] = useState('')
   /** A conversa que já está na tela: trocar a URL depois de um turno não a carrega de novo. */
   const carregada = useRef<number | null | undefined>(undefined)
   const pedidoAtendido = useRef(false)
+  /** O turno em curso: sair da tela o cancela (o servidor termina e grava do mesmo jeito). */
+  const turnoAtual = useRef<AbortController | null>(null)
+  /** A conversa do turno em curso, que pode ter acabado de ser aberta. */
+  const conversaDoTurno = useRef<number | null>(null)
 
   const llm = conversas?.llmDisponivel ?? false
 
-  /** Lê a conversa e o documento dela; abre a pré-visualização se o documento está sendo montado. */
-  const lerConversa = useCallback(
-    async (id: number, lista: ConversasDaParceria, abrirSeMontando: boolean) => {
-      const atual = await obterConversa(id)
-      const resumo = lista.conversas.find((item) => item.id === id)?.relatorio ?? null
-      setConversa(atual)
-      if (!resumo) {
-        setRelatorio(null)
-        return { atual, relatorio: null }
-      }
-      const documento = await obterRelatorioAtlas(resumo.id)
-      setRelatorio(documento)
-      if (abrirSeMontando && EM_MONTAGEM.includes(documento.status)) {
-        setDocumentoAberto(true)
-        setVistaMovel('documento')
-      }
-      return { atual, relatorio: documento }
-    },
-    [],
-  )
+  /** Lê a conversa e o documento dela. Quem chama mostra os dois de uma vez, para a tela não piscar entre as leituras. */
+  const lerConversa = useCallback(async (id: number, lista: ConversasDaParceria) => {
+    const atual = await obterConversa(id)
+    const resumo = lista.conversas.find((item) => item.id === id)?.relatorio ?? null
+    return { atual, documento: resumo ? await obterRelatorioAtlas(resumo.id) : null }
+  }, [])
 
   useEffect(() => {
     if (carregada.current === conversaId) return
@@ -139,7 +138,17 @@ export function PaginaAtlas() {
           setConversa(null)
           setRelatorio(null)
           setDocumentoAberto(false)
-        } else await lerConversa(conversaId, lista, true)
+          return
+        }
+        const { atual, documento } = await lerConversa(conversaId, lista)
+        if (!ativo) return
+        setConversa(atual)
+        setRelatorio(documento)
+        // O documento que ainda está sendo montado abre ao lado da conversa.
+        if (documento && EM_MONTAGEM.includes(documento.status)) {
+          setDocumentoAberto(true)
+          setVistaMovel('documento')
+        }
       } catch (erro) {
         if (!ativo) return
         if (erro instanceof ErroApi && erro.status === 403) setBloqueio(erro.message)
@@ -167,50 +176,90 @@ export function PaginaAtlas() {
     return () => window.removeEventListener(EVENTO_LLM_MUDOU, aoMudar)
   }, [parceria.id])
 
-  /** Depois de um turno: relê a conversa, a lista e o documento. Pedir um documento joga o chat para o lado. */
-  async function aposTurno(resultado: Conversa) {
+  // Sair da tela no meio de uma resposta para de ler o fluxo.
+  useEffect(() => () => turnoAtual.current?.abort(), [])
+
+  /**
+   * Depois de um turno: relê a conversa, a lista e o documento, e troca a resposta ao vivo pela gravada no mesmo passo.
+   * Pedir um documento joga o chat para o lado.
+   */
+  async function aposTurno(id: number) {
     const antes = relatorio
     const lista = await listarConversas(parceria.id)
+    const { atual, documento } = await lerConversa(id, lista)
     setConversas(lista)
-    const { relatorio: depois } = await lerConversa(resultado.conversaId, lista, false)
-    if (depois && (depois.id !== antes?.id || depois.status !== antes?.status)) {
+    setConversa(atual)
+    setRelatorio(documento)
+    setAoVivo(null)
+    setEnviada(null)
+    if (documento && (documento.id !== antes?.id || documento.status !== antes?.status)) {
       setDocumentoAberto(true)
       setAbaLateral('conversa')
     }
-    if (resultado.conversaId !== conversaId) {
-      carregada.current = resultado.conversaId
-      navegar(`${base}/atlas/${resultado.conversaId}`, { replace: conversaId !== null })
+    if (id !== conversaId) {
+      carregada.current = id
+      navegar(`${base}/atlas/${id}`, { replace: conversaId !== null })
     }
   }
 
-  async function turno(fazer: () => Promise<Conversa>, mensagem?: string) {
+  /**
+   * Roda um turno e mostra a resposta enquanto ela chega. Com {@code devolverErro}, o erro de antes do fluxo volta a quem
+   * chamou (o cartão o mostra junto dos campos); o que falha no meio do fluxo aparece na conversa, que é relida.
+   */
+  async function turno(fazer: Turno, { mensagem, devolverErro = false, emFluxo = true }: { mensagem?: string; devolverErro?: boolean; emFluxo?: boolean } = {}) {
+    const controle = new AbortController()
+    turnoAtual.current = controle
+    conversaDoTurno.current = conversa?.conversaId ?? null
+    let comecou = false
     setFalha(null)
     setPensando(true)
+    // Sem resposta ao vivo, a conversa sabe que o turno é o do botão, que não passa pelo modelo.
+    setAoVivo(emFluxo ? SEM_RESPOSTA : null)
     if (mensagem) setEnviada(mensagem)
     try {
-      await aposTurno(await fazer())
+      const resultado = await fazer((evento) => {
+        comecou = true
+        setAoVivo((atual) => aplicar(atual ?? SEM_RESPOSTA, evento))
+      }, controle.signal)
+      await aposTurno(resultado.conversaId)
     } catch (erro) {
+      if (controle.signal.aborted) return
+      if (devolverErro && !comecou) throw erro
+      // Com o fluxo aberto, o servidor já gravou a pergunta: a conversa relida mostra o que ficou, e a pergunta não volta ao campo.
+      const id = conversaDoTurno.current
+      if (comecou && id !== null) await aposTurno(id).catch(() => undefined)
+      else if (mensagem) setTexto(mensagem)
       setFalha(mensagemDe(erro, 'O Atlas não respondeu. Tente de novo.'))
-      if (mensagem) setTexto(mensagem)
     } finally {
-      setPensando(false)
-      setEnviada(null)
+      if (!controle.signal.aborted) {
+        setPensando(false)
+        setAoVivo(null)
+        setEnviada(null)
+      }
     }
   }
 
   function montar() {
-    turno(() => (conversa ? montarRelatorio(conversa.conversaId) : abrirConversa(parceria.id, true)))
+    turno(() => (conversa ? montarRelatorio(conversa.conversaId) : abrirConversa(parceria.id, true)), { emFluxo: false })
   }
 
   function perguntar(pergunta: string) {
     const mensagem = pergunta.trim()
     if (!mensagem || pensando || !llm) return
     setTexto('')
-    turno(async () => enviarMensagem((conversa ?? (await abrirConversa(parceria.id))).conversaId, mensagem), mensagem)
+    turno(
+      async (aoEvento, sinal) => {
+        const id = conversa?.conversaId ?? (await abrirConversa(parceria.id)).conversaId
+        conversaDoTurno.current = id
+        return enviarMensagem(id, mensagem, aoEvento, sinal)
+      },
+      { mensagem },
+    )
   }
 
-  function responder(resultado: Conversa) {
-    aposTurno(resultado).catch((erro: unknown) => setFalha(mensagemDe(erro, 'O cartão foi respondido, mas a conversa não recarregou.')))
+  /** O cartão respondido retoma o turno do Atlas, em fluxo como uma pergunta. */
+  function responder(solicitacaoId: number, resposta: RespostaDoCartao) {
+    return turno((aoEvento, sinal) => responderCartao(solicitacaoId, resposta, aoEvento, sinal), { devolverErro: true })
   }
 
   function abrirDocumento(aba: AbaLateral) {
@@ -257,6 +306,7 @@ export function PaginaAtlas() {
     itens: conversa?.itens ?? [],
     enviada,
     pensando,
+    aoVivo,
     falha,
     llm,
     texto,

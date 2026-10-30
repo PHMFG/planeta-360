@@ -12,6 +12,8 @@ export type EstadoDoLlm = {
   configuradoPor: UsuarioResumo | null
   configuradoEm: string | null
   llmDisponivel: boolean
+  /** A linha de pensamento do modelo (o raciocínio do DeepSeek), ligada por padrão. */
+  raciocinio: boolean
 }
 
 export type TesteDoLlm = { ok: boolean; milissegundos: number; modelo: string; resposta?: string; erro?: string }
@@ -26,7 +28,7 @@ export async function obterEstadoDoLlm(): Promise<EstadoDoLlm | null> {
   }
 }
 
-export const definirChaveDoLlm = (dados: { chave: string; baseUrl?: string; modelo?: string }) =>
+export const definirChaveDoLlm = (dados: { chave: string; baseUrl?: string; modelo?: string; raciocinio?: boolean }) =>
   pedir<EstadoDoLlm>('/debug/llm', { metodo: 'PUT', corpo: dados })
 
 export const removerChaveDoLlm = () => pedir('/debug/llm', { metodo: 'DELETE' })

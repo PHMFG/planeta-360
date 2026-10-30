@@ -1,6 +1,6 @@
 // Atlas: a conversa da marca, o cartão de perguntas e o relatório de trabalho (rotas 42 a 48 do docs/api.md). [ATLAS]
 // O Atlas monta e redige, mas nunca escreve um número: todo valor que chega aqui já veio formatado pelo servidor, com a origem.
-import { pedir } from './cliente'
+import { ErroApi, pedir, pedirEmFluxo } from './cliente'
 import type { CampoCatalogo, ValorInformado, ValorVigente } from './dados'
 import type { UsuarioResumo } from './parcerias'
 
@@ -12,6 +12,8 @@ export type StatusCartao = 'PENDENTE' | 'RESPONDIDA' | 'RECUSADA' | 'CANCELADA'
 
 export type ItemDaConversa =
   | { tipo: 'usuario'; texto: string }
+  /** A linha de pensamento do modelo, crua: não passa pela checagem do texto e pode ter números e nomes internos. */
+  | { tipo: 'raciocinio'; texto: string }
   /** {@code porModelo} falso: frase fixa do servidor (o botão, sem modelo), que a tela não apresenta como fala do Atlas. */
   | { tipo: 'texto'; texto: string; porModelo?: boolean }
   | { tipo: 'aviso'; texto: string }
@@ -47,15 +49,48 @@ export const abrirConversa = (parceriaId: number, montarRelatorio = false) =>
 
 export const obterConversa = (conversaId: number) => pedir<Conversa>(`/atlas/conversas/${conversaId}`)
 
-export const enviarMensagem = (conversaId: number, texto: string) =>
-  pedir<Conversa>(`/atlas/conversas/${conversaId}/mensagens`, { metodo: 'POST', corpo: { texto } })
+/** O que chega enquanto o Atlas responde, nas rotas 44 e 46 em fluxo. O texto já vem filtrado e com os números resolvidos. */
+export type EventoDoTurno =
+  | { tipo: 'raciocinio'; delta: string }
+  | { tipo: 'etapa'; texto: string }
+  | { tipo: 'texto'; delta: string }
+  /** A checagem recusou o texto desta ida ao modelo: a tela o descarta e espera a nova redação ou a frase fixa. */
+  | { tipo: 'texto_recusado' }
+
+type AoEvento = (evento: EventoDoTurno) => void
+
+/** Um turno em fluxo: repassa os eventos e devolve o que o turno produziu, que chega no evento "fim". */
+async function turnoEmFluxo(caminho: string, corpo: unknown, aoEvento: AoEvento, sinal?: AbortSignal): Promise<Conversa> {
+  const desfecho: { fim?: Conversa; erro?: ErroApi } = {}
+  const inteiro = await pedirEmFluxo(
+    caminho,
+    corpo,
+    ({ nome, dados }) => {
+      const campos = (dados ?? {}) as { delta?: string; texto?: string; status?: number; detail?: string }
+      if (nome === 'fim') desfecho.fim = dados as Conversa
+      else if (nome === 'erro') desfecho.erro = new ErroApi(campos.status ?? 500, campos.detail ?? 'O Atlas não terminou a resposta. Tente de novo.')
+      else if (nome === 'raciocinio' || nome === 'texto') aoEvento({ tipo: nome, delta: campos.delta ?? '' })
+      else if (nome === 'etapa') aoEvento({ tipo: 'etapa', texto: campos.texto ?? '' })
+      else if (nome === 'texto_recusado') aoEvento({ tipo: 'texto_recusado' })
+    },
+    sinal,
+  )
+  if (inteiro !== undefined) return inteiro as Conversa
+  if (desfecho.erro) throw desfecho.erro
+  if (!desfecho.fim) throw new ErroApi(0, 'A resposta do Atlas parou no meio. Tente de novo.')
+  return desfecho.fim
+}
+
+export const enviarMensagem = (conversaId: number, texto: string, aoEvento: AoEvento, sinal?: AbortSignal) =>
+  turnoEmFluxo(`/atlas/conversas/${conversaId}/mensagens`, { texto }, aoEvento, sinal)
 
 /** O botão "Montar relatório" numa conversa que já existe: continua o relatório que estiver montando, ou começa um. */
 export const montarRelatorio = (conversaId: number) =>
   pedir<Conversa>(`/atlas/conversas/${conversaId}/mensagens`, { metodo: 'POST', corpo: ATALHO })
 
-export const responderCartao = (solicitacaoId: number, resposta: RespostaDoCartao) =>
-  pedir<Conversa>(`/atlas/solicitacoes/${solicitacaoId}/respostas`, { metodo: 'POST', corpo: resposta })
+/** A resposta ao cartão retoma o turno do modelo, que continua em fluxo como uma mensagem. */
+export const responderCartao = (solicitacaoId: number, resposta: RespostaDoCartao, aoEvento: AoEvento, sinal?: AbortSignal) =>
+  turnoEmFluxo(`/atlas/solicitacoes/${solicitacaoId}/respostas`, resposta, aoEvento, sinal)
 
 // ---------- Relatório do Atlas ----------
 export type StatusRelatorioAtlas = 'MONTANDO' | 'AGUARDANDO_RESPOSTA' | 'PRONTO' | 'DESCARTADO'

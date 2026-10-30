@@ -116,6 +116,79 @@ export async function pedir<T = void>(caminho: string, opcoes: Opcoes = {}): Pro
   return (tipo.includes('json') ? await resposta.json() : await resposta.text()) as T
 }
 
+/** Um evento de uma resposta em fluxo (text/event-stream): o nome ("event:") e os dados ("data:"), já lidos do JSON. */
+export type EventoDoFluxo = { nome: string; dados: unknown }
+
+/** Lê um evento do fluxo: as linhas "event:" e "data:" até a linha em branco. Comentários e "id:" ficam de fora. */
+function lerEvento(bloco: string): EventoDoFluxo | null {
+  let nome = 'message'
+  const dados: string[] = []
+  for (const linha of bloco.split('\n')) {
+    const separador = linha.indexOf(':')
+    if (separador <= 0) continue
+    const campo = linha.slice(0, separador)
+    const valor = linha.slice(separador + 1).replace(/^ /, '')
+    if (campo === 'event') nome = valor
+    else if (campo === 'data') dados.push(valor)
+  }
+  if (!dados.length) return null
+  const texto = dados.join('\n')
+  try {
+    return { nome, dados: JSON.parse(texto) }
+  } catch {
+    return { nome, dados: texto }
+  }
+}
+
+/**
+ * POST que a API responde em fluxo (text/event-stream): cada evento chega a aoEvento assim que o servidor o manda. [ATLAS]
+ * Os erros de antes do fluxo (404, 409, 422, 429, 503) chegam como em pedir(), em ErroApi. Se a API responder em JSON, o
+ * corpo volta inteiro e nenhum evento é chamado; num fluxo, a função devolve undefined quando o servidor fecha a conexão.
+ */
+export async function pedirEmFluxo(caminho: string, corpo: unknown, aoEvento: (evento: EventoDoFluxo) => void, sinal?: AbortSignal): Promise<unknown> {
+  let resposta: Response
+  try {
+    resposta = await fetch(`${BASE}${caminho}`, {
+      method: 'POST',
+      // O JSON também vale: é como chegam os erros de antes do fluxo (ProblemDetail) e a resposta de uma API sem fluxo.
+      headers: { Accept: 'text/event-stream, application/json', 'Content-Type': 'application/json', [CABECALHO_CSRF]: await tokenCsrf() },
+      body: JSON.stringify(corpo),
+      credentials: 'same-origin',
+      signal: sinal,
+    })
+  } catch (erro) {
+    if (sinal?.aborted) throw erro
+    throw new ErroApi(0, SEM_API)
+  }
+
+  if (resposta.status === 401) aoPerderSessao?.()
+  if (!resposta.ok) throw await lerErro(resposta)
+  const tipo = resposta.headers.get('Content-Type') ?? ''
+  if (!tipo.includes('text/event-stream') || !resposta.body) return tipo.includes('json') ? await resposta.json() : undefined
+
+  const leitor = resposta.body.pipeThrough(new TextDecoderStream()).getReader()
+  let resto = ''
+  for (;;) {
+    let parte: ReadableStreamReadResult<string>
+    try {
+      parte = await leitor.read()
+    } catch (erro) {
+      if (sinal?.aborted) throw erro
+      throw new ErroApi(0, 'A conexão caiu no meio da resposta.')
+    }
+    if (parte.done) return undefined
+    // Um evento termina numa linha em branco; o pedaço que sobra espera o resto chegar.
+    resto = (resto + parte.value).replace(/\r\n/g, '\n')
+    let fim = resto.indexOf('\n\n')
+    while (fim >= 0) {
+      const evento = lerEvento(resto.slice(0, fim))
+      resto = resto.slice(fim + 2)
+      if (evento) aoEvento(evento)
+      fim = resto.indexOf('\n\n')
+    }
+  }
+}
+
 /**
  * Baixa um anexo da API e entrega ao navegador com o nome do arquivo. [UPLOAD]
  * Um link comum falharia calado quando a API recusa (ex.: arquivo que não está mais no armazenamento); aqui o erro volta para a tela.

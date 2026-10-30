@@ -44,6 +44,7 @@ export function BotaoDebug() {
   const [baseUrl, setBaseUrl] = useState('')
   const [modelo, setModelo] = useState('')
   const [provedor, setProvedor] = useState<Provedor>('go-deepseek')
+  const [raciocinio, setRaciocinio] = useState(true)
   const [erros, setErros] = useState<Record<string, string>>({})
   const [falha, setFalha] = useState<string | null>(null)
   const [teste, setTeste] = useState<TesteDoLlm | null>(null)
@@ -56,7 +57,10 @@ export function BotaoDebug() {
       .then((lido) => {
         if (!ativo) return
         setEstado(lido)
-        if (lido) setProvedor(provedorDe(lido))
+        if (!lido) return
+        setProvedor(provedorDe(lido))
+        // Uma API de antes do campo não o manda: o padrão é ligado.
+        setRaciocinio(lido.raciocinio ?? true)
       })
       .catch(() => ativo && setEstado(null))
     return () => {
@@ -93,7 +97,7 @@ export function BotaoDebug() {
     executar('salvar', async () => {
       const destino =
         provedor === 'go-deepseek' ? OPENCODE_GO_DEEPSEEK : { baseUrl: baseUrl.trim() || undefined, modelo: modelo.trim() || undefined }
-      mudou(await definirChaveDoLlm({ chave: chave.trim(), ...destino }))
+      mudou(await definirChaveDoLlm({ chave: chave.trim(), ...destino, raciocinio }))
       // A chave não fica na tela depois de enviada.
       setChave('')
       setTeste(null)
@@ -117,7 +121,7 @@ export function BotaoDebug() {
       <Modal titulo="Debug · chaves de IA" legenda="Temporário, só no ambiente de desenvolvimento" aberto={aberto} aoFechar={() => setAberto(false)}>
         <form onSubmit={salvar} className="flex flex-col gap-4" noValidate>
           <Aviso tipo={estado.llmDisponivel ? 'info' : 'ausente'} titulo={estado.llmDisponivel ? 'Modelo de linguagem ligado' : 'Modelo de linguagem desligado'}>
-            {descrever(estado)} Modelo {estado.modelo}.
+            {descrever(estado)} Modelo {estado.modelo}, {estado.raciocinio === false ? 'sem' : 'com'} linha de pensamento.
           </Aviso>
           <Seletor rotulo="Provedor e modelo" value={provedor} onChange={(evento) => setProvedor(evento.target.value as Provedor)}>
             <option value="go-deepseek">OpenCode Go · DeepSeek V4.1 Flash</option>
@@ -135,8 +139,8 @@ export function BotaoDebug() {
           />
           {provedor === 'go-deepseek' ? (
             <p className="text-xs font-medium text-texto-2">
-              Endereço <code>{OPENCODE_GO_DEEPSEEK.baseUrl}</code> e modelo <code>{OPENCODE_GO_DEEPSEEK.modelo}</code>, sem raciocínio. No console do
-              OpenCode, o dono da conta precisa liberar a região Global (Settings › Privacy › Regions), que o DeepSeek exige.
+              Endereço <code>{OPENCODE_GO_DEEPSEEK.baseUrl}</code> e modelo <code>{OPENCODE_GO_DEEPSEEK.modelo}</code>. No console do OpenCode, o
+              dono da conta precisa liberar a região Global (Settings › Privacy › Regions), que o DeepSeek exige.
             </p>
           ) : (
             <>
@@ -160,6 +164,16 @@ export function BotaoDebug() {
               />
             </>
           )}
+          <label className="flex items-start gap-2.5 text-sm font-semibold">
+            <input type="checkbox" className="mt-0.5 size-4 shrink-0 accent-[var(--secao-cor)]" checked={raciocinio} onChange={(evento) => setRaciocinio(evento.target.checked)} />
+            <span>
+              Linha de pensamento do modelo
+              <span className="block text-xs font-medium text-texto-2">
+                O modelo pensa antes de responder e a conversa mostra o pensamento numa caixa que abre e fecha. Cada resposta demora uns segundos a mais
+                e gasta mais do limite do provedor. Vale ao salvar a chave.
+              </span>
+            </span>
+          </label>
           <p className="text-xs font-medium text-texto-2">
             A chave vai uma vez para a API, fica só na memória dela e some quando a API reinicia. Nunca volta inteira para a tela. Use só com
             dados fictícios.

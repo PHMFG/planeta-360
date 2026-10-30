@@ -111,9 +111,14 @@ export function TextoDoSistema({ children }: { children: ReactNode }) {
   )
 }
 
-/** Texto do Atlas: Regular 15, altura 1.6, branco a 90%. */
-export function TextoDoAtlas({ children }: { children: ReactNode }) {
-  return <p className="text-[15px] leading-[1.6] break-words whitespace-pre-wrap text-white/90">{children}</p>
+/** Texto do Atlas: Regular 15, altura 1.6, branco a 90%. {@code digitando}: o texto ainda está chegando, com o cursor no fim. */
+export function TextoDoAtlas({ children, digitando = false }: { children: ReactNode; digitando?: boolean }) {
+  return (
+    <p className="text-[15px] leading-[1.6] break-words whitespace-pre-wrap text-white/90">
+      {children}
+      {digitando && <span aria-hidden="true" className="ml-0.5 inline-block h-[1.05em] w-0.5 translate-y-[3px] animate-pulse bg-white/70" />}
+    </p>
+  )
 }
 
 /** O aviso do Figma (199:1876): vidro suave, ícone e título; sem enfeite nas laterais. */
