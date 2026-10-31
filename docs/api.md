@@ -1503,7 +1503,7 @@ Cada evento tem `event:` e `data:` com um JSON. Numa ida ao modelo a ordem é `p
 | `texto` | `{"delta": "..."}` | Um pedaço da resposta para a marca, **já filtrado**: um marcador `{{...}}` fica retido até fechar e sai resolvido e formatado, igual ao item `texto` do `fim`; a última palavra espera o espaço seguinte. A cada pedaço, o que chegou até ali passa pela checagem do texto do chat. As frases fixas do servidor (a troca de um texto recusado duas vezes, a falha do modelo, o limite e o prazo do turno) também chegam como `texto`, inteiras. |
 | `ferramenta` | `{"nome": "parceria_consultar", "argumentos": "{}", "resultado": "{...}", "erro": false, "duracaoMs": 42}` | **Só com `atlas.debug.ferramentas=true`.** Uma ferramenta terminou: logo que ela termina, antes da ferramenta seguinte e da próxima ida ao modelo (depois da `etapa` dela). O mesmo corpo do item `ferramenta` do `fim`, sem o `tipo` (veja "Debug das ferramentas"). Desligado, o evento não existe. |
 | `texto_recusado` | `{}` | A checagem recusou o texto desta ida ao modelo (algarismo fora de marcador, chave crua, marcador que não existe ou sem valor, nome de ferramenta, "marcador"...), durante o fluxo ou na checagem do texto inteiro no fim da ida; ou o modelo falhou no meio de um texto. O servidor para de repassar: **a tela descarta o `texto` que recebeu nesta ida**. A seguir vêm a nova redação (novos `texto`) ou a frase fixa. |
-| `fim` | o objeto Conversa | O mesmo JSON que a rota devolve sem fluxo (`conversaId`, `llmDisponivel`, `relatorioDisponivel`, `debugDeFerramentas`, `itens` do turno). Fecha o fluxo. |
+| `fim` | o objeto Conversa | O mesmo JSON que a rota devolve sem fluxo (`conversaId`, `llmDisponivel`, `relatorioDisponivel`, `debugDeFerramentas`, `diagnosticoDisponivel`, `itens` do turno). Fecha o fluxo. O traço do turno já está gravado quando o `fim` sai: o `turno` dos itens pode ser aberto na hora. |
 | `erro` | `{"status": 500, "detail": "Algo deu errado do nosso lado. Tente de novo em instantes; se continuar, avise a equipe."}` | Uma falha inesperada depois de o fluxo abrir (a falha do modelo continua virando a frase fixa, com `fim`). Fecha o fluxo. O fluxo também fecha sozinho depois de 6 minutos. |
 
 Exemplo (rota 44, o modelo consulta os números e responde):
@@ -1540,6 +1540,7 @@ O `fim` é a referência: o que a tela montou com os pedaços dá lugar aos iten
 
 ```json
 { "conversaId": 12, "llmDisponivel": false, "relatorioDisponivel": true, "debugDeFerramentas": false,
+  "diagnosticoDisponivel": false,
   "itens": [
     { "tipo": "usuario", "texto": "Montar o relatório da ativação" },
     { "tipo": "texto", "texto": "Montei a base do relatório de ativação com os números do portal. Faltam números que só vocês sabem.", "porModelo": false },
@@ -1554,17 +1555,18 @@ O `fim` é a referência: o que a tela montou com os pedaços dá lugar aos iten
 - `llmDisponivel` é `true` quando há um modelo de linguagem agora (a chave posta pelo debug ou as variáveis de ambiente; muda na hora ao pôr ou apagar a chave) e `false` no padrão (sem ele o Atlas só oferece o botão, se o relatório estiver ligado). As rotas 42, 43, 44, 45 e 46 trazem o mesmo valor.
 - `relatorioDisponivel` é o valor de `atlas.relatorio.ligado`: `false` no Atlas só chat (o padrão), em que não saem `cartao`, `relatorio_pronto` nem `aviso`. As rotas 42, 43 (ao lado de `llmDisponivel`), 44, 45 e 46 trazem o mesmo valor. O exemplo abaixo é o de um Atlas com o relatório ligado.
 - `debugDeFerramentas` é o valor de `atlas.debug.ferramentas` (veja "Debug das ferramentas"): `true`, os itens trazem também `ferramenta`. Não vem na rota 43.
+- `diagnosticoDisponivel` é `true` quando a marca vê o diagnóstico das próprias conversas: `atlas.diagnostico.ligado` **e** `atlas.diagnostico.marca` (veja "Diagnóstico do Atlas"). Então a rota 49 responde e os itens do assistente (`raciocinio`, `texto`, `ferramenta`, `cartao` e `relatorio_pronto`) trazem o campo `turno`: o id do turno do traço a que a mensagem pertence (um UUID, texto). O front mostra o botão "Diagnóstico" nas respostas que têm `turno`. Falso (o padrão), o campo `turno` não existe em item nenhum. Não vem na rota 43.
 - As rotas **42, 44 e 46 devolvem só os itens do turno**; a **45 devolve a conversa inteira**.
 - Os itens são **derivados do histórico** da conversa, que o servidor grava no formato de chat completions (`user`, `assistant` com `tool_calls`, `tool`), como se o modelo tivesse chamado as ferramentas: nada é guardado só para a tela.
 
 | `tipo` | Quando aparece | Campos |
 | --- | --- | --- |
 | `usuario` | O que a pessoa disse (o botão aparece como "Montar o relatório da ativação"; no histórico que vai ao modelo, a mensagem continua "Montar o relatório da ativação (botão)") | `texto` |
-| `raciocinio` | O **resumo** do raciocínio do modelo de uma mensagem do assistente, **antes** dos itens dela (`texto`, `cartao`, `relatorio_pronto`). O raciocínio cru (`reasoning_content`) nunca aparece: o resumo é gerado no servidor (veja "Raciocínio do modelo") e já passou pela checagem do texto. Só aparece quando a mensagem tem resumo gravado: sem raciocínio, com resumo recusado, atrasado ou perdido, nas mensagens de antes da V9, no botão e nas frases fixas do servidor não há item (a exceção é `Não consegui responder agora`, que pode ter um, quando o modelo raciocinou e não respondeu). A tela o mostra numa caixa minimizável. | `resumo` |
-| `texto` | O que o Atlas disse. Os marcadores `{{...}}` já vêm trocados pelo valor; o que não tem valor vira "indisponível". `porModelo` é `true` só quando o texto foi escrito pelo modelo de linguagem; é `false` nas frases fixas do servidor: as do botão (plano B: "Montei a base...", "Continuo o relatório...", "Pronto: ..."), a frase fixa que troca um texto recusado duas vezes e as de falha, limite e prazo do turno | `texto`, `porModelo` |
-| `ferramenta` | **Debug, só com `atlas.debug.ferramentas=true`.** Uma ferramenta que o agente chamou, na ordem em que rodou, **depois** do `raciocinio` e do `texto` da mesma mensagem do assistente (e antes do `cartao` que ela abriu). Veja "Debug das ferramentas" | `nome`, `argumentos`, `resultado`, `erro`, `duracaoMs` |
-| `cartao` | O cartão de perguntas, com o **estado de agora** | `solicitacaoId`, `relatorioId`, `mensagem`, `status` (`PENDENTE`, `RESPONDIDA`, `RECUSADA` ou `CANCELADA`), `campos` |
-| `relatorio_pronto` | O relatório ficou pronto; o front abre o A4 pela rota 47. **Só com `atlas.relatorio.ligado=true`**, como `cartao` e `aviso` | `relatorioId`, `titulo` |
+| `raciocinio` | O **resumo** do raciocínio do modelo de uma mensagem do assistente, **antes** dos itens dela (`texto`, `cartao`, `relatorio_pronto`). O raciocínio cru (`reasoning_content`) nunca aparece: o resumo é gerado no servidor (veja "Raciocínio do modelo") e já passou pela checagem do texto. Só aparece quando a mensagem tem resumo gravado: sem raciocínio, com resumo recusado, atrasado ou perdido, nas mensagens de antes da V9, no botão e nas frases fixas do servidor não há item (a exceção é `Não consegui responder agora`, que pode ter um, quando o modelo raciocinou e não respondeu). A tela o mostra numa caixa minimizável. | `resumo`, `turno` (só com `diagnosticoDisponivel`) |
+| `texto` | O que o Atlas disse. Os marcadores `{{...}}` já vêm trocados pelo valor; o que não tem valor vira "indisponível". `porModelo` é `true` só quando o texto foi escrito pelo modelo de linguagem; é `false` nas frases fixas do servidor: as do botão (plano B: "Montei a base...", "Continuo o relatório...", "Pronto: ..."), a frase fixa que troca um texto recusado duas vezes e as de falha, limite e prazo do turno | `texto`, `porModelo`, `turno` (só com `diagnosticoDisponivel`) |
+| `ferramenta` | **Debug, só com `atlas.debug.ferramentas=true`.** Uma ferramenta que o agente chamou, na ordem em que rodou, **depois** do `raciocinio` e do `texto` da mesma mensagem do assistente (e antes do `cartao` que ela abriu). Veja "Debug das ferramentas" | `nome`, `argumentos`, `resultado`, `erro`, `duracaoMs`, `turno` (só com `diagnosticoDisponivel`) |
+| `cartao` | O cartão de perguntas, com o **estado de agora** | `solicitacaoId`, `relatorioId`, `mensagem`, `status` (`PENDENTE`, `RESPONDIDA`, `RECUSADA` ou `CANCELADA`), `campos`, `turno` (só com `diagnosticoDisponivel`) |
+| `relatorio_pronto` | O relatório ficou pronto; o front abre o A4 pela rota 47. **Só com `atlas.relatorio.ligado=true`**, como `cartao` e `aviso` | `relatorioId`, `titulo`, `turno` (só com `diagnosticoDisponivel`) |
 | `aviso` | Aviso do sistema: o cartão foi fechado (cancelado, ou o relatório foi descartado). O texto segue o `llmDisponivel` da resposta: `"Cartão fechado. Use Montar relatório para continuar."` sem o modelo, `"Cartão fechado. Quando tiver os números, peça para continuar."` com ele | `texto` |
 
 Cada item de `campos` do cartão é um campo do catálogo (rota 39) mais `obrigatorio` e `vigente`, que usa o formato da rota 40 (`{valor, origem, informadoPor, informadoEm}`, ou `null` se ninguém informou). O cartão pede, de uma vez, o que o relatório precisa e ainda não tem valor: primeiro as obrigatórias (visitantes e cadastros), depois as opcionais (brindes disponíveis e distribuídos). Não há campo de arquivo no cartão.
@@ -1742,6 +1744,44 @@ Cada item de `campos` do cartão é um campo do catálogo (rota 39) mais `obriga
 Um relatório `MONTANDO` ou `AGUARDANDO_RESPOSTA` sem nenhuma mensagem nova na conversa há **mais de 7 dias** vira `DESCARTADO` quando a pessoa **lista** (rota 43) ou **abre** (rota 45) as conversas. O cartão pendente dele vira `CANCELADA` e a chamada que ele deixou aberta é fechada com `cancel` no histórico (a conversa mostra o `aviso` de cartão fechado). O botão, depois disso, começa um relatório novo. Relatório pronto nunca é descartado. Descartar pela tela fica para depois.
 
 **Histórico (rotas 42 a 46):** `CRIACAO` com a entidade `atlas_relatorio` quando o relatório nasce (`valorNovo` = `MONTANDO`), `EDICAO` quando fica pronto (`valorAnterior` = `MONTANDO`, `valorNovo` = `PRONTO`), e `CRIACAO` na entidade `dado_informado` por valor que o cartão gravou. Aparecem no histórico da parceria (rota 20) como as demais ações da marca.
+
+---
+
+# Diagnóstico do Atlas (marco M2)
+
+Cada turno do Atlas (uma mensagem de texto da pessoa ou a resposta do cartão, até a resposta dele) deixa um **traço**: uma linha por etapa, com quando começou, quanto levou, como terminou e um detalhe. Serve para saber **por que** uma resposta saiu como saiu: a busca não achou, o modelo errou o caminho, a checagem recusou, a ferramenta deu erro, o tempo esgotou. A RBS lê o traço de todas as conversas (rotas 50 a 53); a marca, o das próprias (rota 49), se a propriedade permitir. As rotas 49 a 53 estão no fim desta seção. O traço fica em `atlas_traco` (V10, veja `docs/banco.md`).
+
+## Propriedades
+
+| Propriedade | Variável | Padrão | O que faz |
+| --- | --- | --- | --- |
+| `atlas.diagnostico.ligado` | `ATLAS_DIAGNOSTICO` | `false`; `true` no perfil `dev`; `false` no `test` (ligado por classe de teste) | Desligado, **nada é gravado** em `atlas_traco` e as rotas 49 a 53 respondem **404**, como uma rota que não existe (a ordem das conferências continua a de sempre: a rota da RBS dá 403 ao patrocinador antes). |
+| `atlas.diagnostico.marca` | `ATLAS_DIAGNOSTICO_MARCA` | `false`; `true` no perfil `dev`; `false` no `test` | A marca vê o diagnóstico **das próprias conversas**: a rota 49 responde, `diagnosticoDisponivel` sai `true` e os itens do assistente trazem o `turno`. Só vale com o diagnóstico ligado. Desligada, a rota 49 responde 404 também ao dono da conversa. |
+| `atlas.diagnostico.preco-por-milhao.entrada` e `.saida` | `ATLAS_PRECO_ENTRADA`, `ATLAS_PRECO_SAIDA` | `0` | Preço em dólares por milhão de tokens, **só** para a resposta que não traz o custo. Veja "Custo". |
+
+## O traço de um turno
+
+- **Um turno, um `turno`**: todas as etapas dele levam o mesmo UUID e uma `ordem` de 1 em diante (a ordem em que começaram). O traço é guardado na memória enquanto o turno anda e **gravado de uma vez no fim** (também quando o turno dá erro): nenhuma conexão com o banco fica presa durante a chamada ao modelo.
+- **Etapas sequenciais** nunca se sobrepõem: cada uma começa depois de a anterior terminar, e a soma das durações delas não passa do tempo do turno (do começo da primeira ao fim da última). A única que corre em paralelo é o `RESUMO` do raciocínio, que fica fora dessa soma e pode terminar depois do turno: o traço o grava como **pendente** (`resultado` `PULADO`, `dados.pendente` `true`) e, se ele ficar pronto, atualiza a mesma linha.
+- **`resultado`** de uma etapa: `OK`, `RECUSADO` (uma regra disse não), `ERRO`, `SOMBRA` (o JEV decidiu sem agir; ainda não existe) ou `PULADO` (a etapa não rodou, ou ainda não terminou). O `resultado` do **turno** é o da etapa `SAIDA`, sempre a última etapa sequencial.
+- **Todo turno de texto deixa traço**, também o que nem começou: o teto diário atingido (429) e a conversa ocupada (409) deixam `G1_LIMITES` e `SAIDA` com `RECUSADO`. O botão "Montar relatório" (plano B, sem modelo) não deixa traço.
+- **Nada sensível**: o `dados` de uma etapa **nunca** leva o raciocínio cru do modelo (`reasoning_content`), nem o resumo dele no `RESUMO`, nem chave de provedor, nem o prompt de sistema, nem as mensagens do histórico. Todo texto vai cortado em 20.000 caracteres, sem o caractere nulo e sem as chaves de provedor que a API conhece. Um teste procura um raciocínio, uma chave e uma frase do prompt falsos em todo JSON gravado e devolvido.
+
+| Etapa | Quando | O que vem em `dados` |
+| --- | --- | --- |
+| `G1_LIMITES` | Começo do turno: o teto diário da parceria e a trava de um turno por vez | `tetoPorParceria`, `usadasHoje`, `retomada` (`true` na rota 46); `motivo` quando `RECUSADO`: `TETO_DIARIO` ou `TURNO_EM_ANDAMENTO` |
+| `LLM_IDA` | Cada ida ao modelo | `ida` (1, 2, ...), `emFluxo`, `mensagens` (quantas foram ao modelo), `ferramentas` (os nomes oferecidos), `novaRedacao` (`true` na ida que refaz um texto recusado), `modelo`, `tokensEntrada`, `tokensSaida`, `motivoDoFim` (`stop`, `tool_calls`, `length`...), `latenciaMs` (da chamada ao provedor), `custoUsd` e `custoOrigem`, `chamadas` (pedidos de ferramenta da resposta), `comTexto`, `comRaciocinio` (se veio raciocínio, nunca o texto dele). Em falha: `erro` (o nome da exceção) e `detalhe` (a frase já sem chave) |
+| `FERRAMENTA` | Cada pedido de ferramenta | `ferramenta`, `argumentos` e `resultado` (os JSON crus, como textos de até 20.000 caracteres), `pausa` (abriu o cartão), `pronto` (fechou o relatório). `ERRO` quando a ferramenta falhou (o `resultado` é o `{"erro": ...}` que voltou ao modelo). `PULADO` com `motivo` `AGUARDANDO_O_CARTAO` ou `RELATORIO_PRONTO`; `RECUSADO` com `motivo` `LIMITE_DE_CHAMADAS` |
+| `CHECAGEM` | A checagem do texto do chat (número solto, termo interno, marcador) | `origem` (`RESPOSTA` ou `TEXTO_COM_FERRAMENTAS`), `caracteres`, `aprovado` e, se recusou, `motivo` (a frase da recusa) |
+| `RESUMO` | O resumo do raciocínio de uma mensagem, em paralelo | `modelo`, `tokensEntrada`, `tokensSaida`, `latenciaMs`, `custoUsd` da chamada do resumo; `caracteres` e `noPrazo` (`false` se terminou depois de o turno desistir de esperar); `motivo` `RECUSADO_PELA_CHECAGEM` (`RECUSADO`) ou `MENSAGEM_SUMIU` (`ERRO`); `erro`; `pendente` |
+| `SAIDA` | O fim do turno | `tipo`: `TEXTO`, `FRASE_FIXA`, `CARTAO`, `CARTAO_ABERTO`, `RELATORIO_PRONTO`, `RECUSADO_ANTES_DO_TURNO` ou `INTERROMPIDO`; `motivo` (nas frases fixas: `TEXTO_RECUSADO`, `FALHA_DO_MODELO`, `SEM_RESPOSTA`, `PRAZO_DO_TURNO`, `LIMITE_DE_CHAMADAS`, `SEM_MODELO`); `idasAoModelo`, `chamadasDeFerramenta`, `caracteres`, `esperaDosResumosMs`, `resumosPendentes`; em fluxo, `fluxo`: `eventos` (quantos de cada tipo saíram), `primeiroTextoMs` e `clienteSaiu`. `RECUSADO` na frase de texto recusado duas vezes, no limite de chamadas e nas recusas antes do turno; `ERRO` na falha do modelo, no prazo, na resposta vazia e no turno interrompido |
+| `ERRO` | Uma falha inesperada no meio do turno | `excecao` (o nome da exceção) e `mensagem` (curta e limpa, nunca a pilha) |
+
+As etapas `J1_INTENCAO`, `J1_CARTAO`, `BUSCA`, `R3_FONTES`, `R5_RESPOSTA`, `V2_COERENCIA`, `LACUNAS` e `DISJUNTOR` já existem no `CHECK` do banco e entram com os marcos seguintes.
+
+## Custo
+
+O custo de uma ida (e de um resumo) é o `usage.opencode.list_cost` que o OpenCode Go devolve em cada resposta, em dólares, a preço de lista: vai em `dados.custoUsd` da etapa, com `custoOrigem` `RESPOSTA`, e o diagnóstico o soma por turno e por conversa. O preço do DeepSeek V4.1 Flash por milhão de tokens não consta nas referências do projeto (o plano do Go é por limite de uso, não por token), por isso **não há preço fixo no código**: se uma resposta vier sem o `list_cost`, vale o preço por milhão de tokens de `atlas.diagnostico.preco-por-milhao` (entrada e saída), com `custoOrigem` `PRECO_CONFIGURADO`; com os dois em `0` (o padrão), a ida fica sem `custoUsd`. É uma **estimativa**: serve para somar o gasto de uma rodada de testes, não para cobrar.
 
 ---
 

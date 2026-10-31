@@ -7,6 +7,10 @@ import br.com.rbs.portal.atlas.AtlasRepositorio.LinhaDeRelatorio;
 import br.com.rbs.portal.atlas.AtlasRepositorio.LinhaDeSolicitacao;
 import br.com.rbs.portal.atlas.ModoDoAtlas;
 import br.com.rbs.portal.atlas.contexto.AtlasContexto;
+import br.com.rbs.portal.atlas.diagnostico.EtapaDoTraco;
+import br.com.rbs.portal.atlas.diagnostico.ResultadoDaEtapa;
+import br.com.rbs.portal.atlas.diagnostico.Traco;
+import br.com.rbs.portal.atlas.diagnostico.Traco.Etapa;
 import br.com.rbs.portal.atlas.ferramentas.RelatorioFerramentas;
 import br.com.rbs.portal.atlas.ferramentas.RelatorioFerramentas.Execucao;
 import br.com.rbs.portal.atlas.loop.HistoricoDaConversa.Chamada;
@@ -14,6 +18,7 @@ import br.com.rbs.portal.atlas.loop.ResumoDoRaciocinio.ResumosDoTurno;
 import br.com.rbs.portal.atlas.provedor.ProvedorAtual;
 import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm;
 import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.ChamadaDeFerramenta;
+import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.DefinicaoDeFerramenta;
 import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.MensagemDeChat;
 import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.OuvinteDoFluxo;
 import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.PedidoAoLlm;
@@ -74,6 +79,10 @@ import tools.jackson.core.JacksonException;
  *       para cada mensagem gravada com raciocínio, pede ao {@link ResumoDoRaciocinio} um resumo, numa chamada à parte que não
  *       atrasa a ida seguinte. No fim do turno (qualquer saída normal de {@link #conduzir}) espera os resumos pendentes por até
  *       {@code atlas.prazo-do-resumo}; o que não ficou pronto sai sem resumo.</li>
+ *   <li><b>O diagnóstico</b> (plano do Atlas completo, M2): cada ida ao modelo, ferramenta, checagem do texto e resumo do raciocínio,
+ *       e o fim do turno, viram uma etapa do {@link Traco} do contexto. O traço vive na memória e só vai ao banco no fim do turno
+ *       (quem chama o {@code conduzir} o encerra): o loop nunca grava traço durante a chamada ao modelo. Nada do raciocínio cru,
+ *       da chave nem do prompt de sistema entra nele.</li>
  * </ul>
  */
 @Component
@@ -160,13 +169,22 @@ public class LoopDoAgente {
      */
     private static final class Turno {
         final long prazo;
+        final Traco traco;
         int chamadas;
+        int idas;
         boolean limiteAtingido;
         boolean pediuNovaRedacao;
         ResumosDoTurno resumos;
+        // O desfecho, para a etapa SAIDA do traço: o que terminou o turno e a última mensagem que ele gravou.
+        String tipoDaSaida = "CARTAO_ABERTO";
+        ResultadoDaEtapa resultadoDaSaida = ResultadoDaEtapa.OK;
+        String motivoDaSaida;
+        Long mensagemFinalId;
+        int caracteresDaSaida;
 
-        Turno(Duration prazoDoTurno) {
+        Turno(Duration prazoDoTurno, Traco traco) {
             this.prazo = System.nanoTime() + prazoDoTurno.toNanos();
+            this.traco = traco;
         }
 
         boolean venceu() {
@@ -229,19 +247,47 @@ public class LoopDoAgente {
      * {@link OuvinteDoTurno#NENHUM}, nada é transmitido e a resposta sai inteira no fim.
      */
     public void conduzir(AtlasContexto contexto, OuvinteDoTurno ouvinte) {
-        // O provedor é pego UMA vez: se a chave do debug mudar no meio, este turno termina com o que começou.
-        ProvedorDeLlm llm = provedor.provedor().orElse(null);
-        Turno turno = new Turno(prazoDoTurno);
-        if (llm == null) {
-            // A chave do debug foi apagada entre a conferência do service e aqui: termina como uma falha do modelo.
-            gravarFrase(contexto, turno, frase(FRASE_DA_FALHA, FRASE_DA_FALHA_NO_CHAT), null, ouvinte);
-            return;
+        Turno turno = new Turno(prazoDoTurno, contexto.traco());
+        try {
+            // O provedor é pego UMA vez: se a chave do debug mudar no meio, este turno termina com o que começou.
+            ProvedorDeLlm llm = provedor.provedor().orElse(null);
+            if (llm == null) {
+                // A chave do debug foi apagada entre a conferência do service e aqui: termina como uma falha do modelo.
+                gravarFrase(contexto, turno, frase(FRASE_DA_FALHA, FRASE_DA_FALHA_NO_CHAT), null, ouvinte, "SEM_MODELO",
+                        ResultadoDaEtapa.ERRO);
+                registrarSaida(turno, ouvinte, 0, 0);
+                return;
+            }
+            turno.resumos = resumos.abrir(contexto, llm, ouvinte);
+            laco(contexto, ouvinte, llm, turno);
+        } catch (RuntimeException | Error erro) {
+            // Em erro o laço sobe a exceção e não espera os resumos: os que já saíram terminam sozinhos. O traço guarda a falha e
+            // quem chamou o encerra (a etapa SAIDA sai como ERRO).
+            turno.traco.erro(erro);
+            throw erro;
         }
-        turno.resumos = resumos.abrir(contexto, llm, ouvinte);
-        laco(contexto, ouvinte, llm, turno);
         // Qualquer saída normal do laço passa por aqui: antes do fim (ou da resposta JSON), os resumos pendentes têm até o prazo.
-        // Em erro, o laço sobe a exceção e não espera: os resumos que já saíram terminam sozinhos.
-        turno.resumos.esperar();
+        long inicioDaEspera = System.nanoTime();
+        int pendentes = turno.resumos.esperar();
+        registrarSaida(turno, ouvinte, (System.nanoTime() - inicioDaEspera) / 1_000_000, pendentes);
+    }
+
+    /**
+     * A etapa SAIDA do traço: o desfecho do turno (o texto do modelo, uma frase fixa, o cartão aberto, o relatório pronto), quanto o
+     * turno esperou os resumos do raciocínio e o que o fluxo transmitiu. Fica por último entre as etapas sequenciais.
+     */
+    private void registrarSaida(Turno turno, OuvinteDoTurno ouvinte, long esperaDosResumosMs, int resumosPendentes) {
+        Etapa saida = turno.traco.abrir(EtapaDoTraco.SAIDA).mensagem(turno.mensagemFinalId)
+                .dado("tipo", turno.tipoDaSaida).dado("motivo", turno.motivoDaSaida)
+                .dado("idasAoModelo", turno.idas).dado("chamadasDeFerramenta", turno.chamadas)
+                .dado("esperaDosResumosMs", esperaDosResumosMs).dado("resumosPendentes", resumosPendentes);
+        if (turno.caracteresDaSaida > 0) {
+            saida.dado("caracteres", turno.caracteresDaSaida);
+        }
+        if (turno.traco.ativo() && ouvinte.emFluxo()) {
+            saida.dado("fluxo", ouvinte.medidas());
+        }
+        saida.fim(turno.resultadoDaSaida);
     }
 
     private void laco(AtlasContexto contexto, OuvinteDoTurno ouvinte, ProvedorDeLlm llm, Turno turno) {
@@ -254,13 +300,19 @@ public class LoopDoAgente {
                 return;   // cartão aberto: o turno para e espera a rota 46
             }
             if (turno.venceu()) {
-                gravarFrase(contexto, turno, frase(FRASE_DO_PRAZO, FRASE_DO_PRAZO_NO_CHAT), null, ouvinte);
+                gravarFrase(contexto, turno, frase(FRASE_DO_PRAZO, FRASE_DO_PRAZO_NO_CHAT), null, ouvinte, "PRAZO_DO_TURNO",
+                        ResultadoDaEtapa.ERRO);
                 return;
             }
             PedidoAoLlm pedido = pedido(contexto, ativo, transitorias);
             FiltroDoTexto filtro = ouvinte.emFluxo() ? new FiltroDoTexto(resolucao(contexto), checagem, ouvinte) : null;
             RespostaDoLlm resposta;
             AtomicBoolean pensou = new AtomicBoolean();   // o aviso "pensando" sai uma vez por ida
+            // O traço da ida: só o que não é sensível (quantas mensagens e quais ferramentas, nunca o conteúdo nem o prompt).
+            Etapa ida = turno.traco.abrir(EtapaDoTraco.LLM_IDA).dado("ida", ++turno.idas).dado("emFluxo", filtro != null)
+                    .dado("mensagens", pedido.mensagens().size())
+                    .dado("ferramentas", pedido.ferramentas().stream().map(DefinicaoDeFerramenta::nome).toList())
+                    .dado("novaRedacao", transitorias.isEmpty() ? null : true);
             try {
                 resposta = filtro == null ? llm.responder(pedido) : llm.responderEmFluxo(pedido, new OuvinteDoFluxo() {
                     @Override
@@ -278,33 +330,41 @@ public class LoopDoAgente {
                 });
             } catch (RuntimeException falha) {
                 log.warn("Atlas: o modelo não respondeu na conversa {} ({})", contexto.conversaId(), falha.getClass().getSimpleName());
+                ida.dado("erro", falha.getClass().getSimpleName()).dado("detalhe", falha.getMessage()).fim(ResultadoDaEtapa.ERRO);
                 if (filtro != null && filtro.saiuAlgo()) {
                     filtro.recusar();   // o texto pela metade sai da tela; a frase da falha vem a seguir
                 }
-                gravarFrase(contexto, turno, frase(FRASE_DA_FALHA, FRASE_DA_FALHA_NO_CHAT), null, ouvinte);
+                gravarFrase(contexto, turno, frase(FRASE_DA_FALHA, FRASE_DA_FALHA_NO_CHAT), null, ouvinte, "FALHA_DO_MODELO",
+                        ResultadoDaEtapa.ERRO);
                 return;
             }
             String texto = limpar(resposta.texto());
             String raciocinio = limpar(resposta.raciocinio());
+            // A ida termina quando o modelo acaba de responder; o que vem a seguir (checagem, gravação) tem etapa própria.
+            ida.dados(turno.traco.dadosDoUso(resposta.uso(), llm.modelo())).dado("chamadas", resposta.chamadas().size())
+                    .dado("comTexto", texto != null).dado("comRaciocinio", raciocinio != null).fim(ResultadoDaEtapa.OK);
             if (filtro != null) {
                 filtro.fechar();
             }
 
             if (resposta.chamadas().isEmpty()) {
                 if (texto == null) {
-                    gravarFrase(contexto, turno, frase(FRASE_SEM_RESPOSTA, FRASE_SEM_RESPOSTA_NO_CHAT), raciocinio, ouvinte);
+                    gravarFrase(contexto, turno, frase(FRASE_SEM_RESPOSTA, FRASE_SEM_RESPOSTA_NO_CHAT), raciocinio, ouvinte,
+                            "SEM_RESPOSTA", ResultadoDaEtapa.ERRO);
                     return;
                 }
-                Veredito veredito = checarDoChat(contexto, texto);
+                Veredito veredito = checarDoChat(contexto, turno, texto, "RESPOSTA");
                 if (veredito.aprovado()) {
-                    gravarTexto(contexto, turno, texto, raciocinio);   // em fluxo, o texto já foi à tela pelo filtro
+                    ida.mensagem(gravarTexto(contexto, turno, texto, raciocinio));   // em fluxo, o texto já foi à tela pelo filtro
+                    turno.tipoDaSaida = "TEXTO";
                     return;
                 }
                 if (filtro != null) {
                     filtro.recusar();   // a checagem completa recusou o que o filtro deixou passar
                 }
                 if (turno.pediuNovaRedacao) {
-                    gravarFrase(contexto, turno, frase(FRASE_FIXA, FRASE_FIXA_NO_CHAT), null, ouvinte);
+                    gravarFrase(contexto, turno, frase(FRASE_FIXA, FRASE_FIXA_NO_CHAT), null, ouvinte, "TEXTO_RECUSADO",
+                            ResultadoDaEtapa.RECUSADO);
                     return;
                 }
                 turno.pediuNovaRedacao = true;
@@ -316,13 +376,13 @@ public class LoopDoAgente {
             }
 
             transitorias = List.of();
-            if (texto != null && !checarDoChat(contexto, texto).aprovado()) {
+            if (texto != null && !checarDoChat(contexto, turno, texto, "TEXTO_COM_FERRAMENTAS").aprovado()) {
                 texto = null;   // texto solto de uma rodada de ferramentas não passa com número: sai, e a ação segue
                 if (filtro != null) {
                     filtro.recusar();
                 }
             }
-            if (rodar(contexto, turno, texto, resposta.chamadas(), raciocinio, ouvinte)) {
+            if (rodar(contexto, turno, texto, resposta.chamadas(), raciocinio, ouvinte, ida)) {
                 return;
             }
         }
@@ -333,7 +393,7 @@ public class LoopDoAgente {
      * acabou: o cartão abriu, o relatório ficou pronto ou o limite de chamadas estourou.
      */
     private boolean rodar(AtlasContexto contexto, Turno turno, String texto, List<ChamadaDeFerramenta> pedidos, String raciocinio,
-                          OuvinteDoTurno ouvinte) {
+                          OuvinteDoTurno ouvinte, Etapa ida) {
         // O id e os argumentos são os que o servidor guarda: id nosso e argumentos sempre um texto (sem argumento, "{}").
         List<ChamadaDeFerramenta> chamadas = pedidos.stream().map(c -> {
             String nome = limpar(c.nome());
@@ -343,18 +403,24 @@ public class LoopDoAgente {
         }).toList();
         long mensagemId = transacao.execute(estado -> historico.assistente(contexto.conversaId(), texto,
                 chamadas.stream().map(c -> new Chamada(c.id(), c.nome(), c.argumentos())).toList(), raciocinio));
+        ida.mensagem(mensagemId);   // a mensagem do assistente que esta ida produziu
+        turno.mensagemFinalId = mensagemId;
         turno.resumos.pedir(mensagemId, raciocinio);   // à parte: as ferramentas e a próxima ida não esperam por ele
 
         boolean pausa = false;
         boolean pronto = false;
         for (ChamadaDeFerramenta chamada : chamadas) {
+            Etapa etapaDaFerramenta = turno.traco.abrir(EtapaDoTraco.FERRAMENTA).mensagem(mensagemId).dado("ferramenta", chamada.nome());
             if (pausa) {
                 responderComErro(contexto, mensagemId, chamada, RelatorioFerramentas.AGUARDANDO_O_CARTAO, ouvinte);
+                etapaDaFerramenta.dado("motivo", "AGUARDANDO_O_CARTAO").fim(ResultadoDaEtapa.PULADO);
             } else if (pronto) {
                 responderComErro(contexto, mensagemId, chamada, "O relatório já está pronto. Não chame mais ferramentas.", ouvinte);
+                etapaDaFerramenta.dado("motivo", "RELATORIO_PRONTO").fim(ResultadoDaEtapa.PULADO);
             } else if (++turno.chamadas > LIMITE_DE_CHAMADAS_POR_TURNO) {
                 turno.limiteAtingido = true;
                 responderComErro(contexto, mensagemId, chamada, ERRO_DO_LIMITE, ouvinte);
+                etapaDaFerramenta.dado("motivo", "LIMITE_DE_CHAMADAS").fim(ResultadoDaEtapa.RECUSADO);
             } else {
                 String etapa = ETAPAS.get(chamada.nome());
                 if (etapa != null) {
@@ -364,13 +430,18 @@ public class LoopDoAgente {
                 pausa = rodada.execucao().pausa();
                 pronto = rodada.execucao().pronto();
                 avisarFerramenta(ouvinte, chamada, rodada.execucao().resultadoJson(), rodada.erro(), rodada.ms());
+                etapaDaFerramenta.dado("argumentos", chamada.argumentos()).dado("resultado", rodada.execucao().resultadoJson())
+                        .dado("pausa", pausa ? true : null).dado("pronto", pronto ? true : null)
+                        .fim(rodada.erro() ? ResultadoDaEtapa.ERRO : ResultadoDaEtapa.OK);
             }
         }
         if (pausa || pronto) {
+            turno.tipoDaSaida = pausa ? "CARTAO" : "RELATORIO_PRONTO";
             return true;
         }
         if (turno.limiteAtingido) {
-            gravarFrase(contexto, turno, frase(FRASE_DO_LIMITE, FRASE_DO_LIMITE_NO_CHAT), null, ouvinte);
+            gravarFrase(contexto, turno, frase(FRASE_DO_LIMITE, FRASE_DO_LIMITE_NO_CHAT), null, ouvinte, "LIMITE_DE_CHAMADAS",
+                    ResultadoDaEtapa.RECUSADO);
             return true;
         }
         return false;
@@ -469,8 +540,13 @@ public class LoopDoAgente {
     // O texto do chat passa pela mesma regra do relatório
     // ---------------------------------------------------------------------
 
-    private Veredito checarDoChat(AtlasContexto contexto, String texto) {
-        return checagem.chat(resolucao(contexto), texto);
+    /** A checagem do texto do chat, com a etapa CHECAGEM no traço: se aprovou, e por que não (a frase de recusa, que é nossa). */
+    private Veredito checarDoChat(AtlasContexto contexto, Turno turno, String texto, String origem) {
+        Etapa etapa = turno.traco.abrir(EtapaDoTraco.CHECAGEM).dado("origem", origem).dado("caracteres", texto.length());
+        Veredito veredito = checagem.chat(resolucao(contexto), texto);
+        etapa.dado("aprovado", veredito.aprovado()).dado("motivo", veredito.motivo())
+                .fim(veredito.aprovado() ? ResultadoDaEtapa.OK : ResultadoDaEtapa.RECUSADO);
+        return veredito;
     }
 
     /** Uma resolução nova dos marcadores do chat, contra a parceria da conversa e com o perfil de quem pede. */
@@ -478,16 +554,27 @@ public class LoopDoAgente {
         return resolvedor.abrir(contexto.usuario(), contexto.parceriaId(), modelos.obter(ModeloBase.ATIVACAO_EVENTO).orElseThrow());
     }
 
-    private void gravarTexto(AtlasContexto contexto, Turno turno, String texto, String raciocinio) {
+    /** Grava o texto do assistente como a resposta do turno e devolve o id da mensagem. */
+    private long gravarTexto(AtlasContexto contexto, Turno turno, String texto, String raciocinio) {
         long mensagemId = transacao.execute(estado -> historico.assistente(contexto.conversaId(), texto, List.of(), raciocinio));
+        turno.mensagemFinalId = mensagemId;
+        turno.caracteresDaSaida = texto.length();
         if (turno.resumos != null) {
             turno.resumos.pedir(mensagemId, raciocinio);   // sem raciocínio, não há o que resumir
         }
+        return mensagemId;
     }
 
-    /** Grava uma frase fixa do servidor e, em fluxo, a manda inteira à tela (ela não passa pelo filtro: é nossa). */
-    private void gravarFrase(AtlasContexto contexto, Turno turno, String frase, String raciocinio, OuvinteDoTurno ouvinte) {
+    /**
+     * Grava uma frase fixa do servidor e, em fluxo, a manda inteira à tela (ela não passa pelo filtro: é nossa). {@code motivo} e
+     * {@code resultado} dizem ao traço por que o turno terminou assim.
+     */
+    private void gravarFrase(AtlasContexto contexto, Turno turno, String frase, String raciocinio, OuvinteDoTurno ouvinte, String motivo,
+                             ResultadoDaEtapa resultado) {
         gravarTexto(contexto, turno, frase, raciocinio);
+        turno.tipoDaSaida = "FRASE_FIXA";
+        turno.motivoDaSaida = motivo;
+        turno.resultadoDaSaida = resultado;
         ouvinte.texto(frase);
     }
 

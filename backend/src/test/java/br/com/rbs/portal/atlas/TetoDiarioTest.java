@@ -217,8 +217,8 @@ class TetoDiarioTest {
         long conversa = conversaDe(pessoa, amarelo);
         gravarMensagensDoModelo(conversa, 3, 0, null);
 
-        TetoDiario tetoDeTres = new TetoDiario(repositorio, 3, new ModoDoAtlas(true, false));
-        TetoDiario tetoDeQuatro = new TetoDiario(repositorio, 4, new ModoDoAtlas(true, false));
+        TetoDiario tetoDeTres = new TetoDiario(repositorio, 3, new ModoDoAtlas(true, false, false, false));
+        TetoDiario tetoDeQuatro = new TetoDiario(repositorio, 4, new ModoDoAtlas(true, false, false, false));
 
         assertThat(tetoDeTres.atingido(amarelo)).isTrue();
         assertThatThrownBy(() -> tetoDeTres.exigirFolga(amarelo)).isInstanceOf(LimiteDeUsoException.class).hasMessage(FRASE_DO_429);

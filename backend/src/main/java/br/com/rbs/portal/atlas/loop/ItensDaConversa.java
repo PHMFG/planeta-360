@@ -18,6 +18,7 @@ import br.com.rbs.portal.atlas.AtlasRepositorio.LinhaDeMensagem;
 import br.com.rbs.portal.atlas.AtlasRepositorio.LinhaDeRelatorio;
 import br.com.rbs.portal.atlas.AtlasRepositorio.LinhaDeSolicitacao;
 import br.com.rbs.portal.atlas.ModoDoAtlas;
+import br.com.rbs.portal.atlas.diagnostico.TracoRepositorio;
 import br.com.rbs.portal.atlas.provedor.DisponibilidadeDoLlm;
 import br.com.rbs.portal.atlas.relatorio.Especificacao;
 import br.com.rbs.portal.atlas.relatorio.ModeloBase;
@@ -70,9 +71,11 @@ public class ItensDaConversa {
     private final ModeloBase modelos;
     private final DisponibilidadeDoLlm llm;
     private final ModoDoAtlas modo;
+    private final TracoRepositorio tracos;
 
     public ItensDaConversa(AtlasRepositorio repositorio, DadoInformadoService dados, ResolvedorDeReferencias resolvedor,
-                           ModeloBase modelos, DisponibilidadeDoLlm llm, ModoDoAtlas modo) {
+                           ModeloBase modelos, DisponibilidadeDoLlm llm, ModoDoAtlas modo, TracoRepositorio tracos) {
+        this.tracos = tracos;
         this.repositorio = repositorio;
         this.dados = dados;
         this.resolvedor = resolvedor;
@@ -91,6 +94,9 @@ public class ItensDaConversa {
         Map<String, LinhaDeSolicitacao> cartoes = new HashMap<>();
         repositorio.solicitacoesDaConversa(conversa.id()).forEach(s -> cartoes.put(s.toolCallId(), s));
         Map<String, String> ferramentas = new HashMap<>();
+        Map<String, Long> mensagemDoPedido = new HashMap<>();   // diagnóstico: id do pedido de ferramenta -> mensagem do assistente que o fez
+        // Diagnóstico à vista da marca: a que turno do traço cada mensagem do assistente pertence (vazio com o diagnóstico fora).
+        Map<Long, String> turnos = modo.diagnosticoNaMarca() ? tracos.turnosDasMensagens(conversa.id()) : Map.of();
         Map<Long, Especificacao> especificacoes = new HashMap<>();
         Contexto contexto = new Contexto(usuario, conversa);
         Map<String, String> resultados = new HashMap<>();   // debug: toolCallId -> o que a ferramenta devolveu ao modelo
@@ -113,12 +119,13 @@ public class ItensDaConversa {
                 }
                 case "assistant" -> {
                     List<Map<String, Object>> chamadas = chamadasDe(mensagem);
+                    String turno = turnos.get(mensagem.id());
                     if (doTurno && mensagem.resumoDoRaciocinio() != null && !mensagem.resumoDoRaciocinio().isBlank()) {
-                        itens.add(new ItemRaciocinio(mensagem.resumoDoRaciocinio()));
+                        itens.add(new ItemRaciocinio(mensagem.resumoDoRaciocinio(), turno));
                     }
                     if (doTurno && mensagem.conteudo() != null && !mensagem.conteudo().isBlank()) {
                         itens.add(new ItemTexto(contexto.resolucao(modelos, resolvedor).paraExibicao(mensagem.conteudo()),
-                                escritoPeloModelo(mensagem.conteudo(), chamadas)));
+                                escritoPeloModelo(mensagem.conteudo(), chamadas), turno));
                     }
                     List<LinhaDeChamada> trilhaDaMensagem = trilha.getOrDefault(mensagem.id(), List.of());
                     int posicao = 0;
@@ -126,20 +133,22 @@ public class ItensDaConversa {
                         String id = (String) chamada.get("id");
                         String nome = nomeDaFerramenta(chamada);
                         ferramentas.put(id, nome);
+                        mensagemDoPedido.put(id, mensagem.id());
                         if (doTurno && modo.debugDeFerramentas()) {
                             LinhaDeChamada registro = posicao < trilhaDaMensagem.size() ? trilhaDaMensagem.get(posicao) : null;
-                            itens.add(ferramentaDoDebug(chamada, nome, resultados.get(id), registro));
+                            itens.add(ferramentaDoDebug(chamada, nome, resultados.get(id), registro, turno));
                         }
                         posicao++;
                         LinhaDeSolicitacao cartao = cartoes.get(id);
                         if (doTurno && modo.relatorioLigado() && "relatorio_solicitar_campos".equals(nome) && cartao != null) {
-                            itens.add(cartao(contexto, cartao, especificacoes));
+                            itens.add(cartao(contexto, cartao, especificacoes, turno));
                         }
                     }
                 }
                 default -> {
                     if (doTurno) {
-                        itemDaResposta(mensagem, ferramentas.get(mensagem.toolCallId())).ifPresent(itens::add);
+                        itemDaResposta(mensagem, ferramentas.get(mensagem.toolCallId()),
+                                turnos.get(mensagemDoPedido.get(mensagem.toolCallId()))).ifPresent(itens::add);
                     }
                 }
             }
@@ -152,11 +161,12 @@ public class ItensDaConversa {
      * recebeu (nulo se ainda não respondeu). O tempo e o erro vêm da trilha ({@code atlas_tool_call}), que tem uma linha por pedido
      * na ordem dele; se a linha não é desta ferramenta ou não existe, o tempo é nulo e o erro sai do próprio resultado.
      */
-    private static ItemFerramenta ferramentaDoDebug(Map<String, Object> chamada, String nome, String resultado, LinhaDeChamada registro) {
+    private static ItemFerramenta ferramentaDoDebug(Map<String, Object> chamada, String nome, String resultado, LinhaDeChamada registro,
+                                                    String turno) {
         String argumentos = argumentosDe(chamada);
         boolean daTrilha = registro != null && registro.ferramenta().equals(nome);
         boolean erro = daTrilha ? registro.erro() != null : resultadoEUmErro(resultado);
-        return ItemFerramenta.de(DadosDaFerramenta.cortando(nome, argumentos, resultado, erro, daTrilha ? registro.duracaoMs() : null));
+        return ItemFerramenta.de(DadosDaFerramenta.cortando(nome, argumentos, resultado, erro, daTrilha ? registro.duracaoMs() : null), turno);
     }
 
     @SuppressWarnings("unchecked")
@@ -177,7 +187,7 @@ public class ItensDaConversa {
         }
     }
 
-    private Optional<ItemDaConversa> itemDaResposta(LinhaDeMensagem mensagem, String ferramenta) {
+    private Optional<ItemDaConversa> itemDaResposta(LinhaDeMensagem mensagem, String ferramenta, String turno) {
         if (ferramenta == null || mensagem.conteudo() == null || !modo.relatorioLigado()) {
             return Optional.empty();   // só chat: o relatório pronto e o aviso do cartão de uma conversa antiga não saem
         }
@@ -185,7 +195,7 @@ public class ItensDaConversa {
         });
         if ("relatorio_finalizar".equals(ferramenta) && "PRONTO".equals(resultado.get("status"))) {
             return Optional.of(new ItemRelatorioPronto(((Number) resultado.get("relatorioId")).longValue(),
-                    (String) resultado.get("titulo")));
+                    (String) resultado.get("titulo"), turno));
         }
         if ("relatorio_solicitar_campos".equals(ferramenta) && "cancel".equals(resultado.get("acao"))) {
             return Optional.of(new ItemAviso(llm.disponivel() ? PlanoBSemLlm.AVISO_CARTAO_FECHADO_COM_MODELO
@@ -194,7 +204,7 @@ public class ItensDaConversa {
         return Optional.empty();
     }
 
-    private ItemCartao cartao(Contexto contexto, LinhaDeSolicitacao cartao, Map<Long, Especificacao> especificacoes) {
+    private ItemCartao cartao(Contexto contexto, LinhaDeSolicitacao cartao, Map<Long, Especificacao> especificacoes, String turno) {
         Especificacao especificacao = especificacoes.computeIfAbsent(cartao.relatorioId(), id -> {
             LinhaDeRelatorio relatorio = repositorio.relatorio(id).orElseThrow();
             return AtlasJson.ler(relatorio.especificacao(), Especificacao.class);
@@ -210,7 +220,7 @@ public class ItensDaConversa {
                         especificacao.lacunas().obrigatorias().contains(chave), contexto.vigentes(dados).get(chave)));
             }
         }
-        return new ItemCartao(cartao.id(), cartao.relatorioId(), cartao.mensagem(), cartao.status(), campos);
+        return new ItemCartao(cartao.id(), cartao.relatorioId(), cartao.mensagem(), cartao.status(), campos, turno);
     }
 
     /**

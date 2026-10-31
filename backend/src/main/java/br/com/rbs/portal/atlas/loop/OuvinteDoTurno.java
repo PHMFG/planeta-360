@@ -70,6 +70,14 @@ public interface OuvinteDoTurno {
     void textoRecusado();
 
     /**
+     * O que o fluxo transmitiu até agora, para o diagnóstico (a etapa {@code SAIDA}): quantos eventos de cada tipo, quanto
+     * demorou o primeiro pedaço de texto e se o cliente já foi embora. Vazio quando não há fluxo. Nunca leva texto da conversa.
+     */
+    default java.util.Map<String, Object> medidas() {
+        return java.util.Map.of();
+    }
+
+    /**
      * DEBUG (só com {@code atlas.debug.ferramentas}): uma ferramenta terminou, com os argumentos e o resultado crus. Vem logo que
      * ela termina, antes da ferramenta seguinte e da próxima ida ao modelo. O raciocínio cru não passa por aqui.
      */

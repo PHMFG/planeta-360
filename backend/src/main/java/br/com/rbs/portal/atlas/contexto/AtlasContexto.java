@@ -1,5 +1,6 @@
 package br.com.rbs.portal.atlas.contexto;
 
+import br.com.rbs.portal.atlas.diagnostico.Traco;
 import br.com.rbs.portal.comum.UsuarioAutenticado;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.Set;
@@ -18,12 +19,26 @@ import java.util.Set;
  * @param abasAbertas os códigos das abas abertas para este usuário nesta parceria (a RBS: todas)
  * @param conversaId  a conversa em andamento
  * @param requisicao  o pedido HTTP, para o histórico
+ * @param traco       o traço do diagnóstico do turno em andamento ({@link Traco#NENHUM} fora de um turno ou com o diagnóstico
+ *                    desligado): é por aqui que o loop, a checagem e o resumo do raciocínio deixam as etapas
  */
 public record AtlasContexto(UsuarioAutenticado usuario, long parceriaId, String cota, Set<String> abasAbertas, long conversaId,
-                            HttpServletRequest requisicao) {
+                            HttpServletRequest requisicao, Traco traco) {
 
     public AtlasContexto {
         abasAbertas = abasAbertas == null ? Set.of() : Set.copyOf(abasAbertas);
+        traco = traco == null ? Traco.NENHUM : traco;
+    }
+
+    /** Um contexto sem traço (o diagnóstico desligado, ou fora de um turno). */
+    public AtlasContexto(UsuarioAutenticado usuario, long parceriaId, String cota, Set<String> abasAbertas, long conversaId,
+                         HttpServletRequest requisicao) {
+        this(usuario, parceriaId, cota, abasAbertas, conversaId, requisicao, Traco.NENHUM);
+    }
+
+    /** O mesmo contexto, no turno deste traço. */
+    public AtlasContexto comTraco(Traco novo) {
+        return new AtlasContexto(usuario, parceriaId, cota, abasAbertas, conversaId, requisicao, novo);
     }
 
     public boolean abaAberta(String codigoDaAba) {

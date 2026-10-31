@@ -11,6 +11,11 @@ import br.com.rbs.portal.atlas.AtlasRepositorio.LinhaDeConversa;
 import br.com.rbs.portal.atlas.AtlasRepositorio.LinhaDeSolicitacao;
 import br.com.rbs.portal.atlas.contexto.AtlasContexto;
 import br.com.rbs.portal.atlas.contexto.AtlasContextoFabrica;
+import br.com.rbs.portal.atlas.diagnostico.EtapaDoTraco;
+import br.com.rbs.portal.atlas.diagnostico.RegistroDoTraco;
+import br.com.rbs.portal.atlas.diagnostico.ResultadoDaEtapa;
+import br.com.rbs.portal.atlas.diagnostico.Traco;
+import br.com.rbs.portal.atlas.diagnostico.Traco.Etapa;
 import br.com.rbs.portal.atlas.loop.DescarteDeRelatorios;
 import br.com.rbs.portal.atlas.loop.ItensDaConversa;
 import br.com.rbs.portal.atlas.loop.LoopDoAgente;
@@ -26,6 +31,7 @@ import br.com.rbs.portal.atlas.relatorio.RelatorioAtlasService.AcaoDoCartao;
 import br.com.rbs.portal.comum.ConflitoException;
 import br.com.rbs.portal.comum.DadosInvalidosException;
 import br.com.rbs.portal.comum.Datas;
+import br.com.rbs.portal.comum.LimiteDeUsoException;
 import br.com.rbs.portal.comum.NaoEncontradoException;
 import br.com.rbs.portal.comum.ServicoIndisponivelException;
 import br.com.rbs.portal.comum.UsuarioAutenticado;
@@ -94,10 +100,12 @@ public class AtlasService {
     private final DisponibilidadeDoLlm llm;
     private final ModeloBase modelos;
     private final ModoDoAtlas modo;
+    private final RegistroDoTraco registro;
 
     public AtlasService(AtlasRepositorio repositorio, AtlasContextoFabrica contextos, VerificadorDeAcesso verificador,
                         PlanoBSemLlm planoB, LoopDoAgente loop, TetoDiario teto, ItensDaConversa itens, DescarteDeRelatorios descarte,
-                        RelatorioAtlasService relatorios, DisponibilidadeDoLlm llm, ModeloBase modelos, ModoDoAtlas modo) {
+                        RelatorioAtlasService relatorios, DisponibilidadeDoLlm llm, ModeloBase modelos, ModoDoAtlas modo,
+                        RegistroDoTraco registro) {
         this.repositorio = repositorio;
         this.contextos = contextos;
         this.verificador = verificador;
@@ -110,6 +118,7 @@ public class AtlasService {
         this.llm = llm;
         this.modelos = modelos;
         this.modo = modo;
+        this.registro = registro;
     }
 
     // ---------------------------------------------------------------------
@@ -134,7 +143,8 @@ public class AtlasService {
         }
         long conversaId = repositorio.criarConversa(parceriaId, usuario.id());
         if (modelo == null) {
-            return new ConversaDto(conversaId, llm.disponivel(), modo.relatorioLigado(), modo.debugDeFerramentas(), List.of());
+            return new ConversaDto(conversaId, llm.disponivel(), modo.relatorioLigado(), modo.debugDeFerramentas(),
+                    modo.diagnosticoNaMarca(), List.of());
         }
         return rodarPlanoB(usuario, repositorio.conversa(conversaId).orElseThrow(), modelo, requisicao);
     }
@@ -218,15 +228,25 @@ public class AtlasService {
             if (!llm.disponivel()) {
                 throw new ServicoIndisponivelException(llm.semModelo());   // sem provedor, o botão é o caminho
             }
-            teto.exigirFolga(conversa.parceriaId());   // 429: o teto diário de mensagens do Atlas por parceria
+            // O traço do diagnóstico abre aqui: a etapa G1_LIMITES cobre o teto diário (429) e a trava do turno (409).
+            Traco traco = registro.abrir(conversa.parceriaId(), conversa.id());
+            Etapa limites = traco.abrir(EtapaDoTraco.G1_LIMITES).dado("tetoPorParceria", teto.teto());
+            try {
+                limites.dado("usadasHoje", teto.exigirFolga(conversa.parceriaId()));   // 429: o teto diário de mensagens por parceria
+            } catch (LimiteDeUsoException atingido) {
+                limites.dado("motivo", "TETO_DIARIO").fim(ResultadoDaEtapa.RECUSADO);
+                traco.encerrar(ResultadoDaEtapa.RECUSADO, "RECUSADO_ANTES_DO_TURNO", "TETO_DIARIO");
+                throw atingido;
+            }
             String texto = corpo.texto().strip();
-            AtlasContexto contexto = contextos.para(usuario, conversa.parceriaId(), conversa.id(), requisicao);
-            return comecarTurno(usuario, conversa, () -> loop.prepararConversa(contexto, texto),
+            AtlasContexto contexto = contextos.para(usuario, conversa.parceriaId(), conversa.id(), requisicao).comTraco(traco);
+            return comecarTurno(usuario, conversa, traco, limites, () -> loop.prepararConversa(contexto, texto),
                     ouvinte -> loop.conduzir(contexto, ouvinte));
         }
         String modeloDoAtalho = modelo;
         AtlasContexto contexto = contextos.para(usuario, conversa.parceriaId(), conversa.id(), requisicao);
-        return comecarTurno(usuario, conversa, () -> planoB.montar(contexto, modeloDoAtalho), null);
+        return comecarTurno(usuario, conversa, Traco.NENHUM, Traco.NENHUM.abrir(EtapaDoTraco.G1_LIMITES),
+                () -> planoB.montar(contexto, modeloDoAtalho), null);
     }
 
     // ---------------------------------------------------------------------
@@ -240,7 +260,7 @@ public class AtlasService {
             descarte.varrer(List.of(conversaId));
         }
         return new ConversaDto(conversaId, llm.disponivel(), modo.relatorioLigado(), modo.debugDeFerramentas(),
-                itens.itens(usuario, conversa, 0));
+                modo.diagnosticoNaMarca(), itens.itens(usuario, conversa, 0));
     }
 
     // ---------------------------------------------------------------------
@@ -288,13 +308,19 @@ public class AtlasService {
             throw new ConflitoException(RelatorioAtlasService.CARTAO_JA_RESPONDIDO);
         }
         AtlasContexto contexto = contextos.para(usuario, conversa.parceriaId(), conversa.id(), requisicao);
-        if (llm.disponivel() && !teto.atingido(conversa.parceriaId())) {
-            return comecarTurno(usuario, conversa, () -> loop.prepararRetomada(contexto, solicitacaoId, acao, valores),
-                    ouvinte -> loop.conduzir(contexto, ouvinte));
+        long usadas = llm.disponivel() ? teto.usadasHoje(conversa.parceriaId()) : 0;
+        if (llm.disponivel() && usadas < teto.teto()) {
+            Traco traco = registro.abrir(conversa.parceriaId(), conversa.id());
+            Etapa limites = traco.abrir(EtapaDoTraco.G1_LIMITES).dado("tetoPorParceria", teto.teto()).dado("usadasHoje", usadas)
+                    .dado("retomada", true);
+            AtlasContexto doTurno = contexto.comTraco(traco);
+            return comecarTurno(usuario, conversa, traco, limites, () -> loop.prepararRetomada(doTurno, solicitacaoId, acao, valores),
+                    ouvinte -> loop.conduzir(doTurno, ouvinte));
         }
         // Sem modelo, ou com o teto diário atingido: o cartão respondido segue o plano B (não gasta o modelo e a pessoa não fica
         // presa a um cartão aberto).
-        return comecarTurno(usuario, conversa, () -> planoB.responder(contexto, solicitacaoId, acao, valores), null);
+        return comecarTurno(usuario, conversa, Traco.NENHUM, Traco.NENHUM.abrir(EtapaDoTraco.G1_LIMITES),
+                () -> planoB.responder(contexto, solicitacaoId, acao, valores), null);
     }
 
     // ---------------------------------------------------------------------
@@ -325,13 +351,15 @@ public class AtlasService {
         final LinhaDeConversa conversa;
         final int antes;
         final Consumer<OuvinteDoTurno> resto;
+        final Traco traco;
         private final AtomicBoolean encerrado = new AtomicBoolean();
 
-        TurnoAberto(UsuarioAutenticado usuario, LinhaDeConversa conversa, int antes, Consumer<OuvinteDoTurno> resto) {
+        TurnoAberto(UsuarioAutenticado usuario, LinhaDeConversa conversa, int antes, Consumer<OuvinteDoTurno> resto, Traco traco) {
             this.usuario = usuario;
             this.conversa = conversa;
             this.antes = antes;
             this.resto = resto;
+            this.traco = traco;
         }
 
         /** Solta a trava da conversa. Uma vez só: depois disso, outro pedido pode ter começado outro turno. */
@@ -344,7 +372,7 @@ public class AtlasService {
         /** Os itens que o turno produziu, no objeto Conversa. */
         ConversaDto conversa() {
             return new ConversaDto(conversa.id(), llm.disponivel(), modo.relatorioLigado(), modo.debugDeFerramentas(),
-                itens.itens(usuario, conversa, antes));
+                    modo.diagnosticoNaMarca(), itens.itens(usuario, conversa, antes));
         }
     }
 
@@ -352,16 +380,21 @@ public class AtlasService {
      * Começa o turno (409 se outro está em andamento) e faz {@code antes} nele; se {@code antes} falha (o 422 dos valores do
      * cartão, por exemplo), o turno termina e o erro sobe, ainda antes de qualquer fluxo abrir.
      */
-    private TurnoAberto comecarTurno(UsuarioAutenticado usuario, LinhaDeConversa conversa, Runnable antes,
-                                     Consumer<OuvinteDoTurno> resto) {
+    private TurnoAberto comecarTurno(UsuarioAutenticado usuario, LinhaDeConversa conversa, Traco traco, Etapa limites,
+                                     Runnable antes, Consumer<OuvinteDoTurno> resto) {
         int ordem = repositorio.ultimaOrdem(conversa.id());
         if (!repositorio.iniciarTurno(conversa.id())) {
+            limites.dado("motivo", "TURNO_EM_ANDAMENTO").fim(ResultadoDaEtapa.RECUSADO);
+            traco.encerrar(ResultadoDaEtapa.RECUSADO, "RECUSADO_ANTES_DO_TURNO", "TURNO_EM_ANDAMENTO");
             throw new ConflitoException(TURNO_EM_ANDAMENTO);
         }
-        TurnoAberto turno = new TurnoAberto(usuario, conversa, ordem, resto);
+        limites.fim(ResultadoDaEtapa.OK);   // a etapa dos limites termina com a trava na mão
+        TurnoAberto turno = new TurnoAberto(usuario, conversa, ordem, resto, traco);
         try {
             antes.run();
         } catch (RuntimeException | Error erro) {
+            traco.erro(erro);
+            traco.encerrar();
             turno.encerrar();
             throw erro;
         }
@@ -375,6 +408,7 @@ public class AtlasService {
                 turno.resto.accept(OuvinteDoTurno.NENHUM);
             }
         } finally {
+            turno.traco.encerrar();   // o traço vai ao banco antes de a trava soltar e dos itens saírem (eles trazem o id do turno)
             turno.encerrar();
         }
         return turno.conversa();
@@ -392,14 +426,18 @@ public class AtlasService {
                     if (turno.resto != null) {
                         turno.resto.accept(fluxo);
                     }
+                    turno.traco.encerrar();   // o traço vai ao banco antes dos itens, que trazem o id do turno
                     ConversaDto fim = turno.conversa();
                     turno.encerrar();   // antes do fim: quem recebe o fim já pode mandar a próxima mensagem
                     fluxo.fim(fim);
                 } catch (RuntimeException | Error erro) {
                     log.error("Atlas: falha no turno em fluxo da conversa {}", turno.conversa.id(), erro);
+                    turno.traco.erro(erro);
+                    turno.traco.encerrar();
                     turno.encerrar();
                     fluxo.erro(500, ERRO_NO_FLUXO);
                 } finally {
+                    turno.traco.encerrar();
                     turno.encerrar();
                 }
             });
@@ -425,7 +463,7 @@ public class AtlasService {
             return null;
         });
         return new ConversaDto(conversa.id(), llm.disponivel(), modo.relatorioLigado(), modo.debugDeFerramentas(),
-                itens.itens(usuario, conversa, antes));
+                modo.diagnosticoNaMarca(), itens.itens(usuario, conversa, antes));
     }
 
     /**

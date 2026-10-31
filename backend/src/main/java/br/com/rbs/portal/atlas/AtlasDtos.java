@@ -2,6 +2,7 @@ package br.com.rbs.portal.atlas;
 
 import br.com.rbs.portal.dados.DadosDtos.ValorRequisicao;
 import br.com.rbs.portal.dados.DadosDtos.VigenteDto;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import java.time.OffsetDateTime;
@@ -29,9 +30,12 @@ public final class AtlasDtos {
      * A resposta das rotas 42, 44, 45 e 46. 42, 44 e 46 trazem só os itens do turno; a 45, a conversa inteira.
      * {@code relatorioDisponivel} é o {@code atlas.relatorio.ligado}: falso, o Atlas é só o chat. {@code debugDeFerramentas} é o
      * {@code atlas.debug.ferramentas}: verdadeiro, os itens trazem também cada ferramenta que rodou (temporário).
+     * {@code diagnosticoDisponivel} é verdadeiro quando a marca vê o diagnóstico das próprias conversas
+     * ({@code atlas.diagnostico.ligado} e {@code atlas.diagnostico.marca}): os itens do assistente trazem o {@code turno} e a rota
+     * 49 responde.
      */
     public record ConversaDto(Long conversaId, boolean llmDisponivel, boolean relatorioDisponivel, boolean debugDeFerramentas,
-                              List<ItemDaConversa> itens) {
+                              boolean diagnosticoDisponivel, List<ItemDaConversa> itens) {
     }
 
     /** Um campo do cartão: o campo do catálogo (rota 39) mais se é obrigatório e o valor vigente (formato da rota 40). */
@@ -60,9 +64,10 @@ public final class AtlasDtos {
     /**
      * O resumo do raciocínio do modelo ({@code reasoning_content}) de uma mensagem do assistente, gerado e conferido no servidor
      * (o raciocínio cru nunca sai dele). Vem antes dos itens da mesma mensagem e só existe quando a mensagem tem resumo gravado:
-     * mensagem sem raciocínio, com resumo recusado, atrasado ou perdido, e a de antes do resumo, não geram item.
+     * mensagem sem raciocínio, com resumo recusado, atrasado ou perdido, e a de antes do resumo, não geram item. {@code turno} é o
+     * id do turno do diagnóstico a que a mensagem pertence (só com o diagnóstico à vista da marca; veja {@link ConversaDto}).
      */
-    public record ItemRaciocinio(String resumo) implements ItemDaConversa {
+    public record ItemRaciocinio(String resumo, @JsonInclude(JsonInclude.Include.NON_NULL) String turno) implements ItemDaConversa {
     }
 
     /**
@@ -70,7 +75,8 @@ public final class AtlasDtos {
      * texto foi escrito pelo modelo de linguagem; falso nas frases fixas do servidor (o plano B do botão, a troca de um texto
      * recusado, a falha do modelo, o limite e o prazo do turno).
      */
-    public record ItemTexto(String texto, boolean porModelo) implements ItemDaConversa {
+    public record ItemTexto(String texto, boolean porModelo, @JsonInclude(JsonInclude.Include.NON_NULL) String turno)
+            implements ItemDaConversa {
     }
 
     /**
@@ -79,11 +85,11 @@ public final class AtlasDtos {
      * como texto (o que o modelo enviou e o que recebeu), cortados em {@value DadosDaFerramenta#LIMITE_DO_TEXTO} caracteres;
      * {@code resultado} é nulo se a ferramenta ainda não respondeu e {@code duracaoMs} é nulo se não há registro dela.
      */
-    public record ItemFerramenta(String nome, String argumentos, String resultado, boolean erro, Integer duracaoMs)
-            implements ItemDaConversa {
+    public record ItemFerramenta(String nome, String argumentos, String resultado, boolean erro, Integer duracaoMs,
+                                 @JsonInclude(JsonInclude.Include.NON_NULL) String turno) implements ItemDaConversa {
 
-        public static ItemFerramenta de(DadosDaFerramenta dados) {
-            return new ItemFerramenta(dados.nome(), dados.argumentos(), dados.resultado(), dados.erro(), dados.duracaoMs());
+        public static ItemFerramenta de(DadosDaFerramenta dados, String turno) {
+            return new ItemFerramenta(dados.nome(), dados.argumentos(), dados.resultado(), dados.erro(), dados.duracaoMs(), turno);
         }
     }
 
@@ -111,12 +117,13 @@ public final class AtlasDtos {
     }
 
     /** O cartão de perguntas, com o estado de agora (PENDENTE, RESPONDIDA, RECUSADA ou CANCELADA). */
-    public record ItemCartao(Long solicitacaoId, Long relatorioId, String mensagem, String status, List<CampoDoCartaoDto> campos)
-            implements ItemDaConversa {
+    public record ItemCartao(Long solicitacaoId, Long relatorioId, String mensagem, String status, List<CampoDoCartaoDto> campos,
+                             @JsonInclude(JsonInclude.Include.NON_NULL) String turno) implements ItemDaConversa {
     }
 
     /** O relatório que ficou pronto; o front abre o A4 pela rota 47. */
-    public record ItemRelatorioPronto(Long relatorioId, String titulo) implements ItemDaConversa {
+    public record ItemRelatorioPronto(Long relatorioId, String titulo, @JsonInclude(JsonInclude.Include.NON_NULL) String turno)
+            implements ItemDaConversa {
     }
 
     /** Uma conversa da lista da rota 43. */

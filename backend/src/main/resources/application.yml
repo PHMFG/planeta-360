@@ -80,6 +80,21 @@ atlas:
   # padrão, no dev também: o Atlas é só o chat, com parceria_consultar. O código e as tabelas ficam, para o relatório voltar.
   relatorio:
     ligado: ${ATLAS_RELATORIO:false}
+  # [ATLAS] O diagnóstico (M2 do plano do Atlas completo): cada turno deixa um traço em atlas_traco (V10) e as rotas 49 a 53 existem.
+  # Desligado por padrão e na suíte (ligado por classe de teste); ligado no perfil dev, abaixo. Desligado, nada é gravado e as rotas
+  # respondem 404. O traço nunca leva o raciocínio cru, chave nem o prompt de sistema.
+  diagnostico:
+    ligado: ${ATLAS_DIAGNOSTICO:false}
+    # A marca vê o diagnóstico das próprias conversas (rota 49, o campo diagnosticoDisponivel e o turno dos itens). Só vale com o
+    # diagnóstico ligado. A RBS vê o de todas as conversas (rotas 50 a 53) quando o diagnóstico está ligado.
+    marca: ${ATLAS_DIAGNOSTICO_MARCA:false}
+    # O custo do turno, em dólares. O preço do DeepSeek V4.1 Flash por milhão de tokens NÃO consta em docs/atlas/referencias/, e o plano
+    # do OpenCode Go é por limite de uso (US$ 80 por mês), não por token. Por isso o custo vem de usage.opencode.list_cost, que o
+    # Go devolve em cada resposta (somado pelo diagnóstico e gravado em dados.custoUsd da etapa LLM_IDA). Estes dois preços (US$ por
+    # milhão de tokens) só valem quando uma resposta NÃO traz o list_cost; 0 = sem estimativa (o custo fica de fora).
+    preco-por-milhao:
+      entrada: ${ATLAS_PRECO_ENTRADA:0}
+      saida: ${ATLAS_PRECO_SAIDA:0}
 
 server:
   port: 8080
@@ -111,11 +126,15 @@ spring:
     # [ITEM-1] A amostra (Amarelo, Roxo e Verde) mora em db/dev e só carrega neste perfil e no de teste.
     locations: classpath:db/migration,classpath:db/dev
 
-# [ATLAS] As rotas de debug da chave do modelo de linguagem (temporárias) só existem no desenvolvimento.
+# [ATLAS] As rotas de debug da chave do modelo de linguagem (temporárias) só existem no desenvolvimento, e só a RBS as usa.
+# O diagnóstico fica ligado no dev, também para a marca ver o das próprias conversas.
 atlas:
   debug:
     chaves: true
     ferramentas: ${ATLAS_DEBUG_FERRAMENTAS:true}
+  diagnostico:
+    ligado: ${ATLAS_DIAGNOSTICO:true}
+    marca: ${ATLAS_DIAGNOSTICO_MARCA:true}
 
 ---
 spring:
@@ -149,6 +168,10 @@ atlas:
     ferramentas: false
   relatorio:
     ligado: true
+  # O diagnóstico fica desligado no contexto de teste normal (nada é gravado em atlas_traco); a classe de teste que o confere o liga.
+  diagnostico:
+    ligado: false
+    marca: false
 
 # [UPLOAD] Nos testes, os arquivos vão para dentro de target/ (apagado pelo "mvn clean"), nunca para a pasta de desenvolvimento.
 portal:

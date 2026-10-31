@@ -39,15 +39,22 @@ public class TetoDiario {
         return teto;
     }
 
-    /** O teto já foi atingido hoje por esta parceria? */
-    public boolean atingido(long parceriaId) {
-        return repositorio.mensagensDoModeloHoje(parceriaId) >= teto;
+    /** Quantas mensagens do modelo esta parceria já gastou hoje (dia de Brasília). */
+    public long usadasHoje(long parceriaId) {
+        return repositorio.mensagensDoModeloHoje(parceriaId);
     }
 
-    /** 429 com a frase do contrato se o teto já foi atingido hoje. */
-    public void exigirFolga(long parceriaId) {
-        if (atingido(parceriaId)) {
+    /** O teto já foi atingido hoje por esta parceria? */
+    public boolean atingido(long parceriaId) {
+        return usadasHoje(parceriaId) >= teto;
+    }
+
+    /** 429 com a frase do contrato se o teto já foi atingido hoje; senão, quantas mensagens a parceria já usou hoje. */
+    public long exigirFolga(long parceriaId) {
+        long usadas = usadasHoje(parceriaId);
+        if (usadas >= teto) {
             throw new LimiteDeUsoException(modo.relatorioLigado() ? MENSAGEM : MENSAGEM_NO_CHAT);
         }
+        return usadas;
     }
 }
