@@ -1,7 +1,7 @@
 // node --test ferramentas/avaliacao-atlas/testes/*.test.mjs
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { conferir, numerosSemOrigem, resumirTurnos, vazamentos } from '../conferencias.mjs'
+import { conferir, conferirTraco, numerosSemOrigem, resumirTurnos, vazamentos } from '../conferencias.mjs'
 import { extrair, frases, semCitacoes, semNumeracaoDeLista } from '../numeros.mjs'
 
 const valores = (texto) => extrair(texto).flatMap((a) => (a.data ? [`data:${a.data.dia}`, ...(a.data.ano ? [`ano:${a.data.ano}`] : [])] : a.valores))
@@ -95,3 +95,25 @@ test('conferir aceita alternativas e aponta o que faltou', () => {
   const errado = conferir(caso, turnosCom('O prazo é 27/11/2026.', ['{"texto":"27/11/2026"}']))
   assert.deepEqual(errado.filter((r) => !r.ok).map((r) => r.nome).sort(), ['fatos', 'texto_proibido'])
 })
+
+const etapa = (nome, comecou, duracaoMs, ordem = 1) => ({ ordem, etapa: nome, iniciadaEm: new Date(1000 + comecou).toISOString(), duracaoMs })
+const traco = (etapas, duracaoMs = 1000, turno = 't1') => ({ turnos: [{ turno, iniciadoEm: new Date(1000).toISOString(), duracaoMs, etapas }] })
+
+test('traço coerente: as sequenciais cabem, e o resumo pode passar do turno', () => {
+  const d = traco([etapa('LLM_IDA', 0, 600), etapa('RESUMO', 100, 5000), etapa('SAIDA', 600, 300)])
+  assert.deepEqual(conferirTraco(d, [{ tipo: 'texto', turno: 't1' }]), [])
+})
+
+test('traço: etapa fora do turno, soma maior que o turno e turno sem traço', () => {
+  assert.equal(conferirTraco(traco([etapa('LLM_IDA', 900, 500)]), []).filter((p) => p.includes('fora do turno')).length, 1)
+  assert.ok(conferirTraco(traco([etapa('LLM_IDA', 0, 800), etapa('FERRAMENTA', 0, 800)]), []).some((p) => p.includes('somam')))
+  assert.equal(conferirTraco(traco([]), [{ tipo: 'texto', turno: 'outro' }]).length, 1)
+})
+
+test('traço: raciocínio cru e chave reprovam, sem repetir o valor', () => {
+  const comChave = traco([{ ...etapa('LLM_IDA', 0, 10), dados: { x: 'abc-chave-falsa' } }])
+  const [problema] = conferirTraco(comChave, [], ['abc-chave-falsa'])
+  assert.ok(problema.includes('chave') && !problema.includes('abc-chave-falsa'))
+  assert.equal(conferirTraco(traco([{ ...etapa('LLM_IDA', 0, 10), dados: { reasoning_content: 'x' } }]), []).length, 1)
+})
+

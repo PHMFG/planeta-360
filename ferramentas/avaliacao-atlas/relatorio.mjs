@@ -35,6 +35,7 @@ export function calcularMetricas(casos) {
     },
     { nome: 'Recusas e respostas diretas certas', valor: taxa(conferenciasDe(finais, ['recusa', 'resposta_direta'])), unidade: '%', limite: 90, sentido: 'min' },
     { nome: 'Contas e datas exatas', valor: taxa(conferenciasDe(finais, ['conta'])), unidade: '%', limite: 100, sentido: 'min' },
+    { nome: 'Traço do turno coerente', valor: taxa(conferenciasDe(finais, ['traco'])), unidade: '%', limite: 100, sentido: 'min' },
     { nome: 'Latência p95 por turno', valor: percentil(finais.flatMap((e) => e.latencias), 95), unidade: 'ms', limite: 25_000, sentido: 'max' },
     { nome: 'Custo estimado da rodada', valor: custo === null ? null : Math.round(custo * 1000) / 1000, unidade: 'US$', limite: 0.5, sentido: 'max', detalhe: tokens ? `${tokens} tokens` : 'sem o uso de tokens (a partir do M2)' },
   ].map((m) => ({ ...m, passou: m.valor === null ? null : m.sentido === 'min' ? m.valor >= m.limite : m.valor <= m.limite }))

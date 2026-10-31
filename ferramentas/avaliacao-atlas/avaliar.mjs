@@ -11,7 +11,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
 import { Sessao } from './api.mjs'
-import { conferir, numerosSemOrigem, passou, resumirTurnos, vazamentos } from './conferencias.mjs'
+import { conferir, conferirTraco, numerosSemOrigem, passou, resumirTurnos, vazamentos } from './conferencias.mjs'
 import { calcularMetricas, montarHtml } from './relatorio.mjs'
 
 const PASTA = path.dirname(fileURLToPath(import.meta.url))
@@ -42,6 +42,12 @@ const { values: opcoes } = parseArgs({
   },
 })
 const API = opcoes.api ?? process.env.PORTAL_API_URL ?? 'http://localhost:8080'
+
+// Só para procurar as chaves no traço: nunca são impressas nem gravadas.
+const ARQUIVO_DE_SEGREDOS = path.join(RAIZ, 'backend/config/segredos.local.properties')
+const SEGREDOS = fs.existsSync(ARQUIVO_DE_SEGREDOS)
+  ? fs.readFileSync(ARQUIVO_DE_SEGREDOS, 'utf8').split('\n').filter((l) => /^\w+_KEY=./.test(l)).map((l) => l.slice(l.indexOf('=') + 1).trim())
+  : []
 
 function carregarCasos() {
   const pasta = path.join(PASTA, 'casos')
@@ -115,6 +121,8 @@ async function lerDepois(sessao, conversaId, conversa, resumo) {
   return { relatorios, diagnostico }
 }
 
+const traco = (problemas) => ({ nome: 'traco', ok: problemas.length === 0, detalhe: problemas.join('; ') })
+
 async function tentar(caso) {
   const inicio = performance.now()
   try {
@@ -133,7 +141,10 @@ async function tentar(caso) {
     const { relatorios, diagnostico } = await lerDepois(sessao, conversaId, ultima, resumo)
     return {
       conversaId,
-      conferencias: conferir(caso, turnos, relatorios),
+      conferencias: [
+        ...conferir(caso, turnos, relatorios),
+        ...(diagnostico ? [traco(conferirTraco(diagnostico, resumo.itens, SEGREDOS))] : []),
+      ],
       itens: resumo.itens,
       latencias: resumo.latencias,
       ms: Math.round(performance.now() - inicio),

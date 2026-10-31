@@ -142,6 +142,37 @@ export function numerosSemOrigem(turnos, hoje = new Date()) {
   return problemas
 }
 
+// Etapas que rodam em paralelo (seção 8.4 do plano): ficam fora da soma e podem terminar depois do turno.
+const EM_PARALELO = new Set(['RESUMO', 'R3_FONTES'])
+const FOLGA_MS = 50
+
+/**
+ * O traço de cada turno: todo turno tem traço, toda etapa sequencial cabe nele e a soma delas não passa do tempo do turno.
+ * Nenhum traço traz o raciocínio cru nem uma chave. A mensagem de erro nunca repete o valor da chave.
+ */
+export function conferirTraco(diagnostico, itens, segredos = []) {
+  const problemas = []
+  const turnosDoTraco = new Map((diagnostico?.turnos ?? []).map((t) => [t.turno, t]))
+  for (const turno of new Set(itens.map((i) => i.turno).filter(Boolean))) {
+    if (!turnosDoTraco.has(turno)) problemas.push(`turno ${turno} sem traço`)
+  }
+  for (const t of turnosDoTraco.values()) {
+    const inicio = Date.parse(t.iniciadoEm)
+    const fim = inicio + t.duracaoMs
+    const sequenciais = t.etapas.filter((e) => !EM_PARALELO.has(e.etapa))
+    for (const e of sequenciais) {
+      const comecou = Date.parse(e.iniciadaEm)
+      if (comecou < inicio - FOLGA_MS || comecou + e.duracaoMs > fim + FOLGA_MS) problemas.push(`${e.etapa} (ordem ${e.ordem}) fora do turno ${t.turno}`)
+    }
+    const soma = sequenciais.reduce((total, e) => total + e.duracaoMs, 0)
+    if (soma > t.duracaoMs + FOLGA_MS) problemas.push(`etapas somam ${soma} ms num turno de ${t.duracaoMs} ms (${t.turno})`)
+  }
+  const json = JSON.stringify(diagnostico ?? {})
+  if (json.includes('reasoning_content')) problemas.push('o traço traz reasoning_content')
+  if (segredos.some((chave) => chave && json.includes(chave))) problemas.push('o traço traz uma chave de provedor')
+  return problemas
+}
+
 const paginaConfere = (esperada, pagina) => esperada === undefined || [esperada].flat().includes(pagina)
 
 /** Aplica o `espera` do caso. Cada conferência tem nome, porque as métricas contam por nome. */
