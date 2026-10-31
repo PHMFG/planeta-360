@@ -166,10 +166,12 @@ ATLAS_LLM=openai OPENCODE_API_KEY=sua-chave ./mvnw spring-boot:run -Dspring-boot
 
 No Windows (PowerShell): `$env:ATLAS_LLM="openai"; $env:OPENCODE_API_KEY="sua-chave"` antes do `.\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=dev"`.
 
+**Pelo arquivo de segredos (perfil `dev`).** Copie `backend/config/segredos.exemplo.properties` para `backend/config/segredos.local.properties` e preencha as chaves. A API lê esse arquivo ao subir a partir de `backend/`, e o Git o ignora. Sem ele, o portal sobe normalmente, com o Atlas desligado. Variável de ambiente vence o arquivo.
+
 | Variável | Padrão | Para quê |
 | --- | --- | --- |
 | `ATLAS_LLM` | `none` | `openai` liga o modelo (qualquer serviço compatível com a API da OpenAI) |
-| `OPENCODE_API_KEY` | — | A chave do provedor. Só em variável de ambiente, nunca no repositório. Com `ATLAS_LLM=openai` e sem ela, o Atlas não responde e a API avisa no log |
+| `OPENCODE_API_KEY` | — | A chave do provedor. Em variável de ambiente ou no arquivo de segredos, nunca no repositório. Com `ATLAS_LLM=openai` e sem ela, o Atlas não responde e a API avisa no log |
 | `ATLAS_LLM_BASE_URL` | `https://opencode.ai/inference/go/openai/v1` | O endereço do provedor |
 | `ATLAS_LLM_MODELO` | `deepseek-v4.1-flash` | O modelo |
 | `ATLAS_RACIOCINIO` | `true` | O raciocínio do modelo, com o resumo na conversa. Ligado, cada resposta demora uns segundos a mais e gasta mais do limite do provedor |

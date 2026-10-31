@@ -24,3 +24,11 @@ armazenamento/
 .env
 .env.*
 !.env.example
+
+# Chaves dos provedores do Atlas (o exemplo sem valores fica no repositório)
+backend/config/segredos.local.properties
+
+# Saídas do Playwright
+frontend/e2e/capturas/
+frontend/test-results/
+frontend/playwright-report/

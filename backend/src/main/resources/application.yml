@@ -9,7 +9,7 @@
 #
 # [ATLAS] O modelo de linguagem do Atlas vem DESLIGADO (spring.ai.model.chat=none): o portal e a suíte sobem para todo mundo,
 # sem chave, e a mensagem de texto do Atlas responde 503 (com atlas.relatorio.ligado, o botão "Montar relatório" é o plano B). Para ligar: ATLAS_LLM=openai e OPENCODE_API_KEY, e, se
-# quiser, ATLAS_LLM_BASE_URL e ATLAS_LLM_MODELO. Chave só em variável de ambiente, nunca neste arquivo.
+# quiser, ATLAS_LLM_BASE_URL e ATLAS_LLM_MODELO. Chave em variável de ambiente ou, no perfil dev, em config/segredos.local.properties; nunca neste arquivo.
 
 spring:
   application:
@@ -105,6 +105,8 @@ spring:
   config:
     activate:
       on-profile: dev
+    # [ATLAS] As chaves dos provedores, se existir o arquivo (fora do Git). O caminho é relativo à pasta em que a API sobe: backend/.
+    import: optional:file:./config/segredos.local.properties
   flyway:
     # [ITEM-1] A amostra (Amarelo, Roxo e Verde) mora em db/dev e só carrega neste perfil e no de teste.
     locations: classpath:db/migration,classpath:db/dev
