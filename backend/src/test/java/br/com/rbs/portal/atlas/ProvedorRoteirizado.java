@@ -62,6 +62,12 @@ public class ProvedorRoteirizado implements ProvedorDeLlm {
         return passo(pedido -> new RespostaDoLlm(texto, List.of(), null));
     }
 
+    /** O modelo responde só com texto e o provedor diz o que a ida gastou (para os testes do diagnóstico somarem tokens e custo). */
+    public ProvedorRoteirizado textoComUso(String texto, int tokensEntrada, int tokensSaida, java.math.BigDecimal custoDeLista) {
+        return passo(pedido -> new RespostaDoLlm(texto, List.of(), null,
+                new UsoDoLlm("modelo-do-roteiro", tokensEntrada, tokensSaida, "stop", 7L, custoDeLista)));
+    }
+
     /** O modelo pede uma ferramenta, com os argumentos em JSON. */
     public ProvedorRoteirizado chamada(String nome, String argumentos) {
         return chamadas(null, null, pedido(nome, argumentos));

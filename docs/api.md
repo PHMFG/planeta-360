@@ -2,7 +2,7 @@
 
 Este documento é o **contrato entre o back-end e o front-end**. Quem faz a tela lê aqui o que cada rota pede, o que devolve e quais erros esperar, sem precisar abrir o código.
 
-- Todas as 48 rotas estão implementadas e cobertas por testes de integração (`cd backend && ./mvnw test`), inclusive o isolamento entre parcerias. A coluna "Etapa" diz em que etapa do plano cada rota entrou (as do Atlas, 37 em diante, entram como `Atlas 1` e `Atlas 2`). Mudança de formato daqui em diante entra neste arquivo no mesmo commit do código.
+- Todas as 53 rotas estão implementadas e cobertas por testes de integração (`cd backend && ./mvnw test`), inclusive o isolamento entre parcerias. A coluna "Etapa" diz em que etapa do plano cada rota entrou (as do Atlas, 37 em diante, entram como `Atlas 1`, `Atlas 2` e `Atlas M2`). Mudança de formato daqui em diante entra neste arquivo no mesmo commit do código.
 - O banco está descrito em [`docs/banco.md`](banco.md). Os nomes de status, cotas e abas são os mesmos do banco.
 
 ## Como falar com a API
@@ -61,7 +61,7 @@ Todo erro, sem exceção, vem como `application/problem+json` no formato `Proble
 | 400 | Requisição inválida | Corpo vazio ou que não é JSON, ou filtro da URL com o tipo errado (`?pagina=abc`, `?eventoId=abc`, `?atrasadas=talvez`): o `detail` diz qual, por exemplo `"O parâmetro pagina precisa ser um número inteiro."` ou `"O parâmetro atrasadas precisa ser true ou false."`. |
 | 401 | Não autenticado | Sem sessão (ou sessão vencida), e-mail/senha incorretos no login, ou sessão de uma conta que perdeu o acesso (veja "Sessão e CSRF"). |
 | 403 | Acesso negado | Logado, mas o perfil não pode fazer a operação (rota só da RBS), a aba está fechada para a parceria (duas frases diferentes, veja "Aba"), ou falta o token CSRF. |
-| 404 | Não encontrado | O recurso **não existe ou é de outra parceria**. Os dois casos têm a mesma resposta, de propósito. Vale também para rota inexistente e para **id na URL que não é número** (`GET /api/parcerias/abc`): um id que não pode existir é um id que não existe, e o `detail` é a frase de "não encontrado" do recurso da rota (`"Não encontramos esta parceria."`, `"... esta entrega."`, `"... este arquivo."`, `"... esta pergunta."`, `"... este relatório."` (também o do Atlas), `"... esta carga."`, `"... esta conversa."`, `"... esta solicitação."`, `"Não encontramos este e-mail nesta parceria."`), igual à de um id numérico sem registro. |
+| 404 | Não encontrado | O recurso **não existe ou é de outra parceria**. Os dois casos têm a mesma resposta, de propósito. Vale também para rota inexistente e para **id na URL que não é número** (`GET /api/parcerias/abc`): um id que não pode existir é um id que não existe, e o `detail` é a frase de "não encontrado" do recurso da rota (`"Não encontramos esta parceria."`, `"... esta entrega."`, `"... este arquivo."`, `"... esta pergunta."`, `"... este relatório."` (também o do Atlas), `"... esta carga."`, `"... esta conversa."`, `"... esta solicitação."`, `"... este turno."` (rota 51), `"... este provedor."` (rota 53), `"Não encontramos este e-mail nesta parceria."`), igual à de um id numérico sem registro. |
 | 405 | Método não permitido | A rota existe, mas não aceita esse método HTTP. |
 | 409 | Conflito | Uma regra do negócio recusou: regra do banco (SQLSTATE da classe 23, com a frase do gatilho), transição de status que não é permitida, registro duplicado. |
 | 413 | Arquivo grande demais | Envio acima de 20 MB. |
@@ -154,10 +154,15 @@ Todas prontas e testadas. A coluna "Etapa" mostra em que etapa do plano a rota e
 | 46 | `POST /api/atlas/solicitacoes/{id}/respostas` | Dono da conversa | Responde o cartão de perguntas (accept, decline ou cancel) | Atlas 2 |
 | 47 | `GET /api/atlas/relatorios/{id}` | Patrocinador da parceria, ou Admin RBS | O relatório do Atlas, pronto ou em montagem | Atlas 2 |
 | 48 | `GET /api/parcerias/{id}/atlas/relatorios` | Patrocinador da parceria, ou Admin RBS | Os relatórios do Atlas da parceria | Atlas 2 |
+| 49 | `GET /api/atlas/conversas/{id}/diagnostico` | Dono da conversa (com o diagnóstico e `atlas.diagnostico.marca` ligados) | Os turnos da conversa com as etapas, os tokens e o custo | Atlas M2 |
+| 50 | `GET /api/atlas/diagnostico/turnos` | Admin RBS (com o diagnóstico ligado) | Os turnos de todas as conversas, paginados, com filtros | Atlas M2 |
+| 51 | `GET /api/atlas/diagnostico/turnos/{turno}` | Admin RBS (com o diagnóstico ligado) | Um turno com as etapas, a parceria e quem conversou | Atlas M2 |
+| 52 | `GET /api/atlas/provedores` | Admin RBS (com o diagnóstico ligado) | O estado do modelo de linguagem, do JEV e do Gemini, e o teto diário por parceria | Atlas M2 |
+| 53 | `POST /api/atlas/provedores/{nome}/teste` | Admin RBS (com o diagnóstico ligado) | Uma chamada mínima a um provedor (`llm`, `jev` ou `gemini`) | Atlas M2 |
 
-São 48 operações (método + caminho). A rota 5 (`ativar`) faz parte do contrato de autenticação, mas só é implementada na etapa 4. As rotas 37 em diante vieram com o Atlas (MVP): a coluna "Etapa" diz `Atlas 1` (plano de aplicações e dados informados) ou `Atlas 2` (conversa, cartão de perguntas e relatório). Nas rotas 42 a 46 só o Admin Patrocinador chama (a RBS recebe **403** antes de o corpo ser lido); nas 47 e 48 chamam a marca da parceria e a RBS. **Neste MVP o relatório do Atlas está desligado** (`atlas.relatorio.ligado=false`, o padrão): as rotas **46, 47 e 48 não existem (404)**, e as rotas 42 e 44 só aceitam conversa por texto (`atalho` e `modelo` dão 422). Veja "Modo só chat". O contrato do relatório, nas rotas 42 a 48, vale com `atlas.relatorio.ligado=true`.
+São 53 operações (método + caminho). A rota 5 (`ativar`) faz parte do contrato de autenticação, mas só é implementada na etapa 4. As rotas 37 em diante vieram com o Atlas: a coluna "Etapa" diz `Atlas 1` (plano de aplicações e dados informados), `Atlas 2` (conversa, cartão de perguntas e relatório) ou `Atlas M2` (o diagnóstico: rotas 49 a 53, veja "Diagnóstico do Atlas"). A 49 é só do Admin Patrocinador, dono da conversa; as 50 a 53 são só do Admin RBS (o outro perfil recebe **403** antes de tudo). **As rotas 49 a 53 estão sempre mapeadas e respondem 404 com o diagnóstico desligado** (`atlas.diagnostico.ligado=false`, o padrão). Nas rotas 42 a 46 só o Admin Patrocinador chama (a RBS recebe **403** antes de o corpo ser lido); nas 47 e 48 chamam a marca da parceria e a RBS. **Neste MVP o relatório do Atlas está desligado** (`atlas.relatorio.ligado=false`, o padrão): as rotas **46, 47 e 48 não existem (404)**, e as rotas 42 e 44 só aceitam conversa por texto (`atalho` e `modelo` dão 422). Veja "Modo só chat". O contrato do relatório, nas rotas 42 a 48, vale com `atlas.relatorio.ligado=true`.
 
-As rotas de debug do modelo de linguagem (`/api/debug/llm`) são temporárias, só existem no perfil `dev` e ficam fora desta tabela e da conta das 48: veja "Rotas de debug (temporárias)", no fim.
+As rotas de debug do modelo de linguagem (`/api/debug/llm`) são temporárias, só existem no perfil `dev`, são só da RBS e ficam fora desta tabela e da conta das 53: veja "Rotas de debug (temporárias)", no fim.
 
 ## Objetos que se repetem
 
@@ -1783,17 +1788,163 @@ As etapas `J1_INTENCAO`, `J1_CARTAO`, `BUSCA`, `R3_FONTES`, `R5_RESPOSTA`, `V2_C
 
 O custo de uma ida (e de um resumo) é o `usage.opencode.list_cost` que o OpenCode Go devolve em cada resposta, em dólares, a preço de lista: vai em `dados.custoUsd` da etapa, com `custoOrigem` `RESPOSTA`, e o diagnóstico o soma por turno e por conversa. O preço do DeepSeek V4.1 Flash por milhão de tokens não consta nas referências do projeto (o plano do Go é por limite de uso, não por token), por isso **não há preço fixo no código**: se uma resposta vier sem o `list_cost`, vale o preço por milhão de tokens de `atlas.diagnostico.preco-por-milhao` (entrada e saída), com `custoOrigem` `PRECO_CONFIGURADO`; com os dois em `0` (o padrão), a ida fica sem `custoUsd`. É uma **estimativa**: serve para somar o gasto de uma rodada de testes, não para cobrar.
 
+## 49. `GET /api/atlas/conversas/{id}/diagnostico`  · Atlas M2
+
+**Quem chama:** Admin Patrocinador, **dono da conversa**, e só com `atlas.diagnostico.ligado` **e** `atlas.diagnostico.marca`. A RBS recebe **403** (`"Só o Admin Patrocinador da parceria conversa com o Atlas."`) antes de tudo; quem não entrou, 401.
+
+**200**: os turnos da conversa, do mais antigo para o mais novo, com as etapas e os totais.
+
+```json
+{
+  "conversaId": 12, "tokensEntrada": 4210, "tokensSaida": 380, "tokens": 4590, "custoUsd": 0.0031,
+  "turnos": [
+    {
+      "turno": "7c0f2c0e-3f37-4a55-9d1e-0b6c0a8d3e11", "mensagemId": 88,
+      "iniciadoEm": "2026-10-31T19:42:10-03:00", "duracaoMs": 4210, "resultado": "OK",
+      "tokensEntrada": 4210, "tokensSaida": 380, "custoUsd": 0.0031,
+      "etapas": [
+        { "ordem": 1, "etapa": "G1_LIMITES", "resultado": "OK", "iniciadaEm": "2026-10-31T19:42:10-03:00", "duracaoMs": 3, "mensagemId": null,
+          "dados": { "tetoPorParceria": 200, "usadasHoje": 12 } },
+        { "ordem": 2, "etapa": "LLM_IDA", "resultado": "OK", "iniciadaEm": "2026-10-31T19:42:10-03:00", "duracaoMs": 1810, "mensagemId": 86,
+          "dados": { "ida": 1, "emFluxo": true, "mensagens": 4, "ferramentas": ["parceria_consultar"], "modelo": "deepseek-v4.1-flash",
+                     "tokensEntrada": 2100, "tokensSaida": 120, "motivoDoFim": "tool_calls", "latenciaMs": 1790,
+                     "custoUsd": 0.0014, "custoOrigem": "RESPOSTA", "chamadas": 1, "comTexto": false, "comRaciocinio": true } },
+        { "ordem": 3, "etapa": "RESUMO", "resultado": "OK", "iniciadaEm": "2026-10-31T19:42:12-03:00", "duracaoMs": 950, "mensagemId": 86,
+          "dados": { "modelo": "deepseek-v4.1-flash", "tokensEntrada": 310, "tokensSaida": 40, "caracteres": 74, "noPrazo": true } },
+        { "ordem": 4, "etapa": "FERRAMENTA", "resultado": "OK", "iniciadaEm": "2026-10-31T19:42:12-03:00", "duracaoMs": 42, "mensagemId": 86,
+          "dados": { "ferramenta": "parceria_consultar", "argumentos": "{}", "resultado": "{\"abaFechada\":false,...}" } },
+        { "ordem": 5, "etapa": "SAIDA", "resultado": "OK", "iniciadaEm": "2026-10-31T19:42:14-03:00", "duracaoMs": 12, "mensagemId": 88,
+          "dados": { "tipo": "TEXTO", "idasAoModelo": 2, "chamadasDeFerramenta": 1, "caracteres": 96, "esperaDosResumosMs": 0, "resumosPendentes": 0 } }
+      ]
+    }
+  ]
+}
+```
+
+- **Turno.** `turno` é o UUID (o mesmo `turno` que os itens da conversa trazem: o botão "Diagnóstico" de uma resposta abre o turno dela). `iniciadoEm` e `duracaoMs` vão do começo da primeira etapa sequencial ao fim da última (o `RESUMO`, que corre em paralelo, fica de fora). `resultado` é o da etapa `SAIDA`: `OK`, `RECUSADO` ou `ERRO`. `mensagemId` é a última mensagem do assistente que o turno gravou. `tokensEntrada` e `tokensSaida` somam as etapas que os trazem (as idas ao modelo e os resumos do raciocínio); `custoUsd` soma o custo delas (`0` quando nenhuma resposta trouxe custo; veja "Custo"). Os totais da conversa somam os turnos.
+- **Etapa.** `etapa`, `resultado` e `dados`: veja "O traço de um turno". `dados` é sempre um **objeto JSON** (não um texto) e nunca leva o raciocínio cru, chave nem o prompt de sistema. `mensagemId` é a mensagem do assistente que a etapa produziu ou pediu (`null` nas que não têm uma). `iniciadaEm` com o fuso de Brasília.
+- **Conversa sem turno** (nunca falou, ou é de antes do diagnóstico): `turnos` vazio e os totais em `0`.
+
+**Erros**
+
+| Status | Quando |
+| --- | --- |
+| 401 | Sem sessão. |
+| 403 | RBS (`"Só o Admin Patrocinador da parceria conversa com o Atlas."`); aba `APLICACOES` fechada para a marca, com as duas frases de "Aba" (como na rota 45). |
+| 404 | Conversa que não existe, de outra parceria **ou de outro usuário da mesma parceria** (`"Não encontramos esta conversa."`, a mesma frase nos três casos, também para um id que não é número); ou diagnóstico desligado, ou `atlas.diagnostico.marca` desligada (a mesma frase, como se a rota não existisse para esta marca). |
+
+## 50. `GET /api/atlas/diagnostico/turnos`  · Atlas M2
+
+**Quem chama:** Admin RBS, com `atlas.diagnostico.ligado`. O patrocinador recebe **403** (`"Esta operação é restrita à equipe da RBS."`) com qualquer filtro; o diagnóstico desligado dá 404 (`"Não encontramos o que você pediu."`).
+
+**Filtros (todos opcionais)**
+
+| Parâmetro | O que faz |
+| --- | --- |
+| `parceriaId` | Só os turnos desta parceria. Número; outro valor dá 400. |
+| `de`, `ate` | O dia (inclusive, no horário de Brasília) em que o turno **começou**: `2026-10-31`. Formato errado dá 422 em `campos.de` ou `campos.ate`; `ate` antes de `de` dá 422 em `campos.ate`. |
+| `resultado` | `OK`, `RECUSADO`, `ERRO`, `SOMBRA` ou `PULADO` (em maiúsculas ou minúsculas): o resultado do **turno** (o da etapa `SAIDA`). Outro valor dá 422 em `campos.resultado`. |
+| `pagina`, `tamanho` | Paginação do projeto: `pagina` de 0 em diante, `tamanho` de 1 a 200 (padrão 50); fora disso, 422. |
+
+**200**: `{ "itens": [...], "pagina": 0, "tamanho": 50, "total": 137 }`, do turno mais novo para o mais antigo.
+
+```json
+{ "itens": [
+    { "turno": "7c0f2c0e-3f37-4a55-9d1e-0b6c0a8d3e11", "conversaId": 12, "parceriaId": 2, "parceria": "Cliente Amarelo",
+      "usuario": { "id": 3, "nome": "Marketing Amarelo", "perfil": "ADMIN_PATROCINADOR" },
+      "mensagemId": 88, "iniciadoEm": "2026-10-31T19:42:10-03:00", "duracaoMs": 4210, "resultado": "OK", "etapas": 6,
+      "tokensEntrada": 4210, "tokensSaida": 380, "custoUsd": 0.0031 } ],
+  "pagina": 0, "tamanho": 50, "total": 1 }
+```
+
+`etapas` é a quantidade (a lista não traz as etapas: abra o turno pela rota 51). O turno que nem começou (teto diário atingido, conversa ocupada) também aparece, com `resultado` `RECUSADO`. Os campos são os mesmos da rota 51.
+
+**Erros:** 400 (`parceriaId` que não é número); 401; 403 (patrocinador); 404 (diagnóstico desligado); 422 (filtro ou paginação).
+
+## 51. `GET /api/atlas/diagnostico/turnos/{turno}`  · Atlas M2
+
+**Quem chama:** Admin RBS, com o diagnóstico ligado. O mesmo turno da rota 49, mais a parceria, a conversa e quem conversou.
+
+**200**
+
+```json
+{ "turno": "7c0f2c0e-3f37-4a55-9d1e-0b6c0a8d3e11", "conversaId": 12, "parceriaId": 2, "parceria": "Cliente Amarelo",
+  "usuario": { "id": 3, "nome": "Marketing Amarelo", "perfil": "ADMIN_PATROCINADOR" },
+  "mensagemId": 88, "iniciadoEm": "2026-10-31T19:42:10-03:00", "duracaoMs": 4210, "resultado": "OK",
+  "tokensEntrada": 4210, "tokensSaida": 380, "custoUsd": 0.0031,
+  "etapas": [ { "ordem": 1, "etapa": "G1_LIMITES", "resultado": "OK", "iniciadaEm": "...", "duracaoMs": 3, "mensagemId": null, "dados": {} } ] }
+```
+
+**Erros:** 401; 403 (patrocinador); 404 (`"Não encontramos este turno."`: turno que não existe ou id que não é um UUID; ou, com o diagnóstico desligado, `"Não encontramos o que você pediu."`).
+
+## 52. `GET /api/atlas/provedores`  · Atlas M2
+
+**Quem chama:** Admin RBS, com o diagnóstico ligado. Mostra o estado de cada provedor externo e o teto diário.
+
+**200**
+
+```json
+{ "provedores": [
+    { "nome": "llm", "configurado": true, "origem": "AMBIENTE", "modelo": "deepseek-v4.1-flash",
+      "baseUrl": "https://opencode.ai/inference/go/openai/v1", "finalDaChave": "a1b2", "modo": null,
+      "chamadas24h": 120, "erros24h": 2, "latenciaP50Ms": 1400, "latenciaP95Ms": 3100, "disjuntor": null },
+    { "nome": "jev", "configurado": true, "origem": "AMBIENTE", "modelo": "jev-1.14.0", "baseUrl": "https://api.typesafe.ai",
+      "finalDaChave": "c3d4", "modo": "SOMBRA", "chamadas24h": 0, "erros24h": 0, "latenciaP50Ms": null, "latenciaP95Ms": null, "disjuntor": null },
+    { "nome": "gemini", "configurado": false, "origem": "NENHUM", "modelo": "gemini-embedding-2",
+      "baseUrl": "https://generativelanguage.googleapis.com", "finalDaChave": null, "modo": null,
+      "chamadas24h": 0, "erros24h": 0, "latenciaP50Ms": null, "latenciaP95Ms": null, "disjuntor": null } ],
+  "tetoDiario": { "limite": 200, "parcerias": [ { "parceriaId": 2, "parceria": "Cliente Amarelo", "usadas": 12 } ] } }
+```
+
+- **Sempre os três, nesta ordem:** `llm`, `jev`, `gemini`.
+- `configurado` é `true` quando há chave. `origem`: `AMBIENTE` (a chave vem de variável de ambiente ou do arquivo de segredos do perfil `dev`), `DEBUG` (só o `llm`: a chave posta pelas rotas de debug, que vale antes da do ambiente) ou `NENHUM`. A chave: `OPENCODE_API_KEY` (`llm`), `TYPESAFE_API_KEY` (`jev`) e `GEMINI_API_KEY` (`gemini`). As URLs base e os modelos são configuráveis (`ATLAS_LLM_BASE_URL`/`ATLAS_LLM_MODELO`, `ATLAS_JEV_BASE_URL`/`ATLAS_JEV_MODELO`, `ATLAS_GEMINI_BASE_URL`).
+- **Nunca a chave inteira**: `finalDaChave` traz só os 4 últimos caracteres, e só de chave com 8 ou mais; senão `null`.
+- `modo` é o do JEV (`ATLAS_JEV`): `DESLIGADO` (`none`, o padrão), `SOMBRA` ou `ATIVO`; `null` nos outros dois.
+- `chamadas24h`, `erros24h`, `latenciaP50Ms` e `latenciaP95Ms` vêm do traço das últimas 24 horas: as etapas `LLM_IDA` (`llm`), `J1_INTENCAO` e `J1_CARTAO` (`jev`) e `BUSCA` (`gemini`). A latência é das que terminaram bem; sem nenhuma, `null`. Por enquanto só o `llm` deixa traço.
+- `disjuntor` é **`null` até o M8** (o estado do disjuntor de cada provedor).
+- `tetoDiario`: o `limite` (`atlas.teto-diario-por-parceria`) e, das parcerias que gastaram alguma mensagem do modelo **hoje** (dia de Brasília), quantas `usadas`, da que mais gastou para a que menos.
+
+**Erros:** 401; 403 (patrocinador); 404 (diagnóstico desligado).
+
+## 53. `POST /api/atlas/provedores/{nome}/teste`  · Atlas M2
+
+**Quem chama:** Admin RBS, com o diagnóstico ligado (exige o token CSRF). `nome` é `llm`, `jev` ou `gemini` (em qualquer caixa). Sem corpo. Faz **uma chamada real mínima** ao provedor, só para provar que a conexão e a chave funcionam; não grava nada e não conta no teto diário. O cliente de verdade do JEV vem no M7 e o do Gemini no M3.
+
+| Provedor | O que a API chama |
+| --- | --- |
+| `llm` | O modelo que vale agora (como o `POST /api/debug/llm/teste`): a mensagem `"Responda só com a palavra ok."`, sem ferramentas. |
+| `jev` | `POST {base}/v1/systemone` com `Authorization: Bearer` e o modelo `jev-1.14.0` (`ATLAS_JEV_MODELO`): um estado curto em português e uma pergunta `noul` (`"A mensagem pergunta sobre um prazo?"`). Dá certo se a resposta traz `answers.relevante.noul` numérico. |
+| `gemini` | `POST {base}/v1beta/models/gemini-embedding-2:embedContent` com o cabeçalho `x-goog-api-key` e `embedContentConfig.outputDimensionality` 768. Dá certo se a resposta traz o vetor de 768 números. |
+
+**200** sempre que a rota existe: `ok` diz se deu certo.
+
+```json
+{ "provedor": "jev", "ok": true, "chamou": true, "milissegundos": 240, "modelo": "jev-1.14.0", "resposta": "noul 0.95" }
+```
+
+```json
+{ "provedor": "gemini", "ok": false, "chamou": true, "milissegundos": 310, "modelo": "gemini-embedding-2",
+  "erro": "O provedor respondeu 400: API key not valid. Please pass a valid API key." }
+```
+
+- Com `ok` `true` vem `resposta` (no `llm`, a resposta do modelo cortada em 200 caracteres; no `jev`, `noul` e o valor; no `gemini`, `768 dimensões`); com `false`, `erro`. Nunca os dois.
+- **Sem chave**, nada é chamado: `{ "provedor": "jev", "ok": false, "chamou": false, "milissegundos": 0, "modelo": "jev-1.14.0", "erro": "Nenhuma chave configurada." }`.
+- **O erro nunca traz a chave**, mesmo que o provedor a repita no corpo da resposta (ela vem como `[omitido]`). Falha de rede diz só o nome da exceção: `"Não consegui falar com o provedor (ConnectException)."`. Resposta que não é a esperada: `"O provedor respondeu 200, mas não no formato esperado."`.
+- O prazo é de 5 segundos para conectar e 20 para a chamada; o HTTP não segue redirecionamento (a chave vai só ao endereço configurado).
+
+**Erros:** 401; 403 (patrocinador, ou falta o token CSRF); 404 (`"Não encontramos este provedor."`, ou o diagnóstico desligado).
+
 ---
 
 # Rotas de debug (temporárias)
 
-Um recurso **temporário**, para a equipe ligar o modelo de linguagem do Atlas pela tela (o botão "Debug"), sem reiniciar a API e sem variável de ambiente. Não faz parte das 48 rotas do contrato e sai antes da entrega final.
+Um recurso **temporário**, para a equipe ligar o modelo de linguagem do Atlas pela tela (o botão "Debug"), sem reiniciar a API e sem variável de ambiente. Não faz parte das 53 rotas do contrato e sai antes da entrega final.
 
 - **Só existem com `atlas.debug.chaves=true`.** A propriedade vem `false` por padrão, `true` no perfil `dev` e `false` no `test`. Sem ela, as quatro rotas respondem **404**, como uma rota que não existe.
 - **A chave fica só na memória da API.** Nunca vai ao banco, a arquivo ou ao log, e **some quando a API reinicia**. Nenhuma resposta devolve a chave inteira: só os 4 últimos caracteres (`finalDaChave`).
 - **Precedência:** a chave posta aqui &rarr; a das variáveis de ambiente (`ATLAS_LLM=openai` e `OPENCODE_API_KEY`) &rarr; nenhuma (o Atlas fica no botão "Montar relatório"). Pôr ou apagar a chave muda na hora o `llmDisponivel` das rotas 42 a 46; um turno que já começou termina com o modelo com que começou.
 - O modelo montado com a chave usa as mesmas opções do `application.yml` (temperatura 0.2, 1 nova tentativa, 60 segundos de limite, o `User-Agent` `PlanetaAtlas/0.1` e o `x-opencode-session` por conversa) e o raciocínio (`thinking`) do `atlas.raciocinio` (`ATLAS_RACIOCINIO`, ligado por padrão), que o `PUT` pode trocar.
-- **Quem chama:** logado (qualquer perfil: é ferramenta da equipe em desenvolvimento). PUT, DELETE e POST exigem o token CSRF. Erros em `ProblemDetail`.
+- **Quem chama:** **só o Admin RBS** (é ferramenta da equipe em desenvolvimento). O patrocinador recebe **403** (`"Esta operação é restrita à equipe da RBS."`) em qualquer das quatro, com qualquer corpo, sem mexer na chave. PUT, DELETE e POST exigem o token CSRF. Erros em `ProblemDetail`.
 - Cada troca grava uma linha de log (INFO) com quem trocou, a origem, a base URL, o modelo, o final da chave e o raciocínio.
 - Existe também o **debug das ferramentas** (`atlas.debug.ferramentas`), que não é uma rota: veja "Debug das ferramentas", no fim desta seção.
 
@@ -1815,7 +1966,7 @@ Um recurso **temporário**, para a equipe ligar o modelo de linguagem do Atlas p
 | `AMBIENTE` | Sem chave de debug, mas a API subiu com o modelo das variáveis de ambiente. | `configuradoPor` e `configuradoEm` `null`; `baseUrl` e `modelo` os do `application.yml`; `llmDisponivel` `true`. |
 | `NENHUM` | Nenhum modelo. | `baseUrl` e `modelo` trazem os padrões do `application.yml`; `finalDaChave`, `configuradoPor` e `configuradoEm` `null`; `llmDisponivel` `false`. |
 
-**Erros:** 401.
+**Erros:** 401; 403 (patrocinador).
 
 ## `PUT /api/debug/llm`
 
@@ -1828,12 +1979,12 @@ Um recurso **temporário**, para a equipe ligar o modelo de linguagem do Atlas p
 | Status | Quando |
 | --- | --- |
 | 400 | Corpo vazio ou que não é JSON; `raciocinio` que não é `true` nem `false`. |
-| 403 | Falta o token CSRF. |
+| 403 | Patrocinador; falta o token CSRF. |
 | 422 | `campos.chave`: ausente, com menos de 8 ou mais de 500 caracteres, ou com espaço (`"A chave precisa ter de 8 a 500 caracteres, sem espaços."`). `campos.baseUrl`: não começa com `https://` e não é `http://localhost` nem `http://127.0.0.1` (com porta e caminho opcionais), ou passa de 500 caracteres (`"A base URL precisa começar com https:// (ou ser http://localhost ou http://127.0.0.1)."`). `campos.modelo`: mais de 100 caracteres ou caractere fora de letras, números e `._:/-` (`"O modelo tem até 100 caracteres: letras, números e . _ : / -"`). |
 
 ## `DELETE /api/debug/llm`
 
-Esquece a chave do debug: volta ao modelo das variáveis de ambiente, ou a nenhum. **204** sem corpo, também quando não havia chave. **Erros:** 401; 403 (falta o token CSRF).
+Esquece a chave do debug: volta ao modelo das variáveis de ambiente, ou a nenhum. **204** sem corpo, também quando não havia chave. **Erros:** 401; 403 (patrocinador, ou falta o token CSRF).
 
 ## `POST /api/debug/llm/teste`
 
@@ -1849,9 +2000,9 @@ Manda ao modelo que vale agora uma mensagem mínima, sem ferramentas (`"Responda
 { "ok": false, "milissegundos": 1500, "modelo": "deepseek-v4.1-flash", "erro": "O modelo de linguagem não respondeu (UnauthorizedException: 401: ...)." }
 ```
 
-`resposta` vem cortada em 200 caracteres. `erro` é o motivo, sempre sem a chave. Sem modelo nenhum: `{ "ok": false, "milissegundos": 0, "modelo": "<o padrão>", "erro": "Nenhuma chave configurada." }`. Com `ok` `true` não vem `erro`; com `false` não vem `resposta`.
+`resposta` vem cortada em 200 caracteres. `erro` é o motivo, sempre sem a chave. Sem modelo nenhum: `{ "ok": false, "milissegundos": 0, "modelo": "<o padrão>", "erro": "Nenhuma chave configurada." }`. Com `ok` `true` não vem `erro`; com `false` não vem `resposta`. É o mesmo teste da rota 53 para o provedor `llm`.
 
-**Erros:** 401; 403 (falta o token CSRF).
+**Erros:** 401; 403 (patrocinador, ou falta o token CSRF).
 
 ## Debug das ferramentas (`atlas.debug.ferramentas`)
 
@@ -1895,8 +2046,8 @@ Ligada:
 
 | Quem | Pode |
 | --- | --- |
-| **Admin RBS** | Quase tudo: criar parcerias, autorizar e revogar e-mails, criar entregas, mudar status, mandar retorno, aprovar perguntas, subir cargas (inclusive o plano comercial), anexar as fotos de comprovação das aplicações, informar os dados da ativação no lugar da marca, gerar e disponibilizar relatórios, ver o histórico geral e o painel. **Não** conversa com o Atlas (rotas 42 a 46 dão 403), mas lê os relatórios que ele montou (rotas 47 e 48). |
-| **Admin Patrocinador** | Ver a própria parceria, as entregas das abas liberadas, enviar materiais, baixar arquivos da parceria, ver o histórico dela, enviar as perguntas da pesquisa, ver a consolidação, o plano de aplicações com as fotos e informar os dados da ativação (aba `APLICACOES` aberta), conversar com o Atlas e montar o relatório de ativação pelo botão ou, com o modelo de linguagem ligado, pelo texto livre (rotas 42 a 46, só ela; a conversa é de quem a abriu), ver os relatórios do Atlas da parceria (rotas 47 e 48) e o relatório disponibilizado. **Nunca** vê outra parceria nem as rotas da RBS. |
+| **Admin RBS** | Quase tudo: criar parcerias, autorizar e revogar e-mails, criar entregas, mudar status, mandar retorno, aprovar perguntas, subir cargas (inclusive o plano comercial), anexar as fotos de comprovação das aplicações, informar os dados da ativação no lugar da marca, gerar e disponibilizar relatórios, ver o histórico geral e o painel. **Não** conversa com o Atlas (rotas 42 a 46 e 49 dão 403), mas lê os relatórios que ele montou (rotas 47 e 48) e, com o diagnóstico ligado, o traço de todos os turnos, o estado dos provedores e o teste deles (rotas 50 a 53). Usa as rotas de debug da chave do modelo (só dela). |
+| **Admin Patrocinador** | Ver a própria parceria, as entregas das abas liberadas, enviar materiais, baixar arquivos da parceria, ver o histórico dela, enviar as perguntas da pesquisa, ver a consolidação, o plano de aplicações com as fotos e informar os dados da ativação (aba `APLICACOES` aberta), conversar com o Atlas e montar o relatório de ativação pelo botão ou, com o modelo de linguagem ligado, pelo texto livre (rotas 42 a 46, só ela; a conversa é de quem a abriu), ver os relatórios do Atlas da parceria (rotas 47 e 48), o diagnóstico das próprias conversas (rota 49, só com `atlas.diagnostico.marca` ligado) e o relatório disponibilizado. **Nunca** vê outra parceria nem as rotas da RBS. |
 
 ## O que a API grava no histórico
 

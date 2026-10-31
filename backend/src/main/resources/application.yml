@@ -95,6 +95,19 @@ atlas:
     preco-por-milhao:
       entrada: ${ATLAS_PRECO_ENTRADA:0}
       saida: ${ATLAS_PRECO_SAIDA:0}
+  # [ATLAS] O JEV (TypeSafe) e os embeddings (Gemini). Por enquanto só o diagnóstico os usa (rotas 52 e 53 mostram o estado e testam a
+  # conexão); os clientes de verdade entram no M7 (JEV) e no M3 (Gemini). As chaves vêm de variável de ambiente ou, no perfil dev, de
+  # config/segredos.local.properties; nunca deste arquivo. As URLs base são configuráveis para os testes usarem um servidor falso.
+  jev:
+    modo: ${ATLAS_JEV:none}                       # none | sombra | ativo
+    modelo: ${ATLAS_JEV_MODELO:jev-1.14.0}
+    base-url: ${ATLAS_JEV_BASE_URL:https://api.typesafe.ai}
+    chave: ${TYPESAFE_API_KEY:}
+  embeddings:
+    provedor: ${ATLAS_EMBEDDINGS:none}            # gemini | teste | none
+    modelo: gemini-embedding-2
+    base-url: ${ATLAS_GEMINI_BASE_URL:https://generativelanguage.googleapis.com}
+    chave: ${GEMINI_API_KEY:}
 
 server:
   port: 8080

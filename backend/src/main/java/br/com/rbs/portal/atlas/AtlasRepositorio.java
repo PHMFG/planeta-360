@@ -198,6 +198,27 @@ public class AtlasRepositorio {
                 .query(Long.class).single();
     }
 
+    /** Quanto uma parceria gastou do teto diário hoje (as mesmas mensagens que {@link #mensagensDoModeloHoje}). */
+    public record UsoDoTeto(Long parceriaId, String parceria, Long usadas) {
+    }
+
+    /** O uso do teto diário de cada parceria que gastou alguma mensagem hoje, da que mais gastou para a que menos gastou. */
+    public List<UsoDoTeto> mensagensDoModeloHojePorParceria() {
+        return jdbc.sql("""
+                        SELECT c.parceria_id, p.nome_canonico AS parceria, count(*) AS usadas
+                        FROM atlas_mensagem m
+                        JOIN atlas_conversa c ON c.id = m.conversa_id
+                        JOIN parceria pa ON pa.id = c.parceria_id
+                        JOIN patrocinador p ON p.id = pa.patrocinador_id
+                        WHERE m.papel = 'assistant'
+                          AND m.criada_em >= (date_trunc('day', now() AT TIME ZONE 'America/Sao_Paulo') AT TIME ZONE 'America/Sao_Paulo')
+                          AND NOT coalesce(jsonb_path_exists(m.tool_calls, '$[*].id ? (@ like_regex "^botao_")'), false)
+                        GROUP BY c.parceria_id, p.nome_canonico
+                        ORDER BY usadas DESC, p.nome_canonico
+                        """)
+                .query(UsoDoTeto.class).list();
+    }
+
     public List<LinhaDeMensagem> mensagens(long conversaId) {
         return jdbc.sql("""
                         SELECT id, ordem, papel, conteudo, CAST(tool_calls AS text) AS tool_calls, tool_call_id, criada_em,

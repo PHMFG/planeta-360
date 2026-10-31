@@ -272,6 +272,11 @@ public final class ServidorDeLlmFalso implements AutoCloseable {
         return completacao("\"content\":" + json(conteudo), "stop");
     }
 
+    /** Uma resposta só de texto, com o reasoning_content (o raciocínio cru do modelo, que não pode sair da API). */
+    public static String textoComRaciocinio(String conteudo, String raciocinio) {
+        return completacao("\"content\":" + json(conteudo) + ",\"reasoning_content\":" + json(raciocinio), "stop");
+    }
+
     /** Uma resposta com um pedido de ferramenta, e o reasoning_content se não for nulo. */
     public static String chamada(String id, String nome, String argumentosJson, String raciocinio) {
         String chamada = "{\"id\":" + json(id) + ",\"type\":\"function\",\"function\":{\"name\":" + json(nome)

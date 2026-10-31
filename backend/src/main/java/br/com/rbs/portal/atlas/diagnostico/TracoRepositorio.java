@@ -1,8 +1,13 @@
 package br.com.rbs.portal.atlas.diagnostico;
 
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -20,6 +25,61 @@ public class TracoRepositorio {
     public record EtapaNova(long parceriaId, long conversaId, UUID turno, Long mensagemId, int ordem, String etapa, String resultado,
                             OffsetDateTime iniciadaEm, int duracaoMs, String dadosJson) {
     }
+
+    /**
+     * Um turno como o banco o resume, com a parceria e o dono da conversa já ligados. {@code iniciadoEm} e {@code terminadoEm}
+     * cobrem as etapas sequenciais (o resumo do raciocínio, em paralelo, fica de fora); {@code resultado} é o da etapa SAIDA
+     * (ERRO se o turno não a tem); {@code mensagemId} é a última mensagem do assistente que o turno tocou; os tokens e o custo
+     * somam as etapas que os trazem em {@code dados}.
+     */
+    public record TurnoLido(UUID turno, Long conversaId, Long parceriaId, String parceria, Long usuarioId, String usuarioNome,
+                            String usuarioPerfil, OffsetDateTime iniciadoEm, OffsetDateTime terminadoEm, Integer etapas, Long mensagemId,
+                            String resultado, Long tokensEntrada, Long tokensSaida, BigDecimal custoUsd) {
+    }
+
+    /** Uma etapa como está no banco; {@code dados} é o JSON como texto. */
+    public record EtapaLida(UUID turno, Long id, Integer ordem, String etapa, String resultado, OffsetDateTime iniciadaEm,
+                            Integer duracaoMs, Long mensagemId, String dados) {
+    }
+
+    /** Filtros opcionais da lista de turnos. {@code de} (inclusive) e {@code ateExclusivo} limitam o começo do turno. */
+    public record FiltroDeTurnos(Long parceriaId, OffsetDateTime de, OffsetDateTime ateExclusivo, String resultado) {
+    }
+
+    /** A latência e os erros de um provedor nas últimas 24 horas, do traço. As latências são das etapas que terminaram bem. */
+    public record EstatisticasDoProvedor(Long chamadas, Long erros, Double p50, Double p95) {
+    }
+
+    /** O resumo de cada turno: o começo e o fim das etapas sequenciais, o resultado da SAIDA, os tokens e o custo. */
+    private static final String TURNOS_ANTES = """
+            WITH turnos AS (
+                SELECT t.turno, t.conversa_id, t.parceria_id,
+                       min(t.iniciada_em) FILTER (WHERE t.etapa <> 'RESUMO') AS iniciado_em,
+                       max(t.iniciada_em + t.duracao_ms * interval '1 millisecond') FILTER (WHERE t.etapa <> 'RESUMO') AS terminado_em,
+                       count(*) AS etapas,
+                       max(t.mensagem_id) AS mensagem_id,
+                       coalesce((array_agg(t.resultado ORDER BY t.ordem DESC) FILTER (WHERE t.etapa = 'SAIDA'))[1], 'ERRO') AS resultado,
+                       coalesce(sum((t.dados ->> 'tokensEntrada')::bigint), 0) AS tokens_entrada,
+                       coalesce(sum((t.dados ->> 'tokensSaida')::bigint), 0) AS tokens_saida,
+                       coalesce(sum((t.dados ->> 'custoUsd')::numeric), 0) AS custo_usd
+                FROM atlas_traco t
+            """;
+
+    private static final String TURNOS_DEPOIS = """
+                GROUP BY t.turno, t.conversa_id, t.parceria_id
+            )
+            """;
+
+    private static final String TURNOS_COM_DONO = """
+            SELECT x.turno, x.conversa_id, x.parceria_id, p.nome_canonico AS parceria, c.usuario_id, u.nome AS usuario_nome,
+                   u.perfil AS usuario_perfil, x.iniciado_em, x.terminado_em, x.etapas, x.mensagem_id, x.resultado,
+                   x.tokens_entrada, x.tokens_saida, x.custo_usd
+            FROM turnos x
+            JOIN atlas_conversa c ON c.id = x.conversa_id
+            JOIN parceria pa ON pa.id = x.parceria_id
+            JOIN patrocinador p ON p.id = pa.patrocinador_id
+            JOIN usuario u ON u.id = c.usuario_id
+            """;
 
     private final JdbcClient jdbc;
 
@@ -54,6 +114,102 @@ public class TracoRepositorio {
                 .query((rs, n) -> Map.entry(rs.getLong("mensagem_id"), rs.getString("turno")))
                 .list().forEach(e -> turnos.putIfAbsent(e.getKey(), e.getValue()));
         return turnos;
+    }
+
+    // ---------------------------------------------------------------------
+    // Leitura (rotas 49 a 52)
+    // ---------------------------------------------------------------------
+
+    /** Os turnos de uma conversa, do mais antigo para o mais novo. */
+    public List<TurnoLido> turnosDaConversa(long conversaId) {
+        return jdbc.sql(TURNOS_ANTES + " WHERE t.conversa_id = :conversa " + TURNOS_DEPOIS + TURNOS_COM_DONO
+                        + " ORDER BY x.iniciado_em, x.turno")
+                .param("conversa", conversaId)
+                .query(TurnoLido.class).list();
+    }
+
+    /** Um turno, ou nada se o id não existe. */
+    public Optional<TurnoLido> turno(UUID turno) {
+        return jdbc.sql(TURNOS_ANTES + " WHERE t.turno = :turno " + TURNOS_DEPOIS + TURNOS_COM_DONO)
+                .param("turno", turno)
+                .query(TurnoLido.class).optional();
+    }
+
+    /** Uma página de turnos, do mais novo para o mais antigo. */
+    public List<TurnoLido> turnos(FiltroDeTurnos filtro, int pagina, int tamanho) {
+        Map<String, Object> parametros = new LinkedHashMap<>();
+        String dentro = dentro(filtro, parametros);
+        String fora = fora(filtro, parametros);
+        parametros.put("limite", tamanho);
+        parametros.put("deslocamento", (long) pagina * tamanho);
+        return jdbc.sql(TURNOS_ANTES + dentro + TURNOS_DEPOIS + TURNOS_COM_DONO + " WHERE TRUE " + fora
+                        + " ORDER BY x.iniciado_em DESC, x.turno LIMIT :limite OFFSET :deslocamento")
+                .params(parametros)
+                .query(TurnoLido.class).list();
+    }
+
+    public long contarTurnos(FiltroDeTurnos filtro) {
+        Map<String, Object> parametros = new LinkedHashMap<>();
+        String dentro = dentro(filtro, parametros);
+        String fora = fora(filtro, parametros);
+        return jdbc.sql(TURNOS_ANTES + dentro + TURNOS_DEPOIS + " SELECT count(*) FROM turnos x WHERE TRUE " + fora)
+                .params(parametros)
+                .query(Long.class).single();
+    }
+
+    /** O filtro que vale antes de agrupar: a parceria. */
+    private static String dentro(FiltroDeTurnos filtro, Map<String, Object> parametros) {
+        if (filtro.parceriaId() == null) {
+            return " ";
+        }
+        parametros.put("parceria", filtro.parceriaId());
+        return " WHERE t.parceria_id = :parceria ";
+    }
+
+    /** Os filtros que valem sobre o turno já resumido: o resultado e o período do começo dele. */
+    private static String fora(FiltroDeTurnos filtro, Map<String, Object> parametros) {
+        StringBuilder fora = new StringBuilder();
+        if (filtro.resultado() != null) {
+            fora.append(" AND x.resultado = :resultado");
+            parametros.put("resultado", filtro.resultado());
+        }
+        if (filtro.de() != null) {
+            fora.append(" AND x.iniciado_em >= :de");
+            parametros.put("de", filtro.de());
+        }
+        if (filtro.ateExclusivo() != null) {
+            fora.append(" AND x.iniciado_em < :ate");
+            parametros.put("ate", filtro.ateExclusivo());
+        }
+        return fora.toString();
+    }
+
+    /** As etapas destes turnos, na ordem de cada um. */
+    public List<EtapaLida> etapasDosTurnos(Collection<UUID> turnos) {
+        if (turnos.isEmpty()) {
+            return List.of();
+        }
+        return jdbc.sql("""
+                        SELECT t.turno, t.id, t.ordem, t.etapa, t.resultado, t.iniciada_em, t.duracao_ms, t.mensagem_id,
+                               CAST(t.dados AS text) AS dados
+                        FROM atlas_traco t WHERE t.turno IN (:turnos) ORDER BY t.turno, t.ordem
+                        """)
+                .param("turnos", turnos)
+                .query(EtapaLida.class).list();
+    }
+
+    /** Chamadas, erros e latência (p50 e p95, em ms) das etapas dadas nas últimas 24 horas. */
+    public EstatisticasDoProvedor estatisticas(Collection<String> etapas) {
+        return jdbc.sql("""
+                        SELECT count(*) AS chamadas,
+                               count(*) FILTER (WHERE resultado = 'ERRO') AS erros,
+                               percentile_cont(0.5) WITHIN GROUP (ORDER BY duracao_ms) FILTER (WHERE resultado = 'OK') AS p50,
+                               percentile_cont(0.95) WITHIN GROUP (ORDER BY duracao_ms) FILTER (WHERE resultado = 'OK') AS p95
+                        FROM atlas_traco
+                        WHERE etapa IN (:etapas) AND iniciada_em >= now() - interval '24 hours'
+                        """)
+                .param("etapas", etapas)
+                .query(EstatisticasDoProvedor.class).single();
     }
 
     /** O resumo do raciocínio que terminou depois do fim do turno: a linha dele passa de pendente ao resultado de verdade. */

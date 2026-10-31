@@ -501,6 +501,14 @@ public class AtlasService {
         return conversa;
     }
 
+    /**
+     * A conversa, só se for do usuário (a regra da rota 45): a RBS, a de outro usuário, a de outra parceria e a que não existe dão
+     * 404 ou 403 como lá, e com a aba do modelo fechada, 403. É o que o diagnóstico da conversa (rota 49) usa para conferir o dono.
+     */
+    public LinhaDeConversa conversaDoDono(UsuarioAutenticado usuario, long conversaId) {
+        return conversaDoUsuario(usuario, conversaId, CONVERSA_NAO_ENCONTRADA);
+    }
+
     /** Com o relatório desligado, o atalho e o modelo não existem: 422 em {@code campos.atalho}. */
     private void exigirRelatorioLigado() {
         if (!modo.relatorioLigado()) {

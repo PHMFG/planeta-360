@@ -20,8 +20,9 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
  * Três regras, cada uma com as mesmas frases dos Services (que continuam conferindo: aqui é só a primeira linha de defesa):
  * <ul>
  *   <li>{@link #ROTAS_SO_DA_RBS}: perfil que não é Admin RBS recebe 403 ("Esta operação é restrita à equipe da RBS.").</li>
- *   <li>{@link #ROTAS_SO_DO_PATROCINADOR}: a conversa com o Atlas (rotas 42 a 46); a RBS recebe 403 ("Só o Admin Patrocinador da
- *       parceria conversa com o Atlas.") antes de o corpo ser lido. Parceria, dono da conversa e aba o service confere depois.</li>
+ *   <li>{@link #ROTAS_SO_DO_PATROCINADOR}: a conversa com o Atlas (rotas 42 a 46) e o diagnóstico dela (rota 49); a RBS recebe
+ *       403 ("Só o Admin Patrocinador da parceria conversa com o Atlas.") antes de o corpo ser lido. Parceria, dono da conversa e
+ *       aba o service confere depois.</li>
  *   <li>O envio das perguntas da pesquisa (PUT): a RBS recebe 403; o patrocinador precisa ser da parceria (404 se não for)
  *       e ter a aba PESQUISA liberada (403), e só depois o corpo é lido e validado.</li>
  * </ul>
@@ -52,11 +53,24 @@ public class PermissaoAntesDoCorpo implements HandlerInterceptor, WebMvcConfigur
             "GET /api/relatorios.csv",
             "POST /api/parcerias/{id}/relatorios",
             "PATCH /api/relatorios/{id}/status",
-            "POST /api/parcerias/{id}/aplicacoes/{aproveitamentoId}/comprovacoes");
+            "POST /api/parcerias/{id}/aplicacoes/{aproveitamentoId}/comprovacoes",
+            // O diagnóstico do Atlas (rotas 50 a 53): os turnos de todas as conversas e os provedores. Sempre mapeadas; com o
+            // diagnóstico desligado a RBS recebe 404 do service.
+            "GET /api/atlas/diagnostico/turnos",
+            "GET /api/atlas/diagnostico/turnos/{turno}",
+            "GET /api/atlas/provedores",
+            "POST /api/atlas/provedores/{nome}/teste",
+            // As rotas de debug da chave do modelo (temporárias, só no perfil dev): só a RBS as usa. Só existem com
+            // atlas.debug.chaves=true; o teste de classificação liga a propriedade, porque no perfil test elas não existem.
+            "GET /api/debug/llm",
+            "PUT /api/debug/llm",
+            "DELETE /api/debug/llm",
+            "POST /api/debug/llm/teste");
 
     /**
      * As rotas que só o Admin Patrocinador usa e que a RBS não usa por ele: a conversa com o Atlas e o cartão de perguntas (rotas 42
-     * a 46 do docs/api.md). A RBS só lê o relatório que o Atlas montou (rotas 47 e 48, que não estão aqui). Rota nova só da marca:
+     * a 46 do docs/api.md) e o diagnóstico da conversa, do dono dela (rota 49). A RBS só lê o relatório que o Atlas montou (rotas 47
+     * e 48, que não estão aqui) e o diagnóstico de todas as conversas (rotas 50 a 53, na lista da RBS). Rota nova só da marca:
      * acrescente aqui.
      */
     public static final Set<String> ROTAS_SO_DO_PATROCINADOR = Set.of(
@@ -64,7 +78,8 @@ public class PermissaoAntesDoCorpo implements HandlerInterceptor, WebMvcConfigur
             "GET /api/parcerias/{id}/atlas/conversas",
             "POST /api/atlas/conversas/{id}/mensagens",
             "GET /api/atlas/conversas/{id}",
-            "POST /api/atlas/solicitacoes/{id}/respostas");
+            "POST /api/atlas/solicitacoes/{id}/respostas",
+            "GET /api/atlas/conversas/{id}/diagnostico");
 
     /** PUT /api/parcerias/{id}/pesquisa/perguntas: do Admin Patrocinador da parceria, com a aba liberada. */
     static final String ENVIO_DAS_PERGUNTAS = "PUT /api/parcerias/{id}/pesquisa/perguntas";
