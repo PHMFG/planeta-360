@@ -163,7 +163,7 @@ Nesta versão o Atlas é só o chat: a marca pergunta sobre os números da próp
 
 Sem estas variáveis, o portal e os testes funcionam normalmente, mas o Atlas não responde. Com elas, a marca conversa com o Atlas pelo chat. A resposta aparece enquanto o modelo escreve, com a etapa do momento ("Consultando os números da parceria…"). Antes dela, uma caixa conta o tempo em que o modelo pensa e mostra um resumo curto do raciocínio, que fica aberto enquanto ele pensa e depois recolhe; dá para abrir de novo, inclusive nas conversas antigas. O raciocínio completo não sai do servidor: ele volta só ao modelo. O resumo é escrito no servidor, numa chamada curta à parte, e passa pela mesma checagem do texto do Atlas (sem números nem nomes internos); recusado, a caixa mostra só o tempo.
 
-**Pela tela, sem reiniciar (temporário, só no perfil `dev`).** O selo amarelo "Debug", no topo da tela, abre um formulário para colar a chave do provedor (e, se quiser, outro endereço ou modelo), ligar ou desligar o raciocínio do modelo, testar a conexão e remover a chave. A bolinha do selo fica verde com o modelo ligado. A chave fica só na memória da API e some quando ela reinicia; nunca volta inteira para a tela. Fora do perfil `dev` as rotas de debug não existem e o selo não aparece.
+**Pela tela, sem reiniciar (temporário, só no perfil `dev` e só para a RBS).** O selo amarelo "Debug", no topo da tela da RBS, abre um formulário para colar a chave do provedor (e, se quiser, outro endereço ou modelo), ligar ou desligar o raciocínio do modelo, testar a conexão e remover a chave. A bolinha do selo fica verde com o modelo ligado. A chave fica só na memória da API e some quando ela reinicia; nunca volta inteira para a tela. Fora do perfil `dev` as rotas de debug não existem e o selo não aparece.
 
 **Pelas variáveis de ambiente:**
 
@@ -187,6 +187,9 @@ No Windows (PowerShell): `$env:ATLAS_LLM="openai"; $env:OPENCODE_API_KEY="sua-ch
 | `ATLAS_TETO_DIARIO` | `200` | Mensagens do Atlas por parceria por dia; depois disso, o chat responde 429 |
 | `ATLAS_RELATORIO` | `false` | Liga o relatório montado pelo Atlas (botão, cartão e documento). Desligado nesta versão: o código continua no projeto |
 | `ATLAS_DEBUG_FERRAMENTAS` | `false` (`true` no perfil `dev`) | Mostra na conversa as ferramentas que o modelo usou, com argumentos e resultado. Temporário |
+| `ATLAS_DIAGNOSTICO` | `false` (`true` no perfil `dev`) | O diagnóstico: cada turno do Atlas deixa um traço (etapas, tempos, tokens, custo) que a RBS lê pelas rotas 50 a 53. Desligado, nada é gravado e as rotas respondem 404. Veja `docs/api.md`, "Diagnóstico do Atlas" |
+| `ATLAS_DIAGNOSTICO_MARCA` | `false` (`true` no perfil `dev`) | A marca vê o diagnóstico das próprias conversas (rota 49). Só vale com o diagnóstico ligado |
+| `ATLAS_JEV`, `TYPESAFE_API_KEY`, `GEMINI_API_KEY` | `none`, —, — | O JEV (modo e chave) e o Gemini (chave): por enquanto só a rota 52 mostra o estado deles e a 53 testa a conexão |
 
 O Atlas nunca escreve um número: os números do chat vêm da base do portal ou do que a marca informou, sempre com a origem. Use só dados fictícios enquanto o provedor estiver em teste.
 

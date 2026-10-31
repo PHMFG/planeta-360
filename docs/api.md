@@ -1762,7 +1762,7 @@ Cada turno do Atlas (uma mensagem de texto da pessoa ou a resposta do cartão, a
 | --- | --- | --- | --- |
 | `atlas.diagnostico.ligado` | `ATLAS_DIAGNOSTICO` | `false`; `true` no perfil `dev`; `false` no `test` (ligado por classe de teste) | Desligado, **nada é gravado** em `atlas_traco` e as rotas 49 a 53 respondem **404**, como uma rota que não existe (a ordem das conferências continua a de sempre: a rota da RBS dá 403 ao patrocinador antes). |
 | `atlas.diagnostico.marca` | `ATLAS_DIAGNOSTICO_MARCA` | `false`; `true` no perfil `dev`; `false` no `test` | A marca vê o diagnóstico **das próprias conversas**: a rota 49 responde, `diagnosticoDisponivel` sai `true` e os itens do assistente trazem o `turno`. Só vale com o diagnóstico ligado. Desligada, a rota 49 responde 404 também ao dono da conversa. |
-| `atlas.diagnostico.preco-por-milhao.entrada` e `.saida` | `ATLAS_PRECO_ENTRADA`, `ATLAS_PRECO_SAIDA` | `0` | Preço em dólares por milhão de tokens, **só** para a resposta que não traz o custo. Veja "Custo". |
+| `atlas.diagnostico.preco-por-milhao.entrada` e `.saida` | `ATLAS_PRECO_ENTRADA`, `ATLAS_PRECO_SAIDA` | `0.30` e `1.20` | Preço em dólares por milhão de tokens, **só** para a resposta que não traz o custo. Veja "Custo". |
 
 ## O traço de um turno
 
@@ -1786,7 +1786,7 @@ As etapas `J1_INTENCAO`, `J1_CARTAO`, `BUSCA`, `R3_FONTES`, `R5_RESPOSTA`, `V2_C
 
 ## Custo
 
-O custo de uma ida (e de um resumo) é o `usage.opencode.list_cost` que o OpenCode Go devolve em cada resposta, em dólares, a preço de lista: vai em `dados.custoUsd` da etapa, com `custoOrigem` `RESPOSTA`, e o diagnóstico o soma por turno e por conversa. O preço do DeepSeek V4.1 Flash por milhão de tokens não consta nas referências do projeto (o plano do Go é por limite de uso, não por token), por isso **não há preço fixo no código**: se uma resposta vier sem o `list_cost`, vale o preço por milhão de tokens de `atlas.diagnostico.preco-por-milhao` (entrada e saída), com `custoOrigem` `PRECO_CONFIGURADO`; com os dois em `0` (o padrão), a ida fica sem `custoUsd`. É uma **estimativa**: serve para somar o gasto de uma rodada de testes, não para cobrar.
+O custo de uma ida (e de um resumo) é o `usage.opencode.list_cost` que o OpenCode Go devolve em cada resposta, em dólares, a preço de lista: vai em `dados.custoUsd` da etapa, com `custoOrigem` `RESPOSTA`, e o diagnóstico o soma por turno e por conversa. O Go é uma assinatura com limite de uso, não cobra por token, e o preço dele não consta nas referências do projeto; por isso o valor que vale é o `list_cost` da própria resposta, e **não há preço fixo no código**. Se uma resposta vier sem o `list_cost`, vale o preço por milhão de tokens de `atlas.diagnostico.preco-por-milhao` (entrada e saída; os padrões, 0,30 e 1,20, são o preço de lista do mesmo modelo no OpenCode Zen, do quadro do Atlas), com `custoOrigem` `PRECO_CONFIGURADO`; com os dois em `0`, a ida fica sem `custoUsd`. É uma **estimativa**: serve para somar o gasto de uma rodada de testes, não para cobrar. O formato `usage.opencode.list_cost` foi tomado do que o provedor informou e ainda não foi conferido contra uma chamada real: um formato diferente cai no preço configurado.
 
 ## 49. `GET /api/atlas/conversas/{id}/diagnostico`  · Atlas M2
 

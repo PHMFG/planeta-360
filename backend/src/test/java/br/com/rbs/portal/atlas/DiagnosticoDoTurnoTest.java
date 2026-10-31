@@ -114,6 +114,44 @@ class DiagnosticoDoTurnoTest {
     // ---------------------------------------------------------------------
 
     @Test
+    void nadaVaiAoBancoNemFicaTransacaoAbertaDuranteAChamadaAoProvedor() {
+        long conversa = abrir();
+        List<Long> linhasDuranteAIda = new ArrayList<>();
+        // o traço só vai ao banco no fim do turno: durante cada ida ao modelo, o banco ainda não tem uma etapa sequer
+        modelo.passo(pedido -> {
+            linhasDuranteAIda.add(jdbc.sql("SELECT count(*) FROM atlas_traco WHERE conversa_id = :c").param("c", conversa)
+                    .query(Long.class).single());
+            return new br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.RespostaDoLlm(null,
+                    List.of(pedido(LoopDoAgenteTest.CONSULTAR, "{}")), null);
+        });
+        modelo.passo(pedido -> {
+            linhasDuranteAIda.add(jdbc.sql("SELECT count(*) FROM atlas_traco WHERE conversa_id = :c").param("c", conversa)
+                    .query(Long.class).single());
+            return new br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.RespostaDoLlm("Os dados estão no portal.", List.of(), null);
+        });
+
+        falar(conversa, "Como estou?");
+
+        assertThat(linhasDuranteAIda).containsExactly(0L, 0L);
+        assertThat(modelo.transacaoAtivaEmCadaPedido()).as("transação aberta em cada ida ao modelo").containsOnly(false);
+        assertThat(tracoDoTurno(jdbc, conversa)).hasSize(6);   // e no fim do turno, de uma vez, ele está lá
+    }
+
+    @Test
+    void semListCostOCustoVemDoPrecoConfiguradoPorMilhaoDeTokens() {
+        long conversa = abrir();
+        modelo.textoComUso("Posso ajudar.", 1000, 500, null);
+
+        falar(conversa, "Oi");
+
+        // 1.000 x 0,30 + 500 x 1,20 = 900 por milhão de tokens = US$ 0,0009 (os padrões do application.yml)
+        Linha ida = primeira(tracoDoTurno(jdbc, conversa), "LLM_IDA");
+        assertThat(ida.dados()).containsEntry("tokensEntrada", 1000).containsEntry("tokensSaida", 500)
+                .containsEntry("custoOrigem", "PRECO_CONFIGURADO").containsEntry("modelo", "modelo-do-roteiro");
+        assertThat(new java.math.BigDecimal(String.valueOf(ida.dados().get("custoUsd")))).isEqualByComparingTo("0.0009");
+    }
+
+    @Test
     void turnoSoDeTextoTemLimitesIdaChecagemESaida() {
         long conversa = abrir();
         long usadasAntes = usadasHoje();

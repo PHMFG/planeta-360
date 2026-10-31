@@ -88,13 +88,16 @@ atlas:
     # A marca vê o diagnóstico das próprias conversas (rota 49, o campo diagnosticoDisponivel e o turno dos itens). Só vale com o
     # diagnóstico ligado. A RBS vê o de todas as conversas (rotas 50 a 53) quando o diagnóstico está ligado.
     marca: ${ATLAS_DIAGNOSTICO_MARCA:false}
-    # O custo do turno, em dólares. O preço do DeepSeek V4.1 Flash por milhão de tokens NÃO consta em docs/atlas/referencias/, e o plano
-    # do OpenCode Go é por limite de uso (US$ 80 por mês), não por token. Por isso o custo vem de usage.opencode.list_cost, que o
-    # Go devolve em cada resposta (somado pelo diagnóstico e gravado em dados.custoUsd da etapa LLM_IDA). Estes dois preços (US$ por
-    # milhão de tokens) só valem quando uma resposta NÃO traz o list_cost; 0 = sem estimativa (o custo fica de fora).
+    # O custo do turno, em dólares. O OpenCode Go é uma assinatura com limite de uso (US$ 80 por mês), não cobra por token, e o preço do
+    # DeepSeek V4.1 Flash no Go não consta em docs/atlas/referencias/. Por isso o custo vem de usage.opencode.list_cost, que o Go devolve
+    # em cada resposta (somado pelo diagnóstico e gravado em dados.custoUsd da etapa LLM_IDA, com custoOrigem RESPOSTA). Estes dois preços
+    # (US$ por milhão de tokens) só valem quando uma resposta NÃO traz o list_cost, com custoOrigem PRECO_CONFIGURADO. Os valores vêm do
+    # quadro do Atlas (docs/atlas/referencias/quadro-fluxo-ia-atlas.txt, tabela "Provedores"): preço de lista do mesmo modelo no OpenCode
+    # Zen, 0,30 de entrada e 1,20 de saída por milhão (o preço de cache, 0,006, não entra: a API não separa os tokens em cache).
+    # 0 nos dois = sem estimativa (o custo fica de fora).
     preco-por-milhao:
-      entrada: ${ATLAS_PRECO_ENTRADA:0}
-      saida: ${ATLAS_PRECO_SAIDA:0}
+      entrada: ${ATLAS_PRECO_ENTRADA:0.30}
+      saida: ${ATLAS_PRECO_SAIDA:1.20}
   # [ATLAS] O JEV (TypeSafe) e os embeddings (Gemini). Por enquanto só o diagnóstico os usa (rotas 52 e 53 mostram o estado e testam a
   # conexão); os clientes de verdade entram no M7 (JEV) e no M3 (Gemini). As chaves vêm de variável de ambiente ou, no perfil dev, de
   # config/segredos.local.properties; nunca deste arquivo. As URLs base são configuráveis para os testes usarem um servidor falso.

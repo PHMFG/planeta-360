@@ -35,9 +35,10 @@ import org.springframework.transaction.support.TransactionTemplate;
  * Com {@code atlas.diagnostico.ligado=false} (o padrão) entrega sempre o {@link Traco#NENHUM}.
  * <p>
  * <b>Custo.</b> O custo de uma ida é o {@code usage.opencode.list_cost} que o OpenCode Go devolve em cada resposta (somado pelo
- * diagnóstico). O preço do DeepSeek V4.1 Flash por milhão de tokens não consta em {@code docs/atlas/referencias/}, e o plano do Go
- * é por limite de uso (US$ 80 por mês), não por token; por isso os dois preços de {@code application.yml}
- * ({@code atlas.diagnostico.preco-por-milhao}) vêm zerados e só entram quando uma resposta não traz o {@code list_cost}.
+ * diagnóstico). O Go é uma assinatura por limite de uso (US$ 80 por mês), não cobra por token, e o preço dele não consta em
+ * {@code docs/atlas/referencias/}; por isso os dois preços de {@code application.yml} ({@code atlas.diagnostico.preco-por-milhao},
+ * os de lista do mesmo modelo no OpenCode Zen, que o quadro do Atlas registra) só entram quando uma resposta não traz o
+ * {@code list_cost}.
  */
 @Component
 public class RegistroDoTraco {
