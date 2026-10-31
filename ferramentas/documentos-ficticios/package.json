@@ -1,0 +1,17 @@
+{
+  "name": "documentos-ficticios",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Gera os PDFs do kit de documentos fictícios do Atlas a partir de fonte/*.html e confere o gabarito",
+  "scripts": {
+    "gerar": "node gerar.mjs",
+    "conferir": "node conferir.mjs"
+  },
+  "dependencies": {
+    "playwright": "1.64.1"
+  },
+  "devDependencies": {
+    "pdfjs-dist": "5.4.296"
+  }
+}
