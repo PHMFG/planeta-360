@@ -242,7 +242,7 @@ backend/    API Spring Boot (pacotes comum, acesso, parceria, materiais, pesquis
             src/main/resources/db/dev        amostra de demonstração
             src/main/resources/atlas         modelo do relatório do Atlas e o prompt
 frontend/   React + Vite (api, atlas, componentes, estilos, paginas/acesso, paginas/parceria, paginas/rbs, sessao, util)
-scripts/    preparar-banco-atlas.sh (pgvector e papel atlas_ro) e fumaca-provedores.sh
+scripts/    preparar-banco-atlas.sh (pgvector e papel atlas_ro), fumaca-provedores.sh e atlas-dev.sh (API em segundo plano)
 docs/       banco.md, api.md, exemplos de CSV e a modelagem da Sprint 1
 ```
 

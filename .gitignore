@@ -28,6 +28,9 @@ armazenamento/
 # Chaves dos provedores do Atlas (o exemplo sem valores fica no repositório)
 backend/config/segredos.local.properties
 
+# Processo, .jar e log do scripts/atlas-dev.sh
+.atlas-dev/
+
 # Saídas do Playwright
 frontend/e2e/capturas/
 frontend/test-results/
