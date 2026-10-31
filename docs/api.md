@@ -71,7 +71,7 @@ Todo erro, sem exceção, vem como `application/problem+json` no formato `Proble
 | 500 | Erro interno | Falha inesperada. O `detail` é sempre genérico. |
 | 503 | Serviço indisponível | Uma parte de que a rota depende está fora do ar. Hoje só a rota 44: mensagem de texto no Atlas sem o modelo de linguagem. O `detail` diz o que fazer no lugar. |
 
-**Ordem das conferências.** Quando uma chamada tem mais de um problema, a API responde, em geral, pelo primeiro destes: 401 (sem sessão, ou conta que perdeu o acesso) → 403 por perfil (rota só da RBS) → 404 (não existe ou não é do usuário) → 403 por aba não liberada → 400 e 422 (formato do corpo, das partes ou dos filtros) → 409 (o estado atual não permite). A validação do corpo vem depois da permissão: quem não pode usar a rota nunca recebe um erro de campo. Regras de campo que dependem do estado atual (por exemplo, a observação obrigatória da rota 19) vêm depois do 409; cada rota diz.
+**Ordem das conferências.** Quando uma chamada tem mais de um problema, a API responde, em geral, pelo primeiro destes: 401 (sem sessão, ou conta que perdeu o acesso) → 403 por perfil (rota só da RBS) → 404 (não existe ou não é do usuário) → 403 por aba não liberada → 400 e 422 (formato do corpo, das partes ou dos filtros) → 409 (o estado atual não permite). A validação do corpo vem depois da permissão: quem não pode usar a rota nunca recebe um erro de campo. O `HEAD` de uma rota `GET` segue as mesmas conferências, na mesma ordem (a resposta não traz corpo): a marca que faz `HEAD /api/historico?tamanho=999` recebe 403, como no `GET`, e não 422. Regras de campo que dependem do estado atual (por exemplo, a observação obrigatória da rota 19) vêm depois do 409; cada rota diz.
 
 ## Sessão e CSRF
 

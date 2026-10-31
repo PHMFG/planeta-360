@@ -135,6 +135,34 @@ class PermissaoAntesDoCorpoTest {
         }
     }
 
+    @Test
+    void headContaComoGetEPatrocinadorRecebe403NasRotasDaRbsMesmoComFiltroInvalido() {
+        SessaoDeApi amarelo = SessaoDeApi.entrar(mvc, AMARELO);
+
+        for (String uri : List.of("/api/atlas/diagnostico/turnos?tamanho=999", "/api/atlas/diagnostico/turnos?de=ontem",
+                "/api/historico?tamanho=999", "/api/historico?pagina=-1", "/api/historico.csv?q=" + "x".repeat(200),
+                "/api/entregas?tamanho=999", "/api/cargas?pagina=-1", "/api/relatorios?status=INVENTADO", "/api/atlas/provedores")) {
+            assertThat(amarelo.head(uri)).as("HEAD " + uri).hasStatus(HttpStatus.FORBIDDEN);
+            assertThat(amarelo.get(uri)).as("GET " + uri).hasStatus(HttpStatus.FORBIDDEN);
+        }
+    }
+
+    @Test
+    void headDaRbsContinuaComAValidacaoDoGet() {
+        SessaoDeApi rbs = SessaoDeApi.entrar(mvc, RBS);
+
+        assertThat(rbs.head("/api/historico?tamanho=999")).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(rbs.head("/api/historico")).hasStatus(HttpStatus.OK);
+    }
+
+    @Test
+    void rbsRecebe403NoHeadDoDiagnosticoDaConversa() {
+        SessaoDeApi rbs = SessaoDeApi.entrar(mvc, RBS);
+
+        assertThat(rbs.head("/api/atlas/conversas/1/diagnostico")).hasStatus(HttpStatus.FORBIDDEN);
+        assertThat(rbs.head("/api/parcerias/1/atlas/conversas")).hasStatus(HttpStatus.FORBIDDEN);
+    }
+
     // ---------------------------------------------------------------------
     // PUT das perguntas: perfil, parceria e aba liberada antes da validação
     // ---------------------------------------------------------------------

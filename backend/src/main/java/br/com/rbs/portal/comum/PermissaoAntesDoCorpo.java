@@ -26,7 +26,8 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
  *   <li>O envio das perguntas da pesquisa (PUT): a RBS recebe 403; o patrocinador precisa ser da parceria (404 se não for)
  *       e ter a aba PESQUISA liberada (403), e só depois o corpo é lido e validado.</li>
  * </ul>
- * A lista usa o método e o padrão exatamente como estão nos controllers. O PermissaoAntesDoCorpoTest confere que toda rota
+ * A lista usa o método e o padrão exatamente como estão nos controllers; o HEAD vale como GET (senão ele contornaria a conferência
+ * e a validação dos parâmetros viria antes do 403). O PermissaoAntesDoCorpoTest confere que toda rota
  * da API está em uma das listas (estas duas ou a de rotas de ambos os perfis, no teste), então rota nova não passa sem decisão.
  */
 @Component
@@ -108,7 +109,9 @@ public class PermissaoAntesDoCorpo implements HandlerInterceptor, WebMvcConfigur
         if (padrao == null) {
             return true;
         }
-        String rota = requisicao.getMethod() + " " + padrao;
+        // HEAD é o GET sem corpo na resposta: o Spring o atende pelo mesmo método do controller, então a regra é a mesma.
+        String metodo = "HEAD".equals(requisicao.getMethod()) ? "GET" : requisicao.getMethod();
+        String rota = metodo + " " + padrao;
 
         if (ROTAS_SO_DA_RBS.contains(rota)) {
             verificador.exigirRbs(usuario);

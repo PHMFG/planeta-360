@@ -59,6 +59,15 @@ public final class SessaoDeApi {
         return pedido.exchange();
     }
 
+    /** Um HEAD: a mesma rota do GET, sem corpo na resposta. */
+    public MvcTestResult head(String uri) {
+        var pedido = mvc.method(HttpMethod.HEAD).uri(uri).session(sessao);
+        if (agente != null) {
+            pedido = pedido.header("User-Agent", agente);
+        }
+        return pedido.exchange();
+    }
+
     public MvcTestResult post(String uri, String json) {
         return enviar(HttpMethod.POST, uri, json, true);
     }
