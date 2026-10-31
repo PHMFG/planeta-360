@@ -109,6 +109,7 @@ export const GESTAO_RBS: AtalhoRbs[] = [
   { nome: 'Cargas', caminho: '/rbs/cargas', icone: 'ri-upload-cloud-2-line' },
   { nome: 'Relatórios', caminho: '/rbs/relatorios', icone: 'ri-file-chart-line' },
   { nome: 'Histórico', caminho: '/rbs/historico', icone: 'ri-history-line' },
+  { nome: 'Atlas', caminho: '/rbs/atlas', icone: 'ri-pulse-line' },
 ]
 
 export function secaoPorCaminho(caminho: string): Secao {

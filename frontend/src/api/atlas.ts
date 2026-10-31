@@ -19,7 +19,8 @@ export type FerramentaUsada = {
   duracaoMs: number | null
 }
 
-export type ItemDaConversa =
+/** {@code turno}: o turno do diagnóstico que escreveu o item. Só vem com o diagnóstico ligado para quem está na tela. */
+export type ItemDaConversa = { turno?: string } & (
   | { tipo: 'usuario'; texto: string }
   /** O resumo do raciocínio do modelo, escrito no servidor e conferido como o texto. O raciocínio cru não sai do servidor. */
   | { tipo: 'raciocinio'; resumo: string }
@@ -30,6 +31,7 @@ export type ItemDaConversa =
   | { tipo: 'relatorio_pronto'; relatorioId: number; titulo: string }
   /** Só com o debug das ferramentas ligado no servidor. */
   | ({ tipo: 'ferramenta' } & FerramentaUsada)
+)
 
 /** A conversa inteira (rota 45) ou só o que um turno produziu (rotas 42, 44 e 46). */
 export type Conversa = {
@@ -40,6 +42,8 @@ export type Conversa = {
   relatorioDisponivel: boolean
   /** Verdadeiro com atlas.debug.ferramentas ligado no servidor: a tela mostra as ferramentas que o modelo usou. */
   debugDeFerramentas: boolean
+  /** Verdadeiro quando esta pessoa pode abrir o diagnóstico de cada resposta (rota 49). */
+  diagnosticoDisponivel?: boolean
   itens: ItemDaConversa[]
 }
 

@@ -52,7 +52,7 @@ export function BotaoDebug() {
 
   useEffect(() => {
     let ativo = true
-    // Fora do perfil dev a rota não existe (404) e o botão some; qualquer outra falha também o esconde.
+    // Fora do perfil dev a rota não existe (404), a marca não a usa (403) e o botão some; qualquer outra falha também o esconde.
     obterEstadoDoLlm()
       .then((lido) => {
         if (!ativo) return

@@ -13,6 +13,7 @@ import type { RespostaAoVivo } from './AoVivo'
 import { CartaoDocumento } from './CartaoDocumento'
 import { CartaoSolicitacao } from './CartaoSolicitacao'
 import { Compositor } from './Compositor'
+import { BotaoDiagnostico } from './Diagnostico'
 import { AvisoAtlas, BlocoDoAtlas, BlocoDoSistema, Chip, LinhaBuscando, MensagemVoce, TextoDoAtlas, TextoDoSistema } from './Elementos'
 import { FerramentaDebug, SemFerramentaDebug } from './FerramentaDebug'
 import { Raciocinio } from './Raciocinio'
@@ -62,6 +63,8 @@ type Props = {
   relatorioDisponivel: boolean
   /** Com o debug ligado no servidor, a resposta sem ferramenta também diz isso. */
   debugDeFerramentas: boolean
+  /** A conversa, quando esta pessoa pode abrir o diagnóstico de cada resposta. */
+  conversaDoDiagnostico: number | null
   texto: string
   aoMudarTexto: (texto: string) => void
   aoEnviar: () => void
@@ -81,6 +84,7 @@ export function AreaDaConversa({
   llm,
   relatorioDisponivel,
   debugDeFerramentas,
+  conversaDoDiagnostico,
   texto,
   aoMudarTexto,
   aoEnviar,
@@ -132,6 +136,12 @@ export function AreaDaConversa({
     }
   }
 
+  /** O botão do diagnóstico da resposta. Um grupo pode ter mais de um turno (a resposta de um cartão): vale o último. */
+  function diagnosticoDe(grupo: ItemDaResposta[]) {
+    const turno = grupo.map((item) => ('turno' in item ? item.turno : undefined)).filter(Boolean).at(-1)
+    return conversaDoDiagnostico !== null && turno ? <BotaoDiagnostico conversaId={conversaDoDiagnostico} turno={turno} /> : null
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div ref={rolagem} onScroll={aoRolar} className={`min-h-0 flex-1 overflow-y-auto ${compacta ? '-mx-2 px-2' : 'px-4 pt-6 sm:px-8'}`}>
@@ -145,9 +155,13 @@ export function AreaDaConversa({
                 <BlocoDoAtlas key={indice} compacto={compacta}>
                   {grupo.itens.map(conteudo)}
                   {debugDeFerramentas && !grupo.itens.some((item) => item.tipo === 'ferramenta') && <SemFerramentaDebug />}
+                  {diagnosticoDe(grupo.itens)}
                 </BlocoDoAtlas>
               ) : (
-                <BlocoDoSistema key={indice}>{grupo.itens.map(conteudo)}</BlocoDoSistema>
+                <BlocoDoSistema key={indice}>
+                  {grupo.itens.map(conteudo)}
+                  {diagnosticoDe(grupo.itens)}
+                </BlocoDoSistema>
               ),
             )}
           </div>

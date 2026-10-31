@@ -314,6 +314,7 @@ export function PaginaAtlas() {
     llm,
     relatorioDisponivel,
     debugDeFerramentas: conversa?.debugDeFerramentas ?? false,
+    conversaDoDiagnostico: conversa?.diagnosticoDisponivel ? conversa.conversaId : null,
     texto,
     aoMudarTexto: setTexto,
     aoEnviar: () => perguntar(texto),
