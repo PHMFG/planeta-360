@@ -2,7 +2,7 @@
 
 Este documento explica o banco da Entrega 2. É para quem vai ler, testar ou mexer nele.
 O banco é o PostgreSQL (rodamos na versão 18; a mínima é a 15). As tabelas são criadas pelo Flyway.
-Os números: **43 tabelas de negócio (mais a `flyway_schema_history`, do Flyway), 8 visões, 6 funções e 17 gatilhos de regra**. As funções são as 4 de carga e de relatório (`fn_carregar_veiculacoes`, `fn_carregar_pesquisa`, `fn_carregar_plano`, da V7, e `fn_gerar_relatorio`) mais as 2 que formatam números (`fn_numero_br` e `fn_pct_truncado`, da V4; a `fn_pct_arredondado` da V4 saiu na V6). Não contam aqui as funções `tg_*`, uma por gatilho.
+Os números: **44 tabelas de negócio (mais a `flyway_schema_history`, do Flyway), 8 visões, 6 funções e 17 gatilhos de regra**. As funções são as 4 de carga e de relatório (`fn_carregar_veiculacoes`, `fn_carregar_pesquisa`, `fn_carregar_plano`, da V7, e `fn_gerar_relatorio`) mais as 2 que formatam números (`fn_numero_br` e `fn_pct_truncado`, da V4; a `fn_pct_arredondado` da V4 saiu na V6). Não contam aqui as funções `tg_*`, uma por gatilho.
 
 ## Onde está cada coisa
 
@@ -17,6 +17,7 @@ Os números: **43 tabelas de negócio (mais a `flyway_schema_history`, do Flyway
 | `backend/src/main/resources/db/migration/V7__plano_comprovacoes_dados_informados.sql` | A carga do plano comercial por CSV (`stg_plano` e `fn_carregar_plano`), o catálogo de campos e os dados informados pela marca, com a visão do valor vigente e o gatilho que os torna imutáveis (veja "O que a V7 mudou") | Todos os ambientes |
 | `backend/src/main/resources/db/migration/V8__atlas.sql` | As 7 tabelas do Atlas (conversa, mensagem, relatório, cartão de perguntas, cálculo, trilha das ferramentas e decisão do JEV) e o gatilho que congela o relatório pronto (veja "O que a V8 mudou") | Todos os ambientes |
 | `backend/src/main/resources/db/migration/V9__resumo_do_raciocinio.sql` | A coluna `atlas_mensagem.resumo_do_raciocinio`: o resumo do raciocínio do modelo, gerado no servidor, que é o que a conversa mostra no lugar do raciocínio cru (veja "O que a V9 mudou") | Todos os ambientes |
+| `backend/src/main/resources/db/migration/V10__atlas_traco.sql` | A tabela `atlas_traco`: o traço de cada turno do Atlas (uma linha por etapa, com tempo, resultado e detalhe já sanitizado), que alimenta o diagnóstico (veja "O que a V10 mudou") | Todos os ambientes |
 | `backend/src/main/resources/db/dev/R__amostra.sql` | A amostra: Amarelo, Roxo e Verde, usuários, planos, entregas com arquivos, cargas, relatórios | Só dev e test |
 | `backend/src/main/resources/dev/exemplos/` | Arquivos de exemplo (png, jpg, mp4, mp3, docx, xlsx, pptx, zip) que a API copia para o armazenamento no perfil dev | Só dev |
 | `backend/src/test/resources/db/verificacao.sql` | As conferências (contagens, órfãos, uma tentativa de violar cada regra) | Quando se quiser conferir |
@@ -134,6 +135,22 @@ A V9 muda o que a conversa do Atlas mostra do raciocínio do modelo: o `reasonin
 | Regra | `ck_atlas_mensagem_resumo`: só a mensagem do assistente tem resumo, e o texto, quando existe, não é vazio |
 | O raciocínio cru | Não muda: `reasoning_content` continua gravado como estava e volta ao modelo nas idas seguintes (o DeepSeek o exige com ferramentas). O resumo é só para a tela: **nunca vai ao modelo** (`paraOProvedor` não o lê), não é uma mensagem do histórico e não conta no teto diário, que continua contando as mensagens do assistente |
 
+## O que a V10 mudou
+
+A V10 abre o diagnóstico do Atlas (marco M2 do plano): cada turno deixa um traço que a RBS, a equipe e os subagentes leem para saber por que uma resposta saiu como saiu. Só acrescenta uma tabela: nenhuma tabela, visão, função ou gatilho que já existia muda, e a amostra fica como está (sem traço nenhum).
+
+| Assunto | O que a V10 faz |
+| --- | --- |
+| Traço | `atlas_traco`: uma linha por etapa de um turno. `turno` (UUID) agrupa as etapas do mesmo turno; `ordem` é a posição dela nele (única no turno, `uq_atlas_traco_ordem`); `mensagem_id` é a mensagem do assistente que a etapa produziu ou pediu (nulo nas etapas sem uma, como a dos limites); `iniciada_em` e `duracao_ms` dizem quando começou e quanto levou; `dados` (JSONB, sempre um objeto) é o detalhe da etapa |
+| Etapas | `ck_atlas_traco_etapa` já traz a lista completa dos marcos seguintes, para não precisar de outra migração: `G1_LIMITES`, `J1_INTENCAO`, `J1_CARTAO`, `LLM_IDA`, `FERRAMENTA`, `BUSCA`, `R3_FONTES`, `CHECAGEM`, `R5_RESPOSTA`, `V2_COERENCIA`, `LACUNAS`, `RESUMO`, `SAIDA`, `DISJUNTOR` e `ERRO`. Hoje a API grava `G1_LIMITES`, `LLM_IDA`, `FERRAMENTA`, `CHECAGEM`, `RESUMO`, `SAIDA` e `ERRO` |
+| Resultado | `ck_atlas_traco_resultado`: `OK`, `RECUSADO` (uma regra disse não), `ERRO`, `SOMBRA` (o JEV decidiu sem agir) ou `PULADO` (a etapa não rodou, ou o resumo do raciocínio ainda não terminou: nesse caso `dados.pendente` é `true`) |
+| Isolamento | Chave composta `fk_atlas_traco_conversa (conversa_id, parceria_id)` com `atlas_conversa`: o traço só existe para a conversa e a parceria dela |
+| Segurança | `dados` é gravado **já sanitizado** pelo `RegistroDoTraco`, da API: nunca o raciocínio cru do modelo (`reasoning_content`), nunca uma chave de provedor, nunca o prompt de sistema nem as mensagens do histórico (a etapa `LLM_IDA` guarda modelo, tokens, motivo do fim, latência e o número de mensagens), e todo texto cortado em 20.000 caracteres. O banco não confere isso; a suíte sim (`DiagnosticoSemSegredoTest`) |
+| Sem gatilho | Não há gatilho de imutabilidade de propósito: o resumo do raciocínio pode terminar depois do fim do turno, e a linha dele (`RESUMO`) é atualizada por um `UPDATE` curto, sem provedor nenhum no meio |
+| Quem escreve | Só com `atlas.diagnostico.ligado=true` (veja `docs/api.md`, "Diagnóstico do Atlas"); desligado, nada é gravado. A gravação é de uma transação curta no fim do turno (e no `finally`, se der erro): **nenhuma conexão fica presa durante a chamada ao provedor** |
+| Índices | Por conversa e data, por parceria e data, por mensagem e por etapa e data (apoiam as rotas 49 a 52) |
+| Limpeza nos testes | `atlas_traco` (e a `atlas_decisao`, que existe desde a V8) entram nos mapas de limpeza de `LoopSemTransacaoTest` e `ApoioDoFluxo`: as chaves estrangeiras não têm `ON DELETE CASCADE`, e o `DELETE` do `@AfterEach` falharia |
+
 ## Tabelas por área
 
 Negrito marca a coluna acrescentada depois da Sprint 1 numa tabela que já existia nela; as tabelas novas (`cota_tipo_aba`, `codigo_ativacao`, `stg_pesquisa`, `stg_plano`, `campo_catalogo`, `dado_informado` e as do Atlas) não usam negrito. `id` é sempre a chave primária. Colunas com sufixo `_id` apontam para outra tabela.
@@ -223,7 +240,7 @@ Na pesquisa geral o resultado não tem parceria nem pergunta. Na pesquisa da ati
 | `campo_catalogo` | O catálogo fixo do que a marca pode informar. `limite_campo` é o campo cujo valor vigente este não pode passar | chave, aba_id, ordem, rotulo, tipo (`INTEIRO`, `DECIMAL`, `DATA`, `ARQUIVO`), unidade, minimo, maximo, ajuda, limite_campo |
 | `dado_informado` | Cada valor informado, com autor, data e origem. **Só aceita INSERT**; corrigir é gravar de novo | id, parceria_id, campo_chave, valor_numero, valor_data, arquivo_id, origem (`PORTAL` ou `ATLAS`), informado_por, informado_em |
 
-### 9. Atlas (V8 e V9)
+### 9. Atlas (V8 a V10)
 
 | Tabela | Para que serve | Colunas |
 | --- | --- | --- |
@@ -234,6 +251,7 @@ Na pesquisa geral o resultado não tem parceria nem pergunta. Na pesquisa da ati
 | `atlas_calculo` | As fórmulas fixas do modelo, com as variáveis e os valores que entraram | id, relatorio_id, nome, script, variaveis (JSON), resultado, unidade, criado_em |
 | `atlas_tool_call` | Cada ferramenta que rodou, para auditoria | id, mensagem_id, ferramenta, argumentos (JSON), resultado (JSON), erro, duracao_ms |
 | `atlas_decisao` | O que o JEV decidiria, em sombra (P1). Ninguém a escreve ainda | id, mensagem_id, pergunta, escolha, confianca, probabilidades, modelo, decisao_llm, latencia_ms, erro |
+| `atlas_traco` | O traço do diagnóstico: uma linha por etapa de cada turno (V10) | id, parceria_id, conversa_id, turno (UUID), mensagem_id, ordem, etapa, resultado, iniciada_em, duracao_ms, dados (JSON) |
 
 As **7 visões de número** somam sem misturar unidades: `vw_midia_veiculo`, `vw_midia_unidade`, `vw_entregas_resumo`,
 `vw_aplicacoes`, `vw_cortesias`, `vw_indicadores_parceria` (todos os números do relatório) e `vw_faltantes` (o que impede ou enfraquece o relatório), e a 8ª, `vw_dado_vigente`, devolve o valor mais recente de cada campo informado de cada parceria.
@@ -369,6 +387,8 @@ erDiagram
     atlas_relatorio ||--o{ atlas_calculo : "calcula"
     atlas_mensagem ||--o{ atlas_tool_call : "chama"
     atlas_mensagem ||--o{ atlas_decisao : "decide"
+    atlas_conversa ||--o{ atlas_traco : "diagnostico"
+    atlas_mensagem ||--o{ atlas_traco : "etapa"
 ```
 
 ## Formatos dos CSV
@@ -444,6 +464,7 @@ for f in backend/src/main/resources/db/migration/V1__estrutura.sql \
          backend/src/main/resources/db/migration/V7__plano_comprovacoes_dados_informados.sql \
          backend/src/main/resources/db/migration/V8__atlas.sql \
          backend/src/main/resources/db/migration/V9__resumo_do_raciocinio.sql \
+         backend/src/main/resources/db/migration/V10__atlas_traco.sql \
          backend/src/main/resources/db/dev/R__amostra.sql; do
   psql -X -h localhost -U portal -d portal_verificacao -v ON_ERROR_STOP=1 -1 -f "$f"
 done
@@ -451,7 +472,7 @@ psql -X -P pager=off -h localhost -U portal -d portal_verificacao -v ON_ERROR_ST
 psql -X -h localhost -U portal -d postgres -c "DROP DATABASE portal_verificacao"
 ```
 
-O `verificacao.sql` imprime uma tabela com cada conferência e termina com erro se alguma falhar. Hoje são **243 conferências, todas ok**. As 164 de antes seguem iguais (as contagens de estrutura passaram a 43 tabelas, 8 visões, 4 funções de carga e relatório e 17 gatilhos). As 44 seguintes são da V7: o catálogo, a carga do plano (15 linhas numa parceria criada só para a conferência, com cada motivo de rejeição, o reenvio e o `btrim`), o `CHECK` de um valor só, a chave composta do anexo, a imutabilidade, o valor vigente depois de uma correção e 5 verificações de órfãos. As 32 da V8: as 7 tabelas do Atlas, as chaves compostas por parceria, a conversa no formato de chat (papel, ordem, um relatório em montagem e um cartão aberto por vez, nome de cálculo único), o relatório que congela (cada coluna protegida, o descartado, o apagar, e o que ainda pode mudar) e 6 verificações de órfãos. As 3 da V9: o resumo do raciocínio numa mensagem que não é do assistente, o resumo em branco e o resumo numa mensagem do assistente.
+O `verificacao.sql` imprime uma tabela com cada conferência e termina com erro se alguma falhar. Hoje são **253 conferências, todas ok**. As 164 de antes seguem iguais (as contagens de estrutura passaram a 44 tabelas, 8 visões, 4 funções de carga e relatório e 17 gatilhos). As 44 seguintes são da V7: o catálogo, a carga do plano (15 linhas numa parceria criada só para a conferência, com cada motivo de rejeição, o reenvio e o `btrim`), o `CHECK` de um valor só, a chave composta do anexo, a imutabilidade, o valor vigente depois de uma correção e 5 verificações de órfãos. As 32 da V8: as 7 tabelas do Atlas, as chaves compostas por parceria, a conversa no formato de chat (papel, ordem, um relatório em montagem e um cartão aberto por vez, nome de cálculo único), o relatório que congela (cada coluna protegida, o descartado, o apagar, e o que ainda pode mudar) e 6 verificações de órfãos. As 3 da V9: o resumo do raciocínio numa mensagem que não é do assistente, o resumo em branco e o resumo numa mensagem do assistente. As 10 da V10: a lista das 15 etapas no `CHECK`, a amostra sem traço, um traço aceito, etapa e resultado fora da lista, duração negativa, o traço de uma parceria numa conversa de outra, duas etapas com a mesma ordem no turno, dados que não são um objeto e 1 verificação de órfãos (traço ligado a uma mensagem de outra conversa).
 Nada fica gravado: as tentativas de violar regras são desfeitas.
 Rodar o `R__amostra.sql` uma segunda vez não muda nada: a trava avisa "Amostra já carregada".
 
@@ -466,7 +487,7 @@ Os números que a conferência exige:
 | Carga do plano (parceria criada na própria conferência) | 15 lidas, 3 inseridas, 2 duplicadas, 10 rejeitadas, uma por motivo. O reenvio do mesmo arquivo: 15 lidas, 0 inseridas, 5 duplicadas, 10 rejeitadas |
 | Relatórios | 3, um por parceria de 2027, em rascunho |
 | Números dos relatórios | 83 no total, 14 indisponíveis |
-| Órfãos | 0 em todas as 29 verificações (18 de antes, 5 das tabelas da V7 e 6 das da V8) |
+| Órfãos | 0 em todas as 30 verificações (18 de antes, 5 das tabelas da V7, 6 das da V8 e 1 da V10) |
 
 Sobre os relatórios: na Sprint 1 eram 72 números e 6 indisponíveis. Agora são 83: a pesquisa do Amarelo ganhou 3 faixas de nota (75) e a V5 passou a registrar os indicadores sem dado (mais 8), porque todo relatório traz os 17 indicadores do catálogo (3 relatórios, 51 indicadores).
 Os 14 indisponíveis são: "O festival em números" e a pesquisa geral das 3 marcas (6; esses números existem só para 2026, os de 2027 ainda não foram carregados); a pesquisa da ativação do Roxo e da Verde, que ficam fora da cota (4); e as aplicações de marca do Roxo, que não tem aplicação no plano comercial (4).

@@ -1,6 +1,6 @@
--- Confere o banco depois de V1 a V9 e da amostra R__amostra.sql: contagens, cargas, relatórios, órfãos e uma tentativa de violar cada regra.
+-- Confere o banco depois de V1 a V10 e da amostra R__amostra.sql: contagens, cargas, relatórios, órfãos e uma tentativa de violar cada regra.
 -- Atende o item 1 da Entrega 2 (amostra e verificações), prova as 8 correções do item 8 e, na seção 8, o plano comercial, o
--- catálogo e os dados informados da V7 e, na seção 9, as tabelas do Atlas da V8 e o resumo do raciocínio da V9. Nenhuma linha fica gravada: as tentativas são desfeitas (só as sequências avançam).
+-- catálogo e os dados informados da V7 e, na seção 9, as tabelas do Atlas da V8, o resumo do raciocínio da V9 e o traço do diagnóstico da V10. Nenhuma linha fica gravada: as tentativas são desfeitas (só as sequências avançam).
 
 -- Como rodar (banco de dev ou de teste com a amostra carregada; sem meta-comandos, serve também para JDBC com o texto inteiro):
 --   PGPASSWORD=portal psql -X -P pager=off -v ON_ERROR_STOP=1 -h localhost -U portal -d <banco> -f verificacao.sql
@@ -69,7 +69,7 @@ END $f$;
 DO $$
 BEGIN
     -- A tabela de controle do Flyway (flyway_schema_history) não é do portal: fica de fora quando o banco foi criado pelo Flyway.
-    PERFORM pg_temp.confere('ESTRUTURA', 'tabelas (29 da modelagem + 4 novas na V1 + 3 na V7 + 7 na V8)', 43,
+    PERFORM pg_temp.confere('ESTRUTURA', 'tabelas (29 da modelagem + 4 novas na V1 + 3 na V7 + 7 na V8 + 1 na V10)', 44,
        (SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
            AND table_name <> 'flyway_schema_history'));
     PERFORM pg_temp.confere('ESTRUTURA', 'visões (7 de consolidação + vw_dado_vigente)', 8,
@@ -883,7 +883,7 @@ END $$;
 -- ---------------------------------------------------------------------
 DO $$
 BEGIN
-    PERFORM pg_temp.confere('V8 ESTRUTURA', 'tabelas do Atlas (conversa, mensagem, relatório, solicitação, cálculo, tool_call e decisão)', 7,
+    PERFORM pg_temp.confere('V8 ESTRUTURA', 'tabelas do Atlas (conversa, mensagem, relatório, solicitação, cálculo, tool_call, decisão e, desde a V10, traço)', 8,
         (SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE' AND table_name LIKE 'atlas\_%'));
     PERFORM pg_temp.afirma('V8 ESTRUTURA', 'o gatilho rn_atlas_relatorio_congelado existe, com a função tg_atlas_relatorio_congelado',
         EXISTS (SELECT 1 FROM pg_trigger t JOIN pg_proc p ON p.oid = t.tgfoid
@@ -1114,6 +1114,62 @@ BEGIN
         format(c_novo, 'assistant', quote_literal('Conferi os números.')));
 END $$;
 
+-- O traço do diagnóstico (V10): uma linha por etapa do turno, presa à conversa e à parceria dela, com a lista completa de etapas.
+DO $$
+DECLARE
+    -- O molde de cada tentativa: uma conversa do Amarelo e, nela, um traço com a etapa (%1$s), o resultado (%2$s) e a duração (%3$s) dados.
+    c_novo CONSTANT TEXT := $c$
+        DO $d$
+        DECLARE v_conversa BIGINT;
+        BEGIN
+            INSERT INTO atlas_conversa (parceria_id, usuario_id)
+            SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example')
+            RETURNING id INTO v_conversa;
+            INSERT INTO atlas_traco (parceria_id, conversa_id, turno, ordem, etapa, resultado, iniciada_em, duracao_ms)
+            SELECT c.parceria_id, c.id, gen_random_uuid(), 1, '%1$s', '%2$s', now(), %3$s FROM atlas_conversa c WHERE c.id = v_conversa;
+        END $d$ $c$;
+BEGIN
+    PERFORM pg_temp.afirma('V10 ESTRUTURA', 'o CHECK de etapa aceita as 15 etapas do plano',
+        (SELECT count(*) FROM unnest(ARRAY['G1_LIMITES','J1_INTENCAO','J1_CARTAO','LLM_IDA','FERRAMENTA','BUSCA','R3_FONTES','CHECAGEM',
+                                           'R5_RESPOSTA','V2_COERENCIA','LACUNAS','RESUMO','SAIDA','DISJUNTOR','ERRO']) e
+          WHERE (SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = 'ck_atlas_traco_etapa') LIKE '%''' || e || '''%') = 15);
+    PERFORM pg_temp.confere('V10 ESTRUTURA', 'a amostra não traz traço do diagnóstico', 0, (SELECT count(*) FROM atlas_traco));
+    PERFORM pg_temp.aceita('V10 TRACO', 'um traço de LLM_IDA numa conversa do Amarelo', format(c_novo, 'LLM_IDA', 'OK', '12'));
+    PERFORM pg_temp.recusa('V10 TRACO', 'etapa fora da lista', 'ck_atlas_traco_etapa', format(c_novo, 'INVENTADA', 'OK', '12'));
+    PERFORM pg_temp.recusa('V10 TRACO', 'resultado fora da lista', 'ck_atlas_traco_resultado', format(c_novo, 'LLM_IDA', 'TALVEZ', '12'));
+    PERFORM pg_temp.recusa('V10 TRACO', 'duração negativa', 'ck_atlas_traco_duracao', format(c_novo, 'LLM_IDA', 'OK', '-1'));
+    PERFORM pg_temp.recusa('V10 ISOLAMENTO', 'traço da parceria Roxo numa conversa do Amarelo', 'fk_atlas_traco_conversa', $q$
+        DO $d$
+        DECLARE v_conversa BIGINT;
+        BEGIN
+            INSERT INTO atlas_conversa (parceria_id, usuario_id)
+            SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example')
+            RETURNING id INTO v_conversa;
+            INSERT INTO atlas_traco (parceria_id, conversa_id, turno, ordem, etapa, resultado, iniciada_em, duracao_ms)
+            VALUES ((SELECT id FROM _ver_parc WHERE cliente = 'Cliente Roxo' AND edicao = 2027), v_conversa, gen_random_uuid(), 1, 'LLM_IDA', 'OK', now(), 1);
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V10 TRACO', 'duas etapas com a mesma ordem no mesmo turno', 'uq_atlas_traco_ordem', $q$
+        DO $d$
+        DECLARE v_conversa BIGINT; v_turno UUID := gen_random_uuid();
+        BEGIN
+            INSERT INTO atlas_conversa (parceria_id, usuario_id)
+            SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example')
+            RETURNING id INTO v_conversa;
+            INSERT INTO atlas_traco (parceria_id, conversa_id, turno, ordem, etapa, resultado, iniciada_em, duracao_ms)
+            SELECT c.parceria_id, c.id, v_turno, 1, e, 'OK', now(), 1 FROM atlas_conversa c, unnest(ARRAY['G1_LIMITES','LLM_IDA']) e WHERE c.id = v_conversa;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V10 TRACO', 'dados que não são um objeto JSON', 'ck_atlas_traco_dados', $q$
+        DO $d$
+        DECLARE v_conversa BIGINT;
+        BEGIN
+            INSERT INTO atlas_conversa (parceria_id, usuario_id)
+            SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example')
+            RETURNING id INTO v_conversa;
+            INSERT INTO atlas_traco (parceria_id, conversa_id, turno, ordem, etapa, resultado, iniciada_em, duracao_ms, dados)
+            SELECT c.parceria_id, c.id, gen_random_uuid(), 1, 'LLM_IDA', 'OK', now(), 1, '["texto"]' FROM atlas_conversa c WHERE c.id = v_conversa;
+        END $d$ $q$);
+END $$;
+
 -- Órfãos das tabelas novas: esperado 0 em cada linha
 DO $$
 BEGIN
@@ -1131,6 +1187,8 @@ BEGIN
         (SELECT count(*) FROM atlas_calculo k LEFT JOIN atlas_relatorio r ON r.id = k.relatorio_id WHERE r.id IS NULL));
     PERFORM pg_temp.confere('ÓRFÃOS', 'relatórios do Atlas prontos sem snapshot, ou com snapshot sem estarem prontos', 0,
         (SELECT count(*) FROM atlas_relatorio WHERE (status = 'PRONTO') <> (snapshot IS NOT NULL)));
+    PERFORM pg_temp.confere('ÓRFÃOS', 'traços do Atlas ligados a uma mensagem de outra conversa', 0,
+        (SELECT count(*) FROM atlas_traco t JOIN atlas_mensagem m ON m.id = t.mensagem_id WHERE m.conversa_id <> t.conversa_id));
 END $$;
 
 -- ---------------------------------------------------------------------
