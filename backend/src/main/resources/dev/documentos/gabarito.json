@@ -55,7 +55,7 @@
       "onde fica o ponto do shuttle no Saba?",
       "qual portão eu uso pra Arena?"
     ],
-    "resposta": "Portão 4|Portão 6",
+    "resposta": "Portão 4",
     "visivelPara": [
       "amarelo",
       "roxo",
@@ -317,7 +317,10 @@
       "roxo",
       "verde"
     ],
-    "mudouNaV2": true
+    "mudouNaV2": true,
+    "paginasTambem": [
+      3
+    ]
   },
   {
     "fato": "geradores-prazo-v1",
@@ -472,7 +475,7 @@
       "Posso deixar um galão de diesel guardado na ativação?",
       "dá pra estocar combustível no espaço da marca?"
     ],
-    "resposta": "proibido|não",
+    "resposta": "proibido|não pode|não é permitid",
     "visivelPara": [
       "amarelo",
       "roxo",
@@ -620,6 +623,9 @@
       "amarelo",
       "roxo",
       "verde"
+    ],
+    "paginasTambem": [
+      3
     ]
   },
   {
@@ -675,7 +681,7 @@
       "O que acontece se eu não entregar o seguro a tempo?",
       "sem apólice consigo retirar as credenciais?"
     ],
-    "resposta": "não libera|não",
+    "resposta": "não libera|não entra|não é liberad",
     "visivelPara": [
       "amarelo",
       "roxo",
@@ -700,6 +706,9 @@
       "amarelo",
       "roxo",
       "verde"
+    ],
+    "paginasTambem": [
+      3
     ]
   },
   {
@@ -801,7 +810,7 @@
       "Qual a cor da pulseira de serviço?",
       "de que cor é a pulseira da imprensa?"
     ],
-    "resposta": "verde|laranja",
+    "resposta": "verde",
     "visivelPara": [
       "amarelo",
       "roxo",
@@ -861,7 +870,7 @@
       "Qual o limite de volume do som na ativação?",
       "até quantos decibéis posso colocar o som?"
     ],
-    "resposta": "85 dB",
+    "resposta": "85 dB|85 decibéis",
     "visivelPara": [
       "amarelo",
       "roxo",
@@ -881,7 +890,7 @@
       "Posso distribuir brinde nos corredores?",
       "onde é permitido entregar brindes?"
     ],
-    "resposta": "dentro da área da ativação|não",
+    "resposta": "dentro da área da ativação|só dentro|não pode",
     "visivelPara": [
       "amarelo",
       "roxo",
@@ -921,7 +930,7 @@
       "Posso usar laser ou balão de gás na decoração?",
       "o que é proibido usar na ativação?"
     ],
-    "resposta": "proibido|não",
+    "resposta": "proibid|não pode|não é permitid",
     "visivelPara": [
       "amarelo",
       "roxo",
@@ -941,7 +950,7 @@
       "A produção se responsabiliza se roubarem equipamento da ativação?",
       "quem cuida dos equipamentos da marca durante o festival?"
     ],
-    "resposta": "não se responsabiliza|não",
+    "resposta": "não se responsabiliza|não responde",
     "visivelPara": [
       "amarelo",
       "roxo",
@@ -1371,7 +1380,7 @@
       "A nossa cota tem direito a perguntas personalizadas na pesquisa?",
       "posso incluir minhas perguntas na pesquisa com o público?"
     ],
-    "resposta": "não inclui|não",
+    "resposta": "não inclui|não tem direito|não dá direito",
     "visivelPara": [
       "roxo"
     ]
@@ -1505,7 +1514,7 @@
       "Qual o horário de funcionamento do nosso espaço?",
       "a que horas abre o espaço da marca no sábado?"
     ],
-    "resposta": "15h às 23h30|14h às 23h30|23h30",
+    "resposta": "15h às 23h30|14h às 23h30",
     "visivelPara": [
       "amarelo"
     ]
@@ -1805,7 +1814,7 @@
       "Posso levar meu cachorro pra ativação?",
       "animal de estimação pode entrar no Saba?"
     ],
-    "resposta": "não|cães-guia",
+    "resposta": "cães-guia|não é permitid|não pode",
     "visivelPara": [
       "amarelo",
       "roxo",
@@ -2241,13 +2250,10 @@
       "o que diz a Circular 07/2026 sobre as pulseiras prata?"
     ],
     "resposta": "27/01/2027",
-    "visivelPara": [
-      "amarelo",
-      "roxo",
-      "verde"
-    ],
+    "visivelPara": [],
     "revogado": true,
-    "nota": "Visível só até a RBS revogar a circular; depois, nunca pode sair."
+    "nota": "Visível só até a RBS revogar a circular; depois, nunca pode sair.",
+    "ativa": false
   },
   {
     "fato": "circular-pulseira-quantidade",
@@ -2263,13 +2269,10 @@
       "tem limite de pulseiras prata por montadora?"
     ],
     "resposta": "15",
-    "visivelPara": [
-      "amarelo",
-      "roxo",
-      "verde"
-    ],
+    "visivelPara": [],
     "revogado": true,
-    "nota": "Visível só até a RBS revogar a circular; depois, nunca pode sair."
+    "nota": "Visível só até a RBS revogar a circular; depois, nunca pode sair.",
+    "ativa": false
   },
   {
     "fato": "sem-resposta-estacionamento",
