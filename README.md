@@ -203,6 +203,8 @@ No Windows: `.\mvnw.cmd test`. Os testes usam o banco `portal_teste`, que é apa
 
 No front, `npm run build` confere os tipos e gera a versão de produção; `npm run lint` roda o Oxlint.
 
+**No navegador.** Na primeira vez, `npx playwright install chromium`, em `frontend/`. Com a API no ar (`scripts/atlas-dev.sh start`), `npm run e2e` roda os testes de `frontend/e2e/`, e as capturas ficam em `frontend/e2e/capturas/`. Os testes marcados `@vivo` usam o modelo de verdade; sem chave, rode `npm run e2e -- --grep-invert @vivo`. Com a API em outra porta, informe `PORTAL_API_URL=http://localhost:8090`.
+
 Com as chaves no arquivo de segredos, `scripts/fumaca-provedores.sh` confere o OpenCode Go, o JEV e o Gemini com chamadas reais, sem imprimir nenhuma chave.
 
 ## Itens da Entrega 2
