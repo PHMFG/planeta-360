@@ -43,6 +43,9 @@ const COR_DA_BARRA: Record<ResultadoDaEtapa, string> = {
   PULADO: 'bg-white/40',
 }
 
+// Rodam ao lado do caminho crítico: ficam fora da soma do turno (seção 8.4 do plano) e aparecem numa faixa própria.
+const EM_PARALELO = new Set(['RESUMO', 'R3_FONTES'])
+
 // Os campos de cada tipo de etapa, na ordem de leitura. O que não estiver aqui aparece depois, com o nome cru, e o JSON inteiro fica como reserva.
 const CAMPOS_DA_ETAPA: Record<string, [string, string][]> = {
   G1_LIMITES: [['usadasHoje', 'Usadas hoje'], ['tetoPorParceria', 'Teto por parceria']],
@@ -61,7 +64,7 @@ const CAMPOS_DA_ETAPA: Record<string, [string, string][]> = {
     ['custoOrigem', 'Origem do custo'],
     ['ferramentas', 'Ferramentas oferecidas'],
   ],
-  FERRAMENTA: [['nome', 'Ferramenta'], ['erro', 'Com erro'], ['argumentos', 'Argumentos'], ['resultado', 'Resultado']],
+  FERRAMENTA: [['ferramenta', 'Ferramenta'], ['motivo', 'Motivo'], ['erro', 'Com erro'], ['argumentos', 'Argumentos'], ['resultado', 'Resultado']],
   BUSCA: [['consulta', 'Consulta'], ['degradado', 'Só a lista textual'], ['vetorial', 'Lista vetorial'], ['textual', 'Lista textual'], ['fusao', 'Fusão (RRF)']],
   CHECAGEM: [['aprovado', 'Aprovado'], ['motivo', 'Motivo'], ['origem', 'Origem'], ['caracteres', 'Caracteres']],
   RESUMO: [['noPrazo', 'No prazo'], ['pendente', 'Pendente'], ['modelo', 'Modelo'], ['tokensEntrada', 'Tokens de entrada'], ['tokensSaida', 'Tokens de saída'], ['latenciaMs', 'Latência (ms)'], ['caracteres', 'Caracteres']],
@@ -166,12 +169,21 @@ function Resumo({ rotulo, children }: { rotulo: string; children: ReactNode }) {
   )
 }
 
-/** O traço de um turno: o resumo, a linha do tempo e o botão de copiar. */
+function ListaDeEtapas({ etapas, inicio, total }: { etapas: EtapaDoTraco[]; inicio: number; total: number }) {
+  return (
+    <ol className="flex flex-col gap-2">
+      {etapas.map((etapa) => <LinhaDaEtapa key={etapa.ordem} etapa={etapa} inicioDoTurno={inicio} total={total} />)}
+    </ol>
+  )
+}
+
+/** O traço de um turno: o resumo, a linha do tempo, com as etapas paralelas à parte, e o botão de copiar. */
 export function TracoDoTurno({ turno }: { turno: TurnoDoTraco }) {
   const [copiado, setCopiado] = useState<'sim' | 'falhou' | null>(null)
   const inicio = new Date(turno.iniciadoEm).getTime()
   const fimDaUltima = Math.max(turno.duracaoMs, ...turno.etapas.map((etapa) => new Date(etapa.iniciadaEm).getTime() - inicio + etapa.duracaoMs))
   const total = Math.max(1, fimDaUltima)
+  const paralelas = turno.etapas.filter((etapa) => EM_PARALELO.has(etapa.etapa))
 
   async function copiar() {
     try {
@@ -199,9 +211,13 @@ export function TracoDoTurno({ turno }: { turno: TurnoDoTraco }) {
       </div>
       <p className="sr-only" role="status">{copiado === 'sim' ? 'JSON copiado.' : copiado === 'falhou' ? 'Não foi possível copiar.' : ''}</p>
       {copiado === 'falhou' && <p className="text-xs text-[#ff8aa1]">Não foi possível copiar: o navegador bloqueou a área de transferência.</p>}
-      <ol className="flex flex-col gap-2">
-        {turno.etapas.map((etapa) => <LinhaDaEtapa key={etapa.ordem} etapa={etapa} inicioDoTurno={inicio} total={total} />)}
-      </ol>
+      <ListaDeEtapas etapas={turno.etapas.filter((etapa) => !EM_PARALELO.has(etapa.etapa))} inicio={inicio} total={total} />
+      {paralelas.length > 0 && (
+        <section className="flex flex-col gap-2" aria-label="Em paralelo">
+          <h3 className="text-[11px] font-bold tracking-[0.12em] text-atlas-lilas uppercase">Em paralelo, fora da soma do turno</h3>
+          <ListaDeEtapas etapas={paralelas} inicio={inicio} total={total} />
+        </section>
+      )}
     </div>
   )
 }
