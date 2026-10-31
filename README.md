@@ -58,6 +58,14 @@ CREATE DATABASE portal OWNER portal;
 CREATE DATABASE portal_teste OWNER portal;
 ```
 
+**Extensão do Atlas (uma vez só, e de novo ao criar um banco).** As buscas nos documentos usam o pgvector. No macOS e no Linux, rode na raiz do repositório:
+
+```bash
+scripts/preparar-banco-atlas.sh
+```
+
+O script instala o pgvector pelo Homebrew, se precisar, e prepara os bancos `portal` e `portal_teste`: extensão no schema `extensoes` e papel `atlas_ro`. Pode rodar de novo sem problema, e aceita outros bancos como argumento. Ele precisa de um superusuário do PostgreSQL. No macOS é o usuário atual. No Linux, instale o pacote (`sudo apt install postgresql-18-pgvector`) e rode com `sudo -u postgres`. No Windows, instale o pgvector como manda o [README dele](https://github.com/pgvector/pgvector#windows) e rode no `psql` os comandos SQL do script.
+
 **2. Subir a API**, num terminal:
 
 ```bash
@@ -92,7 +100,7 @@ npm run dev
 
 Abra <http://localhost:5173>. O Vite repassa as chamadas `/api` para a porta 8080, então front e API funcionam como um site só.
 
-**Recomeçar do zero.** Para voltar à amostra original, pare a API, rode no `psql` o `DROP DATABASE portal;` e o `CREATE DATABASE portal OWNER portal;` e suba a API de novo. Os arquivos enviados ficam em `backend/armazenamento/`, que pode ser apagada junto (a API recria os arquivos de exemplo da amostra na subida).
+**Recomeçar do zero.** Para voltar à amostra original, pare a API, rode no `psql` o `DROP DATABASE portal;` e o `CREATE DATABASE portal OWNER portal;`, rode o `scripts/preparar-banco-atlas.sh` e suba a API de novo. Os arquivos enviados ficam em `backend/armazenamento/`, que pode ser apagada junto (a API recria os arquivos de exemplo da amostra na subida).
 
 **Quem já tinha o banco `portal` criado precisa recomeçar do zero para ver a amostra nova.** A amostra só carrega num banco vazio e não roda de novo sobre um banco que já a tem. A versão atual traz: entregas Enviado, Em análise e Aprovado com o arquivo que a marca mandou, o VT do Roxo em "Ajuste solicitado" com o recado da RBS no histórico, horários sempre no passado (contados a partir do dia em que o banco é criado) e nenhum "(simulada)" no nome da pesquisa. Num banco criado antes, as migrações novas (V4 a V6) rodam sozinhas ao subir a API, mas a amostra antiga continua como estava.
 
