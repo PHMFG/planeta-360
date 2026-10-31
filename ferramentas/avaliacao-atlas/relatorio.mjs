@@ -91,8 +91,8 @@ function metricasHtml(metricas, anteriores) {
 
 export function montarHtml(rodada, anterior) {
   const contar = (estado) => rodada.casos.filter((c) => c.estado === estado).length
-  const ordem = { erro: 0, falhou: 1, instavel: 2, passou: 3 }
-  const casos = [...rodada.casos].sort((a, b) => ordem[a.estado] - ordem[b.estado] || a.id.localeCompare(b.id))
+  const dosEstados = (...estados) => rodada.casos.filter((c) => estados.includes(c.estado)).sort((a, b) => a.id.localeCompare(b.id))
+  const secao = (titulo, casos) => (casos.length ? `<h2>${titulo} (${casos.length})</h2>\n${casos.map(casoHtml).join('\n')}` : '')
   return `<!doctype html>
 <html lang="pt-BR">
 <head>
@@ -123,8 +123,9 @@ export function montarHtml(rodada, anterior) {
 <p><b>${rodada.casos.length}</b> casos: ${contar('passou')} passaram, ${contar('instavel')} instáveis, ${contar('falhou')} falharam, ${contar('erro')} com erro. ${rodada.pulados} fora deste marco ou filtro.</p>
 <h2>Métricas</h2>
 ${metricasHtml(rodada.metricas, anterior?.metricas)}
-<h2>Casos</h2>
-${casos.map(casoHtml).join('\n')}
+${secao('Falharam', dosEstados('erro', 'falhou'))}
+${secao('Instáveis', dosEstados('instavel'))}
+${secao('Passaram', dosEstados('passou'))}
 </body>
 </html>
 `

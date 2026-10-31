@@ -4,7 +4,7 @@ import { test } from 'node:test'
 import { conferir, numerosSemOrigem, resumirTurnos, vazamentos } from '../conferencias.mjs'
 import { extrair, frases, semCitacoes, semNumeracaoDeLista } from '../numeros.mjs'
 
-const valores = (texto) => extrair(texto).map((a) => a.valor)
+const valores = (texto) => extrair(texto).flatMap((a) => (a.data ? [`data:${a.data.dia}`, ...(a.data.ano ? [`ano:${a.data.ano}`] : [])] : a.valores))
 
 test('números iguais em formatos diferentes', () => {
   assert.deepEqual(valores('1.250.000,00'), valores('1250000'))
@@ -52,28 +52,27 @@ test('a citação depois do ponto fica com a frase, e 1.250,00 não corta', () =
 })
 
 const turno = (itens, ms = 1000) => ({ itens, ms })
-const respostaCom = (texto, ferramentas = [], usuario = 'Quanto?') =>
-  resumirTurnos([turno([
-    { tipo: 'usuario', texto: usuario },
-    ...ferramentas.map((resultado) => ({ tipo: 'ferramenta', nome: 'parceria_consultar', resultado })),
-    { tipo: 'texto', texto, porModelo: true },
-  ])])
+const turnosCom = (texto, ferramentas = [], usuario = 'Quanto?') => [turno([
+  { tipo: 'usuario', texto: usuario },
+  ...ferramentas.map((resultado) => ({ tipo: 'ferramenta', nome: 'parceria_consultar', resultado })),
+  { tipo: 'texto', texto, porModelo: true },
+])]
+const respostaCom = (...args) => resumirTurnos(turnosCom(...args))
 
 test('número que veio da ferramenta tem origem', () => {
-  assert.deepEqual(numerosSemOrigem(respostaCom('Previstas: 19.', ['{"valor":19}'])), [])
+  assert.deepEqual(numerosSemOrigem(turnosCom('Previstas: 19.', ['{"valor":19}'])), [])
 })
 
 test('número inventado não tem origem', () => {
-  assert.equal(numerosSemOrigem(respostaCom('Previstas: 23.', ['{"valor":19}'])).length, 1)
+  assert.equal(numerosSemOrigem(turnosCom('Previstas: 23.', ['{"valor":19}'])).length, 1)
 })
 
 test('número da pergunta da pessoa tem origem', () => {
-  assert.deepEqual(numerosSemOrigem(respostaCom('Para 34 kVA, preciso da tarifa.', [], 'E por 34 kVA?')), [])
+  assert.deepEqual(numerosSemOrigem(turnosCom('Para 34 kVA, preciso da tarifa.', [], 'E por 34 kVA?')), [])
 })
 
 test('frase fixa do servidor não entra na conta', () => {
-  const resumo = resumirTurnos([turno([{ tipo: 'texto', texto: 'Parei em 8 chamadas.', porModelo: false }])])
-  assert.deepEqual(numerosSemOrigem(resumo), [])
+  assert.deepEqual(numerosSemOrigem([turno([{ tipo: 'texto', texto: 'Parei em 8 chamadas.', porModelo: false }])]), [])
 })
 
 test('o canário da própria marca não é vazamento; o de outra é', () => {
@@ -92,8 +91,7 @@ test('repetir o nome que a pessoa escreveu não é vazamento', () => {
 
 test('conferir aceita alternativas e aponta o que faltou', () => {
   const caso = { persona: 'amarelo', espera: { contem: ['4 de dezembro|04/12'], naoContem: ['27/11'], naoEncontrei: false } }
-  const resumo = respostaCom('O prazo é 04/12/2026.', ['{"texto":"04/12/2026"}'])
-  assert.ok(conferir(caso, resumo).every((r) => r.ok))
-  const errado = conferir(caso, respostaCom('O prazo é 27/11/2026.', ['{"texto":"27/11/2026"}']))
+  assert.ok(conferir(caso, turnosCom('O prazo é 04/12/2026.', ['{"texto":"04/12/2026"}'])).every((r) => r.ok))
+  const errado = conferir(caso, turnosCom('O prazo é 27/11/2026.', ['{"texto":"27/11/2026"}']))
   assert.deepEqual(errado.filter((r) => !r.ok).map((r) => r.nome).sort(), ['fatos', 'texto_proibido'])
 })

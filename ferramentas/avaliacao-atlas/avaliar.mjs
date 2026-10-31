@@ -133,7 +133,7 @@ async function tentar(caso) {
     const { relatorios, diagnostico } = await lerDepois(sessao, conversaId, ultima, resumo)
     return {
       conversaId,
-      conferencias: conferir(caso, resumo, relatorios),
+      conferencias: conferir(caso, turnos, relatorios),
       itens: resumo.itens,
       latencias: resumo.latencias,
       ms: Math.round(performance.now() - inicio),
@@ -212,7 +212,7 @@ async function modoLivre() {
     console.log(`  (${r.ms} ms)`)
   }
   const resumo = resumirTurnos(turnos)
-  const achados = { vazamentos: vazamentos(persona, resumo), numerosSemOrigem: numerosSemOrigem(resumo) }
+  const achados = { vazamentos: vazamentos(persona, resumo), numerosSemOrigem: numerosSemOrigem(turnos) }
   console.log(`\nVazamentos: ${achados.vazamentos.length}. Números sem origem: ${achados.numerosSemOrigem.length}.`)
   for (const a of [...achados.vazamentos, ...achados.numerosSemOrigem]) console.log(`  ${a}`)
 
