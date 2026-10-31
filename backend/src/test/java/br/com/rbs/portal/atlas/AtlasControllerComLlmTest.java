@@ -127,6 +127,32 @@ class AtlasControllerComLlmTest {
     }
 
     @Test
+    void textoComCaractereNuloDa422SemGravarNemChamarOModelo() {
+        SessaoDeApi pessoa = entrar(AMARELO);
+        long conversa = abrirConversa(pessoa);
+        long mensagensAntes = jdbc.sql("SELECT count(*) FROM atlas_mensagem WHERE conversa_id = :c").param("c", conversa)
+                .query(Long.class).single();
+
+        // o PostgreSQL não guarda o caractere nulo: antes, o INSERT falhava e a rota respondia 500
+        for (String texto : List.of("ola\\u0000mundo", "\\u0000", "  \\u0000  ", "a".repeat(10) + "\\u0000")) {
+            String json = "{\"texto\":\"" + texto + "\"}";
+            MvcTestResult resposta = pessoa.post("/api/atlas/conversas/" + conversa + "/mensagens", json);
+            assertThat(resposta).as(json).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
+            assertThat(lerJson(resposta, "$.campos.texto")).isEqualTo("A mensagem tem caracteres inválidos.");
+            // a resposta em fluxo dá o mesmo erro, em JSON, antes de o fluxo abrir
+            MvcTestResult emFluxo = pessoa.postAceitando("/api/atlas/conversas/" + conversa + "/mensagens", json, "text/event-stream, application/json");
+            assertThat(emFluxo).as("em fluxo: " + json).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
+            assertThat(lerJson(emFluxo, "$.campos.texto")).isEqualTo("A mensagem tem caracteres inválidos.");
+        }
+        assertThat(jdbc.sql("SELECT count(*) FROM atlas_mensagem WHERE conversa_id = :c").param("c", conversa).query(Long.class).single())
+                .as("nenhuma mensagem foi gravada").isEqualTo(mensagensAntes);
+        assertThat(modelo.pedidos()).isEmpty();
+        // a conversa continua livre: a mensagem seguinte, sem o caractere, entra
+        modelo.texto("Posso ajudar com os dados da parceria.");
+        assertThat(pessoa.post("/api/atlas/conversas/" + conversa + "/mensagens", "{\"texto\":\"ola mundo\"}")).hasStatus(HttpStatus.OK);
+    }
+
+    @Test
     void turnoEmAndamentoDa409() {
         SessaoDeApi pessoa = entrar(AMARELO);
         long conversa = abrirConversa(pessoa);

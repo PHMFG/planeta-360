@@ -180,8 +180,8 @@ public class AtlasService {
      * Rota 44. Com {@code atalho}: roda o plano B nesta conversa; se já há relatório MONTANDO nela, continua dele (reabre o
      * cartão com as lacunas que faltam); com cartão pendente, 409. Com {@code texto}: o loop do modelo de linguagem; sem modelo de
      * linguagem, 503 com a frase "use o botão"; com cartão aberto, a mensagem nova primeiro o fecha com {@code cancel}. Ordem das
-     * respostas: 403 (RBS), 404 (conversa que não é sua), 403 (aba), 422 (texto vazio ou acima de 1.000 caracteres; nem texto nem
-     * atalho; os dois), 503, 429 (teto diário da parceria; só o texto, o botão não conta), 409 (turno em andamento; cartão aberto
+     * respostas: 403 (RBS), 404 (conversa que não é sua), 403 (aba), 422 (texto vazio, com o caractere nulo ou acima de 1.000
+     * caracteres; nem texto nem atalho; os dois), 503, 429 (teto diário da parceria; só o texto, o botão não conta), 409 (turno em andamento; cartão aberto
      * no atalho). Com o relatório desligado, {@code atalho} ou {@code modelo} dão 422 em {@code campos.atalho} e só o texto vale.
      */
     public ConversaDto enviarMensagem(UsuarioAutenticado usuario, long conversaId, MensagemRequisicao corpo,
@@ -215,6 +215,9 @@ public class AtlasService {
         } else if (temTexto) {
             if (corpo.texto().isBlank()) {
                 erros.put("texto", "Escreva a mensagem.");
+            } else if (corpo.texto().indexOf('\u0000') >= 0) {
+                // O PostgreSQL não guarda o caractere nulo: gravar a mensagem falharia com 500. Fica aqui, antes de qualquer gravação.
+                erros.put("texto", "A mensagem tem caracteres inválidos.");
             } else if (corpo.texto().length() > LIMITE_DO_TEXTO) {
                 erros.put("texto", "A mensagem tem no máximo 1.000 caracteres.");
             }
