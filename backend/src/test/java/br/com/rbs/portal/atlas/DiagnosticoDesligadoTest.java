@@ -72,6 +72,19 @@ class DiagnosticoDesligadoTest {
     }
 
     @Test
+    void respostaDeFerramentaSemOPedidoNaoDerrubaAConversaComODiagnosticoDesligado() {
+        SessaoDeApi marca = SessaoDeApi.entrar(mvc, AMARELO);
+        long conversa = abrirConversa(marca);
+        jdbc.sql("INSERT INTO atlas_mensagem (conversa_id, ordem, papel, conteudo, tool_call_id) VALUES (:c, 1, 'tool', '{}', 'sem_pedido')")
+                .param("c", conversa).update();
+
+        MvcTestResult completa = marca.get("/api/atlas/conversas/" + conversa);
+
+        assertThat(completa).hasStatus(HttpStatus.OK);
+        assertThat(lerJson(completa, "$.diagnosticoDisponivel")).isEqualTo(false);
+    }
+
+    @Test
     void asRotasDoDiagnosticoRespondem404AQuemPodeUsaLasComoSeNaoExistissem() {
         SessaoDeApi marca = SessaoDeApi.entrar(mvc, AMARELO);
         long conversa = abrirConversa(marca);

@@ -96,7 +96,7 @@ public class ItensDaConversa {
         Map<String, String> ferramentas = new HashMap<>();
         Map<String, Long> mensagemDoPedido = new HashMap<>();   // diagnóstico: id do pedido de ferramenta -> mensagem do assistente que o fez
         // Diagnóstico à vista da marca: a que turno do traço cada mensagem do assistente pertence (vazio com o diagnóstico fora).
-        Map<Long, String> turnos = modo.diagnosticoNaMarca() ? tracos.turnosDasMensagens(conversa.id()) : Map.of();
+        Map<Long, String> turnos = modo.diagnosticoNaMarca() ? tracos.turnosDasMensagens(conversa.id()) : new HashMap<>();
         Map<Long, Especificacao> especificacoes = new HashMap<>();
         Contexto contexto = new Contexto(usuario, conversa);
         Map<String, String> resultados = new HashMap<>();   // debug: toolCallId -> o que a ferramenta devolveu ao modelo
@@ -147,8 +147,9 @@ public class ItensDaConversa {
                 }
                 default -> {
                     if (doTurno) {
-                        itemDaResposta(mensagem, ferramentas.get(mensagem.toolCallId()),
-                                turnos.get(mensagemDoPedido.get(mensagem.toolCallId()))).ifPresent(itens::add);
+                        Long doPedido = mensagemDoPedido.get(mensagem.toolCallId());   // nulo: resposta sem o pedido (histórico quebrado)
+                        itemDaResposta(mensagem, ferramentas.get(mensagem.toolCallId()), doPedido == null ? null : turnos.get(doPedido))
+                                .ifPresent(itens::add);
                     }
                 }
             }
