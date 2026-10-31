@@ -1,5 +1,6 @@
 package br.com.rbs.portal.atlas.provedor;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 /**
@@ -50,6 +51,27 @@ public interface ProvedorDeLlm {
      */
     default String resumir(PedidoDeResumo pedido) {
         throw new ProvedorIndisponivelException("Este provedor não resume o raciocínio.");
+    }
+
+    /**
+     * O mesmo que {@link #resumir}, devolvendo também o que a chamada gastou ({@link UsoDoLlm}), para o diagnóstico somar o custo
+     * dos resumos. O padrão chama {@link #resumir} e devolve o uso nulo; quem lê o uso do provedor (o {@code ProvedorSpringAi})
+     * sobrescreve este método, e {@link #resumir} passa a ser só o texto dele.
+     */
+    default ResumoDoLlm resumirMedindo(PedidoDeResumo pedido) {
+        return new ResumoDoLlm(resumir(pedido), null);
+    }
+
+    /**
+     * O nome do modelo que este provedor chama, para o diagnóstico quando a resposta não traz o dela; nulo se não sabe. Nunca leva
+     * chave.
+     */
+    default String modelo() {
+        return null;
+    }
+
+    /** O texto do resumo (ou nulo, se veio em branco) e o que a chamada gastou (ou nulo, se o provedor não diz). */
+    record ResumoDoLlm(String texto, UsoDoLlm uso) {
     }
 
     /**
@@ -120,11 +142,39 @@ public interface ProvedorDeLlm {
         }
     }
 
-    /** O que o modelo respondeu: texto (ou nulo), pedidos de ferramenta (ou vazio) e o {@code reasoning_content} (ou nulo). */
-    record RespostaDoLlm(String texto, List<ChamadaDeFerramenta> chamadas, String raciocinio) {
+    /**
+     * O que se mediu de uma ida ao modelo, para o diagnóstico (rotas 49 a 53 do docs/api.md): o modelo que respondeu, os tokens de
+     * entrada e de saída, o motivo do fim ({@code stop}, {@code tool_calls}, {@code length}...), a latência da chamada em
+     * milissegundos e o custo de lista em dólares quando o provedor o informa ({@code usage.opencode.list_cost} no OpenCode Go).
+     * Qualquer campo é nulo quando o provedor não o disse; nenhum leva texto da conversa, raciocínio nem chave.
+     */
+    record UsoDoLlm(String modelo, Integer tokensEntrada, Integer tokensSaida, String motivoDoFim, Long latenciaMs,
+                    BigDecimal custoDeLista) {
+    }
+
+    /**
+     * O que o modelo respondeu: texto (ou nulo), pedidos de ferramenta (ou vazio), o {@code reasoning_content} (ou nulo) e o que a
+     * ida gastou ({@link UsoDoLlm}, ou nulo se quem respondeu não mede, como o roteiro dos testes).
+     */
+    record RespostaDoLlm(String texto, List<ChamadaDeFerramenta> chamadas, String raciocinio, UsoDoLlm uso) {
 
         public RespostaDoLlm {
             chamadas = chamadas == null ? List.of() : List.copyOf(chamadas);
+        }
+
+        public RespostaDoLlm(String texto, List<ChamadaDeFerramenta> chamadas, String raciocinio) {
+            this(texto, chamadas, raciocinio, null);
+        }
+
+        /** A mesma resposta com o que se mediu dela. */
+        public RespostaDoLlm comUso(UsoDoLlm medido) {
+            return new RespostaDoLlm(texto, chamadas, raciocinio, medido);
+        }
+
+        /** Sem o raciocínio cru: um {@code toString} (de um log, de uma mensagem de erro) não pode levá-lo. */
+        @Override
+        public String toString() {
+            return "RespostaDoLlm[comTexto=" + (texto != null) + ", chamadas=" + chamadas.size() + ", uso=" + uso + "]";
         }
     }
 }

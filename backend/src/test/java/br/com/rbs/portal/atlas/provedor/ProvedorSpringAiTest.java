@@ -9,8 +9,10 @@ import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.MensagemDeChat;
 import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.PedidoDeResumo;
 import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.PedidoAoLlm;
 import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.RespostaDoLlm;
+import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.UsoDoLlm;
 import com.jayway.jsonpath.JsonPath;
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
@@ -213,6 +215,111 @@ class ProvedorSpringAiTest {
             assertThat(servidor.recebidas()).extracting(r -> r.cabecalho("x-opencode-session")).containsExactly(List.of("7"), List.of("8"));
             assertThat(servidor.recebidas()).allSatisfy(r -> assertThat(r.cabecalho("user-agent")).containsExactly("PlanetaAtlas/0.1"));
             assertThat(servidor.recebidas()).allSatisfy(r -> assertThat(r.corpo()).doesNotContain("\"tools\""));
+        });
+    }
+
+    // ---------------------------------------------------------------------
+    // O que a ida gastou: tokens, motivo do fim, latência e custo de lista (diagnóstico, M2)
+    // ---------------------------------------------------------------------
+
+    @Test
+    void ousoDaIdaVemDoJsonDaResposta() {
+        servidor.responder(ServidorDeLlmFalso.texto("Certo."));
+        servidor.responder(ServidorDeLlmFalso.chamada("call_1", "relatorio_iniciar", "{}", null));
+
+        ligado().run(contexto -> {
+            ProvedorDeLlm provedor = contexto.getBean(ProvedorDeLlm.class);
+
+            UsoDoLlm texto = provedor.responder(pedido()).uso();
+            assertThat(texto.modelo()).isEqualTo("deepseek-v4.1-flash");
+            assertThat(texto.tokensEntrada()).isEqualTo(ServidorDeLlmFalso.TOKENS_DE_ENTRADA);
+            assertThat(texto.tokensSaida()).isEqualTo(ServidorDeLlmFalso.TOKENS_DE_SAIDA);
+            assertThat(texto.motivoDoFim()).isEqualTo("stop");
+            assertThat(texto.latenciaMs()).isNotNull().isGreaterThanOrEqualTo(0);
+            assertThat(texto.custoDeLista()).isEqualByComparingTo(new BigDecimal(ServidorDeLlmFalso.CUSTO_DE_LISTA));
+
+            assertThat(provedor.responder(pedido()).uso().motivoDoFim()).isEqualTo("tool_calls");
+            assertThat(provedor.modelo()).isEqualTo("deepseek-v4.1-flash");
+        });
+    }
+
+    @Test
+    void emFluxoOCorpoPedeOUsoEOUsoVemNoUltimoPedaco() {
+        servidor.responderEmFluxo(new ServidorDeLlmFalso.Fluxo().texto("Pron").texto("to.").fim("stop"));
+        servidor.responderEmFluxo(new ServidorDeLlmFalso.Fluxo().chamada("call_1", "relatorio_iniciar")
+                .argumentosEmPedacos("{\"modelo\":\"ATIVACAO_EVENTO\"}", 6).fim("tool_calls"));
+
+        ligado().run(contexto -> {
+            ProvedorDeLlm provedor = contexto.getBean(ProvedorDeLlm.class);
+            ProvedorDeLlm.OuvinteDoFluxo calado = new ProvedorDeLlm.OuvinteDoFluxo() {
+                @Override
+                public void raciocinio(String pedaco) {
+                }
+
+                @Override
+                public void texto(String pedaco) {
+                }
+            };
+
+            UsoDoLlm texto = provedor.responderEmFluxo(pedido(), calado).uso();
+            // o servidor recebeu o pedido de uso no fluxo: stream_options.include_usage (o Spring AI 2.0.2 o manda sozinho)
+            String corpo = servidor.recebidas().get(0).corpo();
+            assertThat(JsonPath.<Boolean>read(corpo, "$.stream")).isTrue();
+            assertThat(JsonPath.<Boolean>read(corpo, "$.stream_options.include_usage")).isTrue();
+            assertThat(texto.tokensEntrada()).isEqualTo(ServidorDeLlmFalso.TOKENS_DE_ENTRADA);
+            assertThat(texto.tokensSaida()).isEqualTo(ServidorDeLlmFalso.TOKENS_DE_SAIDA);
+            assertThat(texto.motivoDoFim()).isEqualTo("stop");
+            assertThat(texto.modelo()).isEqualTo("deepseek-v4.1-flash");
+            assertThat(texto.custoDeLista()).isEqualByComparingTo(new BigDecimal(ServidorDeLlmFalso.CUSTO_DE_LISTA));
+            assertThat(texto.latenciaMs()).isGreaterThanOrEqualTo(0);
+
+            UsoDoLlm ferramenta = provedor.responderEmFluxo(pedido(), calado).uso();
+            assertThat(servidor.recebidas().get(1).corpo()).contains("\"include_usage\":true");
+            assertThat(ferramenta.motivoDoFim()).isEqualTo("tool_calls");
+            assertThat(ferramenta.tokensSaida()).isEqualTo(ServidorDeLlmFalso.TOKENS_DE_SAIDA);
+        });
+    }
+
+    @Test
+    void respostaSemUsoDeixaOsTokensNulosEUmCustoQueNaoEntendeVoltaNulo() {
+        servidor.responder("{\"id\":\"x\",\"object\":\"chat.completion\",\"created\":1,\"model\":\"deepseek-v4.1-flash\","
+                + "\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Oi.\"},\"finish_reason\":\"stop\"}]}");
+        servidor.responder("{\"id\":\"x\",\"object\":\"chat.completion\",\"created\":1,\"model\":\"deepseek-v4.1-flash\","
+                + "\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Oi.\"},\"finish_reason\":\"length\"}],"
+                + "\"usage\":{\"prompt_tokens\":3,\"completion_tokens\":2,\"total_tokens\":5,\"opencode\":{\"list_cost\":\"muito\"}}}");
+        servidor.responder("{\"id\":\"x\",\"object\":\"chat.completion\",\"created\":1,\"model\":\"deepseek-v4.1-flash\","
+                + "\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"Oi.\"},\"finish_reason\":\"stop\"}],"
+                + "\"usage\":{\"prompt_tokens\":3,\"completion_tokens\":2,\"total_tokens\":5,\"opencode\":{\"list_cost\":\"0.00031\"}}}");
+
+        ligado().run(contexto -> {
+            ProvedorDeLlm provedor = contexto.getBean(ProvedorDeLlm.class);
+
+            UsoDoLlm semUso = provedor.responder(pedido()).uso();
+            assertThat(semUso.tokensEntrada()).isNull();
+            assertThat(semUso.tokensSaida()).isNull();
+            assertThat(semUso.custoDeLista()).isNull();
+            assertThat(semUso.motivoDoFim()).isEqualTo("stop");
+
+            UsoDoLlm ilegivel = provedor.responder(pedido()).uso();
+            assertThat(ilegivel.tokensEntrada()).isEqualTo(3);
+            assertThat(ilegivel.custoDeLista()).isNull();
+            assertThat(ilegivel.motivoDoFim()).isEqualTo("length");
+
+            assertThat(provedor.responder(pedido()).uso().custoDeLista()).isEqualByComparingTo("0.00031");
+        });
+    }
+
+    @Test
+    void oResumoTambemDevolveOQueGastou() {
+        servidor.responderResumo("Conferi o pedido.");
+
+        ligado().run(contexto -> {
+            ProvedorDeLlm.ResumoDoLlm resumo = contexto.getBean(ProvedorDeLlm.class)
+                    .resumirMedindo(new PedidoDeResumo("7", promptDoResumo(), "Raciocínio da etapa"));
+
+            assertThat(resumo.texto()).isEqualTo("Conferi o pedido.");
+            assertThat(resumo.uso().tokensEntrada()).isEqualTo(ServidorDeLlmFalso.TOKENS_DE_ENTRADA);
+            assertThat(resumo.uso().custoDeLista()).isEqualByComparingTo(new BigDecimal(ServidorDeLlmFalso.CUSTO_DE_LISTA));
         });
     }
 

@@ -1,5 +1,8 @@
 package br.com.rbs.portal.atlas.provedor;
 
+import com.openai.core.JsonValue;
+import com.openai.models.completions.CompletionUsage;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -13,6 +16,8 @@ import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.metadata.ChatResponseMetadata;
+import org.springframework.ai.chat.metadata.Usage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
@@ -89,11 +94,19 @@ public class ProvedorSpringAi implements ProvedorDeLlm {
     }
 
     @Override
+    public String modelo() {
+        return ((OpenAiChatOptions) modelo.getOptions()).getModel();
+    }
+
+    @Override
     public RespostaDoLlm responder(PedidoAoLlm pedido) {
+        long inicio = System.nanoTime();
         try {
             ChatResponse resposta = modelo.call(new Prompt(mensagens(pedido.mensagens()), opcoes(pedido)));
             RespostaDoLlm saida = resposta(resposta);
-            return raciocinio ? saida : new RespostaDoLlm(saida.texto(), saida.chamadas(), null);
+            long ms = (System.nanoTime() - inicio) / 1_000_000;
+            return new RespostaDoLlm(saida.texto(), saida.chamadas(), raciocinio ? saida.raciocinio() : null,
+                    uso(resposta == null ? null : resposta.getMetadata(), motivoDoFim(resposta), ms));
         } catch (RuntimeException erro) {
             throw falha(erro);
         }
@@ -101,12 +114,20 @@ public class ProvedorSpringAi implements ProvedorDeLlm {
 
     @Override
     public String resumir(PedidoDeResumo pedido) {
+        return resumirMedindo(pedido).texto();
+    }
+
+    @Override
+    public ResumoDoLlm resumirMedindo(PedidoDeResumo pedido) {
+        long inicio = System.nanoTime();
         try {
             Prompt prompt = new Prompt(List.of(new SystemMessage(pedido.instrucoes()), new UserMessage(pedido.entrada())),
                     opcoesDoResumo(pedido));
             ChatResponse resposta = modelo.call(prompt);
             Generation geracao = resposta == null ? null : resposta.getResult();
-            return geracao == null || geracao.getOutput() == null ? null : vazioViraNulo(geracao.getOutput().getText());
+            String texto = geracao == null || geracao.getOutput() == null ? null : vazioViraNulo(geracao.getOutput().getText());
+            long ms = (System.nanoTime() - inicio) / 1_000_000;
+            return new ResumoDoLlm(texto, uso(resposta == null ? null : resposta.getMetadata(), motivoDoFim(resposta), ms));
         } catch (RuntimeException erro) {
             // Nada do erro do provedor: nesta chamada vai o raciocínio, e o corpo de um erro pode devolver o que recebeu.
             String nome = erro.getClass().getSimpleName();
@@ -120,9 +141,20 @@ public class ProvedorSpringAi implements ProvedorDeLlm {
         StringBuilder texto = new StringBuilder();
         String raciocinioAcumulado = "";
         List<ChamadaDeFerramenta> chamadas = new ArrayList<>();
+        long inicio = System.nanoTime();
+        ChatResponseMetadata maisCompleta = null;   // o pedaço com o uso: no fluxo ele chega por último, com a lista de escolhas vazia
+        String motivoDoFim = null;
         try {
             // toIterable consome o fluxo nesta thread (a do turno): o cliente HTTP enche a fila na dele, e nada fica em transação.
+            // O uso vem do stream_options.include_usage, que o Spring AI 2.0.2 já manda em todo fluxo (conferido em teste).
             for (ChatResponse parte : modelo.stream(new Prompt(mensagens(pedido.mensagens()), opcoes(pedido))).toIterable()) {
+                if (parte.getMetadata() != null && (maisCompleta == null || tokensDe(parte.getMetadata().getUsage()) > tokensDe(maisCompleta.getUsage()))) {
+                    maisCompleta = parte.getMetadata();
+                }
+                String motivo = motivoDoFim(parte);
+                if (motivo != null) {
+                    motivoDoFim = motivo;
+                }
                 for (Generation geracao : parte.getResults()) {
                     AssistantMessage saida = geracao.getOutput();
                     if (saida == null) {
@@ -145,7 +177,9 @@ public class ProvedorSpringAi implements ProvedorDeLlm {
         } catch (RuntimeException erro) {
             throw falha(erro);
         }
-        return new RespostaDoLlm(vazioViraNulo(texto.toString()), chamadas, vazioViraNulo(raciocinioAcumulado));
+        long ms = (System.nanoTime() - inicio) / 1_000_000;
+        return new RespostaDoLlm(vazioViraNulo(texto.toString()), chamadas, vazioViraNulo(raciocinioAcumulado),
+                uso(maisCompleta, motivoDoFim, ms));
     }
 
     /**
@@ -159,6 +193,74 @@ public class ProvedorSpringAi implements ProvedorDeLlm {
         String motivo = limpar(erro.getClass().getSimpleName() + ": " + erro.getMessage(), chave);
         log.warn("O modelo de linguagem não respondeu ({})", motivo);
         return new ProvedorIndisponivelException("O modelo de linguagem não respondeu (" + motivo + ").", erro);
+    }
+
+    // ---------------------------------------------------------------------
+    // O que a ida gastou (diagnóstico)
+    // ---------------------------------------------------------------------
+
+    /**
+     * O que se mediu da ida: modelo, tokens, motivo do fim, latência e o custo de lista do provedor, quando ele diz. Resposta sem
+     * o campo {@code usage} chega do Spring AI com tokens zerados: aí os tokens ficam nulos (o provedor não disse), nunca 0.
+     */
+    static UsoDoLlm uso(ChatResponseMetadata metadados, String motivoDoFim, long latenciaMs) {
+        Usage uso = metadados == null ? null : metadados.getUsage();
+        boolean informado = tokensDe(uso) > 0;
+        String modelo = metadados == null || metadados.getModel() == null || metadados.getModel().isBlank() ? null : metadados.getModel();
+        return new UsoDoLlm(modelo, informado ? uso.getPromptTokens() : null, informado ? uso.getCompletionTokens() : null,
+                motivoDoFim, latenciaMs, informado ? custoDeLista(uso) : null);
+    }
+
+    private static int tokensDe(Usage uso) {
+        if (uso == null) {
+            return 0;
+        }
+        Integer total = uso.getTotalTokens();
+        return total == null ? 0 : total;
+    }
+
+    /** O motivo do fim da geração (stop, tool_calls, length...), em minúsculas como o provedor o escreve; nulo se não veio. */
+    private static String motivoDoFim(ChatResponse resposta) {
+        if (resposta == null) {
+            return null;
+        }
+        String motivo = null;
+        for (Generation geracao : resposta.getResults()) {
+            String deste = geracao.getMetadata() == null ? null : geracao.getMetadata().getFinishReason();
+            if (deste != null && !deste.isBlank()) {
+                motivo = deste.toLowerCase(java.util.Locale.ROOT);
+            }
+        }
+        return motivo;
+    }
+
+    /**
+     * O {@code usage.opencode.list_cost} da resposta (dólares, a preço de lista), somado pelo diagnóstico no lugar de um preço fixo
+     * por token. O SDK guarda o que não conhece como propriedade adicional do uso; número ou texto numérico servem. Nulo se o
+     * provedor não manda, ou se o formato não é o esperado.
+     */
+    private static BigDecimal custoDeLista(Usage uso) {
+        if (!(uso.getNativeUsage() instanceof CompletionUsage nativo)) {
+            return null;
+        }
+        JsonValue opencode = nativo._additionalProperties().get("opencode");
+        if (opencode == null) {
+            return null;
+        }
+        try {
+            if (opencode.convert(Map.class) instanceof Map<?, ?> mapa) {
+                Object custo = mapa.get("list_cost");
+                if (custo instanceof Number numero) {
+                    return new BigDecimal(numero.toString());
+                }
+                if (custo instanceof String texto && !texto.isBlank()) {
+                    return new BigDecimal(texto.strip());
+                }
+            }
+        } catch (RuntimeException formatoInesperado) {
+            log.debug("Atlas: o usage.opencode da resposta não tem o formato esperado.");
+        }
+        return null;
     }
 
     // ---------------------------------------------------------------------
