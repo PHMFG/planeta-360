@@ -203,6 +203,8 @@ No Windows: `.\mvnw.cmd test`. Os testes usam o banco `portal_teste`, que é apa
 
 No front, `npm run build` confere os tipos e gera a versão de produção; `npm run lint` roda o Oxlint.
 
+Com as chaves no arquivo de segredos, `scripts/fumaca-provedores.sh` confere o OpenCode Go, o JEV e o Gemini com chamadas reais, sem imprimir nenhuma chave.
+
 ## Itens da Entrega 2
 
 | # | Item | Onde está |
@@ -240,6 +242,7 @@ backend/    API Spring Boot (pacotes comum, acesso, parceria, materiais, pesquis
             src/main/resources/db/dev        amostra de demonstração
             src/main/resources/atlas         modelo do relatório do Atlas e o prompt
 frontend/   React + Vite (api, atlas, componentes, estilos, paginas/acesso, paginas/parceria, paginas/rbs, sessao, util)
+scripts/    preparar-banco-atlas.sh (pgvector e papel atlas_ro) e fumaca-provedores.sh
 docs/       banco.md, api.md, exemplos de CSV e a modelagem da Sprint 1
 ```
 
