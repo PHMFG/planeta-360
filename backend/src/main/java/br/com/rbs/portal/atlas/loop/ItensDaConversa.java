@@ -9,6 +9,8 @@ import br.com.rbs.portal.atlas.AtlasDtos.VariavelDoCalculo;
 import br.com.rbs.portal.atlas.AtlasDtos.DadosDaFerramenta;
 import br.com.rbs.portal.atlas.AtlasDtos.ItemDaConversa;
 import br.com.rbs.portal.atlas.AtlasDtos.ItemFerramenta;
+import br.com.rbs.portal.atlas.AtlasDtos.ItemModelo;
+import br.com.rbs.portal.atlas.AtlasDtos.ItemPedidoRelatorio;
 import br.com.rbs.portal.atlas.AtlasDtos.ItemRaciocinio;
 import br.com.rbs.portal.atlas.AtlasDtos.ItemRelatorioPronto;
 import br.com.rbs.portal.atlas.AtlasDtos.FonteDoTexto;
@@ -27,6 +29,9 @@ import br.com.rbs.portal.atlas.checagem.Frases;
 import br.com.rbs.portal.atlas.diagnostico.TracoRepositorio;
 import br.com.rbs.portal.atlas.ferramentas.Calcular;
 import br.com.rbs.portal.atlas.ferramentas.ContarDias;
+import br.com.rbs.portal.atlas.ferramentas.GerarModelo;
+import br.com.rbs.portal.atlas.ferramentas.ModelosEmBranco;
+import br.com.rbs.portal.atlas.ferramentas.PedidoDeRelatorio;
 import br.com.rbs.portal.atlas.provedor.DisponibilidadeDoLlm;
 import br.com.rbs.portal.atlas.relatorio.ContaDoChat;
 import br.com.rbs.portal.atlas.relatorio.Especificacao;
@@ -37,6 +42,7 @@ import br.com.rbs.portal.comum.UsuarioAutenticado;
 import br.com.rbs.portal.dados.DadoInformadoService;
 import br.com.rbs.portal.dados.DadosDtos.CampoDto;
 import br.com.rbs.portal.dados.DadosDtos.VigenteDto;
+import br.com.rbs.portal.relatorio.RelatorioService;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -65,6 +71,10 @@ import tools.jackson.core.type.TypeReference;
  *   <li>a resposta de {@code relatorio_solicitar_campos} com {@code cancel} &rarr; item {@code aviso} ("Cartão fechado..."): sem
  *       modelo de linguagem, "Use Montar relatório para continuar"; com ele ligado agora (o mesmo {@code llmDisponivel} da
  *       resposta), "Quando tiver os números, peça para continuar".</li>
+ *   <li>a resposta de {@code pedido_de_relatorio} &rarr; item {@code pedido_relatorio}, e a de {@code gerar_modelo} &rarr; item
+ *       {@code modelo}, com o relatório ligado ou desligado. O item do pedido traz {@code relatorioOficial}, {@code modelos} e o
+ *       texto de agora, relidos (a RBS pode ter disponibilizado o relatório depois); o do modelo traz o que a ferramenta entregou.
+ *       Resposta com erro não gera item.</li>
  * </ul>
  * Com o debug das ferramentas ({@code atlas.debug.ferramentas}), cada pedido de ferramenta vira também um item {@code ferramenta},
  * depois do {@code raciocinio} e do {@code texto} da mesma mensagem e na ordem em que rodou (antes do {@code cartao} dele).
@@ -82,10 +92,15 @@ public class ItensDaConversa {
     private final DisponibilidadeDoLlm llm;
     private final ModoDoAtlas modo;
     private final TracoRepositorio tracos;
+    private final ModelosEmBranco modelosEmBranco;
+    private final RelatorioService relatorios;
 
     public ItensDaConversa(AtlasRepositorio repositorio, DadoInformadoService dados, ResolvedorDeReferencias resolvedor,
-                           ModeloBase modelos, DisponibilidadeDoLlm llm, ModoDoAtlas modo, TracoRepositorio tracos) {
+                           ModeloBase modelos, DisponibilidadeDoLlm llm, ModoDoAtlas modo, TracoRepositorio tracos,
+                           ModelosEmBranco modelosEmBranco, RelatorioService relatorios) {
         this.tracos = tracos;
+        this.modelosEmBranco = modelosEmBranco;
+        this.relatorios = relatorios;
         this.repositorio = repositorio;
         this.dados = dados;
         this.resolvedor = resolvedor;
@@ -170,8 +185,8 @@ public class ItensDaConversa {
                 default -> {
                     if (doTurno) {
                         Long doPedido = mensagemDoPedido.get(mensagem.toolCallId());   // nulo: resposta sem o pedido (histórico quebrado)
-                        itemDaResposta(mensagem, ferramentas.get(mensagem.toolCallId()), doPedido == null ? null : turnos.get(doPedido))
-                                .ifPresent(itens::add);
+                        itemDaResposta(mensagem, ferramentas.get(mensagem.toolCallId()), doPedido == null ? null : turnos.get(doPedido),
+                                contexto).ifPresent(itens::add);
                     }
                 }
             }
@@ -231,13 +246,19 @@ public class ItensDaConversa {
         }
     }
 
-    private Optional<ItemDaConversa> itemDaResposta(LinhaDeMensagem mensagem, String ferramenta, String turno) {
+    private Optional<ItemDaConversa> itemDaResposta(LinhaDeMensagem mensagem, String ferramenta, String turno, Contexto contexto) {
         if (ferramenta == null || mensagem.conteudo() == null) {
             return Optional.empty();
         }
-        // A conta e a contagem de dias valem com o relatório ligado ou desligado.
+        // A conta, a contagem de dias e as respostas diretas valem com o relatório ligado ou desligado.
         if (Calcular.NOME.equals(ferramenta) || ContarDias.NOME.equals(ferramenta)) {
             return itemDeCalculo(mensagem, ferramenta, turno);
+        }
+        if (PedidoDeRelatorio.NOME.equals(ferramenta)) {
+            return itemDoPedidoDeRelatorio(mensagem, turno, contexto);
+        }
+        if (GerarModelo.NOME.equals(ferramenta)) {
+            return itemDoModelo(mensagem, turno);
         }
         if (!modo.relatorioLigado()) {
             return Optional.empty();   // só chat: o relatório pronto e o aviso do cartão de uma conversa antiga não saem
@@ -253,6 +274,42 @@ public class ItensDaConversa {
                     : PlanoBSemLlm.AVISO_CARTAO_FECHADO));
         }
         return Optional.empty();
+    }
+
+    /**
+     * A resposta de uma ferramenta que deu certo como mapa, se for do {@code tipo} esperado; erro de ferramenta ({@code {"erro": ...}}),
+     * texto que não é um objeto JSON e resposta de outro tipo não geram item.
+     */
+    private static Optional<Map<String, Object>> respostaDoTipo(LinhaDeMensagem mensagem, String tipo) {
+        try {
+            Map<String, Object> resposta = AtlasJson.ler(mensagem.conteudo(), new TypeReference<Map<String, Object>>() {
+            });
+            return resposta != null && !resposta.containsKey("erro") && tipo.equals(resposta.get("tipo")) ? Optional.of(resposta)
+                    : Optional.empty();
+        } catch (RuntimeException naoEObjeto) {
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * O item do {@code pedido_de_relatorio}. O que o histórico guardou só prova que o pedido foi respondido: {@code relatorioOficial},
+     * os modelos e o texto que depende deles são relidos agora, pelo mesmo critério da ferramenta (a rota 35 e a aba Pesquisa), porque o
+     * relatório pode ter sido disponibilizado, ou a Pesquisa aberta ou fechada, depois do turno.
+     */
+    private Optional<ItemDaConversa> itemDoPedidoDeRelatorio(LinhaDeMensagem mensagem, String turno, Contexto contexto) {
+        if (respostaDoTipo(mensagem, PedidoDeRelatorio.TIPO_DO_RESULTADO).isEmpty()) {
+            return Optional.empty();
+        }
+        long parceriaId = contexto.conversa.parceriaId();
+        boolean relatorioOficial = relatorios.temVersaoParaVer(contexto.usuario, parceriaId);
+        return Optional.of(new ItemPedidoRelatorio(PedidoDeRelatorio.texto(relatorioOficial), relatorioOficial,
+                modelosEmBranco.oferecidos(contexto.usuario, parceriaId), turno));
+    }
+
+    /** O item do {@code gerar_modelo}: o que a ferramenta entregou, sem o tipo do modelo (o {@code tipo} do item é {@code modelo}). */
+    private static Optional<ItemDaConversa> itemDoModelo(LinhaDeMensagem mensagem, String turno) {
+        return respostaDoTipo(mensagem, GerarModelo.TIPO_DO_RESULTADO).map(resposta -> new ItemModelo((String) resposta.get("titulo"),
+                (String) resposta.get("conteudo"), (String) resposta.get("nomeArquivo"), turno));
     }
 
     /**

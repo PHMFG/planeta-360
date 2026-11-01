@@ -1,5 +1,6 @@
 package br.com.rbs.portal.atlas.ferramentas;
 
+import br.com.rbs.portal.atlas.AtlasDtos.ModeloOferecido;
 import br.com.rbs.portal.comum.UsuarioAutenticado;
 import br.com.rbs.portal.comum.VerificadorDeAcesso;
 import java.io.IOException;
@@ -72,10 +73,6 @@ public class ModelosEmBranco {
         }
     }
 
-    /** Um modelo oferecido à pessoa: o tipo (o nome do enum) e o título. */
-    public record Oferecido(String tipo, String titulo) {
-    }
-
     /** Um modelo entregue: o tipo, o título, o conteúdo em Markdown e o nome do arquivo que o navegador baixa. */
     public record Modelo(Tipo tipo, String titulo, String conteudo, String nomeArquivo) {
     }
@@ -107,8 +104,8 @@ public class ModelosEmBranco {
     }
 
     /** Os modelos que o {@code pedido_de_relatorio} oferece: os {@link #disponiveis}, com o título. */
-    public List<Oferecido> oferecidos(UsuarioAutenticado usuario, long parceriaId) {
-        return disponiveis(usuario, parceriaId).stream().map(tipo -> new Oferecido(tipo.name(), tipo.titulo)).toList();
+    public List<ModeloOferecido> oferecidos(UsuarioAutenticado usuario, long parceriaId) {
+        return disponiveis(usuario, parceriaId).stream().map(tipo -> new ModeloOferecido(tipo.name(), tipo.titulo)).toList();
     }
 
     /** O modelo do tipo, com o conteúdo lido na subida. Não confere acesso: quem chama usa {@link #disponiveis}. */

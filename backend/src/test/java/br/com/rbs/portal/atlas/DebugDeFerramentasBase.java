@@ -148,6 +148,7 @@ abstract class DebugDeFerramentasBase {
         MvcTestResult resposta = falar(pessoa, conversa, "Me dá um modelo de briefing.");
 
         assertThat(modelo.pedidos()).hasSize(1);   // o turno acabou na resposta direta
+        assertThat(lerLista(resposta, "$.itens[*].tipo")).containsExactly("usuario", "ferramenta", "modelo");   // a ferramenta, depois o item dela
         List<Map<String, Object>> ferramentas = lerLista(resposta, "$.itens[?(@.tipo=='ferramenta')]");
         assertThat(ferramentas).hasSize(1);
         assertThat(ferramentas.get(0)).containsEntry("nome", "gerar_modelo").containsEntry("argumentos", "{\"tipo\":\"BRIEFING_CONTEUDO\"}")

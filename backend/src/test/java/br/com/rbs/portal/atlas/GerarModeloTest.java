@@ -219,7 +219,7 @@ class GerarModeloTest {
                 .param("p", amarelo.parceriaId()).update();
 
         assertThatThrownBy(() -> gerar(amarelo, PESQUISA)).isInstanceOf(SemPermissaoException.class);
-        assertThat(modelos.oferecidos(amarelo.usuario(), amarelo.parceriaId())).extracting(ModelosEmBranco.Oferecido::tipo)
+        assertThat(modelos.oferecidos(amarelo.usuario(), amarelo.parceriaId())).extracting(AtlasDtos.ModeloOferecido::tipo)
                 .containsExactly("BRIEFING_CONTEUDO", "PLANO_OPERACIONAL_ATIVACAO");
     }
 

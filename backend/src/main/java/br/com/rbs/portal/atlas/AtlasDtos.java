@@ -53,9 +53,11 @@ public final class AtlasDtos {
             @JsonSubTypes.Type(value = ItemAviso.class, name = "aviso"),
             @JsonSubTypes.Type(value = ItemCartao.class, name = "cartao"),
             @JsonSubTypes.Type(value = ItemRelatorioPronto.class, name = "relatorio_pronto"),
-            @JsonSubTypes.Type(value = ItemCalculo.class, name = "calculo")})
+            @JsonSubTypes.Type(value = ItemCalculo.class, name = "calculo"),
+            @JsonSubTypes.Type(value = ItemPedidoRelatorio.class, name = "pedido_relatorio"),
+            @JsonSubTypes.Type(value = ItemModelo.class, name = "modelo")})
     public sealed interface ItemDaConversa permits ItemUsuario, ItemRaciocinio, ItemTexto, ItemFerramenta, ItemAviso, ItemCartao,
-            ItemRelatorioPronto, ItemCalculo {
+            ItemRelatorioPronto, ItemCalculo, ItemPedidoRelatorio, ItemModelo {
     }
 
     /** O que a pessoa disse (o botão aparece como "Montar o relatório da ativação"). */
@@ -164,6 +166,30 @@ public final class AtlasDtos {
     public record ItemCalculo(String marcador, String ferramenta, String nome, String script, List<VariavelDoCalculo> variaveis,
                               String resultado, String regra, List<FeriadoConsiderado> feriadosConsiderados,
                               @JsonInclude(JsonInclude.Include.NON_NULL) String turno) implements ItemDaConversa {
+    }
+
+    /** Um modelo em branco que o pedido de relatório oferece: o tipo do contrato ({@code BRIEFING_CONTEUDO}...) e o título. */
+    public record ModeloOferecido(String tipo, String titulo) {
+    }
+
+    /**
+     * A resposta do {@code pedido_de_relatorio} (M5), com o relatório ligado ou desligado: o texto fixo do servidor (sem algarismo),
+     * se há relatório oficial para esta pessoa ver e os modelos em branco que a parceria pode pedir. Derivada da resposta da
+     * ferramenta (resposta com erro não gera item), mas {@code relatorioOficial}, {@code modelos} e o {@code texto} que depende
+     * deles são os <b>de agora</b>, relidos a cada leitura: a RBS pode ter disponibilizado o relatório (ou aberto ou fechado a
+     * Pesquisa) depois. Vem depois do que a mensagem do assistente que o pediu tem.
+     */
+    public record ItemPedidoRelatorio(String texto, boolean relatorioOficial, List<ModeloOferecido> modelos,
+                                      @JsonInclude(JsonInclude.Include.NON_NULL) String turno) implements ItemDaConversa {
+    }
+
+    /**
+     * O modelo em branco que o {@code gerar_modelo} entregou (M5), com o relatório ligado ou desligado, como a ferramenta o devolveu
+     * (resposta com erro não gera item). {@code conteudo} é Markdown; {@code nomeArquivo} termina em {@code .md}, e o navegador gera
+     * o arquivo. O tipo do modelo ({@code BRIEFING_CONTEUDO}...) não vai no item: o {@code tipo} da propriedade é o do item.
+     */
+    public record ItemModelo(String titulo, String conteudo, String nomeArquivo,
+                             @JsonInclude(JsonInclude.Include.NON_NULL) String turno) implements ItemDaConversa {
     }
 
     /** Uma conversa da lista da rota 43. */

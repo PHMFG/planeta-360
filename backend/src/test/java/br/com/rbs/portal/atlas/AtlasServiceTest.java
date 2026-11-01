@@ -140,6 +140,8 @@ class AtlasServiceTest {
             case ItemCartao c -> "cartao";
             case ItemRelatorioPronto p -> "relatorio_pronto";
             case AtlasDtos.ItemCalculo c -> "calculo";
+            case AtlasDtos.ItemPedidoRelatorio r -> "pedido_relatorio";
+            case AtlasDtos.ItemModelo m -> "modelo";
         }).toList();
     }
 

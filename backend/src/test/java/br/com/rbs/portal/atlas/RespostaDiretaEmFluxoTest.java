@@ -1,5 +1,6 @@
 package br.com.rbs.portal.atlas;
 
+import static br.com.rbs.portal.ApoioDeTeste.lerLista;
 import static br.com.rbs.portal.atlas.ApoioDoFluxo.AMARELO;
 import static br.com.rbs.portal.atlas.ApoioDoFluxo.conversa;
 import static br.com.rbs.portal.atlas.ApoioDoFluxo.eventos;
@@ -18,12 +19,14 @@ import br.com.rbs.portal.atlas.ferramentas.GerarModelo;
 import br.com.rbs.portal.atlas.ferramentas.PedidoDeRelatorio;
 import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.MensagemDeChat;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
+import org.springframework.test.web.servlet.assertj.MvcTestResult;
 
 /**
  * [ATLAS] A resposta direta (M5) na resposta em fluxo (SSE) da rota 44: uma ida só ao modelo, a frase da etapa da ferramenta, o texto
@@ -89,6 +92,34 @@ class RespostaDiretaEmFluxoTest {
         assertThat(sequencia(eventos)).containsExactly("etapa", "fim");
         assertThat(eventos.get(0).<String>ler("$.texto")).isEqualTo("Preparando a resposta…");
         assertThat(turnoSolto(jdbc, conversa)).isTrue();
+    }
+
+    @Test
+    void oFimTrazOsItensDaRespostaDiretaEARotaQuarentaECincoOsRelEComOMesmoFormato() {
+        SessaoDeApi pessoa = SessaoDeApi.entrar(mvc, AMARELO);
+        long conversa = conversa(pessoa, jdbc);
+        modelo.chamadas(null, null, pedido(PedidoDeRelatorio.NOME, "{}"), pedido(GerarModelo.NOME, BRIEFING));
+
+        Evento fim = fim(eventos(falarEmFluxo(pessoa, conversa, "Quero o relatório e um modelo de briefing.")));
+
+        assertThat(fim.<List<String>>ler("$.itens[*].tipo")).containsExactly("usuario", "pedido_relatorio", "modelo");
+        Map<String, Object> pedidoDoFim = fim.<List<Map<String, Object>>>ler("$.itens[?(@.tipo=='pedido_relatorio')]").get(0);
+        assertThat(pedidoDoFim.keySet()).containsExactly("tipo", "texto", "relatorioOficial", "modelos");
+        assertThat(pedidoDoFim).containsEntry("relatorioOficial", false);
+        assertThat((String) pedidoDoFim.get("texto")).isEqualTo(PedidoDeRelatorio.texto(false));
+        assertThat(pedidoDoFim.get("modelos")).isEqualTo(List.of(
+                Map.of("tipo", "BRIEFING_CONTEUDO", "titulo", "Briefing de conteúdo"),
+                Map.of("tipo", "PERGUNTAS_PESQUISA", "titulo", "Perguntas da pesquisa"),
+                Map.of("tipo", "PLANO_OPERACIONAL_ATIVACAO", "titulo", "Plano operacional da ativação")));
+        Map<String, Object> modeloDoFim = fim.<List<Map<String, Object>>>ler("$.itens[?(@.tipo=='modelo')]").get(0);
+        assertThat(modeloDoFim.keySet()).containsExactly("tipo", "titulo", "conteudo", "nomeArquivo");
+        assertThat(modeloDoFim).containsEntry("titulo", "Briefing de conteúdo").containsEntry("nomeArquivo", "briefing-de-conteudo.md");
+        assertThat((String) modeloDoFim.get("conteudo")).startsWith("# Briefing de conteúdo");
+
+        // a rota 45 devolve os mesmos dois itens
+        MvcTestResult inteira = pessoa.get("/api/atlas/conversas/" + conversa);
+        assertThat(lerLista(inteira, "$.itens[?(@.tipo=='pedido_relatorio')]")).containsExactly(pedidoDoFim);
+        assertThat(lerLista(inteira, "$.itens[?(@.tipo=='modelo')]")).containsExactly(modeloDoFim);
     }
 
     @Test

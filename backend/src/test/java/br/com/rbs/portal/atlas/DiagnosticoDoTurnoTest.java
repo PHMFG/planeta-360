@@ -218,7 +218,7 @@ class DiagnosticoDoTurnoTest {
         long conversa = abrir();
         modelo.chamada("gerar_modelo", "{\"tipo\":\"BRIEFING_CONTEUDO\"}");
 
-        falar(conversa, "Me dá um modelo de briefing.");
+        ConversaDto resposta = falar(conversa, "Me dá um modelo de briefing.");
 
         List<Linha> traco = tracoDoTurno(jdbc, conversa);
         assertThat(etapas(traco)).containsExactly("G1_LIMITES", "LLM_IDA", "FERRAMENTA", "SAIDA");
@@ -233,6 +233,9 @@ class DiagnosticoDoTurnoTest {
         assertThat(saida.mensagemId()).isEqualTo(mensagem);
         assertThat(saida.dados()).containsEntry("tipo", "RESPOSTA_DIRETA").containsEntry("idasAoModelo", 1)
                 .containsEntry("chamadasDeFerramenta", 1).doesNotContainKey("caracteres");
+        // a marca vê o diagnóstico: o item do modelo traz o id do turno, como os outros itens do assistente
+        assertThat(resposta.itens().stream().filter(AtlasDtos.ItemModelo.class::isInstance).map(AtlasDtos.ItemModelo.class::cast)
+                .map(AtlasDtos.ItemModelo::turno)).containsExactly(traco.get(0).turno().toString());
     }
 
     @Test
