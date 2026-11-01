@@ -120,6 +120,31 @@ class JevNoDiagnosticoTest {
     }
 
     @Test
+    void aRespostaFixaDoCartaoAbertoFicaLigadaAoTurnoEAOBotaoDeDiagnosticoAparece() {
+        // a preparação encerra o turno sem o modelo: a SAIDA tem de levar a mensagem da resposta fixa, e o item da conversa, o turno
+        config.ligar(PontoDoJev.CARTAO, ModoDoJev.ATIVO);
+        jev.cartao("responde_ao_cartao", 0.98);
+        long conversa = conversa();
+        atlas.enviarMensagem(marca(), conversa, new MensagemRequisicao(null, "MONTAR_RELATORIO", "ATIVACAO_EVENTO"), requisicao());
+
+        var resposta = atlas.enviarMensagem(marca(), conversa, new MensagemRequisicao("e os brindes, onde eu informo?", null, null), requisicao());
+
+        assertThat(modelo.pedidos()).isEmpty();
+        Map<String, Object> saida = jdbc.sql("SELECT mensagem_id, CAST(turno AS text) AS turno, dados::text AS dados FROM atlas_traco "
+                + "WHERE conversa_id = :c AND etapa = 'SAIDA' ORDER BY id DESC LIMIT 1").param("c", conversa).query().singleRow();
+        long fixa = jdbc.sql("SELECT id FROM atlas_mensagem WHERE conversa_id = :c AND papel = 'assistant' AND fora_do_modelo ORDER BY ordem DESC LIMIT 1")
+                .param("c", conversa).query(Long.class).single();
+        assertThat(saida.get("mensagem_id")).as("a SAIDA leva a mensagem da resposta fixa").isEqualTo(fixa);
+        assertThat((String) saida.get("dados")).contains("CARTAO_ABERTO_JEV");
+        var texto = resposta.itens().stream().filter(AtlasDtos.ItemTexto.class::isInstance).map(AtlasDtos.ItemTexto.class::cast).findFirst().orElseThrow();
+        assertThat(texto.turno()).as("o botão de diagnóstico precisa do turno").isEqualTo(saida.get("turno"));
+        // reabrir a conversa traz o mesmo turno
+        var reaberta = atlas.verConversa(marca(), conversa);
+        assertThat(reaberta.itens().stream().filter(AtlasDtos.ItemTexto.class::isInstance).map(AtlasDtos.ItemTexto.class::cast)
+                .map(AtlasDtos.ItemTexto::turno)).contains((String) saida.get("turno"));
+    }
+
+    @Test
     void emSombraAEtapaDizOQueTeriaFeitoEOTurnoSegueNormal() {
         config.ligar(PontoDoJev.INTENCAO, ModoDoJev.SOMBRA);
         jev.intencao("fora_de_escopo", 0.97);

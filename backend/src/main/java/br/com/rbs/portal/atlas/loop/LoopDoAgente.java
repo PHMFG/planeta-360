@@ -320,11 +320,11 @@ public class LoopDoAgente {
             }).stream()).toList();
             Optional<DecisaoDoCartao> decisao = jev.cartao(contexto, texto, chaves);
             if (decisao.isPresent() && decisao.get().responde()) {
-                transacao.executeWithoutResult(estado -> {
+                long respostaId = transacao.execute(estado -> {
                     historico.usuarioForaDoModelo(contexto.conversaId(), texto);
-                    historico.assistenteForaDoModelo(contexto.conversaId(), RESPOSTA_DO_CARTAO_ABERTO);
+                    return historico.assistenteForaDoModelo(contexto.conversaId(), RESPOSTA_DO_CARTAO_ABERTO);
                 });
-                contexto.jev().encerrarNoPreparo();
+                contexto.jev().encerrarNoPreparo(respostaId);
                 jev.gravar(contexto);
                 return;
             }
@@ -396,6 +396,7 @@ public class LoopDoAgente {
                 ouvinte.texto(RESPOSTA_DO_CARTAO_ABERTO);
                 turno.tipoDaSaida = "FRASE_FIXA";
                 turno.motivoDaSaida = "CARTAO_ABERTO_JEV";
+                turno.mensagemFinalId = contexto.jev().mensagemDoPreparo();   // a SAIDA a leva: é por ela que a resposta ganha o turno na conversa
                 turno.caracteresDaSaida = RESPOSTA_DO_CARTAO_ABERTO.length();
                 registrarSaida(turno, ouvinte, 0, 0);
                 return;

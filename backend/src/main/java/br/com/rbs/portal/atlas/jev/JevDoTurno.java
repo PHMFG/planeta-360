@@ -57,6 +57,7 @@ public final class JevDoTurno {
     private final List<Decisao> decisoes = new ArrayList<>();
     private int requisicoes;
     private boolean encerradoNoPreparo;
+    private Long mensagemDoPreparo;
     private String marca;
 
     public JevDoTurno() {
@@ -119,13 +120,23 @@ public final class JevDoTurno {
         }
     }
 
-    /** O turno acabou na preparação, sem chamar o modelo (a resposta fixa de um cartão aberto). */
-    public synchronized void encerrarNoPreparo() {
+    /**
+     * O turno acabou na preparação, sem chamar o modelo (a resposta fixa de um cartão aberto). {@code mensagemId} é a mensagem do
+     * assistente que a preparação gravou: a etapa {@code SAIDA} do traço a leva, e por ela a conversa liga a resposta ao turno
+     * (o botão de diagnóstico).
+     */
+    public synchronized void encerrarNoPreparo(long mensagemId) {
         encerradoNoPreparo = true;
+        mensagemDoPreparo = mensagemId;
     }
 
     public synchronized boolean encerradoNoPreparo() {
         return encerradoNoPreparo;
+    }
+
+    /** A mensagem do assistente que a preparação gravou ao encerrar o turno; nulo quando o turno não acabou nela. */
+    public synchronized Long mensagemDoPreparo() {
+        return mensagemDoPreparo;
     }
 
     /** O nome da marca da conversa, que a máscara tira do que vai ao JEV; nulo até alguém o pedir. */
