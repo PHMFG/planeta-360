@@ -171,8 +171,12 @@ export function numerosSemOrigem(turnos, hoje = new Date()) {
           const { marcador, texto, conta, ...metadados } = fonte
           origens.adicionar(valoresDe(metadados))
           origens.adicionar(conta ?? '')
-          if (marcador.startsWith('T')) origens.adicionarFonteCitada(texto ?? '')
-          else origens.adicionar(texto ?? '')
+          if (marcador.startsWith('T')) {
+            origens.adicionarFonteCitada(texto ?? '')
+          } else {
+            origens.adicionar(texto ?? '')
+            for (const inteiro of [texto, conta, valoresDe(metadados)]) origens.adicionarDiasDasDatas(inteiro)
+          }
         }
         for (const achado of extrair(semCitacoes(frase))) {
           // A fonte citada disse o ano desta data: vale o que ela disse, mesmo que a pessoa tenha escrito a data sem ano.
@@ -185,6 +189,23 @@ export function numerosSemOrigem(turnos, hoje = new Date()) {
     }
   }
   return problemas
+}
+
+/**
+ * Todo número do A4 está em "Fontes e cálculos" (M6): o texto que o Atlas redigiu e os indicadores. Título e legenda são do servidor.
+ * O texto do Atlas só tem marcador, e o que aparece aqui é o número já resolvido.
+ */
+export function numerosDoRelatorioSemFonte(relatorio) {
+  const blocos = (relatorio?.secoes ?? []).flatMap((secao) => secao.blocos)
+  const origens = new Origens()
+  for (const item of blocos.find((bloco) => bloco.tipo === 'fontes')?.itens ?? []) origens.adicionar(item.valor ?? '')
+  const conferir = (texto, onde) => extrair(String(texto ?? '')).filter((achado) => !origens.aceita(achado)).map((achado) => `"${achado.trecho}" em ${onde}`)
+  return blocos.flatMap((bloco) => {
+    if (bloco.tipo === 'paragrafo' && bloco.redigidoPor === 'ATLAS') return conferir(bloco.texto, bloco.id)
+    if (bloco.tipo === 'kpi') return conferir(bloco.item.valor, bloco.item.rotulo)
+    if (bloco.tipo === 'kpi_grade') return bloco.itens.flatMap((item) => conferir(item.valor, item.rotulo))
+    return []
+  })
 }
 
 // Etapas que rodam em paralelo (seção 8.4 do plano): ficam fora da soma e podem terminar depois do turno.
@@ -274,6 +295,10 @@ export function conferir(caso, turnos, relatoriosLidos = []) {
       const a4 = JSON.stringify(relatoriosLidos)
       const faltam = espera.relatorioContem.filter((a) => !casaAlguma(a4, a))
       anotar('relatorio_conteudo', faltam.length === 0, `faltou no relatório: ${faltam.join(' e ')}`)
+    }
+    if (espera.relatorioPronto) {
+      const semFonte = relatoriosLidos.flatMap(numerosDoRelatorioSemFonte)
+      anotar('numero_sem_origem', semFonte.length === 0, `no relatório: ${semFonte.join('; ')}`)
     }
   }
   if (espera.pedidoDeRelatorio) {

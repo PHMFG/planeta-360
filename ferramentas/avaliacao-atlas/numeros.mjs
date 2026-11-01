@@ -189,6 +189,14 @@ export class Origens {
     return this
   }
 
+  /** O dia de uma data que a fonte traz por inteiro: "04/12/2026" apoia "dia 4". Vale para registro e conta, sem montar data em pedaços. */
+  adicionarDiasDasDatas(texto) {
+    for (const achado of extrair(String(texto ?? ''), { fonte: true })) {
+      if (achado.data) this.valores.add(`dia:${Number(achado.data.dia.split('-')[1])}`)
+    }
+    return this
+  }
+
   /** O ano da edição ou de hoje: vale como ano ("em 2027"), nunca como valor ("R$ 2.027,00", "2026 credenciais"). */
   adicionarAnoLivre(ano) {
     this.valores.add(`ano:${ano}`)

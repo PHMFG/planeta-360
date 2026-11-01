@@ -1,7 +1,7 @@
 // node --test ferramentas/avaliacao-atlas/testes/*.test.mjs
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { casa, conferir, conferirTraco, numerosSemOrigem, resumirTurnos, vazamentos } from '../conferencias.mjs'
+import { casa, conferir, conferirTraco, numerosDoRelatorioSemFonte, numerosSemOrigem, resumirTurnos, vazamentos } from '../conferencias.mjs'
 import { extrair, frases, semCitacoes, semNumeracaoDeLista } from '../numeros.mjs'
 
 const valores = (texto) => extrair(texto).flatMap((a) => (a.data ? [`data:${a.data.dia}`, ...(a.data.ano ? [`ano:${a.data.ano}`] : [])] : a.valores))
@@ -90,6 +90,24 @@ test('data em pedaços só vale para trecho de documento', () => {
   assert.deepEqual(numerosSemOrigem(comFerramenta('listar_entregas', registro, 'Atualizada em 27/10/2026 [R1].')), [])
   const trecho = { trechos: [{ marcador: 'T1', documento: 'Manual', texto: 'Na sexta, 29, e no sábado, 30 de janeiro de 2027.' }] }
   assert.deepEqual(numerosSemOrigem(comFerramenta('buscar_documentos', trecho, 'Vale em 29/01/2027 [T1].')), [])
+})
+
+test('o dia de uma data inteira vale para registro e conta', () => {
+  const registro = { tipo: 'registros_do_portal', registros: [{ marcador: 'R1', titulo: 'Entrega', texto: 'Prazo: 04/12/2026.' }] }
+  assert.deepEqual(numerosSemOrigem(comFerramenta('listar_entregas', registro, 'O prazo é o dia 4 [R1].')), [])
+  assert.equal(numerosSemOrigem(comFerramenta('listar_entregas', registro, 'O prazo é o dia 5 [R1].')).length, 1)
+})
+
+test('todo número do relatório está em Fontes e cálculos', () => {
+  const relatorio = (texto, valor) => ({ secoes: [{ blocos: [
+    { id: 'p', tipo: 'paragrafo', redigidoPor: 'ATLAS', texto },
+    { id: 'k', tipo: 'kpi', item: { rotulo: 'Visitantes', valor } },
+    { id: 'f', tipo: 'fontes', itens: [{ ref: 'dado:a', rotulo: 'Visitantes', valor: '1.200', origem: 'Marca' }] },
+  ] }] })
+  assert.deepEqual(numerosDoRelatorioSemFonte(relatorio('Passaram pelo espaço: 1.200.', '1.200')), [])
+  assert.equal(numerosDoRelatorioSemFonte(relatorio('Passaram pelo espaço: 1.300.', '1.200')).length, 1)
+  assert.equal(numerosDoRelatorioSemFonte(relatorio('Sem número.', '999')).length, 1)
+  assert.deepEqual(numerosDoRelatorioSemFonte(relatorio('Sem número.', null)), [])
 })
 
 test('o que a pessoa escreveu vale nos turnos seguintes da conversa', () => {
