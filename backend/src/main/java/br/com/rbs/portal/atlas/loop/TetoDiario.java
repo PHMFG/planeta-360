@@ -9,8 +9,9 @@ import org.springframework.stereotype.Component;
 /**
  * O teto diário do Atlas por parceria (plano, seção 6.7). [ATLAS] O Go limita o uso a cada 5 horas, e uma rodada de testes sem
  * teto pode gastá-lo. O contador não tem tabela: são as mensagens do assistente gravadas em {@code atlas_mensagem} no dia
- * (horário de Brasília), de todas as conversas da parceria. O botão "Montar relatório" (plano B) escreve mensagens do assistente
- * com id {@code botao_...} e NÃO conta, porque não gasta o modelo. O limite vem de {@code atlas.teto-diario-por-parceria}
+ * (horário de Brasília), de todas as conversas da parceria. Não contam as que o servidor escreveu sem o modelo ({@code sem_modelo}, V15:
+ * o botão "Montar relatório" do plano B, a recusa de fora de escopo e a resposta direta do JEV) nem as {@code fora_do_modelo} (a
+ * resposta fixa de um cartão aberto), porque não gastam o modelo. O limite vem de {@code atlas.teto-diario-por-parceria}
  * (padrão {@value #PADRAO}); com o contador no limite ou acima, a mensagem de texto seguinte recebe 429. A conferência é no início
  * do turno: um turno que começou abaixo do teto termina, mesmo que passe dele.
  */

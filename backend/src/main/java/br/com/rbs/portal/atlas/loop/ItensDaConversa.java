@@ -64,8 +64,8 @@ import tools.jackson.core.type.TypeReference;
  *       (recusado, atrasado, ou de antes da V9) fica sem ele;</li>
  *   <li>mensagem {@code assistant} com texto &rarr; item {@code texto}, com os marcadores {@code {{ref}}} trocados pelos valores
  *       (o que não tem valor vira "indisponível"); nunca sai marcador cru nem número inventado. {@code porModelo} é falso nas
- *       frases do servidor: a mensagem do plano B (as chamadas dela têm id {@code botao_}) e as frases fixas do loop
- *       ({@link LoopDoAgente#FRASES_DO_SERVIDOR}); verdadeiro no resto, que só o modelo escreve;</li>
+ *       frases do servidor: a mensagem com {@code sem_modelo} (o plano B, a recusa de fora de escopo, a resposta do JEV) e as frases
+ *       fixas do loop ({@link LoopDoAgente#FRASES_DO_SERVIDOR}); verdadeiro no resto, que só o modelo escreve;</li>
  *   <li>cada pedido {@code relatorio_solicitar_campos} &rarr; item {@code cartao}, com os dados de {@code atlas_solicitacao}
  *       (achada pelo {@code tool_call_id}) e o estado de agora, os campos do catálogo e o valor vigente de cada um;</li>
  *   <li>a resposta de {@code relatorio_finalizar} &rarr; item {@code relatorio_pronto};</li>
@@ -163,7 +163,7 @@ public class ItensDaConversa {
                                 .map(f -> ContaDoChat.deDados(AtlasJson.ler(f.dados(), new TypeReference<Map<String, Object>>() {
                                 }))).flatMap(Optional::stream).forEach(resolucao::registrarConta);
                         itens.add(new ItemTexto(resolucao.paraExibicao(mensagem.conteudo()),
-                                escritoPeloModelo(mensagem.conteudo(), chamadas), turno,
+                                escritoPeloModelo(mensagem), turno,
                                 fontesDoTexto(mensagem.conteudo(), fontesDaMensagem)));
                     }
                     List<LinhaDeChamada> trilhaDaMensagem = trilha.getOrDefault(mensagem.id(), List.of());
@@ -372,13 +372,12 @@ public class ItensDaConversa {
     }
 
     /**
-     * O texto foi escrito pelo modelo de linguagem? Não, se a mensagem é do plano B (o servidor dá às chamadas dele o id
-     * {@code botao_}) ou se é uma das frases fixas que o loop grava sozinho.
+     * O texto foi escrito pelo modelo de linguagem? Não, se o servidor o escreveu sem o modelo (a coluna {@code sem_modelo}, V15: o
+     * plano B, a recusa de fora de escopo, a resposta direta do JEV, a resposta fixa do cartão) ou se é uma das frases fixas que o
+     * loop grava sozinho.
      */
-    private static boolean escritoPeloModelo(String conteudo, List<Map<String, Object>> chamadas) {
-        boolean doBotao = chamadas.stream().anyMatch(c -> c.get("id") instanceof String id
-                && id.startsWith(HistoricoDaConversa.PREFIXO_DO_BOTAO));
-        return !doBotao && !LoopDoAgente.FRASES_DO_SERVIDOR.contains(conteudo);
+    private static boolean escritoPeloModelo(LinhaDeMensagem mensagem) {
+        return !mensagem.semModelo() && !LoopDoAgente.FRASES_DO_SERVIDOR.contains(mensagem.conteudo());
     }
 
     @SuppressWarnings("unchecked")

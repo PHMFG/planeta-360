@@ -31,10 +31,13 @@ public class AtlasRepositorio {
     /**
      * Uma mensagem do histórico. {@code toolCalls} é o JSON dos pedidos de ferramenta do assistente (ou nulo) e
      * {@code reasoningContent} o raciocínio que o modelo mandou com a mensagem, se mandou (volta ao modelo na retomada; cru, nunca
-     * vai à API nem ao log). {@code resumoDoRaciocinio} é o resumo dele que a conversa mostra (V9), ou nulo.
+     * vai à API nem ao log). {@code resumoDoRaciocinio} é o resumo dele que a conversa mostra (V9), ou nulo. {@code foraDoModelo} (V15)
+     * é a mensagem que fica na conversa mas não vai ao modelo, nem conta no teto diário nem no relógio de 7 dias; {@code semModelo}
+     * (V15) é a do assistente que o servidor escreveu sem gastar o modelo (não conta no teto, e continua no histórico do modelo).
      */
     public record LinhaDeMensagem(Long id, Integer ordem, String papel, String conteudo, String toolCalls, String toolCallId,
-                                  OffsetDateTime criadaEm, String reasoningContent, String resumoDoRaciocinio) {
+                                  OffsetDateTime criadaEm, String reasoningContent, String resumoDoRaciocinio, boolean foraDoModelo,
+                                  boolean semModelo) {
 
         /** Sem o raciocínio cru: um {@code toString} (de um log, de uma mensagem de erro) não pode levá-lo. */
         @Override
@@ -194,27 +197,36 @@ public class AtlasRepositorio {
     /** Grava a mensagem na próxima ordem da conversa e devolve o id. Chamar dentro da transação, com a conversa travada. */
     public long inserirMensagem(long conversaId, String papel, String conteudo, String toolCallsJson, String toolCallId,
                                 String reasoningContent) {
+        return inserirMensagem(conversaId, papel, conteudo, toolCallsJson, toolCallId, reasoningContent, false, false);
+    }
+
+    /** O mesmo, dizendo se a mensagem é {@code fora_do_modelo} e se é {@code sem_modelo} (V15). */
+    public long inserirMensagem(long conversaId, String papel, String conteudo, String toolCallsJson, String toolCallId,
+                                String reasoningContent, boolean foraDoModelo, boolean semModelo) {
         int ordem = ultimaOrdem(conversaId) + 1;
         return jdbc.sql("""
-                        INSERT INTO atlas_mensagem (conversa_id, ordem, papel, conteudo, tool_calls, tool_call_id, reasoning_content)
-                        VALUES (:conversa, :ordem, :papel, :conteudo, CAST(:calls AS jsonb), :toolCallId, :raciocinio) RETURNING id
+                        INSERT INTO atlas_mensagem (conversa_id, ordem, papel, conteudo, tool_calls, tool_call_id, reasoning_content,
+                                                    fora_do_modelo, sem_modelo)
+                        VALUES (:conversa, :ordem, :papel, :conteudo, CAST(:calls AS jsonb), :toolCallId, :raciocinio, :fora, :sem)
+                        RETURNING id
                         """)
                 .param("conversa", conversaId).param("ordem", ordem).param("papel", papel).param("conteudo", conteudo)
                 .param("calls", toolCallsJson).param("toolCallId", toolCallId).param("raciocinio", reasoningContent)
+                .param("fora", foraDoModelo).param("sem", semModelo)
                 .query(Long.class).single();
     }
 
     /**
      * Quantas mensagens do assistente que vieram do modelo de linguagem foram gravadas hoje (dia de Brasília) nas conversas da
-     * parceria. As do botão (plano B) têm id de pedido {@code botao_...} e não entram: não gastam o modelo. É o contador do
-     * teto diário.
+     * parceria. As que o servidor escreveu sem o modelo ({@code sem_modelo}: o botão, a recusa de fora de escopo, a resposta direta
+     * do JEV) e as {@code fora_do_modelo} não entram: não gastam o modelo. É o contador do teto diário.
      */
     public long mensagensDoModeloHoje(long parceriaId) {
         return jdbc.sql("""
                         SELECT count(*) FROM atlas_mensagem m JOIN atlas_conversa c ON c.id = m.conversa_id
                         WHERE c.parceria_id = :parceria AND m.papel = 'assistant'
                           AND m.criada_em >= (date_trunc('day', now() AT TIME ZONE 'America/Sao_Paulo') AT TIME ZONE 'America/Sao_Paulo')
-                          AND NOT coalesce(jsonb_path_exists(m.tool_calls, '$[*].id ? (@ like_regex "^botao_")'), false)
+                          AND NOT m.sem_modelo AND NOT m.fora_do_modelo
                         """)
                 .param("parceria", parceriaId)
                 .query(Long.class).single();
@@ -234,7 +246,7 @@ public class AtlasRepositorio {
                         JOIN patrocinador p ON p.id = pa.patrocinador_id
                         WHERE m.papel = 'assistant'
                           AND m.criada_em >= (date_trunc('day', now() AT TIME ZONE 'America/Sao_Paulo') AT TIME ZONE 'America/Sao_Paulo')
-                          AND NOT coalesce(jsonb_path_exists(m.tool_calls, '$[*].id ? (@ like_regex "^botao_")'), false)
+                          AND NOT m.sem_modelo AND NOT m.fora_do_modelo
                         GROUP BY c.parceria_id, p.nome_canonico
                         ORDER BY usadas DESC, p.nome_canonico
                         """)
@@ -244,7 +256,7 @@ public class AtlasRepositorio {
     public List<LinhaDeMensagem> mensagens(long conversaId) {
         return jdbc.sql("""
                         SELECT id, ordem, papel, conteudo, CAST(tool_calls AS text) AS tool_calls, tool_call_id, criada_em,
-                               reasoning_content, resumo_do_raciocinio
+                               reasoning_content, resumo_do_raciocinio, fora_do_modelo, sem_modelo
                         FROM atlas_mensagem WHERE conversa_id = :id ORDER BY ordem
                         """)
                 .param("id", conversaId)
@@ -486,8 +498,9 @@ public class AtlasRepositorio {
 
     /**
      * Os relatórios em montagem ou esperando cartão, destas conversas, sem nenhuma mensagem nova há mais de {@code dias} dias
-     * (a última atividade é a mensagem mais nova da conversa, ou a criação do relatório). Trava as linhas; as que outro pedido
-     * está mexendo ficam de fora (não estão paradas).
+     * (a última atividade é a mensagem mais nova da conversa, ou a criação do relatório; a mensagem {@code fora_do_modelo}, a resposta
+     * fixa de um cartão aberto, não conta: conversar com o cartão aberto não mantém o relatório vivo). Trava as linhas; as que outro
+     * pedido está mexendo ficam de fora (não estão paradas).
      */
     public List<Parado> relatoriosParados(List<Long> conversaIds, int dias) {
         if (conversaIds.isEmpty()) {
@@ -498,7 +511,7 @@ public class AtlasRepositorio {
                         FROM atlas_relatorio r
                         WHERE r.conversa_id IN (:conversas) AND r.status IN ('MONTANDO','AGUARDANDO_RESPOSTA')
                           AND greatest(r.criado_em, coalesce((SELECT max(m.criada_em) FROM atlas_mensagem m
-                                                              WHERE m.conversa_id = r.conversa_id), r.criado_em))
+                                                              WHERE m.conversa_id = r.conversa_id AND NOT m.fora_do_modelo), r.criado_em))
                               < now() - make_interval(days => :dias)
                         ORDER BY r.id
                         FOR UPDATE OF r SKIP LOCKED

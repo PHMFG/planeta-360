@@ -63,9 +63,38 @@ public class HistoricoDaConversa {
         return repositorio.inserirMensagem(conversaId, "user", texto, null, null, null);
     }
 
+    /**
+     * A mensagem da pessoa que fica só na conversa ({@code fora_do_modelo}, V15): o histórico que vai ao modelo a pula, e ela não
+     * conta no teto nem no relógio de 7 dias do relatório parado. É a que provocou a resposta fixa de um cartão aberto.
+     */
+    public long usuarioForaDoModelo(long conversaId, String texto) {
+        repositorio.travarConversa(conversaId);
+        return repositorio.inserirMensagem(conversaId, "user", texto, null, null, null, true, false);
+    }
+
     /** A mensagem do assistente: um texto, pedidos de ferramenta, ou os dois juntos. Devolve o id da mensagem. */
     public long assistente(long conversaId, String texto, List<Chamada> chamadas) {
         return assistente(conversaId, texto, chamadas, null);
+    }
+
+    /**
+     * A mensagem do assistente que o SERVIDOR escreveu sem o modelo ({@code sem_modelo}, V15): o botão do plano B, a recusa de fora de
+     * escopo e a resposta direta do JEV. Continua no histórico que vai ao modelo, mas não conta no teto diário e a conversa a mostra
+     * com {@code porModelo} falso. Com {@code chamadas}, é "como se o modelo tivesse chamado a ferramenta"; sem elas, só o texto.
+     */
+    public long assistenteDoServidor(long conversaId, String texto, List<Chamada> chamadas) {
+        repositorio.travarConversa(conversaId);
+        return repositorio.inserirMensagem(conversaId, "assistant", texto, chamadas.isEmpty() ? null : paraJson(chamadas), null, null,
+                false, true);
+    }
+
+    /**
+     * A resposta fixa do servidor a quem escreveu com um cartão aberto ({@code fora_do_modelo} e {@code sem_modelo}): fica na conversa,
+     * não vai ao modelo, e não conta no teto nem no relógio de 7 dias.
+     */
+    public long assistenteForaDoModelo(long conversaId, String texto) {
+        repositorio.travarConversa(conversaId);
+        return repositorio.inserirMensagem(conversaId, "assistant", texto, null, null, null, true, true);
     }
 
     /** O mesmo, com o {@code reasoning_content} que o modelo mandou (nulo se não mandou). */
@@ -113,12 +142,20 @@ public class HistoricoDaConversa {
      * {@code atlas_tool_call} e {@code atlas_fonte} fica como estava: aqui só muda o que vai ao modelo. O que o assistente já escreveu
      * e o raciocínio antigo continuam no histórico (o provedor exige o raciocínio junto das ferramentas); a nota do prompt do turno
      * cobre esse caso, e o risco que sobra está em {@code pendencias.md}.
+     * <p>
+     * A mensagem {@code fora_do_modelo} (V15) não vai: é a resposta fixa de um cartão aberto e a mensagem da pessoa que a provocou.
+     * Elas ficam entre o pedido de ferramenta do cartão e a resposta dele, e sem este filtro a chamada pendente receberia o erro
+     * sintético de {@link #completarSemResposta} e, depois, a resposta de verdade, que ficaria sem pedido. A conversa continua
+     * mostrando as duas.
      */
     public List<MensagemDeChat> paraOProvedor(long conversaId, int ordemDoTurno) {
         List<MensagemDeChat> remontado = new ArrayList<>();
         Map<String, String> nomes = new LinkedHashMap<>();
         Set<String> semResposta = new LinkedHashSet<>();
         for (LinhaDeMensagem linha : repositorio.mensagens(conversaId)) {
+            if (linha.foraDoModelo()) {
+                continue;
+            }
             if (!"tool".equals(linha.papel())) {
                 completarSemResposta(remontado, nomes, semResposta);
             }
