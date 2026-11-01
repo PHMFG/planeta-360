@@ -287,6 +287,24 @@ class CalcularNoChatTest {
     }
 
     // ---------------------------------------------------------------------
+    // Número sem origem pela conta: o que o servidor não pode deixar passar
+    // ---------------------------------------------------------------------
+
+    @Test
+    void oNomeDeUmaVariavelComAlgarismoNaoFazOAlgarismoVirarNumeroDaResposta() {
+        SessaoDeApi pessoa = SessaoDeApi.entrar(mvc, AMARELO);
+        long conversa = conversa(pessoa, jdbc);
+        String artimanha = "{\"nome\":\"multa\",\"script\":\"n312 * 1\",\"variaveis\":{\"n312\":{\"fonte\":\"usuario\",\"valor\":\"5\"}}}";
+        modelo.chamada(CALCULAR, artimanha).texto("A multa é de R$ 312,00 [C1].").texto("A conta deu {{calc:multa}} [C1].");
+
+        MvcTestResult resposta = falar(pessoa, conversa, "Quero 5 unidades.");
+
+        assertThat(textos(resposta)).containsExactly("A conta deu 5 [C1].");
+        MensagemDeChat pedidoDeNovaRedacao = modelo.ultimoPedido().mensagens().get(modelo.ultimoPedido().mensagens().size() - 1);
+        assertThat(pedidoDeNovaRedacao.conteudo()).contains("312", "não tem origem");
+    }
+
+    // ---------------------------------------------------------------------
     // Indisponível: nunca zero
     // ---------------------------------------------------------------------
 

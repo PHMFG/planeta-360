@@ -62,7 +62,8 @@ public final class FontesDoTurno {
         /** O título, a versão, a página e a seção da fonte: valem como parte dela ("página 5"), mas não são o texto do documento. */
         public String metadados() {
             StringBuilder todo = new StringBuilder();
-            if (titulo != null) {
+            // o título de uma conta é o nome que o modelo deu a ela, e um nome com algarismo (energia_20kva) não pode liberar o número
+            if (titulo != null && tipo != Tipo.CALCULO) {
                 todo.append(titulo).append(' ');
             }
             if (versao != null) {

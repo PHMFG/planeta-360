@@ -205,4 +205,16 @@ class FontesDoTurnoTest {
         assertThat(turno.registrarRegistro("entrega", 9, "Outra", null, "Texto", Map.of()).marcador()).isEqualTo("R2");
         assertThat(turno.registrarCalculo("seguro", "seguro", "seguro", Map.of()).marcador()).isEqualTo("C2");
     }
+
+    @Test
+    void oTituloDeUmaContaNaoFazParteDoQueEleCita() {
+        FontesDoTurno turno = turno();
+
+        FontesDoTurno.Fonte conta = turno.registrarCalculo("energia_20kva", "energia_20kva", "Valores usados: 5. Resultado: 5.", Map.of());
+        FontesDoTurno.Fonte registro = turno.registrarRegistro("entrega", 7, "Cortesias 2027", null, "Texto", Map.of());
+
+        assertThat(conta.metadados()).doesNotContain("20");
+        assertThat(conta.conteudoCitavel()).doesNotContain("20").doesNotContain("energia");
+        assertThat(registro.metadados()).as("o título de um registro continua valendo como parte dele").contains("Cortesias 2027");
+    }
 }

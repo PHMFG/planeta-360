@@ -712,4 +712,22 @@ class NormalizadorDeNumerosTest {
         assertThat(NormalizadorDeNumeros.extrair("   ", true)).isEmpty();
         assertThat(valores("sem número nenhum aqui")).isEmpty();
     }
+
+    @Test
+    void oLiteralDoCalcularSoValeComoValorNuncaComoAnoNemPorPedacoDeData() {
+        Origens edicao = new Origens("Edição: Planeta Atlântida 2027. Prazo: 04/12/2026.");
+        Origens valor = new Origens("A multa é de R$ 2.027,00 e fica em 04/12.");
+
+        // a regra da resposta aceita o ano ("em 2027"), e o literal do calcular não
+        assertThat(edicao.aceita(NormalizadorDeNumeros.extrair("2027", false).get(0))).isTrue();
+        assertThat(edicao.aceitaComoValor(NormalizadorDeNumeros.extrair("2027", false).get(0))).isFalse();
+        assertThat(edicao.aceitaComoValor(NormalizadorDeNumeros.extrair("2026", false).get(0))).as("o ano de uma data").isFalse();
+        assertThat(valor.aceitaComoValor(NormalizadorDeNumeros.extrair("2027", false).get(0))).isTrue();
+        assertThat(valor.aceitaComoValor(NormalizadorDeNumeros.extrair("2.027,00", false).get(0))).isTrue();
+        // data nunca é valor, e o dia solto depois de "dia" também não
+        assertThat(valor.aceitaComoValor(NormalizadorDeNumeros.extrair("04/12", false).get(0))).isFalse();
+        assertThat(new Origens("Vence 04/12/2026.").adicionarFonteCitada("Vence no dia 4.").aceitaComoValor(NormalizadorDeNumeros.extrair("4", false).get(0)))
+                .as("o 4 está na fonte como número").isTrue();
+        assertThat(new Origens("Vence 04/12/2026.").aceitaComoValor(NormalizadorDeNumeros.extrair("4", false).get(0))).isFalse();
+    }
 }

@@ -598,6 +598,23 @@ public final class NormalizadorDeNumeros {
             return aceitaPeloDiaESoltoEPeloMes(achado);
         }
 
+        /**
+         * O número como <b>valor</b>: só vale se a origem o trouxe como número. Nunca pela regra do ano ({@code ano:2027} não faz
+         * {@code 2027} valer como valor, nem o ano de uma data da fonte), pelo dia solto depois de "dia" nem por pedaço de data. É o
+         * que o literal do {@code calcular} exige; a regra da resposta ({@link #aceita}) não muda.
+         */
+        public boolean aceitaComoValor(Achado achado) {
+            if (achado.ehData()) {
+                return false;
+            }
+            for (String valor : achado.valores()) {
+                if (!valor.startsWith("ano:") && !valor.startsWith(PREFIXO_DEPOIS_DE_DIA) && valores.contains(valor)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         private boolean aceitaDataComAno(Achado achado) {
             if (valores.contains("data:" + achado.ano() + "-" + achado.dia())) {
                 return true;

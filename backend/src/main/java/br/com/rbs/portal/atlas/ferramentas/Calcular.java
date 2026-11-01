@@ -415,7 +415,7 @@ public class Calcular implements Ferramenta {
                         + "ou usuario.");
                 return null;
             }
-            origens = new Origens().adicionarFonteCitada(fonte.get().texto());
+            origens = new Origens().adicionar(fonte.get().texto());
             onde = "no texto da fonte " + marcador;
             Object unidade = fonte.get().dados().get("unidade");
             unidadeDaFonte = unidade instanceof String texto && UNIDADES.contains(texto) ? texto : null;
@@ -423,7 +423,7 @@ public class Calcular implements Ferramenta {
             erros.put(campo, "A fonte \"" + marcador + "\" não é um marcador (T1, R1, C1...) nem usuario.");
             return null;
         }
-        if (achados.isEmpty() || achados.stream().anyMatch(achado -> achado.ehData() || !origens.aceita(achado))) {
+        if (achados.isEmpty() || achados.stream().anyMatch(achado -> achado.ehData() || !origens.aceitaComoValor(achado))) {
             erros.put(campo, "O valor " + valorLiteral + " não está " + onde + ". Copie o valor exatamente como está lá.");
             return null;
         }
@@ -485,12 +485,13 @@ public class Calcular implements Ferramenta {
         return (valor.signum() < 0 ? "-" : "") + milhares + "," + (centavos.length() < 2 ? "0" + centavos : centavos);
     }
 
-    /** Tudo o que a resposta pode citar da conta: o nome, o valor de cada variável e o resultado. */
+    /**
+     * Tudo o que a resposta pode citar da conta: os valores que entraram (todos já conferidos contra a origem deles) e o resultado.
+     * [VALIDACAO] Sem o nome de variável, o da conta nem o script: o nome de uma variável aceita algarismo ({@code n312}), e um
+     * algarismo escrito pelo modelo em qualquer um desses nomes faria o número valer na resposta sem ter origem.
+     */
     private static String textoDaFonte(ContaDoChat conta) {
-        StringBuilder texto = new StringBuilder("Conta ").append(conta.nome()).append(": ");
-        for (Variavel variavel : conta.variaveis()) {
-            texto.append(variavel.nome()).append(" = ").append(variavel.valor()).append("; ");
-        }
-        return texto.append("resultado = ").append(conta.valorFormatado()).append('.').toString();
+        List<String> valores = conta.variaveis().stream().map(Variavel::valor).toList();
+        return "Valores usados: " + String.join("; ", valores) + ". Resultado: " + conta.valorFormatado() + ".";
     }
 }
