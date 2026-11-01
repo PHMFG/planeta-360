@@ -99,14 +99,22 @@ atlas:
     preco-por-milhao:
       entrada: ${ATLAS_PRECO_ENTRADA:0.30}
       saida: ${ATLAS_PRECO_SAIDA:1.20}
-  # [ATLAS] O JEV (TypeSafe) e os embeddings (Gemini). Os embeddings valem desde o M3 (EmbeddingsGemini, na ingestão dos documentos); o JEV só o
-  # diagnóstico usa por enquanto (rotas 52 e 53 mostram o estado e testam a conexão), e o cliente de verdade dele entra no M7. As chaves vêm de variável de ambiente ou, no perfil dev, de
-  # config/segredos.local.properties; nunca deste arquivo. As URLs base são configuráveis para os testes usarem um servidor falso.
+  # [ATLAS] O JEV (TypeSafe) e os embeddings (Gemini). Os embeddings valem desde o M3 (EmbeddingsGemini, na ingestão dos documentos). O JEV
+  # (M7) entra em seis pontos de decisão (intencao, cartao, fontes, resposta, coerencia e lacunas, perguntas em atlas/jev/perguntas.json).
+  # As chaves vêm de variável de ambiente ou, no perfil dev, de config/segredos.local.properties; nunca deste arquivo. As URLs base são
+  # configuráveis para os testes usarem um servidor falso.
   jev:
+    # O modo de TODOS os pontos: none (desligado), sombra (consulta e só grava "teria feito X") ou ativo (age quando a confiança chega ao
+    # limiar). Cada ponto troca o dele com atlas.jev.<ponto>.modo e o limiar com atlas.jev.<ponto>.limiar (de 0 a 1), por exemplo
+    # atlas.jev.intencao.modo=ativo. Nenhum ponto tem override aqui: quem liga cada um, depois da calibração, é quem opera.
     modo: ${ATLAS_JEV:none}                       # none | sombra | ativo
     modelo: ${ATLAS_JEV_MODELO:jev-1.14.0}
     base-url: ${ATLAS_JEV_BASE_URL:https://api.typesafe.ai}
     chave: ${TYPESAFE_API_KEY:}
+    # O tempo que o turno espera o JEV: a requisição inteira em 800 ms, a conexão em 300 ms. Passou disso, o turno segue o caminho do modelo
+    # de linguagem, sem nova tentativa.
+    timeout: PT0.8S
+    timeout-conexao: PT0.3S
   embeddings:
     provedor: ${ATLAS_EMBEDDINGS:none}            # gemini | teste | none
     modelo: gemini-embedding-2
