@@ -1,6 +1,6 @@
--- Confere o banco depois de V1 a V12 e da amostra R__amostra.sql: contagens, cargas, relatórios, órfãos e uma tentativa de violar cada regra.
+-- Confere o banco depois de V1 a V13 e da amostra R__amostra.sql: contagens, cargas, relatórios, órfãos e uma tentativa de violar cada regra.
 -- Atende o item 1 da Entrega 2 (amostra e verificações), prova as 8 correções do item 8 e, na seção 8, o plano comercial, o
--- catálogo e os dados informados da V7 e, na seção 9, as tabelas do Atlas da V8, o resumo do raciocínio da V9 e o traço do diagnóstico da V10 e, na seção 10, os documentos, os trechos, a busca sem acento e a RLS da V11 e, na seção 11, as fontes citadas, o documento congelado e o plural da busca da V12. Nenhuma linha fica gravada: as tentativas são desfeitas (só as sequências avançam).
+-- catálogo e os dados informados da V7 e, na seção 9, as tabelas do Atlas da V8, o resumo do raciocínio da V9 e o traço do diagnóstico da V10 e, na seção 10, os documentos, os trechos, a busca sem acento e a RLS da V11 e, na seção 11, as fontes citadas, o documento congelado e o plural da busca da V12 e, na seção 12, os prazos da V13. Nenhuma linha fica gravada: as tentativas são desfeitas (só as sequências avançam).
 
 -- Como rodar (banco de dev ou de teste com a amostra carregada; sem meta-comandos, serve também para JDBC com o texto inteiro):
 --   PGPASSWORD=portal psql -X -P pager=off -v ON_ERROR_STOP=1 -h localhost -U portal -d <banco> -f verificacao.sql
@@ -69,7 +69,7 @@ END $f$;
 DO $$
 BEGIN
     -- A tabela de controle do Flyway (flyway_schema_history) não é do portal: fica de fora quando o banco foi criado pelo Flyway.
-    PERFORM pg_temp.confere('ESTRUTURA', 'tabelas (29 da modelagem + 4 novas na V1 + 3 na V7 + 7 na V8 + 1 na V10 + 2 na V11 + 1 na V12)', 47,
+    PERFORM pg_temp.confere('ESTRUTURA', 'tabelas (29 da modelagem + 4 novas na V1 + 3 na V7 + 7 na V8 + 1 na V10 + 2 na V11 + 1 na V12 + 1 na V13)', 48,
        (SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
            AND table_name <> 'flyway_schema_history'));
     PERFORM pg_temp.confere('ESTRUTURA', 'visões (7 de consolidação + vw_dado_vigente)', 8,
@@ -77,7 +77,7 @@ BEGIN
     PERFORM pg_temp.confere('ESTRUTURA', 'funções fn_carregar_veiculacoes, fn_carregar_pesquisa, fn_carregar_plano, fn_gerar_relatorio', 4,
        (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
          WHERE n.nspname = 'public' AND p.proname IN ('fn_carregar_veiculacoes', 'fn_carregar_pesquisa', 'fn_carregar_plano', 'fn_gerar_relatorio')));
-    PERFORM pg_temp.confere('ESTRUTURA', 'gatilhos de regra (rn_*)', 26,
+    PERFORM pg_temp.confere('ESTRUTURA', 'gatilhos de regra (rn_*)', 28,
        (SELECT count(*) FROM pg_trigger WHERE NOT tgisinternal AND tgname LIKE 'rn\_%'));
     PERFORM pg_temp.confere('BASE', 'tipos de cota', 3, (SELECT count(*) FROM cota_tipo));
     PERFORM pg_temp.confere('BASE', 'abas do menu', 7, (SELECT count(*) FROM aba));
@@ -1995,7 +1995,240 @@ BEGIN
 END $$;
 
 -- ---------------------------------------------------------------------
--- 12. Resultado: a lista de conferências e, se alguma falhou, o erro final (saída diferente de zero com ON_ERROR_STOP)
+-- 12. V13: os prazos da edição, da cota e da parceria
+-- ---------------------------------------------------------------------
+-- Estrutura
+DO $$
+BEGIN
+    PERFORM pg_temp.afirma('V13 ESTRUTURA', 'a tabela prazo existe',
+        EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'prazo'));
+    PERFORM pg_temp.afirma('V13 ESTRUTURA', 'os gatilhos rn_prazo_coerente e rn_prazo_imutavel existem',
+        (SELECT count(*) = 2 FROM pg_trigger WHERE NOT tgisinternal AND tgname IN ('rn_prazo_coerente', 'rn_prazo_imutavel')));
+    PERFORM pg_temp.afirma('V13 ESTRUTURA', 'o atlas_ro não lê prazo (ele é do portal: a ferramenta lê como o resto do portal)',
+        NOT has_table_privilege('atlas_ro', 'prazo', 'SELECT'));
+    PERFORM pg_temp.afirma('V13 ESTRUTURA', 'a hora é TIME(0) e a data é DATE',
+        (SELECT bool_and(CASE column_name WHEN 'hora' THEN data_type = 'time without time zone' AND datetime_precision = 0
+                                          WHEN 'data' THEN data_type = 'date' END)
+           FROM information_schema.columns WHERE table_name = 'prazo' AND column_name IN ('hora', 'data')));
+END $$;
+
+-- As regras do prazo
+DO $$
+BEGIN
+    PERFORM pg_temp.aceita('V13 PRAZO', 'prazo GLOBAL da edição, sem documento', $q$
+        INSERT INTO prazo (evento_id, escopo, titulo, data, criado_por)
+        VALUES (pg_temp.ev(2027), 'GLOBAL', 'v13-global', DATE '2026-12-04', pg_temp.rbs()) $q$);
+    PERFORM pg_temp.aceita('V13 PRAZO', 'prazo COTA com hora e descrição', $q$
+        INSERT INTO prazo (evento_id, escopo, cota_tipo_id, titulo, data, hora, descricao, criado_por)
+        VALUES (pg_temp.ev(2027), 'COTA', 1, 'v13-cota', DATE '2026-12-04', TIME '18:00', 'Entregar o briefing.', pg_temp.rbs()) $q$);
+    PERFORM pg_temp.aceita('V13 PRAZO', 'prazo PARCERIA do Amarelo em 2027', $q$
+        INSERT INTO prazo (evento_id, escopo, parceria_id, titulo, data, criado_por)
+        VALUES (pg_temp.ev(2027), 'PARCERIA', (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027),
+                'v13-parceria', DATE '2026-12-04', pg_temp.rbs()) $q$);
+    -- O escopo
+    PERFORM pg_temp.recusa('V13 PRAZO', 'GLOBAL com cota', 'ck_prazo_escopo', $q$
+        INSERT INTO prazo (evento_id, escopo, cota_tipo_id, titulo, data, criado_por)
+        VALUES (pg_temp.ev(2027), 'GLOBAL', 1, 'v13-x', DATE '2026-12-04', pg_temp.rbs()) $q$);
+    PERFORM pg_temp.recusa('V13 PRAZO', 'GLOBAL com parceria', 'ck_prazo_escopo', $q$
+        INSERT INTO prazo (evento_id, escopo, parceria_id, titulo, data, criado_por)
+        VALUES (pg_temp.ev(2027), 'GLOBAL', (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027),
+                'v13-x', DATE '2026-12-04', pg_temp.rbs()) $q$);
+    PERFORM pg_temp.recusa('V13 PRAZO', 'COTA sem cota', 'ck_prazo_escopo', $q$
+        INSERT INTO prazo (evento_id, escopo, titulo, data, criado_por)
+        VALUES (pg_temp.ev(2027), 'COTA', 'v13-x', DATE '2026-12-04', pg_temp.rbs()) $q$);
+    PERFORM pg_temp.recusa('V13 PRAZO', 'COTA com parceria', 'ck_prazo_escopo', $q$
+        INSERT INTO prazo (evento_id, escopo, cota_tipo_id, parceria_id, titulo, data, criado_por)
+        VALUES (pg_temp.ev(2027), 'COTA', 1, (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027),
+                'v13-x', DATE '2026-12-04', pg_temp.rbs()) $q$);
+    PERFORM pg_temp.recusa('V13 PRAZO', 'PARCERIA sem parceria', 'ck_prazo_escopo', $q$
+        INSERT INTO prazo (evento_id, escopo, titulo, data, criado_por)
+        VALUES (pg_temp.ev(2027), 'PARCERIA', 'v13-x', DATE '2026-12-04', pg_temp.rbs()) $q$);
+    PERFORM pg_temp.recusa('V13 PRAZO', 'PARCERIA com cota', 'ck_prazo_escopo', $q$
+        INSERT INTO prazo (evento_id, escopo, cota_tipo_id, parceria_id, titulo, data, criado_por)
+        VALUES (pg_temp.ev(2027), 'PARCERIA', 1, (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027),
+                'v13-x', DATE '2026-12-04', pg_temp.rbs()) $q$);
+    PERFORM pg_temp.recusa('V13 PRAZO', 'escopo fora da lista', 'ck_prazo_escopo', $q$
+        INSERT INTO prazo (evento_id, escopo, titulo, data, criado_por)
+        VALUES (pg_temp.ev(2027), 'TODOS', 'v13-x', DATE '2026-12-04', pg_temp.rbs()) $q$);
+    -- Os campos
+    PERFORM pg_temp.recusa('V13 PRAZO', 'título em branco', 'prazo_titulo_check', $q$
+        INSERT INTO prazo (evento_id, escopo, titulo, data, criado_por)
+        VALUES (pg_temp.ev(2027), 'GLOBAL', '   ', DATE '2026-12-04', pg_temp.rbs()) $q$);
+    PERFORM pg_temp.recusa('V13 PRAZO', 'data antes do ano 2000', 'prazo_data_check', $q$
+        INSERT INTO prazo (evento_id, escopo, titulo, data, criado_por)
+        VALUES (pg_temp.ev(2027), 'GLOBAL', 'v13-x', DATE '1999-12-31', pg_temp.rbs()) $q$);
+    PERFORM pg_temp.recusa('V13 PRAZO', 'data depois do ano 2100', 'prazo_data_check', $q$
+        INSERT INTO prazo (evento_id, escopo, titulo, data, criado_por)
+        VALUES (pg_temp.ev(2027), 'GLOBAL', 'v13-x', DATE '2101-01-01', pg_temp.rbs()) $q$);
+    PERFORM pg_temp.recusa('V13 PRAZO', 'hora com segundos', 'ck_prazo_hora', $q$
+        INSERT INTO prazo (evento_id, escopo, titulo, data, hora, criado_por)
+        VALUES (pg_temp.ev(2027), 'GLOBAL', 'v13-x', DATE '2026-12-04', TIME '18:00:30', pg_temp.rbs()) $q$);
+    PERFORM pg_temp.recusa('V13 PRAZO', 'descrição em branco', 'prazo_descricao_check', $q$
+        INSERT INTO prazo (evento_id, escopo, titulo, data, descricao, criado_por)
+        VALUES (pg_temp.ev(2027), 'GLOBAL', 'v13-x', DATE '2026-12-04', '  ', pg_temp.rbs()) $q$);
+    PERFORM pg_temp.recusa('V13 PRAZO', 'página sem documento', 'ck_prazo_pagina', $q$
+        INSERT INTO prazo (evento_id, escopo, titulo, data, pagina, criado_por)
+        VALUES (pg_temp.ev(2027), 'GLOBAL', 'v13-x', DATE '2026-12-04', 3, pg_temp.rbs()) $q$);
+    PERFORM pg_temp.recusa('V13 PRAZO', 'página 0 (a primeira é a 1)', 'ck_prazo_pagina', $q$
+        INSERT INTO prazo (evento_id, escopo, titulo, data, documento_id, pagina, criado_por)
+        VALUES (pg_temp.ev(2027), 'GLOBAL', 'v13-x', DATE '2026-12-04',
+                pg_temp.doc('v13-pagina-zero', 'v13-pagina-zero', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO'), 0, pg_temp.rbs()) $q$);
+    -- Quem cadastra é da RBS
+    PERFORM pg_temp.recusa('V13 PERMISSAO', 'prazo criado por um Admin Patrocinador', 'fk_prazo_criador', $q$
+        INSERT INTO prazo (evento_id, escopo, titulo, data, criado_por)
+        VALUES (pg_temp.ev(2027), 'GLOBAL', 'v13-x', DATE '2026-12-04', (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example')) $q$);
+    PERFORM pg_temp.recusa('V13 PERMISSAO', 'perfil de quem criou que não é ADMIN_RBS', 'prazo_criado_por_perfil_check', $q$
+        INSERT INTO prazo (evento_id, escopo, titulo, data, criado_por, criado_por_perfil)
+        VALUES (pg_temp.ev(2027), 'GLOBAL', 'v13-x', DATE '2026-12-04', (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example'),
+                'ADMIN_PATROCINADOR') $q$);
+END $$;
+
+-- A parceria, o documento e a página batem com o prazo; o prazo não tem alcance maior que o do documento
+DO $$
+BEGIN
+    PERFORM pg_temp.recusa('V13 ISOLAMENTO', 'prazo de 2026 com a parceria do Amarelo de 2027', 'rn_prazo_coerente', $q$
+        INSERT INTO prazo (evento_id, escopo, parceria_id, titulo, data, criado_por)
+        VALUES (pg_temp.ev(2026), 'PARCERIA', (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027),
+                'v13-x', DATE '2026-12-04', pg_temp.rbs()) $q$);
+    PERFORM pg_temp.recusa('V13 ISOLAMENTO', 'prazo de 2027 com um documento de 2026', 'rn_prazo_coerente', $q$
+        INSERT INTO prazo (evento_id, escopo, titulo, data, documento_id, criado_por)
+        VALUES (pg_temp.ev(2027), 'GLOBAL', 'v13-x', DATE '2026-12-04',
+                pg_temp.doc('v13-doc-2026', 'v13-doc-2026', 'GLOBAL', 2026, NULL, NULL, 'INDEXADO'), pg_temp.rbs()) $q$);
+    PERFORM pg_temp.recusa('V13 PRAZO', 'página maior que as páginas do documento', 'rn_prazo_coerente', $q$
+        DO $d$
+        DECLARE v_doc BIGINT := pg_temp.doc('v13-tres-paginas', 'v13-tres-paginas', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+        BEGIN
+            UPDATE documento SET paginas = 3 WHERE id = v_doc;
+            INSERT INTO prazo (evento_id, escopo, titulo, data, documento_id, pagina, criado_por)
+            VALUES (pg_temp.ev(2027), 'GLOBAL', 'v13-x', DATE '2026-12-04', v_doc, 4, pg_temp.rbs());
+        END $d$ $q$);
+    PERFORM pg_temp.aceita('V13 PRAZO', 'a última página do documento serve', $q$
+        DO $d$
+        DECLARE v_doc BIGINT := pg_temp.doc('v13-tres-paginas', 'v13-tres-paginas', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+        BEGIN
+            UPDATE documento SET paginas = 3 WHERE id = v_doc;
+            INSERT INTO prazo (evento_id, escopo, titulo, data, documento_id, pagina, criado_por)
+            VALUES (pg_temp.ev(2027), 'GLOBAL', 'v13-x', DATE '2026-12-04', v_doc, 3, pg_temp.rbs());
+        END $d$ $q$);
+    -- Documento GLOBAL: o prazo pode ser de qualquer alcance
+    PERFORM pg_temp.aceita('V13 PRAZO', 'documento GLOBAL: prazo da edição, da cota e de uma parceria', $q$
+        DO $d$
+        DECLARE v_doc BIGINT := pg_temp.doc('v13-global', 'v13-global', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+        BEGIN
+            INSERT INTO prazo (evento_id, escopo, titulo, data, documento_id, criado_por)
+            VALUES (pg_temp.ev(2027), 'GLOBAL', 'v13-a', DATE '2026-12-04', v_doc, pg_temp.rbs());
+            INSERT INTO prazo (evento_id, escopo, cota_tipo_id, titulo, data, documento_id, criado_por)
+            VALUES (pg_temp.ev(2027), 'COTA', 2, 'v13-b', DATE '2026-12-04', v_doc, pg_temp.rbs());
+            INSERT INTO prazo (evento_id, escopo, parceria_id, titulo, data, documento_id, criado_por)
+            VALUES (pg_temp.ev(2027), 'PARCERIA', (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Roxo' AND edicao = 2027),
+                    'v13-c', DATE '2026-12-04', v_doc, pg_temp.rbs());
+        END $d$ $q$);
+    -- Documento COTA (Master): só prazo da Master ou de uma parceria Master
+    PERFORM pg_temp.recusa('V13 ISOLAMENTO', 'documento da cota Master com prazo da edição inteira', 'rn_prazo_coerente', $q$
+        INSERT INTO prazo (evento_id, escopo, titulo, data, documento_id, criado_por)
+        VALUES (pg_temp.ev(2027), 'GLOBAL', 'v13-x', DATE '2026-12-04',
+                pg_temp.doc('v13-plano-master', 'v13-plano-master', 'COTA', 2027, 'MASTER', NULL, 'INDEXADO'), pg_temp.rbs()) $q$);
+    PERFORM pg_temp.recusa('V13 ISOLAMENTO', 'documento da cota Master com prazo da Subcota G', 'rn_prazo_coerente', $q$
+        INSERT INTO prazo (evento_id, escopo, cota_tipo_id, titulo, data, documento_id, criado_por)
+        VALUES (pg_temp.ev(2027), 'COTA', 2, 'v13-x', DATE '2026-12-04',
+                pg_temp.doc('v13-plano-master', 'v13-plano-master', 'COTA', 2027, 'MASTER', NULL, 'INDEXADO'), pg_temp.rbs()) $q$);
+    PERFORM pg_temp.recusa('V13 ISOLAMENTO', 'documento da cota Master com prazo da parceria do Roxo (Subcota G)', 'rn_prazo_coerente', $q$
+        INSERT INTO prazo (evento_id, escopo, parceria_id, titulo, data, documento_id, criado_por)
+        VALUES (pg_temp.ev(2027), 'PARCERIA', (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Roxo' AND edicao = 2027),
+                'v13-x', DATE '2026-12-04',
+                pg_temp.doc('v13-plano-master', 'v13-plano-master', 'COTA', 2027, 'MASTER', NULL, 'INDEXADO'), pg_temp.rbs()) $q$);
+    PERFORM pg_temp.aceita('V13 PRAZO', 'documento da cota Master: prazo da Master e da parceria do Amarelo (Master)', $q$
+        DO $d$
+        DECLARE v_doc BIGINT := pg_temp.doc('v13-plano-master', 'v13-plano-master', 'COTA', 2027, 'MASTER', NULL, 'INDEXADO');
+        BEGIN
+            INSERT INTO prazo (evento_id, escopo, cota_tipo_id, titulo, data, documento_id, criado_por)
+            VALUES (pg_temp.ev(2027), 'COTA', 1, 'v13-a', DATE '2026-12-04', v_doc, pg_temp.rbs());
+            INSERT INTO prazo (evento_id, escopo, parceria_id, titulo, data, documento_id, criado_por)
+            VALUES (pg_temp.ev(2027), 'PARCERIA', (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027),
+                    'v13-b', DATE '2026-12-04', v_doc, pg_temp.rbs());
+        END $d$ $q$);
+    -- Documento PARCERIA (Amarelo): só prazo daquela parceria
+    PERFORM pg_temp.recusa('V13 ISOLAMENTO', 'anexo do Amarelo com prazo da edição inteira', 'rn_prazo_coerente', $q$
+        INSERT INTO prazo (evento_id, escopo, titulo, data, documento_id, criado_por)
+        VALUES (pg_temp.ev(2027), 'GLOBAL', 'v13-x', DATE '2026-12-04',
+                pg_temp.doc('v13-anexo-amarelo', 'v13-anexo', 'PARCERIA', 2027, NULL, 'Cliente Amarelo', 'INDEXADO'), pg_temp.rbs()) $q$);
+    PERFORM pg_temp.recusa('V13 ISOLAMENTO', 'anexo do Amarelo com prazo da cota Master', 'rn_prazo_coerente', $q$
+        INSERT INTO prazo (evento_id, escopo, cota_tipo_id, titulo, data, documento_id, criado_por)
+        VALUES (pg_temp.ev(2027), 'COTA', 1, 'v13-x', DATE '2026-12-04',
+                pg_temp.doc('v13-anexo-amarelo', 'v13-anexo', 'PARCERIA', 2027, NULL, 'Cliente Amarelo', 'INDEXADO'), pg_temp.rbs()) $q$);
+    PERFORM pg_temp.recusa('V13 ISOLAMENTO', 'anexo do Amarelo com prazo da parceria do Roxo', 'rn_prazo_coerente', $q$
+        INSERT INTO prazo (evento_id, escopo, parceria_id, titulo, data, documento_id, criado_por)
+        VALUES (pg_temp.ev(2027), 'PARCERIA', (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Roxo' AND edicao = 2027),
+                'v13-x', DATE '2026-12-04',
+                pg_temp.doc('v13-anexo-amarelo', 'v13-anexo', 'PARCERIA', 2027, NULL, 'Cliente Amarelo', 'INDEXADO'), pg_temp.rbs()) $q$);
+    PERFORM pg_temp.aceita('V13 PRAZO', 'anexo do Amarelo com prazo da parceria do Amarelo', $q$
+        INSERT INTO prazo (evento_id, escopo, parceria_id, titulo, data, documento_id, criado_por)
+        VALUES (pg_temp.ev(2027), 'PARCERIA', (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027),
+                'v13-x', DATE '2026-12-04',
+                pg_temp.doc('v13-anexo-amarelo', 'v13-anexo', 'PARCERIA', 2027, NULL, 'Cliente Amarelo', 'INDEXADO'), pg_temp.rbs()) $q$);
+END $$;
+
+-- Depois de criado, o prazo só se desativa
+DO $$
+BEGIN
+    PERFORM pg_temp.recusa('V13 IMUTAVEL', 'mudar o título', 'rn_prazo_imutavel', $q$
+        DO $d$
+        BEGIN
+            INSERT INTO prazo (evento_id, escopo, titulo, data, criado_por) VALUES (pg_temp.ev(2027), 'GLOBAL', 'v13-i', DATE '2026-12-04', pg_temp.rbs());
+            UPDATE prazo SET titulo = 'v13-outro' WHERE titulo = 'v13-i';
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V13 IMUTAVEL', 'mudar a data', 'rn_prazo_imutavel', $q$
+        DO $d$
+        BEGIN
+            INSERT INTO prazo (evento_id, escopo, titulo, data, criado_por) VALUES (pg_temp.ev(2027), 'GLOBAL', 'v13-i', DATE '2026-12-04', pg_temp.rbs());
+            UPDATE prazo SET data = DATE '2026-12-05' WHERE titulo = 'v13-i';
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V13 IMUTAVEL', 'mudar a hora', 'rn_prazo_imutavel', $q$
+        DO $d$
+        BEGIN
+            INSERT INTO prazo (evento_id, escopo, titulo, data, criado_por) VALUES (pg_temp.ev(2027), 'GLOBAL', 'v13-i', DATE '2026-12-04', pg_temp.rbs());
+            UPDATE prazo SET hora = TIME '18:00' WHERE titulo = 'v13-i';
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V13 IMUTAVEL', 'passar de GLOBAL para uma parceria', 'rn_prazo_imutavel', $q$
+        DO $d$
+        BEGIN
+            INSERT INTO prazo (evento_id, escopo, titulo, data, criado_por) VALUES (pg_temp.ev(2027), 'GLOBAL', 'v13-i', DATE '2026-12-04', pg_temp.rbs());
+            UPDATE prazo SET escopo = 'PARCERIA',
+                             parceria_id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027)
+             WHERE titulo = 'v13-i';
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V13 IMUTAVEL', 'trocar o documento de origem', 'rn_prazo_imutavel', $q$
+        DO $d$
+        BEGIN
+            INSERT INTO prazo (evento_id, escopo, titulo, data, criado_por) VALUES (pg_temp.ev(2027), 'GLOBAL', 'v13-i', DATE '2026-12-04', pg_temp.rbs());
+            UPDATE prazo SET documento_id = pg_temp.doc('v13-troca', 'v13-troca', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO') WHERE titulo = 'v13-i';
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V13 IMUTAVEL', 'mudar o título junto com a desativação', 'rn_prazo_imutavel', $q$
+        DO $d$
+        BEGIN
+            INSERT INTO prazo (evento_id, escopo, titulo, data, criado_por) VALUES (pg_temp.ev(2027), 'GLOBAL', 'v13-i', DATE '2026-12-04', pg_temp.rbs());
+            UPDATE prazo SET titulo = 'v13-outro', ativo = FALSE WHERE titulo = 'v13-i';
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V13 IMUTAVEL', 'reativar um prazo desativado', 'rn_prazo_imutavel', $q$
+        DO $d$
+        BEGIN
+            INSERT INTO prazo (evento_id, escopo, titulo, data, criado_por, ativo) VALUES (pg_temp.ev(2027), 'GLOBAL', 'v13-i', DATE '2026-12-04', pg_temp.rbs(), FALSE);
+            UPDATE prazo SET ativo = TRUE WHERE titulo = 'v13-i';
+        END $d$ $q$);
+    PERFORM pg_temp.aceita('V13 IMUTAVEL', 'desativar um prazo (e repetir a desativação)', $q$
+        DO $d$
+        BEGIN
+            INSERT INTO prazo (evento_id, escopo, titulo, data, criado_por) VALUES (pg_temp.ev(2027), 'GLOBAL', 'v13-i', DATE '2026-12-04', pg_temp.rbs());
+            UPDATE prazo SET ativo = FALSE WHERE titulo = 'v13-i';
+            UPDATE prazo SET ativo = FALSE WHERE titulo = 'v13-i';
+            IF (SELECT ativo FROM prazo WHERE titulo = 'v13-i') THEN
+                RAISE EXCEPTION 'o prazo devia estar desativado';
+            END IF;
+        END $d$ $q$);
+END $$;
+
+-- ---------------------------------------------------------------------
+-- 13. Resultado: a lista de conferências e, se alguma falhou, o erro final (saída diferente de zero com ON_ERROR_STOP)
 -- ---------------------------------------------------------------------
 SELECT grupo, conferencia, esperado, obtido, CASE WHEN ok THEN 'ok' ELSE 'FALHOU' END AS resultado FROM _ver ORDER BY ordem;
 SELECT count(*) AS conferencias, count(*) FILTER (WHERE ok) AS ok, count(*) FILTER (WHERE NOT ok) AS falhas FROM _ver;
