@@ -82,10 +82,13 @@ import tools.jackson.core.JacksonException;
  *       {@code tool_call} tem resposta antes da próxima mensagem, menos a do cartão, que a rota 46 fecha. Não se usa o
  *       {@code ToolCallingManager}: ele responderia todas as chamadas da rodada de uma vez.</li>
  *   <li><b>Resposta direta</b> (M5, o {@code returnDirect} feito no nosso loop): se a rodada tem uma ferramenta que respondeu direto
- *       ({@link Execucao#direta()}), as outras chamadas da rodada rodam normalmente, a resposta de todas é gravada e o turno termina
- *       ali, sem nova ida ao modelo. É diferente da pausa do cartão e do relatório pronto, depois dos quais as outras chamadas da
- *       rodada não rodam; se a rodada também teve um deles, ele manda. O texto que veio junto na rodada, se aprovado, fica. Erro de
- *       ferramenta nunca é resposta direta: volta ao modelo.</li>
+ *       ({@link Execucao#direta()}), as outras chamadas da rodada rodam normalmente e a resposta de todas é gravada. Rodada só com
+ *       ferramentas diretas termina o turno ali, sem nova ida ao modelo. Rodada com uma direta <b>e</b> com outra ferramenta que não é
+ *       direta (uma busca, uma conta: "quero o relatório, e me fala até quando informo os geradores") mostra o item e <b>segue</b>,
+ *       com uma nova ida ao modelo para responder o resto; as diretas saem da oferta nessa ida e nas seguintes do turno, para não
+ *       haver laço, e o resultado delas diz ao modelo que o servidor já mostrou a resposta. É diferente da pausa do cartão e do
+ *       relatório pronto, depois dos quais as outras chamadas da rodada não rodam; se a rodada também teve um deles, ele manda. O
+ *       texto que veio junto na rodada, se aprovado, fica. Erro de ferramenta nunca é resposta direta: volta ao modelo.</li>
  *   <li><b>Até {@value #LIMITE_DE_CHAMADAS_POR_TURNO} chamadas de ferramenta por turno</b> (contador nosso). Erro de ferramenta
  *       volta ao modelo como mensagem de ferramenta, nunca como 500.</li>
  *   <li><b>O modelo não escreve número sem origem nem termo interno.</b> O texto da resposta passa pela {@link ChecagemDeFontes}
@@ -156,6 +159,8 @@ public class LoopDoAgente {
             FRASE_SEM_RESPOSTA, FRASE_FIXA_NO_CHAT, FRASE_DO_LIMITE_NO_CHAT, FRASE_DA_FALHA_NO_CHAT, FRASE_DO_PRAZO_NO_CHAT,
             FRASE_SEM_RESPOSTA_NO_CHAT, TEXTO_NAO_ENCONTREI, FRASE_SEM_CONSULTA);
     public static final String ERRO_DO_LIMITE = "Limite de chamadas de ferramenta deste turno atingido. Não chame mais ferramentas.";
+    public static final String ERRO_DA_DIRETA_JA_MOSTRADA = "O servidor já mostrou uma resposta direta neste turno e esta ferramenta não está "
+            + "mais disponível. Responda o resto com texto, sem repetir o que já foi mostrado.";
     /** A frase da etapa {@code etapa} da resposta em fluxo, por ferramenta: a marca lê o que está acontecendo, nunca o nome dela. */
     public static final Map<String, String> ETAPAS = Map.ofEntries(
             Map.entry(RelatorioFerramentas.CONSULTAR, "Consultando os números da parceria…"),
@@ -222,6 +227,8 @@ public class LoopDoAgente {
         int chamadas;
         int idas;
         boolean limiteAtingido;
+        /** Uma resposta direta foi mostrada numa rodada que também teve outra ferramenta: as diretas saem da oferta até o fim do turno. */
+        boolean diretasForaDaOferta;
         boolean pediuNovaRedacao;
         ResumosDoTurno resumos;
         // O desfecho, para a etapa SAIDA do traço: o que terminou o turno e a última mensagem que ele gravou.
@@ -483,8 +490,9 @@ public class LoopDoAgente {
 
     /**
      * Grava a mensagem do assistente com os pedidos de ferramenta e executa cada um, na ordem. Devolve verdadeiro se o turno
-     * acabou: o cartão abriu, o relatório ficou pronto, uma ferramenta respondeu direto ou o limite de chamadas estourou. A resposta
-     * direta vale antes do limite: a ferramenta que já rodou entregou o que a pessoa pediu, e a frase do limite só confundiria.
+     * acabou: o cartão abriu, o relatório ficou pronto, a rodada só teve respostas diretas ou o limite de chamadas estourou. A
+     * resposta direta vale antes do limite: a ferramenta que já rodou entregou o que a pessoa pediu, e a frase do limite só
+     * confundiria. Com uma resposta direta e outra ferramenta na mesma rodada, devolve falso: o turno segue.
      */
     private boolean rodar(AtlasContexto contexto, Turno turno, String texto, List<ChamadaDeFerramenta> pedidos, String raciocinio,
                           OuvinteDoTurno ouvinte, Etapa ida) {
@@ -507,10 +515,15 @@ public class LoopDoAgente {
 
         boolean pausa = false;
         boolean pronto = false;
-        boolean direta = false;   // não para as chamadas seguintes: só encerra o turno no fim da rodada
+        boolean direta = false;   // não para as chamadas seguintes: só decide, no fim da rodada, se o turno acaba ou segue
+        boolean outraRodou = false;   // alguma ferramenta que não respondeu direto rodou na rodada (com resultado ou com erro)
         for (ChamadaDeFerramenta chamada : chamadas) {
             Etapa etapaDaFerramenta = turno.traco.abrir(EtapaDoTraco.FERRAMENTA).mensagem(mensagemId).dado("ferramenta", chamada.nome());
-            if (pausa) {
+            if (turno.diretasForaDaOferta && ferramentas.ehDireta(chamada.nome())) {
+                // o modelo pediu uma resposta direta que não lhe foi oferecida: o servidor já mostrou a anterior
+                responderComErro(contexto, mensagemId, chamada, ERRO_DA_DIRETA_JA_MOSTRADA, ouvinte);
+                etapaDaFerramenta.dado("motivo", "RESPOSTA_DIRETA_JA_MOSTRADA").fim(ResultadoDaEtapa.RECUSADO);
+            } else if (pausa) {
                 responderComErro(contexto, mensagemId, chamada, RelatorioFerramentas.AGUARDANDO_O_CARTAO, ouvinte);
                 etapaDaFerramenta.dado("motivo", "AGUARDANDO_O_CARTAO").fim(ResultadoDaEtapa.PULADO);
             } else if (pronto) {
@@ -530,6 +543,7 @@ public class LoopDoAgente {
                 pronto = rodada.execucao().pronto();
                 boolean respondeuDireto = rodada.execucao().direta();   // o erro de ferramenta nunca é direto: volta ao modelo
                 direta |= respondeuDireto;
+                outraRodou |= !respondeuDireto;
                 avisarFerramenta(ouvinte, chamada, rodada.execucao().resultadoJson(), rodada.erro(), rodada.ms());
                 etapaDaFerramenta.dado("argumentos", chamada.argumentos()).dado("resultado", rodada.execucao().resultadoJson())
                         .dado("pausa", pausa ? true : null).dado("pronto", pronto ? true : null)
@@ -541,9 +555,16 @@ public class LoopDoAgente {
             turno.tipoDaSaida = pausa ? "CARTAO" : "RELATORIO_PRONTO";
             return true;
         }
-        if (direta) {
+        if (direta && (!outraRodou || turno.limiteAtingido)) {
+            // só ferramentas diretas na rodada (ou o limite estourou depois de uma resposta direta, e a frase do limite só confundiria)
             turno.tipoDaSaida = "RESPOSTA_DIRETA";
             return true;
+        }
+        if (direta) {
+            // a rodada tinha também outra ferramenta (uma busca, uma conta...): o item já foi mostrado e o turno segue, com uma nova
+            // ida ao modelo para responder o resto. As diretas saem da oferta, e o resultado delas diz que o servidor já mostrou a resposta
+            turno.diretasForaDaOferta = true;
+            return false;
         }
         if (turno.limiteAtingido) {
             gravarFrase(contexto, turno, frase(FRASE_DO_LIMITE, FRASE_DO_LIMITE_NO_CHAT), null, ouvinte, "LIMITE_DE_CHAMADAS",
@@ -627,7 +648,8 @@ public class LoopDoAgente {
         mensagens.addAll(transitorias);
         boolean podePedirCartao = ativo.isEmpty()
                 || repositorio.solicitacoesDoRelatorio(ativo.get().id()).size() < RelatorioAtlasService.LIMITE_DE_CARTOES;
-        return new PedidoAoLlm(String.valueOf(contexto.conversaId()), mensagens, ferramentas.oferecidas(ativo, podePedirCartao));
+        return new PedidoAoLlm(String.valueOf(contexto.conversaId()), mensagens,
+                ferramentas.oferecidas(ativo, podePedirCartao, turno.diretasForaDaOferta));
     }
 
     /**

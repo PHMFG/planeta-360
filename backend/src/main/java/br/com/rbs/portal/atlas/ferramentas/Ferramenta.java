@@ -29,6 +29,15 @@ public interface Ferramenta {
     /** O modelo recebe esta ferramenta neste estado da conversa? */
     boolean oferecida(EstadoDaConversa estado);
 
+    /**
+     * É uma ferramenta de resposta direta ({@code returnDirect}): o servidor mostra o resultado à pessoa. Numa rodada que também teve
+     * outra ferramenta, o turno segue com uma nova ida ao modelo, e as diretas ficam fora da oferta dessa ida e das seguintes do
+     * turno, para não haver laço.
+     */
+    default boolean direta() {
+        return false;
+    }
+
     /** Fase 1, sem transação. O que devolve é entregue a {@link #executar}. O padrão não faz nada. */
     default Object preparar(AtlasContexto contexto, FontesDoTurno turno, Map<String, Object> argumentos) {
         return null;

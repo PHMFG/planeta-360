@@ -216,14 +216,19 @@ class PedidoDeRelatorioTest {
     @Test
     void naMesmaRodadaComConsultaAsDuasChamadasTemResposta() {
         long conversa = abrir();
-        modelo.chamadas(null, null, pedido(LoopDoAgenteTest.CONSULTAR, "{}"), pedido(PedidoDeRelatorio.NOME, "{}"));
+        modelo.chamadas(null, null, pedido(LoopDoAgenteTest.CONSULTAR, "{}"), pedido(PedidoDeRelatorio.NOME, "{}")).texto("Aqui estão os números.");
 
         falar(conversa, "Quero o relatório e os números.");
 
-        assertThat(modelo.pedidos()).hasSize(1);
-        assertThat(papeis(conversa)).containsExactly("user", "assistant", "tool", "tool");
+        assertThat(modelo.pedidos()).as("a rodada tinha a direta e uma consulta: o turno segue com uma nova ida").hasSize(2);
+        assertThat(papeis(conversa)).containsExactly("user", "assistant", "tool", "tool", "assistant");
         assertThat(respostas(conversa).get(0)).contains("\"dados\"");
         assertThat(json(respostas(conversa).get(1))).containsEntry("tipo", "pedido_relatorio");
+        // o modelo sabe que o servidor já mostrou o pedido, e as diretas saem da oferta nessa ida
+        MensagemDeChat doPedido = modelo.pedidos().get(1).mensagens().stream()
+                .filter(m -> "tool".equals(m.papel()) && PedidoDeRelatorio.NOME.equals(m.ferramenta())).findFirst().orElseThrow();
+        assertThat(doPedido.conteudo()).contains("O servidor já mostrou esta resposta à pessoa", "\"relatorioOficial\":false");
+        assertThat(ProvedorRoteirizado.nomesDasFerramentas(modelo.pedidos().get(1))).doesNotContain(PedidoDeRelatorio.NOME, "gerar_modelo");
     }
 
     @Test

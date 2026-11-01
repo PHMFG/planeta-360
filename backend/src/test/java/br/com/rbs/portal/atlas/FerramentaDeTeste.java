@@ -108,6 +108,12 @@ public class FerramentaDeTeste implements Ferramenta {
         return true;
     }
 
+    /** Com o comportamento de resposta direta, esta é uma ferramenta direta (o loop a tira da oferta depois de mostrá-la). */
+    @Override
+    public boolean direta() {
+        return comportamento == Comportamento.RESPOSTA_DIRETA;
+    }
+
     @Override
     public Object preparar(AtlasContexto contexto, FontesDoTurno turno, Map<String, Object> argumentos) {
         registros.add(new Registro("preparar", TransactionSynchronizationManager.isActualTransactionActive(), Thread.currentThread().getName()));

@@ -82,6 +82,11 @@ public class GerarModelo implements Ferramenta {
     }
 
     @Override
+    public boolean direta() {
+        return true;
+    }
+
+    @Override
     public Execucao executar(AtlasContexto contexto, FontesDoTurno turno, Map<String, Object> argumentos, String chamadaId,
                              Object preparado) {
         Map<String, String> erros = new LinkedHashMap<>();

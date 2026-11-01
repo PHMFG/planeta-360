@@ -140,35 +140,115 @@ class RespostaDiretaNoLoopTest {
     }
 
     @Test
-    void asOutrasChamadasDaRodadaRodamAntesEDepoisDaDiretaETemRespostaGravada() {
+    void rodadaSoComRespostasDiretasEncerraOTurno() {
         long conversa = abrir();
-        modelo.chamadas(null, null, pedido(LoopDoAgenteTest.CONSULTAR, "{}"), pedido(DIRETA, "{}"), pedido(LoopDoAgenteTest.CONSULTAR, "{}"));
+        modelo.chamadas(null, null, pedido(DIRETA, "{}"), pedido(DIRETA, "{}"));   // o roteiro só tem este passo
 
-        falar(conversa, "Preciso disto.");
+        falar(conversa, "Preciso disto, duas vezes.");
 
         assertThat(modelo.pedidos()).hasSize(1);
-        assertThat(papeis(conversa)).containsExactly("user", "assistant", "tool", "tool", "tool");
+        assertThat(modelo.sobraDoRoteiro()).isZero();
+        assertThat(respostas(conversa)).containsExactly("{\"direta\":true}", "{\"direta\":true}");
+    }
+
+    @Test
+    void asOutrasChamadasDaRodadaRodamAntesEDepoisDaDiretaETemRespostaGravadaEOTurnoSegueComUmaNovaIda() {
+        long conversa = abrir();
+        modelo.chamadas(null, null, pedido(LoopDoAgenteTest.CONSULTAR, "{}"), pedido(DIRETA, "{}"), pedido(LoopDoAgenteTest.CONSULTAR, "{}"))
+                .texto("Aqui está o resto.");
+
+        ConversaDto turno = falar(conversa, "Preciso disto.");
+
+        assertThat(modelo.pedidos()).as("a rodada tinha uma direta e outras ferramentas: segue com uma nova ida").hasSize(2);
+        assertThat(modelo.sobraDoRoteiro()).isZero();
+        assertThat(papeis(conversa)).containsExactly("user", "assistant", "tool", "tool", "tool", "assistant");
         List<String> respostas = respostas(conversa);
         assertThat(respostas.get(0)).contains("\"dados\"");
         assertThat(respostas.get(1)).isEqualTo("{\"direta\":true}");
         assertThat(respostas.get(2)).contains("\"dados\"");
         assertThat(ferramenta.registros()).extracting(FerramentaDeTeste.Registro::fase).containsExactly("preparar", "executar");
+        assertThat(turno.itens().stream().filter(ItemTexto.class::isInstance).map(ItemTexto.class::cast).map(ItemTexto::texto))
+                .containsExactly("Aqui está o resto.");
+        // a nova ida leva o histórico inteiro, válido, com a resposta de cada chamada
+        exigirHistoricoValido(modelo.ultimoPedido());
+        assertThat(papeis(modelo.ultimoPedido().mensagens())).containsExactly("system", "user", "assistant", "tool", "tool", "tool");
+    }
+
+    @Test
+    void asDiretasSaemDaOfertaNaNovaIdaENasSeguintesDoTurnoMasVoltamNoTurnoSeguinte() {
+        long conversa = abrir();
+        modelo.chamadas(null, null, pedido(DIRETA, "{}"), pedido(LoopDoAgenteTest.CONSULTAR, "{}"))
+                .chamada(LoopDoAgenteTest.CONSULTAR, "{}").texto("Pronto.");
+
+        falar(conversa, "Preciso disto e dos números.");
+
+        assertThat(ProvedorRoteirizado.nomesDasFerramentas(modelo.pedidos().get(0))).contains(DIRETA, "gerar_modelo", "pedido_de_relatorio");
+        for (int ida = 1; ida <= 2; ida++) {
+            assertThat(ProvedorRoteirizado.nomesDasFerramentas(modelo.pedidos().get(ida))).as("ida " + (ida + 1))
+                    .doesNotContain(DIRETA, "gerar_modelo", "pedido_de_relatorio").contains(LoopDoAgenteTest.CONSULTAR, "buscar_documentos");
+        }
+        // no turno seguinte elas voltam
+        modelo.limpar();
+        modelo.texto("Certo.");
+        falar(conversa, "Obrigado.");
+        assertThat(ProvedorRoteirizado.nomesDasFerramentas(modelo.ultimoPedido())).contains(DIRETA, "gerar_modelo", "pedido_de_relatorio");
+    }
+
+    @Test
+    void seOModeloPedirDeNovoUmaDiretaQueSaiuDaOfertaRecebeErroENadaRoda() {
+        long conversa = abrir();
+        modelo.chamadas(null, null, pedido(DIRETA, "{}"), pedido(LoopDoAgenteTest.CONSULTAR, "{}")).chamada(DIRETA, "{}").texto("Pronto.");
+
+        falar(conversa, "Preciso disto e dos números.");
+
+        assertThat(modelo.pedidos()).hasSize(3);
+        assertThat(ferramenta.registros()).as("a segunda direta não chegou a rodar").extracting(FerramentaDeTeste.Registro::fase)
+                .containsExactly("preparar", "executar");
+        assertThat(respostas(conversa).get(respostas(conversa).size() - 1)).contains(LoopDoAgente.ERRO_DA_DIRETA_JA_MOSTRADA);
+        exigirHistoricoValido(modelo.ultimoPedido());
+    }
+
+    @Test
+    void outraFerramentaDaRodadaQueDaErroTambemFazOTurnoSeguirParaOModeloVerOErro() {
+        long conversa = abrir();
+        // relatorio_finalizar sem relatório em montagem dá erro: ele não é uma resposta direta, e volta ao modelo
+        modelo.chamadas(null, null, pedido(DIRETA, "{}"), pedido(LoopDoAgenteTest.FINALIZAR, "{}")).texto("Não há relatório em montagem.");
+
+        ConversaDto turno = falar(conversa, "Preciso disto e finalize o relatório.");
+
+        assertThat(modelo.pedidos()).hasSize(2);
+        assertThat(respostas(conversa).get(1)).contains("erro");
+        assertThat(turno.itens().stream().filter(ItemTexto.class::isInstance).map(ItemTexto.class::cast).map(ItemTexto::texto))
+                .containsExactly("Não há relatório em montagem.");
     }
 
     @Test
     void historicoSegueValidoParaAMensagemSeguinteSemOErroSinteticoDeFerramenta() {
         long conversa = abrir();
-        modelo.chamadas(null, null, pedido(DIRETA, "{}"), pedido(LoopDoAgenteTest.CONSULTAR, "{}"));
+        modelo.chamadas(null, null, pedido(DIRETA, "{}"), pedido(LoopDoAgenteTest.CONSULTAR, "{}")).texto("Aqui está o resto.");
         falar(conversa, "Preciso disto.");
 
         modelo.texto("Posso ajudar com mais alguma coisa.");
         falar(conversa, "Obrigado.");
 
         exigirHistoricoValido(modelo.ultimoPedido());
-        assertThat(papeis(modelo.ultimoPedido().mensagens())).containsExactly("system", "user", "assistant", "tool", "tool", "user");
+        assertThat(papeis(modelo.ultimoPedido().mensagens())).containsExactly("system", "user", "assistant", "tool", "tool", "assistant", "user");
         assertThat(modelo.ultimoPedido().mensagens().stream().filter(m -> "tool".equals(m.papel())).map(MensagemDeChat::conteudo))
                 .noneMatch(conteudo -> conteudo.contains("não chegou a responder"))
                 .anyMatch(conteudo -> conteudo.equals("{\"direta\":true}"));
+    }
+
+    @Test
+    void soUmaDiretaNaRodadaEncerraEOHistoricoSegueValidoNaMensagemSeguinte() {
+        long conversa = abrir();
+        modelo.chamada(DIRETA, "{}");
+        falar(conversa, "Preciso disto.");
+
+        modelo.texto("Posso ajudar com mais alguma coisa.");
+        falar(conversa, "Obrigado.");
+
+        exigirHistoricoValido(modelo.ultimoPedido());
+        assertThat(papeis(modelo.ultimoPedido().mensagens())).containsExactly("system", "user", "assistant", "tool", "user");
     }
 
     // ---------------------------------------------------------------------

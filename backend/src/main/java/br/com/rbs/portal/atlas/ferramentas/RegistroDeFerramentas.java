@@ -61,11 +61,26 @@ public class RegistroDeFerramentas {
      * é falso quando ele já usou os três cartões que o modelo pode pedir. Com o cartão aberto, nenhuma.
      */
     public List<DefinicaoDeFerramenta> oferecidas(Optional<LinhaDeRelatorio> relatorio, boolean podePedirCartao) {
+        return oferecidas(relatorio, podePedirCartao, false);
+    }
+
+    /**
+     * O mesmo, e {@code semDiretas} tira as ferramentas de resposta direta ({@link Ferramenta#direta()}): depois que uma resposta
+     * direta foi mostrada numa rodada que também teve outra ferramenta, o modelo responde o resto sem poder chamá-las de novo.
+     */
+    public List<DefinicaoDeFerramenta> oferecidas(Optional<LinhaDeRelatorio> relatorio, boolean podePedirCartao, boolean semDiretas) {
         EstadoDaConversa estado = new EstadoDaConversa(modo.relatorioLigado(), relatorio, podePedirCartao);
         if (estado.cartaoAberto()) {
             return List.of();
         }
-        return porNome.values().stream().filter(ferramenta -> ferramenta.oferecida(estado)).map(Ferramenta::definicao).toList();
+        return porNome.values().stream().filter(ferramenta -> !(semDiretas && ferramenta.direta()))
+                .filter(ferramenta -> ferramenta.oferecida(estado)).map(Ferramenta::definicao).toList();
+    }
+
+    /** O nome é o de uma ferramenta de resposta direta? */
+    public boolean ehDireta(String nome) {
+        Ferramenta ferramenta = porNome.get(nome);
+        return ferramenta != null && ferramenta.direta();
     }
 
     /**

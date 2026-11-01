@@ -139,17 +139,43 @@ class RespostaDiretaEmFluxoTest {
     void historicoSegueValidoNaMensagemSeguinteEmFluxoComOutraChamadaNaRodada() {
         SessaoDeApi pessoa = SessaoDeApi.entrar(mvc, AMARELO);
         long conversa = conversa(pessoa, jdbc);
-        modelo.chamadas(null, null, pedido(GerarModelo.NOME, BRIEFING), pedido(LoopDoAgenteTest.CONSULTAR, "{}"));
+        modelo.chamadas(null, null, pedido(GerarModelo.NOME, BRIEFING), pedido(LoopDoAgenteTest.CONSULTAR, "{}")).texto("Aqui estão os números.");
         falarEmFluxo(pessoa, conversa, "Me dá um modelo e os números.");
-        assertThat(modelo.pedidos()).hasSize(1);
+        assertThat(modelo.pedidos()).as("a direta e a consulta na mesma rodada: o turno segue").hasSize(2);
 
         modelo.texto("Posso ajudar com mais alguma coisa.");
         falarEmFluxo(pessoa, conversa, "Obrigado.");
 
         exigirHistoricoValido(modelo.ultimoPedido());
         assertThat(modelo.ultimoPedido().mensagens().stream().map(MensagemDeChat::papel).toList())
-                .containsExactly("system", "user", "assistant", "tool", "tool", "user");
+                .containsExactly("system", "user", "assistant", "tool", "tool", "assistant", "user");
         assertThat(modelo.ultimoPedido().mensagens().stream().filter(m -> "tool".equals(m.papel())).map(MensagemDeChat::conteudo))
                 .noneMatch(conteudo -> conteudo.contains("não chegou a responder"));
+    }
+
+    @Test
+    void relatorioPosEventoEUmaPerguntaNaMesmaMensagemMostraOCartaoEResponde() {
+        // "quero o relatório pós-evento, e me fala até quando informo os geradores": a resposta direta e a outra pergunta
+        SessaoDeApi pessoa = SessaoDeApi.entrar(mvc, AMARELO);
+        long conversa = conversa(pessoa, jdbc);
+        modelo.chamadas(null, null, pedido(PedidoDeRelatorio.NOME, "{}"), pedido(LoopDoAgenteTest.CONSULTAR, "{}"))
+                .textoEmPedacos(null, "Os geradores próprios ", "precisam ser informados ", "antes do evento.");
+
+        List<Evento> eventos = eventos(falarEmFluxo(pessoa, conversa, "Quero o relatório pós-evento, e me fala até quando informo os geradores?"));
+
+        assertThat(modelo.pedidos()).hasSize(2);
+        assertThat(modelo.idasEmFluxo()).isEqualTo(2);
+        assertThat(sequencia(eventos)).as("as duas etapas seguidas, o texto da segunda ida e o fim").containsExactly("etapa", "texto", "fim");
+        assertThat(eventos.stream().filter(e -> e.nome().equals("etapa")).map(e -> e.<String>ler("$.texto")).toList())
+                .containsExactly("Preparando a resposta…", "Consultando os números da parceria…");
+        assertThat(juntar(eventos, "texto", "delta")).isEqualTo("Os geradores próprios precisam ser informados antes do evento.");
+        Evento fim = fim(eventos);
+        assertThat(fim.<List<String>>ler("$.itens[*].tipo")).containsExactly("usuario", "pedido_relatorio", "texto");
+        // o modelo recebeu o aviso de que o servidor já mostrou a resposta, e as diretas saíram da oferta
+        MensagemDeChat doPedido = modelo.ultimoPedido().mensagens().stream()
+                .filter(m -> "tool".equals(m.papel()) && PedidoDeRelatorio.NOME.equals(m.ferramenta())).findFirst().orElseThrow();
+        assertThat(doPedido.conteudo()).contains("O servidor já mostrou esta resposta à pessoa", "Não a repita");
+        assertThat(ProvedorRoteirizado.nomesDasFerramentas(modelo.ultimoPedido())).doesNotContain(PedidoDeRelatorio.NOME, GerarModelo.NOME);
+        assertThat(turnoSolto(jdbc, conversa)).isTrue();
     }
 }

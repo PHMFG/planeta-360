@@ -272,14 +272,21 @@ class GerarModeloTest {
             modelo.limpar();
             long conversa = abrir(AMARELO, "Cliente Amarelo");
             String argumentos = LoopDoAgenteTest.BUSCAR.equals(outra) ? "{\"consulta\":\"prazo de entrega do material\"}" : "{}";
-            modelo.chamadas(null, null, pedido(GerarModelo.NOME, PLANO), pedido(outra, argumentos));
+            modelo.chamadas(null, null, pedido(GerarModelo.NOME, PLANO), pedido(outra, argumentos)).texto("Aqui está o resto.");
 
             falar(AMARELO, conversa, "Preciso de um modelo e de uma consulta.");
 
-            assertThat(modelo.pedidos()).as(outra).hasSize(1);
-            assertThat(papeis(conversa)).as(outra).containsExactly("user", "assistant", "tool", "tool");
+            // a rodada tinha a direta e outra ferramenta: o modelo aparece ao lado do resultado da outra, e o turno segue com uma nova ida
+            assertThat(modelo.pedidos()).as(outra).hasSize(2);
+            assertThat(papeis(conversa)).as(outra).containsExactly("user", "assistant", "tool", "tool", "assistant");
             assertThat(json(respostas(conversa).get(0))).as(outra).containsEntry("tipo", "modelo");
             assertThat(respostas(conversa).get(1)).as(outra).doesNotContain("\"erro\"");
+            // na nova ida o modelo recebe o aviso e o título, nunca o conteúdo do modelo em branco, e sem as diretas na oferta
+            MensagemDeChat doModelo = modelo.pedidos().get(1).mensagens().stream()
+                    .filter(m -> "tool".equals(m.papel()) && GerarModelo.NOME.equals(m.ferramenta())).findFirst().orElseThrow();
+            assertThat(doModelo.conteudo()).as(outra).contains("O servidor já mostrou esta resposta à pessoa", "Plano operacional da ativação")
+                    .doesNotContain("conteudo", "nomeArquivo");
+            assertThat(ProvedorRoteirizado.nomesDasFerramentas(modelo.pedidos().get(1))).as(outra).doesNotContain(GerarModelo.NOME, "pedido_de_relatorio");
 
             modelo.texto("Certo.");
             falar(AMARELO, conversa, "E agora?");

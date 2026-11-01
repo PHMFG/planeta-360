@@ -239,6 +239,26 @@ class DiagnosticoDoTurnoTest {
     }
 
     @Test
+    void respostaDiretaComOutraFerramentaNaRodadaSegueEASaidaFicaTexto() {
+        long conversa = abrir();
+        modelo.chamadas(null, null, pedido("gerar_modelo", "{\"tipo\":\"BRIEFING_CONTEUDO\"}"), pedido("parceria_consultar", "{}"))
+                .texto("Aqui estão os números.");
+
+        falar(conversa, "Me dá um modelo de briefing e os números.");
+
+        List<Linha> traco = tracoDoTurno(jdbc, conversa);
+        assertThat(etapas(traco)).containsExactly("G1_LIMITES", "LLM_IDA", "FERRAMENTA", "FERRAMENTA", "LLM_IDA", "CHECAGEM", "SAIDA");
+        assertThat(resultados(traco)).containsOnly("OK");
+        exigirCoerencia(traco);
+        assertThat(todas(traco, "FERRAMENTA").get(0).dados()).containsEntry("ferramenta", "gerar_modelo").containsEntry("direta", true);
+        assertThat(todas(traco, "FERRAMENTA").get(1).dados()).containsEntry("ferramenta", "parceria_consultar").doesNotContainKey("direta");
+        assertThat(todas(traco, "LLM_IDA").get(1).dados()).containsEntry("ida", 2);
+        assertThat(todas(traco, "LLM_IDA").get(1).dados().get("ferramentas").toString()).doesNotContain("gerar_modelo", "pedido_de_relatorio");
+        assertThat(primeira(traco, "SAIDA").dados()).containsEntry("tipo", "TEXTO").containsEntry("idasAoModelo", 2)
+                .containsEntry("chamadasDeFerramenta", 2);
+    }
+
+    @Test
     void ferramentaQueDaErroFicaComoErroNoTracoEOTurnoSegue() {
         long conversa = abrir();
         modelo.chamada(LoopDoAgenteTest.FINALIZAR, "{}").texto("Ainda não há um relatório em montagem.");
