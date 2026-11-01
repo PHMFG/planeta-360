@@ -78,7 +78,7 @@ export function preparar(texto) {
 }
 
 // O dia solto de um trecho: o número logo depois de um dia da semana ou da palavra "dia". "Portão 5" não é o dia 5.
-const DIA_SOLTO = /(?<![\p{L}\p{N}-])(?:(?:domingo|segunda|ter[çc]a|quarta|quinta|sexta|s[áa]bado)(?:[- ]feira)?|(?:dom|seg|ter|qua|qui|sex|s[áa]b)\.|dias?)\s*[,:]?\s*(\d{1,2})(?![\p{L}\p{N}]|[/:.,]\d)/giu
+const DIA_SOLTO = /(?<![\p{L}\p{N}-])(?:(?:domingo|segunda|ter[çc]a|quarta|quinta|sexta|s[áa]bado)(?:[- ]feira)?|(?:dom|seg|ter|qua|qui|sex|s[áa]b)\.|dia)\s*[,:]?\s*(\d{1,2})(?![\p{L}\p{N}]|[/:.,]\d)/giu
 
 const dataValida = (d, m) => +d >= 1 && +d <= 31 && +m >= 1 && +m <= 12
 

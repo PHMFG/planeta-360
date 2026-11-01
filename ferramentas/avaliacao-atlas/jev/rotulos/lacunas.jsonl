@@ -1,0 +1,20 @@
+{"pedido": "quero o relatório da ativação com os brindes que distribuímos", "chave": "ativacao.brindes_distribuidos", "rotulo_campo": "Brindes distribuídos", "rotulo": true, "split": "ajuste"}
+{"pedido": "monta o relatório da ativação, a gente deu brinde no estande", "chave": "ativacao.brindes_distribuidos", "rotulo_campo": "Brindes distribuídos", "rotulo": true, "split": "ajuste"}
+{"pedido": "relatório da ativação completo, com tudo que tiver sobre o espaço", "chave": "ativacao.brindes_distribuidos", "rotulo_campo": "Brindes distribuídos", "rotulo": true, "split": "reserva"}
+{"pedido": "preciso mostrar pro diretor quantos brindes saíram na ativação", "chave": "ativacao.brindes_distribuidos", "rotulo_campo": "Brindes distribuídos", "rotulo": true, "split": "ajuste"}
+{"pedido": "monta o relatório, levamos 500 brindes pro espaço", "chave": "ativacao.brindes_disponiveis", "rotulo_campo": "Brindes disponíveis", "rotulo": true, "split": "ajuste"}
+{"pedido": "quero ver no relatório quantos brindes levamos e quantos sobraram", "chave": "ativacao.brindes_disponiveis", "rotulo_campo": "Brindes disponíveis", "rotulo": true, "split": "reserva"}
+{"pedido": "relatório da ativação com a taxa de distribuição dos brindes", "chave": "ativacao.brindes_disponiveis", "rotulo_campo": "Brindes disponíveis", "rotulo": true, "split": "ajuste"}
+{"pedido": "relatório da ativação detalhado, inclusive brindes", "chave": "ativacao.brindes_disponiveis", "rotulo_campo": "Brindes disponíveis", "rotulo": true, "split": "ajuste"}
+{"pedido": "o relatório da ativação tem que trazer os brindes, foi nossa ação principal", "chave": "ativacao.brindes_distribuidos", "rotulo_campo": "Brindes distribuídos", "rotulo": true, "split": "reserva"}
+{"pedido": "monta o relatório, a ação de brinde é o que o cliente quer ver", "chave": "ativacao.brindes_distribuidos", "rotulo_campo": "Brindes distribuídos", "rotulo": true, "split": "ajuste"}
+{"pedido": "monta um relatório rápido só com as aplicações", "chave": "ativacao.brindes_distribuidos", "rotulo_campo": "Brindes distribuídos", "rotulo": false, "split": "ajuste"}
+{"pedido": "quero só os números de visitantes e cadastros no relatório", "chave": "ativacao.brindes_distribuidos", "rotulo_campo": "Brindes distribuídos", "rotulo": false, "split": "ajuste"}
+{"pedido": "não tivemos brinde nessa ativação, monta o relatório", "chave": "ativacao.brindes_distribuidos", "rotulo_campo": "Brindes distribuídos", "rotulo": false, "split": "reserva"}
+{"pedido": "relatório simples, sem detalhe de brinde", "chave": "ativacao.brindes_distribuidos", "rotulo_campo": "Brindes distribuídos", "rotulo": false, "split": "ajuste"}
+{"pedido": "não distribuímos nada no espaço, só experiência. monta o relatório", "chave": "ativacao.brindes_distribuidos", "rotulo_campo": "Brindes distribuídos", "rotulo": false, "split": "ajuste"}
+{"pedido": "monta um relatório rápido só com as aplicações", "chave": "ativacao.brindes_disponiveis", "rotulo_campo": "Brindes disponíveis", "rotulo": false, "split": "reserva"}
+{"pedido": "não levamos brinde nenhum, gera o relatório", "chave": "ativacao.brindes_disponiveis", "rotulo_campo": "Brindes disponíveis", "rotulo": false, "split": "ajuste"}
+{"pedido": "quero só o público no relatório da ativação", "chave": "ativacao.brindes_disponiveis", "rotulo_campo": "Brindes disponíveis", "rotulo": false, "split": "ajuste"}
+{"pedido": "relatório curto, sem brindes por favor", "chave": "ativacao.brindes_disponiveis", "rotulo_campo": "Brindes disponíveis", "rotulo": false, "split": "reserva"}
+{"pedido": "a ativação foi só um painel de led, sem brinde. monta o relatório", "chave": "ativacao.brindes_disponiveis", "rotulo_campo": "Brindes disponíveis", "rotulo": false, "split": "ajuste"}
