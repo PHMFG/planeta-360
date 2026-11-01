@@ -43,8 +43,25 @@ public class BuscaHibrida {
     public static final int LIMITE_DE_TEMPO_EM_MS = 8_000;
     static final int CONSTANTE_DO_RRF = 60;
 
-    /** O que a marca da conversa enxerga: a edição, a cota e a parceria (do {@code AtlasContexto}, nunca de argumento de ferramenta). */
+    /**
+     * O que a conversa enxerga: a edição, a cota e a parceria (do {@code AtlasContexto}, nunca de argumento de ferramenta). A conversa
+     * da RBS (M8) não tem marca nem cota: o escopo dela é {@link #soGlobal}, só os documentos {@code GLOBAL} da edição.
+     */
     public record Escopo(long eventoId, int cotaTipoId, long parceriaId) {
+
+        /** O "sem cota" do escopo só global. Nenhuma cota nem parceria de verdade tem id zero (as chaves começam em 1). */
+        public static final int SEM_COTA = 0;
+        public static final long SEM_PARCERIA = 0;
+
+        /** O escopo do Atlas da RBS: os documentos {@code GLOBAL} desta edição, e nenhum de cota nem de parceria. */
+        public static Escopo soGlobal(long eventoId) {
+            return new Escopo(eventoId, SEM_COTA, SEM_PARCERIA);
+        }
+
+        /** Este escopo enxerga só os documentos {@code GLOBAL} da edição? */
+        public boolean soGlobal() {
+            return cotaTipoId == SEM_COTA && parceriaId == SEM_PARCERIA;
+        }
     }
 
     /**
@@ -81,6 +98,15 @@ public class BuscaHibrida {
                   AND (t.escopo = 'GLOBAL'
                        OR (t.escopo = 'COTA' AND t.cota_tipo_id = :cota)
                        OR (t.escopo = 'PARCERIA' AND t.parceria_id = :parceria))""";
+
+    /** O mesmo filtro para o escopo só global (o Atlas da RBS): nenhuma cota, nenhuma parceria, só o {@code GLOBAL} da edição. */
+    private static final String FILTRO_SO_GLOBAL = """
+            t.ativo AND d.status = 'INDEXADO' AND t.evento_id = :evento AND t.escopo = 'GLOBAL'""";
+
+    /** O filtro do {@code WHERE} montado aqui em código, a primeira linha de defesa (a RLS é a segunda). */
+    private static String baseDoFiltro(Escopo escopo) {
+        return escopo.soGlobal() ? FILTRO_SO_GLOBAL : BASE_DO_FILTRO;
+    }
 
     private static final String LEXEMAS = """
             SELECT array_to_string(ARRAY(
@@ -130,7 +156,7 @@ public class BuscaHibrida {
                             WHERE %s
                             GROUP BY d.id, d.titulo, d.versao, d.tipo, d.escopo
                             ORDER BY d.escopo, d.titulo, d.versao, d.id
-                            """.formatted(BASE_DO_FILTRO))
+                            """.formatted(baseDoFiltro(escopo)))
                     .param("evento", escopo.eventoId()).param("cota", escopo.cotaTipoId()).param("parceria", escopo.parceriaId())
                     .query(DocumentoVisivel.class).list();
         });
@@ -163,7 +189,7 @@ public class BuscaHibrida {
         if (lexemas == null || lexemas.isBlank()) {
             return ResultadoDaBusca.semTermo(pedido.consulta(), k, degradado, (System.nanoTime() - inicio) / 1_000_000);
         }
-        String filtro = BASE_DO_FILTRO + (pedido.tipo() == null ? "" : "\n                  AND d.tipo = :tipo");
+        String filtro = baseDoFiltro(pedido.escopo()) + (pedido.tipo() == null ? "" : "\n                  AND d.tipo = :tipo");
         String vetorial = degradado ? """
                 SELECT CAST(NULL AS bigint) AS id, CAST(NULL AS float8) AS distancia, CAST(NULL AS bigint) AS posicao WHERE FALSE
                 """ : """

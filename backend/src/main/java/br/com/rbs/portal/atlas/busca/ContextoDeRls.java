@@ -16,7 +16,8 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  *   <li>o limite de tempo da consulta e os ajustes do índice vetorial (a busca iterativa do HNSW, que continua achando vizinhos
  *       quando o filtro de escopo descarta os primeiros).</li>
  * </ol>
- * Os valores do escopo são sempre números do servidor, nunca texto da pessoa nem do modelo.
+ * Os valores do escopo são sempre números do servidor, nunca texto da pessoa nem do modelo. No escopo só global (o Atlas da RBS) a cota
+ * e a parceria vão vazias: as políticas as leem como nulas e só o documento {@code GLOBAL} da edição passa.
  */
 final class ContextoDeRls {
 
@@ -42,13 +43,17 @@ final class ContextoDeRls {
             throw new IllegalStateException("A busca nos documentos tem de rodar como " + PAPEL + " e está rodando como " + atual
                     + ": nenhuma busca foi feita.");
         }
+        // O escopo só global (o Atlas da RBS) grava a cota e a parceria VAZIAS: o NULLIF das políticas as lê como nulas, e a comparação
+        // com nulo nunca é verdadeira. Nenhum documento de cota nem de parceria passa, e não depende de um id "que não existe".
+        String cota = escopo.soGlobal() ? "" : Integer.toString(escopo.cotaTipoId());
+        String parceria = escopo.soGlobal() ? "" : Long.toString(escopo.parceriaId());
         jdbc.sql("""
                         SELECT set_config('app.evento_id', :evento, true), set_config('app.cota_tipo_id', :cota, true),
                                set_config('app.parceria_id', :parceria, true), set_config('statement_timeout', :tempo, true),
                                set_config('hnsw.iterative_scan', 'relaxed_order', true), set_config('hnsw.ef_search', '100', true)
                         """)
-                .param("evento", Long.toString(escopo.eventoId())).param("cota", Integer.toString(escopo.cotaTipoId()))
-                .param("parceria", Long.toString(escopo.parceriaId())).param("tempo", Integer.toString(limiteDeTempoEmMs))
+                .param("evento", Long.toString(escopo.eventoId())).param("cota", cota)
+                .param("parceria", parceria).param("tempo", Integer.toString(limiteDeTempoEmMs))
                 .query().singleRow();
     }
 }
