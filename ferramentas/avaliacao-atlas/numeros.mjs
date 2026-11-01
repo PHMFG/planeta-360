@@ -15,7 +15,7 @@ const EXTENSO = {
 }
 const PALAVRA = Object.keys(EXTENSO).join('|')
 const ESCALA = 'mil|milh(?:ão|ões|ao|oes)|bilh(?:ão|ões|ao|oes)'
-const UNIDADES = 'reais|real|dias?|horas?|minutos?|kva|kw|por cento|porcento|%|credenciais|credencial|cortesias?|inserç(?:ão|ões)|ingressos?|pulseiras?|metros?|semanas?|meses|aplicaç(?:ão|ões)|pessoas?|litros?|visitantes?|cadastros?|rodadas?|peças?|vezes'
+const UNIDADES = 'reais|real|brindes?|dias?|horas?|minutos?|kva|kw|por cento|porcento|%|credenciais|credencial|cortesias?|inserç(?:ão|ões)|ingressos?|pulseiras?|metros?|semanas?|meses|aplicaç(?:ão|ões)|pessoas?|litros?|visitantes?|cadastros?|rodadas?|peças?|vezes'
 const DEPOIS_UNIDADE = new RegExp(`^\\s*(?:de\\s+)?(?:${UNIDADES})(?![\\p{L}\\p{N}])`, 'iu')
 const DATA_COM_NUMERAL = new RegExp(`(?<![\\p{L}\\p{N}])(primeiro|(?:${PALAVRA})(?:\\s+(?:e\\s+)?(?:${PALAVRA}))*)\\s+de\\s+(${NOME_DO_MES})(?:\\s+de\\s+(\\d{4}))?(?![\\p{L}\\p{N}])`, 'giu')
 const CORRIDA_POR_EXTENSO = new RegExp(`(?<![\\p{L}\\p{N}])(?:(?<!\\bpor\\s{1,8})|(?!cento(?![\\p{L}\\p{N}])))((?:${PALAVRA}|${ESCALA})(?:\\s+(?:e\\s+)?(?:${PALAVRA}|${ESCALA}))*)(?![\\p{L}\\p{N}])(\\s+(?:de\\s+)?(?:${UNIDADES})(?![\\p{L}\\p{N}]))?`, 'giu')
