@@ -111,6 +111,13 @@ atlas:
     modelo: gemini-embedding-2
     base-url: ${ATLAS_GEMINI_BASE_URL:https://generativelanguage.googleapis.com}
     chave: ${GEMINI_API_KEY:}
+    # Quanto esperar antes de tentar de novo depois de um 429 do Gemini (cresce a cada tentativa; o Retry-After, se vier, vale).
+    espera-no-429: PT5S
+  # [ATLAS] A ingestão dos documentos (M3): extrair, dividir, embeddings e gravar os trechos, numa fila na memória (2 threads, atlas-ingestao-).
+  # Aprovar um documento (rota 57) o põe em PROCESSANDO e enfileira DEPOIS do commit. sincrona=true só nos testes: o callback do commit manda
+  # a tarefa ao executor e espera o resultado, para o teste ler o documento já indexado (nunca roda na thread do callback).
+  ingestao:
+    sincrona: false
 
 server:
   port: 8080
@@ -188,6 +195,12 @@ atlas:
   diagnostico:
     ligado: false
     marca: false
+  # Os embeddings da suíte são os de teste (determinísticos, sem rede) e a ingestão espera o fim: o kit de documentos sobe e indexa a cada
+  # contexto, e nenhum teste comum chama o Gemini. Os testes @Tag("avaliacao") trocam isto pelo perfil avaliacao.
+  embeddings:
+    provedor: teste
+  ingestao:
+    sincrona: true
 
 # [UPLOAD] Nos testes, os arquivos vão para dentro de target/ (apagado pelo "mvn clean"), nunca para a pasta de desenvolvimento.
 portal:

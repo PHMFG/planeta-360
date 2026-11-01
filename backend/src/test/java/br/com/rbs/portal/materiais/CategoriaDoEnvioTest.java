@@ -47,6 +47,36 @@ class CategoriaDoEnvioTest extends ApoioDeMateriais {
     }
 
     @Test
+    void aCategoriaDocumentoEDosDocumentosDoAtlasERotaDasEntregasContinuaRecusandoComoInvalida() {
+        SessaoDeApi rbs = entrar(RBS);
+        long entrega = criarEntrega(rbs, amarelo(), "MIDIA", "VT");
+
+        for (SessaoDeApi pessoa : new SessaoDeApi[] {rbs, entrar(AMARELO)}) {
+            MvcTestResult resposta = enviar(pessoa, entrega, "doc.pdf", pdf("x"), "DOCUMENTO", null);
+
+            assertThat(resposta).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
+            assertThat((String) lerJson(resposta, "$.campos.categoria")).startsWith("Categoria inválida. Use uma destas:").doesNotContain("DOCUMENTO,")
+                    .doesNotContain("DOCUMENTO.");
+        }
+        assertThat(contar("SELECT count(*) FROM arquivo WHERE categoria = 'DOCUMENTO' AND entrega_id IS NOT NULL")).isZero();
+    }
+
+    @Test
+    void txtContinuaRecusadoNaRota17ComAListaDosEnviosComuns() {
+        SessaoDeApi rbs = entrar(RBS);
+        long entrega = criarEntrega(rbs, amarelo(), "MIDIA", "VT");
+        byte[] texto = "uma nota em texto\n".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+
+        for (SessaoDeApi pessoa : new SessaoDeApi[] {rbs, entrar(AMARELO)}) {
+            MvcTestResult resposta = enviar(pessoa, entrega, "nota.txt", texto);
+
+            assertThat(resposta).hasStatus(HttpStatus.UNSUPPORTED_MEDIA_TYPE);
+            assertThat(lerJson(resposta, "$.detail"))
+                    .isEqualTo("Este tipo de arquivo não é aceito. Envie um destes: pdf, png, jpg, jpeg, docx, xlsx, pptx, csv, mp4, mp3, zip.");
+        }
+    }
+
+    @Test
     void categoriaQueExisteMasEDaRbsContinuaDando403ParaAMarca() {
         long entrega = criarEntrega(entrar(RBS), amarelo(), "MIDIA", "VT");
 

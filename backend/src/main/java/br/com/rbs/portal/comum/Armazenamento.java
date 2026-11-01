@@ -76,6 +76,15 @@ public class Armazenamento {
     }
 
     /**
+     * Confere um arquivo de documento do Atlas sem gravar nada, para a rota 54 recusar o que não é PDF nem TXT (415), o que passa do
+     * limite (413) e o arquivo vazio (422) ANTES de extrair o texto. Devolve o tipo. O mesmo teste roda de novo dentro de
+     * {@link #gravarDocumento(byte[], String, long, Long)}.
+     */
+    public TipoDeArquivo conferirDocumento(byte[] conteudo, String nomeOriginal) {
+        return preparar(conteudo, nomeOriginal, true).tipo();
+    }
+
+    /**
      * Grava o arquivo de um documento do Atlas (rota 54): categoria DOCUMENTO, só PDF ou TXT (as outras extensões dão 415 com a lista
      * dos dois). {@code parceriaId} nulo = arquivo geral da RBS (documento GLOBAL ou de COTA); preenchido, o arquivo é da parceria
      * (documento PARCERIA) e o gatilho do documento confere que as duas pontas batem. Sem aba, de propósito: a marca nunca baixa

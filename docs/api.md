@@ -2,7 +2,7 @@
 
 Este documento é o **contrato entre o back-end e o front-end**. Quem faz a tela lê aqui o que cada rota pede, o que devolve e quais erros esperar, sem precisar abrir o código.
 
-- Todas as 53 rotas estão implementadas e cobertas por testes de integração (`cd backend && ./mvnw test`), inclusive o isolamento entre parcerias. A coluna "Etapa" diz em que etapa do plano cada rota entrou (as do Atlas, 37 em diante, entram como `Atlas 1`, `Atlas 2` e `Atlas M2`). Mudança de formato daqui em diante entra neste arquivo no mesmo commit do código.
+- Todas as 58 rotas estão implementadas e cobertas por testes de integração (`cd backend && ./mvnw test`), inclusive o isolamento entre parcerias. A coluna "Etapa" diz em que etapa do plano cada rota entrou (as do Atlas, 37 em diante, entram como `Atlas 1`, `Atlas 2`, `Atlas M2` e `Atlas M3`). Mudança de formato daqui em diante entra neste arquivo no mesmo commit do código.
 - O banco está descrito em [`docs/banco.md`](banco.md). Os nomes de status, cotas e abas são os mesmos do banco.
 
 ## Como falar com a API
@@ -61,11 +61,11 @@ Todo erro, sem exceção, vem como `application/problem+json` no formato `Proble
 | 400 | Requisição inválida | Corpo vazio ou que não é JSON, ou filtro da URL com o tipo errado (`?pagina=abc`, `?eventoId=abc`, `?atrasadas=talvez`): o `detail` diz qual, por exemplo `"O parâmetro pagina precisa ser um número inteiro."` ou `"O parâmetro atrasadas precisa ser true ou false."`. |
 | 401 | Não autenticado | Sem sessão (ou sessão vencida), e-mail/senha incorretos no login, ou sessão de uma conta que perdeu o acesso (veja "Sessão e CSRF"). |
 | 403 | Acesso negado | Logado, mas o perfil não pode fazer a operação (rota só da RBS), a aba está fechada para a parceria (duas frases diferentes, veja "Aba"), ou falta o token CSRF. |
-| 404 | Não encontrado | O recurso **não existe ou é de outra parceria**. Os dois casos têm a mesma resposta, de propósito. Vale também para rota inexistente e para **id na URL que não é número** (`GET /api/parcerias/abc`): um id que não pode existir é um id que não existe, e o `detail` é a frase de "não encontrado" do recurso da rota (`"Não encontramos esta parceria."`, `"... esta entrega."`, `"... este arquivo."`, `"... esta pergunta."`, `"... este relatório."` (também o do Atlas), `"... esta carga."`, `"... esta conversa."`, `"... esta solicitação."`, `"... este turno."` (rota 51), `"... este provedor."` (rota 53), `"Não encontramos este e-mail nesta parceria."`), igual à de um id numérico sem registro. |
+| 404 | Não encontrado | O recurso **não existe ou é de outra parceria**. Os dois casos têm a mesma resposta, de propósito. Vale também para rota inexistente e para **id na URL que não é número** (`GET /api/parcerias/abc`): um id que não pode existir é um id que não existe, e o `detail` é a frase de "não encontrado" do recurso da rota (`"Não encontramos esta parceria."`, `"... esta entrega."`, `"... este arquivo."`, `"... esta pergunta."`, `"... este relatório."` (também o do Atlas), `"... esta carga."`, `"... esta conversa."`, `"... esta solicitação."`, `"... este turno."` (rota 51), `"... este provedor."` (rota 53), `"... este documento."` (rotas 56 a 58), `"Não encontramos este e-mail nesta parceria."`), igual à de um id numérico sem registro. |
 | 405 | Método não permitido | A rota existe, mas não aceita esse método HTTP. |
 | 409 | Conflito | Uma regra do negócio recusou: regra do banco (SQLSTATE da classe 23, com a frase do gatilho), transição de status que não é permitida, registro duplicado. |
 | 413 | Arquivo grande demais | Envio acima de 20 MB. |
-| 415 | Tipo de conteúdo não aceito | Extensão ou tipo de arquivo fora da lista permitida, ou `Content-Type` errado. |
+| 415 | Tipo de conteúdo não aceito | Extensão ou tipo de arquivo fora da lista permitida (a rota 54 aceita só `pdf` e `txt`), conteúdo que não bate com a extensão, ou `Content-Type` errado. |
 | 422 | Dados inválidos | Campo faltando ou fora do formato. Vem com `campos`. |
 | 429 | Limite de uso atingido | Um limite de uso foi atingido. Hoje só a rota 44: o teto diário de mensagens do Atlas por parceria. O `detail` diz o que fazer no lugar. |
 | 500 | Erro interno | Falha inesperada. O `detail` é sempre genérico. |
@@ -159,10 +159,15 @@ Todas prontas e testadas. A coluna "Etapa" mostra em que etapa do plano a rota e
 | 51 | `GET /api/atlas/diagnostico/turnos/{turno}` | Admin RBS (com o diagnóstico ligado) | Um turno com as etapas, a parceria e quem conversou | Atlas M2 |
 | 52 | `GET /api/atlas/provedores` | Admin RBS (com o diagnóstico ligado) | O estado do modelo de linguagem, do JEV e do Gemini, e o teto diário por parceria | Atlas M2 |
 | 53 | `POST /api/atlas/provedores/{nome}/teste` | Admin RBS (com o diagnóstico ligado) | Uma chamada mínima a um provedor (`llm`, `jev` ou `gemini`) | Atlas M2 |
+| 54 | `POST /api/documentos` | Admin RBS | Envia um documento (PDF ou TXT) para o Atlas, com título, chave, tipo e escopo | Atlas M3 |
+| 55 | `GET /api/documentos` | Admin RBS | Lista os documentos, com filtros e página | Atlas M3 |
+| 56 | `GET /api/documentos/{id}` | Admin RBS, ou a marca pelo escopo | Um documento: inteiro para a RBS; para a marca, só título, tipo, versão, páginas e se foi substituído | Atlas M3 |
+| 57 | `PATCH /api/documentos/{id}/status` | Admin RBS | Aprova, recusa, revoga ou reindexa um documento | Atlas M3 |
+| 58 | `GET /api/documentos/{id}/trechos` | Admin RBS | Os trechos em que o documento foi cortado, com página, seção, tokens e o começo do texto | Atlas M3 |
 
-São 53 operações (método + caminho). A rota 5 (`ativar`) faz parte do contrato de autenticação, mas só é implementada na etapa 4. As rotas 37 em diante vieram com o Atlas: a coluna "Etapa" diz `Atlas 1` (plano de aplicações e dados informados), `Atlas 2` (conversa, cartão de perguntas e relatório) ou `Atlas M2` (o diagnóstico: rotas 49 a 53, veja "Diagnóstico do Atlas"). A 49 é só do Admin Patrocinador, dono da conversa; as 50 a 53 são só do Admin RBS (o outro perfil recebe **403** antes de tudo). **As rotas 49 a 53 estão sempre mapeadas e respondem 404 com o diagnóstico desligado** (`atlas.diagnostico.ligado=false`, o padrão). Nas rotas 42 a 46 só o Admin Patrocinador chama (a RBS recebe **403** antes de o corpo ser lido); nas 47 e 48 chamam a marca da parceria e a RBS. **Neste MVP o relatório do Atlas está desligado** (`atlas.relatorio.ligado=false`, o padrão): as rotas **46, 47 e 48 não existem (404)**, e as rotas 42 e 44 só aceitam conversa por texto (`atalho` e `modelo` dão 422). Veja "Modo só chat". O contrato do relatório, nas rotas 42 a 48, vale com `atlas.relatorio.ligado=true`.
+São 58 operações (método + caminho). A rota 5 (`ativar`) faz parte do contrato de autenticação, mas só é implementada na etapa 4. As rotas 37 em diante vieram com o Atlas: a coluna "Etapa" diz `Atlas 1` (plano de aplicações e dados informados), `Atlas 2` (conversa, cartão de perguntas e relatório), `Atlas M2` (o diagnóstico: rotas 49 a 53, veja "Diagnóstico do Atlas") ou `Atlas M3` (os documentos: rotas 54 a 58, veja "Os documentos do Atlas"). As rotas 54, 55, 57 e 58 são só do Admin RBS (o outro perfil recebe **403** antes de o corpo ser lido); a 56 é das duas pontas, e a marca só vê o que o escopo dela permite. A 49 é só do Admin Patrocinador, dono da conversa; as 50 a 53 são só do Admin RBS (o outro perfil recebe **403** antes de tudo). **As rotas 49 a 53 estão sempre mapeadas e respondem 404 com o diagnóstico desligado** (`atlas.diagnostico.ligado=false`, o padrão). Nas rotas 42 a 46 só o Admin Patrocinador chama (a RBS recebe **403** antes de o corpo ser lido); nas 47 e 48 chamam a marca da parceria e a RBS. **Neste MVP o relatório do Atlas está desligado** (`atlas.relatorio.ligado=false`, o padrão): as rotas **46, 47 e 48 não existem (404)**, e as rotas 42 e 44 só aceitam conversa por texto (`atalho` e `modelo` dão 422). Veja "Modo só chat". O contrato do relatório, nas rotas 42 a 48, vale com `atlas.relatorio.ligado=true`.
 
-As rotas de debug do modelo de linguagem (`/api/debug/llm`) são temporárias, só existem no perfil `dev`, são só da RBS e ficam fora desta tabela e da conta das 53: veja "Rotas de debug (temporárias)", no fim.
+As rotas de debug do modelo de linguagem (`/api/debug/llm`) são temporárias, só existem no perfil `dev`, são só da RBS e ficam fora desta tabela e da conta das 58: veja "Rotas de debug (temporárias)", no fim.
 
 ## Objetos que se repetem
 
@@ -652,7 +657,8 @@ O patrocinador só enxerga as entregas das abas **liberadas** para a parceria de
 - O servidor também confere o **conteúdo**, pelos primeiros bytes (a "assinatura" do formato), e não só o nome: `pdf` começa com `%PDF`; `png` e `jpg`/`jpeg` com a assinatura de imagem; `zip`, `docx`, `xlsx` e `pptx` com `PK`; `mp4` tem `ftyp` logo no começo; `mp3` começa com `ID3` ou com um quadro de áudio; `csv` precisa ser texto UTF-8 válido, sem bytes nulos. Planilha que é texto mas não está em UTF-8 (o Excel grava em ANSI/Latin-1 quando não se escolhe "CSV UTF-8") recebe 415 com a instrução de salvar de novo como "CSV UTF-8 (separado por vírgulas)"; arquivo que não parece texto (um PNG renomeado para `.csv`) recebe 415 com a frase de arquivo renomeado. Um executável renomeado para `.pdf` é recusado (415). SVG e executáveis ficam de fora, porque podem carregar script. O tipo (`mimeType`) gravado vem da extensão conferida, nunca do que o navegador informou.
 - O nome original perde o caminho da pasta e os caracteres de controle (`C:\fotos\logo.png` vira `logo.png`) e tem no máximo 255 caracteres.
 - O servidor guarda o arquivo com um nome que ele mesmo gera. O nome original só aparece na resposta e no download.
-- Categorias que o **patrocinador** pode usar: `MATERIAL_MARCA`, `MATERIAL_MIDIA`, `DOCUMENTO_INGRESSOS`, `CONTRATO`, `OUTRO`. As demais (`PLANO_COMERCIAL`, `RELATORIO_VEICULACAO`, `COMPROVACAO`, `PESQUISA`, `RELATORIO_PARCERIA`) são só da RBS.
+- Categorias que o **patrocinador** pode usar: `MATERIAL_MARCA`, `MATERIAL_MIDIA`, `DOCUMENTO_INGRESSOS`, `CONTRATO`, `OUTRO`. As demais (`PLANO_COMERCIAL`, `RELATORIO_VEICULACAO`, `COMPROVACAO`, `PESQUISA`, `RELATORIO_PARCERIA`) são só da RBS. A categoria `DOCUMENTO` existe no banco, mas é só dos documentos do Atlas (rota 54): aqui ela é recusada como categoria inexistente (422), para as duas pontas.
+- **`.txt` não vale aqui**: o texto simples é aceito só na rota 54. Um `.txt` enviado a esta rota recebe 415 com a lista de sempre.
 - Cada envio vira uma **nova versão** da entrega (1, 2, 3...). As versões antigas continuam disponíveis.
 - O patrocinador só envia em entrega de aba **liberada**, e só quando a entrega está em `NAO_INICIADO`, `AGUARDANDO_ENVIO`, `AJUSTE_SOLICITADO` ou `ENVIADO`. Depois de `EM_ANALISE`, `APROVADO` ou `NAO_APLICAVEL`, o envio é recusado com 409.
 - O envio do patrocinador muda o status da entrega para `ENVIADO`. O retorno da RBS **não** muda o status.
@@ -699,7 +705,9 @@ O `filename*` leva o nome original em UTF-8 (com acentos e espaços codificados)
 
 **Aba fechada.** O arquivo que pertence a uma aba (o arquivo de uma entrega, por exemplo) segue a mesma regra da lista de entregas: se a aba está fechada para a parceria do patrocinador, o download dá **403** com a mesma frase da lista (`"Esta aba não faz parte da cota da sua parceria."` ou `"Esta aba ainda não foi liberada para a sua parceria."`, veja "Aba"), e nada é gravado no histórico. A ordem é: 404 (arquivo que não existe, de outra parceria, geral da RBS ou relatório não disponibilizado) antes do 403 de aba. Arquivo que não é de nenhuma aba (sem `aba` no banco) não tem essa conferência. A RBS baixa qualquer arquivo, de aba aberta ou fechada.
 
-**Erros:** 403 (aba fechada); 404 (não existe, é de outra parceria, ou o arquivo sumiu do armazenamento). **Histórico:** `DOWNLOAD`, com quem baixou, de que IP e navegador.
+**Arquivo de documento do Atlas.** O arquivo de qualquer documento (rota 54) **não sai por aqui para a marca**: ela recebe 404 (`"Não encontramos este arquivo."`) mesmo no anexo da própria parceria, e mesmo com o documento aprovado. Um documento de escopo `PARCERIA` é gravado com a parceria, e sem esta regra sairia por esta rota recusado, não aprovado ou revogado (como o D11, com CPFs). A marca só lê documento pelo visualizador (rotas 59 e 60, no M4), que confere o status e o escopo. A RBS baixa. O `DOWNLOAD` de um arquivo de documento fica na entidade `documento` (a marca não vê essas linhas).
+
+**Erros:** 403 (aba fechada); 404 (não existe, é de outra parceria, é de um documento do Atlas e quem pede é a marca, ou o arquivo sumiu do armazenamento). **Histórico:** `DOWNLOAD`, com quem baixou, de que IP e navegador.
 
 ## 19. `PATCH /api/entregas/{id}/status`  · etapa 5
 
@@ -738,6 +746,8 @@ O `filename*` leva o nome original em UTF-8 (com acentos e espaços codificados)
 **Filtros (opcionais):** `acao` (uma ou várias, separadas por vírgula), `entidade` (`entrega`, `arquivo`, `parceria`...), `de`, `ate`, `pagina`, `tamanho`. A ordem é da ação mais nova para a mais antiga.
 
 **O que o patrocinador não vê** [PERMISSAO]: além do IP e do navegador, as etapas internas de trabalho da RBS no relatório: `GERACAO_RELATORIO` e `VALIDACAO`. Elas não aparecem nas linhas, nem no `total`, nem num filtro por `acao` (pedir `acao=VALIDACAO` devolve lista vazia). A `DISPONIBILIZACAO`, que é quando o relatório passa a existir para a marca, continua aparecendo. A RBS vê tudo.
+
+**Documentos do Atlas.** O patrocinador também não vê **nenhuma linha da entidade `documento`**: o envio, a aprovação, a recusa, a revogação e a visualização de um documento (nem o de escopo `PARCERIA` da própria parceria, como o anexo do Cliente Amarelo). Elas não aparecem nas linhas, nem no `total`, nem num filtro (`entidade=documento` devolve lista vazia): o título, o motivo da recusa e quem mexeu são justamente o que a rota 56 esconde dele. A RBS vê todas aqui e na rota 21.
 
 **200**: uma página.
 
@@ -1936,9 +1946,177 @@ O custo de uma ida (e de um resumo) é o `usage.opencode.list_cost` que o OpenCo
 
 ---
 
+# Os documentos do Atlas (rotas 54 a 58)
+
+A RBS sobe os documentos de que o Atlas se alimenta: manuais de operação, planos comerciais de cada cota, anexos de parceria, FAQ e comunicados. O documento vira **trechos com embeddings** (vetores de 768 dimensões), com versão, escopo e uma regra do banco (RLS) que só deixa a busca ver o que a marca pode ver. **Só a RBS envia, aprova, recusa, revoga e reindexa**; o documento nasce `AGUARDANDO_APROVACAO` e só a RBS o aprova. A busca e o visualizador chegam no M4 (rotas 59 a 61).
+
+## O ciclo de um documento
+
+```text
+envio (54) -> AGUARDANDO_APROVACAO --APROVAR (57)--> PROCESSANDO --(em segundo plano)--> INDEXADO
+                  |  RECUSAR                          |                                      |  REVOGAR            |  nova versão indexada
+                  v                                   v ERRO (com o motivo)                  v                     v
+               RECUSADO                  REINDEXAR (57) volta a PROCESSANDO              REVOGADO            SUBSTITUIDO (REVOGAR também)
+envio de PDF sem texto, com senha ou corrompido -> nasce ERRO (sem aprovado_por): corrige-se com um novo envio, não com reindexar
+```
+
+| `status` | O que é |
+| --- | --- |
+| `AGUARDANDO_APROVACAO` | Enviado e lido; espera a RBS. Se `contemDadosPessoais` é `true`, a aprovação é recusada pelo banco (409). |
+| `RECUSADO` | A RBS recusou. Final. |
+| `PROCESSANDO` | Aprovado; a indexação (extrair, dividir, embeddings, gravar os trechos) roda em segundo plano. Leva de poucos segundos a um minuto; a tela busca de novo ao voltar à aba do navegador. Se a API cair no meio, ele vira `ERRO` ("Processamento interrompido") na subida seguinte. |
+| `INDEXADO` | Os trechos estão no ar: a busca os enxerga. |
+| `ERRO` | A indexação falhou (ou o texto não pôde ser lido); `erro` diz o motivo. Se o documento já tinha sido aprovado, dá para `REINDEXAR`. |
+| `SUBSTITUIDO` | Uma versão mais nova do mesmo grupo foi indexada. Os trechos ficam, inativos. |
+| `REVOGADO` | A RBS tirou do ar. Vale na hora: os trechos se desligam na mesma transação, também para o que uma conversa já buscou. |
+
+**O grupo e a versão.** Um documento lógico é a `chave` (por exemplo `manual-operacoes`). O **grupo** é a combinação de edição, escopo, cota, parceria e chave: dois documentos de grupos diferentes nunca se substituem (os anexos de duas parcerias com a mesma chave convivem, e o manual de 2026 não é versão do de 2027). A `versao` é a maior do grupo mais 1, calculada no envio. Quando uma versão nova termina de indexar, a anterior vira `SUBSTITUIDO` **na mesma transação** (não há instante sem nenhuma das duas no ar). A que ainda não terminou não tira a antiga do ar: se a nova der erro, a antiga continua.
+
+**O escopo.**
+
+| `escopo` | Quem enxerga | Campos do envio |
+| --- | --- | --- |
+| `GLOBAL` | Todas as parcerias da edição | `eventoId` |
+| `COTA` | As parcerias dessa cota na edição | `eventoId` e `cota` (`MASTER`, `SUBCOTA_G` ou `SUBCOTA`) |
+| `PARCERIA` | Só a parceria dada | `parceriaId` (a edição vem da parceria) |
+
+**Dados pessoais.** Na hora do envio um detector lê o texto: CPF (com ou sem pontuação) e RG marcam sempre; telefone e e-mail só se houver **3 ou mais na mesma página** (um contato institucional não trava um manual). Com a suspeita, `contemDadosPessoais` é `true` e o documento não pode ser aprovado nem reindexado. Um falso positivo não tem saída pela tela: corrige-se o documento e envia-se de novo.
+
+**O que o Documento mostra à RBS** (rotas 54, 55, 56 e 57):
+
+```json
+{
+  "id": 14, "titulo": "Manual de Operações 2027", "chave": "manual-operacoes", "versao": 2,
+  "tipo": "MANUAL_OPERACOES", "escopo": "GLOBAL",
+  "evento": { "id": 2, "nome": "Planeta Atlântida", "edicao": 2027 },
+  "cota": null, "parceria": null,
+  "status": "INDEXADO", "contemDadosPessoais": false,
+  "paginas": 11, "trechos": 12, "modelo": "gemini-embedding-2", "dimensoes": 768, "modeloDiferente": false,
+  "extracaoMs": 210, "embeddingsMs": 1840, "erro": null,
+  "arquivo": { "id": 88, "nomeOriginal": "manual-operacoes-v2.pdf", "mimeType": "application/pdf", "tamanhoBytes": 183204 },
+  "enviadoPor": { "id": 1, "nome": "Equipe B2B RBS", "perfil": "ADMIN_RBS" }, "enviadoEm": "2026-10-31T10:02:00-03:00",
+  "aprovadoPor": { "id": 1, "nome": "Equipe B2B RBS", "perfil": "ADMIN_RBS" }, "aprovadoEm": "2026-10-31T10:03:00-03:00",
+  "revogadoPor": null, "revogadoEm": null,
+  "acoes": ["REVOGAR"]
+}
+```
+
+`cota` (`{ "codigo": "MASTER", "nome": "Master" }`) vem só nos de escopo `COTA`, e `parceria` (`{ "id": 2, "patrocinador": "Cliente Amarelo" }`) só nos de escopo `PARCERIA`. `paginas` é `1` num TXT. `trechos`, `modelo`, `dimensoes`, `extracaoMs` e `embeddingsMs` ficam `0`/`null` até a indexação terminar. `modeloDiferente` é `true` quando o documento está indexado com um modelo de embeddings que **não é o de agora** (a variável `ATLAS_EMBEDDINGS` mudou): a busca o ignora, a API registra o erro no log e a aba mostra o aviso; esta entrega não reindexa sozinha (recriar o banco, ou subir o documento de novo). `acoes` diz o que a RBS pode fazer agora, no vocabulário da rota 57: `AGUARDANDO_APROVACAO` dá `["APROVAR", "RECUSAR"]` (só `["RECUSAR"]` com dado pessoal); `ERRO` dá `["REINDEXAR", "RECUSAR"]` (só `["RECUSAR"]` se nunca foi aprovado ou tem dado pessoal); `INDEXADO` e `SUBSTITUIDO` dão `["REVOGAR"]`; os demais, `[]`.
+
+## 54. `POST /api/documentos`  · Atlas M3
+
+**Quem chama:** Admin RBS (exige o token CSRF). O patrocinador recebe **403** antes de o corpo ser lido.
+
+**Corpo:** `multipart/form-data`
+
+| Parte | Obrigatória | O que é |
+| --- | --- | --- |
+| `arquivo` | Sim | O documento: **PDF** ou **TXT** (UTF-8), até **20 MB**. |
+| `titulo` | Sim | Até 200 caracteres. É o nome que a marca vê. |
+| `chave` | Sim | O documento lógico: letras minúsculas sem acento, números e hífen (`manual-operacoes`), até 80 caracteres. |
+| `tipo` | Sim | `MANUAL_OPERACOES`, `PLANO_COMERCIAL`, `ANEXO_PARCERIA`, `FAQ`, `COMUNICADO` ou `OUTRO`. |
+| `escopo` | Sim | `GLOBAL`, `COTA` ou `PARCERIA`. |
+| `eventoId` | `GLOBAL` e `COTA` | A edição (rota 6). No `PARCERIA` é opcional; se vier, tem de ser a da parceria. |
+| `cota` | `COTA` | `MASTER`, `SUBCOTA_G` ou `SUBCOTA` (o `codigo` da cota, como na rota 7). |
+| `parceriaId` | `PARCERIA` | A parceria (rota 7: `GET /api/parcerias?eventoId=`). |
+
+Para montar o formulário: as edições vêm da rota 6, as parcerias (com a `cota.codigo`) da rota 7, e as cotas são os três códigos acima (`Master`, `Subcota G`, `Subcota`). `cota` só vale no `COTA` e `parceriaId` só no `PARCERIA`; enviá-los em outro escopo dá 422.
+
+**Regras do arquivo.** Só `pdf` e `txt` (sem diferenciar maiúsculas); DOCX, PPTX, ZIP, imagens, CSV e o resto dão **415** (`"Este tipo de arquivo não é aceito. Envie um destes: pdf, txt."`). O conteúdo também é conferido: `pdf` começa com `%PDF`, e `txt` precisa ser UTF-8 válido sem byte nulo; um executável renomeado para `.pdf` dá 415. O servidor guarda o arquivo com um nome que ele gera, na categoria `DOCUMENTO` (geral, sem aba; na pasta da parceria no escopo `PARCERIA`).
+
+**A leitura roda na hora**, antes de gravar: o texto é extraído (uma página por vez, no máximo 300 páginas) e o detector de dados pessoais roda. O documento nasce:
+
+- `AGUARDANDO_APROVACAO`, com `paginas` e `contemDadosPessoais`; ou
+- `ERRO`, **sem `aprovado_por`**, se não houver texto (`"Sem texto extraível; OCR fora do escopo."`, um PDF só de imagem), se o PDF tiver senha (`"O PDF está protegido por senha."`), estiver corrompido (`"O PDF está corrompido ou não pôde ser lido."`) ou passar de 300 páginas (`"O PDF tem N páginas e o limite é 300."`). Esse caso se corrige com um **novo envio**, e não reindexando.
+
+**201**: o **Documento** criado (veja acima). O cabeçalho `Location` aponta para `/api/documentos/{id}`.
+
+**Erros**
+
+| Status | Quando |
+| --- | --- |
+| 401 | Sem sessão. |
+| 403 | Não é Admin RBS, ou falta o token CSRF. |
+| 413 | Arquivo acima de 20 MB (exatamente 20 MB ainda passa). |
+| 415 | Extensão fora de `pdf`/`txt`, ou conteúdo que não bate com ela. |
+| 422 | Campo faltando ou inválido, em `campos`: `arquivo` (`"Envie o documento (PDF ou TXT) na parte \"arquivo\" do formulário."`), `titulo`, `chave`, `tipo`, `escopo`, `eventoId` (falta, não é número ou a edição não existe), `cota` (falta no `COTA`, não existe, ou veio em outro escopo) e `parceriaId` (falta no `PARCERIA`, a parceria não existe, ou veio em outro escopo). |
+
+**Histórico:** `CRIACAO` na entidade `documento` (a marca não vê).
+
+## 55. `GET /api/documentos`  · Atlas M3
+
+**Quem chama:** Admin RBS. O patrocinador recebe **403** com qualquer filtro (inclusive inválido).
+
+**Filtros (opcionais):** `eventoId`, `escopo`, `status`, `tipo`, `chave`, `q` (um pedaço do título, sem diferenciar maiúsculas), `pagina` e `tamanho` (50 por página, no máximo 200). Valor de `escopo`, `status` ou `tipo` fora da lista dá 422 em `campos`. A ordem é do envio mais novo para o mais antigo.
+
+**200**: uma página de **Documento**: `{ "itens": [ ... ], "pagina": 0, "tamanho": 50, "total": 13 }`.
+
+**Erros:** 401; 403; 422 (filtro inválido, ou `pagina`/`tamanho` fora dos limites); 400 (`eventoId` que não é número).
+
+## 56. `GET /api/documentos/{id}`  · Atlas M3
+
+**Quem chama:** Admin RBS (qualquer documento, em qualquer status) ou a marca (Admin Patrocinador), **pelo escopo**.
+
+- **RBS:** o **Documento** inteiro (veja acima).
+- **Marca:** só o que ela precisa para abrir o documento. Nunca o erro, a suspeita de dado pessoal, a autoria, o escopo, a chave nem o caminho do arquivo:
+
+```json
+{ "id": 14, "titulo": "Manual de Operações 2027", "tipo": "MANUAL_OPERACOES", "versao": 2, "paginas": 11, "substituido": false }
+```
+
+`substituido` é `true` quando existe uma versão mais nova (o front mostra o aviso). A marca vê o documento `GLOBAL` da edição de alguma parceria dela, o `COTA` da cota dela nessa edição e o `PARCERIA` da própria parceria, e só se ele está `INDEXADO` ou `SUBSTITUIDO`. [ISOLAMENTO] **Todo o resto dá 404 `"Não encontramos este documento."`**, a mesma frase de um id que não existe: documento de outra edição, de outra cota ou de outra parceria, ainda aguardando, recusado, com erro, em processamento ou revogado. Para ler o texto, a marca usa o visualizador (rotas 59 e 60, no M4); o arquivo em si não sai pela rota 18.
+
+**Erros:** 401; 404 (não existe, ou a marca não pode vê-lo; id que não é número também).
+
+## 57. `PATCH /api/documentos/{id}/status`  · Atlas M3
+
+**Quem chama:** Admin RBS (exige o token CSRF). O patrocinador recebe **403** com qualquer corpo.
+
+**Corpo (JSON):** `{ "acao": "APROVAR", "observacao": "Conferido." }`. `acao` é obrigatória; `observacao` é opcional (até 500 caracteres) e vai para o histórico.
+
+| `acao` | Vale quando o documento está | Passa a | Observação |
+| --- | --- | --- | --- |
+| `APROVAR` | `AGUARDANDO_APROVACAO` | `PROCESSANDO` | Grava quem aprovou e enfileira a indexação **depois do commit**. Com `contemDadosPessoais`, o banco recusa: 409 com `"Este documento parece ter dados pessoais (CPF, RG ou uma lista de contatos) e não pode ser aprovado. Tire os dados pessoais e envie de novo."` |
+| `RECUSAR` | `AGUARDANDO_APROVACAO` ou `ERRO` | `RECUSADO` | |
+| `REVOGAR` | `INDEXADO` ou `SUBSTITUIDO` | `REVOGADO` | Desliga os trechos na hora. Grava quem revogou. |
+| `REINDEXAR` | `ERRO` | `PROCESSANDO` | Recomeça a indexação. Só com `aprovado_por`: o documento que nasceu em `ERRO` nunca foi aprovado, e o banco responde 409 com `"Este documento nunca foi aprovado e não pode ser reindexado. Corrija o arquivo e envie de novo."` |
+
+**200**: o **Documento** como ficou ao fim do pedido. Depois de `APROVAR` ou `REINDEXAR` o `status` é `PROCESSANDO`: a indexação termina depois da resposta (de poucos segundos a um minuto). A tela busca de novo (`GET /api/documentos/{id}` ou a lista) quando a aba do navegador volta ao foco; não há tempo real.
+
+**Erros**
+
+| Status | Quando |
+| --- | --- |
+| 401 | Sem sessão. |
+| 403 | Não é Admin RBS, ou falta o token CSRF. |
+| 404 | O documento não existe (`"Não encontramos este documento."`). |
+| 409 | O status atual não aceita a ação (`"Só um documento aguardando aprovação pode ser aprovado. Este documento está indexado."`), ou o banco recusou (dado pessoal, nunca aprovado). Nada muda. |
+| 422 | `acao` ausente ou fora das quatro, ou `observacao` com mais de 500 caracteres. |
+
+**Histórico:** `ALTERACAO_STATUS` na entidade `documento`, com o status anterior e o novo. A indexação grava o seu: `PROCESSANDO` para `INDEXADO` (com o número de trechos, o modelo e o tempo) ou para `ERRO` (com o motivo), e `INDEXADO` para `SUBSTITUIDO` na versão anterior.
+
+## 58. `GET /api/documentos/{id}/trechos`  · Atlas M3
+
+**Quem chama:** Admin RBS. O patrocinador recebe **403** com qualquer id.
+
+**Filtros:** `pagina` e `tamanho` (50 por página, no máximo 200). Os trechos vêm na ordem do documento, **também os inativos** (de uma versão substituída ou revogada, com `ativo: false`).
+
+**200**: `{ "itens": [ ... ], "pagina": 0, "tamanho": 50, "total": 12 }`, cada item:
+
+```json
+{ "id": 301, "ordem": 5, "paginaInicio": 5, "paginaFim": 6, "secao": "4 Energia elétrica", "tokens": 476, "ativo": true,
+  "inicioDoTexto": "4.1 Pontos de energia\nCada ativação recebe da produção um ponto de energia 220 V com a carga contratada em kVA..." }
+```
+
+`secao` é o caminho da seção (`"3 Energia › 3.2 Tarifa"`, ou `null` se o documento não tem títulos) e `inicioDoTexto` traz os primeiros 240 caracteres. `tokens` é uma estimativa de 4 caracteres por token. Um documento que ainda não foi indexado, ou que deu erro, devolve `total: 0`.
+
+**Erros:** 401; 403; 404 (`"Não encontramos este documento."`); 422 (`pagina`/`tamanho` fora dos limites).
+
+---
+
 # Rotas de debug (temporárias)
 
-Um recurso **temporário**, para a equipe ligar o modelo de linguagem do Atlas pela tela (o botão "Debug"), sem reiniciar a API e sem variável de ambiente. Não faz parte das 53 rotas do contrato e sai antes da entrega final.
+Um recurso **temporário**, para a equipe ligar o modelo de linguagem do Atlas pela tela (o botão "Debug"), sem reiniciar a API e sem variável de ambiente. Não faz parte das 58 rotas do contrato e sai antes da entrega final.
 
 - **Só existem com `atlas.debug.chaves=true`.** A propriedade vem `false` por padrão, `true` no perfil `dev` e `false` no `test`. Sem ela, as quatro rotas respondem **404**, como uma rota que não existe.
 - **A chave fica só na memória da API.** Nunca vai ao banco, a arquivo ou ao log, e **some quando a API reinicia**. Nenhuma resposta devolve a chave inteira: só os 4 últimos caracteres (`finalDaChave`).
@@ -2040,18 +2218,19 @@ Ligada:
 - Toda rota que recebe o id de uma parceria (ou de algo que pertence a uma: entrega, arquivo, pergunta, relatório) confere, **a cada chamada**, se o usuário tem vínculo vigente com ela. A conferência vai ao banco toda vez e não é guardada na sessão. Por isso, quando a RBS revoga um e-mail, o acesso some na hora, mesmo para quem já estava logado.
 - Quem não tem vínculo recebe **404**, o mesmo erro de um id que não existe. Assim um patrocinador não descobre, pelo código de erro, quais parcerias existem.
 - A RBS passa em qualquer parceria que exista. Id que não existe é 404 para todos.
+- Os **documentos do Atlas** seguem o escopo, e não a rota da parceria: a marca vê o `GLOBAL` da edição dela, o `COTA` da cota dela nessa edição e o `PARCERIA` da própria parceria, só indexado (rota 56); o resto é 404, e o arquivo do documento nunca sai pela rota 18 para ela. A busca do Atlas (M4) roda como um papel do banco (`atlas_ro`) que só enxerga isso, com a regra repetida no banco (RLS).
 - O `403` é para outra situação: o usuário **tem** acesso à parceria, mas o perfil dele não pode fazer aquela operação (rota só da RBS), ou a aba está fechada para a parceria (fora da cota, ou ainda não liberada; veja "Aba"). Nas rotas só da RBS o perfil é conferido **primeiro**: o patrocinador recebe 403 com qualquer id (da parceria dele, de outra ou que não existe) e com **qualquer corpo ou filtro** (corpo vazio, JSON quebrado, campo inválido, `?tamanho=999`...). O 403 nunca revela se o id existe nem como é o formato do corpo da rota. As rotas só da RBS são as marcadas "Admin RBS" na tabela do início deste arquivo.
 
 ## Permissões por perfil
 
 | Quem | Pode |
 | --- | --- |
-| **Admin RBS** | Quase tudo: criar parcerias, autorizar e revogar e-mails, criar entregas, mudar status, mandar retorno, aprovar perguntas, subir cargas (inclusive o plano comercial), anexar as fotos de comprovação das aplicações, informar os dados da ativação no lugar da marca, gerar e disponibilizar relatórios, ver o histórico geral e o painel. **Não** conversa com o Atlas (rotas 42 a 46 e 49 dão 403), mas lê os relatórios que ele montou (rotas 47 e 48) e, com o diagnóstico ligado, o traço de todos os turnos, o estado dos provedores e o teste deles (rotas 50 a 53). Usa as rotas de debug da chave do modelo (só dela). |
-| **Admin Patrocinador** | Ver a própria parceria, as entregas das abas liberadas, enviar materiais, baixar arquivos da parceria, ver o histórico dela, enviar as perguntas da pesquisa, ver a consolidação, o plano de aplicações com as fotos e informar os dados da ativação (aba `APLICACOES` aberta), conversar com o Atlas e montar o relatório de ativação pelo botão ou, com o modelo de linguagem ligado, pelo texto livre (rotas 42 a 46, só ela; a conversa é de quem a abriu), ver os relatórios do Atlas da parceria (rotas 47 e 48), o diagnóstico das próprias conversas (rota 49, só com `atlas.diagnostico.marca` ligado) e o relatório disponibilizado. **Nunca** vê outra parceria nem as rotas da RBS. |
+| **Admin RBS** | Quase tudo: criar parcerias, autorizar e revogar e-mails, criar entregas, mudar status, mandar retorno, aprovar perguntas, subir cargas (inclusive o plano comercial), anexar as fotos de comprovação das aplicações, informar os dados da ativação no lugar da marca, gerar e disponibilizar relatórios, ver o histórico geral e o painel. **Não** conversa com o Atlas (rotas 42 a 46 e 49 dão 403), mas lê os relatórios que ele montou (rotas 47 e 48) e, com o diagnóstico ligado, o traço de todos os turnos, o estado dos provedores e o teste deles (rotas 50 a 53). Envia, lista, aprova, recusa, revoga e reindexa os documentos do Atlas e vê os trechos (rotas 54 a 58). Usa as rotas de debug da chave do modelo (só dela). |
+| **Admin Patrocinador** | Ver a própria parceria, as entregas das abas liberadas, enviar materiais, baixar arquivos da parceria, ver o histórico dela, enviar as perguntas da pesquisa, ver a consolidação, o plano de aplicações com as fotos e informar os dados da ativação (aba `APLICACOES` aberta), ver um documento do Atlas que o escopo dela permite (rota 56: título, tipo, versão, páginas e se foi substituído), conversar com o Atlas e montar o relatório de ativação pelo botão ou, com o modelo de linguagem ligado, pelo texto livre (rotas 42 a 46, só ela; a conversa é de quem a abriu), ver os relatórios do Atlas da parceria (rotas 47 e 48), o diagnóstico das próprias conversas (rota 49, só com `atlas.diagnostico.marca` ligado) e o relatório disponibilizado. **Nunca** vê outra parceria nem as rotas da RBS. |
 
 ## O que a API grava no histórico
 
-[HISTORICO] Toda alteração relevante grava uma linha com **quem** fez, **quando**, **de que IP e navegador**, a **parceria**, a **entidade** e, quando há, o valor anterior e o novo. O histórico só aceita inserir: o banco recusa alterar ou apagar uma linha. A linha é gravada na mesma transação da alteração, então ou grava as duas coisas ou nenhuma.
+[HISTORICO] Toda alteração relevante grava uma linha com **quem** fez, **quando**, **de que IP e navegador**, a **parceria**, a **entidade** e, quando há, o valor anterior e o novo. O histórico só aceita inserir: o banco recusa alterar ou apagar uma linha. A linha é gravada na mesma transação da alteração, então ou grava as duas coisas ou nenhuma. Os documentos do Atlas gravam na entidade `documento`: `CRIACAO` no envio (rota 54) e `ALTERACAO_STATUS` em cada mudança de status (rota 57 e a indexação); `DOWNLOAD` quando a RBS baixa o arquivo (rota 18). **Essas linhas não aparecem para a marca na rota 20**, nem no `total` nem num filtro; a RBS as vê nas rotas 20 e 21.
 
 ## Mudanças em relação ao que o front já usava
 

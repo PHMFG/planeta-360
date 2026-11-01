@@ -229,7 +229,9 @@ class PermissaoAntesDoCorpoTest {
             "GET /api/parcerias/{id}/consolidacao", "GET /api/parcerias/{id}/relatorio", "GET /api/relatorios/{id}/csv",
             "GET /api/parcerias/{id}/aplicacoes", "GET /api/campos", "GET /api/parcerias/{id}/dados",
             "POST /api/parcerias/{id}/dados",
-            "GET /api/atlas/relatorios/{id}", "GET /api/parcerias/{id}/atlas/relatorios");
+            "GET /api/atlas/relatorios/{id}", "GET /api/parcerias/{id}/atlas/relatorios",
+            // Rota 56: a RBS vê o documento inteiro; a marca, pelo escopo dela, só o que a rota mostra.
+            "GET /api/documentos/{id}");
 
     @Test
     void todaRotaDaApiEstaClassificadaEAListaDaRbsSoTemRotasQueExistem() {
@@ -265,6 +267,40 @@ class PermissaoAntesDoCorpoTest {
             todas.addAll(conjunto);
         }
         return todas;
+    }
+
+    // ---------------------------------------------------------------------
+    // Documentos do Atlas (rotas 54, 55, 57 e 58): só da RBS, qualquer que seja o corpo, o filtro ou o id; a 56 é das duas pontas
+    // ---------------------------------------------------------------------
+
+    @Test
+    void patrocinadorRecebe403NasRotasDeDocumentoDaRbsQualquerQueSejaOCorpoOFiltroOuOId() {
+        SessaoDeApi amarelo = SessaoDeApi.entrar(mvc, AMARELO);
+
+        for (String corpo : List.of("", "{}", "isto nao e json", "{\"acao\":\"APAGAR\"}", "{\"acao\":\"REVOGAR\"}")) {
+            for (String uri : List.of("/api/documentos/1/status", "/api/documentos/999999/status", "/api/documentos/abc/status")) {
+                MvcTestResult resposta = amarelo.patch(uri, corpo);
+                assertThat(resposta).as("PATCH " + uri + " [" + corpo + "]").hasStatus(HttpStatus.FORBIDDEN);
+                assertThat(lerJson(resposta, "$.detail")).isEqualTo(SO_RBS);
+            }
+        }
+        for (String uri : List.of("/api/documentos", "/api/documentos?status=TALVEZ", "/api/documentos?tamanho=999", "/api/documentos?eventoId=abc",
+                "/api/documentos/1/trechos", "/api/documentos/999999/trechos", "/api/documentos/abc/trechos", "/api/documentos/1/trechos?tamanho=999")) {
+            MvcTestResult resposta = amarelo.get(uri);
+            assertThat(resposta).as("GET " + uri).hasStatus(HttpStatus.FORBIDDEN);
+            assertThat(lerJson(resposta, "$.detail")).isEqualTo(SO_RBS);
+            assertThat(amarelo.head(uri)).as("HEAD " + uri).hasStatus(HttpStatus.FORBIDDEN);
+        }
+    }
+
+    @Test
+    void aRota56EDasDuasPontasEAMarcaDe404NoQueNaoEDela() {
+        SessaoDeApi amarelo = SessaoDeApi.entrar(mvc, AMARELO);
+        SessaoDeApi rbs = SessaoDeApi.entrar(mvc, RBS);
+
+        assertThat(amarelo.get("/api/documentos/999999")).hasStatus(HttpStatus.NOT_FOUND);
+        assertThat(rbs.get("/api/documentos/999999")).hasStatus(HttpStatus.NOT_FOUND);
+        assertThat(amarelo.get("/api/documentos")).hasStatus(HttpStatus.FORBIDDEN);
     }
 
     // ---------------------------------------------------------------------

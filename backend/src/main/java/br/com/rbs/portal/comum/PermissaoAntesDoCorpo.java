@@ -61,6 +61,12 @@ public class PermissaoAntesDoCorpo implements HandlerInterceptor, WebMvcConfigur
             "GET /api/atlas/diagnostico/turnos/{turno}",
             "GET /api/atlas/provedores",
             "POST /api/atlas/provedores/{nome}/teste",
+            // Os documentos do Atlas (rotas 54, 55, 57 e 58): enviar, listar, aprovar/recusar/revogar/reindexar e ver os trechos. A 56
+            // (ver um documento) é das duas pontas: a marca vê o que o escopo dela permite.
+            "POST /api/documentos",
+            "GET /api/documentos",
+            "PATCH /api/documentos/{id}/status",
+            "GET /api/documentos/{id}/trechos",
             // As rotas de debug da chave do modelo (temporárias, só no perfil dev): só a RBS as usa. Só existem com
             // atlas.debug.chaves=true; o teste de classificação liga a propriedade, porque no perfil test elas não existem.
             "GET /api/debug/llm",
