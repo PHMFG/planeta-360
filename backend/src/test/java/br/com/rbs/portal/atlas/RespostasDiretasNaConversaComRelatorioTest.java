@@ -9,4 +9,9 @@ import org.springframework.transaction.annotation.Transactional;
 @TesteComLlmRoteirizado
 @Transactional
 class RespostasDiretasNaConversaComRelatorioTest extends RespostasDiretasNaConversaBase {
+
+    @Override
+    boolean relatorioLigado() {
+        return true;
+    }
 }

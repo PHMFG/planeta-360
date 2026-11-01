@@ -322,6 +322,20 @@ class AtlasSoChatTest {
         assertThat(lerJson(resposta, "$.itens[1].porModelo")).isEqualTo(false);
     }
 
+    @Test
+    void aDescricaoDoPedidoDeRelatorioNoSoChatContinuaAAntigaESemOfertaDoRelatorioDaAtivacao() {
+        SessaoDeApi pessoa = entrar(AMARELO);
+        long conversa = abrirConversa(pessoa);
+        modelo.texto("Posso ajudar com a sua parceria.");
+
+        falar(pessoa, conversa, "Oi.");
+
+        String descricao = modelo.ultimoPedido().ferramentas().stream()
+                .filter(definicao -> "pedido_de_relatorio".equals(definicao.nome())).findFirst().orElseThrow().descricao();
+        assertThat(descricao).contains("Use quando a pessoa pedir o relatório, o relatório oficial, o relatório final")
+                .doesNotContain("qualquer relatório que não seja o da ativação", "montar aqui");
+    }
+
     // ---------------------------------------------------------------------
     // Conversa antiga
     // ---------------------------------------------------------------------

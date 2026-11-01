@@ -29,6 +29,7 @@ import br.com.rbs.portal.relatorio.RelatorioService;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -119,16 +120,40 @@ class PedidoDeRelatorioTest {
         assertThat(resultado).containsEntry("tipo", "pedido_relatorio").containsEntry("relatorioOficial", false)
                 .containsEntry("modelos", List.of(BRIEFING, PESQUISA, PLANO));
         String texto = (String) resultado.get("texto");
-        assertThat(texto).isEqualTo(PedidoDeRelatorio.texto(false)).doesNotContainPattern("[0-9]");
+        assertThat(texto).isEqualTo(PedidoDeRelatorio.texto(false, true)).doesNotContainPattern("[0-9]");
         assertThat(texto).contains("equipe da RBS", "não pelo Atlas", "assim que a RBS o disponibilizar", "modelos em branco");
+        // com o relatório ligado, o texto fixo diz onde o relatório da ativação se monta (sem algarismo)
+        assertThat(texto).endsWith("O relatório da ativação no evento eu monto aqui: é só pedir.");
     }
 
     @Test
-    void osDoisTextosFixosNaoTemAlgarismoNemChaveNemNomeDeFerramenta() {
+    void osTextosFixosNaoTemAlgarismoNemChaveNemNomeDeFerramenta() {
         for (boolean oficial : List.of(false, true)) {
-            assertThat(PedidoDeRelatorio.texto(oficial)).as("oficial=" + oficial).doesNotContainPattern("[0-9]").doesNotContain("{{")
-                    .doesNotContain("_").doesNotContain("pedido").doesNotContain("gerar");
+            for (boolean ligado : List.of(false, true)) {
+                assertThat(PedidoDeRelatorio.texto(oficial, ligado)).as("oficial=" + oficial + ", ligado=" + ligado)
+                        .doesNotContainPattern("[0-9]").doesNotContain("{{").doesNotContain("_").doesNotContain("pedido").doesNotContain("gerar");
+            }
         }
+    }
+
+    @Test
+    void soComORelatorioLigadoOTextoFixoOferecePorLaOMontarORelatorioDaAtivacao() {
+        for (boolean oficial : List.of(false, true)) {
+            assertThat(PedidoDeRelatorio.texto(oficial, true)).as("ligado, oficial=" + oficial).endsWith("O relatório da ativação no evento eu monto aqui: é só pedir.").contains("não pelo Atlas");
+            assertThat(PedidoDeRelatorio.texto(oficial, false)).as("desligado, oficial=" + oficial).doesNotContain("ativação")
+                    .doesNotContain("eu monto");
+            assertThat(PedidoDeRelatorio.texto(oficial, true)).startsWith(PedidoDeRelatorio.texto(oficial, false));
+        }
+    }
+
+    @Test
+    void aDescricaoDaFerramentaSoValeParaOQueNaoEORelatorioDaAtivacaoENaoMandaChamarPeloPedidoGenerico() {
+        String descricao = registro.oferecidas(Optional.empty(), true).stream()
+                .filter(definicao -> PedidoDeRelatorio.NOME.equals(definicao.nome())).findFirst().orElseThrow().descricao();
+
+        assertThat(descricao).contains("qualquer relatório que não seja o da ativação", "pergunte em uma frase")
+                .doesNotContain("Use quando a pessoa pedir o relatório,")
+                .contains("equipe da RBS", "não pelo Atlas", "modelos em branco");
     }
 
     @Test
@@ -159,7 +184,7 @@ class PedidoDeRelatorioTest {
         relatorios.mudarStatus(usuario(jdbc, RBS), relatorio, "DISPONIBILIZADO", requisicao());
         Map<String, Object> disponibilizado = resposta(amarelo);
         assertThat(disponibilizado).containsEntry("relatorioOficial", true);
-        assertThat((String) disponibilizado.get("texto")).isEqualTo(PedidoDeRelatorio.texto(true)).contains("já está disponível")
+        assertThat((String) disponibilizado.get("texto")).isEqualTo(PedidoDeRelatorio.texto(true, true)).contains("já está disponível")
                 .doesNotContain("assim que a RBS o disponibilizar").doesNotContainPattern("[0-9]");
         assertThat(resposta(roxo)).as("o relatório do Amarelo não vale para o Roxo").containsEntry("relatorioOficial", false);
     }

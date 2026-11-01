@@ -11,4 +11,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional
 @TestPropertySource(properties = {"atlas.relatorio.ligado=false"})
 class RespostasDiretasNaConversaSoChatTest extends RespostasDiretasNaConversaBase {
+
+    @Override
+    boolean relatorioLigado() {
+        return false;
+    }
 }

@@ -106,7 +106,7 @@ class RespostaDiretaEmFluxoTest {
         Map<String, Object> pedidoDoFim = fim.<List<Map<String, Object>>>ler("$.itens[?(@.tipo=='pedido_relatorio')]").get(0);
         assertThat(pedidoDoFim.keySet()).containsExactly("tipo", "texto", "relatorioOficial", "modelos");
         assertThat(pedidoDoFim).containsEntry("relatorioOficial", false);
-        assertThat((String) pedidoDoFim.get("texto")).isEqualTo(PedidoDeRelatorio.texto(false));
+        assertThat((String) pedidoDoFim.get("texto")).isEqualTo(PedidoDeRelatorio.texto(false, true));
         assertThat(pedidoDoFim.get("modelos")).isEqualTo(List.of(
                 Map.of("tipo", "BRIEFING_CONTEUDO", "titulo", "Briefing de conteúdo"),
                 Map.of("tipo", "PERGUNTAS_PESQUISA", "titulo", "Perguntas da pesquisa"),

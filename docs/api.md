@@ -1688,10 +1688,10 @@ Algumas ferramentas respondem à pessoa sozinhas: é o `returnDirect` do plano, 
 
 **`pedido_de_relatorio`** (sem argumento)
 
-- Responde ao pedido de "o relatório". O relatório oficial é elaborado e validado pela RBS, não pelo Atlas. O texto é fixo, em português e **sem nenhum algarismo**.
+- Responde ao pedido de "o relatório". O relatório oficial é elaborado e validado pela RBS, não pelo Atlas. O texto é fixo, em português e **sem nenhum algarismo**. **Com o relatório ligado**, a descrição que o modelo lê diz que a ferramenta é para "qualquer relatório que não seja o da ativação" (o da ativação no evento é o `relatorio_iniciar`; se não der para saber qual é, o modelo pergunta em uma frase antes de chamar, como diz o prompt); desligado, a descrição é a de sempre ("quando a pessoa pedir o relatório, o relatório oficial, o relatório final...").
 - O que fica no histórico: `{"tipo": "pedido_relatorio", "texto": "...", "relatorioOficial": false, "modelos": [{"tipo": "BRIEFING_CONTEUDO", "titulo": "Briefing de conteúdo"}, ...]}`.
 - `relatorioOficial` é `true` se a parceria da conversa tem uma versão do relatório que esta pessoa pode ver pela rota 35, com o mesmo critério dela: o patrocinador só conta a **disponibilizada** mais nova (rascunho e validado dão `false`), e o relatório de outra parceria não vale. É só o booleano: **nenhum número do relatório passa pela ferramenta**, e o front leva à página do relatório.
-- `texto`: com `relatorioOficial` verdadeiro, diz que o relatório mais recente já está disponível no portal; falso, que ele aparece no portal assim que a RBS o disponibilizar. Nos dois, diz que o relatório é da equipe da RBS e oferece os modelos em branco.
+- `texto`: com `relatorioOficial` verdadeiro, diz que o relatório mais recente já está disponível no portal; falso, que ele aparece no portal assim que a RBS o disponibilizar. Nos dois, diz que o relatório é da equipe da RBS e oferece os modelos em branco. **Com o relatório ligado**, os dois levam também, no fim, a frase `"O relatório da ativação no evento eu monto aqui: é só pedir."` (sem algarismo); desligado, o texto é o de antes, sem ela. O item `pedido_relatorio` da conversa relê o texto de agora, nos dois modos.
 - `modelos`: os modelos em branco que a parceria pode pedir, com `tipo` e `titulo`, na ordem `BRIEFING_CONTEUDO`, `PERGUNTAS_PESQUISA`, `PLANO_OPERACIONAL_ATIVACAO`. `PERGUNTAS_PESQUISA` só aparece com a aba Pesquisa aberta.
 
 **`gerar_modelo(tipo)`**

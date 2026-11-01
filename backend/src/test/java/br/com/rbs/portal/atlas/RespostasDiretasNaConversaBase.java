@@ -35,6 +35,9 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  */
 abstract class RespostasDiretasNaConversaBase {
 
+    /** O modo do relatório da classe concreta: o texto fixo do pedido muda com ele. */
+    abstract boolean relatorioLigado();
+
     static final ModeloOferecido BRIEFING = new ModeloOferecido("BRIEFING_CONTEUDO", "Briefing de conteúdo");
     static final ModeloOferecido PESQUISA = new ModeloOferecido("PERGUNTAS_PESQUISA", "Perguntas da pesquisa");
     static final ModeloOferecido PLANO = new ModeloOferecido("PLANO_OPERACIONAL_ATIVACAO", "Plano operacional da ativação");
@@ -196,7 +199,9 @@ abstract class RespostasDiretasNaConversaBase {
         assertThat(modelo.pedidos()).hasSize(1);
         ItemPedidoRelatorio item = unico(turno, ItemPedidoRelatorio.class);
         assertThat(item.relatorioOficial()).isFalse();
-        assertThat(item.texto()).isEqualTo(PedidoDeRelatorio.texto(false));
+        assertThat(item.texto()).isEqualTo(PedidoDeRelatorio.texto(false, relatorioLigado()));
+        assertThat(item.texto().contains("O relatório da ativação no evento eu monto aqui: é só pedir.")).as("a oferta de montar o relatório da ativação só existe com o relatório ligado")
+                .isEqualTo(relatorioLigado());
         assertThat(item.modelos()).containsExactly(BRIEFING, PESQUISA, PLANO);
         assertThat(item.turno()).isNull();
         assertThat(reler(AMARELO, conversa).itens()).isEqualTo(turno.itens());
@@ -210,7 +215,7 @@ abstract class RespostasDiretasNaConversaBase {
 
         ItemPedidoRelatorio depois = unico(reler(AMARELO, conversa), ItemPedidoRelatorio.class);
         assertThat(depois.relatorioOficial()).isTrue();
-        assertThat(depois.texto()).isEqualTo(PedidoDeRelatorio.texto(true)).contains("já está disponível");
+        assertThat(depois.texto()).isEqualTo(PedidoDeRelatorio.texto(true, relatorioLigado())).contains("já está disponível");
         assertThat(depois.modelos()).containsExactly(BRIEFING, PESQUISA, PLANO);
         assertThat(jdbc.sql("SELECT conteudo FROM atlas_mensagem WHERE conversa_id = :c AND papel = 'tool'").param("c", conversa)
                 .query(String.class).single()).contains("\"relatorioOficial\":false");

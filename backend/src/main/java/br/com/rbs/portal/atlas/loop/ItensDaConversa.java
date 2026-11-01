@@ -307,7 +307,7 @@ public class ItensDaConversa {
         }
         long parceriaId = contexto.conversa.parceriaId();
         boolean relatorioOficial = relatorios.temVersaoParaVer(contexto.usuario, parceriaId);
-        return Optional.of(new ItemPedidoRelatorio(PedidoDeRelatorio.texto(relatorioOficial), relatorioOficial,
+        return Optional.of(new ItemPedidoRelatorio(PedidoDeRelatorio.texto(relatorioOficial, modo.relatorioLigado()), relatorioOficial,
                 modelosEmBranco.oferecidos(contexto.usuario, parceriaId), turno));
     }
 
