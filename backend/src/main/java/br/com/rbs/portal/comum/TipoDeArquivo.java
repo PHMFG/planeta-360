@@ -17,7 +17,7 @@ import java.util.Optional;
  * <p>[ATLAS] {@link #TXT} existe só para os documentos do Atlas (rota 54, que aceita PDF e TXT): as outras rotas de envio (a 17 das
  * entregas, a 26 das cargas, a 38 das fotos) não o aceitam, e o Armazenamento o recusa quando o envio não é de documento.
  * [DADOS] {@link #XLS} (a planilha do Excel antigo) existe só para a planilha da agência (rota 66, que aceita XLSX, XLS e CSV): as
- * outras rotas não o aceitam.
+ * outras rotas não o aceitam. O CSV dessa rota é conferido só por {@link #semBytesNulos} (qualquer codificação); nas outras, é UTF-8.
  */
 public enum TipoDeArquivo {
     PDF("application/pdf"),
@@ -96,6 +96,20 @@ public enum TipoDeArquivo {
             case CSV, TXT -> ehTextoUtf8SemNulos(b);
             case XLS -> comecaCom(b, 0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1);
         };
+    }
+
+    /**
+     * [DADOS] A conferência do CSV da planilha da agência (rota 66): nenhum byte nulo, em qualquer codificação. Ninguém lê essa
+     * planilha no servidor (ela só é guardada e baixada pela rota 18), então o Latin-1 e o windows-1252 que o Excel em português grava
+     * por padrão entram; o UTF-16, que tem byte nulo em todo caractere ASCII, e o binário renomeado continuam recusados.
+     */
+    public static boolean semBytesNulos(byte[] b) {
+        for (byte valor : b) {
+            if (valor == 0) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**

@@ -131,6 +131,17 @@ class TipoDeArquivoTest {
     }
 
     @Test
+    void csvDaPlanilhaDaAgenciaSoPrecisaDeUmArquivoSemByteNulo() {
+        // o CSV comum continua sendo UTF-8; a rota 66 confere só o byte nulo (veja Armazenamento)
+        byte[] latin1 = "hora;observação\n10h;João\n".getBytes(StandardCharsets.ISO_8859_1);
+        assertThat(TipoDeArquivo.CSV.conteudoConfere(latin1)).isFalse();
+        assertThat(TipoDeArquivo.semBytesNulos(latin1)).isTrue();
+        assertThat(TipoDeArquivo.semBytesNulos("ação;coração\n".getBytes(StandardCharsets.UTF_8))).isTrue();
+        assertThat(TipoDeArquivo.semBytesNulos(bytes(0xFF, 0xFE, 'a', 0, ';', 0))).as("UTF-16").isFalse();
+        assertThat(TipoDeArquivo.semBytesNulos(bytes(0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13))).as("PNG").isFalse();
+    }
+
+    @Test
     void csvGrandeComTextoValidoAte20MbNaoEstouraAMemoria() {
         byte[] grande = new byte[20 * 1024 * 1024];
         java.util.Arrays.fill(grande, (byte) 'a');

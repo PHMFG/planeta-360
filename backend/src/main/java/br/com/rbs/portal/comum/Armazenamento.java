@@ -276,8 +276,11 @@ public class Armazenamento {
                 .filter(aceitos::aceita)
                 .orElseThrow(() -> new ArquivoRecusadoException(HttpStatus.UNSUPPORTED_MEDIA_TYPE,
                         "Este tipo de arquivo não é aceito. Envie um destes: " + aceitos.extensoes() + "."));
-        if (!tipo.conteudoConfere(conteudo)) {
-            throw new ArquivoRecusadoException(HttpStatus.UNSUPPORTED_MEDIA_TYPE, frasePorConteudo(tipo, conteudo));
+        // A planilha da agência (rota 66) em CSV aceita qualquer codificação sem byte nulo: ninguém a lê no servidor, e o Excel em
+        // português a grava em ANSI. Nas outras rotas o CSV precisa ser UTF-8 (a carga e a entrega leem ou mostram o texto).
+        boolean csvDaPlanilha = aceitos == Aceitos.PLANILHAS && tipo == TipoDeArquivo.CSV;
+        if (csvDaPlanilha ? !TipoDeArquivo.semBytesNulos(conteudo) : !tipo.conteudoConfere(conteudo)) {
+            throw new ArquivoRecusadoException(HttpStatus.UNSUPPORTED_MEDIA_TYPE, frasePorConteudo(tipo, conteudo, csvDaPlanilha));
         }
         return new Preparado(nome, tipo, sha256(conteudo), UUID.randomUUID() + "." + tipo.extensao());
     }
@@ -285,10 +288,12 @@ public class Armazenamento {
     /**
      * A frase do 415 por conteúdo que não bate com a extensão. Planilha que é texto, mas não está em UTF-8 (o Excel grava
      * em ANSI/Latin-1 ou em UTF-16 quando não se escolhe "CSV UTF-8"), recebe a instrução de como salvar de novo; o que não
-     * tem cara de texto (um PNG renomeado para .csv, por exemplo) recebe a frase de arquivo renomeado.
+     * tem cara de texto (um PNG renomeado para .csv, por exemplo) recebe a frase de arquivo renomeado. O CSV da planilha da agência
+     * ({@code csvDaPlanilha}) não tem a frase do UTF-8: a codificação não importa lá, e o que o reprova (byte nulo) é arquivo que não
+     * é texto de planilha, ou UTF-16.
      */
-    private static String frasePorConteudo(TipoDeArquivo tipo, byte[] conteudo) {
-        if (tipo == TipoDeArquivo.CSV && TipoDeArquivo.ehTextoQueNaoEUtf8(conteudo)) {
+    private static String frasePorConteudo(TipoDeArquivo tipo, byte[] conteudo, boolean csvDaPlanilha) {
+        if (tipo == TipoDeArquivo.CSV && !csvDaPlanilha && TipoDeArquivo.ehTextoQueNaoEUtf8(conteudo)) {
             return "A planilha não está em UTF-8 (por isso os acentos não seriam lidos certo). No Excel, use Salvar como e "
                     + "escolha \"CSV UTF-8 (separado por vírgulas)\"; depois envie de novo.";
         }

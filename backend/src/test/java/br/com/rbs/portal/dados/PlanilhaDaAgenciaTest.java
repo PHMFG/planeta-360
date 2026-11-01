@@ -10,6 +10,7 @@ import br.com.rbs.portal.ApoioDeTeste.Csrf;
 import br.com.rbs.portal.TesteDeIntegracao;
 import br.com.rbs.portal.acesso.SessaoDeApi;
 import br.com.rbs.portal.comum.Armazenamento;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.Arrays;
@@ -283,6 +284,41 @@ class PlanilhaDaAgenciaTest {
         MvcTestResult binarioComoCsv = enviar(marca, amarelo(), CHAVE, "contagem.csv", png);
         assertThat(binarioComoCsv).hasStatus(HttpStatus.UNSUPPORTED_MEDIA_TYPE);
         assertThat((String) lerJson(binarioComoCsv, "$.detail")).contains("CSV");
+        assertThat(contar("SELECT count(*) FROM dado_informado WHERE campo_chave = ?", CHAVE)).isZero();
+    }
+
+    @ParameterizedTest(name = "CSV em {0} entra: ninguém lê a planilha no servidor")
+    @ValueSource(strings = {"ISO-8859-1", "windows-1252", "UTF-8"})
+    void csvEmQualquerCodificacaoSemByteNuloEntraNaRota66(String codificacao) {
+        // o Excel em português exporta CSV em ANSI (windows-1252) por padrão; os acentos e o "€" não são UTF-8 válido
+        byte[] bytes = "hora;visitantes;observação\n10h;120;João e Conceição\n11h;180;ação\n".getBytes(Charset.forName(codificacao));
+        SessaoDeApi marca = entrar(AMARELO);
+
+        MvcTestResult resposta = enviar(marca, amarelo(), CHAVE, "contagem-excel.csv", bytes);
+
+        assertThat(resposta).hasStatus(HttpStatus.CREATED);
+        long arquivoId = id(resposta, "$.arquivo.id");
+        assertThat(lerJson(resposta, "$.arquivo.nomeOriginal")).isEqualTo("contagem-excel.csv");
+        assertThat(contar("SELECT count(*) FROM arquivo WHERE id = ? AND mime_type = 'text/csv'", arquivoId)).isEqualTo(1);
+        // o arquivo guardado é o que foi enviado, byte a byte
+        assertThat(marca.get("/api/arquivos/" + arquivoId).getResponse().getContentAsByteArray()).isEqualTo(bytes);
+    }
+
+    @Test
+    void csvComByteNuloContinuaRecusadoNaRota66() {
+        SessaoDeApi marca = entrar(AMARELO);
+        byte[] utf16 = "hora;visitantes\n10h;120\n".getBytes(StandardCharsets.UTF_16LE);
+        byte[] utf16ComMarca = new byte[utf16.length + 2];
+        utf16ComMarca[0] = (byte) 0xFF;
+        utf16ComMarca[1] = (byte) 0xFE;
+        System.arraycopy(utf16, 0, utf16ComMarca, 2, utf16.length);
+        byte[] nuloNoMeio = "hora;visitantes\n10h;1\u0000\n".getBytes(StandardCharsets.ISO_8859_1);
+
+        for (byte[] bytes : List.of(utf16, utf16ComMarca, nuloNoMeio)) {
+            MvcTestResult resposta = enviar(marca, amarelo(), CHAVE, "contagem.csv", bytes);
+            assertThat(resposta).hasStatus(HttpStatus.UNSUPPORTED_MEDIA_TYPE);
+            assertThat((String) lerJson(resposta, "$.detail")).contains("CSV").doesNotContain("UTF-8");
+        }
         assertThat(contar("SELECT count(*) FROM dado_informado WHERE campo_chave = ?", CHAVE)).isZero();
     }
 
