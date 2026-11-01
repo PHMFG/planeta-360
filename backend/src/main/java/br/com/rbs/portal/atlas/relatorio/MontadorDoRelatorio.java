@@ -141,8 +141,24 @@ public class MontadorDoRelatorio {
         usadas.add(ref);
         if ("calc".equals(Referencias.prefixo(ref))) {
             resolucao.calculos().stream().filter(c -> c.nome().equals(Referencias.nome(ref)))
-                    .forEach(c -> c.variaveis().forEach(v -> usadas.add(v.ref())));
+                    .forEach(c -> c.variaveis().forEach(v -> usarDaConta(v.ref(), resolucao, usadas)));
         }
+    }
+
+    /**
+     * Uma variável de conta. Na conta do chat a origem pode não ser uma referência ({@code usuario}, {@code T2}, {@code R1}) ou ser
+     * o {@code calc:} de uma conta que não está neste relatório: essas ficam de fora da lista de fontes, que só tem o que resolve.
+     */
+    private void usarDaConta(String ref, Resolucao resolucao, Set<String> usadas) {
+        if (!Referencias.valida(ref) || "parc".equals(Referencias.prefixo(ref)) || "evento".equals(Referencias.prefixo(ref))) {
+            return;
+        }
+        try {
+            resolucao.valor(ref);
+        } catch (ResolvedorDeReferencias.ReferenciaDesconhecidaException semValor) {
+            return;
+        }
+        usadas.add(ref);
     }
 
     private List<FonteDto> fontes(Set<String> usadas, Resolucao resolucao) {

@@ -479,7 +479,7 @@ public class RelatorioAtlasService {
         verificador.exigirAbaLiberada(contexto.usuario(), contexto.parceriaId(), original.aba());
         exigirMontando(relatorio);
 
-        Resolucao resolucao = resolvedor.abrir(contexto.usuario(), contexto.parceriaId(), original);
+        Resolucao resolucao = resolvedor.abrirDoRelatorio(contexto.usuario(), contexto.parceriaId(), original, relatorioId);
         Especificacao especificacao = original;
         List<ResultadoDaOperacao> resultados = new ArrayList<>();
         for (int i = 0; i < operacoes.size(); i++) {
@@ -539,8 +539,12 @@ public class RelatorioAtlasService {
         }
         exigirLacunasResolvidas(contexto, relatorio, especificacao);
 
-        SnapshotDto snapshot = montador.montar(especificacao, resolvedor.abrir(contexto.usuario(), contexto.parceriaId(), especificacao));
+        SnapshotDto snapshot = montador.montar(especificacao,
+                resolvedor.abrirDoRelatorio(contexto.usuario(), contexto.parceriaId(), especificacao, relatorioId));
         for (CalculoDto conta : snapshot.calculos()) {
+            if (!especificacao.calculos().containsKey(conta.nome())) {
+                continue;   // a conta do chat (calcular) já foi gravada em atlas_calculo quando foi feita
+            }
             repositorio.inserirCalculo(relatorioId, conta.nome(), conta.script(), AtlasJson.escrever(conta.variaveis()),
                     conta.resultado(), conta.unidade());
         }
@@ -592,7 +596,7 @@ public class RelatorioAtlasService {
         verificador.exigirAbaLiberada(usuario, relatorio.parceriaId(), especificacao.aba());
         SnapshotDto conteudo = "PRONTO".equals(relatorio.status()) && relatorio.snapshot() != null
                 ? AtlasJson.ler(relatorio.snapshot(), SnapshotDto.class)
-                : montador.montar(especificacao, resolvedor.abrir(usuario, relatorio.parceriaId(), especificacao));
+                : montador.montar(especificacao, resolvedor.abrirDoRelatorio(usuario, relatorio.parceriaId(), especificacao, relatorio.id()));
         return new RelatorioAtlasDto(relatorio.id(), relatorio.parceriaId(), relatorio.patrocinador(), relatorio.modelo(),
                 especificacao.titulo(), relatorio.status(),
                 new UsuarioResumoDto(relatorio.criadoPor(), relatorio.criadoPorNome(), relatorio.criadoPorPerfil()),
