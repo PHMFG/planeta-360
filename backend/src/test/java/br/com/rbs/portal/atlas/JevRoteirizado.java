@@ -30,10 +30,18 @@ public class JevRoteirizado implements ProvedorDeJev {
     private final Map<PontoDoJev, Function<PedidoAoJev, RespostaDoJev>> regras = new ConcurrentHashMap<>();
     private final List<Recebida> recebidas = new CopyOnWriteArrayList<>();
     private volatile Supplier<Integer> conexoesEmUso = () -> 0;
+    private volatile long demoraEmMs;
 
     public JevRoteirizado limpar() {
         regras.clear();
         recebidas.clear();
+        demoraEmMs = 0;
+        return this;
+    }
+
+    /** Todo ponto demora este tanto para responder (um JEV lento); {@link #limpar} volta ao normal. */
+    public JevRoteirizado atrasar(long ms) {
+        this.demoraEmMs = ms;
         return this;
     }
 
@@ -137,6 +145,14 @@ public class JevRoteirizado implements ProvedorDeJev {
         Function<PedidoAoJev, RespostaDoJev> regra = regras.get(ponto);
         if (regra == null) {
             throw new AssertionError("O JEV roteirizado não tem regra para o ponto " + ponto.nome() + ".");
+        }
+        if (demoraEmMs > 0) {
+            try {
+                Thread.sleep(demoraEmMs);
+            } catch (InterruptedException interrompida) {
+                Thread.currentThread().interrupt();
+                throw new JevIndisponivelException("INTERROMPIDO");
+            }
         }
         return regra.apply(pedido);
     }
