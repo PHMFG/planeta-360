@@ -88,6 +88,12 @@ public final class NormalizadorDeNumeros {
             Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     private static final Pattern NUMERO = Pattern.compile("\\d+(?:[.,]\\d+)*");
     private static final Pattern ANO = Pattern.compile("^\\d{4}$");
+    private static final Pattern REAL_ANTES = Pattern.compile("R\\$\\s*$");
+    /** A palavra que, logo antes de quatro dígitos, faz deles um ano: "edição 2027", "em 2026", "Planeta Atlântida 2027". */
+    private static final Pattern PALAVRA_DE_ANO_ANTES = Pattern.compile("(?<![\\p{L}\\p{N}])(?:edi[çc][ãa]o|edi[çc][õo]es|ano|em|de|desde|at[ée]"
+            + "|atl[âa]ntida)(?::\\s*|\\s+)$", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+    private static final Pattern UNIDADE_DEPOIS = Pattern.compile("\\s*(?:de\\s+)?(?:" + UNIDADES + ")" + NAO_ACABA_A_PALAVRA,
+            Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
 
     /** Um número de 1 a 3 dígitos no começo da linha, nos formatos de lista: {@code 1.}, {@code 1)}, {@code **1.**}, {@code ### 1.}, {@code 1 - }. */
     private static final Pattern MARCADOR_DE_LISTA = Pattern.compile(
@@ -239,10 +245,26 @@ public final class NormalizadorDeNumeros {
         // O resto: números com milhar e decimal. A vírgula de uma lista ("19, 17") não é decimal, porque vem seguida de espaço.
         consumir(texto, NUMERO, achados, (m, todo) -> {
             String trecho = m.group();
-            return List.of(ANO.matcher(trecho).matches() ? valor(trecho, normalizarNumero(trecho), "ano:" + trecho)
+            return List.of(ehAno(m, todo) ? valor(trecho, normalizarNumero(trecho), "ano:" + trecho)
                     : valor(trecho, normalizarNumero(trecho)));
         });
         return achados;
+    }
+
+    /**
+     * Quatro dígitos são um ano só se: não têm separador, não vêm depois de "R$", não vêm antes de uma unidade ("2026 credenciais") e
+     * a palavra de antes é de ano ({@link #PALAVRA_DE_ANO_ANTES}: edição, edições, ano, em, de, desde, até, Atlântida). "R$ 2027",
+     * "São 2027 geradores" e "2026 credenciais" são valores, e nunca um ano.
+     */
+    private static boolean ehAno(Matcher numero, String todo) {
+        if (!ANO.matcher(numero.group()).matches()) {
+            return false;
+        }
+        String antes = todo.substring(0, numero.start());
+        if (REAL_ANTES.matcher(antes).find() || !PALAVRA_DE_ANO_ANTES.matcher(antes).find()) {
+            return false;
+        }
+        return !UNIDADE_DEPOIS.matcher(todo).region(numero.end(), todo.length()).lookingAt();
     }
 
     /** Um número escrito por extenso: o valor e se teve escala (mil, milhão). */
@@ -303,12 +325,13 @@ public final class NormalizadorDeNumeros {
     // ---------------------------------------------------------------------
 
     /**
-     * Tudo o que um conjunto de textos permite afirmar. Data com ano só vale no ano certo, se a fonte disser o ano; data sem ano na
-     * fonte vale com qualquer ano na resposta.
+     * Tudo o que um conjunto de textos permite afirmar. Data com ano só vale no ano certo, se a fonte disser o ano. Se ela não disser
+     * (data sem ano), vale com qualquer ano na resposta, a menos que {@link #anosAceitos} limite quais.
      */
     public static final class Origens {
 
         private final Set<String> valores = new HashSet<>();
+        private Set<String> anosAceitos;
 
         public Origens(String... textos) {
             for (String texto : textos) {
@@ -333,9 +356,33 @@ public final class NormalizadorDeNumeros {
             return this;
         }
 
-        /** Uma data de hoje ("01/11/2026"), aceita em qualquer formato. */
+        /**
+         * Os anos que uma data sem ano (nesta origem) libera na resposta: na checagem do chat, o ano da edição, o anterior a ela e o
+         * de hoje. Sem a lista, qualquer ano.
+         */
+        public Origens anosAceitos(Set<String> anos) {
+            this.anosAceitos = anos;
+            return this;
+        }
+
+        /** O ano da edição ou de hoje: vale como ano ("em 2027"), nunca como valor ("R$ 2.027,00", "2026 credenciais"). */
+        public Origens adicionarAnoLivre(int ano) {
+            valores.add("ano:" + ano);
+            return this;
+        }
+
+        /** A data de hoje, em qualquer formato, sem liberar o ano como valor. */
         public Origens adicionarData(LocalDate data) {
-            return adicionar(String.format("%02d/%02d/%d", data.getDayOfMonth(), data.getMonthValue(), data.getYear()));
+            String dia = duasCasas(data.getMonthValue()) + "-" + duasCasas(data.getDayOfMonth());
+            valores.add("data:" + dia);
+            valores.add("data:" + data.getYear() + "-" + dia);
+            valores.add("dataComAno:" + dia);
+            return this;
+        }
+
+        /** Alguma origem disse esta data ({@code "MM-DD"}) <b>com ano</b>? Então só esse ano vale para ela. */
+        public boolean trazDataComAno(String dia) {
+            return valores.contains("dataComAno:" + dia);
         }
 
         public boolean aceita(Achado achado) {
@@ -345,8 +392,11 @@ public final class NormalizadorDeNumeros {
             if (achado.ano() == null) {
                 return valores.contains("data:" + achado.dia());
             }
-            return valores.contains("data:" + achado.ano() + "-" + achado.dia())
-                    || (valores.contains("data:" + achado.dia()) && !valores.contains("dataComAno:" + achado.dia()));
+            if (valores.contains("data:" + achado.ano() + "-" + achado.dia())) {
+                return true;
+            }
+            return valores.contains("data:" + achado.dia()) && !trazDataComAno(achado.dia())
+                    && (anosAceitos == null || anosAceitos.contains(achado.ano()));
         }
     }
 

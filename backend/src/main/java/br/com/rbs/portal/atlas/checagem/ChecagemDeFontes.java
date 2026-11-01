@@ -26,8 +26,8 @@ import org.springframework.stereotype.Component;
  *       outro formato com número ({@code [1]}) é recusada.</li>
  *   <li>Todo número ou data fora de um marcador {@code {{ref}}} aparece <b>numa fonte citada na MESMA frase</b>, no resultado de uma
  *       conta ou contagem de dias deste turno, ou na mensagem da pessoa neste turno. A página, a seção, a versão e o título da fonte
- *       valem como parte dela. A numeração de lista no começo da linha só não conta se estiver em sequência (1, 2, 3...). O ano da edição da parceria e a data de hoje valem
- *       sem fonte. A comparação é por valor ({@link NormalizadorDeNumeros}): {@code 1.250.000,00} e {@code 1250000}, {@code R$ 312} e
+ *       valem como parte dela. A numeração de lista no começo da linha só não conta se estiver em sequência (1, 2, 3...). A data de hoje vale sem fonte; o ano da edição e o
+ *       de hoje valem só como ano (veja {@link NormalizadorDeNumeros}), nunca como valor. A comparação é por valor ({@link NormalizadorDeNumeros}): {@code 1.250.000,00} e {@code 1250000}, {@code R$ 312} e
  *       {@code 312}, {@code 04/12/2026}, {@code 4/12}, {@code 4 de dezembro} e {@code 2026-12-04}, {@code 6h30} e {@code 06:30},
  *       {@code 89,4%} e {@code 89,4}. Todo numeral por extenso conta como número, menos "um" e "uma" (artigo) e "dois"/"duas" sem unidade.</li>
  *   <li>Sem URL, link nem imagem em Markdown, sem HTML, sem nome de ferramenta nem chave crua, e todo marcador {@code {{ref}}} resolve e
@@ -133,20 +133,31 @@ public class ChecagemDeFontes {
         return Optional.empty();
     }
 
-    /** Todo número ou data de cada frase tem origem: fonte citada na frase, conta do turno, mensagem da pessoa, edição ou hoje. */
+    /**
+     * Todo número ou data de cada frase tem origem: fonte citada na frase, conta do turno, mensagem da pessoa, edição ou hoje. Uma
+     * data sem ano só libera, na resposta, o ano da edição, o anterior a ela ou o de hoje; e se a fonte citada na frase diz esse dia
+     * COM ano, vale o ano dela, mesmo que a pessoa tenha escrito a data sem ano. O ano da edição e o de hoje valem como ano, e nunca
+     * como valor ({@code R$ 2.027,00}, {@code 2026 credenciais}).
+     */
     private static Optional<String> motivoDeNumero(FontesDoTurno fontes, String texto) {
-        Origens geral = new Origens(String.valueOf(fontes.anoDaEdicao()), fontes.mensagemDaPessoa());
-        geral.adicionarData(fontes.hoje());
+        int edicao = fontes.anoDaEdicao();
+        int anoDeHoje = fontes.hoje().getYear();
+        Set<String> anosAceitos = new LinkedHashSet<>(List.of(String.valueOf(edicao), String.valueOf(edicao - 1), String.valueOf(anoDeHoje)));
+        Origens geral = new Origens(fontes.mensagemDaPessoa()).anosAceitos(anosAceitos);
+        geral.adicionarAnoLivre(edicao).adicionarAnoLivre(anoDeHoje).adicionarData(fontes.hoje());
         fontes.numerosLivres().forEach(geral::adicionar);
         for (String frase : Frases.dividir(NormalizadorDeNumeros.semNumeracaoDeLista(texto))) {
             Set<String> citadas = new LinkedHashSet<>(Frases.citacoes(frase));
-            Origens daFrase = new Origens();
+            Origens daFrase = new Origens().anosAceitos(anosAceitos);
             for (String marcador : citadas) {
                 fontes.fonte(marcador).ifPresent(fonte -> daFrase.adicionar(fonte.conteudoCitavel()));
             }
             List<Achado> numeros = NormalizadorDeNumeros.extrair(Referencias.semMarcadores(Frases.semCitacoes(frase)), false);
             for (Achado numero : numeros) {
-                if (!geral.aceita(numero) && !daFrase.aceita(numero)) {
+                // A fonte citada disse o ano desta data: vale o que ela disse, mesmo que a pessoa tenha escrito a data sem ano.
+                boolean fonteDisseOAno = numero.ano() != null && daFrase.trazDataComAno(numero.dia());
+                boolean temOrigem = fonteDisseOAno ? daFrase.aceita(numero) : geral.aceita(numero) || daFrase.aceita(numero);
+                if (!temOrigem) {
                     String trecho = frase.length() > TAMANHO_DO_TRECHO_NA_RECUSA ? frase.substring(0, TAMANHO_DO_TRECHO_NA_RECUSA) + "…"
                             : frase;
                     String quemCita = citadas.isEmpty() ? "A frase não cita nenhuma fonte."

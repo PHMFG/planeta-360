@@ -7,6 +7,7 @@ import br.com.rbs.portal.atlas.checagem.NormalizadorDeNumeros.Origens;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -93,7 +94,36 @@ class NormalizadorDeNumerosTest {
 
     @Test
     void anoDeQuatroDigitosCarregaOValorEOAno() {
-        assertThat(valores("2027")).containsExactly("2027", "ano:2027");
+        assertThat(valores("em 2027")).containsExactly("2027", "ano:2027");
+        assertThat(valores("em 2027, a edição")).containsExactly("2027", "ano:2027");
+    }
+
+    @ParameterizedTest(name = "\"{0} 2027\" é um ano")
+    @ValueSource(strings = {"a edição", "Edição", "as edições", "edicao", "o ano", "Ano:", "Edição:", "em", "Em", "de", "a edição de", "desde", "até",
+            "ate", "Planeta Atlântida", "planeta atlantida", "(em", "“em"})
+    void aPalavraAntesDeQuatroDigitosDizSeEUmAno(String antes) {
+        assertThat(valores(antes + " 2027")).containsExactly("2027", "ano:2027");
+    }
+
+    @ParameterizedTest(name = "\"{0}\" não é um ano: é um valor")
+    @ValueSource(strings = {"2027", "São 2027 geradores", "A tarifa é 2027", "valor 2027", "o 2027", "Planeta 2027", "para 2027", "até2027",
+            "mais de.2027", "Tarifa: 2027", "são 2027."})
+    void quatroDigitosSemPalavraDeAnoAntesSaoValor(String texto) {
+        assertThat(valores(texto)).containsExactly("2027");
+    }
+
+    @Test
+    void quatroDigitosComRealAntesOuUnidadeDepoisSaoValorEnuncaAno() {
+        assertThat(valores("R$ 2027")).containsExactly("2027");
+        assertThat(valores("R$2026")).containsExactly("2026");
+        assertThat(valores("2026 credenciais")).containsExactly("2026");
+        assertThat(valores("2026 reais")).containsExactly("2026");
+        assertThat(valores("2027 por cento")).containsExactly("2027");
+        assertThat(valores("2027%")).containsExactly("2027");
+        assertThat(valores("2.027")).as("com separador não é ano").containsExactly("2027");
+        assertThat(valores("R$ 2.027,00")).containsExactly("2027");
+        assertThat(valores("a edição 2027 acontece em breve")).containsExactly("2027", "ano:2027");
+        assertThat(valores("em R$ 2027")).as("o R$ vem antes do número, não a palavra de ano").containsExactly("2027");
     }
 
     // ---------------------------------------------------------------------
@@ -254,9 +284,49 @@ class NormalizadorDeNumerosTest {
     }
 
     @Test
+    void dataSemAnoNaFonteSoLiberaOsAnosAceitosQuandoHaLista() {
+        Origens fonte = new Origens("até 04/12").anosAceitos(Set.of("2026", "2027"));
+
+        assertThat(aceita(fonte, "04/12/2026")).isTrue();
+        assertThat(aceita(fonte, "04/12/2027")).isTrue();
+        assertThat(aceita(fonte, "04/12/2031")).as("ano que ninguém disse").isFalse();
+        assertThat(aceita(fonte, "04/12/2099")).isFalse();
+        assertThat(aceita(fonte, "04/12/2025")).isFalse();
+        assertThat(aceita(fonte, "4/12")).isTrue();
+        assertThat(aceita(new Origens("até 04/12/2026").anosAceitos(Set.of("2026", "2027")), "04/12/2027")).as("a fonte disse 2026").isFalse();
+    }
+
+    @Test
     void oAnoDeUmaDataDaFonteValeComoAnoSoltoNaResposta() {
         assertThat(aceita(new Origens("até 04/12/2026"), "em 2026")).isTrue();
         assertThat(aceita(new Origens("até 04/12/2026"), "em 2027")).isFalse();
+    }
+
+    @Test
+    void oAnoLivreSoValeComoAnoNuncaComoValor() {
+        Origens livre = new Origens().adicionarAnoLivre(2027).adicionarAnoLivre(2026);
+
+        assertThat(aceita(livre, "a edição 2027")).isTrue();
+        assertThat(aceita(livre, "em 2026")).isTrue();
+        assertThat(aceita(livre, "Planeta Atlântida 2027")).isTrue();
+        assertThat(aceita(livre, "São 2027 geradores")).as("a palavra antes não é de ano").isFalse();
+        assertThat(aceita(livre, "2026")).isFalse();
+        assertThat(aceita(livre, "em 2028")).isFalse();
+        assertThat(aceita(livre, "R$ 2.027,00")).isFalse();
+        assertThat(aceita(livre, "R$ 2027")).isFalse();
+        assertThat(aceita(livre, "2027 credenciais")).isFalse();
+        assertThat(aceita(livre, "2026 reais")).isFalse();
+        assertThat(aceita(livre, "2.026")).isFalse();
+    }
+
+    @Test
+    void aDataDeHojeNaoLiberaOAnoComoValor() {
+        Origens hoje = new Origens().adicionarData(LocalDate.of(2026, 11, 1));
+
+        assertThat(aceita(hoje, "01/11/2026")).isTrue();
+        assertThat(aceita(hoje, "R$ 2026")).isFalse();
+        assertThat(aceita(hoje, "2026 credenciais")).isFalse();
+        assertThat(aceita(hoje, "em 2026")).as("o ano de hoje vem do ano livre, e não da data").isFalse();
     }
 
     @Test
@@ -305,7 +375,7 @@ class NormalizadorDeNumerosTest {
         assertThat(valores(NormalizadorDeNumeros.semNumeracaoDeLista("**1.** Primeiro item"))).isEmpty();
         assertThat(valores(NormalizadorDeNumeros.semNumeracaoDeLista("Item 1. Primeiro"))).as("só no começo da linha").containsExactly("1");
         assertThat(valores(NormalizadorDeNumeros.semNumeracaoDeLista("1. São 17 aplicações"))).containsExactly("17");
-        assertThat(valores(NormalizadorDeNumeros.semNumeracaoDeLista("2027. Um ano"))).as("quatro dígitos não é lista").containsExactly("2027", "ano:2027");
+        assertThat(valores(NormalizadorDeNumeros.semNumeracaoDeLista("2027. Um ano"))).as("quatro dígitos não é lista").containsExactly("2027");
     }
 
     @ParameterizedTest(name = "\"{0}\" é numeração de lista")

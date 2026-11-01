@@ -272,6 +272,68 @@ class ChecagemDeFontesTest {
     }
 
     @Test
+    void dataSemAnoDaPessoaNaoLiberaOutroAnoContraAFonteCitada() {
+        // a pessoa escreveu "04/12" sem ano; a fonte diz 04/12/2026: vale o ano da fonte
+        recusa(turno("É em 04/12?", PRAZO), "O prazo é 04/12/2099 [T1].");
+        recusa(turno("É em 04/12?", PRAZO), "O prazo é 04/12/2027 [T1].");
+        recusa(turno("É em 04/12?", PRAZO), "O prazo é 04/12/2025 [T1].");
+        aprova(turno("É em 04/12?", PRAZO), "O prazo é 04/12/2026 [T1].");
+        aprova(turno("É em 04/12?", PRAZO), "O prazo é 04/12 [T1].");
+        aprova(turno("É em 04/12?", PRAZO), "O prazo é 4 de dezembro de 2026 [T1].");
+        // sem fonte, a data sem ano da pessoa só libera o ano da edição, o anterior a ela e o de hoje
+        recusa(turno("É em 04/12?"), "É em 04/12/2099.");
+        recusa(turno("É em 04/12?"), "É em 04/12/2025.");
+        recusa(turno("É em 04/12?"), "É em 04/12/2031.");
+        aprova(turno("É em 04/12?"), "É em 04/12/2026.");
+        aprova(turno("É em 04/12?"), "É em 04/12/2027.");
+        aprova(turno("É em 04/12?"), "É em 04/12.");
+    }
+
+    @Test
+    void dataSemAnoNaFonteTambemSoLiberaOsAnosAceitos() {
+        FontesDoTurno turno = turno("Quando?", "Informe até 04/12 às 18h.");
+
+        aprova(turno, "O prazo é 04/12/2026 [T1].");
+        aprova(turno, "O prazo é 04/12/2027 [T1].");
+        recusa(turno, "O prazo é 04/12/2099 [T1].");
+        recusa(turno, "O prazo é 04/12/2025 [T1].");
+    }
+
+    @Test
+    void dataComAnoDaPessoaValeComOAnoQueEscreveu() {
+        aprova(turno("Posso entregar em 04/12/2026?"), "Em 04/12/2026 depende do combinado.");
+        recusa(turno("Posso entregar em 04/12/2026?"), "Em 04/12/2027 depende do combinado.");
+        recusa(turno("Posso entregar em 04/12/2026?"), "Em 05/12/2026 depende do combinado.");
+    }
+
+    @Test
+    void oAnoDaEdicaoEODeHojeSoValemComoAnoNuncaComoValor() {
+        FontesDoTurno turno = turno("Quanto?");
+
+        aprova(turno, "A edição 2027 acontece em breve.");
+        aprova(turno, "Estamos em 2026, e a edição é a de 2027.");
+        aprova(turno, "Planeta Atlântida 2027 acontece em breve.");
+        aprova(turno, "Desde 2026 o portal existe, e vale até 2027.");
+        aprova(turno, "Edição: 2027.");
+        // só vale como ano se a palavra de antes for de ano: sem ela, é um valor
+        recusa(turno, "São 2027 geradores.");
+        recusa(turno, "São 2026 geradores.");
+        recusa(turno, "A tarifa é 2027.");
+        recusa(turno, "2027 credenciais.");
+        recusa(turno, "Tarifa 2027 por kVA.");
+        recusa(turno, "A multa é de R$ 2.027,00.");
+        recusa(turno, "A multa é de R$ 2027.");
+        recusa(turno, "A multa é de R$ 2.026,00.");
+        recusa(turno, "São 2026 credenciais.");
+        recusa(turno, "São 2027 reais.");
+        recusa(turno, "São 2.027 credenciais.");
+        recusa(turno, "São 2027 por cento.");
+        recusa(turno, "A edição de 2028 acontece em breve.");
+        // com a fonte que traz o valor, ele passa
+        aprova(turno("Quanto?", "A multa é de R$ 2.027,00."), "A multa é de R$ 2.027,00 [T1].");
+    }
+
+    @Test
     void oResultadoDeUmaContaOuDeUmaContagemDeDiasDesteTurnoValeNaFraseToda() {
         FontesDoTurno turno = turno("Quanto pago por 34 kVA?");
         turno.adicionarNumeroLivre("34 * 312 = 10608");
