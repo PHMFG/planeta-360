@@ -68,7 +68,8 @@ function naOrdemDeLeitura(itens: ItemDaResposta[]) {
 const fontesDoGrupo = (itens: ItemDaResposta[]) => itens.flatMap((item) => (item.tipo === 'texto' ? (item.fontes ?? []) : []))
 
 type Props = {
-  parceria: ParceriaResumo
+  /** Nula na conversa da RBS, que é por edição e não tem cartão, relatório nem pedido de relatório. */
+  parceria: ParceriaResumo | null
   itens: ItemDaConversa[]
   /** A mensagem que acabou de sair, mostrada enquanto a resposta não chega. */
   enviada: string | null
@@ -161,11 +162,11 @@ export function AreaDaConversa({
       case 'cartao':
         return <CartaoSolicitacao key={posicao} item={item} aoResponder={aoResponder} />
       case 'relatorio_pronto':
-        return <CartaoDocumento key={posicao} parceria={parceria} relatorioId={item.relatorioId} titulo={item.titulo} aoAbrir={aoAbrirDocumento} />
+        return parceria && <CartaoDocumento key={posicao} parceria={parceria} relatorioId={item.relatorioId} titulo={item.titulo} aoAbrir={aoAbrirDocumento} />
       case 'calculo':
         return <ComoCalculei key={posicao} calculo={item} fontes={fontesDoGrupo(grupo)} aoAbrir={aoAbrirFonte} />
       case 'pedido_relatorio':
-        return <CartaoPedidoDeRelatorio key={posicao} parceria={parceria} item={item} aoPedirModelo={aoMudarTexto} />
+        return parceria && <CartaoPedidoDeRelatorio key={posicao} parceria={parceria} item={item} aoPedirModelo={aoMudarTexto} />
       case 'modelo':
         return <CartaoModelo key={posicao} titulo={item.titulo} conteudo={item.conteudo} nomeArquivo={item.nomeArquivo} />
     }
@@ -225,20 +226,22 @@ export function AreaDaConversa({
       </div>
 
       <div className={`${largura} flex flex-col gap-2.5 ${compacta ? 'pt-3' : 'px-4 pb-1 sm:px-0'}`}>
-        <div>
-          <Chip
-            icone="ri-file-chart-line"
-            carregando={pensando && !aoVivo}
-            disabled={!relatorioDisponivel || pensando || cartaoAberto}
-            title={relatorioDisponivel ? undefined : 'O relatório não está disponível nesta versão'}
-            onClick={aoMontar}
-          >
-            Montar relatório da ativação{!relatorioDisponivel && ' · em breve'}
-          </Chip>
-        </div>
+        {parceria && (
+          <div>
+            <Chip
+              icone="ri-file-chart-line"
+              carregando={pensando && !aoVivo}
+              disabled={!relatorioDisponivel || pensando || cartaoAberto}
+              title={relatorioDisponivel ? undefined : 'O relatório não está disponível nesta versão'}
+              onClick={aoMontar}
+            >
+              Montar relatório da ativação{!relatorioDisponivel && ' · em breve'}
+            </Chip>
+          </div>
+        )}
         {llm && <Compositor valor={texto} aoMudar={aoMudarTexto} aoEnviar={aoEnviar} rotuloEnviar="Enviar" ocupado={pensando} habilitado compacto={compacta} />}
         {!llm && !relatorioDisponivel && <AvisoAtlas titulo="O Atlas está sem o modelo de linguagem agora">Dá para ler a conversa, mas não enviar mensagens. Tente de novo mais tarde.</AvisoAtlas>}
-        <p className="pb-1 text-center text-xs text-white/55 max-sm:hidden">Só os dados desta parceria · todo número do Atlas vem de uma fonte</p>
+        <p className="pb-1 text-center text-xs text-white/55 max-sm:hidden">{parceria ? 'Só os dados desta parceria' : 'Só os documentos gerais da edição'} · todo número do Atlas vem de uma fonte</p>
       </div>
     </div>
   )

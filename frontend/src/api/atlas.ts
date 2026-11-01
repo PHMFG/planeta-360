@@ -100,6 +100,13 @@ const ATALHO = { atalho: 'MONTAR_RELATORIO', modelo: 'ATIVACAO_EVENTO' } as cons
 
 export const listarConversas = (parceriaId: number) => pedir<ConversasDaParceria>(`/parcerias/${parceriaId}/atlas/conversas`)
 
+export type ConversaDaRbsResumo = { id: number; criadaEm: string; atualizadaEm: string; previa: string | null }
+
+/** A conversa da RBS é por edição, sem parceria: só documentos gerais, modelos em branco, contas e datas. */
+export const listarConversasDaRbs = (eventoId: number) => pedir<{ llmDisponivel: boolean; conversas: ConversaDaRbsResumo[] }>(`/eventos/${eventoId}/atlas/conversas`)
+
+export const abrirConversaDaRbs = (eventoId: number) => pedir<Conversa>(`/eventos/${eventoId}/atlas/conversas`, { metodo: 'POST' })
+
 /** Abre uma conversa nova; com {@code montarRelatorio}, já começa o relatório pelo botão (sem passar pelo modelo). */
 export const abrirConversa = (parceriaId: number, montarRelatorio = false) =>
   pedir<Conversa>(`/parcerias/${parceriaId}/atlas/conversas`, { metodo: 'POST', corpo: montarRelatorio ? ATALHO : {} })

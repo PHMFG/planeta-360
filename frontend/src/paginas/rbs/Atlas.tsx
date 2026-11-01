@@ -18,10 +18,11 @@ import { Paginacao } from '../../componentes/LinhaDoTempo'
 import { Tabela, type Coluna } from '../../componentes/Tabela'
 import { dataHora, numero } from '../../util/formatar'
 import { AbaBuscaDeTeste } from './AtlasBuscaDeTeste'
+import { AbaConversa } from './AtlasConversa'
 import { AbaDocumentos } from './AtlasDocumentos'
 import { AbaPrazos } from './AtlasPrazos'
 
-type Aba = 'turnos' | 'provedores' | 'documentos' | 'busca' | 'prazos'
+type Aba = 'turnos' | 'provedores' | 'documentos' | 'busca' | 'prazos' | 'conversa'
 
 const ABAS: { codigo: Aba; nome: string }[] = [
   { codigo: 'turnos', nome: 'Turnos' },
@@ -29,6 +30,7 @@ const ABAS: { codigo: Aba; nome: string }[] = [
   { codigo: 'documentos', nome: 'Documentos' },
   { codigo: 'busca', nome: 'Busca de teste' },
   { codigo: 'prazos', nome: 'Prazos' },
+  { codigo: 'conversa', nome: 'Conversa' },
 ]
 
 const NOME_DO_PROVEDOR: Record<NomeDoProvedor, string> = { llm: 'Modelo de linguagem', jev: 'JEV', gemini: 'Embeddings (Gemini)' }
@@ -274,6 +276,7 @@ export function AtlasRbs() {
       {aba === 'turnos' && <AbaTurnos aoAbrir={(valor) => mudar('turno', valor)} />}
       {aba === 'provedores' && <AbaProvedores />}
       {aba === 'documentos' && <AbaDocumentos />}
+      {aba === 'conversa' && <AbaConversa />}
       {aba === 'busca' && <AbaBuscaDeTeste />}
       {aba === 'prazos' && <AbaPrazos />}
       {turno && <GavetaDoTurno turno={turno} aoFechar={() => mudar('turno', null)} />}
