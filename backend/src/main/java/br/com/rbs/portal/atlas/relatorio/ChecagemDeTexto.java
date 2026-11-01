@@ -3,6 +3,7 @@ package br.com.rbs.portal.atlas.relatorio;
 import br.com.rbs.portal.atlas.relatorio.ResolvedorDeReferencias.ReferenciaDesconhecidaException;
 import br.com.rbs.portal.atlas.relatorio.ResolvedorDeReferencias.Resolucao;
 import br.com.rbs.portal.atlas.relatorio.ResolvedorDeReferencias.Valor;
+import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.springframework.stereotype.Component;
@@ -40,7 +41,8 @@ public class ChecagemDeTexto {
             "(?i)\\b[a-z0-9][a-z0-9-]*(?:\\.[a-z0-9-]+)*\\.(?:com|org|net|edu|gov|io|dev|app|br|co|me|info|biz|xyz|ly|ai)\\b");
     /** Chave de referência escrita fora de marcador ({@code dado:ativacao.visitantes_total}) ou nome de ferramenta. */
     private static final Pattern CHAVE_INTERNA = Pattern.compile(
-            "(?iU)\\b(?:parc|evento|cons|lista|dado|calc):[a-z_]+(?:\\.[a-z0-9_]+)*|\\b(?:relatorio|parceria)_[a-z_]+");
+            "(?iU)\\b(?:parc|evento|cons|lista|dado|calc):[a-z_]+(?:\\.[a-z0-9_]+)*"
+                    + "|\\b(?:relatorio|parceria|buscar|listar|consultar|contar|pedido|gerar|executar)_[a-z_]+");
     /** Palavras do funcionamento interno que a marca não deve ler. */
     private static final Pattern TERMO_INTERNO = Pattern.compile(
             "(?iU)\\bmarcador(?:es)?\\b|\\btool(?:s|_calls?)?\\b|\\bcart[ãa]o de solicita[çc][ãa]o\\b");
@@ -49,11 +51,11 @@ public class ChecagemDeTexto {
     /** O resultado: aprovado, com o texto limpo (espaços normalizados), ou recusado, com o motivo. */
     public record Veredito(boolean aprovado, String texto, String motivo) {
 
-        static Veredito aprovado(String texto) {
+        public static Veredito aprovado(String texto) {
             return new Veredito(true, texto, null);
         }
 
-        static Veredito recusado(String motivo) {
+        public static Veredito recusado(String motivo) {
             return new Veredito(false, null, motivo);
         }
     }
@@ -75,40 +77,13 @@ public class ChecagemDeTexto {
         String texto = original.strip().replaceAll("\\s+", " ");
         String semMarcadores = Referencias.semMarcadores(texto);   // o que o modelo escreveu por conta própria
 
-        if (texto.indexOf('<') >= 0 || texto.indexOf('>') >= 0) {
-            return Veredito.recusado("Sem HTML: não use os sinais < e >. Escreva só texto simples.");
+        Optional<String> deForma = motivoDeForma(texto, semMarcadores);
+        if (deForma.isPresent()) {
+            return Veredito.recusado(deForma.get());
         }
-        if (LINK_OU_IMAGEM_DO_MARKDOWN.matcher(semMarcadores).find()) {
-            return Veredito.recusado("Sem link nem imagem em Markdown. Escreva só texto simples.");
-        }
-        if (URL.matcher(semMarcadores).find() || ENDERECO_SEM_ESQUEMA.matcher(semMarcadores).find()) {
-            return Veredito.recusado("Sem endereço de internet nem URL no texto.");
-        }
-
-        Matcher chave = CHAVE_INTERNA.matcher(semMarcadores);
-        if (chave.find()) {
-            return Veredito.recusado("O texto tem o termo interno \"" + chave.group() + "\" fora de um marcador. A marca não lê "
-                    + "chaves nem nomes de ferramenta: cite o dado com o marcador {{ref}}, entre chaves duplas, ou diga com palavras.");
-        }
-        Matcher termo = TERMO_INTERNO.matcher(semMarcadores);
-        if (termo.find()) {
-            return Veredito.recusado("O texto usa o termo interno \"" + termo.group() + "\". Não fale com a marca de marcador, "
-                    + "referência, ferramenta nem cartão de solicitação: diga o que ela precisa saber com palavras simples.");
-        }
-
-        // Regra 2: todo marcador resolve nesta parceria. A resolução usa sempre a parceria da conversa, nunca a do texto.
-        for (String ref : Referencias.marcadores(texto)) {
-            Valor valor;
-            try {
-                valor = resolucao.valor(ref);
-            } catch (ReferenciaDesconhecidaException desconhecida) {
-                return Veredito.recusado("O marcador {{" + ref + "}} não existe nesta parceria. Use só as referências (campo ref) "
-                        + "que as ferramentas devolveram.");
-            }
-            if (!limitarTamanho && !valor.disponivel()) {
-                return Veredito.recusado("O dado {{" + ref + "}} (" + valor.rotulo() + ") não tem valor agora: " + valor.motivo()
-                        + " Não use o marcador dele; diga com palavras que o dado ainda não existe.");
-            }
+        Optional<String> deMarcador = motivoDeMarcador(resolucao, texto, limitarTamanho);
+        if (deMarcador.isPresent()) {
+            return Veredito.recusado(deMarcador.get());
         }
 
         // Regra 1: sem os marcadores, não pode sobrar algarismo (nem chave solta de marcador mal fechado).
@@ -131,6 +106,57 @@ public class ChecagemDeTexto {
             }
         }
         return Veredito.aprovado(texto);
+    }
+
+    /**
+     * As regras de forma e de termo interno: sem HTML, sem link nem imagem em Markdown, sem URL, sem chave crua de referência nem
+     * nome de ferramenta, sem as palavras do funcionamento interno. {@code texto} é o texto com os espaços normalizados e
+     * {@code semMarcadores} o mesmo sem os marcadores {@code {{ref}}} (e, no chat de fontes, sem as citações). Devolve o motivo da
+     * recusa, escrito para o modelo ler. É a regra do relatório e a do chat de fontes: um lugar só.
+     */
+    public static Optional<String> motivoDeForma(String texto, String semMarcadores) {
+        if (texto.indexOf('<') >= 0 || texto.indexOf('>') >= 0) {
+            return Optional.of("Sem HTML: não use os sinais < e >. Escreva só texto simples.");
+        }
+        if (LINK_OU_IMAGEM_DO_MARKDOWN.matcher(semMarcadores).find()) {
+            return Optional.of("Sem link nem imagem em Markdown. Escreva só texto simples.");
+        }
+        if (URL.matcher(semMarcadores).find() || ENDERECO_SEM_ESQUEMA.matcher(semMarcadores).find()) {
+            return Optional.of("Sem endereço de internet nem URL no texto.");
+        }
+        Matcher chave = CHAVE_INTERNA.matcher(semMarcadores);
+        if (chave.find()) {
+            return Optional.of("O texto tem o termo interno \"" + chave.group() + "\" fora de um marcador. A marca não lê "
+                    + "chaves nem nomes de ferramenta: cite o dado com o marcador {{ref}}, entre chaves duplas, ou diga com palavras.");
+        }
+        Matcher termo = TERMO_INTERNO.matcher(semMarcadores);
+        if (termo.find()) {
+            return Optional.of("O texto usa o termo interno \"" + termo.group() + "\". Não fale com a marca de marcador, "
+                    + "referência, ferramenta nem cartão de solicitação: diga o que ela precisa saber com palavras simples.");
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * Todo marcador {@code {{ref}}} do texto resolve nesta parceria (a resolução usa sempre a parceria da conversa, nunca a do
+     * texto). No chat ({@code limitarTamanho} falso), o marcador também precisa ter valor agora; no parágrafo do relatório o bloco com
+     * dado que falta sai como indisponível, com o motivo.
+     */
+    public static Optional<String> motivoDeMarcador(Resolucao resolucao, String texto, boolean limitarTamanho) {
+        for (String ref : Referencias.marcadores(texto)) {
+            Valor valor;
+            try {
+                valor = resolucao.valor(ref);
+            } catch (ReferenciaDesconhecidaException desconhecida) {
+                return Optional.of("O marcador {{" + ref + "}} não existe nesta parceria. Use só as referências (campo ref) "
+                        + "que as ferramentas devolveram.");
+            }
+            if (!limitarTamanho && !valor.disponivel()) {
+                return Optional.of("O dado {{" + ref + "}} (" + valor.rotulo() + ") não tem valor agora: " + valor.motivo()
+                        + " Não use o marcador dele; diga com palavras que o dado ainda não existe.");
+            }
+        }
+        return Optional.empty();
     }
 
     /** As frases do texto, contadas pelo fim de frase seguido de espaço. O marcador vale uma palavra, para o ponto dele não contar. */
