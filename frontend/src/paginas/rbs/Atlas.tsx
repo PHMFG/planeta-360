@@ -1,4 +1,4 @@
-// Atlas na gestão da RBS: os turnos de todas as parcerias, com o mesmo traço da gaveta da marca, o estado dos provedores (rotas 50 a 53), os documentos e a busca de teste. [ATLAS]
+// Atlas na gestão da RBS: os turnos de todas as parcerias, com o mesmo traço da gaveta da marca, o estado dos provedores (rotas 50 a 53), os documentos, a busca de teste e os prazos. [ATLAS]
 import { useEffect, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router'
 import { ErroApi } from '../../api/cliente'
@@ -19,14 +19,16 @@ import { Tabela, type Coluna } from '../../componentes/Tabela'
 import { dataHora, numero } from '../../util/formatar'
 import { AbaBuscaDeTeste } from './AtlasBuscaDeTeste'
 import { AbaDocumentos } from './AtlasDocumentos'
+import { AbaPrazos } from './AtlasPrazos'
 
-type Aba = 'turnos' | 'provedores' | 'documentos' | 'busca'
+type Aba = 'turnos' | 'provedores' | 'documentos' | 'busca' | 'prazos'
 
 const ABAS: { codigo: Aba; nome: string }[] = [
   { codigo: 'turnos', nome: 'Turnos' },
   { codigo: 'provedores', nome: 'Provedores' },
   { codigo: 'documentos', nome: 'Documentos' },
   { codigo: 'busca', nome: 'Busca de teste' },
+  { codigo: 'prazos', nome: 'Prazos' },
 ]
 
 const NOME_DO_PROVEDOR: Record<NomeDoProvedor, string> = { llm: 'Modelo de linguagem', jev: 'JEV', gemini: 'Embeddings (Gemini)' }
@@ -268,6 +270,7 @@ export function AtlasRbs() {
       {aba === 'provedores' && <AbaProvedores />}
       {aba === 'documentos' && <AbaDocumentos />}
       {aba === 'busca' && <AbaBuscaDeTeste />}
+      {aba === 'prazos' && <AbaPrazos />}
       {turno && <GavetaDoTurno turno={turno} aoFechar={() => mudar('turno', null)} />}
     </div>
   )
