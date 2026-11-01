@@ -71,11 +71,11 @@ class DivisorDeTrechosTest {
 
     @Test
     void oD01VirouTrechosNumeradosEmOrdemComPaginasCoerentes() {
-        assertThat(d01).hasSizeBetween(10, 16);
+        assertThat(d01).as("um trecho nunca atravessa página: o kit passou de 12 para 20 trechos").hasSizeBetween(18, 22);
         assertThat(d01).extracting(Trecho::ordem).containsExactlyElementsOf(IntStream.rangeClosed(1, d01.size()).boxed().toList());
         assertThat(d01).allSatisfy(t -> {
             assertThat(t.paginaInicio()).isBetween(1, 11);
-            assertThat(t.paginaFim()).isBetween(t.paginaInicio(), 11);
+            assertThat(t.paginaFim()).isEqualTo(t.paginaInicio());
             assertThat(t.texto()).isNotBlank();
             assertThat(t.tokens()).isEqualTo(DivisorDeTrechos.estimarTokens(t.texto()));
         });
@@ -122,13 +122,17 @@ class DivisorDeTrechosTest {
     }
 
     @Test
-    void aFraseQueCruzaAQuebraDePaginaFicaInteiraNoMesmoTrecho() {
-        Trecho montagem = comTexto(d01, "A montagem das ativações começa em 18/01/2027");
+    void aFraseQueCruzaAQuebraDePaginaSeCortaNelaECadaPedacoFicaNaPaginaDele() {
+        Trecho cabeca = comTexto(d01, "A montagem das ativações começa em 18/01/2027");
+        Trecho cauda = comTexto(d01, "de festival na condição em que estiverem");
 
-        // a frase começa no pé da página 3 e termina no topo da 4
-        assertThat(montagem.texto()).contains("Estruturas que não estiverem prontas na vistoria seguem para o dia de festival na condição em que estiverem");
-        assertThat(montagem.paginaInicio()).isEqualTo(3);
-        assertThat(montagem.paginaFim()).isEqualTo(4);
+        // a frase começa no pé da página 3 e termina no topo da 4: cada pedaço fica no trecho da página onde está
+        assertThat(cabeca.texto()).endsWith("Estruturas que não estiverem prontas na vistoria seguem para o dia");
+        assertThat(cabeca.paginaInicio()).isEqualTo(3);
+        assertThat(cabeca.paginaFim()).isEqualTo(3);
+        assertThat(cauda.paginaInicio()).isEqualTo(4);
+        assertThat(cauda.paginaFim()).isEqualTo(4);
+        assertThat(cauda).isNotSameAs(cabeca);
         assertThat(d01.stream().filter(t -> t.texto().contains("seguem para o dia")).count()).isEqualTo(1);
     }
 
@@ -153,9 +157,12 @@ class DivisorDeTrechosTest {
                 "TOPO FIXO\nO segundo texto fica aqui.\nPé fixo página 2",
                 "TOPO FIXO\nO terceiro texto fica aqui.\nPé fixo página 3"));
 
-        assertThat(trechos).hasSize(1);
-        assertThat(trechos.get(0).texto()).doesNotContain("TOPO FIXO").doesNotContain("Pé fixo");
-        assertThat(trechos.get(0).texto()).contains("primeiro texto", "segundo texto", "terceiro texto");
+        assertThat(trechos).as("um trecho por página").hasSize(3);
+        assertThat(trechos).extracting(Trecho::paginaInicio).containsExactly(1, 2, 3);
+        assertThat(trechos).allSatisfy(t -> assertThat(t.texto()).doesNotContain("TOPO FIXO").doesNotContain("Pé fixo"));
+        assertThat(trechos.get(0).texto()).contains("primeiro texto");
+        assertThat(trechos.get(1).texto()).contains("segundo texto");
+        assertThat(trechos.get(2).texto()).contains("terceiro texto");
     }
 
     // ---------------------------------------------------------------------
@@ -234,15 +241,6 @@ class DivisorDeTrechosTest {
         assertThat(trechos.get(0).tokens()).isGreaterThanOrEqualTo(DivisorDeTrechos.MINIMO_DE_TOKENS);
         assertThat(trechos.get(1).secaoCaminho()).isEqualTo("2 Outra raiz");
         assertThat(trechos.get(1).texto()).isEqualTo("Texto de outra raiz.");
-    }
-
-    @Test
-    void seccoesDeRaizesDiferentesSoSeJuntamSeOTrechoAindaNaoTemOMinimo() {
-        List<Trecho> trechos = divisor.dividir(paginas("1. Raiz\nTexto da primeira raiz.\n2. Outra raiz\nTexto de outra raiz."));
-
-        assertThat(trechos).hasSize(1);
-        assertThat(trechos.get(0).secaoCaminho()).isEqualTo("1 Raiz");
-        assertThat(trechos.get(0).texto()).isEqualTo("Texto da primeira raiz.\n2 Outra raiz\nTexto de outra raiz.");
     }
 
     @Test
@@ -413,10 +411,12 @@ class DivisorDeTrechosTest {
 
         List<Trecho> trechos = divisor.dividir(paginas);
 
-        assertThat(trechos).hasSize(1);
+        assertThat(trechos).as("o 3 é de primeiro nível: abre outro trecho").hasSize(2);
         assertThat(trechos.get(0).secaoCaminho()).isEqualTo("1 Regras");
-        assertThat(trechos.get(0).texto()).as("o título sem corpo antes do próximo e o título no fim do documento ficam no texto")
-                .contains("2. Anexos", "4. Fim", "O glossário explica os termos usados.");
+        assertThat(trechos.get(0).texto()).as("o título sem corpo antes do próximo fica no texto da seção que estava aberta")
+                .isEqualTo("O texto da regra.\n2. Anexos");
+        assertThat(trechos.get(1).secaoCaminho()).isEqualTo("3 Glossário");
+        assertThat(trechos.get(1).texto()).as("o título no fim do documento fica no texto").isEqualTo("O glossário explica os termos usados.\n4. Fim");
         confereQueNadaSumiu(paginas);
     }
 
@@ -476,7 +476,7 @@ class DivisorDeTrechosTest {
         List<Trecho> trechos = divisor.dividir(paginas);
 
         assertThat(trechos.stream().map(Trecho::texto).collect(Collectors.joining("\n"))).contains("Sumário\n1. Apresentação\n2. Cronograma operacional\n3. Seguros");
-        assertThat(trechos.stream().map(Trecho::secaoCaminho)).contains("CAPA DO MANUAL", "1 Apresentação");
+        assertThat(trechos.stream().map(Trecho::secaoCaminho)).contains("CAPA DO MANUAL", "1 Apresentação › 1.1 Objetivo");
         assertThat(juncao(trechos)).contains("1.1 Objetivo", "2 Cronograma operacional");
         confereQueNadaSumiu(paginas);
     }
@@ -733,8 +733,10 @@ class DivisorDeTrechosTest {
 
         List<Trecho> trechos = divisor.dividir(paginas);
 
-        assertThat(caminhos(trechos)).containsExactly("DAS OBRIGAÇÕES", "DOS PRAZOS", "DAS MULTAS");
-        assertThat(trechos.get(0).texto()).startsWith("CAPÍTULO I\nDAS OBRIGAÇÕES\n");
+        assertThat(caminhos(trechos)).as("a linha CAPÍTULO I, antes do primeiro título de primeiro nível, é o trecho sem caminho")
+                .containsExactly(null, "DAS OBRIGAÇÕES", "DOS PRAZOS", "DAS MULTAS");
+        assertThat(trechos.get(0).texto()).isEqualTo("CAPÍTULO I");
+        assertThat(trechos.get(1).texto()).endsWith("CAPÍTULO II");
         assertThat(juncao(trechos)).contains("CAPÍTULO II", "CAPÍTULO III");
         confereQueNadaSumiu(paginas);
     }
@@ -748,7 +750,8 @@ class DivisorDeTrechosTest {
         assertThat(caminhos(trechos)).containsExactly("1 Abertura", "TARIFAS", "3 Seguros");
         assertThat(trechos.get(0).texto()).endsWith("2. Energia");
         confereQueNadaSumiu(paginas);
-        assertThat(caminhos(divisor.dividir(txt("2. Energia", "TARIFAS", corpo("Tarifas"))))).as("sem seção antes, o 2 não segue a sequência").containsExactly("TARIFAS");
+        assertThat(caminhos(divisor.dividir(txt("2. Energia", "TARIFAS", corpo("Tarifas"))))).as("sem seção antes, o 2 não segue a sequência: fica no trecho sem caminho, antes do TARIFAS")
+                .containsExactly(null, "TARIFAS");
     }
 
     @Test
@@ -781,8 +784,8 @@ class DivisorDeTrechosTest {
 
         List<Trecho> trechos = divisor.dividir(paginas);
 
-        assertThat(caminhos(trechos)).containsExactly("ENTREGA");
-        assertThat(trechos.get(0).texto()).startsWith("DOCUMENTOS EXIGIDOS\n1. Contrato assinado\n2. Apólice de R$ 2.000.000,00\n3. Comprovante\nENTREGA\n");
+        assertThat(caminhos(trechos)).containsExactly(null, "ENTREGA");
+        assertThat(trechos.get(0).texto()).isEqualTo("DOCUMENTOS EXIGIDOS\n1. Contrato assinado\n2. Apólice de R$ 2.000.000,00\n3. Comprovante");
         confereQueNadaSumiu(paginas);
     }
 
@@ -1044,6 +1047,345 @@ class DivisorDeTrechosTest {
             assertThat(oQueSumiu(paginas)).as("vez " + vez + ": " + Arrays.toString(textos)).isEmpty();
             assertThat(divisor.dividir(paginas)).as("vez " + vez + ": " + Arrays.toString(textos))
                     .allSatisfy(t -> assertThat(t.tokens()).isLessThanOrEqualTo(DivisorDeTrechos.LIMITE_DE_TOKENS));
+            assertThat(divisor.dividir(paginas)).as("vez " + vez + ": uma página só por trecho: " + Arrays.toString(textos))
+                    .allSatisfy(t -> assertThat(t.paginaInicio()).isEqualTo(t.paginaFim()));
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // M4, rodada de correção: trecho de uma página só, e título de primeiro nível abre trecho
+    // ---------------------------------------------------------------------
+
+    private static void umaPaginaSo(List<Trecho> trechos, String quem) {
+        assertThat(trechos).as(quem).isNotEmpty().allSatisfy(t -> assertThat(t.paginaInicio()).as(quem + ", trecho " + t.ordem())
+                .isEqualTo(t.paginaFim()));
+    }
+
+    private static Linha tabela(String texto) {
+        return new Linha(texto, 70, List.of(70.0, 300.0), true);
+    }
+
+    @Test
+    void nenhumTrechoDoKitAtravessaPagina() {
+        for (KitDeDocumentos.Documento documento : KitDeDocumentos.DOCUMENTOS) {
+            if ("D12".equals(documento.id())) {
+                continue;
+            }
+            umaPaginaSo(divisor.dividir(extrair(documento.id())), documento.id());
+        }
+    }
+
+    @Test
+    void oSomDe85DbDoManualFicaNaPagina9ComASecao10ENaoNoTrechoQueComecouNa8() {
+        Trecho som = comTexto(divisor.dividir(extrair("D02")), "O som de uma ativação não pode passar de 85 dB(A)");
+
+        assertThat(som.paginaInicio()).isEqualTo(9);
+        assertThat(som.paginaFim()).isEqualTo(9);
+        assertThat(som.secaoCaminho()).startsWith("10 Ativação das marcas");
+    }
+
+    @Test
+    void todoFatoDoGabaritoQueCabeEmUmaPaginaEstaEmTrechoDaPaginaDele() throws java.io.IOException {
+        var gabarito = tools.jackson.databind.json.JsonMapper.builder().build()
+                .readTree(new org.springframework.core.io.ClassPathResource(KitDeDocumentos.GABARITO).getInputStream());
+        java.util.Map<String, List<Trecho>> porDocumento = new java.util.HashMap<>();
+        List<String> falhas = new ArrayList<>();
+        int conferidos = 0;
+        for (var fato : gabarito) {
+            if (fato.path("semResposta").asBoolean(false) || fato.path("documento").isNull() || fato.path("trecho").isNull()
+                    || fato.path("quebraDePagina").asBoolean(false)) {
+                continue;
+            }
+            String id = fato.path("id").asString();
+            List<Trecho> trechos = porDocumento.computeIfAbsent(id, chave -> divisor.dividir(extrair(chave)));
+            String procurado = GabaritoDosDocumentosTest.normalizar(fato.path("trecho").asString());
+            List<Trecho> com = trechos.stream().filter(t -> GabaritoDosDocumentosTest.normalizar(t.texto()).contains(procurado)).toList();
+            conferidos++;
+            Set<Integer> paginasCertas = new HashSet<>(List.of(fato.path("pagina").asInt()));
+            fato.path("paginasTambem").forEach(p -> paginasCertas.add(p.asInt()));
+            int pagina = fato.path("pagina").asInt();
+            if (com.isEmpty()) {
+                falhas.add(fato.path("fato").asString() + " (" + id + "): nenhum trecho tem o texto do gabarito");
+            } else if (com.stream().anyMatch(t -> !paginasCertas.contains(t.paginaInicio()))) {
+                falhas.add(fato.path("fato").asString() + " (" + id + ", página " + pagina + "): trecho na página "
+                        + com.stream().map(t -> t.paginaInicio() + "-" + t.paginaFim()).toList());
+            }
+        }
+        assertThat(falhas).as("fatos do gabarito sem trecho na página certa").isEmpty();
+        assertThat(conferidos).isGreaterThanOrEqualTo(100);
+    }
+
+    @Test
+    void secaoQueAtravessaAPaginaViraUmTrechoPorPaginaComOMesmoCaminho() {
+        List<Trecho> trechos = divisor.dividir(paginas(
+                "1. Regras\n" + frases("A regra", 3).replace(". A regra", ".\nA regra"),
+                frases("A norma", 3).replace(". A norma", ".\nA norma")));
+
+        assertThat(trechos).hasSize(2);
+        assertThat(trechos).extracting(Trecho::paginaInicio).containsExactly(1, 2);
+        assertThat(trechos).extracting(Trecho::paginaFim).containsExactly(1, 2);
+        assertThat(trechos).extracting(Trecho::secaoCaminho).containsExactly("1 Regras", "1 Regras");
+        assertThat(trechos.get(0).texto()).contains("A regra 3 descreve").doesNotContain("A norma");
+        assertThat(trechos.get(1).texto()).startsWith("A norma 1 descreve").doesNotContain("A regra");
+    }
+
+    @Test
+    void aSobreposicaoNuncaVemDaPaginaAnterior() {
+        String paginaUm = "1. Regras\n" + frases("A regra", 100).replace(". A regra", ".\nA regra");
+        String paginaDois = frases("A norma", 100).replace(". A norma", ".\nA norma");
+
+        List<Trecho> trechos = divisor.dividir(paginas(paginaUm, paginaDois));
+
+        umaPaginaSo(trechos, "duas páginas grandes");
+        List<Trecho> daPagina2 = trechos.stream().filter(t -> t.paginaInicio() == 2).toList();
+        assertThat(daPagina2.size()).isGreaterThanOrEqualTo(2);
+        assertThat(daPagina2.get(0).texto()).as("o primeiro da página 2 não abre com frase da 1").startsWith("A norma 1 descreve").doesNotContain("A regra");
+        // dentro da mesma página a sobreposição de uma frase continua: o trecho 2 da página 2 abre com a última frase do 1
+        String anterior = daPagina2.get(0).texto();
+        assertThat(daPagina2.get(1).texto()).startsWith(anterior.substring(anterior.lastIndexOf("A norma")).strip());
+        confereQueNadaSumiu(paginas(paginaUm, paginaDois));
+    }
+
+    @Test
+    void fraseQueCruzaAQuebraDePaginaSeCortaNelaECadaPedacoFicaNaSuaPaginaSemPerderTexto() {
+        List<Pagina> paginas = paginas("1. Prazos\nO prazo para informar os geradores vai até",
+                "o dia 27/11/2026 às 18h, sem prorrogação.\nOutra regra.");
+
+        List<Trecho> trechos = divisor.dividir(paginas);
+
+        assertThat(trechos).hasSize(2);
+        assertThat(trechos.get(0).paginaInicio()).isEqualTo(1);
+        assertThat(trechos.get(0).paginaFim()).isEqualTo(1);
+        assertThat(trechos.get(0).texto()).isEqualTo("O prazo para informar os geradores vai até");
+        assertThat(trechos.get(1).paginaInicio()).isEqualTo(2);
+        assertThat(trechos.get(1).paginaFim()).isEqualTo(2);
+        assertThat(trechos.get(1).texto()).startsWith("o dia 27/11/2026 às 18h, sem prorrogação.").contains("Outra regra.");
+        confereQueNadaSumiu(paginas);
+    }
+
+    @Test
+    void palavraPartidaPorHifenNaQuebraDePaginaTambemSeCortaENadaSome() {
+        List<Pagina> paginas = paginas("1. Datas\nO festival abre na sexta-", "feira, dia 29, e fecha no domingo.");
+
+        List<Trecho> trechos = divisor.dividir(paginas);
+
+        assertThat(trechos).hasSize(2);
+        assertThat(trechos.get(0).texto()).endsWith("sexta-");
+        assertThat(trechos.get(1).texto()).startsWith("feira, dia 29");
+        umaPaginaSo(trechos, "hífen na quebra de página");
+        confereQueNadaSumiu(paginas);
+    }
+
+    @Test
+    void naMesmaPaginaAFraseEAPalavraPartidaPorHifenContinuamInteiras() {
+        List<Trecho> trechos = divisor.dividir(paginas("1. Datas\nO festival abre na sexta-\nfeira, dia 29, e fecha no domingo."));
+
+        assertThat(trechos).hasSize(1);
+        assertThat(trechos.get(0).texto()).isEqualTo("O festival abre na sexta-feira, dia 29, e fecha no domingo.");
+    }
+
+    @Test
+    void tituloDePrimeiroNivelSempreAbreOutroTrechoMesmoComAsDuasSecoesPequenasNaMesmaPagina() {
+        List<Trecho> trechos = divisor.dividir(paginas("1. Raiz\nTexto da primeira raiz.\n2. Outra raiz\nTexto de outra raiz."));
+
+        assertThat(trechos).hasSize(2);
+        assertThat(trechos.get(0).secaoCaminho()).isEqualTo("1 Raiz");
+        assertThat(trechos.get(0).texto()).isEqualTo("Texto da primeira raiz.");
+        assertThat(trechos.get(1).secaoCaminho()).isEqualTo("2 Outra raiz");
+        assertThat(trechos.get(1).texto()).isEqualTo("Texto de outra raiz.");
+        umaPaginaSo(trechos, "duas raízes");
+    }
+
+    @Test
+    void tituloDePrimeiroNivelEmCaixaAltaTambemAbreOutroTrecho() {
+        List<Trecho> trechos = divisor.dividir(paginas("REGRAS GERAIS\nTexto curto das regras.\nPRAZOS\nTexto curto dos prazos."));
+
+        assertThat(trechos).extracting(Trecho::secaoCaminho).containsExactly("REGRAS GERAIS", "PRAZOS");
+        assertThat(trechos).extracting(Trecho::texto).containsExactly("Texto curto das regras.", "Texto curto dos prazos.");
+    }
+
+    @Test
+    void tituloDeSegundoNivelNaoAbreTrechoESecoesPequenasDaMesmaRaizContinuamJuntas() {
+        List<Trecho> trechos = divisor.dividir(paginas("1. Raiz\n1.1 Primeira\nTexto um da raiz.\n1.2 Segunda\nTexto dois da raiz."));
+
+        assertThat(trechos).hasSize(1);
+        assertThat(trechos.get(0).secaoCaminho()).isEqualTo("1 Raiz");
+        assertThat(trechos.get(0).texto()).contains("1.1 Primeira", "Texto um da raiz.", "1.2 Segunda", "Texto dois da raiz.");
+    }
+
+    @Test
+    void oSomDaSecao10NaoApareceComoSecao9() {
+        String[] nomes = {"Um", "Dois", "Três", "Quatro", "Cinco", "Seis", "Sete", "Oito"};
+        StringBuilder antes = new StringBuilder();
+        for (int s = 1; s <= 8; s++) {
+            antes.append(s).append(". Seção ").append(nomes[s - 1]).append("\nTexto curto da seção ").append(s).append(".\n");
+        }
+        String pagina8 = antes + "9. Credenciamento\nO credenciamento fecha antes da montagem.";
+        String pagina9 = "10. Ativação das marcas\n10.1 Energia\nA energia segue o manual.\n10.2 Som\nO som não pode passar de 85 dB(A).";
+
+        List<Trecho> trechos = divisor.dividir(paginas(pagina8, pagina9));
+
+        Trecho som = comTexto(trechos, "85 dB(A)");
+        assertThat(som.secaoCaminho()).startsWith("10 Ativação das marcas");
+        assertThat(som.paginaInicio()).isEqualTo(2);
+        assertThat(som.paginaFim()).isEqualTo(2);
+        assertThat(comTexto(trechos, "O credenciamento fecha").secaoCaminho()).isEqualTo("9 Credenciamento");
+        assertThat(som.texto()).doesNotContain("credenciamento");
+    }
+
+    @Test
+    void tabelaQueAtravessaAPaginaSeParteNelaERepeteALegendaEOCabecalhoNaSeguinte() {
+        Pagina um = new Pagina(1, List.of(new Linha("1. Valores", 62, List.of(62.0), false), tabela("Tabela 1 · Valores"), tabela("Item Valor"),
+                tabela("Energia R$ 10,00"), tabela("Água R$ 20,00")));
+        Pagina dois = new Pagina(2, List.of(tabela("Gás R$ 30,00"), tabela("Luz R$ 40,00")));
+
+        List<Trecho> trechos = divisor.dividir(List.of(um, dois));
+
+        assertThat(trechos).hasSize(2);
+        assertThat(trechos.get(0).texto()).isEqualTo("Tabela 1 · Valores\nItem Valor\nEnergia R$ 10,00\nÁgua R$ 20,00");
+        assertThat(trechos.get(1).texto()).isEqualTo("Tabela 1 · Valores\nItem Valor\nGás R$ 30,00\nLuz R$ 40,00");
+        assertThat(trechos).extracting(Trecho::paginaInicio).containsExactly(1, 2);
+        assertThat(trechos).extracting(Trecho::paginaFim).containsExactly(1, 2);
+        assertThat(trechos).extracting(Trecho::secaoCaminho).containsExactly("1 Valores", "1 Valores");
+    }
+
+    @Test
+    void tabelaSemLegendaQueAtravessaAPaginaRepeteSoOCabecalho() {
+        Pagina um = new Pagina(1, List.of(new Linha("1. Valores", 62, List.of(62.0), false), tabela("Item Valor"), tabela("Energia R$ 10,00")));
+        Pagina dois = new Pagina(2, List.of(tabela("Gás R$ 30,00")));
+
+        List<Trecho> trechos = divisor.dividir(List.of(um, dois));
+
+        assertThat(trechos).extracting(Trecho::texto).containsExactly("Item Valor\nEnergia R$ 10,00", "Item Valor\nGás R$ 30,00");
+    }
+
+    @Test
+    void naPaginaSeguinteOutraTabelaComLegendaPropriaNaoGanhaOCabecalhoDaPrimeira() {
+        Pagina um = new Pagina(1, List.of(new Linha("1. Valores", 62, List.of(62.0), false), tabela("Tabela 1 · Energia"), tabela("Item Valor"),
+                tabela("Energia R$ 10,00")));
+        Pagina dois = new Pagina(2, List.of(tabela("Tabela 2 · Água"), tabela("Item Preço"), tabela("Água R$ 20,00")));
+
+        List<Trecho> trechos = divisor.dividir(List.of(um, dois));
+
+        assertThat(trechos).extracting(Trecho::texto).containsExactly("Tabela 1 · Energia\nItem Valor\nEnergia R$ 10,00",
+                "Tabela 2 · Água\nItem Preço\nÁgua R$ 20,00");
+    }
+
+    @Test
+    void tabelaDeUmaPaginaSoContinuaInteira() {
+        Pagina um = new Pagina(1, List.of(new Linha("1. Valores", 62, List.of(62.0), false), tabela("Tabela 1 · Valores"), tabela("Item Valor"),
+                tabela("Energia R$ 10,00"), tabela("Água R$ 20,00")));
+
+        List<Trecho> trechos = divisor.dividir(List.of(um));
+
+        assertThat(trechos).extracting(Trecho::texto).containsExactly("Tabela 1 · Valores\nItem Valor\nEnergia R$ 10,00\nÁgua R$ 20,00");
+    }
+
+    @Test
+    void umTxtComDoisTitulosDePrimeiroNivelViraDoisTrechosNaPagina1SemPerderNada() {
+        List<Pagina> paginas = txt("1. Perguntas", "O festival abre na sexta.", "", "2. Números", "O público é de 40 mil pessoas por dia.");
+
+        List<Trecho> trechos = divisor.dividir(paginas);
+
+        assertThat(trechos).extracting(Trecho::secaoCaminho).containsExactly("1 Perguntas", "2 Números");
+        assertThat(trechos).extracting(Trecho::paginaInicio).containsExactly(1, 1);
+        assertThat(trechos).extracting(Trecho::paginaFim).containsExactly(1, 1);
+        confereQueNadaSumiu(paginas);
+    }
+
+    @Test
+    void oD08TxtContinuaNaPagina1ENaoPerdeNada() {
+        List<Trecho> trechos = divisor.dividir(extrair("D08"));
+
+        assertThat(trechos).isNotEmpty().allSatisfy(t -> {
+            assertThat(t.paginaInicio()).isEqualTo(1);
+            assertThat(t.paginaFim()).isEqualTo(1);
+        });
+        assertThat(oQueSumiu(extrair("D08"))).isEmpty();
+    }
+
+    /**
+     * O documento montado ao acaso, com os marcadores conhecidos: cada linha do corpo leva um marcador (ZaSbLc) e o teste sabe a página
+     * e o título de primeiro nível dele. Cada marcador tem de estar num trecho da página dele e do primeiro nível dele; nenhum trecho
+     * atravessa página nem junta dois primeiros níveis; nenhum passa do limite; e nada some.
+     */
+    @Test
+    void documentoEstruturadoAoAcasoCadaMarcadorFicaNaSuaPaginaNaSuaRaizENadaSome() {
+        String[] nomes = {"Energia elétrica", "Credenciamento", "Ativação das marcas", "Montagem", "Abastecimento", "Segurança", "Seguros",
+                "Contatos"};
+        String[] subnomes = {"Pontos", "Tarifa", "Prazos", "Som", "Alimentos"};
+        String[] palavras = {"regra", "prazo", "marca", "festival", "gerador", "vistoria", "credencial", "montadora", "palco", "ativação"};
+        Pattern marcador = Pattern.compile("Z\\d+S\\d+L\\d+");
+        Random sorteio = new Random(360);
+        for (int vez = 0; vez < 250; vez++) {
+            List<List<String>> paginasDoDocumento = new ArrayList<>();
+            paginasDoDocumento.add(new ArrayList<>());
+            java.util.Map<String, Integer> paginaDoMarcador = new java.util.LinkedHashMap<>();
+            java.util.Map<String, String> raizDoMarcador = new java.util.HashMap<>();
+            // um quarto dos documentos cabe numa página só (como o TXT), e um terço tem os títulos de primeiro nível em caixa alta
+            boolean umaPaginaSo = sorteio.nextInt(4) == 0;
+            boolean caixaAlta = sorteio.nextInt(3) == 0;
+            int[] limiteDaPagina = {umaPaginaSo ? Integer.MAX_VALUE : 4 + sorteio.nextInt(30)};
+            int secoes = 1 + sorteio.nextInt(6);
+            for (int s = 1; s <= secoes; s++) {
+                String raiz = caixaAlta ? nomes[s - 1].toUpperCase(java.util.Locale.ROOT) : s + " " + nomes[s - 1];
+                java.util.function.Consumer<String> linha = texto -> {
+                    List<String> atual = paginasDoDocumento.get(paginasDoDocumento.size() - 1);
+                    atual.add(texto);
+                    if (atual.size() >= limiteDaPagina[0]) {
+                        paginasDoDocumento.add(new ArrayList<>());
+                        limiteDaPagina[0] = umaPaginaSo ? Integer.MAX_VALUE : 4 + sorteio.nextInt(30);
+                    }
+                };
+                linha.accept(caixaAlta ? raiz : s + ". " + nomes[s - 1]);
+                int subsecoes = sorteio.nextInt(4);
+                for (int j = 0; j <= subsecoes; j++) {
+                    if (j > 0) {
+                        linha.accept(s + "." + j + " " + subnomes[(j + s) % subnomes.length]);
+                    }
+                    int corpo = 1 + sorteio.nextInt(j == 0 && subsecoes > 0 ? 3 : 45);
+                    for (int n = 1; n <= corpo; n++) {
+                        String id = "Z" + s + "S" + j + "L" + n;
+                        StringBuilder texto = new StringBuilder();
+                        int quantas = 5 + sorteio.nextInt(10);
+                        int ondeFicaOMarcador = sorteio.nextInt(quantas);
+                        for (int k = 0; k < quantas; k++) {
+                            texto.append(k == 0 ? "" : " ").append(k == ondeFicaOMarcador ? id + " " : "").append(palavras[sorteio.nextInt(palavras.length)]);
+                        }
+                        texto.append(sorteio.nextInt(4) == 0 ? "" : ".");
+                        paginaDoMarcador.put(id, paginasDoDocumento.size());
+                        raizDoMarcador.put(id, raiz);
+                        linha.accept(texto.toString());
+                    }
+                }
+            }
+            if (paginasDoDocumento.get(paginasDoDocumento.size() - 1).isEmpty()) {
+                paginasDoDocumento.remove(paginasDoDocumento.size() - 1);
+            }
+            List<Pagina> paginas = paginas(paginasDoDocumento.stream().map(p -> String.join("\n", p)).toArray(String[]::new));
+            String quem = "vez " + vez + " (" + paginas.size() + " páginas)";
+
+            List<Trecho> trechos = divisor.dividir(paginas);
+
+            umaPaginaSo(trechos, quem);
+            Set<String> vistos = new HashSet<>();
+            for (Trecho trecho : trechos) {
+                assertThat(trecho.tokens()).as(quem).isLessThanOrEqualTo(DivisorDeTrechos.LIMITE_DE_TOKENS);
+                String raizDoTrecho = trecho.secaoCaminho().split(" › ")[0];
+                Matcher achado = marcador.matcher(trecho.texto());
+                boolean semMarcador = true;
+                while (achado.find()) {
+                    String id = achado.group();
+                    vistos.add(id);
+                    assertThat(trecho.paginaInicio()).as(quem + ": a página de " + id).isEqualTo(paginaDoMarcador.get(id));
+                    assertThat(raizDoMarcador.get(id)).as(quem + ": o primeiro nível de " + id + " no trecho " + trecho.ordem() + " [" + trecho.secaoCaminho() + "]")
+                            .isEqualTo(raizDoTrecho);
+                    semMarcador = false;
+                }
+                assertThat(semMarcador).as(quem + ": trecho " + trecho.ordem() + " sem nenhum marcador").isFalse();
+            }
+            assertThat(vistos).as(quem + ": marcadores que sumiram").containsExactlyInAnyOrderElementsOf(paginaDoMarcador.keySet());
+            confereQueNadaSumiu(paginas);
         }
     }
 }

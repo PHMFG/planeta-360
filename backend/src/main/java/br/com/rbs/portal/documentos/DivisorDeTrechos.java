@@ -29,8 +29,16 @@ import org.springframework.stereotype.Component;
  *       linhas com cara de título só a última é o título, com os ancestrais de numeração prefixo da dela; as outras ficam no texto.
  *       A numeração de um nível só ({@code 4.}) tem de seguir a sequência dos títulos aceitos. Título com data, {@code R$}, {@code %}
  *       ou número com separador é só texto, e o que tem algarismo além da numeração fica no caminho <b>e</b> no texto;</li>
+ *   <li><b>um trecho nunca atravessa página</b>: mudou a página, começa outro trecho, com o mesmo caminho de seção, e sem frase de
+ *       sobreposição (ela viria da página anterior). A frase e a palavra partida por hífen que cruzam a quebra de página também se
+ *       cortam ali: cada pedaço fica no trecho da página onde está, e {@code paginaInicio} é sempre igual a {@code paginaFim}. Assim a
+ *       fonte que o Atlas cita aponta a página onde o fato está, e não a em que o trecho começou;</li>
+ *   <li><b>um título de primeiro nível</b> ({@code 10 Ativação das marcas}: numeração sem ponto interno, ou título em caixa alta)
+ *       <b>sempre começa outro trecho</b>: o caminho do trecho começa no título de primeiro nível em vigor na primeira linha dele, e
+ *       a seção pequena não se junta mais à vizinha de outra raiz;</li>
  *   <li>tabela inteira num trecho: a sequência de linhas com colunas alinhadas que o extrator marcou nunca é cortada (acima de
- *       {@value #LIMITE_DE_TOKENS} tokens ela se parte nas linhas, repetindo a legenda e o cabeçalho);</li>
+ *       {@value #LIMITE_DE_TOKENS} tokens ela se parte nas linhas, repetindo a legenda e o cabeçalho). A tabela que atravessa a página
+ *       se parte na página, e a parte da página seguinte repete a legenda e o cabeçalho, como na tabela grande;</li>
  *   <li>de {@value #MINIMO_DE_TOKENS} a {@value #ALVO_DE_TOKENS} tokens por trecho (estimativa de 4 caracteres por token) e no máximo
  *       {@value #LIMITE_DE_TOKENS}, <b>contando os separadores</b> e as linhas de título que entram no texto. O Gemini corta <b>em
  *       silêncio</b> o que passa de 8.192 tokens, então o limite fica longe disso. Seções pequenas se juntam (com o título delas dentro
@@ -38,8 +46,8 @@ import org.springframework.stereotype.Component;
  *   <li>uma frase de sobreposição entre dois trechos da mesma seção partida; nunca entre seções, e só se o trecho ainda couber nos
  *       {@value #LIMITE_DE_TOKENS} tokens com ela.</li>
  * </ul>
- * A frase que cruza a quebra de página fica inteira no mesmo trecho: o corte só acontece entre frases. A palavra partida por hífen na
- * quebra de linha ({@code sexta-} e {@code feira}) volta inteira, com o hífen.
+ * Dentro de uma página, o corte só acontece entre frases, e a palavra partida por hífen na quebra de linha ({@code sexta-} e
+ * {@code feira}) volta inteira, com o hífen.
  */
 @Component
 public class DivisorDeTrechos {
@@ -108,6 +116,11 @@ public class DivisorDeTrechos {
 
         int tokens() {
             return atomos.stream().mapToInt(Atomo::tokens).sum();
+        }
+
+        /** A página da unidade: todos os átomos dela são da mesma (veja {@link #unidadesDa(Secao)}). */
+        int pagina() {
+            return atomos.get(0).paginaInicio();
         }
     }
 
@@ -542,6 +555,9 @@ public class DivisorDeTrechos {
                 atual.atomos.add(new Atomo(linha.texto().strip(), "\n", linha.pagina(), linha.pagina(), false));
                 continue;
             }
+            if (!paragrafo.isEmpty() && paragrafo.get(paragrafo.size() - 1).pagina() != linha.pagina()) {
+                encerrarParagrafo(atual, paragrafo);   // o parágrafo (e a frase) que cruza a quebra de página se corta nela
+            }
             paragrafo.add(linha);
         }
         encerrarParagrafo(atual, paragrafo);
@@ -549,16 +565,45 @@ public class DivisorDeTrechos {
         return secoes;
     }
 
+    /**
+     * Fecha a tabela em um átomo por página. A parte de uma página que não é a primeira repete a legenda e o cabeçalho da tabela (as
+     * mesmas linhas que {@link #partirTabela} repete), a menos que ela comece com uma legenda própria: é outra tabela, que o extrator
+     * deixou colada à primeira.
+     */
     private static void encerrarTabela(Secao secao, List<LinhaDoDocumento> tabela) {
         if (tabela.isEmpty()) {
             return;
         }
-        StringBuilder texto = new StringBuilder();
-        for (LinhaDoDocumento linha : tabela) {
-            texto.append(texto.isEmpty() ? "" : "\n").append(linha.texto());
+        int quantasDeCabecalho = quantasLinhasDeCabecalho(tabela.stream().map(LinhaDoDocumento::texto).toList());
+        String cabecalho = tabela.subList(0, Math.min(quantasDeCabecalho, tabela.size())).stream().map(LinhaDoDocumento::texto)
+                .collect(java.util.stream.Collectors.joining("\n"));
+        int de = 0;
+        while (de < tabela.size()) {
+            int ate = de;
+            while (ate < tabela.size() && tabela.get(ate).pagina() == tabela.get(de).pagina()) {
+                ate++;
+            }
+            StringBuilder texto = new StringBuilder();
+            if (de > 0 && !ehLegenda(tabela.get(de).texto())) {
+                texto.append(cabecalho);
+            }
+            for (LinhaDoDocumento linha : tabela.subList(de, ate)) {
+                texto.append(texto.isEmpty() ? "" : "\n").append(linha.texto());
+            }
+            int pagina = tabela.get(de).pagina();
+            secao.atomos.add(new Atomo(texto.toString(), "\n", pagina, pagina, true));
+            de = ate;
         }
-        secao.atomos.add(new Atomo(texto.toString(), "\n", tabela.get(0).pagina(), tabela.get(tabela.size() - 1).pagina(), true));
         tabela.clear();
+    }
+
+    private static boolean ehLegenda(String linha) {
+        return linha.regionMatches(true, 0, "Tabela ", 0, 7);
+    }
+
+    /** A legenda ("Tabela N ...") e o cabeçalho da tabela, ou só o cabeçalho quando não há legenda. */
+    private static int quantasLinhasDeCabecalho(List<String> linhas) {
+        return linhas.size() > 1 && ehLegenda(linhas.get(0)) ? 2 : 1;
     }
 
     // ---------------------------------------------------------------------
@@ -686,19 +731,36 @@ public class DivisorDeTrechos {
     // Unidades: a seção inteira, ou as partes dela quando passa do alvo
     // ---------------------------------------------------------------------
 
+    /**
+     * As unidades da seção, uma página de cada vez: os átomos seguidos que são da mesma página formam uma sequência, e nenhuma unidade
+     * junta átomos de páginas diferentes. A frase de sobreposição, por isso, nunca vem da página anterior.
+     */
     private static List<Unidade> unidadesDa(Secao secao) {
         if (secao.atomos.isEmpty()) {
             return List.of();   // título sem texto (o sumário, ou o pai de outros títulos): só dá o caminho aos filhos
         }
-        int total = secao.atomos.stream().mapToInt(Atomo::tokens).sum();
+        List<Unidade> unidades = new ArrayList<>();
+        int de = 0;
+        for (int i = 1; i <= secao.atomos.size(); i++) {
+            if (i == secao.atomos.size() || secao.atomos.get(i).paginaInicio() != secao.atomos.get(de).paginaInicio()) {
+                unidades.addAll(unidadesDaPagina(secao, secao.atomos.subList(de, i)));
+                de = i;
+            }
+        }
+        return unidades;
+    }
+
+    /** As unidades de uma sequência de átomos da mesma página: ela inteira, ou as partes dela quando passa do alvo. */
+    private static List<Unidade> unidadesDaPagina(Secao secao, List<Atomo> atomos) {
+        int total = atomos.stream().mapToInt(Atomo::tokens).sum();
         if (total <= ALVO_DE_TOKENS) {
-            return List.of(new Unidade(secao.caminho, List.copyOf(secao.atomos)));
+            return List.of(new Unidade(secao.caminho, List.copyOf(atomos)));
         }
         String cabecalho = cabecalhoDe(secao.caminho);
         List<Unidade> unidades = new ArrayList<>();
         List<Atomo> atual = new ArrayList<>();
         int tokens = 0;
-        for (Atomo atomo : secao.atomos) {
+        for (Atomo atomo : atomos) {
             if (atomo.tabela() && atomo.tokens() > ALVO_DE_TOKENS) {
                 fechar(unidades, secao, atual);
                 tokens = 0;
@@ -739,7 +801,7 @@ public class DivisorDeTrechos {
             return List.of(tabela);
         }
         String[] linhas = tabela.texto().split("\n");
-        int quantasDeCabecalho = linhas.length > 1 && linhas[0].regionMatches(true, 0, "Tabela ", 0, 7) ? 2 : 1;
+        int quantasDeCabecalho = quantasLinhasDeCabecalho(Arrays.asList(linhas));
         String cabecalho = String.join("\n", java.util.Arrays.copyOfRange(linhas, 0, Math.min(quantasDeCabecalho, linhas.length)));
         int espacoDaLinha = Math.max(1, limite - estimarTokens(cabecalho + "\n"));   // o que sobra no pedaço para uma linha só
         List<Atomo> partes = new ArrayList<>();
@@ -775,7 +837,11 @@ public class DivisorDeTrechos {
             boolean mesmaRaiz = topo(grupo.get(0).caminho()).equals(topo(unidade.caminho()));
             boolean pequenoDemais = estimarTokens(montar(grupo).texto()) < MINIMO_DE_TOKENS
                     && numerada(grupo.get(0).caminho()) == numerada(unidade.caminho());
-            if (tokensJuntos <= ALVO_DE_TOKENS && (mesmaRaiz || pequenoDemais)) {
+            boolean mesmaPagina = grupo.get(0).pagina() == unidade.pagina();
+            // um título de primeiro nível novo sempre abre outro trecho: o caminho do trecho começa no primeiro nível em vigor
+            boolean abreOutraRaiz = !topo(grupo.get(grupo.size() - 1).caminho()).equals(topo(unidade.caminho()))
+                    && ehDePrimeiroNivel(topo(unidade.caminho()));
+            if (mesmaPagina && !abreOutraRaiz && tokensJuntos <= ALVO_DE_TOKENS && (mesmaRaiz || pequenoDemais)) {
                 grupo.add(unidade);
             } else {
                 trechos.add(comOrdem(montar(grupo), trechos.size() + 1));
@@ -797,6 +863,16 @@ public class DivisorDeTrechos {
     private static String topo(List<String> caminho) {
         return caminho.isEmpty() ? "" : caminho.get(0);
     }
+
+    /**
+     * Se o rótulo de um título do caminho é de primeiro nível: numeração sem ponto interno ({@code 10 Ativação das marcas}) ou sem
+     * numeração (caixa alta, "Sumário"). {@code 10.2 Som} é de segundo nível. O rótulo vazio (o texto antes do primeiro título) não é.
+     */
+    private static boolean ehDePrimeiroNivel(String rotulo) {
+        return !rotulo.isEmpty() && !NUMERACAO_COM_PONTO_INTERNO.matcher(rotulo).find();
+    }
+
+    private static final Pattern NUMERACAO_COM_PONTO_INTERNO = Pattern.compile("^\\d{1,2}(?:\\.\\d{1,2})+\\s");
 
     private static Trecho comOrdem(Trecho trecho, int ordem) {
         return new Trecho(ordem, trecho.paginaInicio(), trecho.paginaFim(), trecho.secaoCaminho(), trecho.texto(), trecho.tokens());

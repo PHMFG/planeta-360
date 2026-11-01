@@ -247,10 +247,16 @@ class DocumentoLeituraTest extends ApoioDeDocumentos {
         assertThat(lerJson(resposta, "$.itens[0].ordem")).isEqualTo(1);
         assertThat(lerJson(resposta, "$.itens[0].paginaInicio")).isEqualTo(1);
         assertThat(lerJson(resposta, "$.itens[0].secao")).isEqualTo("PLANETA 360 · OPERAÇÕES DO FESTIVAL");
-        assertThat(lerJson(resposta, "$.itens[1].secao")).isEqualTo("1 Apresentação");
+        // a capa (página 1) e o sumário (página 2) são dois trechos: um trecho nunca atravessa página
+        assertThat(lerJson(resposta, "$.itens[1].paginaInicio")).isEqualTo(2);
+        assertThat(lerJson(resposta, "$.itens[1].secao")).isEqualTo("PLANETA 360 · OPERAÇÕES DO FESTIVAL");
+        assertThat(lerJson(resposta, "$.itens[2].secao")).isEqualTo("1 Apresentação");
+        for (int i = 0; i < 5; i++) {
+            assertThat(lerJson(resposta, "$.itens[" + i + "].paginaFim")).as("trecho " + (i + 1)).isEqualTo(lerJson(resposta, "$.itens[" + i + "].paginaInicio"));
+        }
         assertThat(lerJson(resposta, "$.itens[0].ativo")).isEqualTo(true);
         assertThat((Integer) lerJson(resposta, "$.itens[0].tokens")).isGreaterThan(0);
-        assertThat(((String) lerJson(resposta, "$.itens[1].inicioDoTexto"))).startsWith("1.1 Objetivo deste manual").hasSizeLessThanOrEqualTo(240);
+        assertThat(((String) lerJson(resposta, "$.itens[2].inicioDoTexto"))).startsWith("1.1 Objetivo deste manual").hasSizeLessThanOrEqualTo(240);
         assertThat(lista(resposta, "$.itens").size()).isEqualTo(5);
         assertThat(((Number) lerJson(rbs.get("/api/documentos/" + d02 + "/trechos?pagina=1&tamanho=5"), "$.itens[0].ordem")).intValue()).isEqualTo(6);
     }
