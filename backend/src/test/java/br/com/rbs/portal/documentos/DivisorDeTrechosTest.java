@@ -9,8 +9,10 @@ import br.com.rbs.portal.documentos.ExtratorDeTexto.Pagina;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Random;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -131,10 +133,13 @@ class DivisorDeTrechosTest {
     }
 
     @Test
-    void ocabecalhoEORodapeRepetidosNaoEntramNosTrechos() {
-        assertThat(d01).noneMatch(t -> t.texto().contains("DOCUMENTO FICTÍCIO"));
-        assertThat(d01).noneMatch(t -> t.texto().matches("(?s).*Página \\d+ de 11.*"));
-        assertThat(d01).noneMatch(t -> t.texto().contains("testes do Atlas"));
+    void ocabecalhoEORodapeRepetidosFicamUmaVezSoNaPrimeiraPagina() {
+        // as duas linhas do pé têm algarismo (360, 2027): saem das repetições, mas ficam uma vez, na primeira página (a capa)
+        assertThat(d01.get(0).texto()).contains("DOCUMENTO FICTÍCIO · Planeta 360 · testes do Atlas DOCUMENTO FICTÍCIO · Planeta 360 · testes do Atlas · Manual de Operações 2027 Página 1 de 11");
+        assertThat(d01.stream().skip(1)).noneMatch(t -> t.texto().contains("DOCUMENTO FICTÍCIO"));
+        assertThat(d01.stream().skip(1)).noneMatch(t -> t.texto().matches("(?s).*Página \\d+ de 11.*"));
+        assertThat(d01.stream().map(Trecho::texto).collect(Collectors.joining("\n")).split("testes do Atlas", -1)).as("duas linhas, uma vez cada")
+                .hasSize(3);
     }
 
     @Test
@@ -172,8 +177,10 @@ class DivisorDeTrechosTest {
     }
 
     @Test
-    void aMarcaDoTxtNoTopoENoPeSaiComoCabecalhoERodape() {
-        assertThat(d08).noneMatch(t -> t.texto().contains("DOCUMENTO FICTÍCIO"));
+    void oTxtNaoTemCabecalhoNemRodapeEAMarcaDoTopoEDoPeFicaNoTexto() {
+        assertThat(juncao(d08).split("DOCUMENTO FICTÍCIO · Planeta 360 · testes do Atlas", -1)).as("a marca do topo e a do pé").hasSize(3);
+        assertThat(d08.get(0).texto()).contains("DOCUMENTO FICTÍCIO · Planeta 360 · testes do Atlas");
+        assertThat(d08.get(d08.size() - 1).texto()).endsWith("DOCUMENTO FICTÍCIO · Planeta 360 · testes do Atlas");
     }
 
     // ---------------------------------------------------------------------
@@ -311,15 +318,79 @@ class DivisorDeTrechosTest {
         return palavras;
     }
 
-    /** Toda palavra e todo número das linhas que sobraram depois do cabeçalho e do rodapé está no texto ou no caminho de algum trecho. */
-    private void confereQueNadaSumiu(List<Pagina> paginas) {
-        Set<String> faltando = palavrasENumeros(String.join("\n", DivisorDeTrechos.linhasMantidas(paginas)));
+    private static final Pattern NUMERACAO_EM_TEXTO = Pattern.compile("\\b(?:p[aá]gina|p[aá]g\\.?|page|p\\.)\\s*\\d+(?:\\s*(?:de|of|/)\\s*\\d+)?",
+            Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+    private static final Pattern SO_O_NUMERO_DA_PAGINA = Pattern.compile("^[\\s\\-–—|•·]*(\\d{1,4})(?:\\s*(?:/|de|of)\\s*\\d{1,4})?[\\s\\-–—|•·]*$",
+            Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+
+    /** A linha como o cabeçalho a compara: espaços unidos e a numeração de página no texto trocada por "#". */
+    private static String chaveDaLinha(String linha) {
+        return NUMERACAO_EM_TEXTO.matcher(linha.strip().replaceAll("\\s+", " ")).replaceAll("#");
+    }
+
+    /** As linhas sem algarismo que aparecem na borda (3 primeiras ou 3 últimas) de 2 páginas ou mais: cabeçalho e rodapé, que saem inteiros. */
+    private static Set<String> cabecalhosSemAlgarismo(List<Pagina> paginas) {
+        java.util.Map<String, Set<Integer>> porLinha = new java.util.HashMap<>();
+        for (Pagina pagina : paginas) {
+            List<Linha> linhas = pagina.linhas();
+            for (int i = 0; i < linhas.size(); i++) {
+                if ((i < 3 || i >= linhas.size() - 3) && !linhas.get(i).tabela() && !linhas.get(i).texto().isBlank()) {
+                    porLinha.computeIfAbsent(chaveDaLinha(linhas.get(i).texto()), chave -> new HashSet<>()).add(pagina.numero());
+                }
+            }
+        }
+        Set<String> cabecalhos = new HashSet<>();
+        porLinha.forEach((chave, onde) -> {
+            if (onde.size() >= 2 && chave.chars().noneMatch(Character::isDigit)) {
+                cabecalhos.add(chave);
+            }
+        });
+        return cabecalhos;
+    }
+
+    /**
+     * O texto CRU das páginas (como o extrator o entregou, sem nenhum cabeçalho ou rodapé tirado), menos a numeração de página
+     * ("Página 3 de 11" onde estiver, e a linha que é só o número da página, no topo ou no pé, com o número a até 5 da página) e menos
+     * as linhas de cabeçalho e rodapé sem algarismo, que saem inteiras. As que têm algarismo ficam uma vez, e entram na conta.
+     */
+    private static String textoCruSemNumeracao(List<Pagina> paginas) {
+        Set<String> cabecalhos = cabecalhosSemAlgarismo(paginas);
+        StringBuilder texto = new StringBuilder();
+        for (Pagina pagina : paginas) {
+            List<Linha> linhas = pagina.linhas();
+            for (int i = 0; i < linhas.size(); i++) {
+                String linha = linhas.get(i).texto().strip();
+                Matcher soNumero = SO_O_NUMERO_DA_PAGINA.matcher(linha);
+                boolean naBorda = i < 3 || i >= linhas.size() - 3;
+                if (naBorda && soNumero.matches() && Math.abs(Integer.parseInt(soNumero.group(1)) - pagina.numero()) <= 5) {
+                    continue;
+                }
+                if (naBorda && cabecalhos.contains(chaveDaLinha(linha))) {
+                    continue;
+                }
+                texto.append(NUMERACAO_EM_TEXTO.matcher(linha).replaceAll(" ")).append('\n');
+            }
+        }
+        return texto.toString();
+    }
+
+    /** O que sumiu do índice: palavras e números do texto cru de cada página que não estão em nenhum trecho nem em nenhum caminho. */
+    private Set<String> oQueSumiu(List<Pagina> paginas) {
+        Set<String> faltando = palavrasENumeros(textoCruSemNumeracao(paginas));
         faltando.removeAll(palavrasENumeros(juncao(divisor.dividir(paginas))));
-        assertThat(faltando).as("palavras e números do texto que não estão em nenhum trecho nem no caminho de seção").isEmpty();
+        return faltando;
+    }
+
+    /**
+     * Toda palavra e todo número do texto extraído cru (não o que sobrou depois do cabeçalho e do rodapé) está no texto ou no caminho de
+     * algum trecho, menos a numeração de página. As repetições de um cabeçalho que ficou uma vez têm as mesmas palavras da que ficou.
+     */
+    private void confereQueNadaSumiu(List<Pagina> paginas) {
+        assertThat(oQueSumiu(paginas)).as("palavras e números do texto cru que não estão em nenhum trecho nem no caminho de seção").isEmpty();
     }
 
     @Test
-    void listaDeTitulosSeguidosFicaNoTextoENenhumaViraCaminho() {
+    void listaDeTitulosSeguidosSoOUltimoEhTituloEORestoFicaNoTexto() {
         List<Pagina> paginas = txt("DOCUMENTOS EXIGIDOS", "1. Contrato assinado", "2. Apólice de seguro de R$ 2.000.000,00", "3. Comprovante de pagamento",
                 "ENTREGA", "As peças são entregues pela marca no portal até o prazo do plano comercial.", "",
                 "INGRESSOS", "10 Ingressos Pista", "4 Ingressos Camarote", "Os ingressos são distribuídos entre os setores do festival.", "",
@@ -331,7 +402,8 @@ class DivisorDeTrechosTest {
                 "10 Ingressos Pista", "4 Ingressos Camarote", "PRAZO FINAL 15/01/2027", "Sem prorrogação.");
         assertThat(trechos.stream().map(Trecho::texto).collect(Collectors.joining("\n")))
                 .as("o número fica no texto, e não só no caminho").contains("10 Ingressos Pista\n4 Ingressos Camarote", "R$ 2.000.000,00");
-        assertThat(trechos).as("lista não é seção: nenhuma linha dela vira caminho").allSatisfy(t -> assertThat(t.secaoCaminho()).isNull());
+        assertThat(trechos.stream().map(Trecho::secaoCaminho)).as("só a última linha da sequência é o título")
+                .doesNotContain("1 Contrato assinado", "3 Comprovante de pagamento").noneMatch(c -> c != null && c.contains("Ingressos Camarote"));
         confereQueNadaSumiu(paginas);
     }
 
@@ -343,7 +415,8 @@ class DivisorDeTrechosTest {
 
         assertThat(trechos).hasSize(1);
         assertThat(trechos.get(0).secaoCaminho()).isEqualTo("1 Regras");
-        assertThat(trechos.get(0).texto()).contains("2. Anexos", "3. Glossário", "4. Fim", "O glossário explica os termos usados.");
+        assertThat(trechos.get(0).texto()).as("o título sem corpo antes do próximo e o título no fim do documento ficam no texto")
+                .contains("2. Anexos", "4. Fim", "O glossário explica os termos usados.");
         confereQueNadaSumiu(paginas);
     }
 
@@ -362,13 +435,13 @@ class DivisorDeTrechosTest {
 
     @Test
     void tabelaEmTxtComLinhasEmCaixaAltaComNumerosNaoSome() {
-        List<Pagina> paginas = txt("4. Cotas e ingressos", "A tabela abaixo mostra as cortesias e as credenciais por dia.", "MASTER 40 20", "SUBCOTA G 20 10",
+        List<Pagina> paginas = txt("1. Cotas e ingressos", "A tabela abaixo mostra as cortesias e as credenciais por dia.", "MASTER 40 20", "SUBCOTA G 20 10",
                 "SUBCOTA 10 5", "Os valores valem para a edição de 2027.");
 
         List<Trecho> trechos = divisor.dividir(paginas);
 
         assertThat(trechos).hasSize(1);
-        assertThat(trechos.get(0).secaoCaminho()).isEqualTo("4 Cotas e ingressos");
+        assertThat(trechos.get(0).secaoCaminho()).isEqualTo("1 Cotas e ingressos");
         assertThat(trechos.get(0).texto()).contains("MASTER 40 20", "SUBCOTA G 20 10", "SUBCOTA 10 5");
         confereQueNadaSumiu(paginas);
     }
@@ -389,8 +462,8 @@ class DivisorDeTrechosTest {
         List<Trecho> trechos = divisor.dividir(paginas);
 
         assertThat(trechos).hasSize(1);
-        assertThat(trechos.get(0).secaoCaminho()).isEqualTo("3 Energia");
-        assertThat(trechos.get(0).texto()).isEqualTo("3.1 Pontos\n3.2 Tarifa\nA tarifa é de R$ 312,00 por kVA.");
+        assertThat(trechos.get(0).secaoCaminho()).as("só a última é o título; o ancestral de numeração prefixo fica junto").isEqualTo("3 Energia › 3.2 Tarifa");
+        assertThat(trechos.get(0).texto()).isEqualTo("3.1 Pontos\nA tarifa é de R$ 312,00 por kVA.");
         confereQueNadaSumiu(paginas);
     }
 
@@ -414,10 +487,7 @@ class DivisorDeTrechosTest {
             if ("D12".equals(documento.id())) {
                 continue;   // sem texto extraível
             }
-            List<Pagina> paginas = extrair(documento.id());
-            Set<String> faltando = palavrasENumeros(String.join("\n", DivisorDeTrechos.linhasMantidas(paginas)));
-            faltando.removeAll(palavrasENumeros(juncao(divisor.dividir(paginas))));
-            assertThat(faltando).as(documento.id() + ": palavras e números que sumiram").isEmpty();
+            assertThat(oQueSumiu(extrair(documento.id()))).as(documento.id() + ": palavras e números do texto cru que sumiram").isEmpty();
         }
     }
 
@@ -471,13 +541,21 @@ class DivisorDeTrechosTest {
 
     @Test
     void numeracaoDePaginaNaoImpedeQueORodapeSaia() {
-        for (String modelo : List.of("Página %d de 4", "Pág. %d", "%d/4", "%d", "- %d -", "Page %d of 4",
-                "Manual de Operações 2027 · Planeta 360 · Página %d de 4")) {
+        for (String modelo : List.of("Página %d de 4", "Pág. %d", "%d/4", "%d", "- %d -", "Page %d of 4", "%d/20")) {
             List<String> mantidas = DivisorDeTrechos.linhasMantidas(quatroPaginas(null, modelo, false));
 
             assertThat(mantidas).as(modelo).hasSize(16)
                     .noneMatch(linha -> IntStream.rangeClosed(1, 4).anyMatch(n -> linha.equals(modelo.formatted(n))));
         }
+    }
+
+    @Test
+    void rodapeComTextoENumeracaoDePaginaTemAlgarismoForaDaNumeracaoEFicaUmaVez() {
+        String modelo = "Manual de Operações 2027 · Planeta 360 · Página %d de 4";
+
+        List<String> mantidas = DivisorDeTrechos.linhasMantidas(quatroPaginas(null, modelo, false));
+
+        assertThat(mantidas).hasSize(17).containsOnlyOnce(modelo.formatted(1)).doesNotContain(modelo.formatted(2), modelo.formatted(3), modelo.formatted(4));
     }
 
     @Test
@@ -523,8 +601,11 @@ class DivisorDeTrechosTest {
 
         List<String> mantidas = DivisorDeTrechos.linhasMantidas(paginas);
 
-        assertThat(mantidas).noneMatch(linha -> linha.contains("DOCUMENTO FICTÍCIO"));
-        assertThat(mantidas.size()).as("duas linhas por página, nas 11 páginas").isEqualTo(paginas.stream().mapToInt(p -> p.linhas().size()).sum() - 2 * 11);
+        assertThat(mantidas.stream().filter(linha -> linha.contains("DOCUMENTO FICTÍCIO")).count()).as("o pé tem 360 e 2027: fica uma vez").isEqualTo(2);
+        assertThat(mantidas.stream().filter(linha -> linha.matches(".*Página \\d+ de 11")).toList()).containsExactly(
+                "DOCUMENTO FICTÍCIO · Planeta 360 · testes do Atlas · Manual de Operações 2027 Página 1 de 11");
+        assertThat(mantidas.size()).as("duas linhas por página, nas 11 páginas, e as da primeira ficam")
+                .isEqualTo(paginas.stream().mapToInt(p -> p.linhas().size()).sum() - 2 * 10);
     }
 
     // ---------------------------------------------------------------------
@@ -618,5 +699,351 @@ class DivisorDeTrechosTest {
         assertThat(DivisorDeTrechos.titulo("Este é um parágrafo comum de texto.")).isNull();
         assertThat(DivisorDeTrechos.titulo("kVA")).isNull();
         assertThat(DivisorDeTrechos.titulo("10 dB(A) medidos a 3 metros,")).isNull();
+    }
+
+    // ---------------------------------------------------------------------
+    // M3, segunda rodada de correção: só a última linha de uma sequência de títulos é o título (A)
+    // ---------------------------------------------------------------------
+
+    /** Cerca de 500 tokens em frases, para cada seção ter o seu trecho e os pequenos não se juntarem. */
+    private static String corpo(String assunto) {
+        return frases("O assunto " + assunto, 20);
+    }
+
+    private static List<String> caminhos(List<Trecho> trechos) {
+        return trechos.stream().map(Trecho::secaoCaminho).toList();
+    }
+
+    @Test
+    void numaSequenciaDeTitulosNumeradosSoAUltimaEhTituloEAAnteriorFicaNoTexto() {
+        List<Pagina> paginas = txt("1. Regras", corpo("Regras"), "2. Anexos", "3. Glossário", corpo("Glossário"), "3.1 Termos", corpo("Termos"),
+                "4. Fim", corpo("Fim"));
+
+        List<Trecho> trechos = divisor.dividir(paginas);
+
+        assertThat(caminhos(trechos)).containsExactly("1 Regras", "3 Glossário", "3 Glossário › 3.1 Termos", "4 Fim");
+        assertThat(trechos.get(0).texto()).as("2. Anexos fica no texto").endsWith("2. Anexos");
+        confereQueNadaSumiu(paginas);
+    }
+
+    @Test
+    void capituloEmDuasLinhasSoASegundaEhTitulo() {
+        List<Pagina> paginas = txt("CAPÍTULO I", "DAS OBRIGAÇÕES", corpo("Obrigações"), "CAPÍTULO II", "DOS PRAZOS", corpo("Prazos"), "CAPÍTULO III",
+                "DAS MULTAS", corpo("Multas"));
+
+        List<Trecho> trechos = divisor.dividir(paginas);
+
+        assertThat(caminhos(trechos)).containsExactly("DAS OBRIGAÇÕES", "DOS PRAZOS", "DAS MULTAS");
+        assertThat(trechos.get(0).texto()).startsWith("CAPÍTULO I\nDAS OBRIGAÇÕES\n");
+        assertThat(juncao(trechos)).contains("CAPÍTULO II", "CAPÍTULO III");
+        confereQueNadaSumiu(paginas);
+    }
+
+    @Test
+    void numeradoSeguidoDeSubtituloEmCaixaAltaSoOSubtituloEhTitulo() {
+        List<Pagina> paginas = txt("1. Abertura", corpo("Abertura"), "2. Energia", "TARIFAS", corpo("Tarifas"), "3. Seguros", corpo("Seguros"));
+
+        List<Trecho> trechos = divisor.dividir(paginas);
+
+        assertThat(caminhos(trechos)).containsExactly("1 Abertura", "TARIFAS", "3 Seguros");
+        assertThat(trechos.get(0).texto()).endsWith("2. Energia");
+        confereQueNadaSumiu(paginas);
+        assertThat(caminhos(divisor.dividir(txt("2. Energia", "TARIFAS", corpo("Tarifas"))))).as("sem seção antes, o 2 não segue a sequência").containsExactly("TARIFAS");
+    }
+
+    @Test
+    void sumarioColadoNoTituloDeVerdadeSoOTituloDeVerdadeVaiParaOCaminho() {
+        List<Pagina> paginas = txt("Sumário", "1. Apresentação", "2. Regras", "1. Apresentação", "1.1 Objetivo", corpo("Objetivo"), "2. Regras", corpo("Regras"));
+
+        List<Trecho> trechos = divisor.dividir(paginas);
+
+        assertThat(caminhos(trechos)).contains("1 Apresentação › 1.1 Objetivo", "2 Regras");
+        assertThat(trechos.get(0).texto()).as("o sumário fica no texto").startsWith("Sumário\n1. Apresentação\n2. Regras");
+        assertThat(caminhos(trechos)).noneMatch(c -> c != null && c.contains("Sumário"));
+        confereQueNadaSumiu(paginas);
+    }
+
+    @Test
+    void sumarioSeguidoDireitoDoTextoDoPrimeiroTitulo() {
+        List<Pagina> paginas = txt("CAPA DO MANUAL", corpo("Capa"), "Sumário", "1. Apresentação", "2. Energia", "3. Seguros", "", "1. Apresentação",
+                corpo("Apresentação"), "1.1 Objetivo", corpo("Objetivo"), "2. Energia", corpo("Energia"), "3. Seguros", corpo("Seguros"));
+
+        List<Trecho> trechos = divisor.dividir(paginas);
+
+        assertThat(caminhos(trechos)).containsExactly("CAPA DO MANUAL", "1 Apresentação", "1 Apresentação › 1.1 Objetivo", "2 Energia", "3 Seguros");
+        assertThat(trechos.get(0).texto()).as("o sumário ficou com a capa").endsWith("Sumário\n1. Apresentação\n2. Energia\n3. Seguros");
+        confereQueNadaSumiu(paginas);
+    }
+
+    @Test
+    void listaDeDocumentosExigidosComValorEmReaisSoOUltimoTituloVaiParaOCaminho() {
+        List<Pagina> paginas = txt("DOCUMENTOS EXIGIDOS", "1. Contrato assinado", "2. Apólice de R$ 2.000.000,00", "3. Comprovante", "ENTREGA", corpo("Entrega"));
+
+        List<Trecho> trechos = divisor.dividir(paginas);
+
+        assertThat(caminhos(trechos)).containsExactly("ENTREGA");
+        assertThat(trechos.get(0).texto()).startsWith("DOCUMENTOS EXIGIDOS\n1. Contrato assinado\n2. Apólice de R$ 2.000.000,00\n3. Comprovante\nENTREGA\n");
+        confereQueNadaSumiu(paginas);
+    }
+
+    @Test
+    void numeroDeUmNivelForaDaSequenciaEhItemDeListaENaoTitulo() {
+        List<Pagina> paginas = txt("INGRESSOS", "10 Ingressos Pista", "4 Ingressos Camarote", corpo("Ingressos"));
+
+        List<Trecho> trechos = divisor.dividir(paginas);
+
+        assertThat(caminhos(trechos)).containsExactly("INGRESSOS");
+        assertThat(trechos.get(0).texto()).contains("10 Ingressos Pista\n4 Ingressos Camarote");
+        confereQueNadaSumiu(paginas);
+
+        List<Pagina> data = txt("15 Janeiro de 2027", corpo("Janeiro"));
+        assertThat(caminhos(divisor.dividir(data))).as("sem sequência de títulos antes, 15 não é título").containsExactly((String) null);
+        assertThat(divisor.dividir(data).get(0).texto()).startsWith("15 Janeiro de 2027");
+        confereQueNadaSumiu(data);
+
+        List<Pagina> lista = txt("1. Regras", corpo("Regras"), "2. Prazos", corpo("Prazos"), "7 Pontos de venda", "1. Verifique o gerador", "2. Ligue o cabo",
+                "Depois confira a carga.", "3. Seguros", corpo("Seguros"));
+        assertThat(caminhos(divisor.dividir(lista))).as("a lista dentro da seção e o 7 não quebram a sequência").containsExactly("1 Regras", "2 Prazos", "3 Seguros");
+        confereQueNadaSumiu(lista);
+    }
+
+    @Test
+    void ancestralDeNumeracaoPrefixoFicaNoCaminhoESubtituloIrmaoFicaNoTexto() {
+        List<Pagina> paginas = txt("3. Energia", "3.1 Pontos", "3.2 Tarifa", corpo("Tarifa"), "3.3 Consumo", corpo("Consumo"));
+
+        List<Trecho> trechos = divisor.dividir(paginas);
+
+        assertThat(caminhos(trechos)).containsExactly("3 Energia › 3.2 Tarifa", "3 Energia › 3.3 Consumo");
+        assertThat(trechos.get(0).texto()).startsWith("3.1 Pontos\n");
+        confereQueNadaSumiu(paginas);
+        assertThat(caminhos(divisor.dividir(txt("3.2 Tarifa", corpo("Tarifa"), "3.3 Consumo", corpo("Consumo"))))).as("irmãos sem pai não se aninham")
+                .containsExactly("3.2 Tarifa", "3.3 Consumo");
+    }
+
+    @Test
+    void tituloComAlgarismoAlemDaNumeracaoFicaNoCaminhoETambemNoTexto() {
+        List<Pagina> paginas = txt("PLANO", corpo("Plano"), "TOTAL DE CREDENCIAIS 1800", corpo("Total"), "CAPACIDADE 40000", corpo("Capacidade"),
+                "PLANO COMERCIAL 2027", corpo("Comercial"), "1. Energia", corpo("Energia"), "1.1 Pontos de 220 V", corpo("Pontos"));
+
+        List<Trecho> trechos = divisor.dividir(paginas);
+
+        assertThat(caminhos(trechos)).containsExactly("PLANO", "TOTAL DE CREDENCIAIS 1800", "CAPACIDADE 40000", "PLANO COMERCIAL 2027", "1 Energia",
+                "1 Energia › 1.1 Pontos de 220 V");
+        assertThat(trechos.get(0).texto()).as("sem algarismo, o título só fica no caminho").doesNotContain("PLANO\n").startsWith("O assunto Plano 1");
+        assertThat(trechos.get(1).texto()).startsWith("TOTAL DE CREDENCIAIS 1800\n");
+        assertThat(trechos.get(2).texto()).startsWith("CAPACIDADE 40000\n");
+        assertThat(trechos.get(3).texto()).startsWith("PLANO COMERCIAL 2027\n");
+        assertThat(trechos.get(4).texto()).as("o 1 da numeração não conta como algarismo").startsWith("O assunto Energia 1");
+        assertThat(trechos.get(5).texto()).startsWith("1.1 Pontos de 220 V\n");
+        confereQueNadaSumiu(paginas);
+    }
+
+    @Test
+    void tituloComDataValorOuNumeroComSeparadorEhSoTexto() {
+        List<Pagina> paginas = txt("1. Energia", corpo("Energia"), "1.1 Tarifa por kVA: R$ 312,00", corpo("Tarifa"), "PRAZO 15/01/2027", corpo("Prazo"));
+
+        List<Trecho> trechos = divisor.dividir(paginas);
+
+        assertThat(trechos).allSatisfy(t -> assertThat(t.secaoCaminho()).isEqualTo("1 Energia"));
+        assertThat(juncao(trechos)).contains("1.1 Tarifa por kVA: R$ 312,00", "PRAZO 15/01/2027");
+        assertThat(DivisorDeTrechos.titulo("1.1 Tarifa por kVA: R$ 312,00")).isNull();
+        assertThat(DivisorDeTrechos.titulo("2. Apólice de R$ 2.000.000,00")).isNull();
+        assertThat(DivisorDeTrechos.titulo("3. Desconto de 15%")).isNull();
+        assertThat(DivisorDeTrechos.titulo("TOTAL DE CREDENCIAIS 1800")).isNotNull();
+        assertThat(DivisorDeTrechos.titulo("CAPACIDADE 40000")).isNotNull();
+        assertThat(DivisorDeTrechos.titulo("PLANO COMERCIAL 2027")).isNotNull();
+        confereQueNadaSumiu(paginas);
+    }
+
+    // ---------------------------------------------------------------------
+    // M3, segunda rodada de correção: cabeçalho e rodapé (B)
+    // ---------------------------------------------------------------------
+
+    /** Uma página por argumento: quatro linhas de texto diferentes e, no pé, o argumento. */
+    private static List<Pagina> comPes(String... pes) {
+        List<Pagina> paginas = new ArrayList<>();
+        for (int n = 1; n <= pes.length; n++) {
+            List<Linha> linhas = new ArrayList<>();
+            for (int k = 1; k <= 4; k++) {
+                linhas.add(new Linha("Parágrafo " + k + " único da página número " + n + " do relatório de testes.", 62, List.of(62.0), false));
+            }
+            linhas.add(new Linha(pes[n - 1], 62, List.of(62.0), false));
+            paginas.add(new Pagina(n, linhas));
+        }
+        return paginas;
+    }
+
+    private static long vezes(List<String> linhas, String linha) {
+        return linhas.stream().filter(linha::equals).count();
+    }
+
+    @Test
+    void numeroSoltoOuNSobreNSoEhNumeracaoSeAcompanharAPagina() {
+        for (String[] pes : new String[][] {{"1", "2", "3", "4"}, {"3", "4", "5", "6"}, {"1/4", "2/4", "3/4", "4/4"}, {"1/20", "2/20", "3/20", "4/20"},
+                {"- 1 -", "- 2 -", "- 3 -", "- 4 -"}, {"0", "1", "2", "3"}}) {
+            List<String> mantidas = DivisorDeTrechos.linhasMantidas(comPes(pes));
+
+            assertThat(mantidas).as(String.join(" ", pes)).hasSize(16).doesNotContainAnyElementsOf(List.of(pes));
+        }
+        for (String[] pes : new String[][] {{"40/20", "40/20", "40/20", "40/20"}, {"1800", "1800", "1800", "1800"}, {"2027", "2027", "2027", "2027"}}) {
+            List<String> mantidas = DivisorDeTrechos.linhasMantidas(comPes(pes));
+
+            assertThat(vezes(mantidas, pes[0])).as(pes[0] + " não é numeração: fica uma vez, na primeira página").isEqualTo(1);
+            assertThat(mantidas.indexOf(pes[0])).isEqualTo(4);
+            assertThat(mantidas).hasSize(17);
+        }
+    }
+
+    @Test
+    void numeroQueNaoAcompanhaAPaginaOuMudaDeTotalNaoEhNumeracao() {
+        for (String[] pes : new String[][] {{"11", "12", "13", "14"}, {"1/4", "2/5", "3/6", "4/7"}, {"1", "3", "5", "7"}, {"2027", "2028", "2029", "2030"}}) {
+            List<String> mantidas = DivisorDeTrechos.linhasMantidas(comPes(pes));
+
+            assertThat(mantidas).as(String.join(" ", pes)).hasSize(20).contains(pes);
+        }
+    }
+
+    @Test
+    void paginaEPagCotinuamNumeracaoSemConferirAContaDaPagina() {
+        assertThat(DivisorDeTrechos.linhasMantidas(comPes("Página 7 de 40", "Página 9 de 40", "Página 11 de 40", "Página 13 de 40"))).hasSize(16);
+        assertThat(DivisorDeTrechos.linhasMantidas(comPes("Pág. 7", "Pág. 9", "Pág. 11", "Pág. 13"))).hasSize(16);
+    }
+
+    @Test
+    void linhaRepetidaComAlgarismoForaDaNumeracaoFicaUmaVezNaPrimeiraPagina() {
+        List<Pagina> paginas = new ArrayList<>();
+        for (int n = 1; n <= 3; n++) {
+            List<Linha> linhas = new ArrayList<>();
+            linhas.add(new Linha("Texto um da página " + n + " do relatório.", 62, List.of(62.0), false));
+            linhas.add(new Linha("Texto dois da página " + n + " do relatório.", 62, List.of(62.0), false));
+            linhas.add(new Linha("Cortesias 40 por cota", 62, List.of(62.0), false));
+            linhas.add(new Linha("Prazo 15-01-2027", 62, List.of(62.0), false));
+            linhas.add(new Linha("Entrega ate 15 de janeiro", 62, List.of(62.0), false));
+            paginas.add(new Pagina(n, linhas));
+        }
+
+        List<String> mantidas = DivisorDeTrechos.linhasMantidas(paginas);
+
+        for (String linha : List.of("Cortesias 40 por cota", "Prazo 15-01-2027", "Entrega ate 15 de janeiro")) {
+            assertThat(vezes(mantidas, linha)).as(linha).isEqualTo(1);
+        }
+        assertThat(mantidas.indexOf("Cortesias 40 por cota")).as("na primeira página").isLessThan(mantidas.indexOf("Texto um da página 2 do relatório."));
+        assertThat(juncao(divisor.dividir(paginas))).contains("Cortesias 40 por cota", "Prazo 15-01-2027", "Entrega ate 15 de janeiro");
+        confereQueNadaSumiu(paginas);
+    }
+
+    @Test
+    void umTxtNaoTemCabecalhoNemRodapeEnadaSaiDele() {
+        for (List<String> linhas : List.of(
+                List.of("Pergunta um?", "Sim.", "Pergunta dois?", "A resposta longa da pergunta dois.", "Pergunta três?", "Sim."),
+                List.of("Limite 40 credenciais", "Texto do meio um.", "Texto do meio dois.", "Texto do meio três.", "Texto do meio quatro.", "Limite 40 credenciais"),
+                List.of("2. Energia", "A energia é contratada.", "Outro parágrafo da energia.", "Mais um parágrafo da energia.", "Fecha a energia.", "2. Energia"),
+                List.of("TOPO FIXO", "Um.", "Dois.", "Três.", "Quatro.", "TOPO FIXO"))) {
+            List<Pagina> paginas = txt(linhas.toArray(String[]::new));
+
+            assertThat(DivisorDeTrechos.linhasMantidas(paginas)).as(String.join(" | ", linhas)).containsExactlyElementsOf(linhas);
+            confereQueNadaSumiu(paginas);
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // M3, segunda rodada de correção: o limite de 1.500 tokens com o separador na conta (C)
+    // ---------------------------------------------------------------------
+
+    /** Uma frase de exatamente {@code caracteres} caracteres, que começa em maiúscula e termina em ponto. */
+    private static String fraseDeCaracteres(String inicio, int caracteres) {
+        StringBuilder frase = new StringBuilder(inicio);
+        while (frase.length() < caracteres - 1) {
+            frase.append(" palavra");
+        }
+        frase.setLength(caracteres - 1);
+        if (frase.charAt(frase.length() - 1) == ' ') {
+            frase.setCharAt(frase.length() - 1, 'x');
+        }
+        return frase.append('.').toString();
+    }
+
+    @Test
+    void oSeparadorEntraNaContaDoLimiteDeTokens() {
+        String a = fraseDeCaracteres("Primeira frase", 2000);
+        String b = fraseDeCaracteres("Segunda frase", 4000);
+
+        List<Trecho> trechos = divisor.dividir(paginas("1. Texto grande\n" + a + "\n" + b));
+
+        assertThat(trechos).allSatisfy(t -> {
+            assertThat(t.texto().length()).isLessThanOrEqualTo(DivisorDeTrechos.LIMITE_DE_TOKENS * DivisorDeTrechos.CARACTERES_POR_TOKEN);
+            assertThat(t.tokens()).isLessThanOrEqualTo(DivisorDeTrechos.LIMITE_DE_TOKENS);
+        });
+        assertThat(trechos).extracting(Trecho::tokens).as("a sobreposição estouraria o limite por 1 caractere: o trecho vai sem ela").containsExactly(500, 1000);
+    }
+
+    @Test
+    void somaExatamenteIgualAoLimiteCabeEASobreposicaoEntra() {
+        String a = fraseDeCaracteres("Primeira frase", 2000);
+        String b = fraseDeCaracteres("Segunda frase", 3999);
+
+        List<Trecho> trechos = divisor.dividir(paginas("1. Texto grande\n" + a + "\n" + b));
+
+        assertThat(trechos).extracting(Trecho::tokens).containsExactly(500, DivisorDeTrechos.LIMITE_DE_TOKENS);
+        assertThat(trechos.get(1).texto()).hasSize(6000).startsWith(a).endsWith(b);
+    }
+
+    @Test
+    void nenhumTrechoPassaDoLimiteComFrasesDeTamanhoAleatorioNemComTituloComAlgarismo() {
+        Random sorteio = new Random(7);
+        for (int vez = 0; vez < 1500; vez++) {
+            StringBuilder documento = new StringBuilder(vez % 2 == 0 ? "1. Texto\n" : "RELATÓRIO DE 2027\n");
+            int quantas = 2 + sorteio.nextInt(6);
+            for (int i = 0; i < quantas; i++) {
+                documento.append(fraseDeCaracteres("Frase " + i, 200 + sorteio.nextInt(30) * 200)).append(sorteio.nextBoolean() ? "\n" : " ");
+            }
+            for (Trecho trecho : divisor.dividir(paginas(documento.toString()))) {
+                assertThat(trecho.tokens()).as(documento.toString().substring(0, 40) + " vez " + vez).isLessThanOrEqualTo(DivisorDeTrechos.LIMITE_DE_TOKENS);
+            }
+        }
+    }
+
+    @Test
+    void tabelaComUmaLinhaMaiorQueOLimiteTambemNaoPassa() {
+        List<Linha> linhas = new ArrayList<>();
+        linhas.add(new Linha("1. Valores", 62, List.of(62.0), false));
+        linhas.add(new Linha("Tabela 1 · Valores", 62, List.of(62.0), true));
+        linhas.add(new Linha("Item Valor", 70, List.of(70.0, 300.0), true));
+        linhas.add(new Linha("Item " + "comprido ".repeat(1500) + "R$ 1,00", 70, List.of(70.0, 300.0), true));
+
+        List<Trecho> trechos = divisor.dividir(List.of(new Pagina(1, linhas)));
+
+        assertThat(trechos).isNotEmpty().allSatisfy(t -> assertThat(t.tokens()).isLessThanOrEqualTo(DivisorDeTrechos.LIMITE_DE_TOKENS));
+    }
+
+    // ---------------------------------------------------------------------
+    // M3, segunda rodada de correção: fuzz, o que sumiu e o limite, partindo do texto cru (D)
+    // ---------------------------------------------------------------------
+
+    @Test
+    void fuzzNadaSomeDoTextoCruENenhumTrechoPassaDoLimite() {
+        String[] tipos = {"1. Apresentação", "1.1 Objetivo", "2 Energia", "2.3.4 Detalhe", "CRONOGRAMA", "MASTER 40 20", "PRAZO 15/01/2027", "Sumário",
+                "O texto da regra é este.", "Uma frase sem ponto", "outra minúscula", "Linha com hífen-", "feira e resto.", "• item da lista",
+                "- item com traço;", "Tarifa por kVA: R$ 312,00", "", "", "40", "Página 3 de 9", "Sr. Fulano veio. Dr. Beltrano também!", "3 Ingressos Pista",
+                "A: b:", "10 de Janeiro de 2027", "ÁREA 51", "ANEXO I", "Tabela 1 · Marcos", "TOTAL DE CREDENCIAIS 1800", "2. Apólice de R$ 100,00",
+                "CAPÍTULO II", "DAS MULTAS", "1/9", "Sim."};
+        Random sorteio = new Random(11);
+        for (int vez = 0; vez < 4000; vez++) {
+            int quantasPaginas = 1 + sorteio.nextInt(3);
+            String[] textos = new String[quantasPaginas];
+            for (int p = 0; p < quantasPaginas; p++) {
+                StringBuilder pagina = new StringBuilder();
+                int quantasLinhas = 1 + sorteio.nextInt(10);
+                for (int k = 0; k < quantasLinhas; k++) {
+                    pagina.append(tipos[sorteio.nextInt(tipos.length)]).append(k + 1 < quantasLinhas ? "\n" : "");
+                }
+                textos[p] = pagina.toString();
+            }
+            List<Pagina> paginas = paginas(textos);
+
+            assertThat(oQueSumiu(paginas)).as("vez " + vez + ": " + Arrays.toString(textos)).isEmpty();
+            assertThat(divisor.dividir(paginas)).as("vez " + vez + ": " + Arrays.toString(textos))
+                    .allSatisfy(t -> assertThat(t.tokens()).isLessThanOrEqualTo(DivisorDeTrechos.LIMITE_DE_TOKENS));
+        }
     }
 }
