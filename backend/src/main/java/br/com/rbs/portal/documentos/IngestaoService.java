@@ -32,9 +32,8 @@ import java.util.concurrent.FutureTask;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.SmartInitializingSingleton;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.context.event.ApplicationReadyEvent;
-import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -44,7 +43,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 /**
  * A ingestão dos documentos aprovados (I1 a I6 do quadro, M3 do plano do Atlas completo). [ATLAS] Aprovar um documento (rota 57)
  * o põe em PROCESSANDO e chama {@link #depoisDoCommit(long)}, que enfileira a tarefa <b>depois do commit</b> num executor próprio
- * ({@code atlas-ingestao-}, 2 threads). A fila fica na memória: na subida da API, o PROCESSANDO que sobrou de uma queda vira ERRO
+ * ({@code atlas-ingestao-}, 2 threads). A fila fica na memória: na subida da API, <b>antes de ela atender e antes dos
+ * {@code ApplicationRunner}</b> (como {@link SmartInitializingSingleton}), o PROCESSANDO que sobrou de uma queda vira ERRO
  * ("processamento interrompido") e o "Reindexar" recomeça. Os passos, cada um numa transação curta:
  * <ol>
  *   <li>extrair o texto do arquivo (sem transação);</li>
@@ -63,7 +63,7 @@ import org.springframework.transaction.support.TransactionTemplate;
  * o passo que falha é desfeito.
  */
 @Service
-public class IngestaoService {
+public class IngestaoService implements SmartInitializingSingleton {
 
     private static final Logger log = LoggerFactory.getLogger(IngestaoService.class);
     static final String PROCESSAMENTO_INTERROMPIDO = "Processamento interrompido: a API foi reiniciada antes de terminar. Reindexe o documento.";
@@ -297,8 +297,14 @@ public class IngestaoService {
     // Na subida da API
     // ---------------------------------------------------------------------
 
-    @EventListener(ApplicationReadyEvent.class)
-    void aoSubir() {
+    /**
+     * Roda quando todos os beans já existem e <b>antes</b> de a API atender e de qualquer {@code ApplicationRunner} (o
+     * {@code DocumentosDaAmostra} sobe o kit, e um documento aprovado nesse meio tempo está de verdade em processamento). O Flyway já
+     * rodou: o {@code JdbcClient} do repositório depende da migração (DatabaseInitializationDependencyConfigurer do Spring Boot).
+     * No {@code ApplicationReadyEvent}, que vem depois dos runners, uma tarefa em andamento era marcada como órfã.
+     */
+    @Override
+    public void afterSingletonsInstantiated() {
         recuperarOrfaos();
         avisarModeloDiferente();
     }

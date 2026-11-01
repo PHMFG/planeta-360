@@ -1964,7 +1964,7 @@ envio de PDF sem texto, com senha ou corrompido -> nasce ERRO (sem aprovado_por)
 | --- | --- |
 | `AGUARDANDO_APROVACAO` | Enviado e lido; espera a RBS. Se `contemDadosPessoais` é `true`, a aprovação é recusada pelo banco (409). |
 | `RECUSADO` | A RBS recusou. Final. |
-| `PROCESSANDO` | Aprovado; a indexação (extrair, dividir, embeddings, gravar os trechos) roda em segundo plano. Leva de poucos segundos a um minuto; a tela busca de novo ao voltar à aba do navegador. Se a API cair no meio, ele vira `ERRO` ("Processamento interrompido") na subida seguinte. |
+| `PROCESSANDO` | Aprovado; a indexação (extrair, dividir, embeddings, gravar os trechos) roda em segundo plano. Leva de poucos segundos a um minuto; a tela busca de novo ao voltar à aba do navegador. Se a API cair no meio, ele vira `ERRO` ("Processamento interrompido") na subida seguinte, **antes** de a API começar a atender; um documento aprovado durante a própria subida (enquanto a amostra ainda carrega) não é tocado. |
 | `INDEXADO` | Os trechos estão no ar: a busca os enxerga. |
 | `ERRO` | A indexação falhou (ou o texto não pôde ser lido); `erro` diz o motivo. Qualquer falha vira `ERRO`, também a inesperada, até um erro do próprio JVM (`"Falha inesperada na indexação (StackOverflowError). Veja o log da API."`): o documento nunca fica preso em `PROCESSANDO`. Se o documento já tinha sido aprovado, dá para `REINDEXAR`. |
 | `SUBSTITUIDO` | Uma versão mais nova do mesmo grupo foi indexada. Os trechos ficam, inativos. |
