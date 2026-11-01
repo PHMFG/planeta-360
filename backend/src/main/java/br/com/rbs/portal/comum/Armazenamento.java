@@ -76,6 +76,27 @@ public class Armazenamento {
     }
 
     /**
+     * Grava o arquivo de um documento do Atlas (rota 54): categoria DOCUMENTO, só PDF ou TXT (as outras extensões dão 415 com a lista
+     * dos dois). {@code parceriaId} nulo = arquivo geral da RBS (documento GLOBAL ou de COTA); preenchido, o arquivo é da parceria
+     * (documento PARCERIA) e o gatilho do documento confere que as duas pontas batem. Sem aba, de propósito: a marca nunca baixa
+     * este arquivo pela rota 18 (o ArquivoRepositorio sabe que ele é de um documento). Chame de dentro de uma transação, como
+     * {@link #gravar(byte[], String, String, long, Long)}.
+     */
+    public Arquivo gravarDocumento(byte[] conteudo, String nomeOriginal, long enviadoPor, Long parceriaId) {
+        Preparado pronto = preparar(conteudo, nomeOriginal, true);
+        String caminho = (parceriaId == null ? "geral" : "parcerias/" + parceriaId) + "/" + pronto.nomeNoDisco();
+        escrever(caminho, conteudo);
+        return inserir("""
+                        INSERT INTO arquivo (parceria_id, categoria, nome_original, mime_type, tamanho_bytes, caminho,
+                                             hash_sha256, enviado_por)
+                        VALUES (:parceriaId, 'DOCUMENTO', :nome, :mime, :tamanho, :caminho, :hash, :enviadoPor)
+                        RETURNING\s""" + COLUNAS,
+                Map.of("nome", pronto.nomeOriginal(), "mime", pronto.tipo().mime(), "tamanho", (long) conteudo.length,
+                        "caminho", caminho, "hash", pronto.hash(), "enviadoPor", enviadoPor),
+                parceriaId, caminho);
+    }
+
+    /**
      * Grava um arquivo avulso de uma parceria (sem entrega) que pertence a uma aba, por exemplo a foto de comprovação de uma
      * aplicação, na aba APLICACOES. [PERMISSAO] A aba importa: o download (rota 18) só confere se a aba está aberta para a
      * marca quando o arquivo tem aba; sem ela, a marca baixaria o arquivo com a aba fechada. O {@code abaCodigo} é um dos 7
@@ -185,6 +206,14 @@ public class Armazenamento {
 
     /** [UPLOAD] Vazio (422), grande demais (413), extensão fora da lista ou conteúdo que não bate com ela (415). */
     private Preparado preparar(byte[] conteudo, String nomeInformado) {
+        return preparar(conteudo, nomeInformado, false);
+    }
+
+    /**
+     * O mesmo, para os dois tipos de arquivo: o comum (a lista de {@link TipoDeArquivo#listaDeExtensoes()}, sem o TXT) e o do
+     * documento do Atlas (só PDF e TXT). [ATLAS] O .txt só existe na rota 54: a rota 17 continua recusando.
+     */
+    private Preparado preparar(byte[] conteudo, String nomeInformado, boolean documento) {
         if (conteudo == null || conteudo.length == 0) {
             throw new DadosInvalidosException(Map.of("arquivo", "O arquivo está vazio."));
         }
@@ -193,9 +222,11 @@ public class Armazenamento {
                     "O arquivo passa do limite de " + descreverLimite() + ". Envie um arquivo menor.");
         }
         String nome = limparNome(nomeInformado);
-        TipoDeArquivo tipo = TipoDeArquivo.daExtensao(nome).orElseThrow(() -> new ArquivoRecusadoException(
-                HttpStatus.UNSUPPORTED_MEDIA_TYPE,
-                "Este tipo de arquivo não é aceito. Envie um destes: " + TipoDeArquivo.listaDeExtensoes() + "."));
+        TipoDeArquivo tipo = TipoDeArquivo.daExtensao(nome)
+                .filter(t -> documento ? t == TipoDeArquivo.PDF || t == TipoDeArquivo.TXT : t != TipoDeArquivo.TXT)
+                .orElseThrow(() -> new ArquivoRecusadoException(HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+                        "Este tipo de arquivo não é aceito. Envie um destes: "
+                                + (documento ? "pdf, txt" : TipoDeArquivo.listaDeExtensoes()) + "."));
         if (!tipo.conteudoConfere(conteudo)) {
             throw new ArquivoRecusadoException(HttpStatus.UNSUPPORTED_MEDIA_TYPE, frasePorConteudo(tipo, conteudo));
         }

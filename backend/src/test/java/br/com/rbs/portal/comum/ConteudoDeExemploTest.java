@@ -32,6 +32,13 @@ class ConteudoDeExemploTest {
     }
 
     @Test
+    void txtDeExemploDizQueEFicticioComONomeDoArquivoEEUtf8() {
+        String texto = new String(ConteudoDeExemplo.para("faq_do_patrocinador.txt").orElseThrow(), StandardCharsets.UTF_8);
+
+        assertThat(texto).startsWith("Arquivo de exemplo").contains("faq_do_patrocinador.txt").contains("fictício");
+    }
+
+    @Test
     void extensaoForaDaListaNaoGeraNada() {
         assertThat(ConteudoDeExemplo.para("programa.exe")).isEmpty();
         assertThat(ConteudoDeExemplo.para("sem-extensao")).isEmpty();

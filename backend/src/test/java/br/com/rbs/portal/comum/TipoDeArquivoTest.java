@@ -64,7 +64,7 @@ class TipoDeArquivoTest {
     void assinaturasErradasOuCurtasDemaisReprovam() {
         byte[] executavel = bytes('M', 'Z', 0x90, 0, 3, 0, 0, 0, 4, 0, 0, 0);
         for (TipoDeArquivo tipo : TipoDeArquivo.values()) {
-            if (tipo != TipoDeArquivo.CSV) {
+            if (tipo != TipoDeArquivo.CSV && tipo != TipoDeArquivo.TXT) {
                 assertThat(tipo.conteudoConfere(executavel)).as(tipo.name() + " com executável").isFalse();
                 assertThat(tipo.conteudoConfere(new byte[0])).as(tipo.name() + " vazio").isFalse();
                 assertThat(tipo.conteudoConfere(bytes(0x00))).as(tipo.name() + " curto").isFalse();
@@ -87,6 +87,18 @@ class TipoDeArquivoTest {
         assertThat(TipoDeArquivo.CSV.conteudoConfere(bytes('a', ';', 0xE7, 0xE3, 'o'))).as("Latin-1 não é UTF-8").isFalse();
         assertThat(TipoDeArquivo.CSV.conteudoConfere(bytes('a', 0xC3))).as("UTF-8 cortado no meio de uma letra").isFalse();
         assertThat(TipoDeArquivo.CSV.conteudoConfere(bytes(0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A))).isFalse();
+    }
+
+    @Test
+    void txtEOTipoDosDocumentosDoAtlasEFicaForaDaListaDosEnviosComuns() {
+        assertThat(TipoDeArquivo.TXT.mime()).isEqualTo("text/plain");
+        assertThat(TipoDeArquivo.daExtensao("faq.TXT")).contains(TipoDeArquivo.TXT);
+        assertThat(TipoDeArquivo.listaDeExtensoes()).as("a frase do 415 dos envios comuns não cita o txt").doesNotContain("txt");
+        assertThat(TipoDeArquivo.TXT.conteudoConfere("Pergunta frequente: horário dos portões.\n".getBytes(StandardCharsets.UTF_8))).isTrue();
+        assertThat(TipoDeArquivo.TXT.conteudoConfere("ação".getBytes(StandardCharsets.UTF_8))).isTrue();
+        assertThat(TipoDeArquivo.TXT.conteudoConfere(bytes('a', 0, 'b'))).as("byte nulo").isFalse();
+        assertThat(TipoDeArquivo.TXT.conteudoConfere(bytes('a', ';', 0xE7, 0xE3, 'o'))).as("Latin-1 não é UTF-8").isFalse();
+        assertThat(TipoDeArquivo.TXT.conteudoConfere(bytes('M', 'Z', 0x90, 0, 3, 0, 0, 0, 4, 0, 0, 0))).as("executável").isFalse();
     }
 
     @Test
