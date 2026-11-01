@@ -47,6 +47,9 @@ class ConversaComDocumentoRetiradoTest extends ApoioDeDocumentos {
     @Autowired
     ProvedorRoteirizado modelo;
 
+    @Autowired
+    IngestaoService ingestao;
+
     @BeforeEach
     void zerarORoteiro() {
         modelo.limpar();
@@ -160,5 +163,31 @@ class ConversaComDocumentoRetiradoTest extends ApoioDeDocumentos {
                 .filter(ItemTexto.class::isInstance).map(ItemTexto.class::cast).flatMap(t -> t.fontes().stream()).toList();
         assertThat(fontes.get(0).substituido()).isTrue();
         assertThat(fontes.get(0).revogado()).isFalse();
+    }
+
+    @Test
+    void aRbsPublicaUmaVersaoNovaDeVerdadeEAVersaoQueAConversaCitouSaiDoArNoPromptDoTurnoSeguinte() {
+        long conversa = abrir();
+        FonteDoTexto fonte = primeiroTurno(conversa).fontes().get(0);
+        SessaoDeApi rbs = entrar(RBS);
+        Map<String, String> campos = global("Manual de Operações 2027", "manual-operacoes");
+        campos.put("tipo", "MANUAL_OPERACOES");
+        long v3 = enviarOk(rbs, "manual-novo.pdf", KitDeDocumentos.por("D02").conteudo(), campos);
+        assertThat(acao(rbs, v3, "APROVAR")).hasStatus(HttpStatus.OK);
+        ingestao.processar(v3);
+        assertThat(statusDe(fonte.documentoId())).isEqualTo("SUBSTITUIDO");
+        assertThat(statusDe(v3)).isEqualTo("INDEXADO");
+        modelo.limpar();
+        modelo.texto("Entendi.");
+
+        falar(conversa, "E agora?");
+
+        String prompt = modelo.pedidos().get(0).mensagens().get(0).conteudo();
+        assertThat(prompt).contains(NOTA).contains("- Manual de Operações 2027 v2 não vale mais: não use o que foi dito dele.");
+        assertThat(prompt).as("a v3, que vale, não entra na nota").doesNotContain("Manual de Operações 2027 v3");
+        FonteDoTexto reaberta = atlas.verConversa(usuario(jdbc, AMARELO), conversa).itens().stream().filter(ItemTexto.class::isInstance)
+                .map(ItemTexto.class::cast).flatMap(t -> t.fontes().stream()).findFirst().orElseThrow();
+        assertThat(reaberta.substituido()).isTrue();
+        assertThat(reaberta.revogado()).isFalse();
     }
 }
