@@ -83,7 +83,7 @@ public class PermissaoAntesDoCorpo implements HandlerInterceptor, WebMvcConfigur
 
     /**
      * As rotas que só o Admin Patrocinador usa e que a RBS não usa por ele: a conversa com o Atlas e o cartão de perguntas (rotas 42
-     * a 46 do docs/api.md) e o diagnóstico da conversa, do dono dela (rota 49). A RBS só lê o relatório que o Atlas montou (rotas 47
+     * a 46 do docs/api.md), o diagnóstico da conversa, do dono dela (rota 49), e o descarte do relatório (rota 65). A RBS só lê o relatório que o Atlas montou (rotas 47
      * e 48, que não estão aqui) e o diagnóstico de todas as conversas (rotas 50 a 53, na lista da RBS). Rota nova só da marca:
      * acrescente aqui.
      */
@@ -93,7 +93,9 @@ public class PermissaoAntesDoCorpo implements HandlerInterceptor, WebMvcConfigur
             "POST /api/atlas/conversas/{id}/mensagens",
             "GET /api/atlas/conversas/{id}",
             "POST /api/atlas/solicitacoes/{id}/respostas",
-            "GET /api/atlas/conversas/{id}/diagnostico");
+            "GET /api/atlas/conversas/{id}/diagnostico",
+            // Descartar o relatório pela tela (rota 65): existe só com atlas.relatorio.ligado=true, como as rotas 46 a 48.
+            "POST /api/atlas/relatorios/{id}/descartar");
 
     /** PUT /api/parcerias/{id}/pesquisa/perguntas: do Admin Patrocinador da parceria, com a aba liberada. */
     static final String ENVIO_DAS_PERGUNTAS = "PUT /api/parcerias/{id}/pesquisa/perguntas";

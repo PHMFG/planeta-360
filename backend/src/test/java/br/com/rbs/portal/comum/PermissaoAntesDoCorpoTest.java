@@ -258,7 +258,7 @@ class PermissaoAntesDoCorpoTest {
                         PermissaoAntesDoCorpo.ROTAS_SO_DO_PATROCINADOR, ROTAS_DO_PATROCINADOR));
         assertThat(PermissaoAntesDoCorpo.ROTAS_SO_DA_RBS).as("uma rota não é das duas listas")
                 .doesNotContainAnyElementsOf(PermissaoAntesDoCorpo.ROTAS_SO_DO_PATROCINADOR);
-        assertThat(PermissaoAntesDoCorpo.ROTAS_SO_DO_PATROCINADOR).hasSize(6);
+        assertThat(PermissaoAntesDoCorpo.ROTAS_SO_DO_PATROCINADOR).hasSize(7);
     }
 
     @SafeVarargs

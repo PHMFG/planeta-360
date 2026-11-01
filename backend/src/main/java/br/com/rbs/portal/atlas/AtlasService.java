@@ -8,6 +8,7 @@ import br.com.rbs.portal.atlas.AtlasDtos.MensagemRequisicao;
 import br.com.rbs.portal.atlas.AtlasDtos.RelatorioDaConversaDto;
 import br.com.rbs.portal.atlas.AtlasDtos.RespostaDoCartaoRequisicao;
 import br.com.rbs.portal.atlas.AtlasRepositorio.LinhaDeConversa;
+import br.com.rbs.portal.atlas.AtlasRepositorio.LinhaDeRelatorio;
 import br.com.rbs.portal.atlas.AtlasRepositorio.LinhaDeSolicitacao;
 import br.com.rbs.portal.atlas.contexto.AtlasContexto;
 import br.com.rbs.portal.atlas.contexto.AtlasContextoFabrica;
@@ -338,6 +339,30 @@ public class AtlasService {
     /** Rota 48. Usuários da parceria e a RBS. */
     public List<RelatorioAtlasResumoDto> listarRelatorios(UsuarioAutenticado usuario, long parceriaId) {
         return relatorios.listar(usuario, parceriaId);
+    }
+
+    // ---------------------------------------------------------------------
+    // Rota 65: descartar o relatório pela tela
+    // ---------------------------------------------------------------------
+
+    /**
+     * Rota 65. Descarta o relatório de trabalho que a pessoa não quer mais: {@code MONTANDO} ou {@code AGUARDANDO_RESPOSTA} vira
+     * {@code DESCARTADO}, o cartão pendente vira {@code CANCELADA} e a chamada que ele deixou aberta é fechada com {@code cancel}
+     * (a conversa deixa de esperar a resposta e pode começar outro relatório). Devolve o mesmo corpo da rota 47. Ordem das
+     * respostas: 403 (RBS), 404 (não existe ou é de outra parceria), 403 (aba do modelo fechada para a marca), 409 (já está pronto;
+     * turno em andamento na conversa). Já descartado: 200 sem mudar nada, sem nova linha no histórico. O relatório é da parceria:
+     * qualquer Admin Patrocinador dela descarta. O turno da conversa é pego durante o descarte, como nas outras rotas do turno.
+     */
+    public RelatorioAtlasDto descartarRelatorio(UsuarioAutenticado usuario, long relatorioId, HttpServletRequest requisicao) {
+        verificador.exigirPatrocinador(usuario, VerificadorDeAcesso.SO_PATROCINADOR_USA_O_ATLAS);
+        LinhaDeRelatorio relatorio = relatorios.exigirAcesso(usuario, relatorioId);
+        if ("PRONTO".equals(relatorio.status())) {
+            throw new ConflitoException(DescarteDeRelatorios.JA_ESTA_PRONTO);
+        }
+        if (!"DESCARTADO".equals(relatorio.status())) {
+            comTurno(relatorio.conversaId(), () -> descarte.descartarDaTela(relatorioId, usuario, requisicao));
+        }
+        return relatorios.ver(usuario, relatorioId);
     }
 
     // ---------------------------------------------------------------------

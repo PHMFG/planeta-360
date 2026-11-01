@@ -204,8 +204,22 @@ class AtlasSoChatTest {
     }
 
     // ---------------------------------------------------------------------
-    // Rotas 46, 47 e 48 não existem
+    // Rotas 46, 47, 48 e 65 não existem
     // ---------------------------------------------------------------------
+
+    @Test
+    void aRota65DescartarDa404ComoRotaQueNaoExisteENadaMuda() {
+        long conversa = conversaAntigaComCartao();
+        long relatorio = jdbc.sql("SELECT id FROM atlas_relatorio WHERE conversa_id = :c").param("c", conversa).query(Long.class).single();
+
+        for (String email : List.of(AMARELO, RBS, ROXO)) {
+            MvcTestResult resposta = entrar(email).post("/api/atlas/relatorios/" + relatorio + "/descartar", null);
+            assertThat(resposta).as(email).hasStatus(HttpStatus.NOT_FOUND);
+            assertThat(lerJson(resposta, "$.status")).isEqualTo(404);
+        }
+        assertThat(jdbc.sql("SELECT status FROM atlas_relatorio WHERE id = :r").param("r", relatorio).query(String.class).single())
+                .isEqualTo("AGUARDANDO_RESPOSTA");
+    }
 
     @Test
     void asRotas46a48DaoNotFoundComoRotaQueNaoExiste() {

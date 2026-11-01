@@ -590,10 +590,8 @@ public class RelatorioAtlasService {
      */
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public RelatorioAtlasDto ver(UsuarioAutenticado usuario, long relatorioId) {
-        LinhaDeRelatorio relatorio = repositorio.relatorio(relatorioId).orElseThrow(() -> new NaoEncontradoException(NAO_ENCONTRADO));
-        exigirParceriaDoRecurso(usuario, relatorio.parceriaId());
+        LinhaDeRelatorio relatorio = exigirAcesso(usuario, relatorioId);
         Especificacao especificacao = ler(relatorio);
-        verificador.exigirAbaLiberada(usuario, relatorio.parceriaId(), especificacao.aba());
         SnapshotDto conteudo = "PRONTO".equals(relatorio.status()) && relatorio.snapshot() != null
                 ? AtlasJson.ler(relatorio.snapshot(), SnapshotDto.class)
                 : montador.montar(especificacao, resolvedor.abrirDoRelatorio(usuario, relatorio.parceriaId(), especificacao, relatorio.id()));
@@ -602,6 +600,17 @@ public class RelatorioAtlasService {
                 new UsuarioResumoDto(relatorio.criadoPor(), relatorio.criadoPorNome(), relatorio.criadoPorPerfil()),
                 Datas.emBrasilia(relatorio.criadoEm()), Datas.emBrasilia(relatorio.finalizadoEm()),
                 RelatorioAtlasDtos.SELO, conteudo.secoes());
+    }
+
+    /**
+     * O relatório que o usuário pode alcançar: 404 se não existe ou é de outra parceria (a mesma frase), 403 se a aba do modelo está
+     * fechada para a marca. É a conferência das rotas 47 e 65, que partem da mesma regra de acesso (o relatório é da parceria).
+     */
+    public LinhaDeRelatorio exigirAcesso(UsuarioAutenticado usuario, long relatorioId) {
+        LinhaDeRelatorio relatorio = repositorio.relatorio(relatorioId).orElseThrow(() -> new NaoEncontradoException(NAO_ENCONTRADO));
+        exigirParceriaDoRecurso(usuario, relatorio.parceriaId());
+        verificador.exigirAbaLiberada(usuario, relatorio.parceriaId(), ler(relatorio).aba());
+        return relatorio;
     }
 
     /**
