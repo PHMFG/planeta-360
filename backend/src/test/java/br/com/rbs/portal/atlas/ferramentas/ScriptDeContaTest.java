@@ -223,6 +223,30 @@ class ScriptDeContaTest {
                 .hasMessageContaining("pct(parte, todo)");
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "a / b * 100 / b",
+            "a / 100 * 100 / b",
+            "100 / b + a",
+            "(a + 100) / b",
+    })
+    void oCemQueMultiplicaOuQueNaoEODivisorContinuaPedindoOPctQuandoHaDivisaoPorVariavel(String script) {
+        assertThatThrownBy(() -> conferir(script, declaradas(script))).as(script).isInstanceOf(DadosInvalidosException.class)
+                .hasMessageContaining("pct(parte, todo)");
+    }
+
+    @Test
+    void oCemComoDivisorNaoEPercentualAMaoMesmoComDivisaoPorVariavel() {
+        Set<String> pvn = Set.of("p", "v", "n");
+        // "10% de 450 entre 3 geradores": p * v / 100 / n
+        assertThatCode(() -> conferir("p * v / 100 / n", pvn)).doesNotThrowAnyException();
+        assertThatCode(() -> conferir("a / 100 / b", AB)).doesNotThrowAnyException();
+        assertThatCode(() -> conferir("(a / 100) / b", AB)).doesNotThrowAnyException();
+        assertThatCode(() -> conferir("a / b / 100", AB)).doesNotThrowAnyException();
+        assertThatCode(() -> conferir("p * v / (100) / n", pvn)).doesNotThrowAnyException();
+        assertThatCode(() -> conferir("a * b / 100", AB)).doesNotThrowAnyException();
+    }
+
     @Test
     void aConstanteCemSemDivisaoPorVariavelContinuaValendo() {
         assertThatCode(() -> conferir("a * b / 100", AB)).doesNotThrowAnyException();

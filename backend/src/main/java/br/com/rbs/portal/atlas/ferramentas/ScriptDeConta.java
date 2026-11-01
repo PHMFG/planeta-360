@@ -29,9 +29,10 @@ import java.util.regex.Pattern;
  *       {@code (a + b) / (b + a)}, {@code a / (a + 0)}, {@code pct(a, a + 0)}): dariam 1, 0 ou 100 sem origem nenhuma (somados,
  *       dariam qualquer número). A conferência é por <i>significado</i>, e não pela forma do texto: a árvore do script é avaliada
  *       com três atribuições fixas de valores não redondos (veja {@link #conferirSignificado}), e a parte que não muda é recusada;</li>
- *   <li><b>percentual só com {@code pct}</b>: a constante {@code 100} junto de uma divisão por algo que não é constante
- *       ({@code a * 100 / b}, {@code (a / b) * 100}) é recusada. A divisão do motor arredonda meio para cima e 459.999 de 460.000 daria
- *       "100%", o que o {@code fn_pct_truncado} do portal evita. {@code a * b / 100} continua valendo.</li>
+ *   <li><b>percentual só com {@code pct}</b>: a constante {@code 100} que <i>multiplica</i>, junto de uma divisão por algo que não é
+ *       constante ({@code a * 100 / b}, {@code (a / b) * 100}), é recusada. A divisão do motor arredonda meio para cima e 459.999 de
+ *       460.000 daria "100%", o que o {@code fn_pct_truncado} do portal evita. O 100 que <i>divide</i> não é percentual à mão:
+ *       {@code a * b / 100} e {@code p * v / 100 / n} ("10% de 450 entre 3 geradores") continuam valendo.</li>
  * </ul>
  * Sem aspas, sem {@code =~}, sem ponto, sem quebra de linha, sem os pares de sinais de incremento e de comentário, sem caractere
  * fora do ASCII, com até 2.000 caracteres e no máximo {@value #MAXIMO_DE_ANINHAMENTO} parênteses aninhados. A forma é conferida por uma gramática
@@ -103,10 +104,10 @@ final class ScriptDeConta {
             }
         }
         conferirSignificado(raiz, variaveis);
-        if (analise.temCem && analise.dividePorNaoConstante) {
+        if (analise.cems > analise.cemsComoDivisor && analise.dividePorNaoConstante) {
             throw recusado("Percentual se calcula com pct(parte, todo), que corta na primeira casa como o portal. Não use a constante 100 "
-                    + "junto de uma divisão por variável (a * 100 / b, a / b * 100): a divisão arredondaria 99,9998% para 100%. A divisão "
-                    + "por uma constante, como a * b / 100, continua valendo.");
+                    + "que multiplica junto de uma divisão por variável (a * 100 / b, a / b * 100): a divisão arredondaria 99,9998% para "
+                    + "100%. O 100 que divide, como em a * b / 100 ou a * b / 100 / c, continua valendo.");
         }
         return analise.constantes;
     }
@@ -206,7 +207,9 @@ final class ScriptDeConta {
         private final Set<String> variaveis;
         private int posicao;
         int constantes;
-        boolean temCem;
+        /** Quantas vezes o {@code 100} aparece, e quantas delas são o divisor direto de uma divisão ({@code a / 100}). */
+        int cems;
+        int cemsComoDivisor;
         boolean dividePorNaoConstante;
         final Map<String, Integer> usadas = new HashMap<>();
 
@@ -246,6 +249,9 @@ final class ScriptDeConta {
                 if (sinal == '/' && temVariavel(direita)) {
                     dividePorNaoConstante = true;
                 }
+                if (sinal == '/' && semParenteses(direita) instanceof Constante constante && constante.texto().equals("100")) {
+                    cemsComoDivisor++;
+                }
                 esquerda = new Conta(sinal, esquerda, direita);
             }
             return esquerda;
@@ -271,7 +277,9 @@ final class ScriptDeConta {
             switch (token.tipo()) {
                 case NUMERO -> {
                     constantes++;
-                    temCem |= token.texto().equals("100");
+                    if (token.texto().equals("100")) {
+                        cems++;
+                    }
                     posicao++;
                     return new Constante(token.texto());
                 }
@@ -340,6 +348,11 @@ final class ScriptDeConta {
     // ---------------------------------------------------------------------
     // O significado: parte do script que dá sempre o mesmo resultado
     // ---------------------------------------------------------------------
+
+    /** A parte sem os parênteses em volta: {@code (100)} é o {@code 100}. */
+    private static No semParenteses(No no) {
+        return no instanceof Agrupado agrupado ? semParenteses(agrupado.dentro()) : no;
+    }
 
     /** Algum pedaço da árvore tem variável? Sem variável, é uma constante do script. */
     private static boolean temVariavel(No no) {
