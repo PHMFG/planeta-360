@@ -150,6 +150,8 @@ public class DocumentoService {
             campos.put("titulo", "Informe o título do documento.");
         } else if (titulo.length() > LIMITE_TITULO) {
             campos.put("titulo", "O título tem no máximo " + LIMITE_TITULO + " caracteres.");
+        } else if (temNulo(titulo)) {
+            campos.put("titulo", "O título tem caracteres inválidos.");
         }
         String chave = limpo(dados.chave());
         if (chave == null) {
@@ -240,6 +242,12 @@ public class DocumentoService {
         String escopoLimpo = escolhido(escopo, ESCOPOS, "escopo", "Escopo inválido. Use GLOBAL, COTA ou PARCERIA.", campos);
         String statusLimpo = escolhido(status, STATUS, "status", "Status inválido. Use AGUARDANDO_APROVACAO, RECUSADO, PROCESSANDO, INDEXADO, ERRO, SUBSTITUIDO ou REVOGADO.", campos);
         String tipoLimpo = escolhido(tipo, TIPOS, "tipo", "Tipo inválido. Use MANUAL_OPERACOES, PLANO_COMERCIAL, ANEXO_PARCERIA, FAQ, COMUNICADO ou OUTRO.", campos);
+        if (temNulo(chave)) {
+            campos.put("chave", "A chave tem caracteres inválidos.");
+        }
+        if (temNulo(q)) {
+            campos.put("q", "A busca pelo título tem caracteres inválidos.");
+        }
         if (!campos.isEmpty()) {
             throw new DadosInvalidosException(campos);
         }
@@ -285,6 +293,8 @@ public class DocumentoService {
         String observacao = limpo(observacaoInformada);
         if (observacao != null && observacao.length() > LIMITE_OBSERVACAO) {
             campos.put("observacao", "A observação tem no máximo " + LIMITE_OBSERVACAO + " caracteres.");
+        } else if (temNulo(observacao)) {
+            campos.put("observacao", "A observação tem caracteres inválidos.");
         }
         if (!campos.isEmpty()) {
             throw new DadosInvalidosException(campos);
@@ -404,6 +414,11 @@ public class DocumentoService {
 
     private static String limpo(String texto) {
         return texto == null || texto.isBlank() ? null : texto.strip();
+    }
+
+    /** O PostgreSQL não guarda o caractere nulo (U+0000): um texto com ele falharia na gravação com 500, e aqui vira 422. */
+    private static boolean temNulo(String texto) {
+        return texto != null && texto.indexOf('\u0000') >= 0;
     }
 
     private static Long numero(String texto) {

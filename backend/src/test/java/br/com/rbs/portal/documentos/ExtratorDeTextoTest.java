@@ -66,6 +66,17 @@ class ExtratorDeTextoTest {
     }
 
     @Test
+    void ocaractereNuloSaiDoTextoPorqueOPostgresqlNaoOGuarda() {
+        assertThat(ExtratorDeTexto.limpar("a\u0000b\u0000c")).isEqualTo("abc");
+        assertThat(ExtratorDeTexto.limpar("\u0000")).isEmpty();
+
+        Extracao extracao = extrator.extrairTxt("tex\u0000to com nulo\nsegunda\u0000 linha\n".getBytes(StandardCharsets.UTF_8));
+
+        assertThat(extracao.paginas().get(0).linhas()).extracting(Linha::texto).containsExactly("texto com nulo", "segunda linha");
+        assertThatThrownBy(() -> extrator.extrairTxt("\u0000\u0000\n  ".getBytes(StandardCharsets.UTF_8))).hasMessage("O arquivo de texto está vazio.");
+    }
+
+    @Test
     void extraiOTextoDeCadaPaginaNaOrdemEComONumeroDela() throws Exception {
         Extracao extracao = extrator.extrairPdf(pdf("Primeira pagina", "Segunda pagina", "Terceira pagina"));
 

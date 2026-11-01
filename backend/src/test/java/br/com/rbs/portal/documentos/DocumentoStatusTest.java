@@ -218,6 +218,18 @@ class DocumentoStatusTest extends ApoioDeDocumentos {
     }
 
     @Test
+    void caractereNuloNaObservacaoDa422EmCamposEmVezDe500() {
+        SessaoDeApi rbs = entrar(RBS);
+        long id = enviarComunicado(rbs, "teste-observacao-nula");
+
+        MvcTestResult resposta = rbs.patch("/api/documentos/" + id + "/status", "{\"acao\":\"RECUSAR\",\"observacao\":\"fora do \\u0000padrão\"}");
+
+        assertThat(resposta).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(lerJson(resposta, "$.campos.observacao")).isEqualTo("A observação tem caracteres inválidos.");
+        assertThat(statusDe(id)).isEqualTo("AGUARDANDO_APROVACAO");
+    }
+
+    @Test
     void documentoInexistenteOuIdQueNaoENumeroDa404ComAFraseDoDocumento() {
         SessaoDeApi rbs = entrar(RBS);
 

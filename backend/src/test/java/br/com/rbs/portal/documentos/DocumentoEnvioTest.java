@@ -325,6 +325,26 @@ class DocumentoEnvioTest extends ApoioDeDocumentos {
     }
 
     @Test
+    void caractereNuloNoTituloOuNaChaveDa422EmCamposEmVezDe500() {
+        SessaoDeApi rbs = entrar(RBS);
+        byte[] pdf = KitDeDocumentos.por("D09").conteudo();
+        long antes = contar("SELECT count(*) FROM documento");
+
+        MvcTestResult noTitulo = enviar(rbs, "a.pdf", pdf, global("Título com\u0000nulo", "teste-nulo-1"));
+        MvcTestResult naChave = enviar(rbs, "a.pdf", pdf, global("Título comum", "teste\u0000nulo"));
+        MvcTestResult nosDois = enviar(rbs, "a.pdf", pdf, global("\u0000", "\u0000"));
+
+        assertThat(noTitulo).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(lerJson(noTitulo, "$.campos.titulo")).isEqualTo("O título tem caracteres inválidos.");
+        assertThat(mapa(noTitulo, "$.campos").keySet()).containsExactly("titulo");
+        assertThat(naChave).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat((String) lerJson(naChave, "$.campos.chave")).startsWith("A chave usa só letras minúsculas sem acento");
+        assertThat(nosDois).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(mapa(nosDois, "$.campos").keySet()).containsExactlyInAnyOrder("titulo", "chave");
+        assertThat(contar("SELECT count(*) FROM documento")).as("nada ficou gravado").isEqualTo(antes);
+    }
+
+    @Test
     void valoresInvalidosDao422CampoACampo() {
         SessaoDeApi rbs = entrar(RBS);
         byte[] pdf = KitDeDocumentos.por("D09").conteudo();

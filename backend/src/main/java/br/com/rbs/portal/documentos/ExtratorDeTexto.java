@@ -144,11 +144,12 @@ public class ExtratorDeTexto {
 
     /**
      * O texto como o resto do Atlas o lê: normalizado em NFC (o PDFBox pode entregar a letra e o acento separados), sem o BOM, com
-     * o espaço sem quebra virando espaço comum e a quebra de linha {@code \n}.
+     * o espaço sem quebra virando espaço comum e a quebra de linha {@code \n}. O caractere nulo (U+0000) sai: o PostgreSQL não o guarda,
+     * e gravar um trecho com ele falharia.
      */
     static String limpar(String bruto) {
         return Normalizer.normalize(bruto, Normalizer.Form.NFC)
-                .replace("﻿", "").replace(' ', ' ').replace("\r\n", "\n").replace('\r', '\n').strip();
+                .replace("\u0000", "").replace("﻿", "").replace(' ', ' ').replace("\r\n", "\n").replace('\r', '\n').strip();
     }
 
     // ---------------------------------------------------------------------

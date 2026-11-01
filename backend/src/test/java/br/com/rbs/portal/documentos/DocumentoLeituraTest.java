@@ -108,6 +108,21 @@ class DocumentoLeituraTest extends ApoioDeDocumentos {
     }
 
     @Test
+    void caractereNuloNoFiltroDeChaveOuDeTituloDa422EmCamposEmVezDe500() {
+        SessaoDeApi rbs = entrar(RBS);
+
+        MvcTestResult naChave = rbs.get("/api/documentos?chave={c}", "manual\u0000operacoes");
+        MvcTestResult noTitulo = rbs.get("/api/documentos?q={q}", "circ\u0000ular");
+        MvcTestResult nosDois = rbs.get("/api/documentos?q={q}&chave={c}", "\u0000", "\u0000");
+
+        assertThat(naChave).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(lerJson(naChave, "$.campos.chave")).isEqualTo("A chave tem caracteres inválidos.");
+        assertThat(noTitulo).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(lerJson(noTitulo, "$.campos.q")).isEqualTo("A busca pelo título tem caracteres inválidos.");
+        assertThat(mapa(nosDois, "$.campos").keySet()).containsExactlyInAnyOrder("q", "chave");
+    }
+
+    @Test
     void marcaRecebe403NaListaAntesDeValidarOFiltro() {
         SessaoDeApi amarelo = entrar(AMARELO);
 

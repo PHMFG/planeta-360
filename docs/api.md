@@ -2039,7 +2039,7 @@ Para montar o formulário: as edições vêm da rota 6, as parcerias (com a `cot
 | 403 | Não é Admin RBS, ou falta o token CSRF. |
 | 413 | Arquivo acima de 20 MB (exatamente 20 MB ainda passa). |
 | 415 | Extensão fora de `pdf`/`txt`, ou conteúdo que não bate com ela. |
-| 422 | Campo faltando ou inválido, em `campos`: `arquivo` (`"Envie o documento (PDF ou TXT) na parte \"arquivo\" do formulário."`), `titulo`, `chave`, `tipo`, `escopo`, `eventoId` (falta, não é número ou a edição não existe), `cota` (falta no `COTA`, não existe, ou veio em outro escopo) e `parceriaId` (falta no `PARCERIA`, a parceria não existe, ou veio em outro escopo). |
+| 422 | Campo faltando ou inválido, em `campos`: `arquivo` (`"Envie o documento (PDF ou TXT) na parte \"arquivo\" do formulário."`), `titulo` (falta, passa de 200 caracteres ou tem o caractere nulo: `"O título tem caracteres inválidos."`), `chave`, `tipo`, `escopo`, `eventoId` (falta, não é número ou a edição não existe), `cota` (falta no `COTA`, não existe, ou veio em outro escopo) e `parceriaId` (falta no `PARCERIA`, a parceria não existe, ou veio em outro escopo). |
 
 **Histórico:** `CRIACAO` na entidade `documento` (a marca não vê).
 
@@ -2047,7 +2047,7 @@ Para montar o formulário: as edições vêm da rota 6, as parcerias (com a `cot
 
 **Quem chama:** Admin RBS. O patrocinador recebe **403** com qualquer filtro (inclusive inválido).
 
-**Filtros (opcionais):** `eventoId`, `escopo`, `status`, `tipo`, `chave`, `q` (um pedaço do título, sem diferenciar maiúsculas), `pagina` e `tamanho` (50 por página, no máximo 200). Valor de `escopo`, `status` ou `tipo` fora da lista dá 422 em `campos`. A ordem é do envio mais novo para o mais antigo.
+**Filtros (opcionais):** `eventoId`, `escopo`, `status`, `tipo`, `chave`, `q` (um pedaço do título, sem diferenciar maiúsculas), `pagina` e `tamanho` (50 por página, no máximo 200). Valor de `escopo`, `status` ou `tipo` fora da lista dá 422 em `campos`, e `chave` ou `q` com o caractere nulo também (`"A chave tem caracteres inválidos."`, `"A busca pelo título tem caracteres inválidos."`). A ordem é do envio mais novo para o mais antigo.
 
 **200**: uma página de **Documento**: `{ "itens": [ ... ], "pagina": 0, "tamanho": 50, "total": 13 }`.
 
@@ -2091,7 +2091,7 @@ Para montar o formulário: as edições vêm da rota 6, as parcerias (com a `cot
 | 403 | Não é Admin RBS, ou falta o token CSRF. |
 | 404 | O documento não existe (`"Não encontramos este documento."`). |
 | 409 | O status atual não aceita a ação (`"Só um documento aguardando aprovação pode ser aprovado. Este documento está indexado."`), ou o banco recusou (dado pessoal, nunca aprovado). Nada muda. |
-| 422 | `acao` ausente ou fora das quatro, ou `observacao` com mais de 500 caracteres. |
+| 422 | `acao` ausente ou fora das quatro, ou `observacao` com mais de 500 caracteres ou com o caractere nulo (`"A observação tem caracteres inválidos."`). |
 
 **Histórico:** `ALTERACAO_STATUS` na entidade `documento`, com o status anterior e o novo. A indexação grava o seu: `PROCESSANDO` para `INDEXADO` (com o número de trechos, o modelo e o tempo) ou para `ERRO` (com o motivo), e `INDEXADO` para `SUBSTITUIDO` na versão anterior.
 
