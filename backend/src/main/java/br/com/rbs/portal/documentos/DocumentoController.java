@@ -4,6 +4,8 @@ import br.com.rbs.portal.comum.UsuarioAutenticado;
 import br.com.rbs.portal.documentos.DocumentoDtos.DocumentoDto;
 import br.com.rbs.portal.documentos.DocumentoDtos.MudarStatusRequisicao;
 import br.com.rbs.portal.documentos.DocumentoDtos.TrechoDoDocumentoDto;
+import br.com.rbs.portal.documentos.DocumentoDtos.TrechoDoVisualizadorDto;
+import br.com.rbs.portal.documentos.DocumentoService.ConteudoDoDocumento;
 import br.com.rbs.portal.documentos.DocumentoService.DadosDoEnvio;
 import br.com.rbs.portal.materiais.MateriaisDtos.PaginaDto;
 import jakarta.servlet.http.HttpServletRequest;
@@ -13,6 +15,11 @@ import jakarta.validation.constraints.Min;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import org.springframework.core.io.FileSystemResource;
+import org.springframework.core.io.Resource;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -28,9 +35,9 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
- * Rotas 54 a 58 do contrato (docs/api.md): os documentos do Atlas. [ATLAS] Enviar (54), listar (55), ver (56), aprovar, recusar,
- * revogar e reindexar (57) e ver os trechos (58). [PERMISSAO] Todas são só da RBS, menos a 56, em que a marca vê o documento que o
- * escopo dela permite (e só o que a rota mostra). As regras estão no DocumentoService; aqui entram as partes do formulário, o corpo e
+ * Rotas 54 a 60 do contrato (docs/api.md): os documentos do Atlas. [ATLAS] Enviar (54), listar (55), ver (56), aprovar, recusar,
+ * revogar e reindexar (57), ver os trechos (58) e o visualizador: o arquivo (59) e um trecho inteiro (60). [PERMISSAO] São só da RBS,
+ * menos a 56, a 59 e a 60, em que a marca vê o documento que o escopo dela permite (e só o que a rota mostra). As regras estão no DocumentoService; aqui entram as partes do formulário, o corpo e
  * os cabeçalhos. As partes são conferidas no service (e não por required=true) para a falta delas virar 422 com "campos".
  */
 @RestController
@@ -96,6 +103,52 @@ public class DocumentoController {
     public DocumentoDto mudarStatus(@AuthenticationPrincipal UsuarioAutenticado usuario, @PathVariable long id,
                                     @Valid @RequestBody MudarStatusRequisicao corpo, HttpServletRequest requisicao) {
         return servico.mudarStatus(usuario, id, corpo.acao(), corpo.observacao(), requisicao);
+    }
+
+    /**
+     * 59. O arquivo do documento para o visualizador, na própria página (inline), nunca como anexo. Os cabeçalhos tiram do arquivo
+     * qualquer poder sobre a página: {@code nosniff} (o navegador não reinterpreta o tipo), {@code Content-Security-Policy: sandbox}
+     * (um PDF ou TXT aberto direto não roda script nem acessa a sessão) e {@code Cache-Control: private, no-store} (nada fica em cache
+     * do navegador ou de intermediário). Aceita {@code Range}, como o leitor de PDF pede; só a primeira leitura vai ao histórico.
+     */
+    @GetMapping("/{id}/conteudo")
+    public ResponseEntity<Resource> conteudo(@AuthenticationPrincipal UsuarioAutenticado usuario, @PathVariable long id,
+                                             HttpServletRequest requisicao) {
+        ConteudoDoDocumento arquivo = servico.conteudo(usuario, id, ehPrimeiraLeitura(requisicao), requisicao);
+        HttpHeaders cabecalhos = new HttpHeaders();
+        cabecalhos.setContentType(tipo(arquivo.mimeType()));
+        cabecalhos.setContentDisposition(ContentDisposition.inline().filename(arquivo.nomeOriginal(), StandardCharsets.UTF_8).build());
+        cabecalhos.set("X-Content-Type-Options", "nosniff");
+        cabecalhos.set("Content-Security-Policy", "sandbox");
+        cabecalhos.set("Cache-Control", "private, no-store");
+        return ResponseEntity.ok().headers(cabecalhos).body(new FileSystemResource(arquivo.caminho()));
+    }
+
+    /** 60. O trecho inteiro, com a página e o texto, para o destaque no visualizador. */
+    @GetMapping("/{id}/trechos/{trechoId}")
+    public TrechoDoVisualizadorDto trechoDoVisualizador(@AuthenticationPrincipal UsuarioAutenticado usuario, @PathVariable long id,
+                                                        @PathVariable long trechoId) {
+        return servico.trechoDoVisualizador(usuario, id, trechoId);
+    }
+
+    /** Só a primeira leitura grava o DOWNLOAD: nem o HEAD nem a faixa que não começa no byte 0 (continuação da mesma leitura). */
+    private static boolean ehPrimeiraLeitura(HttpServletRequest requisicao) {
+        if ("HEAD".equals(requisicao.getMethod())) {
+            return false;
+        }
+        String faixa = requisicao.getHeader(HttpHeaders.RANGE);
+        return faixa == null || faixa.replace(" ", "").startsWith("bytes=0-");
+    }
+
+    /** O tipo do arquivo; o TXT sai com o conjunto de caracteres dito (UTF-8), para a tela não adivinhar os acentos. */
+    private static MediaType tipo(String mime) {
+        try {
+            MediaType tipo = MediaType.parseMediaType(mime);
+            return "text".equals(tipo.getType()) && "plain".equals(tipo.getSubtype()) && tipo.getCharset() == null
+                    ? new MediaType(tipo, StandardCharsets.UTF_8) : tipo;
+        } catch (IllegalArgumentException invalido) {
+            return MediaType.APPLICATION_OCTET_STREAM;
+        }
     }
 
     /** 58. */

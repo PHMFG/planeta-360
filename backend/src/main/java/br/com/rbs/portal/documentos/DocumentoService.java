@@ -16,6 +16,7 @@ import br.com.rbs.portal.documentos.DocumentoDtos.DocumentoDaMarcaDto;
 import br.com.rbs.portal.documentos.DocumentoDtos.DocumentoDto;
 import br.com.rbs.portal.documentos.DocumentoDtos.ParceriaDoDocumentoDto;
 import br.com.rbs.portal.documentos.DocumentoDtos.TrechoDoDocumentoDto;
+import br.com.rbs.portal.documentos.DocumentoDtos.TrechoDoVisualizadorDto;
 import br.com.rbs.portal.documentos.DocumentoRepositorio.Filtro;
 import br.com.rbs.portal.documentos.DocumentoRepositorio.Linha;
 import br.com.rbs.portal.documentos.DocumentoRepositorio.Travado;
@@ -26,6 +27,7 @@ import br.com.rbs.portal.materiais.MateriaisDtos.UsuarioResumoDto;
 import br.com.rbs.portal.parceria.ParceriaDtos.CotaDto;
 import br.com.rbs.portal.parceria.ParceriaDtos.EventoDto;
 import jakarta.servlet.http.HttpServletRequest;
+import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -356,6 +358,51 @@ public class DocumentoService {
                         t.inicioDoTexto()))
                 .toList();
         return new PaginaDto<>(itens, pagina, tamanho, repositorio.contarTrechos(id));
+    }
+
+    // ---------------------------------------------------------------------
+    // Rotas 59 e 60: o visualizador
+    // ---------------------------------------------------------------------
+
+    /** O arquivo do documento pronto para ir ao navegador (rota 59). */
+    public record ConteudoDoDocumento(Path caminho, String nomeOriginal, String mimeType) {
+    }
+
+    /**
+     * Rota 59. [ISOLAMENTO] A RBS abre o arquivo de qualquer documento, em qualquer status. A marca só abre o que a rota 56 mostra a ela
+     * (indexado ou substituído, no escopo de alguma parceria dela): o resto, inclusive o revogado, o recusado, o que ainda não foi
+     * aprovado e o de outra edição, cota ou parceria, dá 404 com a mesma frase. É o único caminho da marca até o arquivo de um documento:
+     * a rota 18 o recusa. [HISTORICO] Grava DOWNLOAD na entidade {@code documento} (com a parceria só no escopo PARCERIA; nos outros, com
+     * o usuário), uma vez por abertura: a continuação de uma leitura por faixas (pedaço que não começa em 0) e o HEAD não gravam.
+     */
+    @Transactional
+    public ConteudoDoDocumento conteudo(UsuarioAutenticado usuario, long id, boolean primeiraLeitura, HttpServletRequest requisicao) {
+        var linha = (usuario.ehRbs() ? repositorio.conteudo(id) : repositorio.conteudoParaAMarca(id, usuario.id()))
+                .orElseThrow(DocumentoService::naoEncontrado);
+        Path caminho = armazenamento.localizar(linha.arquivoCaminho()).orElseThrow(
+                () -> new NaoEncontradoException("Este documento não está mais disponível. Avise a equipe da RBS."));
+        if (primeiraLeitura) {
+            historico.registrar(AcaoHistorico.DOWNLOAD, usuario, linha.parceriaId(), "documento", linha.id(), null, linha.arquivoNome(),
+                    null, requisicao);
+        }
+        return new ConteudoDoDocumento(caminho, linha.arquivoNome(), linha.arquivoMime());
+    }
+
+    /**
+     * Rota 60. O trecho inteiro (página e texto) para o destaque. Vale a mesma regra de acesso da rota 59: a RBS vê qualquer trecho, a
+     * marca só os do documento que a rota 56 mostra a ela (também os de uma versão substituída, que abre com aviso). Trecho que não é do
+     * documento da URL dá 404, como o documento que não existe.
+     */
+    @Transactional(readOnly = true)
+    public TrechoDoVisualizadorDto trechoDoVisualizador(UsuarioAutenticado usuario, long documentoId, long trechoId) {
+        boolean pode = usuario.ehRbs() ? repositorio.buscar(documentoId).isPresent()
+                : repositorio.paraAMarca(documentoId, usuario.id()).isPresent();
+        if (!pode) {
+            throw naoEncontrado();
+        }
+        var trecho = repositorio.trechoInteiro(documentoId, trechoId).orElseThrow(DocumentoService::naoEncontrado);
+        return new TrechoDoVisualizadorDto(trecho.id(), trecho.documentoId(), trecho.ordem(), trecho.paginaInicio(), trecho.paginaFim(),
+                trecho.secaoCaminho(), trecho.texto());
     }
 
     // ---------------------------------------------------------------------

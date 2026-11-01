@@ -54,6 +54,14 @@ public final class DocumentoDtos {
     public record DocumentoDaMarcaDto(Long id, String titulo, String tipo, Integer versao, Integer paginas, boolean substituido) {
     }
 
+    /**
+     * Um trecho inteiro para o visualizador (rota 60): a página (ou o intervalo, quando o trecho atravessa páginas), a seção e o texto
+     * como foi indexado, que a tela usa para destacar o trecho na página do PDF.
+     */
+    public record TrechoDoVisualizadorDto(Long id, Long documentoId, Integer ordem, Integer paginaInicio, Integer paginaFim,
+                                          String secao, String texto) {
+    }
+
     /** Um trecho na lista da RBS (rota 58): onde está, de que seção é, quanto pesa e o começo do texto. */
     public record TrechoDoDocumentoDto(Long id, Integer ordem, Integer paginaInicio, Integer paginaFim, String secao, Integer tokens,
                                        boolean ativo, String inicioDoTexto) {

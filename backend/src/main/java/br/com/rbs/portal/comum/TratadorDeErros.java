@@ -190,7 +190,8 @@ public class TratadorDeErros extends ResponseEntityExceptionHandler {
                         case "aplicacoes" -> "Não encontramos esta aplicação.";
                         case "conversas" -> "Não encontramos esta conversa.";
                         case "solicitacoes" -> "Não encontramos esta solicitação.";
-                        case "documentos" -> "Não encontramos este documento.";
+                        // O id de um trecho na URL (rota 60) não é número: a mesma frase do documento, para o 404 não dizer qual dos dois falhou.
+                        case "documentos", "trechos" -> "Não encontramos este documento.";
                         default -> Problemas.detalhePadrao(HttpStatus.NOT_FOUND);
                     };
                 }

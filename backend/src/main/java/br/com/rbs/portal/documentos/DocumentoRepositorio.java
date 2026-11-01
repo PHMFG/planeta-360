@@ -150,16 +150,57 @@ public class DocumentoRepositorio {
         return jdbc.sql("""
                         SELECT d.id, d.titulo, d.tipo, d.versao, d.paginas, (d.status = 'SUBSTITUIDO') AS substituido
                         FROM documento d
-                        WHERE d.id = :id AND d.status IN ('INDEXADO', 'SUBSTITUIDO')
+                        WHERE d.id = :id AND %s
+                        """.formatted(VISIVEL_PARA_A_MARCA))
+                .param("id", id).param("usuarioId", usuarioId).query(LinhaDaMarca.class).optional();
+    }
+
+    /** A regra da rota 56, a mesma do visualizador (rotas 59 e 60): indexado ou substituído, no escopo de uma parceria do usuário. */
+    private static final String VISIVEL_PARA_A_MARCA = """
+            d.status IN ('INDEXADO', 'SUBSTITUIDO')
                           AND EXISTS (SELECT 1 FROM parceria_usuario pu
                                       JOIN usuario u ON u.id = pu.usuario_id
                                       JOIN parceria p ON p.id = pu.parceria_id
                                       WHERE pu.usuario_id = :usuarioId AND u.ativo AND p.evento_id = d.evento_id
                                         AND (d.escopo = 'GLOBAL'
                                              OR (d.escopo = 'COTA' AND p.cota_tipo_id = d.cota_tipo_id)
-                                             OR (d.escopo = 'PARCERIA' AND p.id = d.parceria_id)))
+                                             OR (d.escopo = 'PARCERIA' AND p.id = d.parceria_id)))""";
+
+    /**
+     * O arquivo de um documento para o visualizador (rota 59). {@code parceriaId} é o do documento de escopo PARCERIA (nulo nos outros):
+     * é o que o histórico do download grava.
+     */
+    public record LinhaDoConteudo(Long id, Long parceriaId, String arquivoNome, String arquivoMime, String arquivoCaminho) {
+    }
+
+    private static final String CONTEUDO = """
+            SELECT d.id, d.parceria_id, a.nome_original AS arquivo_nome, a.mime_type AS arquivo_mime, a.caminho AS arquivo_caminho
+            FROM documento d JOIN arquivo a ON a.id = d.arquivo_id
+            """;
+
+    /** O arquivo do documento, em qualquer status (a RBS abre o recusado, o revogado e o que deu erro). */
+    public Optional<LinhaDoConteudo> conteudo(long id) {
+        return jdbc.sql(CONTEUDO + " WHERE d.id = :id").param("id", id).query(LinhaDoConteudo.class).optional();
+    }
+
+    /** O arquivo do documento que a marca pode ver (a regra da rota 56): o resto, inclusive o revogado, não volta. */
+    public Optional<LinhaDoConteudo> conteudoParaAMarca(long id, long usuarioId) {
+        return jdbc.sql(CONTEUDO + " WHERE d.id = :id AND " + VISIVEL_PARA_A_MARCA).param("id", id).param("usuarioId", usuarioId)
+                .query(LinhaDoConteudo.class).optional();
+    }
+
+    /** Um trecho com o texto inteiro, para o destaque do visualizador (rota 60). */
+    public record LinhaDoTrechoInteiro(Long id, Long documentoId, Integer ordem, Integer paginaInicio, Integer paginaFim,
+                                       String secaoCaminho, String texto) {
+    }
+
+    /** O trecho {@code trechoId} do documento {@code documentoId}; trecho de outro documento não volta. */
+    public Optional<LinhaDoTrechoInteiro> trechoInteiro(long documentoId, long trechoId) {
+        return jdbc.sql("""
+                        SELECT id, documento_id, ordem, pagina_inicio, pagina_fim, secao_caminho, texto
+                        FROM documento_trecho WHERE documento_id = :documento AND id = :trecho
                         """)
-                .param("id", id).param("usuarioId", usuarioId).query(LinhaDaMarca.class).optional();
+                .param("documento", documentoId).param("trecho", trechoId).query(LinhaDoTrechoInteiro.class).optional();
     }
 
     public long contarTrechos(long documentoId) {

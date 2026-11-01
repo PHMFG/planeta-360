@@ -2,7 +2,7 @@
 
 Este documento é o **contrato entre o back-end e o front-end**. Quem faz a tela lê aqui o que cada rota pede, o que devolve e quais erros esperar, sem precisar abrir o código.
 
-- Todas as 58 rotas estão implementadas e cobertas por testes de integração (`cd backend && ./mvnw test`), inclusive o isolamento entre parcerias. A coluna "Etapa" diz em que etapa do plano cada rota entrou (as do Atlas, 37 em diante, entram como `Atlas 1`, `Atlas 2`, `Atlas M2` e `Atlas M3`). Mudança de formato daqui em diante entra neste arquivo no mesmo commit do código.
+- Todas as 60 rotas estão implementadas e cobertas por testes de integração (`cd backend && ./mvnw test`), inclusive o isolamento entre parcerias. A coluna "Etapa" diz em que etapa do plano cada rota entrou (as do Atlas, 37 em diante, entram como `Atlas 1`, `Atlas 2`, `Atlas M2`, `Atlas M3` e `Atlas M4`). Mudança de formato daqui em diante entra neste arquivo no mesmo commit do código.
 - O banco está descrito em [`docs/banco.md`](banco.md). Os nomes de status, cotas e abas são os mesmos do banco.
 
 ## Como falar com a API
@@ -164,10 +164,12 @@ Todas prontas e testadas. A coluna "Etapa" mostra em que etapa do plano a rota e
 | 56 | `GET /api/documentos/{id}` | Admin RBS, ou a marca pelo escopo | Um documento: inteiro para a RBS; para a marca, só título, tipo, versão, páginas e se foi substituído | Atlas M3 |
 | 57 | `PATCH /api/documentos/{id}/status` | Admin RBS | Aprova, recusa, revoga ou reindexa um documento | Atlas M3 |
 | 58 | `GET /api/documentos/{id}/trechos` | Admin RBS | Os trechos em que o documento foi cortado, com página, seção, tokens e o começo do texto | Atlas M3 |
+| 59 | `GET /api/documentos/{id}/conteudo` | Admin RBS, ou a marca pelo escopo | O arquivo do documento, para o visualizador abrir na página (inline) | Atlas M4 |
+| 60 | `GET /api/documentos/{id}/trechos/{trechoId}` | Admin RBS, ou a marca pelo escopo | Um trecho inteiro, com a página e o texto, para o destaque no visualizador | Atlas M4 |
 
-São 58 operações (método + caminho). A rota 5 (`ativar`) faz parte do contrato de autenticação, mas só é implementada na etapa 4. As rotas 37 em diante vieram com o Atlas: a coluna "Etapa" diz `Atlas 1` (plano de aplicações e dados informados), `Atlas 2` (conversa, cartão de perguntas e relatório), `Atlas M2` (o diagnóstico: rotas 49 a 53, veja "Diagnóstico do Atlas") ou `Atlas M3` (os documentos: rotas 54 a 58, veja "Os documentos do Atlas"). As rotas 54, 55, 57 e 58 são só do Admin RBS (o outro perfil recebe **403** antes de o corpo ser lido); a 56 é das duas pontas, e a marca só vê o que o escopo dela permite. A 49 é só do Admin Patrocinador, dono da conversa; as 50 a 53 são só do Admin RBS (o outro perfil recebe **403** antes de tudo). **As rotas 49 a 53 estão sempre mapeadas e respondem 404 com o diagnóstico desligado** (`atlas.diagnostico.ligado=false`, o padrão). Nas rotas 42 a 46 só o Admin Patrocinador chama (a RBS recebe **403** antes de o corpo ser lido); nas 47 e 48 chamam a marca da parceria e a RBS. **Neste MVP o relatório do Atlas está desligado** (`atlas.relatorio.ligado=false`, o padrão): as rotas **46, 47 e 48 não existem (404)**, e as rotas 42 e 44 só aceitam conversa por texto (`atalho` e `modelo` dão 422). Veja "Modo só chat". O contrato do relatório, nas rotas 42 a 48, vale com `atlas.relatorio.ligado=true`.
+São 60 operações (método + caminho). A rota 5 (`ativar`) faz parte do contrato de autenticação, mas só é implementada na etapa 4. As rotas 37 em diante vieram com o Atlas: a coluna "Etapa" diz `Atlas 1` (plano de aplicações e dados informados), `Atlas 2` (conversa, cartão de perguntas e relatório), `Atlas M2` (o diagnóstico: rotas 49 a 53, veja "Diagnóstico do Atlas") `Atlas M3` (os documentos: rotas 54 a 58, veja "Os documentos do Atlas") ou `Atlas M4` (o visualizador, rotas 59 e 60, veja "Os documentos do Atlas"). As rotas 54, 55, 57 e 58 são só do Admin RBS (o outro perfil recebe **403** antes de o corpo ser lido); a 56, a 59 e a 60 são das duas pontas, e a marca só vê o que o escopo dela permite. A 49 é só do Admin Patrocinador, dono da conversa; as 50 a 53 são só do Admin RBS (o outro perfil recebe **403** antes de tudo). **As rotas 49 a 53 estão sempre mapeadas e respondem 404 com o diagnóstico desligado** (`atlas.diagnostico.ligado=false`, o padrão). Nas rotas 42 a 46 só o Admin Patrocinador chama (a RBS recebe **403** antes de o corpo ser lido); nas 47 e 48 chamam a marca da parceria e a RBS. **Neste MVP o relatório do Atlas está desligado** (`atlas.relatorio.ligado=false`, o padrão): as rotas **46, 47 e 48 não existem (404)**, e as rotas 42 e 44 só aceitam conversa por texto (`atalho` e `modelo` dão 422). Veja "Modo só chat". O contrato do relatório, nas rotas 42 a 48, vale com `atlas.relatorio.ligado=true`.
 
-As rotas de debug do modelo de linguagem (`/api/debug/llm`) são temporárias, só existem no perfil `dev`, são só da RBS e ficam fora desta tabela e da conta das 58: veja "Rotas de debug (temporárias)", no fim.
+As rotas de debug do modelo de linguagem (`/api/debug/llm`) são temporárias, só existem no perfil `dev`, são só da RBS e ficam fora desta tabela e da conta das 60: veja "Rotas de debug (temporárias)", no fim.
 
 ## Objetos que se repetem
 
@@ -1990,9 +1992,9 @@ O custo de uma ida (e de um resumo) é o `usage.opencode.list_cost` que o OpenCo
 
 ---
 
-# Os documentos do Atlas (rotas 54 a 58)
+# Os documentos do Atlas (rotas 54 a 60)
 
-A RBS sobe os documentos de que o Atlas se alimenta: manuais de operação, planos comerciais de cada cota, anexos de parceria, FAQ e comunicados. O documento vira **trechos com embeddings** (vetores de 768 dimensões), com versão, escopo e uma regra do banco (RLS) que só deixa a busca ver o que a marca pode ver. **Só a RBS envia, aprova, recusa, revoga e reindexa**; o documento nasce `AGUARDANDO_APROVACAO` e só a RBS o aprova. A busca e o visualizador chegam no M4 (rotas 59 a 61).
+A RBS sobe os documentos de que o Atlas se alimenta: manuais de operação, planos comerciais de cada cota, anexos de parceria, FAQ e comunicados. O documento vira **trechos com embeddings** (vetores de 768 dimensões), com versão, escopo e uma regra do banco (RLS) que só deixa a busca ver o que a marca pode ver. **Só a RBS envia, aprova, recusa, revoga e reindexa**; o documento nasce `AGUARDANDO_APROVACAO` e só a RBS o aprova. A busca nos documentos está em "Busca nos documentos"; o visualizador, nas rotas 59 e 60.
 
 ## O ciclo de um documento
 
@@ -2156,11 +2158,43 @@ Para montar o formulário: as edições vêm da rota 6, as parcerias (com a `cot
 
 **Erros:** 401; 403; 404 (`"Não encontramos este documento."`); 422 (`pagina`/`tamanho` fora dos limites).
 
+## 59. `GET /api/documentos/{id}/conteudo`  · Atlas M4
+
+O arquivo do documento, para o visualizador abri-lo na página da fonte de uma resposta do Atlas. **Quem chama:** Admin RBS (qualquer documento, em qualquer status) ou a marca (Admin Patrocinador), **pelo escopo**: a regra é exatamente a da rota 56. A marca abre o documento `GLOBAL` da edição de alguma parceria dela, o `COTA` da cota dela nessa edição e o `PARCERIA` da própria parceria, e só se ele está `INDEXADO` ou `SUBSTITUIDO` (a versão substituída abre; o aviso "existe versão mais nova" vem de `substituido` na rota 56). [ISOLAMENTO] **Todo o resto dá 404 `"Não encontramos este documento."`**, a mesma frase de um id que não existe: revogado, recusado, ainda sem aprovação, com erro, de outra edição, de outra cota, de outra parceria. Esta é a **única** rota por onde a marca chega ao arquivo de um documento (a rota 18 o recusa com 404).
+
+**200**: os bytes do arquivo (`application/pdf`, ou `text/plain; charset=UTF-8` para o TXT), com estes cabeçalhos:
+
+| Cabeçalho | Valor | Para quê |
+| --- | --- | --- |
+| `Content-Disposition` | `inline; filename*=UTF-8''<nome original>` | O leitor abre na própria página; nunca é anexo. |
+| `X-Content-Type-Options` | `nosniff` | O navegador não reinterpreta o tipo do arquivo. |
+| `Content-Security-Policy` | `sandbox` | Um arquivo aberto direto não roda script nem acessa a sessão. |
+| `Cache-Control` | `private, no-store` | Nada fica em cache do navegador nem de intermediário. |
+
+A rota aceita `Range` (o leitor de PDF pede o arquivo por faixas) e responde **206** com `Content-Range`; sem `Range`, 200 com o arquivo todo.
+
+**Histórico:** cada abertura grava `DOWNLOAD` na entidade `documento`, com o nome original do arquivo em `valorNovo`. No documento de escopo `PARCERIA` a linha leva a `parceria_id` dele; nos outros fica sem parceria, com o usuário. **Só a primeira leitura grava**: uma faixa que não começa no byte 0 (a continuação da mesma abertura) e o `HEAD` não gravam. A marca não vê essas linhas na rota 20; a RBS as vê nas rotas 20 e 21.
+
+**Erros:** 401; 404 (não existe, a marca não pode vê-lo, id que não é número; ou o arquivo sumiu do armazenamento: `"Este documento não está mais disponível. Avise a equipe da RBS."`).
+
+## 60. `GET /api/documentos/{id}/trechos/{trechoId}`  · Atlas M4
+
+O trecho inteiro de um documento, para o visualizador abrir na página certa e destacar o trecho. **Quem chama:** as mesmas pessoas e a mesma regra de acesso da rota 59 (a RBS vê qualquer trecho; a marca, só os do documento que a rota 56 mostra a ela, também os de uma versão substituída, que têm `ativo: false` na rota 58). O `trechoId` precisa ser do documento da URL: **um trecho de outro documento dá 404**, mesmo que a marca veja os dois documentos.
+
+```json
+{ "id": 301, "documentoId": 14, "ordem": 5, "paginaInicio": 5, "paginaFim": 6, "secao": "4 Energia elétrica › 4.1 Tarifa",
+  "texto": "4.1 Pontos de energia\nCada ativação recebe da produção um ponto de energia 220 V com a carga contratada em kVA..." }
+```
+
+`texto` é o texto inteiro do trecho, **como foi indexado** (o PDFBox extrai, o `pdf.js` quebra em outros pontos: a tela normaliza os espaços e compara sobre o texto corrido da página). `paginaInicio` e `paginaFim` diferem quando o trecho atravessa páginas; o `marcador [T1]` da resposta aponta para `trechoId` pelo item `fontes` do texto. `secao` é `null` se o documento não tem títulos. Não leva parceria, arquivo, caminho, escopo, embedding nem tokens.
+
+**Erros:** 401; 404 (`"Não encontramos este documento."` para todos os casos, para o erro não dizer qual dos dois ids falhou: documento ou trecho que não existe, documento que a marca não pode ver, trecho de outro documento, id que não é número).
+
 ---
 
 # Rotas de debug (temporárias)
 
-Um recurso **temporário**, para a equipe ligar o modelo de linguagem do Atlas pela tela (o botão "Debug"), sem reiniciar a API e sem variável de ambiente. Não faz parte das 58 rotas do contrato e sai antes da entrega final.
+Um recurso **temporário**, para a equipe ligar o modelo de linguagem do Atlas pela tela (o botão "Debug"), sem reiniciar a API e sem variável de ambiente. Não faz parte das 60 rotas do contrato e sai antes da entrega final.
 
 - **Só existem com `atlas.debug.chaves=true`.** A propriedade vem `false` por padrão, `true` no perfil `dev` e `false` no `test`. Sem ela, as quatro rotas respondem **404**, como uma rota que não existe.
 - **A chave fica só na memória da API.** Nunca vai ao banco, a arquivo ou ao log, e **some quando a API reinicia**. Nenhuma resposta devolve a chave inteira: só os 4 últimos caracteres (`finalDaChave`).
@@ -2262,7 +2296,7 @@ Ligada:
 - Toda rota que recebe o id de uma parceria (ou de algo que pertence a uma: entrega, arquivo, pergunta, relatório) confere, **a cada chamada**, se o usuário tem vínculo vigente com ela. A conferência vai ao banco toda vez e não é guardada na sessão. Por isso, quando a RBS revoga um e-mail, o acesso some na hora, mesmo para quem já estava logado.
 - Quem não tem vínculo recebe **404**, o mesmo erro de um id que não existe. Assim um patrocinador não descobre, pelo código de erro, quais parcerias existem.
 - A RBS passa em qualquer parceria que exista. Id que não existe é 404 para todos.
-- Os **documentos do Atlas** seguem o escopo, e não a rota da parceria: a marca vê o `GLOBAL` da edição dela, o `COTA` da cota dela nessa edição e o `PARCERIA` da própria parceria, só indexado (rota 56); o resto é 404, e o arquivo do documento nunca sai pela rota 18 para ela. A busca do Atlas (M4) roda como um papel do banco (`atlas_ro`) que só enxerga isso, com a regra repetida no banco (RLS).
+- Os **documentos do Atlas** seguem o escopo, e não a rota da parceria: a marca vê o `GLOBAL` da edição dela, o `COTA` da cota dela nessa edição e o `PARCERIA` da própria parceria, só indexado ou substituído (rota 56); o resto é 404, e o arquivo do documento nunca sai pela rota 18 para ela: ela o abre só pelo visualizador (rotas 59 e 60), com a mesma regra da 56. A busca do Atlas (M4) roda como um papel do banco (`atlas_ro`) que só enxerga isso, com a regra repetida no banco (RLS).
 - O `403` é para outra situação: o usuário **tem** acesso à parceria, mas o perfil dele não pode fazer aquela operação (rota só da RBS), ou a aba está fechada para a parceria (fora da cota, ou ainda não liberada; veja "Aba"). Nas rotas só da RBS o perfil é conferido **primeiro**: o patrocinador recebe 403 com qualquer id (da parceria dele, de outra ou que não existe) e com **qualquer corpo ou filtro** (corpo vazio, JSON quebrado, campo inválido, `?tamanho=999`...). O 403 nunca revela se o id existe nem como é o formato do corpo da rota. As rotas só da RBS são as marcadas "Admin RBS" na tabela do início deste arquivo.
 
 ## Permissões por perfil
@@ -2270,7 +2304,7 @@ Ligada:
 | Quem | Pode |
 | --- | --- |
 | **Admin RBS** | Quase tudo: criar parcerias, autorizar e revogar e-mails, criar entregas, mudar status, mandar retorno, aprovar perguntas, subir cargas (inclusive o plano comercial), anexar as fotos de comprovação das aplicações, informar os dados da ativação no lugar da marca, gerar e disponibilizar relatórios, ver o histórico geral e o painel. **Não** conversa com o Atlas (rotas 42 a 46 e 49 dão 403), mas lê os relatórios que ele montou (rotas 47 e 48) e, com o diagnóstico ligado, o traço de todos os turnos, o estado dos provedores e o teste deles (rotas 50 a 53). Envia, lista, aprova, recusa, revoga e reindexa os documentos do Atlas e vê os trechos (rotas 54 a 58). Usa as rotas de debug da chave do modelo (só dela). |
-| **Admin Patrocinador** | Ver a própria parceria, as entregas das abas liberadas, enviar materiais, baixar arquivos da parceria, ver o histórico dela, enviar as perguntas da pesquisa, ver a consolidação, o plano de aplicações com as fotos e informar os dados da ativação (aba `APLICACOES` aberta), ver um documento do Atlas que o escopo dela permite (rota 56: título, tipo, versão, páginas e se foi substituído), conversar com o Atlas e montar o relatório de ativação pelo botão ou, com o modelo de linguagem ligado, pelo texto livre (rotas 42 a 46, só ela; a conversa é de quem a abriu), ver os relatórios do Atlas da parceria (rotas 47 e 48), o diagnóstico das próprias conversas (rota 49, só com `atlas.diagnostico.marca` ligado) e o relatório disponibilizado. **Nunca** vê outra parceria nem as rotas da RBS. |
+| **Admin Patrocinador** | Ver a própria parceria, as entregas das abas liberadas, enviar materiais, baixar arquivos da parceria, ver o histórico dela, enviar as perguntas da pesquisa, ver a consolidação, o plano de aplicações com as fotos e informar os dados da ativação (aba `APLICACOES` aberta), ver um documento do Atlas que o escopo dela permite (rota 56: título, tipo, versão, páginas e se foi substituído) e abri-lo no visualizador, com o arquivo e o trecho citado (rotas 59 e 60), conversar com o Atlas e montar o relatório de ativação pelo botão ou, com o modelo de linguagem ligado, pelo texto livre (rotas 42 a 46, só ela; a conversa é de quem a abriu), ver os relatórios do Atlas da parceria (rotas 47 e 48), o diagnóstico das próprias conversas (rota 49, só com `atlas.diagnostico.marca` ligado) e o relatório disponibilizado. **Nunca** vê outra parceria nem as rotas da RBS. |
 
 ## O que a API grava no histórico
 
