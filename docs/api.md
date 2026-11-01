@@ -1970,7 +1970,7 @@ envio de PDF sem texto, com senha ou corrompido -> nasce ERRO (sem aprovado_por)
 | `SUBSTITUIDO` | Uma versão mais nova do mesmo grupo foi indexada. Os trechos ficam, inativos. |
 | `REVOGADO` | A RBS tirou do ar. Vale na hora: os trechos se desligam na mesma transação, também para o que uma conversa já buscou. |
 
-**O grupo e a versão.** Um documento lógico é a `chave` (por exemplo `manual-operacoes`). O **grupo** é a combinação de edição, escopo, cota, parceria e chave: dois documentos de grupos diferentes nunca se substituem (os anexos de duas parcerias com a mesma chave convivem, e o manual de 2026 não é versão do de 2027). A `versao` é a maior do grupo mais 1, calculada no envio. Quando uma versão nova termina de indexar, a anterior vira `SUBSTITUIDO` **na mesma transação** (não há instante sem nenhuma das duas no ar). A que ainda não terminou não tira a antiga do ar: se a nova der erro, a antiga continua.
+**O grupo e a versão.** Um documento lógico é a `chave` (por exemplo `manual-operacoes`). O **grupo** é a combinação de edição, escopo, cota, parceria e chave: dois documentos de grupos diferentes nunca se substituem (os anexos de duas parcerias com a mesma chave convivem, e o manual de 2026 não é versão do de 2027). A `versao` é a maior do grupo mais 1, calculada no envio. Quando uma versão nova termina de indexar, a anterior vira `SUBSTITUIDO` **na mesma transação** (não há instante sem nenhuma das duas no ar), e o histórico da anterior registra `INDEXADO` para `SUBSTITUIDO` mesmo que as duas terminem ao mesmo tempo (a nova espera a trava do grupo antes de ler quais versões vai substituir). A que ainda não terminou não tira a antiga do ar: se a nova der erro, a antiga continua.
 
 **O escopo.**
 

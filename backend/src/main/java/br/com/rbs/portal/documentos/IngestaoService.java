@@ -238,6 +238,10 @@ public class IngestaoService implements SmartInitializingSingleton {
     }
 
     private void publicar(ParaIngestao documento, int trechos, int embeddingsMs) {
+        // A trava do grupo (a mesma de fn_publicar_documento, que pega de novo sem problema na mesma transação) vem ANTES de ler quais
+        // versões esta vai substituir: se outra versão do grupo está publicando sem ter confirmado, esta espera aqui e só então lê a
+        // lista. Lida antes da trava, a lista vinha vazia, a versão antiga virava SUBSTITUIDO e o histórico não dizia.
+        repositorio.travarGrupoDoDocumento(documento.id());
         List<Long> substituidos = repositorio.indexadosMaisAntigosDoGrupo(documento.id());
         repositorio.publicar(documento.id());
         UsuarioAutenticado quem = quem(documento.aprovadoPor());

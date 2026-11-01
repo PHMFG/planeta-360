@@ -8,9 +8,15 @@ import br.com.rbs.portal.acesso.SessaoDeApi;
 import br.com.rbs.portal.atlas.embeddings.EmbeddingsDeTeste;
 import br.com.rbs.portal.atlas.embeddings.EmbeddingsIndisponivelException;
 import br.com.rbs.portal.atlas.embeddings.ProvedorDeEmbeddings;
+import br.com.rbs.portal.documentos.DocumentoRepositorio.TrechoParaGravar;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,7 +27,9 @@ import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.HttpStatus;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * [ATLAS] O que só aparece SEM uma transação envolvendo o teste, no molde do LoopSemTransacaoTest: a ingestão roda numa thread do
@@ -105,6 +113,15 @@ class IngestaoSemTransacaoTest extends ApoioDeDocumentos {
 
     @Autowired
     GravadorDeEmbeddings embeddings;
+
+    @Autowired
+    DocumentoRepositorio repositorio;
+
+    @Autowired
+    IngestaoService ingestao;
+
+    @Autowired
+    PlatformTransactionManager gerenteDeTransacao;
 
     private final List<Long> criados = new ArrayList<>();
 
@@ -253,6 +270,69 @@ class IngestaoSemTransacaoTest extends ApoioDeDocumentos {
 
         assertThat(acao(rbs, id, "RECUSAR")).hasStatus(HttpStatus.OK);
         assertThat(statusDe(id)).isEqualTo("RECUSADO");
+    }
+
+    /** Espera até a conexão de outra sessão estar parada numa trava de aviso (advisory lock) do PostgreSQL. */
+    private void esperarAlguemNaTravaDoGrupo() throws InterruptedException {
+        for (int tentativa = 0; tentativa < 200; tentativa++) {
+            long esperando = contar("SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock' AND wait_event = 'advisory'");
+            if (esperando > 0) {
+                return;
+            }
+            Thread.sleep(50);
+        }
+        throw new AssertionError("ninguém ficou esperando a trava do grupo em 10 segundos");
+    }
+
+    @Test
+    void aVersaoNovaQueEsperaAVelhaTerminarDeSePublicarAindaRegistraNoHistoricoQueAVelhaFoiSubstituida() throws Exception {
+        SessaoDeApi rbs = entrar(RBS);
+        long v1 = enviarEAprovar(rbs, "teste-historico-da-troca");
+        long v2 = enviarEAprovar(rbs, "teste-historico-da-troca");
+        long rbsId = contar("SELECT id FROM usuario WHERE email = ?", RBS);
+        TransactionTemplate transacao = new TransactionTemplate(gerenteDeTransacao);
+        // as duas aprovadas e PROCESSANDO, sem disparar a ingestão: quem publica é este teste (v1) e a ingestão de verdade (v2)
+        transacao.executeWithoutResult(estado -> {
+            repositorio.aprovar(v1, rbsId);
+            repositorio.aprovar(v2, rbsId);
+        });
+        String vetor = ProvedorDeEmbeddings.comoTextoDoBanco(new EmbeddingsDeTeste().paraConsulta("texto do trecho"));
+        CountDownLatch v1PublicouSemConfirmar = new CountDownLatch(1);
+        CountDownLatch confirmarV1 = new CountDownLatch(1);
+        ExecutorService threads = Executors.newFixedThreadPool(2);
+        try {
+            // v1 está no meio da própria publicação: tem a trava do grupo e o INDEXADO ainda não foi confirmado
+            Future<?> publicandoV1 = threads.submit(() -> transacao.executeWithoutResult(estado -> {
+                repositorio.inserirTrechos(v1, List.of(new TrechoParaGravar(1, 1, 1, null, "texto do trecho", 4, vetor)));
+                repositorio.gravarResultadoDaIngestao(v1, 1, 1, EmbeddingsDeTeste.MODELO, ProvedorDeEmbeddings.DIMENSOES, 1);
+                repositorio.publicar(v1);
+                v1PublicouSemConfirmar.countDown();
+                try {
+                    confirmarV1.await(30, TimeUnit.SECONDS);
+                } catch (InterruptedException interrompida) {
+                    Thread.currentThread().interrupt();
+                }
+            }));
+            assertThat(v1PublicouSemConfirmar.await(30, TimeUnit.SECONDS)).isTrue();
+
+            // v2 termina de indexar e tenta publicar: tem de esperar a trava de v1
+            Future<?> indexandoV2 = threads.submit(() -> ingestao.processar(v2));
+            esperarAlguemNaTravaDoGrupo();
+            assertThat(indexandoV2.isDone()).as("v2 espera a trava de v1").isFalse();
+            confirmarV1.countDown();
+            publicandoV1.get(30, TimeUnit.SECONDS);
+            indexandoV2.get(30, TimeUnit.SECONDS);
+        } finally {
+            confirmarV1.countDown();
+            threads.shutdownNow();
+        }
+
+        assertThat(statusDe(v2)).isEqualTo("INDEXADO");
+        assertThat(statusDe(v1)).isEqualTo("SUBSTITUIDO");
+        assertThat(contar("SELECT count(*) FROM historico WHERE entidade = 'documento' AND entidade_id = ? AND valor_anterior = 'INDEXADO' AND valor_novo = 'SUBSTITUIDO'", v1))
+                .as("a v1 ficou SUBSTITUIDO e o histórico tem de dizer isso, uma vez").isEqualTo(1);
+        assertThat(contar("SELECT count(*) FROM documento_trecho WHERE documento_id = ? AND ativo", v1)).isZero();
+        assertThat(contar("SELECT count(*) FROM documento_trecho WHERE documento_id = ? AND ativo", v2)).isGreaterThan(0);
     }
 
     @Test

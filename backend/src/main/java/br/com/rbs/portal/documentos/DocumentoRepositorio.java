@@ -341,6 +341,15 @@ public class DocumentoRepositorio {
                 .param("dimensoes", dimensoes).param("embeddings", embeddingsMs).update();
     }
 
+    /**
+     * Trava o grupo do documento até o fim da transação, com a mesma chave de {@link #travarGrupo} e de {@code fn_publicar_documento}.
+     * Quem vai publicar chama isto ANTES de {@link #indexadosMaisAntigosDoGrupo(long)}: a lista só vale depois de a trava ser sua.
+     */
+    public void travarGrupoDoDocumento(long id) {
+        jdbc.sql("SELECT fn_trava_grupo_documento(d.evento_id, d.escopo, d.cota_tipo_id, d.parceria_id, d.chave) FROM documento d WHERE d.id = :id")
+                .param("id", id).query().singleRow();
+    }
+
     /** Os documentos INDEXADOS mais antigos do mesmo grupo: os que a publicação deste vai passar a SUBSTITUIDO. */
     public List<Long> indexadosMaisAntigosDoGrupo(long id) {
         return jdbc.sql("""
