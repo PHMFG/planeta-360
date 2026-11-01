@@ -573,6 +573,20 @@ class ChecagemDeFontesTest {
     }
 
     @Test
+    void oQueDeveContinuarPassandoDepoisDeEndurecerAsRegras() {
+        aprova(turno("Quais manuais?"), "Os dois manuais tratam disso.");
+        aprova(turno("Quando?"), "A edição 2027 acontece em breve.");
+        aprova(turno("Quanto?", "O percentual foi de 89,4% do previsto."), "São 89,4 por cento [T1].");
+        aprova(turno("Quando?", PRAZO), "O prazo é quatro de dezembro [T1].");
+        aprova(turno("Quando?", PRAZO), "1. Prazo até 04/12/2026 [T1].\n2. Às 18h [T1].");
+        aprova(turno("Quanto?", "312"), "São trezentos e doze [T1].");
+        aprova(turno("Quantos?", "Os lotes três e quatro abrem antes"), "O lote 3 [T1].");
+        aprova(turno("Quando?", PRAZO), "### 1. Prazo\nAté 04/12/2026 [T1].");
+        aprova(turno("Quando?", PRAZO), "1 - O prazo é 04/12/2026 [T1].");
+        aprova(turno("Quem?", "O contato é b2b@rbs.com.br"), "O contato é b2b@rbs.com.br [T1].");
+    }
+
+    @Test
     void zeroPorExtensoContaComoNumero() {
         recusa(turno("Quantos?"), "Hoje há zero geradores.");
         recusa(turno("Quantos?", "Pode ter até 2 geradores."), "Hoje há zero geradores [T1].");
