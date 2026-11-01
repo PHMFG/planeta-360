@@ -1,29 +1,29 @@
 package br.com.rbs.portal.atlas.loop;
 
-import br.com.rbs.portal.atlas.relatorio.ChecagemDeTexto;
+import br.com.rbs.portal.atlas.checagem.ChecagemDeFontes;
+import br.com.rbs.portal.atlas.checagem.FontesDoTurno;
+import br.com.rbs.portal.atlas.checagem.Frases;
 import br.com.rbs.portal.atlas.relatorio.ChecagemDeTexto.Veredito;
-import br.com.rbs.portal.atlas.relatorio.Referencias;
 import br.com.rbs.portal.atlas.relatorio.ResolvedorDeReferencias.Resolucao;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.regex.Matcher;
 
 /**
- * O filtro do texto do chat em fluxo, de UMA ida ao modelo. [ATLAS] [VALIDACAO] O texto chega em pedaços; antes de ir à tela, cada
- * trecho passa pela mesma {@link ChecagemDeTexto} do chat, e só sai o que ela aprovaria, já com os marcadores trocados pelos
- * valores (o mesmo que o item {@code texto} mostra no fim):
- * <ul>
- *   <li>um marcador {@code {{...}}} fica retido até fechar, e sai resolvido e formatado;</li>
- *   <li>a última palavra fica retida até vir um espaço (ou o fim): "tool" pode virar "toolbox", "parceria" pode virar
- *       "parceria_consultar"; o corte nunca cai dentro de um marcador;</li>
- *   <li>a cada trecho novo, a checagem roda sobre TUDO o que chegou até o corte (o texto cru, com os marcadores). Se ela recusar
- *       (algarismo fora de marcador, chave crua, marcador que não resolve ou sem valor, nome de ferramenta, "marcador"...), o
- *       filtro para de repassar e avisa uma vez ({@code texto_recusado}). O que já saiu tinha passado pela checagem.</li>
- * </ul>
- * No fim da ida ({@link #fechar}) o resto sai, se a checagem do texto inteiro aprovar. A checagem completa do loop continua
- * valendo depois disso. Quando a checagem recusa, o filtro guarda o motivo e até onde tinha conferido ({@link #motivoDaRecusa},
- * {@link #caracteresNaRecusa}), para o loop deixar a etapa {@code CHECAGEM} de origem {@code FLUXO} no traço. Não é seguro para
- * várias threads: roda na thread do turno.
+ * O filtro do texto do chat em fluxo, de UMA ida ao modelo. [ATLAS] [VALIDACAO] O texto chega em pedaços; antes de ir à tela, o que
+ * chegou passa pela mesma {@link ChecagemDeFontes} do chat, e só sai o que ela aprovaria, já com os marcadores {@code {{ref}}} trocados
+ * pelos valores (o mesmo que o item {@code texto} mostra no fim). As citações {@code [T1]} seguem no texto: é a tela quem as
+ * transforma em link para a fonte.
+ * <p>
+ * <b>O filtro segura a frase inteira.</b> A regra "o número está na fonte citada na MESMA frase" não dá para conferir palavra a
+ * palavra: o número costuma vir antes do {@code [T1]} da frase, e a citação pode vir até depois do ponto ({@code ...2026. [T1]}). Por
+ * isso o texto só avança quando uma frase está completa, no sentido de {@link Frases}: ponto, {@code !}, {@code ?} ou reticências
+ * seguidos de espaço, ou uma quebra de linha; {@code 1.250,00} e {@code 3.2} não cortam, as citações que vêm logo depois do ponto
+ * ficam presas à frase anterior, e a frase fica em aberto enquanto o que vem depois do ponto ainda pode ser o começo de uma citação.
+ * Um marcador {@code {{...}}} que não fechou também segura. Resposta sem pontuação sai no {@link #fechar}. A tela recebe a resposta
+ * frase a frase; se a checagem recusar uma frase, o filtro para de repassar e avisa uma vez ({@code texto_recusado}), e o que já saiu
+ * tinha passado pela checagem.
+ * <p>
+ * Quando a checagem recusa, o filtro guarda o motivo e até onde tinha conferido ({@link #motivoDaRecusa},
+ * {@link #caracteresNaRecusa}), para o loop deixar a etapa {@code CHECAGEM} de origem {@code FLUXO} no traço. Não é seguro para várias
+ * threads: roda na thread do turno.
  */
 final class FiltroDoTexto {
 
@@ -31,7 +31,8 @@ final class FiltroDoTexto {
     static final String TEXTO_MUDOU_NA_TELA = "O texto que já estava na tela mudou quando o trecho seguinte chegou.";
 
     private final Resolucao resolucao;
-    private final ChecagemDeTexto checagem;
+    private final ChecagemDeFontes checagem;
+    private final FontesDoTurno fontes;
     private final OuvinteDoTurno ouvinte;
     private final StringBuilder recebido = new StringBuilder();
     private int aceito;               // quantos caracteres de "recebido" já passaram pelo filtro
@@ -40,9 +41,10 @@ final class FiltroDoTexto {
     private String motivoDaRecusa;    // a frase da checagem que recusou; nulo se não recusou, ou se foi o loop que mandou recusar
     private int caracteresNaRecusa;   // quanto do texto cru a checagem tinha conferido quando recusou
 
-    FiltroDoTexto(Resolucao resolucao, ChecagemDeTexto checagem, OuvinteDoTurno ouvinte) {
+    FiltroDoTexto(Resolucao resolucao, ChecagemDeFontes checagem, FontesDoTurno fontes, OuvinteDoTurno ouvinte) {
         this.resolucao = resolucao;
         this.checagem = checagem;
+        this.fontes = fontes;
         this.ouvinte = ouvinte;
     }
 
@@ -52,7 +54,7 @@ final class FiltroDoTexto {
             return;
         }
         recebido.append(pedaco);
-        avancar(pontoSeguro());
+        avancar(fimDasFrasesCompletas());
     }
 
     /** A ida terminou: o que estava retido passa (ou é recusado) pela checagem do texto inteiro. */
@@ -110,7 +112,7 @@ final class FiltroDoTexto {
         if (candidato.isBlank()) {
             return;   // nada para mostrar ainda (e a checagem recusaria o texto vazio)
         }
-        Veredito veredito = checagem.chat(resolucao, candidato);
+        Veredito veredito = checagem.chat(resolucao, fontes, candidato);
         if (!veredito.aprovado()) {
             recusarPelaChecagem(veredito.motivo(), candidato.length());
             return;
@@ -130,53 +132,18 @@ final class FiltroDoTexto {
     }
 
     /**
-     * Até onde o texto recebido pode passar agora: antes de um marcador que ainda não fechou (ou de uma chave solta no fim, que
-     * pode ser o começo de um), e até o último espaço que não está dentro de um marcador.
+     * Até onde o texto recebido tem só frases completas: o fim da última frase que nada que chegue depois muda. Antes de uma frase
+     * em aberto (sem ponto, ou com o ponto sem saber ainda o que vem depois, ou com um marcador que não fechou), nada avança.
      */
-    private int pontoSeguro() {
+    private int fimDasFrasesCompletas() {
         String texto = recebido.toString();
-        int limite = texto.length();
-        int aberto = marcadorAberto(texto);
-        if (aberto >= 0) {
-            limite = aberto;
-        } else if (texto.endsWith("{")) {
-            limite = texto.length() - 1;
-        }
-        List<int[]> marcadores = new ArrayList<>();
-        Matcher m = Referencias.MARCADOR.matcher(texto.substring(0, limite));
-        while (m.find()) {
-            marcadores.add(new int[]{m.start(), m.end()});
-        }
-        for (int i = limite - 1; i >= aceito; i--) {
-            if (Character.isWhitespace(texto.charAt(i)) && !dentro(marcadores, i)) {
-                return i + 1;
-            }
-        }
-        return aceito;
-    }
-
-    /** A posição do primeiro "{{" que ainda não fechou (lendo da esquerda para a direita), ou -1. */
-    private static int marcadorAberto(String texto) {
-        int desde = 0;
+        int fim = aceito;
         while (true) {
-            int abre = texto.indexOf("{{", desde);
-            if (abre < 0) {
-                return -1;
+            int proximo = Frases.fimDaPrimeiraFraseCompleta(texto, fim);
+            if (proximo < 0) {
+                return fim;
             }
-            int fecha = texto.indexOf("}}", abre + 2);
-            if (fecha < 0) {
-                return abre;
-            }
-            desde = fecha + 2;
+            fim = proximo;
         }
-    }
-
-    private static boolean dentro(List<int[]> marcadores, int posicao) {
-        for (int[] marcador : marcadores) {
-            if (posicao >= marcador[0] && posicao < marcador[1]) {
-                return true;
-            }
-        }
-        return false;
     }
 }

@@ -764,7 +764,9 @@ class LoopDoAgenteTest {
                     assertThat(mensagens.get(mensagens.size() - 2).papel()).isEqualTo("assistant");
                     assertThat(mensagens.get(mensagens.size() - 2).conteudo()).isEqualTo("Deu 7 por visitante.");
                     assertThat(mensagens.get(mensagens.size() - 1).papel()).isEqualTo("user");
-                    assertThat(mensagens.get(mensagens.size() - 1).conteudo()).contains("recusada").contains("algarismo \"7\"");
+                    assertThat(mensagens.get(mensagens.size() - 1).conteudo()).contains("recusada").contains("\"7\"").contains("não tem origem")
+                            .contains("citação [T#]").contains("Não encontrei isso nos documentos do portal.")
+                            .doesNotContain("sem nenhum algarismo");   // o pedido deixou de mandar escrever sem número
                     return new br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.RespostaDoLlm(
                             "Aplicações previstas: {{cons:aplicacoes.previstas}}; comprovadas: {{cons:aplicacoes.comprovadas}}.", List.of(), null);
                 });

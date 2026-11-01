@@ -243,7 +243,7 @@ class DiagnosticoDoTurnoTest {
         assertThat(resultados(traco)).containsExactly("OK", "OK", "RECUSADO", "OK", "RECUSADO", "RECUSADO");
         exigirCoerencia(traco);
         assertThat(todas(traco, "LLM_IDA").get(1).dados()).containsEntry("novaRedacao", true);
-        assertThat((String) todas(traco, "CHECAGEM").get(0).dados().get("motivo")).contains("algarismo");
+        assertThat((String) todas(traco, "CHECAGEM").get(0).dados().get("motivo")).contains("não tem origem");
         assertThat(primeira(traco, "SAIDA").dados()).containsEntry("tipo", "FRASE_FIXA").containsEntry("motivo", "TEXTO_RECUSADO");
     }
 
@@ -438,10 +438,10 @@ class DiagnosticoDoTurnoTest {
         assertThat(resultados(traco)).containsExactly("OK", "OK", "RECUSADO", "RECUSADO", "OK", "OK", "OK");
         exigirCoerencia(traco);
         List<Linha> checagens = todas(traco, "CHECAGEM");
-        // o filtro cortou o texto na tela assim que viu o algarismo: foi o que ele tinha checado até ali
+        // o filtro segura a frase inteira e a confere no fim da ida: o que ele tinha checado é o texto todo
         assertThat(checagens.get(0).dados()).containsEntry("origem", "FLUXO").containsEntry("aprovado", false)
-                .containsEntry("caracteres", "Foram muitas, mais de 10 ".length());
-        assertThat((String) checagens.get(0).dados().get("motivo")).contains("algarismo");
+                .containsEntry("caracteres", "Foram muitas, mais de 10 mil.".length());
+        assertThat((String) checagens.get(0).dados().get("motivo")).contains("não tem origem");
         // a checagem do texto inteiro vem depois, como sempre
         assertThat(checagens.get(1).dados()).containsEntry("origem", "RESPOSTA").containsEntry("aprovado", false);
         assertThat(checagens.get(2).dados()).containsEntry("origem", "RESPOSTA").containsEntry("aprovado", true);
@@ -484,14 +484,16 @@ class DiagnosticoDoTurnoTest {
     void modeloQueCaiDepoisDoFiltroRecusarUmTrechoDeixaAChecagemDoFluxoEAIdaComErro() {
         SessaoDeApi pessoa = SessaoDeApi.entrar(mvc, AMARELO);
         long conversa = conversa(pessoa, jdbc);
-        modelo.textoEmPedacosEFalha("Foram ", "mais de ", "10 ", "mil ", "visitas.");
+        modelo.textoEmPedacosEFalha("Foram ", "mais de ", "10 ", "mil ", "visitas. ", "E depois ");
 
         falarEmFluxo(pessoa, conversa, "Quantas?");
 
         List<Linha> traco = tracoDoTurno(jdbc, conversa);
         assertThat(etapas(traco)).containsExactly("G1_LIMITES", "LLM_IDA", "CHECAGEM", "SAIDA");
         assertThat(resultados(traco)).containsExactly("OK", "ERRO", "RECUSADO", "ERRO");
-        assertThat(todas(traco, "CHECAGEM").get(0).dados()).containsEntry("origem", "FLUXO").containsEntry("aprovado", false);
+        // a primeira frase completou quando a segunda começou: o filtro a conferiu, recusou, e só então o modelo caiu
+        assertThat(todas(traco, "CHECAGEM").get(0).dados()).containsEntry("origem", "FLUXO").containsEntry("aprovado", false)
+                .containsEntry("caracteres", "Foram mais de 10 mil visitas.".length());
         assertThat(primeira(traco, "SAIDA").dados()).containsEntry("motivo", "FALHA_DO_MODELO");
         exigirCoerencia(traco);
     }

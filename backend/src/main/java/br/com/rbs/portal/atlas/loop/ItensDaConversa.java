@@ -8,16 +8,19 @@ import br.com.rbs.portal.atlas.AtlasDtos.ItemDaConversa;
 import br.com.rbs.portal.atlas.AtlasDtos.ItemFerramenta;
 import br.com.rbs.portal.atlas.AtlasDtos.ItemRaciocinio;
 import br.com.rbs.portal.atlas.AtlasDtos.ItemRelatorioPronto;
+import br.com.rbs.portal.atlas.AtlasDtos.FonteDoTexto;
 import br.com.rbs.portal.atlas.AtlasDtos.ItemTexto;
 import br.com.rbs.portal.atlas.AtlasDtos.ItemUsuario;
 import br.com.rbs.portal.atlas.AtlasJson;
 import br.com.rbs.portal.atlas.AtlasRepositorio;
 import br.com.rbs.portal.atlas.AtlasRepositorio.LinhaDeChamada;
+import br.com.rbs.portal.atlas.AtlasRepositorio.LinhaDeFonte;
 import br.com.rbs.portal.atlas.AtlasRepositorio.LinhaDeConversa;
 import br.com.rbs.portal.atlas.AtlasRepositorio.LinhaDeMensagem;
 import br.com.rbs.portal.atlas.AtlasRepositorio.LinhaDeRelatorio;
 import br.com.rbs.portal.atlas.AtlasRepositorio.LinhaDeSolicitacao;
 import br.com.rbs.portal.atlas.ModoDoAtlas;
+import br.com.rbs.portal.atlas.checagem.Frases;
 import br.com.rbs.portal.atlas.diagnostico.TracoRepositorio;
 import br.com.rbs.portal.atlas.provedor.DisponibilidadeDoLlm;
 import br.com.rbs.portal.atlas.relatorio.Especificacao;
@@ -30,6 +33,7 @@ import br.com.rbs.portal.dados.DadosDtos.CampoDto;
 import br.com.rbs.portal.dados.DadosDtos.VigenteDto;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -107,6 +111,10 @@ public class ItensDaConversa {
             repositorio.chamadasDaConversa(conversa.id()).forEach(c -> trilha.computeIfAbsent(c.mensagemId(), id -> new ArrayList<>()).add(c));
         }
 
+        // As fontes citadas em cada resposta (atlas_fonte), de uma vez só para a conversa inteira.
+        Map<Long, List<LinhaDeFonte>> fontes = new HashMap<>();
+        repositorio.fontesDaConversa(conversa.id()).forEach(f -> fontes.computeIfAbsent(f.mensagemId(), id -> new ArrayList<>()).add(f));
+
         List<ItemDaConversa> itens = new ArrayList<>();
         for (LinhaDeMensagem mensagem : mensagens) {
             boolean doTurno = mensagem.ordem() > desdeOrdem;
@@ -125,7 +133,8 @@ public class ItensDaConversa {
                     }
                     if (doTurno && mensagem.conteudo() != null && !mensagem.conteudo().isBlank()) {
                         itens.add(new ItemTexto(contexto.resolucao(modelos, resolvedor).paraExibicao(mensagem.conteudo()),
-                                escritoPeloModelo(mensagem.conteudo(), chamadas), turno));
+                                escritoPeloModelo(mensagem.conteudo(), chamadas), turno,
+                                fontesDoTexto(mensagem.conteudo(), fontes.getOrDefault(mensagem.id(), List.of()))));
                     }
                     List<LinhaDeChamada> trilhaDaMensagem = trilha.getOrDefault(mensagem.id(), List.of());
                     int posicao = 0;
@@ -155,6 +164,27 @@ public class ItensDaConversa {
             }
         }
         return itens;
+    }
+
+    /**
+     * As fontes que o texto cita, na ordem em que a primeira citação aparece. Só entra o que está em {@code atlas_fonte} para essa
+     * mensagem (o servidor só grava a fonte de uma citação que existia no turno).
+     */
+    private static List<FonteDoTexto> fontesDoTexto(String texto, List<LinhaDeFonte> gravadas) {
+        if (gravadas.isEmpty()) {
+            return List.of();
+        }
+        Map<String, LinhaDeFonte> porMarcador = new HashMap<>();
+        gravadas.forEach(f -> porMarcador.put(f.marcador(), f));
+        List<FonteDoTexto> citadas = new ArrayList<>();
+        for (String marcador : new LinkedHashSet<>(Frases.citacoes(texto))) {
+            LinhaDeFonte f = porMarcador.get(marcador);
+            if (f != null) {
+                citadas.add(new FonteDoTexto(f.marcador(), f.tipo(), f.documentoId(), f.titulo(), f.versao(), f.pagina(), f.secao(),
+                        f.trechoId(), f.substituido(), f.revogado()));
+            }
+        }
+        return citadas;
     }
 
     /**

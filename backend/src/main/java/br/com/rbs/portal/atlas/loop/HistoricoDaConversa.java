@@ -88,14 +88,28 @@ public class HistoricoDaConversa {
         return repositorio.mensagens(conversaId);
     }
 
+    /** A frase que toma o lugar do texto de um resultado de busca de um turno anterior. */
+    public static final String AVISO_DO_RESULTADO_ANTIGO = "resultado de um turno anterior; busque de novo para citar";
+
+    /** As ferramentas cujo resultado traz texto de documento: de turno anterior, vão ao modelo sem o texto. */
+    private static final Set<String> FERRAMENTAS_COM_TEXTO_DE_DOCUMENTO = Set.of("buscar_documentos");
+
     /**
      * O histórico para mandar ao modelo, na ordem em que aconteceu: a mensagem da pessoa, a do assistente (com os pedidos de
      * ferramenta e o raciocínio que ele deu) e a resposta de cada ferramenta (com o nome dela). [ATLAS] Toda {@code tool_call}
      * tem de ter resposta antes da próxima mensagem que não é de ferramenta, ou o provedor responde 400. Se alguma ficou sem
      * (um turno que caiu no meio), esta remontagem completa a conta com um erro, só na memória; o cartão que espera a resposta
      * não passa por aqui, porque o loop não chama o modelo enquanto há cartão aberto.
+     * <p>
+     * [ISOLAMENTO] <b>O resultado de uma busca nos documentos de um turno anterior vai sem o texto</b> ({@code ordem} até
+     * {@code ordemDoTurno}): só o documento e a versão, e a frase "resultado de um turno anterior; busque de novo para citar". Sem
+     * isso, um documento revogado ou uma versão substituída continuariam disponíveis ao modelo ("o que dizia aquela circular?"
+     * teria resposta sem nova busca, e uma frase sem número e sem citação passaria pela checagem). O que foi gravado em
+     * {@code atlas_tool_call} e {@code atlas_fonte} fica como estava: aqui só muda o que vai ao modelo. O que o assistente já escreveu
+     * e o raciocínio antigo continuam no histórico (o provedor exige o raciocínio junto das ferramentas); a nota do prompt do turno
+     * cobre esse caso, e o risco que sobra está em {@code pendencias.md}.
      */
-    public List<MensagemDeChat> paraOProvedor(long conversaId) {
+    public List<MensagemDeChat> paraOProvedor(long conversaId, int ordemDoTurno) {
         List<MensagemDeChat> remontado = new ArrayList<>();
         Map<String, String> nomes = new LinkedHashMap<>();
         Set<String> semResposta = new LinkedHashSet<>();
@@ -115,12 +129,52 @@ public class HistoricoDaConversa {
                 }
                 default -> {
                     semResposta.remove(linha.toolCallId());
-                    remontado.add(MensagemDeChat.resultado(linha.toolCallId(), nomes.get(linha.toolCallId()), linha.conteudo()));
+                    String ferramenta = nomes.get(linha.toolCallId());
+                    String conteudo = linha.ordem() <= ordemDoTurno && FERRAMENTAS_COM_TEXTO_DE_DOCUMENTO.contains(ferramenta)
+                            ? semOTextoDosDocumentos(linha.conteudo()) : linha.conteudo();
+                    remontado.add(MensagemDeChat.resultado(linha.toolCallId(), ferramenta, conteudo));
                 }
             }
         }
         completarSemResposta(remontado, nomes, semResposta);
         return remontado;
+    }
+
+    /**
+     * O resultado de uma busca sem o texto dos trechos: só os documentos (título e versão, sem repetir) e o aviso. Um erro de
+     * ferramenta ({@code {"erro": ...}}) não tem texto de documento e segue como está.
+     */
+    static String semOTextoDosDocumentos(String conteudoJson) {
+        Map<String, Object> resultado;
+        try {
+            resultado = AtlasJson.ler(conteudoJson, new TypeReference<Map<String, Object>>() {
+            });
+        } catch (RuntimeException naoEObjeto) {
+            resultado = null;
+        }
+        if (resultado != null && resultado.containsKey("erro")) {
+            return conteudoJson;
+        }
+        Set<List<Object>> vistos = new LinkedHashSet<>();
+        if (resultado != null && resultado.get("trechos") instanceof List<?> trechos) {
+            for (Object trecho : trechos) {
+                if (trecho instanceof Map<?, ?> mapa) {
+                    vistos.add(java.util.Arrays.asList(mapa.get("documento"), mapa.get("versao")));
+                }
+            }
+        }
+        List<Map<String, Object>> documentos = new ArrayList<>();
+        for (List<Object> documento : vistos) {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("documento", documento.get(0));
+            item.put("versao", documento.get(1));
+            documentos.add(item);
+        }
+        Map<String, Object> novo = new LinkedHashMap<>();
+        novo.put("tipo", "resultado_de_turno_anterior");
+        novo.put("aviso", AVISO_DO_RESULTADO_ANTIGO);
+        novo.put("documentos", documentos);
+        return AtlasJson.escrever(novo);
     }
 
     private static void completarSemResposta(List<MensagemDeChat> remontado, Map<String, String> nomes, Set<String> semResposta) {

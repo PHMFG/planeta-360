@@ -73,10 +73,27 @@ public final class AtlasDtos {
     /**
      * O que o Atlas disse, com os marcadores {@code {{ref}}} já trocados pelos valores. {@code porModelo} é verdadeiro só quando o
      * texto foi escrito pelo modelo de linguagem; falso nas frases fixas do servidor (o plano B do botão, a troca de um texto
-     * recusado, a falha do modelo, o limite e o prazo do turno).
+     * recusado, a falha do modelo, o limite e o prazo do turno, e o "não encontrei" com a indicação do atendimento da RBS).
+     * {@code fontes} são as fontes que o texto cita (as citações {@code [T1]} continuam no texto, para a tela virar link): só vem
+     * quando o texto cita alguma, na ordem em que a primeira citação aparece.
      */
-    public record ItemTexto(String texto, boolean porModelo, @JsonInclude(JsonInclude.Include.NON_NULL) String turno)
-            implements ItemDaConversa {
+    public record ItemTexto(String texto, boolean porModelo, @JsonInclude(JsonInclude.Include.NON_NULL) String turno,
+                            @JsonInclude(JsonInclude.Include.NON_EMPTY) List<FonteDoTexto> fontes) implements ItemDaConversa {
+
+        public ItemTexto(String texto, boolean porModelo, String turno) {
+            this(texto, porModelo, turno, List.of());
+        }
+    }
+
+    /**
+     * Uma fonte citada num texto do Atlas, derivada de {@code atlas_fonte}. {@code tipo} é {@code TRECHO}, {@code REGISTRO} ou
+     * {@code CALCULO}; os campos do documento só vêm no trecho. {@code versao} e {@code pagina} são os da citação;
+     * {@code substituido} e {@code revogado} são o estado de agora do documento: substituído abre com aviso, e revogado não abre mais
+     * (a rota 59 responde 404).
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public record FonteDoTexto(String marcador, String tipo, Long documentoId, String titulo, Integer versao, Integer pagina,
+                               String secao, Long trechoId, boolean substituido, boolean revogado) {
     }
 
     /**

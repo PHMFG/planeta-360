@@ -20,7 +20,7 @@ import org.springframework.test.web.servlet.assertj.MvcTestResult;
  * em outra thread, que não enxerga uma transação aberta do teste, e o resumo do raciocínio é gravado por outra thread também.
  * Não faz parte da API.
  */
-final class ApoioDoFluxo {
+public final class ApoioDoFluxo {
 
     static final String FLUXO_E_JSON = "text/event-stream, application/json";
     static final String AMARELO = "marketing@amarelo.example";
@@ -134,13 +134,13 @@ final class ApoioDoFluxo {
      * Guarda o último id de cada tabela do Atlas (e das que ele grava) antes do teste e apaga, depois, o que o teste confirmou.
      * As tabelas com gatilho de imutabilidade têm o gatilho desligado só durante a limpeza (em {@code try/finally}).
      */
-    static final class Limpeza {
+    public static final class Limpeza {
 
         private static final Map<String, String> TABELAS_E_GATILHOS = new LinkedHashMap<>();
 
         static {
             TABELAS_E_GATILHOS.put("atlas_traco", null);
-        TABELAS_E_GATILHOS.put("atlas_fonte", null);
+            TABELAS_E_GATILHOS.put("atlas_fonte", null);
             TABELAS_E_GATILHOS.put("atlas_decisao", null);
             TABELAS_E_GATILHOS.put("atlas_tool_call", null);
             TABELAS_E_GATILHOS.put("atlas_calculo", null);
@@ -155,16 +155,16 @@ final class ApoioDoFluxo {
         private final JdbcClient jdbc;
         private final Map<String, Long> ultimoIdAntes = new LinkedHashMap<>();
 
-        Limpeza(JdbcClient jdbc) {
+        public Limpeza(JdbcClient jdbc) {
             this.jdbc = jdbc;
         }
 
-        void guardar() {
+        public void guardar() {
             TABELAS_E_GATILHOS.keySet().forEach(tabela -> ultimoIdAntes.put(tabela,
                     jdbc.sql("SELECT coalesce(max(id), 0) FROM " + tabela).query(Long.class).single()));
         }
 
-        void apagar() {
+        public void apagar() {
             TABELAS_E_GATILHOS.forEach((tabela, gatilho) -> {
                 if (gatilho != null) {
                     jdbc.sql("ALTER TABLE " + tabela + " DISABLE TRIGGER " + gatilho).update();

@@ -293,6 +293,67 @@ public class AtlasRepositorio {
     }
 
     // ---------------------------------------------------------------------
+    // Fontes citadas (V12)
+    // ---------------------------------------------------------------------
+
+    /** Grava a fonte de trecho que uma mensagem do assistente citou; {@code dados} guarda o título e a seção como estavam. */
+    public void inserirFonteDeTrecho(long mensagemId, String marcador, long trechoId, long documentoId, int versao, int pagina,
+                                     String titulo, String secao) {
+        java.util.Map<String, Object> dados = new java.util.LinkedHashMap<>();
+        dados.put("titulo", titulo);
+        dados.put("secao", secao);
+        jdbc.sql("""
+                        INSERT INTO atlas_fonte (mensagem_id, marcador, tipo, trecho_id, documento_id, versao, pagina, dados)
+                        VALUES (:mensagem, :marcador, 'TRECHO', :trecho, :documento, :versao, :pagina, CAST(:dados AS jsonb))
+                        """)
+                .param("mensagem", mensagemId).param("marcador", marcador).param("trecho", trechoId).param("documento", documentoId)
+                .param("versao", versao).param("pagina", pagina).param("dados", AtlasJson.escrever(dados)).update();
+    }
+
+    /**
+     * Uma fonte citada numa mensagem, como a conversa a mostra. {@code substituido} e {@code revogado} são o estado de AGORA do
+     * documento (ele pode ter mudado depois da resposta).
+     */
+    public record LinhaDeFonte(Long mensagemId, String marcador, String tipo, Long trechoId, Long documentoId, Integer versao,
+                               Integer pagina, String titulo, String secao, boolean substituido, boolean revogado) {
+    }
+
+    /** As fontes de todas as mensagens da conversa, por mensagem e pelo número do marcador. */
+    public List<LinhaDeFonte> fontesDaConversa(long conversaId) {
+        return jdbc.sql("""
+                        SELECT f.mensagem_id, f.marcador, f.tipo, f.trecho_id, f.documento_id, f.versao, f.pagina,
+                               f.dados ->> 'titulo' AS titulo, f.dados ->> 'secao' AS secao,
+                               coalesce(d.status = 'SUBSTITUIDO', FALSE) AS substituido, coalesce(d.status = 'REVOGADO', FALSE) AS revogado
+                        FROM atlas_fonte f
+                        JOIN atlas_mensagem m ON m.id = f.mensagem_id
+                        LEFT JOIN documento d ON d.id = f.documento_id
+                        WHERE m.conversa_id = :conversa
+                        ORDER BY f.mensagem_id, f.id
+                        """)
+                .param("conversa", conversaId).query(LinhaDeFonte.class).list();
+    }
+
+    /** Um documento que a conversa já citou e que deixou de valer (revogado, ou substituído por uma versão mais nova). */
+    public record DocumentoRetirado(String titulo, Integer versao) {
+    }
+
+    /**
+     * Os documentos que alguma resposta desta conversa citou (pela {@code atlas_fonte}) e que hoje estão revogados ou substituídos. O
+     * prompt do turno avisa o modelo de cada um, para ele não repetir o que disse deles.
+     */
+    public List<DocumentoRetirado> documentosCitadosQueSairamDoAr(long conversaId) {
+        return jdbc.sql("""
+                        SELECT DISTINCT d.titulo, d.versao
+                        FROM atlas_fonte f
+                        JOIN atlas_mensagem m ON m.id = f.mensagem_id
+                        JOIN documento d ON d.id = f.documento_id
+                        WHERE m.conversa_id = :conversa AND d.status IN ('REVOGADO', 'SUBSTITUIDO')
+                        ORDER BY d.titulo, d.versao
+                        """)
+                .param("conversa", conversaId).query(DocumentoRetirado.class).list();
+    }
+
+    // ---------------------------------------------------------------------
     // Relatório
     // ---------------------------------------------------------------------
 

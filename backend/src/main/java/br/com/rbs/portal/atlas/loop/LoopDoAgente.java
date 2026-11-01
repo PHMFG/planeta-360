@@ -11,7 +11,10 @@ import br.com.rbs.portal.atlas.diagnostico.EtapaDoTraco;
 import br.com.rbs.portal.atlas.diagnostico.ResultadoDaEtapa;
 import br.com.rbs.portal.atlas.diagnostico.Traco;
 import br.com.rbs.portal.atlas.diagnostico.Traco.Etapa;
+import br.com.rbs.portal.atlas.checagem.ChecagemDeFontes;
 import br.com.rbs.portal.atlas.checagem.FontesDoTurno;
+import br.com.rbs.portal.atlas.checagem.FontesDoTurno.Fonte;
+import br.com.rbs.portal.atlas.checagem.Frases;
 import br.com.rbs.portal.atlas.ferramentas.BuscarDocumentos;
 import br.com.rbs.portal.atlas.ferramentas.Execucao;
 import br.com.rbs.portal.atlas.ferramentas.RegistroDeFerramentas;
@@ -27,9 +30,9 @@ import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.MensagemDeChat;
 import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.OuvinteDoFluxo;
 import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.PedidoAoLlm;
 import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.RespostaDoLlm;
-import br.com.rbs.portal.atlas.relatorio.ChecagemDeTexto;
 import br.com.rbs.portal.atlas.relatorio.ChecagemDeTexto.Veredito;
 import br.com.rbs.portal.atlas.relatorio.ModeloBase;
+import br.com.rbs.portal.atlas.relatorio.Referencias;
 import br.com.rbs.portal.atlas.relatorio.RelatorioAtlasService;
 import br.com.rbs.portal.atlas.relatorio.RelatorioAtlasService.AcaoDoCartao;
 import br.com.rbs.portal.atlas.relatorio.ResolvedorDeReferencias;
@@ -42,6 +45,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -70,10 +74,14 @@ import tools.jackson.core.JacksonException;
  *       {@code ToolCallingManager}: ele responderia todas as chamadas da rodada de uma vez.</li>
  *   <li><b>Até {@value #LIMITE_DE_CHAMADAS_POR_TURNO} chamadas de ferramenta por turno</b> (contador nosso). Erro de ferramenta
  *       volta ao modelo como mensagem de ferramenta, nunca como 500.</li>
- *   <li><b>O modelo não escreve número nem termo interno.</b> O texto da resposta passa pela {@link ChecagemDeTexto} (a mesma
- *       do parágrafo do relatório): com algarismo solto, chave crua ({@code dado:...}), nome de ferramenta, marcador que não
- *       resolve ou sem valor, o servidor pede uma nova redação uma vez; se falhar de novo, troca pela frase fixa
- *       {@link #FRASE_FIXA}. O histórico guarda o texto com os marcadores; quem exibe os resolve.</li>
+ *   <li><b>O modelo não escreve número sem origem nem termo interno.</b> O texto da resposta passa pela {@link ChecagemDeFontes}
+ *       (M4; no relatório e no resumo do raciocínio vale a regra antiga da {@link ChecagemDeTexto}, sem nenhum algarismo): com
+ *       número ou data que nenhuma fonte citada na mesma frase traz, citação que não existe neste turno, chave crua
+ *       ({@code dado:...}), nome de ferramenta, marcador que não resolve ou sem valor, o servidor pede uma nova redação uma
+ *       vez; se falhar de novo, troca pelo texto fixo: {@link #TEXTO_NAO_ENCONTREI} num turno que buscou nos documentos,
+ *       {@link #FRASE_FIXA} num que não buscou. O histórico guarda o texto com os marcadores e as citações; quem exibe os resolve.
+ *       A frase {@code "Não encontrei isso nos documentos do portal."} escrita pelo modelo ganha a indicação do atendimento, e a
+ *       resposta de um turno que buscou, nada achou e não cita nada vira o mesmo texto fixo.</li>
  *   <li><b>Falha do modelo não quebra o histórico</b>: o turno termina com uma frase fixa gravada, e tudo o que já foi feito
  *       fica salvo.</li>
  *   <li>O id de cada pedido de ferramenta é nosso ({@code call_<uuid>}), único na conversa.</li>
@@ -115,12 +123,19 @@ public class LoopDoAgente {
     public static final String FRASE_DO_PRAZO_NO_CHAT = "Esta resposta demorou mais do que o esperado e eu parei. Tente de novo.";
     public static final String FRASE_SEM_RESPOSTA_NO_CHAT = "Não consegui responder agora. Tente de novo.";
     /**
+     * A frase que o prompt manda o modelo escrever, exatamente, quando os trechos não respondem, e o texto fixo do L2: o servidor
+     * acrescenta a indicação do atendimento da RBS. O avaliador de conversas reconhece a primeira parte.
+     */
+    public static final String FRASE_NAO_ENCONTREI = "Não encontrei isso nos documentos do portal.";
+    public static final String INDICACAO_DO_ATENDIMENTO = "Para essa dúvida, fale com o atendimento da RBS.";
+    public static final String TEXTO_NAO_ENCONTREI = FRASE_NAO_ENCONTREI + " " + INDICACAO_DO_ATENDIMENTO;
+    /**
      * As frases que o próprio loop grava como texto do assistente: no item {@code texto}, saem com {@code porModelo} falso. Entram
      * as dos dois modos: a conversa guarda a frase que valia quando foi escrita.
      */
     public static final Set<String> FRASES_DO_SERVIDOR = Set.of(FRASE_FIXA, FRASE_DO_LIMITE, FRASE_DA_FALHA, FRASE_DO_PRAZO,
             FRASE_SEM_RESPOSTA, FRASE_FIXA_NO_CHAT, FRASE_DO_LIMITE_NO_CHAT, FRASE_DA_FALHA_NO_CHAT, FRASE_DO_PRAZO_NO_CHAT,
-            FRASE_SEM_RESPOSTA_NO_CHAT);
+            FRASE_SEM_RESPOSTA_NO_CHAT, TEXTO_NAO_ENCONTREI);
     public static final String ERRO_DO_LIMITE = "Limite de chamadas de ferramenta deste turno atingido. Não chame mais ferramentas.";
     /** A frase da etapa {@code etapa} da resposta em fluxo, por ferramenta: a marca lê o que está acontecendo, nunca o nome dela. */
     public static final Map<String, String> ETAPAS = Map.of(
@@ -139,7 +154,7 @@ public class LoopDoAgente {
     private final HistoricoDaConversa historico;
     private final AtlasRepositorio repositorio;
     private final PlanoBSemLlm planoB;
-    private final ChecagemDeTexto checagem;
+    private final ChecagemDeFontes checagem;
     private final ResolvedorDeReferencias resolvedor;
     private final ModeloBase modelos;
     private final TransactionTemplate transacao;
@@ -150,7 +165,7 @@ public class LoopDoAgente {
 
     /** {@code prazoDoTurno} vem de {@code atlas.prazo-do-turno} (padrão {@link #PRAZO_DO_TURNO}); os testes o encurtam. */
     public LoopDoAgente(ProvedorAtual provedor, RegistroDeFerramentas ferramentas, HistoricoDaConversa historico,
-                        AtlasRepositorio repositorio, PlanoBSemLlm planoB, ChecagemDeTexto checagem, ResolvedorDeReferencias resolvedor,
+                        AtlasRepositorio repositorio, PlanoBSemLlm planoB, ChecagemDeFontes checagem, ResolvedorDeReferencias resolvedor,
                         ModeloBase modelos, TransactionTemplate transacao, ResumoDoRaciocinio resumos, ModoDoAtlas modo,
                         @Value("${atlas.prazo-do-turno:PT3M}") Duration prazoDoTurno) {
         this.provedor = provedor;
@@ -176,6 +191,8 @@ public class LoopDoAgente {
         final long prazo;
         final Traco traco;
         final FontesDoTurno fontes;
+        /** A última ordem do histórico quando o turno começou: o que tem ordem até aqui é de turno anterior. */
+        final int ordemInicial;
         int chamadas;
         int idas;
         boolean limiteAtingido;
@@ -188,10 +205,11 @@ public class LoopDoAgente {
         Long mensagemFinalId;
         int caracteresDaSaida;
 
-        Turno(Duration prazoDoTurno, Traco traco, FontesDoTurno fontes) {
+        Turno(Duration prazoDoTurno, Traco traco, FontesDoTurno fontes, int ordemInicial) {
             this.prazo = System.nanoTime() + prazoDoTurno.toNanos();
             this.traco = traco;
             this.fontes = fontes;
+            this.ordemInicial = ordemInicial;
         }
 
         boolean venceu() {
@@ -256,7 +274,8 @@ public class LoopDoAgente {
     public void conduzir(AtlasContexto contexto, OuvinteDoTurno ouvinte) {
         Turno turno = new Turno(prazoDoTurno, contexto.traco(), new FontesDoTurno(
                 repositorio.ultimaMensagemDaPessoa(contexto.conversaId()).orElse(""),
-                repositorio.escopoDaParceria(contexto.parceriaId()).edicao(), Datas.hoje()));
+                repositorio.escopoDaParceria(contexto.parceriaId()).edicao(), Datas.hoje()),
+                repositorio.ultimaOrdem(contexto.conversaId()));
         try {
             // O provedor é pego UMA vez: se a chave do debug mudar no meio, este turno termina com o que começou.
             ProvedorDeLlm llm = provedor.provedor().orElse(null);
@@ -313,8 +332,8 @@ public class LoopDoAgente {
                         ResultadoDaEtapa.ERRO);
                 return;
             }
-            PedidoAoLlm pedido = pedido(contexto, ativo, transitorias);
-            FiltroDoTexto filtro = ouvinte.emFluxo() ? new FiltroDoTexto(resolucao(contexto), checagem, ouvinte) : null;
+            PedidoAoLlm pedido = pedido(contexto, turno, ativo, transitorias);
+            FiltroDoTexto filtro = ouvinte.emFluxo() ? new FiltroDoTexto(resolucao(contexto), checagem, turno.fontes, ouvinte) : null;
             RespostaDoLlm resposta;
             AtomicBoolean pensou = new AtomicBoolean();   // o aviso "pensando" sai uma vez por ida
             // O traço da ida: só o que não é sensível (quantas mensagens e quais ferramentas, nunca o conteúdo nem o prompt).
@@ -368,6 +387,23 @@ public class LoopDoAgente {
                 }
                 Veredito veredito = checarDoChat(contexto, turno, texto, "RESPOSTA");
                 if (veredito.aprovado()) {
+                    if (ehNaoEncontrei(texto)) {
+                        // O modelo escreveu a frase certa: o servidor acrescenta a indicação do atendimento da RBS (o L2 do quadro).
+                        ouvinte.texto(" " + INDICACAO_DO_ATENDIMENTO);
+                        ida.mensagem(gravarTexto(contexto, turno, TEXTO_NAO_ENCONTREI, raciocinio));
+                        turno.tipoDaSaida = "TEXTO";
+                        turno.motivoDaSaida = "NAO_ENCONTREI";
+                        return;
+                    }
+                    if (semApoioNosDocumentos(turno, texto)) {
+                        // Buscou, nenhuma busca trouxe trecho, e a resposta não cita fonte nem usa dado da parceria: não há de onde ela
+                        // tenha saído. Sai o texto fixo, e a tela descarta o que recebeu.
+                        if (filtro != null) {
+                            filtro.recusar();
+                        }
+                        gravarFrase(contexto, turno, TEXTO_NAO_ENCONTREI, raciocinio, ouvinte, "SEM_FONTE", ResultadoDaEtapa.RECUSADO);
+                        return;
+                    }
                     ida.mensagem(gravarTexto(contexto, turno, texto, raciocinio));   // em fluxo, o texto já foi à tela pelo filtro
                     turno.tipoDaSaida = "TEXTO";
                     return;
@@ -376,15 +412,18 @@ public class LoopDoAgente {
                     filtro.recusar();   // a checagem completa recusou o que o filtro deixou passar
                 }
                 if (turno.pediuNovaRedacao) {
-                    gravarFrase(contexto, turno, frase(FRASE_FIXA, FRASE_FIXA_NO_CHAT), null, ouvinte, "TEXTO_RECUSADO",
-                            ResultadoDaEtapa.RECUSADO);
+                    // Segunda recusa: num turno que buscou, o texto fixo do L2; num que não buscou, a frase de sempre.
+                    if (turno.fontes.buscas() > 0) {
+                        gravarFrase(contexto, turno, TEXTO_NAO_ENCONTREI, null, ouvinte, "TEXTO_RECUSADO", ResultadoDaEtapa.RECUSADO);
+                    } else {
+                        gravarFrase(contexto, turno, frase(FRASE_FIXA, FRASE_FIXA_NO_CHAT), null, ouvinte, "TEXTO_RECUSADO",
+                                ResultadoDaEtapa.RECUSADO);
+                    }
                     return;
                 }
                 turno.pediuNovaRedacao = true;
-                transitorias = List.of(MensagemDeChat.assistente(texto, List.of(), null), MensagemDeChat.usuario(
-                        "Sua resposta foi recusada pelo servidor: " + veredito.motivo() + " Escreva a resposta de novo, sem "
-                                + "nenhum algarismo nem número por extenso, citando os dados só com marcadores {{ref}}, e sem termo "
-                                + "interno (marcador, referência, ferramenta, chave ou nome de ferramenta)."));
+                transitorias = List.of(MensagemDeChat.assistente(texto, List.of(), null), MensagemDeChat.usuario(pedidoDeNovaRedacao(
+                        veredito.motivo())));
                 continue;
             }
 
@@ -414,8 +453,12 @@ public class LoopDoAgente {
             return new ChamadaDeFerramenta(HistoricoDaConversa.novoIdDoModelo(), nome == null ? "ferramenta_sem_nome" : nome,
                     argumentos == null ? "{}" : argumentos);
         }).toList();
-        long mensagemId = transacao.execute(estado -> historico.assistente(contexto.conversaId(), texto,
-                chamadas.stream().map(c -> new Chamada(c.id(), c.nome(), c.argumentos())).toList(), raciocinio));
+        long mensagemId = transacao.execute(estado -> {
+            long id = historico.assistente(contexto.conversaId(), texto,
+                    chamadas.stream().map(c -> new Chamada(c.id(), c.nome(), c.argumentos())).toList(), raciocinio);
+            gravarFontes(id, turno, texto);
+            return id;
+        });
         ida.mensagem(mensagemId);   // a mensagem do assistente que esta ida produziu
         turno.mensagemFinalId = mensagemId;
         turno.resumos.pedir(mensagemId, raciocinio);   // à parte: as ferramentas e a próxima ida não esperam por ele
@@ -523,19 +566,73 @@ public class LoopDoAgente {
     // O que vai ao modelo
     // ---------------------------------------------------------------------
 
-    private PedidoAoLlm pedido(AtlasContexto contexto, Optional<LinhaDeRelatorio> ativo, List<MensagemDeChat> transitorias) {
+    private PedidoAoLlm pedido(AtlasContexto contexto, Turno turno, Optional<LinhaDeRelatorio> ativo, List<MensagemDeChat> transitorias) {
         List<MensagemDeChat> mensagens = new ArrayList<>();
         mensagens.add(MensagemDeChat.sistema(promptDe(contexto)));
-        mensagens.addAll(historico.paraOProvedor(contexto.conversaId()));
+        mensagens.addAll(historico.paraOProvedor(contexto.conversaId(), turno.ordemInicial));
         mensagens.addAll(transitorias);
         boolean podePedirCartao = ativo.isEmpty()
                 || repositorio.solicitacoesDoRelatorio(ativo.get().id()).size() < RelatorioAtlasService.LIMITE_DE_CARTOES;
         return new PedidoAoLlm(String.valueOf(contexto.conversaId()), mensagens, ferramentas.oferecidas(ativo, podePedirCartao));
     }
 
-    /** O prompt de sistema com a data de hoje e o nome da marca; id de parceria, conversa ou usuário nunca entra. */
+    /**
+     * O prompt de sistema com a data de hoje e o nome da marca; id de parceria, conversa ou usuário nunca entra. Se um documento que
+     * a conversa já citou foi revogado ou substituído, o prompt do turno ganha a nota "<título> v<n> não vale mais: não use o que foi
+     * dito dele" (a lista vem de {@code atlas_fonte} e do estado de agora dos documentos; a nota não é gravada em lugar nenhum).
+     */
     private String promptDe(AtlasContexto contexto) {
-        return prompt.replace("@DATA@", DIA.format(Datas.hoje())).replace("@MARCA@", repositorio.nomeDaMarca(contexto.parceriaId()));
+        String base = prompt.replace("@DATA@", DIA.format(Datas.hoje())).replace("@MARCA@", repositorio.nomeDaMarca(contexto.parceriaId()));
+        List<AtlasRepositorio.DocumentoRetirado> retirados = repositorio.documentosCitadosQueSairamDoAr(contexto.conversaId());
+        if (retirados.isEmpty()) {
+            return base;
+        }
+        StringBuilder nota = new StringBuilder(base).append("\n\nDocumentos que esta conversa já citou e que mudaram:");
+        for (AtlasRepositorio.DocumentoRetirado documento : retirados) {
+            nota.append("\n- ").append(documento.titulo()).append(" v").append(documento.versao())
+                    .append(" não vale mais: não use o que foi dito dele.");
+        }
+        return nota.toString();
+    }
+
+    /**
+     * O pedido de uma nova redação do chat (o texto foi recusado). Não é fixo: diz o motivo e o que a regra do chat pede, que é o
+     * oposto de "sem nenhum algarismo": os números de documento vão copiados da fonte, com a citação na mesma frase.
+     */
+    private static String pedidoDeNovaRedacao(String motivo) {
+        return "Sua resposta foi recusada pelo servidor: " + motivo + " Escreva a resposta de novo. Número e data de documento vão "
+                + "copiados exatamente como estão no trecho, com a citação [T#] na mesma frase; dado da parceria só com marcador "
+                + "{{ref}}; nada de termo interno, link ou endereço. Se os trechos não trazem a resposta, escreva exatamente \""
+                + FRASE_NAO_ENCONTREI + "\".";
+    }
+
+    /** O texto é, só, a frase de "não encontrei" (sem importar a caixa, os espaços nem o ponto final). */
+    private static boolean ehNaoEncontrei(String texto) {
+        String limpo = texto.strip().replaceAll("\\s+", " ");
+        return limpo.equalsIgnoreCase(FRASE_NAO_ENCONTREI)
+                || limpo.equalsIgnoreCase(FRASE_NAO_ENCONTREI.substring(0, FRASE_NAO_ENCONTREI.length() - 1));
+    }
+
+    /**
+     * O turno buscou, toda busca voltou sem trecho, e a resposta não cita fonte nem usa marcador de dado da parceria: ela não tem de
+     * onde ter saído. (Com marcador {{ref}}, é uma resposta certa com dado da parceria, e não pode virar "não encontrei".)
+     */
+    private static boolean semApoioNosDocumentos(Turno turno, String texto) {
+        return turno.fontes.todasAsBuscasVazias() && Frases.citacoes(texto).isEmpty() && Referencias.marcadores(texto).isEmpty();
+    }
+
+    /** Grava, na transação da mensagem, as fontes de trecho que o texto citou ({@code atlas_fonte}); o texto já passou pela checagem. */
+    private void gravarFontes(long mensagemId, Turno turno, String texto) {
+        if (texto == null) {
+            return;
+        }
+        for (String marcador : new LinkedHashSet<>(Frases.citacoes(texto))) {
+            Fonte fonte = turno.fontes.fonte(marcador).orElse(null);
+            if (fonte != null && fonte.tipo() == FontesDoTurno.Tipo.TRECHO) {
+                repositorio.inserirFonteDeTrecho(mensagemId, fonte.marcador(), fonte.trechoId(), fonte.documentoId(), fonte.versao(),
+                        fonte.pagina(), fonte.titulo(), fonte.secao());
+            }
+        }
     }
 
     /** O prompt do modo: {@code relatorio.txt} com o relatório ligado, {@code chat.txt} (sem o fluxo do relatório) desligado. */
@@ -560,7 +657,7 @@ public class LoopDoAgente {
     /** A checagem do texto do chat, com a etapa CHECAGEM no traço: se aprovou, e por que não (a frase de recusa, que é nossa). */
     private Veredito checarDoChat(AtlasContexto contexto, Turno turno, String texto, String origem) {
         Etapa etapa = turno.traco.abrir(EtapaDoTraco.CHECAGEM).dado("origem", origem).dado("caracteres", texto.length());
-        Veredito veredito = checagem.chat(resolucao(contexto), texto);
+        Veredito veredito = checagem.chat(resolucao(contexto), turno.fontes, texto);
         etapa.dado("aprovado", veredito.aprovado()).dado("motivo", veredito.motivo())
                 .fim(veredito.aprovado() ? ResultadoDaEtapa.OK : ResultadoDaEtapa.RECUSADO);
         return veredito;
@@ -586,7 +683,11 @@ public class LoopDoAgente {
 
     /** Grava o texto do assistente como a resposta do turno e devolve o id da mensagem. */
     private long gravarTexto(AtlasContexto contexto, Turno turno, String texto, String raciocinio) {
-        long mensagemId = transacao.execute(estado -> historico.assistente(contexto.conversaId(), texto, List.of(), raciocinio));
+        long mensagemId = transacao.execute(estado -> {
+            long id = historico.assistente(contexto.conversaId(), texto, List.of(), raciocinio);
+            gravarFontes(id, turno, texto);
+            return id;
+        });
         turno.mensagemFinalId = mensagemId;
         turno.caracteresDaSaida = texto.length();
         if (turno.resumos != null) {
