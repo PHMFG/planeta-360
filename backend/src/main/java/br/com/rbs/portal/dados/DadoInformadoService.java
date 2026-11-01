@@ -1,20 +1,26 @@
 package br.com.rbs.portal.dados;
 
 import br.com.rbs.portal.comum.AcaoHistorico;
+import br.com.rbs.portal.comum.Armazenamento;
 import br.com.rbs.portal.comum.DadosInvalidosException;
 import br.com.rbs.portal.comum.Datas;
 import br.com.rbs.portal.comum.HistoricoService;
+import br.com.rbs.portal.comum.NaoEncontradoException;
 import br.com.rbs.portal.comum.UsuarioAutenticado;
 import br.com.rbs.portal.comum.VerificadorDeAcesso;
 import br.com.rbs.portal.dados.DadoInformadoRepositorio.LinhaDeCampo;
 import br.com.rbs.portal.dados.DadoInformadoRepositorio.LinhaDeVigente;
+import br.com.rbs.portal.dados.DadosDtos.ArquivoDoDadoDto;
 import br.com.rbs.portal.dados.DadosDtos.CampoComValorDto;
 import br.com.rbs.portal.dados.DadosDtos.CampoDto;
 import br.com.rbs.portal.dados.DadosDtos.DadosDaAbaDto;
 import br.com.rbs.portal.dados.DadosDtos.ValorRequisicao;
 import br.com.rbs.portal.dados.DadosDtos.VigenteDto;
+import br.com.rbs.portal.materiais.Arquivo;
 import br.com.rbs.portal.materiais.MateriaisDtos.UsuarioResumoDto;
 import jakarta.servlet.http.HttpServletRequest;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.text.DecimalFormat;
@@ -30,6 +36,7 @@ import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 /**
  * O catálogo de campos (rota 39) e os dados que a marca informa (rotas 40 e 41): os números que o sistema não tem e só ela
@@ -40,6 +47,8 @@ import org.springframework.transaction.annotation.Transactional;
  * brindes distribuídos não passam dos disponíveis), nos dois sentidos. [HISTORICO] Corrigir é gravar uma linha nova (a anterior
  * fica como trilha, a vigente é a mais recente); valor igual ao vigente não grava nada; cada valor gravado registra CRIACAO.
  * [ISOLAMENTO] [PERMISSAO] Parceria de outro patrocinador dá 404; a marca só lê e grava com a aba do campo aberta (403).
+ * O campo de arquivo (a planilha da agência, M6) tem o próprio caminho de gravação, {@link #enviarArquivo} (rota 66): o JSON das
+ * rotas 41 e do cartão do Atlas continua recusando-o.
  */
 @Service
 public class DadoInformadoService {
@@ -51,11 +60,14 @@ public class DadoInformadoService {
     private final DadoInformadoRepositorio repositorio;
     private final VerificadorDeAcesso verificador;
     private final HistoricoService historico;
+    private final Armazenamento armazenamento;
 
-    public DadoInformadoService(DadoInformadoRepositorio repositorio, VerificadorDeAcesso verificador, HistoricoService historico) {
+    public DadoInformadoService(DadoInformadoRepositorio repositorio, VerificadorDeAcesso verificador, HistoricoService historico,
+                                Armazenamento armazenamento) {
         this.repositorio = repositorio;
         this.verificador = verificador;
         this.historico = historico;
+        this.armazenamento = armazenamento;
     }
 
     // ---------------------------------------------------------------------
@@ -157,6 +169,52 @@ public class DadoInformadoService {
     }
 
     // ---------------------------------------------------------------------
+    // Rota 66: o campo de arquivo
+    // ---------------------------------------------------------------------
+
+    /**
+     * Rota 66. Grava o arquivo de um campo {@code ARQUIVO} (hoje {@code ativacao.planilha_agencia}, a planilha da agência) como valor
+     * novo da parceria, com origem PORTAL, e devolve o valor vigente (o que acabou de entrar). Ordem das respostas: 404 (parceria que
+     * não existe ou é de outra; campo que não está no catálogo), 403 (aba do campo fechada para a marca), 422 (campo que não é de
+     * arquivo; parte {@code arquivo} ausente ou vazia), 413 e 415 (tamanho, extensão ou conteúdo, conferidos pelo Armazenamento: só
+     * {@code .xlsx}, {@code .xls} e {@code .csv}). O arquivo fica na parceria e na aba do campo, na categoria OUTRO, e sai pela rota 18
+     * com as mesmas regras de acesso. [HISTORICO] Cada envio é uma linha nova em {@code dado_informado} (a anterior fica guardada) e
+     * grava CRIACAO, na mesma transação do arquivo: se algo falhar, nem o registro nem o arquivo em disco ficam.
+     */
+    @Transactional
+    public VigenteDto enviarArquivo(UsuarioAutenticado usuario, long parceriaId, String chave, MultipartFile arquivo,
+                                    HttpServletRequest requisicao) {
+        verificador.exigirParceria(usuario, parceriaId);
+        LinhaDeCampo campo = porChave(repositorio.campos(null)).get(chave);
+        if (campo == null) {
+            throw new NaoEncontradoException("Não encontramos este campo.");
+        }
+        verificador.exigirAbaLiberada(usuario, parceriaId, campo.aba());
+        if (!"ARQUIVO".equals(campo.tipo())) {
+            throw new DadosInvalidosException(Map.of(chave, "Este campo não recebe arquivo. Informe o número pelo formulário."));
+        }
+        if (arquivo == null || arquivo.isEmpty()) {
+            throw new DadosInvalidosException(Map.of("arquivo", "Envie o arquivo na parte \"arquivo\" do formulário."));
+        }
+
+        repositorio.travarParceria(parceriaId);
+        LinhaDeVigente anterior = vigentesPorChave(parceriaId).get(chave);
+        Arquivo gravado = armazenamento.gravarPlanilha(bytesDe(arquivo), arquivo.getOriginalFilename(), usuario.id(), parceriaId, campo.aba());
+        long id = repositorio.inserirArquivo(parceriaId, chave, gravado.id(), OrigemDoDado.PORTAL.name(), usuario.id());
+        historico.registrar(AcaoHistorico.CRIACAO, usuario, parceriaId, "dado_informado", id, descrever(anterior), gravado.nomeOriginal(),
+                campo.rotulo() + " (portal)", requisicao);
+        return vigente(vigentesPorChave(parceriaId).get(chave));
+    }
+
+    private static byte[] bytesDe(MultipartFile arquivo) {
+        try {
+            return arquivo.getBytes();
+        } catch (IOException erro) {
+            throw new UncheckedIOException(erro);
+        }
+    }
+
+    // ---------------------------------------------------------------------
     // Para o Atlas
     // ---------------------------------------------------------------------
 
@@ -191,6 +249,7 @@ public class DadoInformadoService {
         String chave = campo.chave();
         switch (campo.tipo()) {
             case "ARQUIVO" -> {
+                // o arquivo entra pela rota 66 (multipart); o JSON da rota 41 e o cartão do Atlas não o aceitam
                 erros.putIfAbsent(chave, "Este campo recebe um arquivo, que ainda não é aceito por aqui.");
                 return null;
             }
@@ -315,7 +374,7 @@ public class DadoInformadoService {
         Object valor = l.valorNumero() != null ? ("INTEIRO".equals(l.tipo()) ? (Object) l.valorNumero().longValue() : l.valorNumero())
                 : l.valorData() != null ? l.valorData() : l.arquivoId();
         return new VigenteDto(valor, l.origem(), new UsuarioResumoDto(l.usuarioId(), l.usuarioNome(), l.usuarioPerfil()),
-                Datas.emBrasilia(l.informadoEm()));
+                Datas.emBrasilia(l.informadoEm()), l.arquivoId() == null ? null : new ArquivoDoDadoDto(l.arquivoId(), l.arquivoNome()));
     }
 
     private Map<String, LinhaDeVigente> vigentesPorChave(long parceriaId) {
@@ -341,7 +400,7 @@ public class DadoInformadoService {
             case BigDecimal numero -> formatar(numero);
             case LocalDate data -> data.toString();
             case LinhaDeVigente atual -> atual.valorNumero() != null ? formatar(atual.valorNumero())
-                    : atual.valorData() != null ? atual.valorData().toString() : "arquivo " + atual.arquivoId();
+                    : atual.valorData() != null ? atual.valorData().toString() : atual.arquivoNome();
             default -> valor.toString();
         };
     }

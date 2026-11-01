@@ -228,7 +228,7 @@ class PermissaoAntesDoCorpoTest {
             "GET /api/parcerias/{id}/pesquisa", "PUT /api/parcerias/{id}/pesquisa/perguntas",
             "GET /api/parcerias/{id}/consolidacao", "GET /api/parcerias/{id}/relatorio", "GET /api/relatorios/{id}/csv",
             "GET /api/parcerias/{id}/aplicacoes", "GET /api/campos", "GET /api/parcerias/{id}/dados",
-            "POST /api/parcerias/{id}/dados",
+            "POST /api/parcerias/{id}/dados", "POST /api/parcerias/{id}/dados-informados/{chave}/arquivo",
             "GET /api/atlas/relatorios/{id}", "GET /api/parcerias/{id}/atlas/relatorios",
             // Rota 56: a RBS vê o documento inteiro; a marca, pelo escopo dela, só o que a rota mostra. Rotas 59 e 60: o visualizador
             // (o arquivo e um trecho inteiro), com a mesma regra de acesso.

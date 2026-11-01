@@ -22,6 +22,9 @@ class ConteudoDeExemploTest {
     @Test
     void cadaTipoAceitoTemUmConteudoPequenoQuePassaNaConferenciaDoEnvio() {
         for (TipoDeArquivo tipo : TipoDeArquivo.values()) {
+            if (tipo == TipoDeArquivo.XLS) {
+                continue;   // só a planilha da agência (rota 66) aceita .xls; a amostra não tem arquivo desse tipo
+            }
             String nome = "exemplo." + tipo.extensao();
 
             byte[] conteudo = ConteudoDeExemplo.para(nome).orElseThrow(() -> new AssertionError("Sem exemplo para " + nome));
@@ -36,6 +39,11 @@ class ConteudoDeExemploTest {
         String texto = new String(ConteudoDeExemplo.para("faq_do_patrocinador.txt").orElseThrow(), StandardCharsets.UTF_8);
 
         assertThat(texto).startsWith("Arquivo de exemplo").contains("faq_do_patrocinador.txt").contains("fictício");
+    }
+
+    @Test
+    void xlsNaoTemExemploPoisSoAPlanilhaDaAgenciaOAceita() {
+        assertThat(ConteudoDeExemplo.para("planilha.xls")).isEmpty();
     }
 
     @Test

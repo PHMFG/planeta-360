@@ -81,7 +81,7 @@ public class Armazenamento {
      * {@link #gravarDocumento(byte[], String, long, Long)}.
      */
     public TipoDeArquivo conferirDocumento(byte[] conteudo, String nomeOriginal) {
-        return preparar(conteudo, nomeOriginal, true).tipo();
+        return preparar(conteudo, nomeOriginal, Aceitos.DOCUMENTOS).tipo();
     }
 
     /**
@@ -92,7 +92,7 @@ public class Armazenamento {
      * {@link #gravar(byte[], String, String, long, Long)}.
      */
     public Arquivo gravarDocumento(byte[] conteudo, String nomeOriginal, long enviadoPor, Long parceriaId) {
-        Preparado pronto = preparar(conteudo, nomeOriginal, true);
+        Preparado pronto = preparar(conteudo, nomeOriginal, Aceitos.DOCUMENTOS);
         String caminho = (parceriaId == null ? "geral" : "parcerias/" + parceriaId) + "/" + pronto.nomeNoDisco();
         escrever(caminho, conteudo);
         return inserir("""
@@ -114,10 +114,25 @@ public class Armazenamento {
      */
     public Arquivo gravar(byte[] conteudo, String nomeOriginal, String categoria, long enviadoPor, Long parceriaId,
                           String abaCodigo) {
+        return gravarNaAba(conteudo, nomeOriginal, categoria, enviadoPor, parceriaId, abaCodigo, Aceitos.COMUNS);
+    }
+
+    /**
+     * Grava a planilha da agência (rota 66, o campo {@code ativacao.planilha_agencia}): um arquivo avulso da parceria, na aba dela
+     * (APLICACOES) e na categoria OUTRO, para o download (rota 18) conferir a parceria e a aba. Aceita só {@code .xlsx}, {@code .xls}
+     * e {@code .csv}, conferidos pelo conteúdo (413 acima do limite, 415 fora da lista ou com o conteúdo que não bate, 422 se vazio).
+     * Chame de dentro de uma transação, como {@link #gravar(byte[], String, String, long, Long)}.
+     */
+    public Arquivo gravarPlanilha(byte[] conteudo, String nomeOriginal, long enviadoPor, long parceriaId, String abaCodigo) {
+        return gravarNaAba(conteudo, nomeOriginal, "OUTRO", enviadoPor, parceriaId, abaCodigo, Aceitos.PLANILHAS);
+    }
+
+    private Arquivo gravarNaAba(byte[] conteudo, String nomeOriginal, String categoria, long enviadoPor, Long parceriaId,
+                                String abaCodigo, Aceitos aceitos) {
         if (parceriaId == null) {
             throw new IllegalArgumentException("Arquivo geral da RBS (sem parceria) não pertence a uma aba.");
         }
-        Preparado pronto = preparar(conteudo, nomeOriginal);
+        Preparado pronto = preparar(conteudo, nomeOriginal, aceitos);
         Integer abaId = jdbc.sql("SELECT id FROM aba WHERE codigo = :codigo").param("codigo", abaCodigo)
                 .query(Integer.class).optional()
                 .orElseThrow(() -> new IllegalArgumentException("A aba " + abaCodigo + " não existe."));
@@ -213,16 +228,42 @@ public class Armazenamento {
     private record Preparado(String nomeOriginal, TipoDeArquivo tipo, String hash, String nomeNoDisco) {
     }
 
+    /** Os tipos que um envio aceita: os comuns, os do documento do Atlas (rota 54) e os da planilha da agência (rota 66). */
+    private enum Aceitos {
+        COMUNS(null),
+        DOCUMENTOS("pdf, txt"),
+        PLANILHAS("xlsx, xls, csv");
+
+        private final String extensoes;
+
+        Aceitos(String extensoes) {
+            this.extensoes = extensoes;
+        }
+
+        String extensoes() {
+            return this == COMUNS ? TipoDeArquivo.listaDeExtensoes() : extensoes;
+        }
+
+        boolean aceita(TipoDeArquivo tipo) {
+            return switch (this) {
+                case COMUNS -> tipo != TipoDeArquivo.TXT && tipo != TipoDeArquivo.XLS;
+                case DOCUMENTOS -> tipo == TipoDeArquivo.PDF || tipo == TipoDeArquivo.TXT;
+                case PLANILHAS -> tipo == TipoDeArquivo.XLSX || tipo == TipoDeArquivo.XLS || tipo == TipoDeArquivo.CSV;
+            };
+        }
+    }
+
     /** [UPLOAD] Vazio (422), grande demais (413), extensão fora da lista ou conteúdo que não bate com ela (415). */
     private Preparado preparar(byte[] conteudo, String nomeInformado) {
-        return preparar(conteudo, nomeInformado, false);
+        return preparar(conteudo, nomeInformado, Aceitos.COMUNS);
     }
 
     /**
-     * O mesmo, para os dois tipos de arquivo: o comum (a lista de {@link TipoDeArquivo#listaDeExtensoes()}, sem o TXT) e o do
-     * documento do Atlas (só PDF e TXT). [ATLAS] O .txt só existe na rota 54: a rota 17 continua recusando.
+     * O mesmo, para cada lista de tipos: a comum (a de {@link TipoDeArquivo#listaDeExtensoes()}, sem o TXT nem o XLS), a do documento
+     * do Atlas (só PDF e TXT) e a da planilha da agência (XLSX, XLS e CSV). [ATLAS] O .txt só existe na rota 54, e o .xls só na rota
+     * 66: a rota 17 continua recusando os dois.
      */
-    private Preparado preparar(byte[] conteudo, String nomeInformado, boolean documento) {
+    private Preparado preparar(byte[] conteudo, String nomeInformado, Aceitos aceitos) {
         if (conteudo == null || conteudo.length == 0) {
             throw new DadosInvalidosException(Map.of("arquivo", "O arquivo está vazio."));
         }
@@ -232,10 +273,9 @@ public class Armazenamento {
         }
         String nome = limparNome(nomeInformado);
         TipoDeArquivo tipo = TipoDeArquivo.daExtensao(nome)
-                .filter(t -> documento ? t == TipoDeArquivo.PDF || t == TipoDeArquivo.TXT : t != TipoDeArquivo.TXT)
+                .filter(aceitos::aceita)
                 .orElseThrow(() -> new ArquivoRecusadoException(HttpStatus.UNSUPPORTED_MEDIA_TYPE,
-                        "Este tipo de arquivo não é aceito. Envie um destes: "
-                                + (documento ? "pdf, txt" : TipoDeArquivo.listaDeExtensoes()) + "."));
+                        "Este tipo de arquivo não é aceito. Envie um destes: " + aceitos.extensoes() + "."));
         if (!tipo.conteudoConfere(conteudo)) {
             throw new ArquivoRecusadoException(HttpStatus.UNSUPPORTED_MEDIA_TYPE, frasePorConteudo(tipo, conteudo));
         }

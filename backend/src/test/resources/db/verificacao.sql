@@ -688,8 +688,6 @@ BEGIN
         (SELECT limite_campo FROM campo_catalogo WHERE chave = 'ativacao.cadastros_consentidos') = 'ativacao.visitantes_total'
         AND (SELECT limite_campo FROM campo_catalogo WHERE chave = 'ativacao.brindes_distribuidos') = 'ativacao.brindes_disponiveis'
         AND (SELECT count(*) FROM campo_catalogo WHERE limite_campo IS NOT NULL) = 2);
-    PERFORM pg_temp.afirma('V7 CATÁLOGO', 'o campo de arquivo da agência ainda não existe (entra na etapa seguinte)',
-        NOT EXISTS (SELECT 1 FROM campo_catalogo WHERE tipo = 'ARQUIVO'));
     PERFORM pg_temp.recusa('V7 CATÁLOGO', 'campo que limita a si mesmo', 'ck_campo_limite_proprio', $q$
         UPDATE campo_catalogo SET limite_campo = chave WHERE chave = 'ativacao.brindes_disponiveis' $q$);
 END $$;
@@ -2228,7 +2226,63 @@ BEGIN
 END $$;
 
 -- ---------------------------------------------------------------------
--- 13. Resultado: a lista de conferências e, se alguma falhou, o erro final (saída diferente de zero com ON_ERROR_STOP)
+-- 13. V14: o campo de arquivo da planilha da agência (M6)
+-- ---------------------------------------------------------------------
+-- A V14 só acrescenta uma linha ao catálogo: o tipo ARQUIVO, a coluna dado_informado.arquivo_id e a chave composta que prende o arquivo à
+-- parceria são da V7. Aqui se confere a linha nova e que o valor de arquivo funciona como os outros (vigente, um valor só, mesma parceria).
+DO $$
+BEGIN
+    PERFORM pg_temp.confere('V14 CATÁLOGO', 'campos da aba Aplicações (os quatro inteiros e a planilha)', 5,
+        (SELECT count(*) FROM campo_catalogo c JOIN aba a ON a.id = c.aba_id WHERE a.codigo = 'APLICACOES'));
+    PERFORM pg_temp.confere('V14 CATÁLOGO', 'campos de arquivo no catálogo (só a planilha da agência)', 1,
+        (SELECT count(*) FROM campo_catalogo WHERE tipo = 'ARQUIVO'));
+    PERFORM pg_temp.afirma('V14 CATÁLOGO', 'a planilha: aba Aplicações, ordem 5, rótulo e ajuda, sem unidade, limites nem campo-limite',
+        EXISTS (SELECT 1 FROM campo_catalogo c JOIN aba a ON a.id = c.aba_id
+                 WHERE c.chave = 'ativacao.planilha_agencia' AND a.codigo = 'APLICACOES' AND c.tipo = 'ARQUIVO' AND c.ordem = 5
+                   AND c.rotulo = 'Planilha da agência' AND c.ajuda ILIKE '%planilha%agência%'
+                   AND c.unidade IS NULL AND c.minimo IS NULL AND c.maximo IS NULL AND c.limite_campo IS NULL));
+    PERFORM pg_temp.afirma('V14 CATÁLOGO', 'a planilha vem depois dos quatro inteiros na ordem do formulário',
+        (SELECT max(ordem) FROM campo_catalogo WHERE tipo = 'INTEIRO') < (SELECT ordem FROM campo_catalogo WHERE chave = 'ativacao.planilha_agencia'));
+    PERFORM pg_temp.afirma('V14 CATÁLOGO', 'nenhum campo limita a planilha nem é limitado por ela',
+        NOT EXISTS (SELECT 1 FROM campo_catalogo WHERE limite_campo = 'ativacao.planilha_agencia'));
+    PERFORM pg_temp.aceita('V14 DADOS', 'a planilha do Amarelo com um arquivo do próprio Amarelo', $q$
+        INSERT INTO dado_informado (parceria_id, campo_chave, arquivo_id, origem, informado_por)
+        SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), 'ativacao.planilha_agencia',
+               (SELECT a.id FROM arquivo a WHERE a.categoria = 'COMPROVACAO' AND a.parceria_id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027) LIMIT 1),
+               'PORTAL', (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example') $q$);
+    PERFORM pg_temp.recusa('V14 DADOS', 'a planilha do Amarelo com um arquivo da Verde', 'fk_dado_informado_arquivo_parceria', $q$
+        INSERT INTO dado_informado (parceria_id, campo_chave, arquivo_id, origem, informado_por)
+        SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), 'ativacao.planilha_agencia',
+               (SELECT a.id FROM arquivo a WHERE a.categoria = 'COMPROVACAO' AND a.parceria_id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Verde' AND edicao = 2027) LIMIT 1),
+               'PORTAL', (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example') $q$);
+    PERFORM pg_temp.recusa('V14 DADOS', 'a planilha com o arquivo e um número ao mesmo tempo', 'ck_dado_informado_um_valor', $q$
+        INSERT INTO dado_informado (parceria_id, campo_chave, valor_numero, arquivo_id, origem, informado_por)
+        SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), 'ativacao.planilha_agencia', 10,
+               (SELECT a.id FROM arquivo a WHERE a.categoria = 'COMPROVACAO' AND a.parceria_id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027) LIMIT 1),
+               'PORTAL', (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example') $q$);
+    PERFORM pg_temp.aceita('V14 DADOS', 'a planilha vigente é o arquivo mais recente, e o anterior fica guardado', $q$
+        DO $d$
+        DECLARE
+            v_parceria BIGINT := (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027);
+            v_usuario  BIGINT := (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example');
+            v_arquivos BIGINT[] := ARRAY(SELECT a.id FROM arquivo a WHERE a.categoria = 'COMPROVACAO' AND a.parceria_id = v_parceria ORDER BY a.id LIMIT 2);
+        BEGIN
+            INSERT INTO dado_informado (parceria_id, campo_chave, arquivo_id, origem, informado_por, informado_em)
+            VALUES (v_parceria, 'ativacao.planilha_agencia', v_arquivos[1], 'PORTAL', v_usuario, now() - interval '1 hour'),
+                   (v_parceria, 'ativacao.planilha_agencia', v_arquivos[2], 'PORTAL', v_usuario, now());
+            IF (SELECT arquivo_id FROM vw_dado_vigente WHERE parceria_id = v_parceria AND campo_chave = 'ativacao.planilha_agencia') IS DISTINCT FROM v_arquivos[2] THEN
+                RAISE EXCEPTION 'o vigente devia ser o arquivo mais recente';
+            END IF;
+            IF (SELECT count(*) FROM dado_informado WHERE parceria_id = v_parceria AND campo_chave = 'ativacao.planilha_agencia') <> 2 THEN
+                RAISE EXCEPTION 'o arquivo anterior devia continuar guardado';
+            END IF;
+        END $d$ $q$);
+    PERFORM pg_temp.confere('V14 DADOS', 'as tentativas não deixaram planilha nenhuma na amostra', 0,
+        (SELECT count(*) FROM dado_informado WHERE campo_chave = 'ativacao.planilha_agencia'));
+END $$;
+
+-- ---------------------------------------------------------------------
+-- 14. Resultado: a lista de conferências e, se alguma falhou, o erro final (saída diferente de zero com ON_ERROR_STOP)
 -- ---------------------------------------------------------------------
 SELECT grupo, conferencia, esperado, obtido, CASE WHEN ok THEN 'ok' ELSE 'FALHOU' END AS resultado FROM _ver ORDER BY ordem;
 SELECT count(*) AS conferencias, count(*) FILTER (WHERE ok) AS ok, count(*) FILTER (WHERE NOT ok) AS falhas FROM _ver;

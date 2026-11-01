@@ -2,7 +2,7 @@
 
 Este documento é o **contrato entre o back-end e o front-end**. Quem faz a tela lê aqui o que cada rota pede, o que devolve e quais erros esperar, sem precisar abrir o código.
 
-- Todas as 65 rotas estão implementadas e cobertas por testes de integração (`cd backend && ./mvnw test`), inclusive o isolamento entre parcerias. A coluna "Etapa" diz em que etapa do plano cada rota entrou (as do Atlas, 37 em diante, entram como `Atlas 1`, `Atlas 2`, `Atlas M2`, `Atlas M3`, `Atlas M4`, `Atlas M5` e `Atlas M6`). Mudança de formato daqui em diante entra neste arquivo no mesmo commit do código.
+- Todas as 66 rotas estão implementadas e cobertas por testes de integração (`cd backend && ./mvnw test`), inclusive o isolamento entre parcerias. A coluna "Etapa" diz em que etapa do plano cada rota entrou (as do Atlas, 37 em diante, entram como `Atlas 1`, `Atlas 2`, `Atlas M2`, `Atlas M3`, `Atlas M4`, `Atlas M5` e `Atlas M6`). Mudança de formato daqui em diante entra neste arquivo no mesmo commit do código.
 - O banco está descrito em [`docs/banco.md`](banco.md). Os nomes de status, cotas e abas são os mesmos do banco.
 
 ## Como falar com a API
@@ -171,10 +171,11 @@ Todas prontas e testadas. A coluna "Etapa" mostra em que etapa do plano a rota e
 | 63 | `POST /api/eventos/{id}/prazos` | Admin RBS | Cadastra um prazo, com o documento e a página de onde ele saiu, se tiver | Atlas M5 |
 | 64 | `DELETE /api/prazos/{id}` | Admin RBS | Desativa o prazo (não apaga): ele sai do Atlas e a linha fica | Atlas M5 |
 | 65 | `POST /api/atlas/relatorios/{id}/descartar` | Admin Patrocinador da parceria | Descarta o relatório do Atlas que está em montagem ou esperando o cartão; devolve o mesmo corpo da rota 47 | Atlas M6 |
+| 66 | `POST /api/parcerias/{id}/dados-informados/{chave}/arquivo` | Patrocinador da parceria, ou Admin RBS | Envia o arquivo de um campo de arquivo do catálogo (a planilha da agência: xlsx, xls ou csv); devolve o valor vigente | Atlas M6 |
 
-São 65 operações (método + caminho). A rota 5 (`ativar`) faz parte do contrato de autenticação, mas só é implementada na etapa 4. As rotas 37 em diante vieram com o Atlas: a coluna "Etapa" diz `Atlas 1` (plano de aplicações e dados informados), `Atlas 2` (conversa, cartão de perguntas e relatório), `Atlas M2` (o diagnóstico: rotas 49 a 53, veja "Diagnóstico do Atlas") `Atlas M3` (os documentos: rotas 54 a 58, veja "Os documentos do Atlas") `Atlas M4` (o visualizador, rotas 59 e 60, e a busca de teste, rota 61, veja "Busca nos documentos") `Atlas M5` (os prazos: rotas 62 a 64, veja "Os prazos do Atlas") ou `Atlas M6` (o relatório religado: a rota 65, veja "Descarte do relatório parado"). As rotas 54, 55, 57, 58, 61, 62, 63 e 64 são só do Admin RBS (o outro perfil recebe **403** antes de o corpo ser lido); a 56, a 59 e a 60 são das duas pontas, e a marca só vê o que o escopo dela permite. A 49 é só do Admin Patrocinador, dono da conversa; as 50 a 53 são só do Admin RBS (o outro perfil recebe **403** antes de tudo). **As rotas 49 a 53 estão sempre mapeadas e respondem 404 com o diagnóstico desligado** (`atlas.diagnostico.ligado=false`, o padrão). Nas rotas 42 a 46 e 65 só o Admin Patrocinador chama (a RBS recebe **403** antes de o corpo ser lido); nas 47 e 48 chamam a marca da parceria e a RBS. **O relatório do Atlas está ligado nos perfis `dev` e `test` e desligado no padrão** (`atlas.relatorio.ligado=false`, `ATLAS_RELATORIO`). Desligado, as rotas **46, 47, 48 e 65 não existem (404)**, e as rotas 42 e 44 só aceitam conversa por texto (`atalho` e `modelo` dão 422): é o modo só chat, que continua existindo e testado. Veja "Modo só chat". O contrato do relatório, nas rotas 42 a 48 e 65, vale com `atlas.relatorio.ligado=true`.
+São 66 operações (método + caminho). A rota 5 (`ativar`) faz parte do contrato de autenticação, mas só é implementada na etapa 4. As rotas 37 em diante vieram com o Atlas: a coluna "Etapa" diz `Atlas 1` (plano de aplicações e dados informados), `Atlas 2` (conversa, cartão de perguntas e relatório), `Atlas M2` (o diagnóstico: rotas 49 a 53, veja "Diagnóstico do Atlas") `Atlas M3` (os documentos: rotas 54 a 58, veja "Os documentos do Atlas") `Atlas M4` (o visualizador, rotas 59 e 60, e a busca de teste, rota 61, veja "Busca nos documentos") `Atlas M5` (os prazos: rotas 62 a 64, veja "Os prazos do Atlas") ou `Atlas M6` (o relatório religado: a rota 65, veja "Descarte do relatório parado"; e a planilha da agência: a rota 66, veja "Dados informados pela marca"). As rotas 54, 55, 57, 58, 61, 62, 63 e 64 são só do Admin RBS (o outro perfil recebe **403** antes de o corpo ser lido); a 56, a 59 e a 60 são das duas pontas, e a marca só vê o que o escopo dela permite; a 66 é da marca da parceria e da RBS. A 49 é só do Admin Patrocinador, dono da conversa; as 50 a 53 são só do Admin RBS (o outro perfil recebe **403** antes de tudo). **As rotas 49 a 53 estão sempre mapeadas e respondem 404 com o diagnóstico desligado** (`atlas.diagnostico.ligado=false`, o padrão). Nas rotas 42 a 46 e 65 só o Admin Patrocinador chama (a RBS recebe **403** antes de o corpo ser lido); nas 47 e 48 chamam a marca da parceria e a RBS. **O relatório do Atlas está ligado nos perfis `dev` e `test` e desligado no padrão** (`atlas.relatorio.ligado=false`, `ATLAS_RELATORIO`). Desligado, as rotas **46, 47, 48 e 65 não existem (404)**, e as rotas 42 e 44 só aceitam conversa por texto (`atalho` e `modelo` dão 422): é o modo só chat, que continua existindo e testado. Veja "Modo só chat". O contrato do relatório, nas rotas 42 a 48 e 65, vale com `atlas.relatorio.ligado=true`.
 
-As rotas de debug do modelo de linguagem (`/api/debug/llm`) são temporárias, só existem no perfil `dev`, são só da RBS e ficam fora desta tabela e da conta das 65: veja "Rotas de debug (temporárias)", no fim.
+As rotas de debug do modelo de linguagem (`/api/debug/llm`) são temporárias, só existem no perfil `dev`, são só da RBS e ficam fora desta tabela e da conta das 66: veja "Rotas de debug (temporárias)", no fim.
 
 ## Objetos que se repetem
 
@@ -1319,7 +1320,7 @@ A aba **Aplicações** deixa de ser só uma lista de entregas: ela mostra o plan
 
 # Dados informados pela marca (Atlas, parte 1)
 
-Os números que o sistema não tem e só a marca (ou a agência dela) sabe, como os visitantes no espaço e os brindes distribuídos. O que se pode informar está num **catálogo fixo** (rota 39); o valor de cada parceria tem **autor, data e origem** (`PORTAL` para o formulário da aba, `ATLAS` para o cartão do assistente) e entra pela mesma rota de gravação (41) nos dois casos, com a mesma validação. Cada valor é uma linha nova: corrigir é gravar de novo, e a mais recente vale.
+Os números que o sistema não tem e só a marca (ou a agência dela) sabe, como os visitantes no espaço e os brindes distribuídos. O que se pode informar está num **catálogo fixo** (rota 39); o valor de cada parceria tem **autor, data e origem** (`PORTAL` para o formulário da aba, `ATLAS` para o cartão do assistente) e entra pela mesma rota de gravação (41) nos dois casos, com a mesma validação. Cada valor é uma linha nova: corrigir é gravar de novo, e a mais recente vale. O campo de arquivo (a planilha da agência) entra pela rota 66.
 
 ## 39. `GET /api/campos`  · Atlas 1
 
@@ -1337,9 +1338,9 @@ Os números que o sistema não tem e só a marca (ou a agência dela) sabe, como
 ]
 ```
 
-Hoje são quatro campos, todos da aba `APLICACOES`, inteiros a partir de 0 e sem máximo: `ativacao.visitantes_total` (Visitantes no espaço), `ativacao.cadastros_consentidos` (Cadastros com consentimento; **limite: os visitantes**), `ativacao.brindes_disponiveis` (Brindes disponíveis) e `ativacao.brindes_distribuidos` (Brindes distribuídos; **limite: os disponíveis**).
+Hoje são cinco campos, todos da aba `APLICACOES`. Quatro são inteiros a partir de 0 e sem máximo: `ativacao.visitantes_total` (Visitantes no espaço), `ativacao.cadastros_consentidos` (Cadastros com consentimento; **limite: os visitantes**), `ativacao.brindes_disponiveis` (Brindes disponíveis) e `ativacao.brindes_distribuidos` (Brindes distribuídos; **limite: os disponíveis**). O quinto, `ativacao.planilha_agencia` (Planilha da agência, tipo `ARQUIVO`, ordem 5, sem unidade, mínimo, máximo nem limite), é a planilha de contagem que a agência manda; entra pela rota 66 e fica fora do Atlas (V14).
 
-- `tipo`: `INTEIRO`, `DECIMAL`, `DATA` ou `ARQUIVO`. Um campo `ARQUIVO` ainda não é aceito pela rota 41.
+- `tipo`: `INTEIRO`, `DECIMAL`, `DATA` ou `ARQUIVO`. Um campo `ARQUIVO` não é aceito pela rota 41: o arquivo entra pela rota 66.
 - `minimo` e `maximo`: `null` quando não há limite. Num campo `INTEIRO` saem como inteiro (`0`), num `DECIMAL` com até 2 casas.
 - `limiteCampo`: a `chave` do campo cujo valor vigente este não pode passar, ou `null`.
 
@@ -1375,7 +1376,7 @@ Hoje são quatro campos, todos da aba `APLICACOES`, inteiros a partir de 0 e sem
 ```
 
 - Cada campo traz os mesmos dados da rota 39 mais `vigente`: o valor **mais recente** que a parceria informou. `vigente` é `null` enquanto ninguém informou.
-- `valor` é um inteiro (campo `INTEIRO`), um decimal (`DECIMAL`) ou uma data `AAAA-MM-DD` (`DATA`). `origem` é `PORTAL` (formulário da aba) ou `ATLAS` (cartão do assistente). `informadoPor` é quem informou (a marca ou a RBS) e `informadoEm` tem o fuso de Brasília.
+- `valor` é um inteiro (campo `INTEIRO`), um decimal (`DECIMAL`), uma data `AAAA-MM-DD` (`DATA`) ou o id do arquivo (`ARQUIVO`). No campo `ARQUIVO`, o `vigente` traz também `arquivo: {id, nomeOriginal}` (o id é o da rota 18, que baixa o arquivo); nos outros campos `arquivo` é `null`. `origem` é `PORTAL` (formulário da aba) ou `ATLAS` (cartão do assistente). `informadoPor` é quem informou (a marca ou a RBS) e `informadoEm` tem o fuso de Brasília.
 - Corrigir um número é gravá-lo de novo (rota 41): a rota mostra só o mais recente, e os anteriores ficam guardados.
 
 **Erros:** 401; 403 (aba fechada, só para a marca); 404 (parceria que não existe ou é de outra); 422 (`aba`).
@@ -1419,7 +1420,7 @@ Hoje são quatro campos, todos da aba `APLICACOES`, inteiros a partir de 0 e sem
 | Chave que não está no catálogo | `Campo desconhecido.` |
 | Mesma chave duas vezes no pedido | `Este campo aparece mais de uma vez no pedido.` |
 | Campos de abas diferentes no mesmo pedido | `campos.valores`: `Envie os campos de uma aba só.` |
-| Campo de arquivo (ainda não aceito por JSON) | `Este campo recebe um arquivo, que ainda não é aceito por aqui.` |
+| Campo de arquivo (o arquivo entra pela rota 66, não por JSON) | `Este campo recebe um arquivo, que ainda não é aceito por aqui.` |
 | Valor ausente ou `null` | `Informe o valor.` (em campo `DATA`: `Informe a data no formato AAAA-MM-DD.`) |
 | Item nulo na lista | `Valor vazio.` |
 | Chave com mais de 80 caracteres | `A chave do campo tem no máximo 80 caracteres.` |
@@ -1434,6 +1435,43 @@ Hoje são quatro campos, todos da aba `APLICACOES`, inteiros a partir de 0 e sem
 Os números das frases saem no padrão brasileiro (`1.200`). Sem valor vigente no campo-limite, não há com o que comparar, e o valor passa. Se o campo-limite e o dependente vêm no mesmo pedido, vale o par novo (cadastros 400 com visitantes 500 passa, mesmo com os vigentes 900 e 1.200); um dependente acima do limite novo recebe o erro no próprio campo.
 
 **Histórico:** `CRIACAO` por valor gravado (entidade `dado_informado`), com o valor anterior em `valorAnterior` (quando havia), o novo em `valorNovo` (já formatado, `1.200`) e o rótulo do campo com a origem em `detalhe` (`Visitantes no espaço (portal)`).
+
+## 66. `POST /api/parcerias/{id}/dados-informados/{chave}/arquivo`  · Atlas M6
+
+Envia o arquivo de um campo `ARQUIVO` do catálogo. Hoje existe um só: `ativacao.planilha_agencia` ("Planilha da agência", aba `APLICACOES`), a planilha de contagem que a agência manda. O arquivo entra como um **valor vigente** igual aos outros (quem informou, quando e a origem `PORTAL`), e o anterior fica guardado. É o único caminho de gravação do campo de arquivo: a rota 41 e o cartão do Atlas continuam recusando-o. O campo fica **fora do Atlas**: não é lacuna (obrigatória nem opcional), não entra no cartão de perguntas, não é dado do relatório, e o relatório fica pronto com ou sem ele.
+
+**Quem chama:** patrocinador da parceria, ou Admin RBS (exige o token CSRF). Marca de outra parceria recebe **404**; a marca só envia com a aba do campo (`APLICACOES`) aberta (**403**, com as duas frases de "Aba"); a RBS envia sempre.
+
+**Corpo:** `multipart/form-data` com a parte `arquivo`. Só `.xlsx`, `.xls` e `.csv` (a extensão não diferencia maiúsculas), conferidos pelo conteúdo (`xlsx` é um zip, `xls` começa com a assinatura de 8 bytes do Excel antigo, `csv` é texto UTF-8 sem byte nulo), até **20 MB** (o limite de todos os envios; exatamente 20 MB ainda passa). O servidor guarda o arquivo na parceria e na aba `APLICACOES`, na categoria `OUTRO`, com o nome original e o hash SHA-256, como no envio da rota 17.
+
+**201** (com `Location: /api/arquivos/{id}`): o **valor vigente** que acabou de entrar, no formato do `vigente` da rota 40.
+
+```json
+{
+  "valor": 57,
+  "origem": "PORTAL",
+  "informadoPor": { "id": 3, "nome": "Marketing Amarelo", "perfil": "ADMIN_PATROCINADOR" },
+  "informadoEm": "2026-11-02T10:00:00-03:00",
+  "arquivo": { "id": 57, "nomeOriginal": "contagem-final.xlsx" }
+}
+```
+
+`valor` é o id do arquivo (o mesmo de `arquivo.id`). **Baixe pela rota 18** (`GET /api/arquivos/{arquivo.id}`), com as regras de sempre: a dona recebe o arquivo como anexo; outra marca recebe **404**; com a aba fechada, a marca recebe **403**; a RBS baixa sempre. O download grava `DOWNLOAD` no histórico.
+
+- **Cada envio é um valor novo**, mesmo com o mesmo arquivo: a rota 40 mostra o mais recente, e os anteriores ficam guardados (o arquivo também, no armazenamento).
+- **Leitura.** A rota 40 passa a trazer `arquivo: {id, nomeOriginal}` dentro do `vigente` do campo de arquivo (e `arquivo: null` nos outros campos); `valor` continua o id do arquivo.
+- **Histórico:** `CRIACAO` na entidade `dado_informado`, com o nome do arquivo anterior em `valorAnterior` (quando havia), o do novo em `valorNovo` e `Planilha da agência (portal)` em `detalhe`. Tudo na mesma transação do arquivo: se algo falhar, nem o registro nem o arquivo em disco ficam.
+
+**Erros**
+
+| Status | Quando |
+| --- | --- |
+| 401 | Sem sessão. |
+| 403 | Aba do campo fechada para a marca (as duas frases de "Aba"); falta o token CSRF. |
+| 404 | Parceria que não existe ou é de outra (`"Não encontramos esta parceria."`); `chave` que não está no catálogo (`"Não encontramos este campo."`). |
+| 413 | Arquivo acima de 20 MB. |
+| 415 | Extensão fora de `xlsx`, `xls` e `csv` (`"Este tipo de arquivo não é aceito. Envie um destes: xlsx, xls, csv."`), conteúdo que não bate com a extensão, ou requisição que não é `multipart/form-data`. |
+| 422 | `chave` de um campo que não é de arquivo (`campos["ativacao.visitantes_total"]`: `"Este campo não recebe arquivo. Informe o número pelo formulário."`); parte `arquivo` ausente ou vazia (`campos.arquivo`). |
 
 ---
 
@@ -2454,7 +2492,7 @@ Cadastra um prazo na edição `{id}`. **Quem chama:** Admin RBS (exige o token C
 
 # Rotas de debug (temporárias)
 
-Um recurso **temporário**, para a equipe ligar o modelo de linguagem do Atlas pela tela (o botão "Debug"), sem reiniciar a API e sem variável de ambiente. Não faz parte das 65 rotas do contrato e sai antes da entrega final.
+Um recurso **temporário**, para a equipe ligar o modelo de linguagem do Atlas pela tela (o botão "Debug"), sem reiniciar a API e sem variável de ambiente. Não faz parte das 66 rotas do contrato e sai antes da entrega final.
 
 - **Só existem com `atlas.debug.chaves=true`.** A propriedade vem `false` por padrão, `true` no perfil `dev` e `false` no `test`. Sem ela, as quatro rotas respondem **404**, como uma rota que não existe.
 - **A chave fica só na memória da API.** Nunca vai ao banco, a arquivo ou ao log, e **some quando a API reinicia**. Nenhuma resposta devolve a chave inteira: só os 4 últimos caracteres (`finalDaChave`).
@@ -2563,8 +2601,8 @@ Ligada:
 
 | Quem | Pode |
 | --- | --- |
-| **Admin RBS** | Quase tudo: criar parcerias, autorizar e revogar e-mails, criar entregas, mudar status, mandar retorno, aprovar perguntas, subir cargas (inclusive o plano comercial), anexar as fotos de comprovação das aplicações, informar os dados da ativação no lugar da marca, gerar e disponibilizar relatórios, ver o histórico geral e o painel. **Não** conversa com o Atlas nem descarta o relatório dele (rotas 42 a 46, 49 e 65 dão 403), mas lê os relatórios que ele montou (rotas 47 e 48) e, com o diagnóstico ligado, o traço de todos os turnos, o estado dos provedores e o teste deles (rotas 50 a 53). Envia, lista, aprova, recusa, revoga e reindexa os documentos do Atlas e vê os trechos (rotas 54 a 58). Lista, cadastra e desativa os prazos que o Atlas consulta (rotas 62 a 64). Usa as rotas de debug da chave do modelo (só dela). |
-| **Admin Patrocinador** | Ver a própria parceria, as entregas das abas liberadas, enviar materiais, baixar arquivos da parceria, ver o histórico dela, enviar as perguntas da pesquisa, ver a consolidação, o plano de aplicações com as fotos e informar os dados da ativação (aba `APLICACOES` aberta), ver um documento do Atlas que o escopo dela permite (rota 56: título, tipo, versão, páginas e se foi substituído) e abri-lo no visualizador, com o arquivo e o trecho citado (rotas 59 e 60), conversar com o Atlas e montar o relatório de ativação pelo botão ou, com o modelo de linguagem ligado, pelo texto livre (rotas 42 a 46, só ela; a conversa é de quem a abriu), ver os relatórios do Atlas da parceria (rotas 47 e 48) e descartar o que está em montagem (rota 65, de qualquer Admin Patrocinador da parceria), o diagnóstico das próprias conversas (rota 49, só com `atlas.diagnostico.marca` ligado) e o relatório disponibilizado. **Nunca** vê outra parceria nem as rotas da RBS. |
+| **Admin RBS** | Quase tudo: criar parcerias, autorizar e revogar e-mails, criar entregas, mudar status, mandar retorno, aprovar perguntas, subir cargas (inclusive o plano comercial), anexar as fotos de comprovação das aplicações, informar os dados da ativação, a planilha da agência inclusa, no lugar da marca, gerar e disponibilizar relatórios, ver o histórico geral e o painel. **Não** conversa com o Atlas nem descarta o relatório dele (rotas 42 a 46, 49 e 65 dão 403), mas lê os relatórios que ele montou (rotas 47 e 48) e, com o diagnóstico ligado, o traço de todos os turnos, o estado dos provedores e o teste deles (rotas 50 a 53). Envia, lista, aprova, recusa, revoga e reindexa os documentos do Atlas e vê os trechos (rotas 54 a 58). Lista, cadastra e desativa os prazos que o Atlas consulta (rotas 62 a 64). Usa as rotas de debug da chave do modelo (só dela). |
+| **Admin Patrocinador** | Ver a própria parceria, as entregas das abas liberadas, enviar materiais, baixar arquivos da parceria, ver o histórico dela, enviar as perguntas da pesquisa, ver a consolidação, o plano de aplicações com as fotos e informar os dados da ativação, a planilha da agência inclusa (aba `APLICACOES` aberta), ver um documento do Atlas que o escopo dela permite (rota 56: título, tipo, versão, páginas e se foi substituído) e abri-lo no visualizador, com o arquivo e o trecho citado (rotas 59 e 60), conversar com o Atlas e montar o relatório de ativação pelo botão ou, com o modelo de linguagem ligado, pelo texto livre (rotas 42 a 46, só ela; a conversa é de quem a abriu), ver os relatórios do Atlas da parceria (rotas 47 e 48) e descartar o que está em montagem (rota 65, de qualquer Admin Patrocinador da parceria), o diagnóstico das próprias conversas (rota 49, só com `atlas.diagnostico.marca` ligado) e o relatório disponibilizado. **Nunca** vê outra parceria nem as rotas da RBS. |
 
 ## O que a API grava no histórico
 

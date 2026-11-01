@@ -90,6 +90,20 @@ class TipoDeArquivoTest {
     }
 
     @Test
+    void xlsEOTipoDaPlanilhaDaAgenciaEFicaForaDaListaDosEnviosComuns() {
+        assertThat(TipoDeArquivo.XLS.mime()).isEqualTo("application/vnd.ms-excel");
+        assertThat(TipoDeArquivo.daExtensao("contagem.XLS")).contains(TipoDeArquivo.XLS);
+        assertThat(TipoDeArquivo.listaDeExtensoes()).as("a frase do 415 dos envios comuns não cita o xls").doesNotContain("xls,")
+                .endsWith("zip");
+        byte[] ole2 = bytes(0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1, 0, 0);
+        assertThat(TipoDeArquivo.XLS.conteudoConfere(ole2)).isTrue();
+        assertThat(TipoDeArquivo.XLS.conteudoConfere(bytes(0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A))).as("assinatura incompleta").isFalse();
+        assertThat(TipoDeArquivo.XLS.conteudoConfere(bytes('P', 'K', 3, 4, 0))).as("um zip não é xls").isFalse();
+        assertThat(TipoDeArquivo.XLSX.conteudoConfere(ole2)).as("um xls não é xlsx").isFalse();
+        assertThat(TipoDeArquivo.CSV.conteudoConfere(ole2)).as("nem csv").isFalse();
+    }
+
+    @Test
     void txtEOTipoDosDocumentosDoAtlasEFicaForaDaListaDosEnviosComuns() {
         assertThat(TipoDeArquivo.TXT.mime()).isEqualTo("text/plain");
         assertThat(TipoDeArquivo.daExtensao("faq.TXT")).contains(TipoDeArquivo.TXT);
