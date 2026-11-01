@@ -6,6 +6,8 @@ import static br.com.rbs.portal.atlas.ferramentas.Argumentos.exigirSemErros;
 import br.com.rbs.portal.atlas.AtlasJson;
 import br.com.rbs.portal.atlas.checagem.FontesDoTurno;
 import br.com.rbs.portal.atlas.checagem.FontesDoTurno.Fonte;
+import br.com.rbs.portal.atlas.checagem.NormalizadorDeNumeros;
+import br.com.rbs.portal.atlas.checagem.NormalizadorDeNumeros.Origens;
 import br.com.rbs.portal.atlas.contexto.AtlasContexto;
 import br.com.rbs.portal.atlas.ferramentas.Feriados.Feriado;
 import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.DefinicaoDeFerramenta;
@@ -36,7 +38,13 @@ import org.springframework.stereotype.Component;
  *       caíram em dia de semana dentro do intervalo e foram pulados. O servidor registra a fonte com tudo o que a resposta pode
  *       citar (as datas de entrada, a quantidade, o resultado e os feriados) e o resultado como número livre do turno.</li>
  *   <li>Nenhum argumento é parceria. Argumento desconhecido, data inválida ({@code AAAA-MM-DD}), {@code fim} antes de
- *       {@code inicio} e ano fora de 2000 a 2100 voltam ao modelo como erro.</li>
+ *       {@code inicio}, intervalo de mais de {@value #INTERVALO_MAXIMO} dias e ano fora de 2000 a 2100 voltam ao modelo como erro.</li>
+ *   <li><b>Os números e as datas têm origem</b> (a contagem não pode fabricar número: com {@code dias} 312 o resultado "312" valeria
+ *       em qualquer frase). {@code dias} precisa estar numa fonte deste turno ({@code T#}, {@code R#}, {@code C#}) ou numa mensagem da
+ *       pessoa na conversa, comparado por valor como o literal do {@code calcular}. {@code inicio} e {@code fim} precisam ser uma
+ *       data de uma fonte deste turno ou do que a pessoa escreveu (data sem ano vale, como em {@link Origens}), ou de hoje até
+ *       {@value #DIAS_DE_FOLGA_DE_HOJE} dias depois (para "amanhã" e "segunda que vem"). O resultado de outra contagem do turno é
+ *       uma fonte, então serve de {@code inicio}.</li>
  * </ul>
  */
 @Component
@@ -46,6 +54,12 @@ public class ContarDias implements Ferramenta {
     static final int ANO_MINIMO = 2000;
     static final int ANO_MAXIMO = 2100;
     static final int DIAS_MAXIMO = 400;
+    /** O intervalo de {@code inicio} a {@code fim}: sem isso, 01/01/2000 a 31/12/2100 devolvia 819 feriados e 41 KB por chamada. */
+    static final int INTERVALO_MAXIMO = 800;
+    /** Quantos feriados a resposta lista, no máximo. */
+    static final int FERIADOS_MAXIMOS = 40;
+    /** Hoje e os sete dias seguintes valem como data de partida ou de chegada sem fonte. */
+    static final int DIAS_DE_FOLGA_DE_HOJE = 7;
     static final String TITULO_DA_FONTE = "Contagem de dias";
     private static final Set<String> ARGUMENTOS = Set.of("inicio", "fim", "dias", "uteis", "sentido");
     private static final Pattern DATA = Pattern.compile("\\d{4}-\\d{2}-\\d{2}");
@@ -56,7 +70,10 @@ public class ContarDias implements Ferramenta {
                     + "entre duas datas. O dia de início não conta e o dia final conta. Com uteis verdadeiro, sábados, domingos e "
                     + "feriados nacionais e do RS ficam de fora. Informe inicio e exatamente um de fim ou dias. Devolve o resultado, a "
                     + "regra em uma frase, os feriados que ficaram de fora e o marcador [C#] para citar a conta. Use sempre que a "
-                    + "resposta depender de contar dias ou achar uma data; nunca conte você mesmo.",
+                    + "resposta depender de contar dias ou achar uma data; nunca conte você mesmo. Os números e as datas têm de ter "
+                    + "origem: dias vem do que a pessoa escreveu na conversa ou de uma fonte deste turno (T#, R#, C#); inicio e fim "
+                    + "são datas que a pessoa escreveu ou que uma fonte deste turno trouxe (inclusive o resultado de outra contagem), "
+                    + "ou de hoje até 7 dias depois. Com fim, o intervalo vai até 800 dias.",
             """
             {"type":"object","properties":{
               "inicio":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$","description":"Data de partida, AAAA-MM-DD. O dia dela não conta."},
@@ -112,7 +129,12 @@ public class ContarDias implements Ferramenta {
         }
         if (inicio != null && fim != null && fim.isBefore(inicio)) {
             erros.put("fim", "O fim não pode ser antes do início.");
+        } else if (inicio != null && fim != null && ChronoUnit.DAYS.between(inicio, fim) > INTERVALO_MAXIMO) {
+            erros.put("fim", "De inicio a fim são " + ChronoUnit.DAYS.between(inicio, fim) + " dias; o máximo é " + INTERVALO_MAXIMO
+                    + ". Use datas mais próximas.");
         }
+        exigirSemErros(erros);
+        conferirAOrigem(turno, inicio, fim, dias, erros);
         exigirSemErros(erros);
 
         boolean depois = !"antes".equals(sentido);
@@ -151,6 +173,47 @@ public class ContarDias implements Ferramenta {
     }
 
     // ---------------------------------------------------------------------
+    // A origem dos números e das datas
+    // ---------------------------------------------------------------------
+
+    /**
+     * [VALIDACAO] A contagem não fabrica número: {@code dias} vem do que a pessoa escreveu na conversa ou de uma fonte deste turno
+     * (por valor, como o literal do {@code calcular}), e as datas, do que a pessoa escreveu, de uma fonte deste turno, ou de hoje até
+     * {@value #DIAS_DE_FOLGA_DE_HOJE} dias depois. O trecho de documento ainda diz as datas em pedaços; registro e conta, por inteiro.
+     */
+    private static void conferirAOrigem(FontesDoTurno turno, LocalDate inicio, LocalDate fim, Integer dias, Map<String, String> erros) {
+        Origens origens = turno.origensDaPessoa();
+        for (Fonte fonte : turno.fontes()) {
+            if (fonte.tipo() == FontesDoTurno.Tipo.TRECHO) {
+                origens.adicionarFonteCitada(fonte.texto());
+            } else {
+                origens.adicionar(fonte.texto());
+            }
+        }
+        if (dias != null && !origens.aceitaComoValor(NormalizadorDeNumeros.extrair(String.valueOf(dias), false).get(0))) {
+            erros.put("dias", "O número de dias " + dias + " não está no que a pessoa escreveu nesta conversa nem em nenhuma fonte deste turno "
+                    + "(T#, R#, C#). Use a quantidade que a pessoa disse ou que uma fonte trouxe, copiada como está; a ferramenta não inventa "
+                    + "quantidade.");
+        }
+        dataComOrigem("inicio", inicio, turno, origens, erros);
+        dataComOrigem("fim", fim, turno, origens, erros);
+    }
+
+    private static void dataComOrigem(String campo, LocalDate data, FontesDoTurno turno, Origens origens, Map<String, String> erros) {
+        if (data == null) {
+            return;
+        }
+        LocalDate hoje = turno.hoje();
+        boolean deHoje = !data.isBefore(hoje) && !data.isAfter(hoje.plusDays(DIAS_DE_FOLGA_DE_HOJE));
+        if (deHoje || origens.aceita(NormalizadorDeNumeros.extrair(DIA.format(data), false).get(0))) {
+            return;
+        }
+        erros.put(campo, "A data de " + campo + " (" + DIA.format(data) + ") não está no que a pessoa escreveu nesta conversa nem em nenhuma "
+                + "fonte deste turno (T#, R#, C#), e não é de hoje (" + DIA.format(hoje) + ") até " + DIAS_DE_FOLGA_DE_HOJE
+                + " dias depois. Use uma data que a pessoa escreveu ou que uma fonte trouxe, copiada como está.");
+    }
+
+    // ---------------------------------------------------------------------
     // A conta
     // ---------------------------------------------------------------------
 
@@ -186,7 +249,7 @@ public class ContarDias implements Ferramenta {
         LocalDate de = inicio.isBefore(ultimo) ? inicio.plusDays(1) : ultimo;
         LocalDate ate = inicio.isBefore(ultimo) ? ultimo : inicio.minusDays(1);
         List<Feriado> pulados = new ArrayList<>();
-        for (LocalDate data = de; !data.isAfter(ate); data = data.plusDays(1)) {
+        for (LocalDate data = de; !data.isAfter(ate) && pulados.size() < FERIADOS_MAXIMOS; data = data.plusDays(1)) {
             Optional<Feriado> feriado = Feriados.fimDeSemana(data) ? Optional.empty() : feriados.em(data);
             feriado.ifPresent(pulados::add);
         }

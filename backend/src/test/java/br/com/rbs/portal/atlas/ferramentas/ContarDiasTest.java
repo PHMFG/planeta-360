@@ -28,11 +28,48 @@ class ContarDiasTest {
         return contar(ferramenta, turno, argumentos);
     }
 
+    /**
+     * Conta com a origem em ordem: a pessoa "escreveu" as datas e a quantidade que os argumentos usam. Os testes da conta não são sobre
+     * a origem (veja os de "A origem dos números e das datas", que usam {@link #contarComOQueTem}).
+     */
     static Map<String, Object> contar(ContarDias ferramenta, FontesDoTurno turno, String argumentos) {
+        comOrigem(turno, argumentos);
+        return contarComOQueTem(ferramenta, turno, argumentos);
+    }
+
+    static Map<String, Object> contarComOQueTem(ContarDias ferramenta, FontesDoTurno turno, String argumentos) {
         Execucao execucao = ferramenta.executar(null, turno, Argumentos.ler(argumentos), "call_x", null);
         assertThat(execucao.pausa()).isFalse();
         return AtlasJson.ler(execucao.resultadoJson(), new TypeReference<Map<String, Object>>() {
         });
+    }
+
+    static void comOrigem(FontesDoTurno turno, String argumentos) {
+        Map<String, Object> lidos = Argumentos.ler(argumentos);
+        StringBuilder escrito = new StringBuilder();
+        for (String campo : List.of("inicio", "fim")) {
+            if (lidos.get(campo) instanceof String texto) {
+                try {
+                    escrito.append(DIA.format(LocalDate.parse(texto))).append(". ");
+                } catch (RuntimeException invalida) {
+                    // data que não existe: o erro de formato vem antes da origem
+                }
+            }
+        }
+        if (lidos.get("dias") instanceof Number dias) {
+            escrito.append(dias).append(" dias.");
+        }
+        List<String> mensagens = new java.util.ArrayList<>(turno.mensagensAnterioresDaPessoa());
+        mensagens.add(escrito.toString());
+        turno.comMensagensAnteriores(mensagens);
+    }
+
+    private static final java.time.format.DateTimeFormatter DIA = java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy");
+    private static final LocalDate HOJE = LocalDate.of(2026, 11, 1);
+
+    private Map<String, String> camposSemOrigem(FontesDoTurno turno, String argumentos) {
+        return org.junit.jupiter.api.Assertions.assertThrows(DadosInvalidosException.class,
+                () -> ferramenta.executar(null, turno, Argumentos.ler(argumentos), "call_x", null)).campos();
     }
 
     @SuppressWarnings("unchecked")
@@ -42,12 +79,14 @@ class ContarDiasTest {
 
     /** Tudo o que o modelo lê do erro: a frase e o motivo de cada campo. */
     String erro(String argumentos) {
+        comOrigem(turno, argumentos);
         DadosInvalidosException erro = org.junit.jupiter.api.Assertions.assertThrows(DadosInvalidosException.class,
                 () -> ferramenta.executar(null, turno, Argumentos.ler(argumentos), "call_x", null));
         return erro.getMessage() + " " + String.join(" ", erro.campos().values());
     }
 
     Map<String, String> campos(String argumentos) {
+        comOrigem(turno, argumentos);
         return org.junit.jupiter.api.Assertions.assertThrows(DadosInvalidosException.class,
                 () -> ferramenta.executar(null, turno, Argumentos.ler(argumentos), "call_x", null)).campos();
     }
@@ -192,6 +231,111 @@ class ContarDiasTest {
         assertThat(contar("{\"inicio\":\"2026-11-03\",\"dias\":1}")).containsEntry("marcador", "C1");
         assertThat(contar("{\"inicio\":\"2026-11-03\",\"dias\":2}")).containsEntry("marcador", "C2");
         assertThat(turno.existe("C2")).isTrue();
+    }
+
+    // ---------------------------------------------------------------------
+    // A origem dos números e das datas (critério bloqueante: número sem origem)
+    // ---------------------------------------------------------------------
+
+    @Test
+    void diasQueNenhumaFonteNemMensagemDaPessoaTemNaoValeEOResultadoNaoViraNumeroLivre() {
+        FontesDoTurno vazio = new FontesDoTurno("Quanto fica?", 2027, HOJE);
+
+        Map<String, String> campos = camposSemOrigem(vazio, "{\"inicio\":\"2026-11-01\",\"dias\":312}");
+
+        assertThat(campos).containsOnlyKeys("dias");
+        assertThat(campos.get("dias")).contains("312", "pessoa escreveu", "fonte");
+        assertThat(vazio.fontes()).isEmpty();
+        assertThat(vazio.numerosLivres()).isEmpty();
+    }
+
+    @Test
+    void diasValeSeEstaNaMensagemDaPessoaEmUmaMensagemAnteriorOuEmQualquerFonteDoTurno() {
+        String argumentos = "{\"inicio\":\"2026-11-01\",\"dias\":312}";
+
+        assertThat(contarComOQueTem(ferramenta, new FontesDoTurno("Daqui a 312 dias, que dia cai?", 2027, HOJE), argumentos))
+                .containsEntry("resultado", "09/09/2027");
+        assertThat(contarComOQueTem(ferramenta, new FontesDoTurno("E agora?", 2027, HOJE).comMensagensAnteriores(List.of("Faltam 312 dias?")),
+                argumentos)).containsKey("resultado");
+        FontesDoTurno comRegistro = new FontesDoTurno("Quanto?", 2027, HOJE);
+        comRegistro.registrarRegistro("prazo", 1, "Prazo", "Prazos", "Prazo: 09/09/2027. Faltam 312 dias.", Map.of());
+        assertThat(contarComOQueTem(ferramenta, comRegistro, argumentos)).containsKey("resultado");
+        // o título e a página de uma fonte não são o texto dela, como no calcular
+        FontesDoTurno soNoTitulo = new FontesDoTurno("Quanto?", 2027, HOJE);
+        soNoTitulo.registrarTrecho(1, 1, "Manual 312", 312, 312, "Seção 312", "Um texto sem número.");
+        assertThat(camposSemOrigem(soNoTitulo, argumentos)).containsOnlyKeys("dias");
+        // o ano não é valor: o 2027 de "Para 2027" não autoriza dias 27
+        FontesDoTurno soAno = new FontesDoTurno("Para 2027, quantos?", 2027, HOJE);
+        assertThat(camposSemOrigem(soAno, "{\"inicio\":\"2026-11-01\",\"dias\":27}")).containsOnlyKeys("dias");
+    }
+
+    @Test
+    void inicioEFimQueNaoSaoDeHojeAteSeteDiasDepoisNemDeFonteNemDaPessoaSaoErro() {
+        FontesDoTurno turno = new FontesDoTurno("Quantos dias?", 2027, HOJE);
+
+        // o ataque: 01/01 a 09/11 são 312 dias, que passariam a valer em qualquer frase
+        Map<String, String> campos = camposSemOrigem(turno, "{\"inicio\":\"2026-01-01\",\"fim\":\"2026-11-09\"}");
+
+        assertThat(campos).containsOnlyKeys("inicio", "fim");
+        assertThat(campos.get("inicio")).contains("01/01/2026", "01/11/2026");
+        assertThat(turno.fontes()).isEmpty();
+        assertThat(turno.numerosLivres()).isEmpty();
+        // hoje e os sete dias seguintes valem; o oitavo não
+        assertThat(contarComOQueTem(ferramenta, turno, "{\"inicio\":\"2026-11-01\",\"fim\":\"2026-11-08\"}")).containsEntry("resultado", "7");
+        assertThat(camposSemOrigem(turno, "{\"inicio\":\"2026-11-01\",\"fim\":\"2026-11-09\"}")).containsOnlyKeys("fim");
+        assertThat(camposSemOrigem(turno, "{\"inicio\":\"2026-10-31\",\"fim\":\"2026-11-03\"}")).as("ontem não é de hoje").containsOnlyKeys("inicio");
+    }
+
+    @Test
+    void aDataSemAnoDaPessoaOuDaFonteValeEOAnoCompletoDaFonteTambem() {
+        // 03/11 sem ano na mensagem, e as datas completas
+        assertThat(contarComOQueTem(ferramenta, new FontesDoTurno("Se o briefing sair em 03/11 e a entrega for 20/11, quanto dá?", 2027, HOJE),
+                "{\"inicio\":\"2026-11-03\",\"fim\":\"2026-11-20\"}")).containsEntry("resultado", "17");
+        FontesDoTurno fonte = new FontesDoTurno("Quantos dias?", 2027, HOJE);
+        fonte.registrarRegistro("prazo", 1, "Geradores", "Prazos", "Prazo: 04/12/2026 às 18:00. Faltam 33 dias.", Map.of());
+        assertThat(contarComOQueTem(ferramenta, fonte, "{\"inicio\":\"2026-11-01\",\"fim\":\"2026-12-04\"}")).containsEntry("resultado", "33");
+        // a data de outro ano que a fonte disse com ano não vale
+        assertThat(camposSemOrigem(fonte, "{\"inicio\":\"2026-11-01\",\"fim\":\"2027-12-04\"}")).containsOnlyKeys("fim");
+    }
+
+    @Test
+    void registroEContaValemPeloQueDizemPorInteiroEOTrechoDizOsPedacos() {
+        FontesDoTurno registro = new FontesDoTurno("Quantos dias?", 2027, HOJE);
+        registro.registrarRegistro("entrega", 1, "Reenvio do VT", "Mídia", "Reenvio do VT em até 30 segundos. Atualizada em 27/10/2026.", Map.of());
+        // a data montada com o 30 e o mês 10 não existe na fonte
+        assertThat(camposSemOrigem(registro, "{\"inicio\":\"2026-10-30\",\"fim\":\"2026-11-01\"}")).containsOnlyKeys("inicio");
+        FontesDoTurno trecho = new FontesDoTurno("Quantos dias?", 2027, HOJE);
+        trecho.registrarTrecho(1, 1, "Manual de Operações 2027", 2, 2, "Datas", "O festival acontece na sexta-feira, 29, e no sábado, 30 de janeiro de 2027.");
+        assertThat(contarComOQueTem(ferramenta, trecho, "{\"inicio\":\"2026-11-01\",\"fim\":\"2027-01-29\"}")).containsEntry("resultado", "89");
+    }
+
+    @Test
+    void oResultadoDeOutraContagemDoTurnoServeDeInicio() {
+        FontesDoTurno turno = new FontesDoTurno("Quando vencem 18 dias úteis depois de 03/11/2026?", 2027, HOJE);
+
+        assertThat(contarComOQueTem(ferramenta, turno, "{\"inicio\":\"2026-11-03\",\"dias\":18,\"uteis\":true}")).containsEntry("resultado", "30/11/2026");
+        // o 30/11/2026 está no texto de C1; e os 18 dias, na mensagem da pessoa
+        assertThat(contarComOQueTem(ferramenta, turno, "{\"inicio\":\"2026-11-30\",\"dias\":18}")).containsEntry("resultado", "18/12/2026");
+        // mas um resultado que nenhuma contagem deu não serve
+        assertThat(camposSemOrigem(turno, "{\"inicio\":\"2026-12-01\",\"dias\":18}")).containsOnlyKeys("inicio");
+    }
+
+    @Test
+    void ointervaloComFimVaiAte800DiasEOsFeriadosListadosNuncaPassamDe40() {
+        LocalDate inicio = LocalDate.of(2026, 11, 3);
+        LocalDate ate800 = inicio.plusDays(800);
+        LocalDate ate801 = inicio.plusDays(801);
+        FontesDoTurno turno = new FontesDoTurno("Quantos dias?", 2027, HOJE);
+
+        Map<String, Object> maximo = contar(ferramenta, turno, "{\"inicio\":\"" + inicio + "\",\"fim\":\"" + ate800 + "\",\"uteis\":true}");
+        assertThat(maximo).containsKey("resultado");
+        assertThat(feriados(maximo)).isNotEmpty().hasSizeLessThanOrEqualTo(40);
+        comOrigem(turno, "{\"inicio\":\"" + inicio + "\",\"fim\":\"" + ate801 + "\"}");
+        assertThat(camposSemOrigem(turno, "{\"inicio\":\"" + inicio + "\",\"fim\":\"" + ate801 + "\"}")).containsOnlyKeys("fim");
+        assertThat(camposSemOrigem(turno, "{\"inicio\":\"" + inicio + "\",\"fim\":\"" + ate801 + "\"}").get("fim")).contains("801", "800");
+        // o intervalo de um século inteiro, que devolvia 819 feriados e 41 KB
+        comOrigem(turno, "{\"inicio\":\"2000-01-01\",\"fim\":\"2100-12-31\"}");
+        assertThat(camposSemOrigem(turno, "{\"inicio\":\"2000-01-01\",\"fim\":\"2100-12-31\",\"uteis\":true}")).containsOnlyKeys("fim");
     }
 
     // ---------------------------------------------------------------------

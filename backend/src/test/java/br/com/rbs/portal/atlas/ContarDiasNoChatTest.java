@@ -153,6 +153,27 @@ class ContarDiasNoChatTest {
     }
 
     @Test
+    void aContagemNaoFabricaUmNumeroQueNingemDisse() {
+        long conversa = abrir();
+        // dias 312 a partir de 01/01: nem o 312 nem o 01/01 estão em lugar nenhum; "R$ 312,00 [C1]" nunca teria origem
+        modelo.chamada(DIAS, "{\"inicio\":\"2026-01-01\",\"dias\":312}").texto("A multa é de R$ 312,00 [C1].")
+                .texto("Não consegui responder isso agora.");
+
+        ItemTexto texto = textoFinal(falar(conversa, "Qual é a multa?"));
+
+        assertThat(texto.texto()).isEqualTo("Não consegui responder isso agora.");
+        String resultado = jdbc.sql("SELECT conteudo FROM atlas_mensagem WHERE conversa_id = :c AND papel = 'tool'").param("c", conversa)
+                .query(String.class).single();
+        assertThat(resultado).contains("erro", "dias", "inicio");
+        assertThat(jdbc.sql("SELECT count(*) FROM atlas_fonte f JOIN atlas_mensagem m ON m.id = f.mensagem_id WHERE m.conversa_id = :c")
+                .param("c", conversa).query(Long.class).single()).isZero();
+        // e o resultado de 01/01 até 09/11 (312 dias) também não vira número da resposta
+        modelo.limpar();
+        modelo.chamada(DIAS, "{\"inicio\":\"2026-01-01\",\"fim\":\"2026-11-09\"}").texto("São 312 dias [C1].").texto("Não sei dizer agora.");
+        assertThat(textoFinal(falar(conversa, "Quantos dias passaram?")).texto()).isEqualTo("Não sei dizer agora.");
+    }
+
+    @Test
     void erroDeArgumentoVoltaAoModeloEOMarcadorNaoExiste() {
         long conversa = abrir();
         modelo.chamada(DIAS, "{\"inicio\":\"2026-02-30\",\"dias\":18}").texto("O prazo termina em 30/11/2026 [C1].")
