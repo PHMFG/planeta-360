@@ -17,14 +17,19 @@ import java.util.regex.Pattern;
  * Acha os números e as datas de um texto e os deixa numa forma comparável (plano do Atlas completo, M4). [ATLAS] [VALIDACAO] É a
  * regra de "número com origem" do chat: {@code "1.250.000,00"} e {@code "1250000"}, {@code "R$ 312"} e {@code "312"},
  * {@code "04/12/2026"}, {@code "4/12"}, {@code "4 de dezembro"} e {@code "2026-12-04"}, {@code "6h30"} e {@code "06:30"},
- * {@code "89,4%"} e {@code "89,4"} são iguais. Numeral por extenso seguido de unidade ({@code "dezessete aplicações"},
- * {@code "trezentos reais"}) e com escala ({@code "três mil"}) conta como número; {@code "os dois manuais"} não. É a mesma conta do
- * avaliador de conversas ({@code ferramentas/avaliacao-atlas/numeros.mjs}).
+ * {@code "89,4%"} e {@code "89,4"} são iguais. É a mesma conta do avaliador de conversas
+ * ({@code ferramentas/avaliacao-atlas/numeros.mjs}).
  * <p>
- * Datas e horas são consumidas antes dos números, para {@code 04/12/2026} não virar três números. Numa FONTE, todo numeral por
- * extenso conta (porque "duas rodadas" é a origem de "2 rodadas"); na RESPOSTA, só com unidade, e "um dia" não é número: é artigo.
- * Cada dígito conta: o que vem dentro de uma palavra ({@code planeta360}, {@code D09}) também. "Planeta 360", o nome do festival,
- * não é número. Sem estado: tudo estático.
+ * <b>Numeral por extenso.</b> Todo numeral conta como número, na resposta e na fonte, menos "um" e "uma", que são artigo e nunca
+ * contam (nem como origem), e "dois" e "duas", que na resposta só contam com unidade ou escala ("os dois manuais" não é número; na
+ * fonte, "duas rodadas" é a origem de "2 rodadas"). Numeral seguido de "de &lt;mês&gt;" é data ("dez de dezembro", "vinte e cinco
+ * de dezembro"; "sete e oito de dezembro" são duas). "Por cento" depois de algarismo não é o numeral cento. Os numerais só somam em
+ * ordem decrescente de grandeza (centena, dezena de 20 a 90, unidade de 1 a 19): "trezentos e doze" é 312, mas "três e quatro" são
+ * o 3 e o 4, e "dez e trinta", o 10 e o 30. Cada número separado é conferido por si.
+ * <p>
+ * Datas e horas são consumidas antes dos números, para {@code 04/12/2026} não virar três números. Cada dígito conta: o que vem
+ * dentro de uma palavra ({@code planeta360}, {@code D09}) também. "Planeta 360", o nome do festival, não é número. Sem estado: tudo
+ * estático.
  */
 public final class NormalizadorDeNumeros {
 
@@ -48,13 +53,25 @@ public final class NormalizadorDeNumeros {
     }
 
     private static final String PALAVRA = String.join("|", EXTENSO.keySet());
-    private static final String ESCALA = "mil|milh(?:ão|ões)";
-    private static final String UNIDADES = "reais|real|dias?|horas?|minutos?|kva|kw|por cento|credenciais|credencial|cortesias?|inserç(?:ão|ões)"
-            + "|ingressos?|pulseiras?|metros?|semanas?|meses|aplicaç(?:ão|ões)|pessoas?|litros?|visitantes?|cadastros?|rodadas?|peças?|vezes";
+    private static final String ESCALA = "mil|milh(?:ão|ões|ao|oes)";
+    private static final String UNIDADES = "reais|real|dias?|horas?|minutos?|kva|kw|por\\s+cento|porcento|%|credenciais|credencial|cortesias?"
+            + "|inserç(?:ão|ões)|ingressos?|pulseiras?|metros?|semanas?|meses|aplicaç(?:ão|ões)|pessoas?|litros?|visitantes?|cadastros?"
+            + "|rodadas?|peças?|vezes";
+    private static final String NAO_ACABA_A_PALAVRA = "(?![\\p{L}\\p{N}])";
 
-    private static final Pattern CORRIDA_POR_EXTENSO = Pattern.compile("(?<![\\p{L}\\p{N}])((?:" + PALAVRA + "|" + ESCALA
-            + ")(?:\\s+(?:e\\s+)?(?:" + PALAVRA + "|" + ESCALA + "))*)(?![\\p{L}\\p{N}])(\\s+(?:de\\s+)?(?:" + UNIDADES
-            + ")(?![\\p{L}\\p{N}]))?", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+    /**
+     * Uma corrida de numerais ("trezentos e doze", "três e quatro", "dois milhões"), com a unidade que vem depois, se houver. "Por
+     * cento" não é o numeral cento: depois de "por", a corrida não pode começar por ele. A corrida pode ter mais de um número (veja
+     * {@link #porExtenso}).
+     */
+    private static final Pattern CORRIDA_POR_EXTENSO = Pattern.compile("(?<![\\p{L}\\p{N}])(?:(?<!\\bpor\\s{1,8})|(?!cento"
+            + NAO_ACABA_A_PALAVRA + "))((?:" + PALAVRA + "|" + ESCALA + ")(?:\\s+(?:e\\s+)?(?:" + PALAVRA + "|" + ESCALA + "))*)"
+            + NAO_ACABA_A_PALAVRA + "(\\s+(?:de\\s+)?(?:" + UNIDADES + ")" + NAO_ACABA_A_PALAVRA + ")?",
+            Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+    /** "dez de dezembro", "vinte e cinco de dezembro de 2026", "sete e oito de dezembro": o numeral seguido de "de mês" é data. */
+    private static final Pattern DATA_COM_NUMERAL = Pattern.compile("(?<![\\p{L}\\p{N}])((?:" + PALAVRA + ")(?:\\s+(?:e\\s+)?(?:" + PALAVRA
+            + "))*)\\s+de\\s+(" + NOME_DO_MES + ")(?:\\s+de\\s+(\\d{4}))?" + NAO_ACABA_A_PALAVRA,
+            Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     private static final Pattern MILHAR_BR = Pattern.compile("^\\d{1,3}(\\.\\d{3})+(,\\d+)?$");
     private static final Pattern ISO = Pattern.compile("\\b(\\d{4})-(\\d{2})-(\\d{2})\\b");
     private static final Pattern DATA_COM_ANO = Pattern.compile("\\b(\\d{1,2})/(\\d{1,2})/(\\d{4})\\b");
@@ -112,11 +129,14 @@ public final class NormalizadorDeNumeros {
         return n < 10 ? "0" + n : String.valueOf(n);
     }
 
-    /** Um consumidor devolve o achado (ou os achados) e se o trecho deve ser apagado; nulo deixa o trecho como está. */
+    /**
+     * Um consumidor devolve o achado (ou os achados); nulo deixa o trecho como está. Recebe o texto todo, para quem precisa do que vem
+     * antes ou depois do trecho.
+     */
     @FunctionalInterface
     private interface Montador {
 
-        List<Achado> montar(Matcher m);
+        List<Achado> montar(Matcher m, String todo);
     }
 
     private static String consumir(String texto, Pattern padrao, List<Achado> achados, Montador montador) {
@@ -124,7 +144,7 @@ public final class NormalizadorDeNumeros {
         StringBuilder saida = new StringBuilder();
         int fim = 0;
         while (m.find()) {
-            List<Achado> novos = montador.montar(m);
+            List<Achado> novos = montador.montar(m, texto);
             if (novos == null) {
                 continue;
             }
@@ -152,23 +172,23 @@ public final class NormalizadorDeNumeros {
     }
 
     /**
-     * Os números e as datas do texto. Em uma {@code fonte}, todo numeral por extenso conta; na resposta, só com unidade (ou escala),
-     * e "um dia" não é número.
+     * Os números e as datas do texto. Em uma {@code fonte}, todo numeral por extenso conta, menos "um" e "uma"; na resposta, "dois" e
+     * "duas" só contam com unidade ou escala.
      */
     public static List<Achado> extrair(String textoOriginal, boolean fonte) {
         List<Achado> achados = new ArrayList<>();
         String texto = " " + (textoOriginal == null ? "" : textoOriginal) + " ";
         texto = texto.replace("Planeta 360", "           ");
 
-        texto = consumir(texto, ISO, achados, m -> List.of(data(m.group(), Integer.parseInt(m.group(3)), Integer.parseInt(m.group(2)),
+        texto = consumir(texto, ISO, achados, (m, todo) -> List.of(data(m.group(), Integer.parseInt(m.group(3)), Integer.parseInt(m.group(2)),
                 m.group(1))));
-        texto = consumir(texto, DATA_COM_ANO, achados, m -> List.of(data(m.group(), Integer.parseInt(m.group(1)),
+        texto = consumir(texto, DATA_COM_ANO, achados, (m, todo) -> List.of(data(m.group(), Integer.parseInt(m.group(1)),
                 Integer.parseInt(m.group(2)), m.group(3))));
-        texto = consumir(texto, DATA_COM_ANO_CURTO, achados, m -> List.of(data(m.group(), Integer.parseInt(m.group(1)),
+        texto = consumir(texto, DATA_COM_ANO_CURTO, achados, (m, todo) -> List.of(data(m.group(), Integer.parseInt(m.group(1)),
                 Integer.parseInt(m.group(2)), "20" + m.group(3))));
-        texto = consumir(texto, DATA_SEM_ANO, achados, m -> List.of(data(m.group(), Integer.parseInt(m.group(1)),
+        texto = consumir(texto, DATA_SEM_ANO, achados, (m, todo) -> List.of(data(m.group(), Integer.parseInt(m.group(1)),
                 Integer.parseInt(m.group(2)), null)));
-        texto = consumir(texto, DATA_POR_EXTENSO, achados, m -> {
+        texto = consumir(texto, DATA_POR_EXTENSO, achados, (m, todo) -> {
             List<Achado> datas = new ArrayList<>();
             List<String> dias = new ArrayList<>(List.of(m.group(1)));
             Matcher outros = Pattern.compile("\\d{1,2}").matcher(m.group(2));
@@ -181,31 +201,42 @@ public final class NormalizadorDeNumeros {
             return datas;
         });
 
-        texto = consumir(texto, HORA_DOIS_PONTOS, achados, m -> List.of(hora(m.group(), Integer.parseInt(m.group(1)),
+        texto = consumir(texto, HORA_DOIS_PONTOS, achados, (m, todo) -> List.of(hora(m.group(), Integer.parseInt(m.group(1)),
                 Integer.parseInt(m.group(2)))));
-        texto = consumir(texto, HORA_COM_H, achados, m -> List.of(hora(m.group(), Integer.parseInt(m.group(1)),
+        texto = consumir(texto, HORA_COM_H, achados, (m, todo) -> List.of(hora(m.group(), Integer.parseInt(m.group(1)),
                 m.group(2) == null ? 0 : Integer.parseInt(m.group(2)))));
-        texto = consumir(texto, HORAS_POR_EXTENSO, achados, m -> {
+        texto = consumir(texto, HORAS_POR_EXTENSO, achados, (m, todo) -> {
             int horas = Integer.parseInt(m.group(1));
             return List.of(horas <= 24 ? valor(m.group(), "hora:" + duasCasas(horas) + ":00", String.valueOf(horas))
                     : valor(m.group(), String.valueOf(horas)));
         });
 
-        texto = consumir(texto, ALGARISMO_COM_ESCALA, achados, m -> {
+        texto = consumir(texto, ALGARISMO_COM_ESCALA, achados, (m, todo) -> {
             BigDecimal escala = m.group(2).equalsIgnoreCase("mil") ? BigDecimal.valueOf(1000) : BigDecimal.valueOf(1_000_000);
             BigDecimal valor = new BigDecimal(m.group(1).replace(',', '.')).multiply(escala);
             return List.of(valor(m.group(), valor.stripTrailingZeros().toPlainString()));
         });
-        texto = consumir(texto, CORRIDA_POR_EXTENSO, achados, m -> {
-            Extenso extenso = porExtenso(m.group(1));
-            if (fonte || extenso.temEscala()) {
-                return List.of(valor(m.group(), String.valueOf(extenso.valor())));
+        // "dez de dezembro" é uma data; "sete e oito de dezembro", duas. Vem antes dos numerais soltos.
+        texto = consumir(texto, DATA_COM_NUMERAL, achados, (m, todo) -> {
+            List<Achado> datas = new ArrayList<>();
+            for (Grupo grupo : porExtenso(m.group(1))) {
+                datas.add(data(m.group(), (int) grupo.valor(), mes(m.group(2)), m.group(3)));
             }
-            return m.group(2) != null && extenso.valor() != 1 ? List.of(valor(m.group(), String.valueOf(extenso.valor()))) : null;
+            return datas;
+        });
+        texto = consumir(texto, CORRIDA_POR_EXTENSO, achados, (m, todo) -> {
+            boolean comUnidade = m.group(2) != null;
+            List<Achado> numeros = new ArrayList<>();
+            for (Grupo grupo : porExtenso(m.group(1))) {
+                if (contaComoNumero(grupo, comUnidade, fonte)) {
+                    numeros.add(valor(m.group(), String.valueOf(grupo.valor())));
+                }
+            }
+            return numeros.isEmpty() ? null : numeros;
         });
 
         // O resto: números com milhar e decimal. A vírgula de uma lista ("19, 17") não é decimal, porque vem seguida de espaço.
-        consumir(texto, NUMERO, achados, m -> {
+        consumir(texto, NUMERO, achados, (m, todo) -> {
             String trecho = m.group();
             return List.of(ANO.matcher(trecho).matches() ? valor(trecho, normalizarNumero(trecho), "ano:" + trecho)
                     : valor(trecho, normalizarNumero(trecho)));
@@ -213,30 +244,57 @@ public final class NormalizadorDeNumeros {
         return achados;
     }
 
-    private record Extenso(long valor, boolean temEscala) {
+    /** Um número escrito por extenso: o valor e se teve escala (mil, milhão). */
+    private record Grupo(long valor, boolean temEscala) {
     }
 
-    private static Extenso porExtenso(String palavras) {
+    /** Centena (3), dezena de 20 a 90 (2) ou unidade de 1 a 19 (1): os numerais só somam se a grandeza cair. */
+    private static int grandeza(int valor) {
+        return valor >= 100 ? 3 : valor >= 20 ? 2 : 1;
+    }
+
+    /**
+     * Os números de uma corrida de numerais. Eles só somam em ordem decrescente de grandeza ("trezentos e doze", "vinte e cinco",
+     * "dois mil e quinhentos"); quando a grandeza não cai, começa outro número: "três e quatro" são o 3 e o 4, "dez e trinta" o 10
+     * e o 30. A escala (mil, milhão) multiplica o que veio antes dela e recomeça a ordem.
+     */
+    private static List<Grupo> porExtenso(String palavras) {
+        List<Grupo> grupos = new ArrayList<>();
         long total = 0;
         long parcial = 0;
         boolean temEscala = false;
+        int ultima = 4;
         for (String palavra : palavras.toLowerCase(Locale.ROOT).split("\\s+")) {
             if (palavra.isEmpty() || palavra.equals("e")) {
                 continue;
             }
-            if (palavra.equals("mil")) {
-                total += (parcial == 0 ? 1 : parcial) * 1000;
+            if (palavra.equals("mil") || palavra.startsWith("milh")) {
+                total += (parcial == 0 ? 1 : parcial) * (palavra.equals("mil") ? 1000L : 1_000_000L);
                 parcial = 0;
                 temEscala = true;
-            } else if (palavra.startsWith("milh")) {
-                total += (parcial == 0 ? 1 : parcial) * 1_000_000L;
-                parcial = 0;
-                temEscala = true;
-            } else {
-                parcial += EXTENSO.getOrDefault(palavra, 0);
+                ultima = 4;
+                continue;
             }
+            int valor = EXTENSO.get(palavra);
+            if (grandeza(valor) >= ultima) {
+                grupos.add(new Grupo(total + parcial, temEscala));
+                total = 0;
+                parcial = 0;
+                temEscala = false;
+            }
+            parcial += valor;
+            ultima = grandeza(valor);
         }
-        return new Extenso(total + parcial, temEscala);
+        grupos.add(new Grupo(total + parcial, temEscala));
+        return grupos;
+    }
+
+    /**
+     * "Um" e "uma" são artigo e nunca contam, nem na fonte. "Dois" e "duas" só contam na resposta com unidade (ou escala): "os dois
+     * manuais" não é número, e "duas rodadas" na fonte é a origem de "2 rodadas". O resto conta sempre.
+     */
+    private static boolean contaComoNumero(Grupo grupo, boolean comUnidade, boolean fonte) {
+        return grupo.temEscala() || (grupo.valor() != 1 && (fonte || grupo.valor() != 2 || comUnidade));
     }
 
     // ---------------------------------------------------------------------

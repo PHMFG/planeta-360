@@ -369,6 +369,62 @@ class ChecagemDeFontesTest {
     }
 
     @Test
+    void dataPorExtensoPrecisaDeOrigemComoQualquerOutraData() {
+        // a regra do furo: "dez de dezembro" não é "4 de dezembro" só porque a fonte tem uma data em dezembro
+        assertThat(recusa(turno("Quando?", PRAZO), "O prazo é dez de dezembro [T1].")).contains("dez de dezembro");
+        recusa(turno("Quando?", PRAZO), "O prazo é vinte e cinco de dezembro [T1].");
+        recusa(turno("Quando?"), "O prazo é vinte e cinco de dezembro.");
+        recusa(turno("Quando?", PRAZO), "O prazo é quatro de novembro [T1].");
+        aprova(turno("Quando?", PRAZO), "O prazo é quatro de dezembro [T1].");
+        aprova(turno("Quando?", PRAZO), "O prazo é quatro de dezembro de 2026 [T1].");
+        recusa(turno("Quando?", PRAZO), "O prazo é quatro de dezembro de 2027 [T1].");
+        aprova(turno("Quando?", "Os dias sete e oito de dezembro"), "Valem sete de dezembro e 8 de dezembro [T1].");
+    }
+
+    @Test
+    void numeralPorExtensoSemUnidadeTambemContaComoNumero() {
+        recusa(turno("Quanto?"), "A tarifa é de trezentos e doze por kVA.");
+        recusa(turno("Quanto?"), "A tarifa é de R$ trezentos e doze por kVA.");
+        recusa(turno("Quanto?"), "O limite é vinte %.");
+        recusa(turno("Quanto?"), "O limite é vinte porcento.");
+        recusa(turno("Quanto?"), "A multa é de dois milhoes de reais.");
+        recusa(turno("Quanto?"), "A multa é de dois milhões de reais.");
+        recusa(turno("Quanto?"), "São doze convites.");
+        recusa(turno("Quanto?"), "São cem.");
+        aprova(turno("Quanto?", "São 312"), "São trezentos e doze [T1].");
+        aprova(turno("Quanto?", "São doze convites por cota."), "São 12 convites [T1].");
+        aprova(turno("Quanto?", "São 12 convites por cota."), "São doze convites [T1].");
+    }
+
+    @Test
+    void umEUmaSaoArtigoENuncaSaoOrigemDe1() {
+        aprova(turno("Quanto?"), "Vale um dia de antecedência e uma credencial por pessoa.");
+        // "uma credencial" na pergunta não é o 1 de "R$ 1,00"
+        recusa(turno("Qual é a multa por uma credencial?"), "A multa é de R$ 1,00.");
+        recusa(turno("Quanto?", "um valor qualquer da tabela"), "A multa é de R$ 1,00 [T1].");
+        recusa(turno("Quanto?", "uma cota por marca"), "São 1 cota [T1].");
+        aprova(turno("Qual é a multa por 1 credencial?"), "Para 1 credencial, a multa vale o combinado.");
+    }
+
+    @Test
+    void numeraisForaDeOrdemDeGrandezaSaoNumerosSeparadosEcadaUmTemDeTerOrigem() {
+        recusa(turno("Quantos?", "Os lotes três e quatro abrem antes"), "São 7 lotes [T1].");
+        aprova(turno("Quantos?", "Os lotes três e quatro abrem antes"), "O lote 3 [T1].");
+        aprova(turno("Quantos?", "Os lotes três e quatro abrem antes"), "Os lotes 3 e 4 abrem antes [T1].");
+        recusa(turno("Quantos?", "Os dias sete e oito de dezembro"), "É no dia 15 [T1].");
+        aprova(turno("Quantos?", "Os dias sete e oito de dezembro"), "É no dia 8 de dezembro [T1].");
+        recusa(turno("Quantos?", "Os valores dez e trinta"), "São 40 [T1].");
+        aprova(turno("Quantos?", "Os valores dez e trinta"), "São 10 e 30 [T1].");
+    }
+
+    @Test
+    void porCentoDepoisDeAlgarismoNaoEONumeroCem() {
+        aprova(turno("Quanto?", "O percentual comprovado foi de 89,4% do previsto."), "São 89,4 por cento [T1].");
+        aprova(turno("Quanto?", "O percentual comprovado foi de 89,4% do previsto."), "São 89,4 por  cento [T1].");
+        recusa(turno("Quanto?", "O percentual comprovado foi de 89,4% do previsto."), "São cem por cento [T1].");
+    }
+
+    @Test
     void algarismoDeOutroAlfabetoDeLarguraTotalOuSobrescritoNaoEscapa() {
         recusa(turno("Quanto?"), "A tarifa é de ٣١٢ por kVA.");   // árabe-índico
         recusa(turno("Quanto?"), "A tarifa é de ３１２ por kVA.");   // largura total

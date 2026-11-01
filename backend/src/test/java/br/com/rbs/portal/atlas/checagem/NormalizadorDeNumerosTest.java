@@ -147,16 +147,80 @@ class NormalizadorDeNumerosTest {
 
     @ParameterizedTest(name = "\"{0}\" não é número")
     @ValueSource(strings = {"os dois manuais", "um dia", "uma hora", "a primeira vez", "uma ativação grande", "dois lados", "tenho um plano",
-            "só um", "dez coisas", "cem"})
-    void numeralPorExtensoSemUnidadeOuArtigoNaoContaNaResposta(String texto) {
+            "só um", "uma de nós", "as duas partes"})
+    void artigoEDoisSemUnidadeNaoContamNaResposta(String texto) {
         assertThat(valores(texto)).isEmpty();
     }
 
+    @ParameterizedTest(name = "\"{0}\" vale {1} mesmo sem unidade")
+    @CsvSource(delimiter = '|', value = {"dez coisas | 10", "cem | 100", "doze convites | 12", "vinte | 20", "são trezentos e doze | 312",
+            "sete | 7", "noventa | 90", "cento e vinte | 120", "dois mil | 2000", "mil | 1000", "um mil | 1000"})
+    void todoNumeralPorExtensoContaNaRespostaMenosUmEDois(String texto, String esperado) {
+        assertThat(valores(texto)).containsExactly(esperado);
+    }
+
+    @ParameterizedTest(name = "\"{0}\" vale {1}: dois e duas contam com unidade ou escala")
+    @CsvSource(delimiter = '|', value = {"dois reais | 2", "duas inserções | 2", "dois por cento | 2", "dois % | 2", "duas horas | 2",
+            "dois milhões de reais | 2000000", "dois milhoes | 2000000", "dois mil | 2000", "vinte porcento | 20", "vinte % | 20"})
+    void doisComUnidadeOuEscalaContam(String texto, String esperado) {
+        assertThat(valores(texto)).contains(esperado);
+    }
+
+    @ParameterizedTest(name = "\"{0}\"")
+    @ValueSource(strings = {"89,4 por cento", "89,4 por  cento", "89,4 Por Cento", "89,4 porcento", "89,4 %"})
+    void porCentoDepoisDeAlgarismoNaoEONumeralCento(String texto) {
+        assertThat(valores(texto)).containsExactly("89.4");
+    }
+
     @Test
-    void numaFonteTodoNumeralPorExtensoContaPorqueEleEAOrigemDoAlgarismo() {
+    void cemEPorCentoSeparados() {
+        assertThat(valores("cem por cento")).containsExactly("100");
+        assertThat(valores("por cento")).isEmpty();
+    }
+
+    @Test
+    void numeralSeguidoDeDeMesEData() {
+        assertThat(NormalizadorDeNumeros.extrair("dez de dezembro", false)).singleElement().satisfies(a -> {
+            assertThat(a.ehData()).isTrue();
+            assertThat(a.dia()).isEqualTo("12-10");
+            assertThat(a.ano()).isNull();
+        });
+        assertThat(valores("vinte e cinco de dezembro")).containsExactly("data:12-25");
+        assertThat(valores("quatro de dezembro")).containsExactly("data:12-04");
+        assertThat(valores("Quatro de Dezembro de 2026")).containsExactly("data:12-04", "ano:2026");
+        assertThat(valores("sete e oito de dezembro")).as("duas datas").containsExactly("data:12-07", "data:12-08");
+        assertThat(valores("trinta e um de janeiro")).containsExactly("data:01-31");
+        assertThat(valores("o prazo vai até dez de dezembro, às 18h")).contains("data:12-10").doesNotContain("10");
+    }
+
+    @Test
+    void numeraisSoSomamEmOrdemDecrescenteDeGrandeza() {
+        assertThat(valores("trezentos e doze")).containsExactly("312");
+        assertThat(valores("vinte e cinco")).containsExactly("25");
+        assertThat(valores("cento e vinte e três")).containsExactly("123");
+        assertThat(valores("dois mil e quinhentos")).containsExactly("2500");
+        assertThat(valores("mil e duzentos")).containsExactly("1200");
+        assertThat(valores("cem mil")).containsExactly("100000");
+        assertThat(valores("vinte e cinco mil")).containsExactly("25000");
+        assertThat(valores("duzentos e trinta e quatro mil reais")).containsExactly("234000");
+    }
+
+    @ParameterizedTest(name = "\"{0}\" são {1}, e não a soma")
+    @CsvSource(delimiter = '|', value = {"três e quatro | 3,4", "dez e trinta | 10,30", "dezessete e dezoito | 17,18", "vinte e trinta | 20,30",
+            "duzentos e trezentos | 200,300", "cinco e sete | 5,7", "vinte e dois e trinta | 22,30", "trinta e cinco e dez | 35,10"})
+    void numeraisForaDeOrdemSaoNumerosSeparados(String texto, String esperados) {
+        assertThat(valores(texto, true)).containsExactly(esperados.split(","));
+        assertThat(valores(texto)).containsExactly(esperados.split(","));
+    }
+
+    @Test
+    void numaFonteTodoNumeralPorExtensoContaMenosUmEUmaQueSaoArtigo() {
         assertThat(valores("duas rodadas", true)).containsExactly("2");
         assertThat(valores("os dois manuais", true)).containsExactly("2");
-        assertThat(valores("um dia", true)).containsExactly("1");
+        assertThat(valores("um dia", true)).as("artigo: nunca é a origem de 1").isEmpty();
+        assertThat(valores("uma credencial por pessoa", true)).isEmpty();
+        assertThat(aceita(new Origens("um dia"), "1 dia")).isFalse();
+        assertThat(aceita(new Origens("uma credencial"), "R$ 1,00")).isFalse();
     }
 
     // ---------------------------------------------------------------------
