@@ -965,6 +965,19 @@ class ChecagemDeFontesTest {
     }
 
     @Test
+    void doisBrindesSemFonteSaoRecusadosPorqueBrindesEUnidadeDoRelatorio() {
+        // a versão do documento é 3 e a página 5: o 2 de "dois" não tem de onde sair (o helper turno() usa a versão 2)
+        FontesDoTurno turno = new FontesDoTurno("Quantos brindes foram entregues?", 2027, HOJE);
+        turno.registrarTrecho(100, 10, "Manual de Operações 2027", 3, 5, "4 Energia › 4.1 Tarifa", "Os brindes ficam no estande.");
+
+        recusa(turno, "Foram dois brindes entregues [T1].");
+        recusa(turno, "Foram dois brinde entregues [T1].");
+        aprova(turno, "Os brindes ficam no estande [T1].");
+        // com o 2 na fonte, o número por extenso tem origem
+        aprova(turno("Quantos brindes?", "Foram 2 brindes entregues."), "Foram dois brindes entregues [T1].");
+    }
+
+    @Test
     void doisEspacosETabulacaoEntreOsGruposTambemSaoRecusados() {
         FontesDoTurno turno = turno("Quanto?", "São 2 rodadas, 220 V.");
 

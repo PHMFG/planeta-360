@@ -242,9 +242,19 @@ class NormalizadorDeNumerosTest {
 
     @ParameterizedTest(name = "\"{0}\" vale {1}: dois e duas contam com unidade ou escala")
     @CsvSource(delimiter = '|', value = {"dois reais | 2", "duas inserções | 2", "dois por cento | 2", "dois % | 2", "duas horas | 2",
-            "dois milhões de reais | 2000000", "dois milhoes | 2000000", "dois mil | 2000", "vinte porcento | 20", "vinte % | 20"})
+            "dois milhões de reais | 2000000", "dois milhoes | 2000000", "dois mil | 2000", "vinte porcento | 20", "vinte % | 20",
+            "dois brindes | 2", "Foram dois brindes entregues | 2", "dois brinde | 2", "dois visitantes | 2", "dois cadastros | 2"})
     void doisComUnidadeOuEscalaContam(String texto, String esperado) {
         assertThat(valores(texto)).contains(esperado);
+    }
+
+    @Test
+    void brindeEUnidadeMasOutraPalavraComecadaPorBrindeNao() {
+        // "brindes" é campo do relatório (brindes disponíveis e distribuídos): "dois brindes" é o número 2
+        assertThat(valores("dois brindes")).containsExactly("2");
+        assertThat(valores("os dois brindes entregues")).containsExactly("2");
+        assertThat(valores("os dois brindados")).isEmpty();
+        assertThat(valores("os dois brindeiros")).isEmpty();
     }
 
     @ParameterizedTest(name = "\"{0}\"")

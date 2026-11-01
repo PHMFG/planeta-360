@@ -72,7 +72,7 @@ public final class NormalizadorDeNumeros {
     private static final String ESCALA = "mil|milh(?:ão|ões|ao|oes)|bilh(?:ão|ões|ao|oes)";
     private static final String UNIDADES = "reais|real|dias?|horas?|minutos?|kva|kw|por\\s+cento|porcento|%|credenciais|credencial|cortesias?"
             + "|inserç(?:ão|ões)|ingressos?|pulseiras?|metros?|semanas?|meses|aplicaç(?:ão|ões)|pessoas?|litros?|visitantes?|cadastros?"
-            + "|rodadas?|peças?|vezes";
+            + "|rodadas?|peças?|vezes|brindes?";
     private static final String NAO_ACABA_A_PALAVRA = "(?![\\p{L}\\p{N}])";
 
     /**
