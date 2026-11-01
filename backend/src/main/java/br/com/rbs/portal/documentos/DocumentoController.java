@@ -113,7 +113,8 @@ public class DocumentoController {
      * do navegador ou de intermediário). A rota ignora o {@code Range}: todo GET devolve 200 com o arquivo inteiro e grava o DOWNLOAD,
      * e o {@code Accept-Ranges: none} avisa ao leitor. Por isso o corpo é um {@link InputStreamResource}, que o Spring não fatia (um
      * {@link Resource} de arquivo seria fatiado em 206, e um {@code Range} inválido daria 416 com o arquivo inteiro no corpo, sem a
-     * contagem). Só o HEAD não grava.
+     * contagem). Só o HEAD não grava. Cada GET gasta uma ficha do limite de aberturas por hora do usuário (429 com quanto falta, no
+     * service); o HEAD só olha.
      */
     @GetMapping("/{id}/conteudo")
     public ResponseEntity<Resource> conteudo(@AuthenticationPrincipal UsuarioAutenticado usuario, @PathVariable long id,

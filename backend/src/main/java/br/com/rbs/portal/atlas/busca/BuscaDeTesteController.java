@@ -10,7 +10,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Rota 61 do contrato (docs/api.md, "Busca nos documentos"): a busca de teste da RBS. [ATLAS] Sempre mapeada. [PERMISSAO] Só do
- * Admin RBS: o PermissaoAntesDoCorpo responde 403 antes de o corpo ser lido. As regras estão no BuscaDeTesteService.
+ * Admin RBS: o PermissaoAntesDoCorpo responde 403 antes de o corpo ser lido. As regras (e o limite de buscas por hora, que dá 429 antes do
+ * embedding) estão no BuscaDeTesteService.
  */
 @RestController
 public class BuscaDeTesteController {

@@ -62,13 +62,17 @@ spring:
 # Com o teto atingido, a rota 44 com texto responde 429. Serve para uma rodada de testes não gastar o limite do provedor.
 atlas:
   teto-diario-por-parceria: ${ATLAS_TETO_DIARIO:200}
-  # [ATLAS] Os limites por usuário (Bucket4j, na memória; M8): mensagens de texto por hora (rota 44) e relatórios por dia que o modelo
-  # monta (relatorio_iniciar). O botão não conta. Acima do limite, a mensagem recebe 429 com quanto falta, e o relatório do modelo
-  # volta como erro de ferramenta. A ficha volta aos poucos, sem esperar a hora inteira. No perfil test os valores são altos: o
-  # balde fica na memória e o rollback dos testes não o zera.
+  # [ATLAS] Os limites por usuário (Bucket4j, na memória; M8): mensagens de texto por hora (rota 44, da marca e da RBS), relatórios por
+  # dia que o modelo monta (relatorio_iniciar), aberturas de documento por hora (rota 59, em que cada GET grava uma linha de DOWNLOAD)
+  # e buscas de teste por hora (rota 61, em que cada chamada gasta um embedding do Gemini). O botão não conta. Acima do limite, a rota
+  # responde 429 com quanto falta (a mensagem, o documento e a busca), e o relatório do modelo volta como erro de ferramenta. A ficha
+  # volta aos poucos, sem esperar a hora inteira. No perfil test os valores são altos: o balde fica na memória e o rollback dos testes
+  # não o zera.
   limites:
     mensagens-por-hora: ${ATLAS_LIMITE_MENSAGENS_POR_HORA:20}
     relatorios-por-dia: ${ATLAS_LIMITE_RELATORIOS_POR_DIA:3}
+    documentos-por-hora: ${ATLAS_LIMITE_DOCUMENTOS_POR_HORA:120}
+    buscas-de-teste-por-hora: ${ATLAS_LIMITE_BUSCAS_DE_TESTE_POR_HORA:60}
   # [ATLAS] Os disjuntores do modelo de linguagem, do JEV e do Gemini (Resilience4j; M8). Cada um abre com 5 falhas seguidas ou 50% das
   # 10 últimas chamadas e deixa uma chamada de prova passar depois de 60 s; aberto, o modelo dá a frase fixa de falha na hora, o JEV fica
   # como se estivesse desligado e a busca segue só na lista textual. O estado está na rota 52 (disjuntor) e a recusa no traço (DISJUNTOR).
@@ -299,13 +303,15 @@ spring:
 
 # [ATLAS] As rotas de debug ficam desligadas no contexto de teste normal; a classe de teste delas as liga.
 # [ATLAS] Os limites por usuário ficam altos no teste normal (o contexto do Spring é compartilhado e o balde não volta no rollback);
-# o LimitesPorUsuarioTest usa os valores padrão num contexto próprio.
+# o LimitesPorUsuarioTest e o LimitesDeDocumentosEBuscaDeTesteTest usam os valores padrão num contexto próprio.
 # [ATLAS] No teste o relatório fica ligado (os testes dele continuam valendo) e o debug das ferramentas, desligado; as classes de
 # teste do modo só chat e do debug mudam isso com @TestPropertySource.
 atlas:
   limites:
     mensagens-por-hora: 100000
     relatorios-por-dia: 100000
+    documentos-por-hora: 100000
+    buscas-de-teste-por-hora: 100000
   disjuntores:
     ligado: false
   debug:

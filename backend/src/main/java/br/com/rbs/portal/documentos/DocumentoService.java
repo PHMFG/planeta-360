@@ -1,6 +1,7 @@
 package br.com.rbs.portal.documentos;
 
 import br.com.rbs.portal.atlas.embeddings.ProvedorDeEmbeddings;
+import br.com.rbs.portal.atlas.limites.LimitesPorUsuario;
 import br.com.rbs.portal.comum.AcaoHistorico;
 import br.com.rbs.portal.comum.Armazenamento;
 import br.com.rbs.portal.comum.ConflitoException;
@@ -69,11 +70,13 @@ public class DocumentoService {
     private final ProvedorDeEmbeddings embeddings;
     private final VerificadorDeAcesso verificador;
     private final HistoricoService historico;
+    private final LimitesPorUsuario limites;
     private final TransactionTemplate transacao;
 
     public DocumentoService(DocumentoRepositorio repositorio, Armazenamento armazenamento, ExtratorDeTexto extrator,
                             DetectorDeDadosPessoais detector, IngestaoService ingestao, ProvedorDeEmbeddings embeddings,
-                            VerificadorDeAcesso verificador, HistoricoService historico, PlatformTransactionManager gerenteDeTransacao) {
+                            VerificadorDeAcesso verificador, HistoricoService historico, LimitesPorUsuario limites,
+                            PlatformTransactionManager gerenteDeTransacao) {
         this.repositorio = repositorio;
         this.armazenamento = armazenamento;
         this.extrator = extrator;
@@ -82,6 +85,7 @@ public class DocumentoService {
         this.embeddings = embeddings;
         this.verificador = verificador;
         this.historico = historico;
+        this.limites = limites;
         this.transacao = new TransactionTemplate(gerenteDeTransacao);
     }
 
@@ -374,6 +378,9 @@ public class DocumentoService {
      * aprovado e o de outra edição, cota ou parceria, dá 404 com a mesma frase. É o único caminho da marca até o arquivo de um documento:
      * a rota 18 o recusa. [HISTORICO] Grava DOWNLOAD na entidade {@code documento} (com a parceria só no escopo PARCERIA; nos outros, com
      * o usuário), uma linha por GET: a rota ignora o {@code Range}, e só o HEAD não grava.
+     * [M8] Cada GET grava uma linha, então o usuário tem um limite de aberturas por hora ({@code atlas.limites.documentos-por-hora}):
+     * 429 com quanto falta. A conferência vem depois das permissões e do arquivo (o 404 de um documento que a marca não vê, ou cujo
+     * arquivo sumiu, não gasta ficha). O GET gasta a ficha; o HEAD, que não grava, só olha e responde o que o GET responderia.
      */
     @Transactional
     public ConteudoDoDocumento conteudo(UsuarioAutenticado usuario, long id, boolean gravarDownload, HttpServletRequest requisicao) {
@@ -382,8 +389,11 @@ public class DocumentoService {
         Path caminho = armazenamento.localizar(linha.arquivoCaminho()).orElseThrow(
                 () -> new NaoEncontradoException("Este documento não está mais disponível. Avise a equipe da RBS."));
         if (gravarDownload) {
+            limites.consumirDocumento(usuario.id());
             historico.registrar(AcaoHistorico.DOWNLOAD, usuario, linha.parceriaId(), "documento", linha.id(), null, linha.arquivoNome(),
                     null, requisicao);
+        } else {
+            limites.exigirDocumento(usuario.id());
         }
         return new ConteudoDoDocumento(caminho, linha.arquivoNome(), linha.arquivoMime());
     }

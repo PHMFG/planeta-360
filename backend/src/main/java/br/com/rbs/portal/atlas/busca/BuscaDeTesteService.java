@@ -10,6 +10,7 @@ import br.com.rbs.portal.atlas.busca.BuscaDeTesteDtos.ParceriaDaBuscaDto;
 import br.com.rbs.portal.atlas.busca.BuscaHibrida.Candidato;
 import br.com.rbs.portal.atlas.busca.BuscaHibrida.Escopo;
 import br.com.rbs.portal.atlas.busca.ConsultaAosDocumentos.Consultada;
+import br.com.rbs.portal.atlas.limites.LimitesPorUsuario;
 import br.com.rbs.portal.comum.DadosInvalidosException;
 import br.com.rbs.portal.comum.UsuarioAutenticado;
 import br.com.rbs.portal.comum.VerificadorDeAcesso;
@@ -34,19 +35,23 @@ public class BuscaDeTesteService {
     private final AtlasRepositorio atlas;
     private final ConsultaAosDocumentos consultas;
     private final BuscaHibrida busca;
+    private final LimitesPorUsuario limites;
 
     public BuscaDeTesteService(VerificadorDeAcesso verificador, AtlasRepositorio atlas, ConsultaAosDocumentos consultas,
-                               BuscaHibrida busca) {
+                               BuscaHibrida busca, LimitesPorUsuario limites) {
         this.verificador = verificador;
         this.atlas = atlas;
         this.consultas = consultas;
         this.busca = busca;
+        this.limites = limites;
     }
 
     /**
      * Rota 61. Ordem das respostas: 403 (não é da RBS, antes do corpo), 400 (corpo ausente ou quebrado) e 422 (campos). Parceria que
      * não existe é 422 em {@code campos.parceriaId}, como no envio de documento. Sem termo útil na consulta, a resposta é 200 com as
-     * listas vazias e {@code semTermoUtil} verdadeiro.
+     * listas vazias e {@code semTermoUtil} verdadeiro. [M8] Cada chamada pode gastar um embedding do Gemini, então o usuário tem um
+     * limite de buscas por hora ({@code atlas.limites.buscas-de-teste-por-hora}): 429 com quanto falta, depois dos 403, 400 e 422 (que
+     * não gastam ficha) e antes do embedding.
      */
     public BuscaDeTesteDto buscar(UsuarioAutenticado usuario, BuscaDeTesteRequisicao corpo) {
         verificador.exigirRbs(usuario);
@@ -77,6 +82,7 @@ public class BuscaDeTesteService {
             throw new DadosInvalidosException(campos);
         }
 
+        limites.consumirBuscaDeTeste(usuario.id());   // 429: o limite por hora, antes do embedding
         Escopo escopo = new Escopo(escopoDaParceria.eventoId(), escopoDaParceria.cotaTipoId(), corpo.parceriaId());
         Consultada consultada = consultas.consultar(escopo, consulta, tipo);
         var resultado = consultada.resultado();
