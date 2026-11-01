@@ -1,11 +1,13 @@
 // As fontes de uma resposta do Atlas: o [T1] do texto vira um chip que abre o documento, e a lista "Fontes" fica embaixo. [ATLAS]
 // Enquanto a resposta chega, as fontes ainda não existem (vêm no fim do turno): o chip aparece sem ação e, na conversa gravada,
-// troca pelo que abre. A citação que não tem fonte fica como veio; só o que é documento e ainda está no ar abre.
+// troca pelo que abre. A citação que não tem fonte fica como veio; só o que é documento e ainda está no ar abre. O registro do
+// portal [R1] abre o documento só quando veio de um (um prazo do manual, na página dele), e a conta [C1] está em "Como calculei".
 import { Fragment } from 'react'
 import type { FonteDaResposta } from '../api/atlas'
 import { partesComCitacoes } from './citacoes'
 
-const abre = (fonte: FonteDaResposta) => fonte.tipo === 'TRECHO' && fonte.documentoId !== undefined && fonte.trechoId !== undefined && !fonte.revogado
+const abre = (fonte: FonteDaResposta) =>
+  fonte.documentoId !== undefined && !fonte.revogado && (fonte.tipo === 'REGISTRO' || (fonte.tipo === 'TRECHO' && fonte.trechoId !== undefined))
 
 const FORMA = 'mx-0.5 inline-flex h-6 min-w-6 items-center justify-center rounded-md px-1.5 align-baseline text-[11px] leading-none font-bold'
 const CHIP_PARADO = `${FORMA} bg-white/8 text-white/64`
@@ -17,10 +19,17 @@ function ondeEsta(fonte: FonteDaResposta) {
 
 type AoAbrir = (fonte: FonteDaResposta) => void
 
+/** O que o chip parado explica: o documento retirado, o registro do portal ou a conta. */
+function dicaDoChip(fonte: FonteDaResposta) {
+  if (fonte.revogado) return 'Este documento foi retirado pela RBS.'
+  if (fonte.tipo === 'CALCULO') return 'Conta do Atlas: veja em Como calculei.'
+  return fonte.titulo
+}
+
 function ChipDaFonte({ fonte, aoAbrir }: { fonte: FonteDaResposta; aoAbrir: AoAbrir }) {
   if (!abre(fonte)) {
     return (
-      <span className={CHIP_PARADO} title={fonte.revogado ? 'Este documento foi retirado pela RBS.' : undefined}>
+      <span className={CHIP_PARADO} title={dicaDoChip(fonte)}>
         {fonte.marcador}
       </span>
     )
@@ -73,16 +82,16 @@ function ConteudoDaLinha({ fonte }: { fonte: FonteDaResposta }) {
   )
 }
 
-/** A lista "Fontes", embaixo da resposta: título, versão e página de cada documento citado. */
+/** A lista "Fontes", embaixo da resposta: cada documento citado, com versão e página, e cada registro do portal. A conta tem "Como calculei". */
 export function ListaDeFontes({ fontes, aoAbrir }: { fontes: FonteDaResposta[]; aoAbrir: AoAbrir }) {
-  const dosDocumentos = fontes.filter((fonte) => fonte.tipo === 'TRECHO')
-  if (dosDocumentos.length === 0) return null
+  const citadas = fontes.filter((fonte) => fonte.tipo !== 'CALCULO')
+  if (citadas.length === 0) return null
   const linha = 'flex w-full items-start gap-2.5 rounded-[12px] border border-white/12 bg-white/5 px-3 py-2 text-left'
   return (
     <section className="flex flex-col gap-2" aria-label="Fontes">
       <h3 className="text-[11px] font-bold tracking-[0.12em] text-white/64 uppercase">Fontes</h3>
       <ul className="flex flex-col gap-1.5">
-        {dosDocumentos.map((fonte) => (
+        {citadas.map((fonte) => (
           <li key={fonte.marcador}>
             {abre(fonte) ? (
               <button type="button" onClick={() => aoAbrir(fonte)} className={`${linha} transition-colors hover:bg-white/12`}>

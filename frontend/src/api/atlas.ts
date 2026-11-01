@@ -1,5 +1,5 @@
 // Atlas: a conversa da marca, o cartão de perguntas e o relatório de trabalho (rotas 42 a 48 do docs/api.md). [ATLAS]
-// O Atlas monta e redige, mas nunca escreve um número: todo valor que chega aqui já veio formatado pelo servidor, com a origem.
+// Todo número do Atlas tem origem: o dado da parceria vem resolvido pelo servidor, e o do documento ou da conta vem com a citação.
 import { ErroApi, pedir, pedirEmFluxo } from './cliente'
 import type { CampoCatalogo, ValorInformado, ValorVigente } from './dados'
 import type { UsuarioResumo } from './parcerias'
@@ -36,6 +36,21 @@ export type FonteDaResposta = {
   revogado?: boolean
 }
 
+/** Uma entrada de "Como calculei": de onde veio o número (o marcador da fonte, o dado da parceria ou o que a pessoa escreveu). */
+export type VariavelDoCalculo = { nome: string; origem: string; valor: string | null }
+
+/** Uma conta ou contagem de dias que o Atlas fez nesta resposta, com a origem de cada número. */
+export type CalculoDaResposta = {
+  marcador: string
+  ferramenta: 'calcular' | 'contar_dias'
+  nome: string | null
+  script: string | null
+  variaveis: VariavelDoCalculo[]
+  resultado: string
+  regra: string | null
+  feriadosConsiderados: { data: string; nome: string }[]
+}
+
 /** {@code turno}: o turno do diagnóstico que escreveu o item. Só vem com o diagnóstico ligado para quem está na tela. */
 export type ItemDaConversa = { turno?: string } & (
   | { tipo: 'usuario'; texto: string }
@@ -46,6 +61,11 @@ export type ItemDaConversa = { turno?: string } & (
   | { tipo: 'aviso'; texto: string }
   | { tipo: 'cartao'; solicitacaoId: number; relatorioId: number; mensagem: string; status: StatusCartao; campos: CampoDoCartao[] }
   | { tipo: 'relatorio_pronto'; relatorioId: number; titulo: string }
+  | ({ tipo: 'calculo' } & CalculoDaResposta)
+  /** O pedido de outro relatório: texto fixo, se a RBS já disponibilizou o oficial e os modelos em branco que dá para pedir. */
+  | { tipo: 'pedido_relatorio'; texto: string; relatorioOficial: boolean; modelos: { tipo: string; titulo: string }[] }
+  /** Um modelo em branco, para baixar ou copiar. O arquivo é gerado no navegador. */
+  | { tipo: 'modelo'; titulo: string; conteudo: string; nomeArquivo: string }
   /** Só com o debug das ferramentas ligado no servidor. */
   | ({ tipo: 'ferramenta' } & FerramentaUsada)
 )

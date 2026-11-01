@@ -6,13 +6,17 @@
 // A resposta do modelo chega em tempo real: o tempo pensando com o resumo do raciocínio, o texto e o que ele está fazendo; no
 // fim do turno, a conversa gravada toma o lugar da versão ao vivo. Com o debug ligado no servidor, as ferramentas que o modelo
 // usou aparecem na ordem em que rodaram. Com o relatório desligado na API, o botão dele aparece desabilitado.
-// O que a resposta cita dos documentos vira chip no texto e entra na lista "Fontes", e abre no visualizador.
+// O que a resposta cita dos documentos vira chip no texto e entra na lista "Fontes", e abre no visualizador. A conta aparece depois
+// do texto, em "Como calculei". O pedido de outro relatório e o modelo em branco são respostas diretas, sem nova ida ao modelo.
 import { Fragment, useEffect, useRef } from 'react'
 import type { FonteDaResposta, ItemDaConversa, RespostaDoCartao } from '../api/atlas'
 import type { ParceriaResumo } from '../api/tipos'
 import type { RespostaAoVivo } from './AoVivo'
 import { CartaoDocumento } from './CartaoDocumento'
+import { CartaoModelo } from './CartaoModelo'
+import { CartaoPedidoDeRelatorio } from './CartaoPedidoDeRelatorio'
 import { CartaoSolicitacao } from './CartaoSolicitacao'
+import { ComoCalculei } from './ComoCalculei'
 import { Compositor } from './Compositor'
 import { BotaoDiagnostico } from './Diagnostico'
 import { AvisoAtlas, BlocoDoAtlas, BlocoDoSistema, Chip, LinhaBuscando, MensagemVoce, TextoDoAtlas, TextoDoSistema } from './Elementos'
@@ -49,7 +53,19 @@ function agrupar(itens: ItemDaConversa[]): Grupo[] {
 }
 
 /** Sem o campo, o servidor é de antes da marcação e todo texto conta como do modelo. O pensamento só existe com o modelo. */
-const doModelo = (item: ItemDaResposta) => item.tipo === 'raciocinio' || item.tipo === 'ferramenta' || (item.tipo === 'texto' && item.porModelo !== false)
+const doModelo = (item: ItemDaResposta) =>
+  item.tipo === 'raciocinio' || item.tipo === 'ferramenta' || item.tipo === 'calculo' || item.tipo === 'pedido_relatorio' || item.tipo === 'modelo' || (item.tipo === 'texto' && item.porModelo !== false)
+
+/** A conta roda antes de o modelo escrever, mas se lê depois do texto que a usa. O resto fica na ordem em que aconteceu. */
+function naOrdemDeLeitura(itens: ItemDaResposta[]) {
+  const ultimoTexto = itens.findLastIndex((item) => item.tipo === 'texto')
+  if (ultimoTexto < 0) return itens
+  const contas = itens.slice(0, ultimoTexto).filter((item) => item.tipo === 'calculo')
+  return contas.length === 0 ? itens : [...itens.slice(0, ultimoTexto + 1).filter((item) => item.tipo !== 'calculo'), ...contas, ...itens.slice(ultimoTexto + 1)]
+}
+
+/** As fontes citadas na resposta: "Como calculei" abre a origem de um número pelo mesmo chip. */
+const fontesDoGrupo = (itens: ItemDaResposta[]) => itens.flatMap((item) => (item.tipo === 'texto' ? (item.fontes ?? []) : []))
 
 type Props = {
   parceria: ParceriaResumo
@@ -123,7 +139,7 @@ export function AreaDaConversa({
   const largura = compacta ? 'w-full' : 'mx-auto w-full max-w-[760px]'
   const espaco = compacta ? 'gap-5' : 'gap-[26px]'
 
-  function conteudo(item: ItemDaResposta, posicao: number) {
+  function conteudo(item: ItemDaResposta, posicao: number, grupo: ItemDaResposta[]) {
     switch (item.tipo) {
       case 'raciocinio':
         return <Raciocinio key={posicao} resumos={item.resumos} />
@@ -146,6 +162,12 @@ export function AreaDaConversa({
         return <CartaoSolicitacao key={posicao} item={item} aoResponder={aoResponder} />
       case 'relatorio_pronto':
         return <CartaoDocumento key={posicao} parceria={parceria} relatorioId={item.relatorioId} titulo={item.titulo} aoAbrir={aoAbrirDocumento} />
+      case 'calculo':
+        return <ComoCalculei key={posicao} calculo={item} fontes={fontesDoGrupo(grupo)} aoAbrir={aoAbrirFonte} />
+      case 'pedido_relatorio':
+        return <CartaoPedidoDeRelatorio key={posicao} parceria={parceria} item={item} aoPedirModelo={aoMudarTexto} />
+      case 'modelo':
+        return <CartaoModelo key={posicao} titulo={item.titulo} conteudo={item.conteudo} nomeArquivo={item.nomeArquivo} />
     }
   }
 
@@ -166,13 +188,13 @@ export function AreaDaConversa({
                 <MensagemVoce key={indice} texto={grupo.texto} />
               ) : grupo.itens.some(doModelo) ? (
                 <BlocoDoAtlas key={indice} compacto={compacta}>
-                  {grupo.itens.map(conteudo)}
+                  {naOrdemDeLeitura(grupo.itens).map((item, posicao, ordenados) => conteudo(item, posicao, ordenados))}
                   {debugDeFerramentas && !grupo.itens.some((item) => item.tipo === 'ferramenta') && <SemFerramentaDebug />}
                   {diagnosticoDe(grupo.itens)}
                 </BlocoDoAtlas>
               ) : (
                 <BlocoDoSistema key={indice}>
-                  {grupo.itens.map(conteudo)}
+                  {grupo.itens.map((item, posicao, todos) => conteudo(item, posicao, todos))}
                   {diagnosticoDe(grupo.itens)}
                 </BlocoDoSistema>
               ),
