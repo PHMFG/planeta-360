@@ -28,7 +28,7 @@ import { Modal } from '../../componentes/Modal'
 import { nomeStatus, Status } from '../../componentes/Status'
 import { dataHora, numero, tamanho } from '../../util/formatar'
 
-const TIPOS: { codigo: TipoDoDocumento; nome: string }[] = [
+export const TIPOS: { codigo: TipoDoDocumento; nome: string }[] = [
   { codigo: 'MANUAL_OPERACOES', nome: 'Manual de operações' },
   { codigo: 'PLANO_COMERCIAL', nome: 'Plano comercial' },
   { codigo: 'ANEXO_PARCERIA', nome: 'Anexo da parceria' },
