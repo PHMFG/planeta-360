@@ -137,7 +137,9 @@ atlas:
   jev:
     # O modo de TODOS os pontos: none (desligado), sombra (consulta e só grava "teria feito X") ou ativo (age quando a confiança chega ao
     # limiar). Cada ponto troca o dele com atlas.jev.<ponto>.modo e o limiar com atlas.jev.<ponto>.limiar (de 0 a 1), por exemplo
-    # atlas.jev.intencao.modo=ativo. Nenhum ponto tem override aqui: quem liga cada um, depois da calibração, é quem opera.
+    # atlas.jev.intencao.modo=ativo. Neste bloco base nenhum ponto tem override (tudo fica em none): quem liga cada um é quem opera. Os
+    # perfis dev e demo, mais abaixo, fixam o modo e o limiar dos seis pontos com o resultado da calibração (ATLAS_JEV_<PONTO> troca o
+    # modo de um deles).
     modo: ${ATLAS_JEV:none}                       # none | sombra | ativo
     modelo: ${ATLAS_JEV_MODELO:jev-1.14.0}
     base-url: ${ATLAS_JEV_BASE_URL:https://api.typesafe.ai}

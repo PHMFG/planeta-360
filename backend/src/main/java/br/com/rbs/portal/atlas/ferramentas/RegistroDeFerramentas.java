@@ -19,11 +19,12 @@ import org.springframework.stereotype.Component;
  * {@code RelatorioFerramentas} era um {@code switch} de cinco nomes e só oferecia {@code parceria_consultar} sem relatório. Agora
  * cada ferramenta se declara ({@link Ferramenta}) e o registro escolhe, a cada ida ao modelo, as do estado:
  * <ul>
- *   <li>sem relatório em montagem: {@code parceria_consultar}, {@code buscar_documentos} e, com o relatório ligado,
- *       {@code relatorio_iniciar};</li>
- *   <li>relatório {@code MONTANDO}: as duas primeiras mais {@code relatorio_solicitar_campos} (enquanto couber outro cartão),
- *       {@code relatorio_editar} e {@code relatorio_finalizar}: o relatório pode ficar montando por dias, e a pessoa continua podendo
- *       perguntar sobre os documentos;</li>
+ *   <li>sem relatório em montagem: as ferramentas de consulta e de conta ({@code parceria_consultar}, {@code buscar_documentos},
+ *       {@code listar_entregas}, {@code consultar_cota}, {@code consultar_prazos}, {@code contar_dias}, {@code calcular},
+ *       {@code pedido_de_relatorio} e {@code gerar_modelo}) e, com o relatório ligado, {@code relatorio_iniciar};</li>
+ *   <li>relatório {@code MONTANDO}: as de consulta e de conta mais {@code relatorio_solicitar_campos} (enquanto couber outro
+ *       cartão), {@code relatorio_editar} e {@code relatorio_finalizar}: o relatório pode ficar montando por dias, e a pessoa
+ *       continua podendo perguntar sobre os documentos;</li>
  *   <li>cartão aberto: nenhuma (o turno para).</li>
  * </ul>
  * O registro também roda a ferramenta em duas fases: {@link #preparar} (sem transação) e {@link #executar} (na transação do loop).

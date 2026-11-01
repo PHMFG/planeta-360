@@ -55,7 +55,9 @@ public final class DiagnosticoDtos {
     /**
      * Um provedor na rota 52. {@code origem}: {@code AMBIENTE}, {@code DEBUG} (só o modelo de linguagem) ou {@code NENHUM}. Nunca a
      * chave inteira: só os 4 últimos caracteres. {@code modo} é o do JEV ({@code DESLIGADO}, {@code SOMBRA} ou {@code ATIVO}) e
-     * nulo nos outros. {@code pontos} só vem no JEV (M7): o modo e o limiar de cada um dos seis pontos. {@code disjuntor} é nulo até o M8. A latência e os erros são das últimas 24 horas, do traço.
+     * nulo nos outros. {@code pontos} só vem no JEV (M7): o modo e o limiar de cada um dos seis pontos. {@code disjuntor} é o estado do disjuntor do provedor
+     * ({@code FECHADO}, {@code ABERTO}, {@code MEIO_ABERTO} ou {@code DESLIGADO}, com {@code atlas.disjuntores.ligado=false}), nunca
+     * nulo desde o M8. A latência e os erros são das últimas 24 horas, do traço.
      */
     public record ProvedorDto(String nome, boolean configurado, String origem, String modelo, String baseUrl, String finalDaChave,
                               String modo, long chamadas24h, long erros24h, Long latenciaP50Ms, Long latenciaP95Ms, String disjuntor,

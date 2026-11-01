@@ -8,8 +8,11 @@ import org.springframework.stereotype.Component;
  * O que o Atlas oferece nesta execução. [ATLAS] Duas propriedades, lidas uma vez na subida:
  * <ul>
  *   <li>{@code atlas.relatorio.ligado} ({@code ATLAS_RELATORIO}, desligada por padrão): o relatório de trabalho. Desligada, o
- *       Atlas é só o chat: o modelo recebe só {@code parceria_consultar} e o prompt {@code chat.txt}, o atalho e o cartão não
- *       existem, as rotas 46 a 48 não são mapeadas (404) e a conversa não devolve cartão, relatório pronto nem aviso de cartão.
+ *       Atlas é só o chat: o modelo recebe todas as ferramentas de consulta e de conta ({@code parceria_consultar},
+ *       {@code buscar_documentos}, {@code listar_entregas}, {@code consultar_cota}, {@code consultar_prazos}, {@code contar_dias},
+ *       {@code calcular}, {@code pedido_de_relatorio} e {@code gerar_modelo}), menos as {@code relatorio_*}, e o prompt
+ *       {@code chat.txt}; o atalho e o cartão não existem, as rotas 46 a 48 não são mapeadas (404) e a conversa não devolve cartão,
+ *       relatório pronto nem aviso de cartão.
  *       O código do relatório continua no projeto, e as tabelas do banco ficam sem uso.</li>
  *   <li>{@code atlas.debug.ferramentas} ({@code ATLAS_DEBUG_FERRAMENTAS}, desligada por padrão, ligada no perfil dev): temporário.
  *       A conversa mostra cada ferramenta que o agente chamou, com os argumentos e o resultado crus.</li>

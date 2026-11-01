@@ -12,9 +12,11 @@ import org.springframework.stereotype.Component;
  * O modo e o limiar de cada ponto de decisão do JEV (plano do Atlas completo, M7), lidos uma vez na subida. [ATLAS] O modo padrão
  * de todos os pontos é o de {@code atlas.jev.modo} ({@code ATLAS_JEV}: {@code none}, {@code sombra} ou {@code ativo}); cada ponto
  * pode trocá-lo com {@code atlas.jev.<ponto>.modo}, e o limiar vem de {@code atlas.jev.<ponto>.limiar} (de 0 a 1; o padrão é o do
- * {@link PontoDoJev} até a calibração fixar o do ponto). O padrão do {@code application.yml} é {@code none} e nenhum ponto tem
- * override: quem liga cada ponto, depois da calibração, é quem opera. A chave, o endereço e o modelo do JEV ficam na
- * {@code ConfiguracaoDeProvedores}.
+ * {@link PontoDoJev} quando nada o fixa). O padrão do {@code application.yml} é {@code none} e, fora dos perfis {@code dev} e
+ * {@code demo}, nenhum ponto tem override: quem liga cada ponto, depois da calibração, é quem opera. Os perfis {@code dev} e
+ * {@code demo} fixam o modo e o limiar de cada um dos seis pontos com o resultado da calibração (intenção, cartão e resposta
+ * ativos; fontes, coerência e lacunas em sombra), e {@code ATLAS_JEV_<PONTO>} troca o modo de um deles. A chave, o endereço e o
+ * modelo do JEV ficam na {@code ConfiguracaoDeProvedores}.
  */
 @Component
 public class ConfiguracaoDoJev {
