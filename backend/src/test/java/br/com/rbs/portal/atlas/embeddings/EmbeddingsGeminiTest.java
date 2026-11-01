@@ -242,6 +242,63 @@ class EmbeddingsGeminiTest {
         assertThat(ProvedorDeEmbeddings.norma(gemini.paraConsulta("p"))).isCloseTo(1.0, org.assertj.core.data.Offset.offset(1e-4));
     }
 
+    // ---------------------------------------------------------------------
+    // M3, rodada de correção: vetor inválido nunca chega ao banco (achado 8)
+    // ---------------------------------------------------------------------
+
+    private static final String SEM_VETOR_VALIDO = "O Gemini devolveu um vetor inválido";
+
+    private static String valoresCom(int posicao, String valor) {
+        return IntStream.range(0, 768).mapToObj(i -> i == posicao ? valor : "0.036").collect(Collectors.joining(",", "[", "]"));
+    }
+
+    @Test
+    void vetorSoDeZerosEErroPorqueOCossenoDariaNaN() {
+        servidor.responder(200, "{\"embedding\":{\"values\":" + IntStream.range(0, 768).mapToObj(i -> "0").collect(Collectors.joining(",", "[", "]")) + "}}");
+        servidor.responder(200, "{\"embeddings\":[{\"values\":" + IntStream.range(0, 768).mapToObj(i -> "0.0").collect(Collectors.joining(",", "[", "]")) + "}]}");
+
+        assertThatThrownBy(() -> gemini.paraConsulta("p")).isInstanceOf(EmbeddingsIndisponivelException.class)
+                .hasMessage(SEM_VETOR_VALIDO + ": todos os valores são zero.");
+        assertThatThrownBy(() -> gemini.paraTrechos("T", trechos(1))).isInstanceOf(EmbeddingsIndisponivelException.class)
+                .hasMessage(SEM_VETOR_VALIDO + ": todos os valores são zero.");
+    }
+
+    @Test
+    void valorNuloOuQueNaoEhNumeroNoVetorEErroEmVezDeVirarZero() {
+        for (String ruim : List.of("null", "\"abc\"", "\"0.5\"", "true", "[0.1]", "{\"a\":1}")) {
+            servidor.responder(200, "{\"embedding\":{\"values\":" + valoresCom(7, ruim) + "}}");
+
+            assertThatThrownBy(() -> gemini.paraConsulta("p")).as(ruim).isInstanceOf(EmbeddingsIndisponivelException.class)
+                    .hasMessage(SEM_VETOR_VALIDO + ": a posição 7 não é um número finito.");
+        }
+    }
+
+    @Test
+    void umNuloEOutrosZerosNaoPassamComoVetorUnitario() {
+        servidor.responder(200, "{\"embedding\":{\"values\":[1," + IntStream.range(0, 767).mapToObj(i -> "null").collect(Collectors.joining(",")) + "]}}");
+
+        assertThatThrownBy(() -> gemini.paraConsulta("p")).isInstanceOf(EmbeddingsIndisponivelException.class)
+                .hasMessage(SEM_VETOR_VALIDO + ": a posição 1 não é um número finito.");
+    }
+
+    @Test
+    void valorQueEstouraOFloatEErroEmVezDeVirarInfinitoENaN() {
+        for (String enorme : List.of("1e40", "-1e40", "3.5e38")) {
+            servidor.responder(200, "{\"embeddings\":[{\"values\":" + valoresCom(3, enorme) + "}]}");
+
+            assertThatThrownBy(() -> gemini.paraTrechos("T", trechos(1))).as(enorme).isInstanceOf(EmbeddingsIndisponivelException.class)
+                    .hasMessage(SEM_VETOR_VALIDO + ": a posição 3 não é um número finito.");
+        }
+    }
+
+    @Test
+    void umVetorInvalidoNoMeioDoLoteDerrubaOLoteInteiroComAFraseClaraESemAChave() {
+        servidor.responder(200, "{\"embeddings\":[{\"values\":" + umNaPosicao(0) + "},{\"values\":" + valoresCom(0, "null") + "}]}");
+
+        assertThatThrownBy(() -> gemini.paraTrechos("T", trechos(2))).isInstanceOf(EmbeddingsIndisponivelException.class)
+                .hasMessageContaining(SEM_VETOR_VALIDO).hasMessageNotContaining(CHAVE).hasMessageNotContaining("AIza");
+    }
+
     @Test
     void semChaveNaoChamaNadaEODiagnosticoDizPorque() {
         EmbeddingsGemini semChave = new EmbeddingsGemini(servidor.urlBase(), "  ", "gemini-embedding-2", 768, Duration.ZERO);

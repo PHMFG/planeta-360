@@ -27,7 +27,9 @@ import tools.jackson.databind.json.JsonMapper;
  *       meio, até achar o item que o Gemini não aceita;</li>
  *   <li>429 espera e tenta de novo (até {@value #TENTATIVAS_NO_429} vezes, respeitando o {@code Retry-After}); 500 a 504 tentam mais
  *       uma vez;</li>
- *   <li>a norma é conferida: fora de 1 ± 0,01, o vetor é normalizado; número de dimensões diferente de 768 é erro;</li>
+ *   <li>a norma é conferida: fora de 1 ± 0,01, o vetor é normalizado; número de dimensões diferente de 768, valor que não é um número
+ *       finito ({@code null}, texto, {@code 1e40}) e vetor só de zeros são erro ({@link EmbeddingsIndisponivelException}), porque o
+ *       cosseno do pgvector daria NaN;</li>
  *   <li>a chave nunca sai em mensagem de erro, nem inteira nem em parte (a frase do provedor entra sem ela);</li>
  *   <li>nenhuma transação: quem chama não pode segurar uma durante estas chamadas.</li>
  * </ul>
@@ -37,6 +39,7 @@ public class EmbeddingsGemini implements ProvedorDeEmbeddings {
 
     static final int TAMANHO_DO_LOTE = 50;
     static final int TENTATIVAS_NO_429 = 4;
+    private static final String VETOR_INVALIDO = "O Gemini devolveu um vetor inválido";
     private static final Duration LIMITE_DA_ESPERA = Duration.ofSeconds(30);
     private static final Logger log = LoggerFactory.getLogger(EmbeddingsGemini.class);
     private static final JsonMapper JSON = JsonMapper.builder().build();
@@ -245,7 +248,11 @@ public class EmbeddingsGemini implements ProvedorDeEmbeddings {
         return ": " + (frase.length() > 200 ? frase.substring(0, 200) + "…" : frase);
     }
 
-    /** O vetor de um {@code values}: 768 números, normalizado se a norma fugir de 1 por mais de 0,01. */
+    /**
+     * O vetor de um {@code values}: 768 números, todos finitos (como float), com norma maior que zero, e normalizado se a norma fugir de
+     * 1 por mais de 0,01. Valor que não é número ({@code null}, texto), número que estoura o float ({@code 1e40}) e vetor só de zeros
+     * são erro, e não um vetor: um vetor de zeros dá NaN no cosseno do pgvector, e um {@code null} contaria como 0.
+     */
     private float[] vetorDe(JsonNode values) {
         if (!values.isArray() || values.size() != dimensoes) {
             throw new EmbeddingsIndisponivelException("O Gemini devolveu " + (values.isArray() ? values.size() : 0)
@@ -253,9 +260,16 @@ public class EmbeddingsGemini implements ProvedorDeEmbeddings {
         }
         float[] vetor = new float[values.size()];
         for (int i = 0; i < vetor.length; i++) {
-            vetor[i] = (float) values.get(i).asDouble();
+            JsonNode valor = values.get(i);
+            vetor[i] = valor.isNumber() ? (float) valor.doubleValue() : Float.NaN;
+            if (!Float.isFinite(vetor[i])) {
+                throw new EmbeddingsIndisponivelException(VETOR_INVALIDO + ": a posição " + i + " não é um número finito.");
+            }
         }
         double norma = ProvedorDeEmbeddings.norma(vetor);
+        if (!Double.isFinite(norma) || norma == 0.0) {
+            throw new EmbeddingsIndisponivelException(VETOR_INVALIDO + ": todos os valores são zero.");
+        }
         if (Math.abs(norma - 1.0) > 0.01) {
             log.warn("Atlas: o Gemini devolveu um vetor com norma {} e o Atlas o normalizou.", norma);
             return ProvedorDeEmbeddings.normalizarSeFugir(vetor);

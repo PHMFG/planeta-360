@@ -59,7 +59,10 @@ public interface ProvedorDeEmbeddings {
         return texto.append(']').toString();
     }
 
-    /** Divide o vetor pela norma quando ela foge de 1 por mais de 0,01; a norma do vetor sai por {@link #norma(float[])}. */
+    /**
+     * Divide o vetor pela norma quando ela foge de 1 por mais de 0,01; a norma do vetor sai por {@link #norma(float[])}. Um vetor de
+     * norma zero volta como está: quem chama já recusou o vetor de zeros (o do Gemini é erro, e o de teste nunca o produz).
+     */
     static float[] normalizarSeFugir(float[] vetor) {
         double norma = norma(vetor);
         if (Math.abs(norma - 1.0) <= 0.01 || norma == 0.0) {
