@@ -821,6 +821,17 @@ class CalcularTest {
         assertThat(rodar(contexto, turno, "{\"nome\":\"maior\",\"script\":\"max(a, b)\"," + variaveis + "}")).containsEntry("valorFormatado", "19");
     }
 
+    @Test
+    void oPisoComLimiteConstanteNaoERecusadoPorDarZeroNosValoresDeTeste() {
+        // os valores de teste da trava ficam abaixo de 1000: max(q - 1000, 0) * p dava 0 neles, e a conta era recusada por engano
+        FontesDoTurno turno = new FontesDoTurno("Vendi 1200 ingressos a 50, e a franquia é de 1000.", 2027, LocalDate.of(2026, 11, 1));
+        AtlasContexto contexto = contexto();
+        String variaveis = "\"variaveis\":{\"q\":{\"fonte\":\"usuario\",\"valor\":\"1200\"},\"p\":{\"fonte\":\"usuario\",\"valor\":\"50\"}}";
+
+        assertThat(rodar(contexto, turno, "{\"nome\":\"excedente\",\"script\":\"max(q - 1000, 0) * p\"," + variaveis + "}"))
+                .containsEntry("valorFormatado", "10.000");
+    }
+
     // ---------------------------------------------------------------------
     // Registro e oferta
     // ---------------------------------------------------------------------

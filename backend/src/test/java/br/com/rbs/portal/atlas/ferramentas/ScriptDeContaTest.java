@@ -214,6 +214,25 @@ class ScriptDeContaTest {
     }
 
     @Test
+    void oPisoCujoLimiteFicaForaDosValoresDeTesteNaoFazAContaSerRecusada() {
+        // os valores de teste não passam de 11,3: max(q - 1000, 0) dá 0 nas três atribuições, e o produto com p também. Isso é só o limite
+        // ficar de um lado dos valores de teste, e não faz da conta um número fixo
+        assertThatCode(() -> conferir("max(q - 1000, 0) * p", Set.of("p", "q"))).as("excedente acima de 1000").doesNotThrowAnyException();
+        assertThatCode(() -> conferir("max(q - 100, 0) * p", Set.of("p", "q"))).as("excedente acima de 100").doesNotThrowAnyException();
+        assertThatCode(() -> conferir("max(total - usado - reservado, 0) * preco", Set.of("total", "usado", "reservado", "preco")))
+                .as("saldo livre vezes o preço").doesNotThrowAnyException();
+        // o nó acima também: quem tem um piso ou um teto com limite constante dentro não é julgado pelos valores de teste
+        assertThatCode(() -> conferir("pct(max(q - 1000, 0), p)", Set.of("p", "q"))).doesNotThrowAnyException();
+        assertThatCode(() -> conferir("(max(q - 1000, 0) * p) / r", Set.of("p", "q", "r"))).doesNotThrowAnyException();
+        assertThatCode(() -> conferir("min(q, 1000) * p", Set.of("p", "q"))).doesNotThrowAnyException();
+        // mas o que é fixo fora do piso continua recusado, e o piso não livra a parte vizinha
+        assertThatThrownBy(() -> conferir("max(q - 1000, 0) * (p / p)", Set.of("p", "q"))).isInstanceOf(DadosInvalidosException.class)
+                .hasMessageContaining("p / p");
+        assertThatThrownBy(() -> conferir("max(q, 1000) + (p - (p + 0))", Set.of("p", "q"))).isInstanceOf(DadosInvalidosException.class);
+        assertThatThrownBy(() -> conferir("max(q, 1000) * min(p, p + 0)", Set.of("p", "q"))).isInstanceOf(DadosInvalidosException.class);
+    }
+
+    @Test
     void duasVezesCadaVariavelPassaEATerceiraNao() {
         assertThatCode(() -> conferir("(a + b) * (a - b)", AB)).as("a e b duas vezes").doesNotThrowAnyException();
         assertThatCode(() -> conferir("a * b + a * b", AB)).doesNotThrowAnyException();

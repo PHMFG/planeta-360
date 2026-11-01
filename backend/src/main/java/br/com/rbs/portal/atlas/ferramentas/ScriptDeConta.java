@@ -28,7 +28,9 @@ import java.util.regex.Pattern;
  *       script pode dar <b>sempre o mesmo resultado</b>, qualquer que seja o valor das variáveis ({@code a / a}, {@code a - a},
  *       {@code (a + b) / (b + a)}, {@code a / (a + 0)}, {@code pct(a, a + 0)}): dariam 1, 0 ou 100 sem origem nenhuma (somados,
  *       dariam qualquer número). A conferência é por <i>significado</i>, e não pela forma do texto: a árvore do script é avaliada
- *       com três atribuições fixas de valores não redondos (veja {@link #conferirSignificado}), e a parte que não muda é recusada;</li>
+ *       com três atribuições fixas de valores não redondos (veja {@link #conferirSignificado}), e a parte que não muda é recusada.
+ *       O piso e o teto com limite constante ({@code max(q - 1000, 0) * p}) ficam de fora dessa conferência: os valores de teste
+ *       ficam de um lado do limite e a parte daria sempre o mesmo resultado sem ser fixa;</li>
  *   <li><b>percentual só com {@code pct}</b>: a constante {@code 100} que <i>multiplica</i>, junto de uma divisão por algo que não é
  *       constante ({@code a * 100 / b}, {@code (a / b) * 100}), é recusada. A divisão do motor arredonda meio para cima e 459.999 de
  *       460.000 daria "100%", o que o {@code fn_pct_truncado} do portal evita. O 100 que <i>divide</i> não é percentual à mão:
@@ -374,6 +376,26 @@ final class ScriptDeConta {
         };
     }
 
+    /**
+     * O {@code min} ou {@code max} com um argumento constante (sem variável) é o piso ou o teto: {@code max(q - 1000, 0)},
+     * {@code min(a, 1000)}.
+     */
+    private static boolean ehPisoOuTeto(Funcao funcao) {
+        return !funcao.nome().equals("pct") && (!temVariavel(funcao.primeiro()) || !temVariavel(funcao.segundo()));
+    }
+
+    /** Algum pedaço da árvore, inclusive o próprio nó, é um piso ou um teto ({@link #ehPisoOuTeto})? */
+    private static boolean temPisoOuTeto(No no) {
+        return switch (no) {
+            case Constante constante -> false;
+            case Variavel variavel -> false;
+            case Negativo negativo -> temPisoOuTeto(negativo.dentro());
+            case Agrupado agrupado -> temPisoOuTeto(agrupado.dentro());
+            case Conta conta -> temPisoOuTeto(conta.esquerda()) || temPisoOuTeto(conta.direita());
+            case Funcao funcao -> ehPisoOuTeto(funcao) || temPisoOuTeto(funcao.primeiro()) || temPisoOuTeto(funcao.segundo());
+        };
+    }
+
     /** Os números primos de onde saem os valores de teste: a raiz quadrada de cada um não é redonda nem tem relação com a de outro. */
     private static final int[] PRIMOS = {2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97, 101,
             103, 107, 109, 113, 127};
@@ -392,6 +414,10 @@ final class ScriptDeConta {
      * pula aquela atribuição. Duas exceções, que não fabricam número: {@code x + x} e {@code x * x} dependem de {@code x}, e o piso
      * ou o teto ({@code max(a - b, 0)}, {@code min(a, 1000)}) devolve a variável ou a constante que o script já contou; mas
      * {@code min} ou {@code max} com o mesmo valor nos dois argumentos ({@code min(a, a + 0)}) não é conta nenhuma.
+     * <b>O piso e o teto com limite constante não são julgados pelos valores de teste</b>: os valores não passam de 11,3, então
+     * {@code max(q - 1000, 0)} dá 0 nas três atribuições, e {@code max(q - 1000, 0) * p} também, só porque o limite ficou de um lado
+     * dos valores. Um {@code min} ou {@code max} com um argumento constante, e todo nó que o contém, é tratado como dependente das
+     * variáveis (não é recusado por dar sempre o mesmo valor); o resto do script segue conferido pelo significado.
      * Só mexe no que é decidido antes de rodar: a execução continua no JEXL.
      */
     private static void conferirSignificado(No raiz, Set<String> variaveis) {
@@ -458,9 +484,9 @@ final class ScriptDeConta {
                     throw recusado(funcao.nome() + "(" + parte(funcao.primeiro()) + ", " + parte(funcao.segundo()) + ") com o mesmo valor nos "
                             + "dois argumentos não é uma conta: dá sempre o mesmo resultado, sem origem. Use valores diferentes.");
                 }
-                // o piso e o teto (max(a - b, 0), min(a, 1000)) devolvem a variável ou a constante que o script já contou
-                boolean pisoOuTeto = !pct && !doisComVariavel;
-                if (!pisoOuTeto) {
+                // o piso e o teto (max(a - b, 0), min(a, 1000)) devolvem a variável ou a constante que o script já contou; os nós acima
+                // dele também ficam livres (veja recusarSeNaoMuda)
+                if (!ehPisoOuTeto(funcao)) {
                     recusarSeNaoMuda(no, resultado);
                 }
                 yield resultado;
@@ -482,7 +508,8 @@ final class ScriptDeConta {
     }
 
     private static void recusarSeNaoMuda(No no, double[] resultado) {
-        if (temVariavel(no) && naoMuda(resultado)) {
+        // com um piso ou um teto dentro, o valor de teste não diz nada: ele fica de um lado do limite (max(q - 1000, 0) dá 0 nas três)
+        if (temVariavel(no) && !temPisoOuTeto(no) && naoMuda(resultado)) {
             throw recusado("Uma parte do script dá sempre o mesmo resultado, qualquer que seja o valor (" + parte(no) + "): isso não é uma "
                     + "conta. Cada número tem de vir de uma variável com a fonte dele.");
         }
