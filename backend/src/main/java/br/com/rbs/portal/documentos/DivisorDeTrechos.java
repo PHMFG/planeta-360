@@ -38,7 +38,9 @@ import org.springframework.stereotype.Component;
  *       a seção pequena não se junta mais à vizinha de outra raiz;</li>
  *   <li>tabela inteira num trecho: a sequência de linhas com colunas alinhadas que o extrator marcou nunca é cortada (acima de
  *       {@value #LIMITE_DE_TOKENS} tokens ela se parte nas linhas, repetindo a legenda e o cabeçalho). A tabela que atravessa a página
- *       se parte na página, e a parte da página seguinte repete a legenda e o cabeçalho, como na tabela grande;</li>
+ *       se parte na página, e a parte da página seguinte repete a legenda e o cabeçalho, como na tabela grande. <b>Só a tabela com
+ *       legenda</b> ({@code Tabela N}) repete: sem legenda a primeira linha pode ser dado, e nada se repete; e a página seguinte que já
+ *       abre com o cabeçalho não o ganha de novo;</li>
  *   <li>de {@value #MINIMO_DE_TOKENS} a {@value #ALVO_DE_TOKENS} tokens por trecho (estimativa de 4 caracteres por token) e no máximo
  *       {@value #LIMITE_DE_TOKENS}, <b>contando os separadores</b> e as linhas de título que entram no texto. O Gemini corta <b>em
  *       silêncio</b> o que passa de 8.192 tokens, então o limite fica longe disso. Seções pequenas se juntam (com o título delas dentro
@@ -567,16 +569,19 @@ public class DivisorDeTrechos {
 
     /**
      * Fecha a tabela em um átomo por página. A parte de uma página que não é a primeira repete a legenda e o cabeçalho da tabela (as
-     * mesmas linhas que {@link #partirTabela} repete), a menos que ela comece com uma legenda própria: é outra tabela, que o extrator
-     * deixou colada à primeira.
+     * mesmas linhas que {@link #partirTabela} repete) <b>só se a tabela tem legenda</b> ("Tabela N ..."): sem legenda não há como
+     * saber que a primeira linha é cabeçalho, e repeti-la inventaria uma linha de dado ("Master 40") no topo da página seguinte. Também
+     * não repete se a página seguinte já abre com o cabeçalho (o extrator ou o próprio documento o repetiu), nem se ela abre com uma
+     * legenda própria: é outra tabela, que o extrator deixou colada à primeira.
      */
     private static void encerrarTabela(Secao secao, List<LinhaDoDocumento> tabela) {
         if (tabela.isEmpty()) {
             return;
         }
         int quantasDeCabecalho = quantasLinhasDeCabecalho(tabela.stream().map(LinhaDoDocumento::texto).toList());
-        String cabecalho = tabela.subList(0, Math.min(quantasDeCabecalho, tabela.size())).stream().map(LinhaDoDocumento::texto)
+        String cabecalho = tabela.subList(0, quantasDeCabecalho).stream().map(LinhaDoDocumento::texto)
                 .collect(java.util.stream.Collectors.joining("\n"));
+        String linhaDoCabecalho = quantasDeCabecalho == 2 ? tabela.get(1).texto() : null;
         int de = 0;
         while (de < tabela.size()) {
             int ate = de;
@@ -584,7 +589,8 @@ public class DivisorDeTrechos {
                 ate++;
             }
             StringBuilder texto = new StringBuilder();
-            if (de > 0 && !ehLegenda(tabela.get(de).texto())) {
+            if (de > 0 && quantasDeCabecalho > 0 && !ehLegenda(tabela.get(de).texto())
+                    && !mesmaLinha(tabela.get(de).texto(), linhaDoCabecalho)) {
                 texto.append(cabecalho);
             }
             for (LinhaDoDocumento linha : tabela.subList(de, ate)) {
@@ -601,9 +607,14 @@ public class DivisorDeTrechos {
         return linha.regionMatches(true, 0, "Tabela ", 0, 7);
     }
 
-    /** A legenda ("Tabela N ...") e o cabeçalho da tabela, ou só o cabeçalho quando não há legenda. */
+    /** As duas linhas que a tabela repete ao se partir: a legenda ("Tabela N ...") e o cabeçalho que vem depois dela; sem legenda, nenhuma. */
     private static int quantasLinhasDeCabecalho(List<String> linhas) {
-        return linhas.size() > 1 && ehLegenda(linhas.get(0)) ? 2 : 1;
+        return linhas.size() > 1 && ehLegenda(linhas.get(0)) ? 2 : 0;
+    }
+
+    /** As duas linhas são iguais, sem contar a quantidade de espaços? */
+    private static boolean mesmaLinha(String a, String b) {
+        return b != null && a.strip().replaceAll("\\s+", " ").equals(b.strip().replaceAll("\\s+", " "));
     }
 
     // ---------------------------------------------------------------------
@@ -795,14 +806,17 @@ public class DivisorDeTrechos {
         }
     }
 
-    /** Tabela acima do limite: parte nas linhas, repetindo a legenda e o cabeçalho em cada parte (e a linha maior que o limite, nas palavras). */
+    /**
+     * Tabela acima do limite: parte nas linhas, repetindo a legenda e o cabeçalho em cada parte (e a linha maior que o limite, nas
+     * palavras). Sem legenda não repete nada: a primeira linha pode ser dado, e cada linha da tabela fica em exatamente uma parte.
+     */
     private static List<Atomo> partirTabela(Atomo tabela, int limite) {
         if (tabela.tokens() <= limite) {
             return List.of(tabela);
         }
         String[] linhas = tabela.texto().split("\n");
         int quantasDeCabecalho = quantasLinhasDeCabecalho(Arrays.asList(linhas));
-        String cabecalho = String.join("\n", java.util.Arrays.copyOfRange(linhas, 0, Math.min(quantasDeCabecalho, linhas.length)));
+        String cabecalho = String.join("\n", java.util.Arrays.copyOfRange(linhas, 0, quantasDeCabecalho));
         int espacoDaLinha = Math.max(1, limite - estimarTokens(cabecalho + "\n"));   // o que sobra no pedaço para uma linha só
         List<Atomo> partes = new ArrayList<>();
         StringBuilder parte = new StringBuilder(cabecalho);
@@ -812,7 +826,10 @@ public class DivisorDeTrechos {
                     partes.add(new Atomo(parte.toString(), "\n", tabela.paginaInicio(), tabela.paginaFim(), true));
                     parte = new StringBuilder(cabecalho);
                 }
-                parte.append('\n').append(linha);
+                if (parte.length() > 0) {
+                    parte.append('\n');
+                }
+                parte.append(linha);
             }
         }
         partes.add(new Atomo(parte.toString(), "\n", tabela.paginaInicio(), tabela.paginaFim(), true));

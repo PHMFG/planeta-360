@@ -1250,13 +1250,81 @@ class DivisorDeTrechosTest {
     }
 
     @Test
-    void tabelaSemLegendaQueAtravessaAPaginaRepeteSoOCabecalho() {
+    void tabelaSemLegendaQueAtravessaAPaginaNaoRepeteNada() {
+        // sem legenda ("Tabela N"), a primeira linha pode ser dado, e não cabeçalho: repeti-la na página seguinte inventaria uma linha
         Pagina um = new Pagina(1, List.of(new Linha("1. Valores", 62, List.of(62.0), false), tabela("Item Valor"), tabela("Energia R$ 10,00")));
         Pagina dois = new Pagina(2, List.of(tabela("Gás R$ 30,00")));
 
         List<Trecho> trechos = divisor.dividir(List.of(um, dois));
 
-        assertThat(trechos).extracting(Trecho::texto).containsExactly("Item Valor\nEnergia R$ 10,00", "Item Valor\nGás R$ 30,00");
+        assertThat(trechos).extracting(Trecho::texto).containsExactly("Item Valor\nEnergia R$ 10,00", "Gás R$ 30,00");
+    }
+
+    @Test
+    void tabelaSemLegendaNaoRepeteAPrimeiraLinhaComoSeFosseCabecalho() {
+        Pagina um = new Pagina(1, List.of(new Linha("1. Cotas", 62, List.of(62.0), false), tabela("Master 40"), tabela("Prata 20")));
+        Pagina dois = new Pagina(2, List.of(tabela("Bronze 10"), tabela("Apoio 5")));
+
+        List<Trecho> trechos = divisor.dividir(List.of(um, dois));
+
+        assertThat(trechos).extracting(Trecho::texto).containsExactly("Master 40\nPrata 20", "Bronze 10\nApoio 5");
+        confereQueNadaSumiu(List.of(um, dois));
+    }
+
+    @Test
+    void naPaginaSeguinteACabecalhoJaRepetidoPeloExtratorNaoSeRepeteDeNovo() {
+        Pagina um = new Pagina(1, List.of(new Linha("1. Valores", 62, List.of(62.0), false), tabela("Tabela 1 · Valores"), tabela("Item Valor"),
+                tabela("Energia R$ 10,00")));
+        Pagina dois = new Pagina(2, List.of(tabela("Item Valor"), tabela("Gás R$ 30,00")));
+
+        List<Trecho> trechos = divisor.dividir(List.of(um, dois));
+
+        assertThat(trechos).extracting(Trecho::texto).containsExactly("Tabela 1 · Valores\nItem Valor\nEnergia R$ 10,00", "Item Valor\nGás R$ 30,00");
+        confereQueNadaSumiu(List.of(um, dois));
+    }
+
+    @Test
+    void naPaginaSeguinteACabecalhoComOutraQuantidadeDeEspacosTambemContaComoIgual() {
+        Pagina um = new Pagina(1, List.of(new Linha("1. Valores", 62, List.of(62.0), false), tabela("Tabela 1 · Valores"), tabela("Item   Valor"),
+                tabela("Energia R$ 10,00")));
+        Pagina dois = new Pagina(2, List.of(tabela("Item Valor"), tabela("Gás R$ 30,00")));
+
+        assertThat(divisor.dividir(List.of(um, dois))).extracting(Trecho::texto).last().isEqualTo("Item Valor\nGás R$ 30,00");
+    }
+
+    @Test
+    void tabelaComLegendaQueAtravessaAPaginaSemOCabecalhoRepeteALegendaEOCabecalho() {
+        Pagina um = new Pagina(1, List.of(new Linha("1. Valores", 62, List.of(62.0), false), tabela("Tabela 1 · Valores"), tabela("Item Valor"),
+                tabela("Energia R$ 10,00")));
+        Pagina dois = new Pagina(2, List.of(tabela("Gás R$ 30,00")));
+
+        assertThat(divisor.dividir(List.of(um, dois))).extracting(Trecho::texto).containsExactly("Tabela 1 · Valores\nItem Valor\nEnergia R$ 10,00",
+                "Tabela 1 · Valores\nItem Valor\nGás R$ 30,00");
+    }
+
+    @Test
+    void tabelaSemLegendaMaiorQueOLimiteSeParteSemRepetirLinhaNenhumaENadaSome() {
+        List<Linha> linhas = new ArrayList<>();
+        linhas.add(new Linha("1. Valores", 62, List.of(62.0), false));
+        for (int i = 1; i <= 500; i++) {
+            linhas.add(tabela("Item de número " + i + " com uma descrição bem comprida para ocupar espaço R$ " + i + ",00"));
+        }
+        List<Pagina> paginas = List.of(new Pagina(1, linhas));
+
+        List<Trecho> partes = divisor.dividir(paginas);
+
+        assertThat(partes.size()).isGreaterThan(2);
+        assertThat(partes).allSatisfy(t -> assertThat(t.tokens()).isLessThanOrEqualTo(DivisorDeTrechos.LIMITE_DE_TOKENS));
+        assertThat(partes.get(0).texto()).startsWith("Item de número 1 com");
+        for (Trecho parte : partes.subList(1, partes.size())) {
+            assertThat(parte.texto()).as("a parte " + parte.ordem() + " não começa pela primeira linha da tabela").doesNotStartWith("Item de número 1 ");
+        }
+        for (int i = 1; i <= 500; i++) {
+            String linha = "Item de número " + i + " com uma descrição bem comprida para ocupar espaço R$ " + i + ",00";
+            long vezes = partes.stream().filter(t -> java.util.Arrays.asList(t.texto().split("\n")).contains(linha)).count();
+            assertThat(vezes).as(linha + " aparece em exatamente um trecho").isEqualTo(1);
+        }
+        confereQueNadaSumiu(paginas);
     }
 
     @Test
