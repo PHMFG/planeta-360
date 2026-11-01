@@ -70,10 +70,18 @@ final class ScriptDeConta {
     }
 
     /**
-     * Confere o script contra as variáveis declaradas; sobe {@link DadosInvalidosException} (campo {@code script}) se não passa.
-     * Devolve quantas constantes o script tem (0 a 2): o {@link Calcular} soma as das contas {@code calc:} que ele usa.
+     * As constantes de um script: {@code total} é quantas ele tem (0 a 2, o limite do próprio script) e {@code acumuladas} é quantas a
+     * conta seguinte herda pela cadeia. O {@code 100} usado como divisor ({@code a * b / 100}) só encolhe o número: conta no total e
+     * não se acumula.
      */
-    static int conferir(String script, Set<String> variaveis) {
+    record Constantes(int total, int acumuladas) {
+    }
+
+    /**
+     * Confere o script contra as variáveis declaradas; sobe {@link DadosInvalidosException} (campo {@code script}) se não passa.
+     * Devolve as constantes do script: o {@link Calcular} soma as acumuladas às das contas {@code calc:} que ele usa.
+     */
+    static Constantes conferir(String script, Set<String> variaveis) {
         if (script == null || script.isBlank()) {
             throw recusado("Escreva o script da conta.");
         }
@@ -109,7 +117,7 @@ final class ScriptDeConta {
                     + "que multiplica junto de uma divisão por variável (a * 100 / b, a / b * 100): a divisão arredondaria 99,9998% para "
                     + "100%. O 100 que divide, como em a * b / 100 ou a * b / 100 / c, continua valendo.");
         }
-        return analise.constantes;
+        return new Constantes(analise.constantes, analise.constantes - analise.cemsComoDivisor);
     }
 
     // ---------------------------------------------------------------------

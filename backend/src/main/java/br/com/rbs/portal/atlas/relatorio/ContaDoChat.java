@@ -26,8 +26,8 @@ import java.util.Map;
  *                       casas (100/3 &times; 3 é 100, e não 99,99); só o que sai para a tela é arredondado. Nulo nas contas gravadas antes
  *                       deste campo, que usam o {@code valor}
  * @param constantes     quantas constantes do script esta conta soma <b>pela cadeia</b>: as do script dela e as das contas
- *                       {@code calc:} que ela usa (a fórmula fixa do modelo conta zero). O limite de duas constantes vale para o total, e não
- *                       conta a conta
+ *                       {@code calc:} que ela usa (a fórmula fixa do modelo conta zero). O {@code 100} que divide ({@code v * p / 100}) só
+ *                       encolhe o número e não entra. O limite de duas constantes vale para o total, e não conta a conta
  */
 public record ContaDoChat(String nome, BigDecimal valor, String valorFormatado, String script, String unidade, String formato,
                           List<Variavel> variaveis, BigDecimal valorExato, int constantes) {

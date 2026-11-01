@@ -167,7 +167,7 @@ public class Calcular implements Ferramenta {
         exigirSemErros(erros);
 
         // 2. O script: a lista de tokens, antes de qualquer outra coisa
-        int constantesDoScript = ScriptDeConta.conferir(script, declaradas.keySet());
+        int constantesDoScript = ScriptDeConta.conferir(script, declaradas.keySet()).acumuladas();
 
         // 3. A origem de cada variável
         Resolucao resolucao = resolucaoDoTurno(contexto, turno);
@@ -467,7 +467,9 @@ public class Calcular implements Ferramenta {
 
     /**
      * [VALIDACAO] O limite de duas constantes vale pela cadeia: as do script mais as das contas {@code calc:} do turno que ele usa. Sem
-     * isso, {@code x + 100 + 100} numa conta e {@code y + 100 + 2} na seguinte montariam qualquer número em poucas chamadas.
+     * isso, {@code x + 100 + 100} numa conta e {@code y + 100 + 2} na seguinte montariam qualquer número em poucas chamadas. O
+     * {@code 100} que divide ({@code v * p / 100}) só encolhe o número e não se acumula (três percentuais e o total passam); ele ainda
+     * conta no limite do próprio script, que o {@link ScriptDeConta} confere.
      */
     private static int constantesPelaCadeia(int doScript, List<Entrada> entradas, Map<String, String> erros) {
         int herdadas = entradas.stream().mapToInt(Entrada::constantes).sum();

@@ -658,6 +658,41 @@ class CalcularTest {
     }
 
     @Test
+    void tresPercentuaisESeuTotalNaoEstouramACadeiaPoisODivisorCemSoEncolhe() {
+        FontesDoTurno turno = new FontesDoTurno("Comissão de 10% sobre 1200, 800 e 500; some tudo.", 2027, LocalDate.of(2026, 11, 1));
+        AtlasContexto contexto = contexto();
+
+        for (String[] item : new String[][] {{"x", "1200"}, {"y", "800"}, {"z", "500"}}) {
+            rodar(contexto, turno, "{\"nome\":\"" + item[0] + "\",\"script\":\"v * p / 100\",\"variaveis\":{"
+                    + "\"v\":{\"fonte\":\"usuario\",\"valor\":\"" + item[1] + "\"},\"p\":{\"fonte\":\"usuario\",\"valor\":\"10\"}}}");
+        }
+        Map<String, Object> total = rodar(contexto, turno, "{\"nome\":\"total\",\"script\":\"x + y + z\",\"variaveis\":{"
+                + "\"x\":{\"ref\":\"calc:x\"},\"y\":{\"ref\":\"calc:y\"},\"z\":{\"ref\":\"calc:z\"}}}");
+
+        assertThat(total).containsEntry("valorFormatado", "250");
+        assertThat(ContaDoChat.deDados(turno.fonte("C1").orElseThrow().dados()).orElseThrow().constantes()).as("o 100 que divide não se acumula").isZero();
+        assertThat(ContaDoChat.deDados(turno.fonte("C4").orElseThrow().dados()).orElseThrow().constantes()).isZero();
+        // o 100 que divide ainda conta no limite do próprio script: três constantes num script seguem recusadas
+        assertThat(erro(contexto, turno, "{\"nome\":\"tres\",\"script\":\"v / 100 / 100 / 100\",\"variaveis\":{"
+                + "\"v\":{\"fonte\":\"usuario\",\"valor\":\"1200\"}}}")).contains("3 constantes");
+    }
+
+    @Test
+    void oCemQueMultiplicaSeguePesandoNaCadeiaEODivisorNaoLimpaAsConstantesDeAntes() {
+        FontesDoTurno turno = new FontesDoTurno("Quero 7 e 5 unidades.", 2027, LocalDate.of(2026, 11, 1));
+        AtlasContexto contexto = contexto();
+
+        rodar(contexto, turno, "{\"nome\":\"ca\",\"script\":\"a + 100\",\"variaveis\":{\"a\":{\"fonte\":\"usuario\",\"valor\":\"7\"}}}");
+        rodar(contexto, turno, "{\"nome\":\"cb\",\"script\":\"t * 100\",\"variaveis\":{\"t\":{\"ref\":\"calc:ca\"}}}");
+        // dividir por 100 não esconde as duas constantes que a cadeia já tem
+        assertThat(erro(contexto, turno, "{\"nome\":\"cc\",\"script\":\"t / 100 + 2\",\"variaveis\":{\"t\":{\"ref\":\"calc:cb\"}}}"))
+                .contains("constantes", "cadeia");
+        assertThat(rodar(contexto, turno, "{\"nome\":\"cd\",\"script\":\"t / 100\",\"variaveis\":{\"t\":{\"ref\":\"calc:cb\"}}}"))
+                .containsEntry("marcador", "C3");
+        assertThat(ContaDoChat.deDados(turno.fonte("C3").orElseThrow().dados()).orElseThrow().constantes()).isEqualTo(2);
+    }
+
+    @Test
     void oAtaqueDeEncadearContasParaChegarEm312NaoFecha() {
         // x + 100 + 100 numa conta e y + 100 + 2, y + 2 + 2... depois: com a cadeia, a terceira conta já não passa
         FontesDoTurno turno = new FontesDoTurno("Quero 7 e 5 unidades.", 2027, LocalDate.of(2026, 11, 1));

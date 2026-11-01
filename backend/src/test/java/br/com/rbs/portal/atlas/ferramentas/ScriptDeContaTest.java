@@ -84,10 +84,25 @@ class ScriptDeContaTest {
         assertThat(conferirEContar("a * 2", Set.of("a"))).isEqualTo(1);
         assertThat(conferirEContar("a * 2 + 1", Set.of("a"))).isEqualTo(2);
         assertThat(conferirEContar("a * 100 / 1000", Set.of("a"))).isEqualTo(2);
+        assertThat(conferirEContar("a * b / 100", AB)).as("o 100 que divide também conta no limite do script").isEqualTo(1);
+    }
+
+    @Test
+    void oCemQueDivideNaoSomaNasConstantesQueSeAcumulamPelaCadeia() {
+        // acumuladas: as que a conta seguinte herda. O 100 como divisor só encolhe o número, e fica de fora
+        assertThat(ScriptDeConta.conferir("a * b / 100", AB).acumuladas()).isZero();
+        assertThat(ScriptDeConta.conferir("a * b / (100)", AB).acumuladas()).isZero();
+        assertThat(ScriptDeConta.conferir("a / 100 / 100", Set.of("a")).acumuladas()).isZero();
+        assertThat(ScriptDeConta.conferir("a / 100 / 100", Set.of("a")).total()).as("mas conta no limite do script").isEqualTo(2);
+        assertThat(ScriptDeConta.conferir("a * 100 / 100", Set.of("a")).acumuladas()).as("o 100 que multiplica soma").isEqualTo(1);
+        assertThat(ScriptDeConta.conferir("a * 2 / 100", Set.of("a")).acumuladas()).isEqualTo(1);
+        assertThat(ScriptDeConta.conferir("a / 1000", Set.of("a")).acumuladas()).as("só o 100 é livre").isEqualTo(1);
+        assertThat(ScriptDeConta.conferir("a + 100", Set.of("a")).acumuladas()).isEqualTo(1);
+        assertThat(ScriptDeConta.conferir("a + b", AB).acumuladas()).isZero();
     }
 
     static int conferirEContar(String script, Set<String> variaveis) {
-        return ScriptDeConta.conferir(script, variaveis);
+        return ScriptDeConta.conferir(script, variaveis).total();
     }
 
     // ---------------------------------------------------------------------
