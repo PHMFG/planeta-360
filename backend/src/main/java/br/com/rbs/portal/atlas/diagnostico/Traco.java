@@ -35,7 +35,7 @@ public final class Traco {
     private static final Logger log = LoggerFactory.getLogger(Traco.class);
 
     private final RegistroDoTraco registro;
-    private final long parceriaId;
+    private final Long parceriaId;
     private final long conversaId;
     private final UUID turno;
     private final Object trava = new Object();
@@ -45,12 +45,12 @@ public final class Traco {
 
     private Traco() {
         this.registro = null;
-        this.parceriaId = 0;
+        this.parceriaId = null;
         this.conversaId = 0;
         this.turno = null;
     }
 
-    Traco(RegistroDoTraco registro, long parceriaId, long conversaId) {
+    Traco(RegistroDoTraco registro, Long parceriaId, long conversaId) {
         this.registro = registro;
         this.parceriaId = parceriaId;
         this.conversaId = conversaId;
@@ -269,7 +269,8 @@ public final class Traco {
         }
     }
 
-    long parceriaId() {
+    /** A parceria da conversa; nulo na conversa sem parceria (o Atlas da RBS). */
+    Long parceriaId() {
         return parceriaId;
     }
 

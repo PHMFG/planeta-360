@@ -31,7 +31,7 @@ class RegistroDoTracoTest {
 
     @Test
     void desligadoEntregaOTracoQueNaoFazNada() {
-        Traco traco = registro(false, "0", "0").abrir(1, 2);
+        Traco traco = registro(false, "0", "0").abrir(1L, 2);
 
         assertThat(traco).isSameAs(Traco.NENHUM);
         assertThat(traco.ativo()).isFalse();
@@ -46,8 +46,8 @@ class RegistroDoTracoTest {
     void ligadoCadaTurnoTemUmIdNovo() {
         RegistroDoTraco registro = registro(true, "0", "0");
 
-        Traco um = registro.abrir(1, 2);
-        Traco outro = registro.abrir(1, 2);
+        Traco um = registro.abrir(1L, 2);
+        Traco outro = registro.abrir(1L, 2);
 
         assertThat(um.ativo()).isTrue();
         assertThat(um.turno()).isNotNull().isNotEqualTo(outro.turno());

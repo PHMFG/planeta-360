@@ -22,14 +22,15 @@ import org.springframework.stereotype.Repository;
 public class TracoRepositorio {
 
     /** Uma etapa a gravar. {@code dadosJson} já vem sanitizado. */
-    public record EtapaNova(long parceriaId, long conversaId, UUID turno, Long mensagemId, int ordem, String etapa, String resultado,
+    public record EtapaNova(Long parceriaId, long conversaId, UUID turno, Long mensagemId, int ordem, String etapa, String resultado,
                             OffsetDateTime iniciadaEm, int duracaoMs, String dadosJson) {
     }
 
     /**
-     * Um turno como o banco o resume, com a parceria e o dono da conversa já ligados. {@code iniciadoEm} e {@code terminadoEm}
-     * cobrem as etapas sequenciais (o resumo do raciocínio, em paralelo, e a busca, que está dentro da ferramenta, ficam de fora); {@code resultado} é o da etapa SAIDA
-     * (ERRO se o turno não a tem); {@code mensagemId} é a última mensagem do assistente que o turno tocou; os tokens e o custo
+     * Um turno como o banco o resume, com a parceria e o dono da conversa já ligados. {@code parceriaId} e {@code parceria} são nulos
+     * no turno de uma conversa sem parceria (o Atlas da RBS, V15): por isso a parceria entra por junção externa. {@code iniciadoEm}
+     * e {@code terminadoEm} cobrem as etapas sequenciais (o resumo do raciocínio, em paralelo, e a busca, que está dentro da
+     * ferramenta, ficam de fora); {@code resultado} é o da etapa SAIDA (ERRO se o turno não a tem); {@code mensagemId} é a última mensagem do assistente que o turno tocou; os tokens e o custo
      * somam as etapas que os trazem em {@code dados}.
      */
     public record TurnoLido(UUID turno, Long conversaId, Long parceriaId, String parceria, Long usuarioId, String usuarioNome,
@@ -76,8 +77,8 @@ public class TracoRepositorio {
                    x.tokens_entrada, x.tokens_saida, x.custo_usd
             FROM turnos x
             JOIN atlas_conversa c ON c.id = x.conversa_id
-            JOIN parceria pa ON pa.id = x.parceria_id
-            JOIN patrocinador p ON p.id = pa.patrocinador_id
+            LEFT JOIN parceria pa ON pa.id = x.parceria_id
+            LEFT JOIN patrocinador p ON p.id = pa.patrocinador_id
             JOIN usuario u ON u.id = c.usuario_id
             """;
 

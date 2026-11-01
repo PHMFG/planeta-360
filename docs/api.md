@@ -2170,7 +2170,7 @@ O custo de uma ida (e de um resumo) é o `usage.opencode.list_cost` que o OpenCo
   "pagina": 0, "tamanho": 50, "total": 1 }
 ```
 
-`etapas` é a quantidade (a lista não traz as etapas: abra o turno pela rota 51). O turno que nem começou (teto diário atingido, conversa ocupada) também aparece, com `resultado` `RECUSADO`. Os campos são os mesmos da rota 51.
+`etapas` é a quantidade (a lista não traz as etapas: abra o turno pela rota 51). O turno que nem começou (teto diário atingido, conversa ocupada) também aparece, com `resultado` `RECUSADO`. Os campos são os mesmos da rota 51. O turno de uma conversa sem parceria (o Atlas da RBS, veja as rotas 67 e 68) aparece com `parceriaId` e `parceria` **nulos**, e `usuario` é a pessoa da RBS que conversou; o filtro `parceriaId` não o traz.
 
 **Erros:** 400 (`parceriaId` que não é número); 401; 403 (patrocinador); 404 (diagnóstico desligado); 422 (filtro ou paginação).
 
@@ -2187,6 +2187,8 @@ O custo de uma ida (e de um resumo) é o `usage.opencode.list_cost` que o OpenCo
   "tokensEntrada": 4210, "tokensSaida": 380, "custoUsd": 0.0031,
   "etapas": [ { "ordem": 1, "etapa": "G1_LIMITES", "resultado": "OK", "iniciadaEm": "...", "duracaoMs": 3, "mensagemId": null, "dados": {} } ] }
 ```
+
+No turno de uma conversa sem parceria (o Atlas da RBS), `parceriaId` e `parceria` são `null`.
 
 **Erros:** 401; 403 (patrocinador); 404 (`"Não encontramos este turno."`: turno que não existe ou id que não é um UUID; ou, com o diagnóstico desligado, `"Não encontramos o que você pediu."`).
 

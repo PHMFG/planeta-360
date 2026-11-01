@@ -78,8 +78,11 @@ public class RegistroDoTraco {
         }
     }
 
-    /** O traço de um turno novo desta conversa; o {@link Traco#NENHUM} com o diagnóstico desligado. */
-    public Traco abrir(long parceriaId, long conversaId) {
+    /**
+     * O traço de um turno novo desta conversa; o {@link Traco#NENHUM} com o diagnóstico desligado. {@code parceriaId} é nulo na
+     * conversa sem parceria (o Atlas da RBS).
+     */
+    public Traco abrir(Long parceriaId, long conversaId) {
         return modo.diagnosticoLigado() ? new Traco(this, parceriaId, conversaId) : Traco.NENHUM;
     }
 
