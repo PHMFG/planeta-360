@@ -45,6 +45,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -141,13 +142,13 @@ public class LoopDoAgente {
             FRASE_SEM_RESPOSTA_NO_CHAT, TEXTO_NAO_ENCONTREI, FRASE_SEM_CONSULTA);
     public static final String ERRO_DO_LIMITE = "Limite de chamadas de ferramenta deste turno atingido. Não chame mais ferramentas.";
     /** A frase da etapa {@code etapa} da resposta em fluxo, por ferramenta: a marca lê o que está acontecendo, nunca o nome dela. */
-    public static final Map<String, String> ETAPAS = Map.of(
-            RelatorioFerramentas.CONSULTAR, "Consultando os números da parceria…",
-            BuscarDocumentos.NOME, "Buscando nos documentos do portal…",
-            RelatorioFerramentas.INICIAR, "Abrindo o relatório…",
-            RelatorioFerramentas.SOLICITAR_CAMPOS, "Preparando as perguntas…",
-            RelatorioFerramentas.EDITAR, "Redigindo o documento…",
-            RelatorioFerramentas.FINALIZAR, "Finalizando o documento…");
+    public static final Map<String, String> ETAPAS = Map.ofEntries(
+            Map.entry(RelatorioFerramentas.CONSULTAR, "Consultando os números da parceria…"),
+            Map.entry(BuscarDocumentos.NOME, "Buscando nos documentos do portal…"),
+            Map.entry(RelatorioFerramentas.INICIAR, "Abrindo o relatório…"),
+            Map.entry(RelatorioFerramentas.SOLICITAR_CAMPOS, "Preparando as perguntas…"),
+            Map.entry(RelatorioFerramentas.EDITAR, "Redigindo o documento…"),
+            Map.entry(RelatorioFerramentas.FINALIZAR, "Finalizando o documento…"));
 
     private static final Logger log = LoggerFactory.getLogger(LoopDoAgente.class);
     private static final DateTimeFormatter DIA = DateTimeFormatter.ofPattern("dd/MM/yyyy");
@@ -653,16 +654,38 @@ public class LoopDoAgente {
         return turno.fontes.todasAsBuscasFalharam() && Frases.citacoes(texto).isEmpty() && Referencias.marcadores(texto).isEmpty();
     }
 
-    /** Grava, na transação da mensagem, as fontes de trecho que o texto citou ({@code atlas_fonte}); o texto já passou pela checagem. */
+    /**
+     * Grava, na transação da mensagem, as fontes que o texto citou ({@code atlas_fonte}): trecho, registro do portal e conta; o texto
+     * já passou pela checagem. Uma conta que o texto só usa pelo marcador {@code {{calc:nome}}}, sem a citação {@code [C1]}, também
+     * é gravada: a releitura da conversa precisa dela para trocar o marcador pelo valor.
+     */
     private void gravarFontes(long mensagemId, Turno turno, String texto) {
         if (texto == null) {
             return;
         }
-        for (String marcador : new LinkedHashSet<>(Frases.citacoes(texto))) {
+        Set<String> marcadores = new LinkedHashSet<>(Frases.citacoes(texto));
+        for (String ref : Referencias.marcadores(texto)) {
+            if (ref.startsWith("calc:")) {
+                turno.fontes.conta(Referencias.nome(ref)).ifPresent(conta -> marcadores.add(conta.marcador()));
+            }
+        }
+        for (String marcador : marcadores) {
             Fonte fonte = turno.fontes.fonte(marcador).orElse(null);
-            if (fonte != null && fonte.tipo() == FontesDoTurno.Tipo.TRECHO) {
-                repositorio.inserirFonteDeTrecho(mensagemId, fonte.marcador(), fonte.trechoId(), fonte.documentoId(), fonte.versao(),
-                        fonte.pagina(), fonte.titulo(), fonte.secao());
+            if (fonte == null) {
+                continue;
+            }
+            switch (fonte.tipo()) {
+                case TRECHO -> repositorio.inserirFonteDeTrecho(mensagemId, fonte.marcador(), fonte.trechoId(), fonte.documentoId(),
+                        fonte.versao(), fonte.pagina(), fonte.titulo(), fonte.secao());
+                case REGISTRO -> {
+                    // O título e a seção vão em dados, junto do que o registro trouxe (a unidade, o documento de origem).
+                    Map<String, Object> dados = new LinkedHashMap<>();
+                    dados.put("titulo", fonte.titulo());
+                    dados.put("secao", fonte.secao());
+                    dados.putAll(fonte.dados());
+                    repositorio.inserirFonteDeRegistro(mensagemId, fonte.marcador(), fonte.registroEntidade(), fonte.registroId(), dados);
+                }
+                case CALCULO -> repositorio.inserirFonteDeCalculo(mensagemId, fonte.marcador(), fonte.dados());
             }
         }
     }

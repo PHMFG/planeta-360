@@ -3,7 +3,9 @@ package br.com.rbs.portal.atlas;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -299,7 +301,7 @@ public class AtlasRepositorio {
     /** Grava a fonte de trecho que uma mensagem do assistente citou; {@code dados} guarda o título e a seção como estavam. */
     public void inserirFonteDeTrecho(long mensagemId, String marcador, long trechoId, long documentoId, int versao, int pagina,
                                      String titulo, String secao) {
-        java.util.Map<String, Object> dados = new java.util.LinkedHashMap<>();
+        Map<String, Object> dados = new LinkedHashMap<>();
         dados.put("titulo", titulo);
         dados.put("secao", secao);
         jdbc.sql("""
@@ -311,25 +313,59 @@ public class AtlasRepositorio {
     }
 
     /**
+     * Grava a fonte de registro do portal ({@code [R#]}) que uma mensagem citou. O CHECK da tabela proíbe, no registro, as colunas do
+     * documento: se o registro veio de um documento, o {@code documentoId}, a {@code versao} e a {@code pagina} ficam em {@code dados},
+     * junto do título e da seção.
+     */
+    public void inserirFonteDeRegistro(long mensagemId, String marcador, String entidade, long id, Map<String, Object> dados) {
+        jdbc.sql("""
+                        INSERT INTO atlas_fonte (mensagem_id, marcador, tipo, registro_entidade, registro_id, dados)
+                        VALUES (:mensagem, :marcador, 'REGISTRO', :entidade, :id, CAST(:dados AS jsonb))
+                        """)
+                .param("mensagem", mensagemId).param("marcador", marcador).param("entidade", entidade).param("id", id)
+                .param("dados", AtlasJson.escrever(dados)).update();
+    }
+
+    /** Grava a fonte de conta ({@code [C#]}, do {@code calcular} ou do {@code contar_dias}): a conta inteira vai em {@code dados}. */
+    public void inserirFonteDeCalculo(long mensagemId, String marcador, Map<String, Object> dados) {
+        jdbc.sql("""
+                        INSERT INTO atlas_fonte (mensagem_id, marcador, tipo, dados)
+                        VALUES (:mensagem, :marcador, 'CALCULO', CAST(:dados AS jsonb))
+                        """)
+                .param("mensagem", mensagemId).param("marcador", marcador).param("dados", AtlasJson.escrever(dados)).update();
+    }
+
+    /**
      * Uma fonte citada numa mensagem, como a conversa a mostra. {@code substituido} e {@code revogado} são o estado de AGORA do
-     * documento (ele pode ter mudado depois da resposta).
+     * documento (ele pode ter mudado depois da resposta). {@code documentoId}, {@code versao} e {@code pagina} são das colunas num
+     * trecho e de {@code dados} num registro que veio de um documento. {@code titulo} é o do trecho ou do registro e, na conta, o
+     * nome dela. {@code dados} é o JSON cru (a conta, para a releitura resolver o {@code {{calc:nome}}} daquela mensagem).
      */
     public record LinhaDeFonte(Long mensagemId, String marcador, String tipo, Long trechoId, Long documentoId, Integer versao,
-                               Integer pagina, String titulo, String secao, boolean substituido, boolean revogado) {
+                               Integer pagina, String titulo, String secao, boolean substituido, boolean revogado, String dados) {
     }
+
+    /** O documento a que a fonte aponta: a coluna, no trecho, ou o {@code documentoId} de {@code dados}, no registro. */
+    private static final String DOCUMENTO_DA_FONTE = """
+            coalesce(f.documento_id, CASE WHEN jsonb_typeof(f.dados -> 'documentoId') = 'number'
+                                          THEN (f.dados ->> 'documentoId')::bigint END)""";
 
     /** As fontes de todas as mensagens da conversa, por mensagem e pelo número do marcador. */
     public List<LinhaDeFonte> fontesDaConversa(long conversaId) {
         return jdbc.sql("""
-                        SELECT f.mensagem_id, f.marcador, f.tipo, f.trecho_id, f.documento_id, f.versao, f.pagina,
-                               f.dados ->> 'titulo' AS titulo, f.dados ->> 'secao' AS secao,
-                               coalesce(d.status = 'SUBSTITUIDO', FALSE) AS substituido, coalesce(d.status = 'REVOGADO', FALSE) AS revogado
+                        SELECT f.mensagem_id, f.marcador, f.tipo, f.trecho_id,
+                               %s AS documento_id,
+                               coalesce(f.versao, CASE WHEN jsonb_typeof(f.dados -> 'versao') = 'number' THEN (f.dados ->> 'versao')::int END) AS versao,
+                               coalesce(f.pagina, CASE WHEN jsonb_typeof(f.dados -> 'pagina') = 'number' THEN (f.dados ->> 'pagina')::int END) AS pagina,
+                               coalesce(f.dados ->> 'titulo', f.dados ->> 'nome') AS titulo, f.dados ->> 'secao' AS secao,
+                               coalesce(d.status = 'SUBSTITUIDO', FALSE) AS substituido, coalesce(d.status = 'REVOGADO', FALSE) AS revogado,
+                               f.dados::text AS dados
                         FROM atlas_fonte f
                         JOIN atlas_mensagem m ON m.id = f.mensagem_id
-                        LEFT JOIN documento d ON d.id = f.documento_id
+                        LEFT JOIN documento d ON d.id = %s
                         WHERE m.conversa_id = :conversa
                         ORDER BY f.mensagem_id, f.id
-                        """)
+                        """.formatted(DOCUMENTO_DA_FONTE, DOCUMENTO_DA_FONTE))
                 .param("conversa", conversaId).query(LinhaDeFonte.class).list();
     }
 
@@ -346,10 +382,10 @@ public class AtlasRepositorio {
                         SELECT DISTINCT d.titulo, d.versao
                         FROM atlas_fonte f
                         JOIN atlas_mensagem m ON m.id = f.mensagem_id
-                        JOIN documento d ON d.id = f.documento_id
+                        JOIN documento d ON d.id = %s
                         WHERE m.conversa_id = :conversa AND d.status IN ('REVOGADO', 'SUBSTITUIDO')
                         ORDER BY d.titulo, d.versao
-                        """)
+                        """.formatted(DOCUMENTO_DA_FONTE))
                 .param("conversa", conversaId).query(DocumentoRetirado.class).list();
     }
 

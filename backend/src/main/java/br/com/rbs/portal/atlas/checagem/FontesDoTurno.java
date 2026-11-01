@@ -41,10 +41,22 @@ public final class FontesDoTurno {
     /**
      * Uma fonte citável. {@code texto} é o conteúdo (o trecho do documento, o registro, a conta). O título, a versão, a página e a
      * seção são metadados que o modelo também vê no resultado da ferramenta e que valem como parte da fonte: citar "página 6" ou
-     * "seção 3.2" ao lado de {@code [T1]} não é número sem origem.
+     * "seção 3.2" ao lado de {@code [T1]} não é número sem origem. {@code registroEntidade} e {@code registroId} dizem qual linha
+     * do portal é um {@code [R#]}; {@code dados} é o resto que se grava em {@code atlas_fonte.dados} (de um registro: a unidade e, se
+     * veio de um documento, o {@code documentoId}, a {@code versao} e a {@code pagina}; de uma conta: a conta inteira).
      */
     public record Fonte(String marcador, Tipo tipo, Long trechoId, Long documentoId, String titulo, Integer versao, Integer pagina,
-                        String secao, String texto) {
+                        String secao, String texto, String registroEntidade, Long registroId, Map<String, Object> dados) {
+
+        public Fonte {
+            dados = dados == null ? Map.of() : Collections.unmodifiableMap(new LinkedHashMap<>(dados));
+        }
+
+        /** Um trecho de documento: sem registro e sem dados. */
+        public Fonte(String marcador, Tipo tipo, Long trechoId, Long documentoId, String titulo, Integer versao, Integer pagina,
+                     String secao, String texto) {
+            this(marcador, tipo, trechoId, documentoId, titulo, versao, pagina, secao, texto, null, null, Map.of());
+        }
 
         /** O título, a versão, a página e a seção da fonte: valem como parte dela ("página 5"), mas não são o texto do documento. */
         public String metadados() {
@@ -75,6 +87,8 @@ public final class FontesDoTurno {
     private final LocalDate hoje;
     private final Map<String, Fonte> fontes = new LinkedHashMap<>();
     private final Map<Long, String> marcadorDoTrecho = new HashMap<>();
+    private final Map<String, String> marcadorDoRegistro = new HashMap<>();   // "entidade#id" -> R#
+    private final Map<String, String> marcadorDaConta = new LinkedHashMap<>();   // nome da conta do calcular -> C#
     private final Map<Tipo, Integer> contadores = new HashMap<>();
     private final List<String> numerosLivres = new ArrayList<>();
     private int buscas;
@@ -166,6 +180,47 @@ public final class FontesDoTurno {
         return fonte;
     }
 
+    /**
+     * Registra uma linha do portal como fonte {@code [R#]} (M5) e devolve a fonte. A mesma linha ({@code entidade}, {@code id}) em
+     * dois resultados do turno mantém o marcador. {@code dados} leva o que se grava em {@code atlas_fonte.dados} além do título e da
+     * seção: a unidade e, se o registro veio de um documento, o {@code documentoId}, a {@code versao} e a {@code pagina}.
+     */
+    public Fonte registrarRegistro(String entidade, long id, String titulo, String secao, String texto, Map<String, Object> dados) {
+        String chave = entidade + "#" + id;
+        String existente = marcadorDoRegistro.get(chave);
+        if (existente != null) {
+            return fontes.get(existente);
+        }
+        Fonte fonte = new Fonte(novoMarcador(Tipo.REGISTRO), Tipo.REGISTRO, null, null, titulo, null, null, secao, texto, entidade, id, dados);
+        fontes.put(fonte.marcador(), fonte);
+        marcadorDoRegistro.put(chave, fonte.marcador());
+        return fonte;
+    }
+
+    /**
+     * Registra uma conta do {@code calcular} (com o {@code nome}) ou uma contagem de {@code contar_dias} (sem nome) como fonte
+     * {@code [C#]}: o contador é um só para as duas. {@code titulo} é o nome da conta ou "Contagem de dias"; {@code texto} traz tudo
+     * o que a resposta pode citar dela; {@code dados} é a conta inteira, como vai para {@code atlas_fonte.dados}.
+     */
+    public Fonte registrarCalculo(String nome, String titulo, String texto, Map<String, Object> dados) {
+        Fonte fonte = new Fonte(novoMarcador(Tipo.CALCULO), Tipo.CALCULO, null, null, titulo, null, null, null, texto, null, null, dados);
+        fontes.put(fonte.marcador(), fonte);
+        if (nome != null) {
+            marcadorDaConta.put(nome, fonte.marcador());
+        }
+        return fonte;
+    }
+
+    /** A conta do {@code calcular} com este nome, se o turno já a fez. */
+    public Optional<Fonte> conta(String nome) {
+        return Optional.ofNullable(marcadorDaConta.get(nome)).map(fontes::get);
+    }
+
+    /** As contas do {@code calcular} deste turno, na ordem em que foram feitas (a contagem de dias não entra). */
+    public List<Fonte> contas() {
+        return marcadorDaConta.values().stream().map(fontes::get).toList();
+    }
+
     /** O próximo marcador do tipo: T1, T2...; R1...; C1... */
     public String novoMarcador(Tipo tipo) {
         int proximo = contadores.merge(tipo, 1, Integer::sum);
@@ -197,14 +252,16 @@ public final class FontesDoTurno {
      * Uma fotografia das fontes, dos marcadores e dos números livres do turno (não das tentativas de busca, que contam mesmo quando a
      * busca falha).
      */
-    public record Marca(Map<String, Fonte> fontes, Map<Long, String> marcadorDoTrecho, Map<Tipo, Integer> contadores,
-                        List<String> numerosLivres, int buscasComTrecho, int buscasConcluidas) {
+    public record Marca(Map<String, Fonte> fontes, Map<Long, String> marcadorDoTrecho, Map<String, String> marcadorDoRegistro,
+                        Map<String, String> marcadorDaConta, Map<Tipo, Integer> contadores, List<String> numerosLivres,
+                        int buscasComTrecho, int buscasConcluidas) {
     }
 
     /** Tira a fotografia, antes de a ferramenta rodar. */
     public Marca marcar() {
-        return new Marca(new LinkedHashMap<>(fontes), new HashMap<>(marcadorDoTrecho), new HashMap<>(contadores),
-                new ArrayList<>(numerosLivres), buscasComTrecho, buscasConcluidas);
+        return new Marca(new LinkedHashMap<>(fontes), new HashMap<>(marcadorDoTrecho), new HashMap<>(marcadorDoRegistro),
+                new LinkedHashMap<>(marcadorDaConta), new HashMap<>(contadores), new ArrayList<>(numerosLivres), buscasComTrecho,
+                buscasConcluidas);
     }
 
     /**
@@ -217,6 +274,10 @@ public final class FontesDoTurno {
         fontes.putAll(marca.fontes());
         marcadorDoTrecho.clear();
         marcadorDoTrecho.putAll(marca.marcadorDoTrecho());
+        marcadorDoRegistro.clear();
+        marcadorDoRegistro.putAll(marca.marcadorDoRegistro());
+        marcadorDaConta.clear();
+        marcadorDaConta.putAll(marca.marcadorDaConta());
         contadores.clear();
         contadores.putAll(marca.contadores());
         numerosLivres.clear();

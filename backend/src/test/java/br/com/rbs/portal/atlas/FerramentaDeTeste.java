@@ -29,7 +29,16 @@ public class FerramentaDeTeste implements Ferramenta {
          * Registra um trecho no turno (como a busca faz na fase 2) e devolve um resultado que o loop não consegue gravar: o JSON com o
          * escape de nulo, que o PostgreSQL não guarda no jsonb. A transação do loop desfaz, e o modelo recebe um erro.
          */
-        FONTE_E_RESULTADO_QUE_NAO_GRAVA
+        FONTE_E_RESULTADO_QUE_NAO_GRAVA,
+        /**
+         * Registra no turno um registro do portal ([R1], com o documento de origem em {@code dados}) e uma conta ([C1], de nome
+         * {@code tarifa}), como o M5 faz, e devolve o resultado normalmente.
+         */
+        REGISTRO_E_CONTA
+    }
+
+    /** O documento de onde o registro do comportamento {@link Comportamento#REGISTRO_E_CONTA} diz ter vindo. */
+    public record DocumentoDeTeste(long documentoId, int versao, int pagina) {
     }
 
     /** O trecho (real, do banco) que o comportamento {@link Comportamento#FONTE_E_RESULTADO_QUE_NAO_GRAVA} registra no turno. */
@@ -43,9 +52,11 @@ public class FerramentaDeTeste implements Ferramenta {
     private volatile Comportamento comportamento = Comportamento.NORMAL;
     private volatile long demoraEmMs = 0;
     private volatile TrechoDeTeste trechoDeTeste;
+    private volatile DocumentoDeTeste documentoDoRegistro;
 
     public void limpar() {
         trechoDeTeste = null;
+        documentoDoRegistro = null;
         registros.clear();
         comportamento = Comportamento.NORMAL;
         demoraEmMs = 0;
@@ -58,6 +69,12 @@ public class FerramentaDeTeste implements Ferramenta {
     public void fonteQueNaoGrava(TrechoDeTeste trecho) {
         this.trechoDeTeste = trecho;
         this.comportamento = Comportamento.FONTE_E_RESULTADO_QUE_NAO_GRAVA;
+    }
+
+    /** O registro e a conta do comportamento {@link Comportamento#REGISTRO_E_CONTA}; {@code documento} é a origem do registro (ou nulo). */
+    public void registroEConta(DocumentoDeTeste documento) {
+        this.documentoDoRegistro = documento;
+        this.comportamento = Comportamento.REGISTRO_E_CONTA;
     }
 
     public void demora(long milissegundos) {
@@ -117,6 +134,24 @@ public class FerramentaDeTeste implements Ferramenta {
             turno.registrarTrecho(t.trechoId(), t.documentoId(), t.titulo(), t.versao(), t.pagina(), t.secao(), t.texto());
             turno.concluirBusca(false);
             return Execucao.resultado("{\"texto\":\"\\u0000\"}");
+        }
+        if (comportamento == Comportamento.REGISTRO_E_CONTA) {
+            Map<String, Object> dadosDoRegistro = new java.util.LinkedHashMap<>();
+            dadosDoRegistro.put("unidade", "INSERCAO");
+            DocumentoDeTeste documento = documentoDoRegistro;
+            if (documento != null) {
+                dadosDoRegistro.put("documentoId", documento.documentoId());
+                dadosDoRegistro.put("versao", documento.versao());
+                dadosDoRegistro.put("pagina", documento.pagina());
+            }
+            FontesDoTurno.Fonte registro = turno.registrarRegistro("entrega", 77, "Cortesias do evento", "Cortesias › Lista",
+                    "Há 12 cortesias previstas para o evento.", dadosDoRegistro);
+            Map<String, Object> conta = new java.util.LinkedHashMap<>();
+            conta.put("nome", "tarifa");
+            conta.put("valorFormatado", "10.608,00");
+            FontesDoTurno.Fonte fonteDaConta = turno.registrarCalculo("tarifa", "tarifa", "tarifa: preco = 312; area = 34; resultado = 10.608,00",
+                    conta);
+            return Execucao.resultado("{\"registro\":\"" + registro.marcador() + "\",\"conta\":\"" + fonteDaConta.marcador() + "\"}");
         }
         return Execucao.resultado("{\"preparado\":\"" + preparado + "\"}");
     }

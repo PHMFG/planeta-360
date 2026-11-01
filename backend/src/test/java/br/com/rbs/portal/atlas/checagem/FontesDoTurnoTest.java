@@ -3,6 +3,8 @@ package br.com.rbs.portal.atlas.checagem;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.LocalDate;
+import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -143,5 +145,64 @@ class FontesDoTurnoTest {
         turno.desfazer(antes);
 
         assertThat(turno.todasAsBuscasFalharam()).as("o resultado dessa busca não chegou ao modelo: para ele, a busca falhou").isTrue();
+    }
+
+    // ---------------------------------------------------------------------
+    // M5: registros do portal [R#] e contas [C#]
+    // ---------------------------------------------------------------------
+
+    @Test
+    void oMesmoRegistroDoPortalMantemOMarcador() {
+        FontesDoTurno turno = turno();
+
+        FontesDoTurno.Fonte primeiro = turno.registrarRegistro("entrega", 7, "Cortesias", "Cortesias › 12", "Entregas de cortesias", Map.of("unidade", "INSERCAO"));
+        FontesDoTurno.Fonte outro = turno.registrarRegistro("entrega", 8, "Cortesias", "Cortesias › 13", "Outra entrega", Map.of());
+        FontesDoTurno.Fonte repetido = turno.registrarRegistro("entrega", 7, "Cortesias", "Cortesias › 12", "Entregas de cortesias", Map.of());
+
+        assertThat(primeiro.marcador()).isEqualTo("R1");
+        assertThat(primeiro.tipo()).isEqualTo(FontesDoTurno.Tipo.REGISTRO);
+        assertThat(primeiro.registroEntidade()).isEqualTo("entrega");
+        assertThat(primeiro.registroId()).isEqualTo(7L);
+        assertThat(primeiro.dados()).containsEntry("unidade", "INSERCAO");
+        assertThat(outro.marcador()).isEqualTo("R2");
+        assertThat(repetido.marcador()).as("o mesmo (entidade, id) mantém o marcador").isEqualTo("R1");
+        assertThat(turno.fontes()).hasSize(2);
+        // a mesma linha em outra entidade é outro registro
+        assertThat(turno.registrarRegistro("prazo", 7, "Prazo", null, "Texto", Map.of()).marcador()).isEqualTo("R3");
+    }
+
+    @Test
+    void contaEContagemDeDiasDividemOContadorDeC() {
+        FontesDoTurno turno = turno();
+
+        FontesDoTurno.Fonte conta = turno.registrarCalculo("tarifa", "tarifa", "tarifa: preco = 312", Map.of("nome", "tarifa"));
+        FontesDoTurno.Fonte dias = turno.registrarCalculo(null, "Contagem de dias", "18 dias úteis depois de 03/11/2026", Map.of());
+        FontesDoTurno.Fonte outra = turno.registrarCalculo("seguro", "seguro", "seguro: x = 2", Map.of());
+
+        assertThat(List.of(conta.marcador(), dias.marcador(), outra.marcador())).containsExactly("C1", "C2", "C3");
+        assertThat(conta.tipo()).isEqualTo(FontesDoTurno.Tipo.CALCULO);
+        assertThat(turno.existe("C2")).isTrue();
+        assertThat(turno.conta("tarifa")).containsSame(conta);
+        assertThat(turno.conta("seguro")).containsSame(outra);
+        assertThat(turno.conta("contagem")).isEmpty();
+        assertThat(turno.contas()).as("só as contas do calcular, na ordem").containsExactly(conta, outra);
+    }
+
+    @Test
+    void desfazerVoltaOsRegistrosEAsContasTambem() {
+        FontesDoTurno turno = turno();
+        turno.registrarRegistro("entrega", 7, "Cortesias", null, "Texto", Map.of());
+        turno.registrarCalculo("tarifa", "tarifa", "tarifa", Map.of());
+        FontesDoTurno.Marca antes = turno.marcar();
+
+        turno.registrarRegistro("entrega", 9, "Outra", null, "Texto", Map.of());
+        turno.registrarCalculo("seguro", "seguro", "seguro", Map.of());
+        turno.desfazer(antes);
+
+        assertThat(turno.existe("R2")).isFalse();
+        assertThat(turno.existe("C2")).isFalse();
+        assertThat(turno.conta("seguro")).as("o nome volta a ficar livre").isEmpty();
+        assertThat(turno.registrarRegistro("entrega", 9, "Outra", null, "Texto", Map.of()).marcador()).isEqualTo("R2");
+        assertThat(turno.registrarCalculo("seguro", "seguro", "seguro", Map.of()).marcador()).isEqualTo("C2");
     }
 }
