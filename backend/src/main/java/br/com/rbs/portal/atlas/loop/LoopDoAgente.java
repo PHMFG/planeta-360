@@ -615,11 +615,11 @@ public class LoopDoAgente {
     }
 
     /**
-     * O turno buscou, toda busca voltou sem trecho, e a resposta não cita fonte nem usa marcador de dado da parceria: ela não tem de
-     * onde ter saído. (Com marcador {{ref}}, é uma resposta certa com dado da parceria, e não pode virar "não encontrei".)
+     * O turno buscou, nenhuma busca trouxe trecho (voltaram vazias ou deram erro), e a resposta não cita fonte nem usa marcador de
+     * dado da parceria: ela não tem de onde ter saído. (Com marcador {{ref}}, é uma resposta certa com dado da parceria, e não pode virar "não encontrei".)
      */
     private static boolean semApoioNosDocumentos(Turno turno, String texto) {
-        return turno.fontes.todasAsBuscasVazias() && Frases.citacoes(texto).isEmpty() && Referencias.marcadores(texto).isEmpty();
+        return turno.fontes.nenhumaBuscaTrouxeTrecho() && Frases.citacoes(texto).isEmpty() && Referencias.marcadores(texto).isEmpty();
     }
 
     /** Grava, na transação da mensagem, as fontes de trecho que o texto citou ({@code atlas_fonte}); o texto já passou pela checagem. */

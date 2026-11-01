@@ -73,8 +73,7 @@ public final class FontesDoTurno {
     private final Map<Tipo, Integer> contadores = new HashMap<>();
     private final List<String> numerosLivres = new ArrayList<>();
     private int buscas;
-    private int buscasConcluidas;
-    private int buscasVazias;
+    private int buscasComTrecho;
 
     /**
      * @param mensagemDaPessoa o que a pessoa escreveu neste turno (os números dela valem na resposta: "por 34 kVA", "em 03/11")
@@ -117,17 +116,19 @@ public final class FontesDoTurno {
         buscas++;
     }
 
-    /** Anota o fim de uma busca que chegou a um resultado (com trechos ou sem nenhum). */
+    /** Anota o fim de uma busca que chegou a um resultado (com trechos ou sem nenhum). A que falhou nunca chega aqui. */
     public void concluirBusca(boolean vazia) {
-        buscasConcluidas++;
-        if (vazia) {
-            buscasVazias++;
+        if (!vazia) {
+            buscasComTrecho++;
         }
     }
 
-    /** O turno buscou e todas as buscas voltaram sem nenhum trecho: não há em que se apoiar. */
-    public boolean todasAsBuscasVazias() {
-        return buscasConcluidas > 0 && buscasVazias == buscasConcluidas;
+    /**
+     * O turno buscou e nenhuma busca trouxe trecho: não há em que se apoiar. Vale para a busca que voltou vazia e também para a que
+     * falhou (a ferramenta deu erro): numa resposta sem citação e sem dado da parceria, o modelo escreveu de onde não tinha como saber.
+     */
+    public boolean nenhumaBuscaTrouxeTrecho() {
+        return buscas > 0 && buscasComTrecho == 0;
     }
 
     // ---------------------------------------------------------------------

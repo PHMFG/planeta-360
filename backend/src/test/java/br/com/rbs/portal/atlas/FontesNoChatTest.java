@@ -399,6 +399,62 @@ class FontesNoChatTest {
     }
 
     @Test
+    void turnoEmQueTodaBuscaDeuErroEResponderSemCitacaoViraOTextoFixo() {
+        long conversa = abrir();
+        embeddings.falharAsProximasBuscas(1);
+        modelo.chamada(BUSCAR, busca(CONSULTA)).texto("O prazo costuma ser no fim do ano.");
+
+        ItemTexto texto = textoFinal(falar(conversa, "Qual o prazo?"));
+
+        // a busca caiu: o modelo não tem trecho nenhum, e a resposta sem citação não tem de onde ter saído
+        assertThat(texto.texto()).isEqualTo(LoopDoAgente.TEXTO_NAO_ENCONTREI);
+        assertThat(texto.porModelo()).isFalse();
+        Linha saida = primeira(ultimoTurno(conversa), "SAIDA");
+        assertThat(saida.resultado()).isEqualTo("RECUSADO");
+        assertThat(saida.dados()).containsEntry("motivo", "SEM_FONTE");
+        assertThat(primeira(ultimoTurno(conversa), "BUSCA").resultado()).isEqualTo("ERRO");
+        assertThat(textosDoAssistente(conversa)).doesNotContain("fim do ano");
+    }
+
+    @Test
+    void asTresBuscasDeramErroEResponderSemCitacaoViraOTextoFixo() {
+        long conversa = abrir();
+        embeddings.falharAsProximasBuscas(3);
+        modelo.chamada(BUSCAR, busca(CONSULTA)).chamada(BUSCAR, busca(CONSULTA + " novamente")).chamada(BUSCAR, busca("outro assunto"))
+                .texto("Costuma ser no fim do ano.");
+
+        ItemTexto texto = textoFinal(falar(conversa, "Qual o prazo?"));
+
+        assertThat(texto.texto()).isEqualTo(LoopDoAgente.TEXTO_NAO_ENCONTREI);
+        assertThat(primeira(ultimoTurno(conversa), "SAIDA").dados()).containsEntry("motivo", "SEM_FONTE");
+    }
+
+    @Test
+    void umaBuscaQueCaiuEOutraQueDeuTrechoDeixamAResposta() {
+        long conversa = abrir();
+        embeddings.falharAsProximasBuscas(1);
+        modelo.chamada(BUSCAR, busca(CONSULTA)).chamada(BUSCAR, busca(CONSULTA));
+        escrever(pedido -> frasePrazo(marcador(pedido, PRAZO, true)));
+
+        ItemTexto texto = textoFinal(falar(conversa, "Até quando informo os geradores?"));
+
+        assertThat(texto.texto()).contains(PRAZO).matches(".*\\[T[1-9]\\]\\.");
+        assertThat(texto.fontes()).hasSize(1);
+        assertThat(primeira(ultimoTurno(conversa), "SAIDA").dados()).doesNotContainEntry("motivo", "SEM_FONTE");
+    }
+
+    @Test
+    void buscaQueCaiuMasRespostaComDadoDaParceriaNaoViraNaoEncontrei() {
+        long conversa = abrir();
+        embeddings.falharAsProximasBuscas(1);
+        modelo.chamada(BUSCAR, busca(CONSULTA)).texto("Para {{parc:patrocinador}}, não consegui consultar os documentos agora.");
+
+        ItemTexto texto = textoFinal(falar(conversa, "Qual a regra?"));
+
+        assertThat(texto.texto()).isEqualTo("Para Cliente Amarelo, não consegui consultar os documentos agora.");
+    }
+
+    @Test
     void buscaSemTrechoMasRespostaComDadoDaParceriaNaoViraNaoEncontrei() {
         long conversa = abrir();
         modelo.chamada(BUSCAR, busca("de a o que para")).texto("Para {{parc:patrocinador}}, o regulamento não traz essa regra.");

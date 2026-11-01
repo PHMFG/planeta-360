@@ -5,6 +5,7 @@ import br.com.rbs.portal.atlas.embeddings.EmbeddingsIndisponivelException;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
@@ -19,8 +20,10 @@ public class EmbeddingsControlavel extends EmbeddingsDeTeste {
     private volatile boolean falharNaConsulta;
     private volatile boolean desligado;
     private volatile long demoraEmMs;
+    private final AtomicInteger buscasQueCaem = new AtomicInteger();
 
     public void limpar() {
+        buscasQueCaem.set(0);
         transacaoNaConsulta.clear();
         consultas.clear();
         falharNaConsulta = false;
@@ -34,6 +37,15 @@ public class EmbeddingsControlavel extends EmbeddingsDeTeste {
 
     public void desligado(boolean desligado) {
         this.desligado = desligado;
+    }
+
+    /**
+     * As próximas {@code n} buscas dos documentos caem com uma exceção (o banco fora do ar, por exemplo): a consulta pergunta se os
+     * embeddings estão ligados antes de tudo, e é aí que ela falha. Não é o mesmo que {@link #falharNaConsulta}, em que o embedding cai
+     * mas a busca segue só com a lista textual.
+     */
+    public void falharAsProximasBuscas(int n) {
+        buscasQueCaem.set(n);
     }
 
     public void demora(long milissegundos) {
@@ -51,6 +63,9 @@ public class EmbeddingsControlavel extends EmbeddingsDeTeste {
 
     @Override
     public boolean ligado() {
+        if (buscasQueCaem.getAndUpdate(restantes -> Math.max(0, restantes - 1)) > 0) {
+            throw new IllegalStateException("A busca caiu (teste).");
+        }
         return !desligado;
     }
 
