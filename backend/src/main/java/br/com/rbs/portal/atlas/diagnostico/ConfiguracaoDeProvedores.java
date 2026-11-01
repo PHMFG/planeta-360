@@ -5,8 +5,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
- * A configuração do JEV (TypeSafe) e dos embeddings (Gemini), lida uma vez na subida. [ATLAS] Por enquanto serve só ao
- * diagnóstico (rotas 52 e 53 mostram o estado e testam a conexão): o cliente de verdade do Gemini vem no M3 e o do JEV no M7. As
+ * A configuração do JEV (TypeSafe) e dos embeddings (Gemini), lida uma vez na subida. [ATLAS] Serve ao diagnóstico
+ * (rotas 52 e 53 mostram o estado e testam a conexão) e, no Gemini, aos embeddings dos documentos ({@code atlas/embeddings}, M3); o
+ * cliente de verdade do JEV vem no M7. As
  * chaves vêm de variável de ambiente (ou do {@code config/segredos.local.properties}, no perfil dev) e nunca saem daqui inteiras:
  * {@link ProvedoresService} mostra no máximo os 4 últimos caracteres. As URLs base são configuráveis para os testes usarem um
  * servidor HTTP falso.

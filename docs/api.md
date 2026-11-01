@@ -1918,7 +1918,7 @@ O custo de uma ida (e de um resumo) é o `usage.opencode.list_cost` que o OpenCo
 
 ## 53. `POST /api/atlas/provedores/{nome}/teste`  · Atlas M2
 
-**Quem chama:** Admin RBS, com o diagnóstico ligado (exige o token CSRF). `nome` é `llm`, `jev` ou `gemini` (em qualquer caixa). Sem corpo. Faz **uma chamada real mínima** ao provedor, só para provar que a conexão e a chave funcionam; não grava nada e não conta no teto diário. O cliente de verdade do JEV vem no M7 e o do Gemini no M3.
+**Quem chama:** Admin RBS, com o diagnóstico ligado (exige o token CSRF). `nome` é `llm`, `jev` ou `gemini` (em qualquer caixa). Sem corpo. Faz **uma chamada real mínima** ao provedor, só para provar que a conexão e a chave funcionam; não grava nada e não conta no teto diário. O cliente de verdade do JEV vem no M7. O do Gemini (os embeddings dos documentos) existe desde o M3, mas este teste continua fazendo a própria chamada mínima.
 
 | Provedor | O que a API chama |
 | --- | --- |

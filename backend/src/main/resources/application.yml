@@ -98,8 +98,8 @@ atlas:
     preco-por-milhao:
       entrada: ${ATLAS_PRECO_ENTRADA:0.30}
       saida: ${ATLAS_PRECO_SAIDA:1.20}
-  # [ATLAS] O JEV (TypeSafe) e os embeddings (Gemini). Por enquanto só o diagnóstico os usa (rotas 52 e 53 mostram o estado e testam a
-  # conexão); os clientes de verdade entram no M7 (JEV) e no M3 (Gemini). As chaves vêm de variável de ambiente ou, no perfil dev, de
+  # [ATLAS] O JEV (TypeSafe) e os embeddings (Gemini). Os embeddings valem desde o M3 (EmbeddingsGemini, na ingestão dos documentos); o JEV só o
+  # diagnóstico usa por enquanto (rotas 52 e 53 mostram o estado e testam a conexão), e o cliente de verdade dele entra no M7. As chaves vêm de variável de ambiente ou, no perfil dev, de
   # config/segredos.local.properties; nunca deste arquivo. As URLs base são configuráveis para os testes usarem um servidor falso.
   jev:
     modo: ${ATLAS_JEV:none}                       # none | sombra | ativo
