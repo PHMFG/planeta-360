@@ -78,7 +78,7 @@ public class RelatorioFerramentas {
                     + "volta como { acao, campos }, com acao accept, decline ou cancel.",
             """
             {"type":"object","properties":{
-              "mensagem":{"type":"string","maxLength":400,"description":"O que você diz à pessoa no cartão, em português e sem números."},
+              "mensagem":{"type":"string","maxLength":400,"description":"O que você diz à pessoa no cartão, em português, sem número (nem por extenso), sem link nem chave."},
               "campos":{"type":"array","minItems":1,"maxItems":8,"items":{"type":"string"},
                         "description":"As chaves das lacunas (campo chave), por exemplo ativacao.visitantes_total."}},
              "required":["mensagem","campos"],"additionalProperties":false}""");

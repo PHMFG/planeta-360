@@ -86,6 +86,43 @@ public class ChecagemDeTexto {
         return checar(resolucao, texto, true);
     }
 
+    /**
+     * A mensagem do cartão de perguntas ({@code relatorio_solicitar_campos}), M6: a regra do parágrafo do relatório, sem o limite de
+     * frases (o cartão tem o dele, de 400 caracteres, conferido por quem chama) e <b>sem marcador</b>. Nenhum algarismo, nenhum número
+     * nem data por extenso, nenhum HTML, link ou endereço de internet, nenhuma chave crua ({@code dado:...}) nem nome de ferramenta:
+     * antes só o tamanho era conferido, e um texto com número, link e chave chegava inteiro à tela. O cartão mostra a mensagem como
+     * está, então um {@code {{ref}}} apareceria cru e também é recusado. A mensagem fixa do botão e as frases comuns passam, e
+     * "Faltam dois números" também: "dois" sem unidade não é número. O motivo da recusa é escrito para o modelo ler e reescrever.
+     */
+    public Veredito mensagemDoCartao(String original) {
+        if (original == null || original.isBlank()) {
+            return Veredito.recusado("A mensagem do cartão está vazia.");
+        }
+        String texto = original.strip().replaceAll("\\s+", " ");
+        if (Referencias.MARCADOR.matcher(texto).find()) {
+            return Veredito.recusado("A mensagem do cartão não usa marcador {{ref}}: o cartão mostra o texto como está. Diga com "
+                    + "palavras o que você precisa, sem citar valor.");
+        }
+        Optional<String> deForma = motivoDeForma(texto, texto);
+        if (deForma.isPresent()) {
+            return Veredito.recusado(deForma.get());
+        }
+        Matcher algarismo = ALGARISMO.matcher(texto);
+        if (algarismo.find()) {
+            return Veredito.recusado("A mensagem do cartão tem o algarismo \"" + algarismo.group() + "\". Não escreva número, nem por "
+                    + "extenso: diga com palavras o que você precisa, sem citar valor.");
+        }
+        if (texto.indexOf('{') >= 0 || texto.indexOf('}') >= 0) {
+            return Veredito.recusado("Há uma chave { ou } solta na mensagem do cartão. Escreva só texto simples.");
+        }
+        List<NormalizadorDeNumeros.Achado> porExtenso = NormalizadorDeNumeros.extrair(texto, false);
+        if (!porExtenso.isEmpty()) {
+            return Veredito.recusado("A mensagem do cartão tem número ou data por extenso (\"" + porExtenso.get(0).trecho().strip()
+                    + "\"). Não escreva número nem data, nem por extenso: diga com palavras o que você precisa, sem citar valor.");
+        }
+        return Veredito.aprovado(texto);
+    }
+
     /** O texto do chat: as mesmas regras, menos o limite de frases e de caracteres (a resposta do chat não é um parágrafo). */
     public Veredito chat(Resolucao resolucao, String texto) {
         return checar(resolucao, texto, false);

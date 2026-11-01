@@ -308,8 +308,9 @@ public class RelatorioAtlasService {
     /**
      * Abre o cartão de perguntas pedido pelo modelo e pausa o relatório (AGUARDANDO_RESPOSTA). {@code chaves} são de 1 a 8 chaves
      * do catálogo da aba do modelo, sem repetir e sem campo de arquivo (o cartão não tem upload no MVP); {@code mensagem} tem até
-     * 400 caracteres; {@code toolCallId} liga o cartão ao pedido de ferramenta na conversa. Ordem das respostas: 404 (relatório
-     * de outra conversa), 422 (argumentos), 409 (o relatório não está em montagem, ou já teve três cartões).
+     * 400 caracteres e passa pela {@link ChecagemDeTexto#mensagemDoCartao} (sem número, endereço, HTML nem chave crua); {@code toolCallId}
+     * liga o cartão ao pedido de ferramenta na conversa. Ordem das respostas: 404 (relatório de outra conversa), 422 (argumentos,
+     * inclusive a mensagem recusada), 409 (o relatório não está em montagem, ou já teve três cartões).
      */
     @Transactional
     public CartaoAberto solicitarCampos(AtlasContexto contexto, long relatorioId, String mensagem, List<String> chaves,
@@ -345,6 +346,12 @@ public class RelatorioAtlasService {
             erros.put("mensagem", "Escreva a mensagem do cartão.");
         } else if (mensagem.trim().length() > LIMITE_DA_MENSAGEM) {
             erros.put("mensagem", "A mensagem do cartão tem no máximo " + LIMITE_DA_MENSAGEM + " caracteres.");
+        } else {
+            // a mesma regra do parágrafo: sem número, endereço, HTML nem chave crua (o botão manda uma mensagem fixa, que passa)
+            Veredito veredito = checagem.mensagemDoCartao(mensagem);
+            if (!veredito.aprovado()) {
+                erros.put("mensagem", veredito.motivo());
+            }
         }
         if (toolCallId == null || toolCallId.isBlank() || toolCallId.length() > LIMITE_DO_ID_DA_CHAMADA) {
             erros.put("toolCallId", "O id do pedido tem de 1 a " + LIMITE_DO_ID_DA_CHAMADA + " caracteres.");
