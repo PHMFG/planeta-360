@@ -188,7 +188,7 @@ class JevEmSombraTest {
         long conversa = semDiferenca("ramo", j -> j.intencao("pergunta_documentos", 0.97), m -> m.texto("Não encontrei isso nos documentos do portal."),
                 () -> falar(conversa(), "qual o horário de montagem?"));
 
-        assertThat(decisoes(conversa).get(0).get("acao")).isEqualTo("teria feito: dar ao modelo só as ferramentas dos documentos");
+        assertThat(decisoes(conversa).get(0).get("acao")).isEqualTo("teria feito: dar ao modelo só as ferramentas de consulta");
         assertThat(ProvedorRoteirizado.nomesDasFerramentas(modelo.pedidos().get(0))).contains("parceria_consultar", "pedido_de_relatorio");
     }
 

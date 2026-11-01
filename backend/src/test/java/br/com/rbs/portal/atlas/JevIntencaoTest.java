@@ -271,31 +271,71 @@ class JevIntencaoTest {
     }
 
     // ---------------------------------------------------------------------
-    // pergunta_documentos e dados_parceria: o modelo, com o subconjunto do ramo
+    // pergunta_documentos e dados_parceria: o modelo, com as ferramentas de consulta
     // ---------------------------------------------------------------------
 
+    /** Os dois ramos oferecem as mesmas ferramentas: as de consulta. Uma pergunta que cruza documento e dado não pode perder nenhuma. */
+    private static final List<String> FERRAMENTAS_DE_CONSULTA = List.of("buscar_documentos", "parceria_consultar", "listar_entregas",
+            "consultar_cota", "consultar_prazos", "calcular", "contar_dias");
+
     @Test
-    void perguntaSobreDocumentosDaAoModeloSoAsFerramentasDosDocumentos() {
+    void perguntaSobreDocumentosDaAoModeloTodasAsFerramentasDeConsulta() {
         long conversa = conversa();
         jev.intencao("pergunta_documentos", 0.95);
         modelo.texto("Não encontrei isso nos documentos do portal.");
 
         falar(conversa, "qual o horário de montagem?");
 
-        assertThat(nomesDasFerramentasDoPedido(0)).containsExactlyInAnyOrder("buscar_documentos", "consultar_prazos", "calcular", "contar_dias");
-        assertThat(decisoes(conversa).get(0).get("acao")).isEqualTo("fez: deu ao modelo só as ferramentas dos documentos");
+        assertThat(nomesDasFerramentasDoPedido(0)).containsExactlyInAnyOrderElementsOf(FERRAMENTAS_DE_CONSULTA);
+        assertThat(decisoes(conversa).get(0).get("acao")).isEqualTo("fez: deu ao modelo só as ferramentas de consulta");
     }
 
     @Test
-    void perguntaSobreOsDadosDaParceriaDaAoModeloSoAsFerramentasDosDados() {
+    void perguntaSobreOsDadosDaParceriaDaAoModeloTodasAsFerramentasDeConsulta() {
         long conversa = conversa();
         jev.intencao("dados_parceria", 0.95);
         modelo.texto("Posso consultar.");
 
         falar(conversa, "quantas aplicações já comprovamos?");
 
-        assertThat(nomesDasFerramentasDoPedido(0)).containsExactlyInAnyOrder("parceria_consultar", "listar_entregas", "consultar_cota",
-                "consultar_prazos", "calcular", "contar_dias");
+        assertThat(nomesDasFerramentasDoPedido(0)).containsExactlyInAnyOrderElementsOf(FERRAMENTAS_DE_CONSULTA);
+        assertThat(decisoes(conversa).get(0).get("acao")).isEqualTo("fez: deu ao modelo só as ferramentas de consulta");
+    }
+
+    @Test
+    void osRamosTiramSoOQueNaoEConsultaEAsDoRelatorioAbertoFicam() {
+        // montar_relatorio abre o relatório em código; na mensagem seguinte, a pergunta de documentos ou de dados mantém as relatorio_*
+        // desse relatório (menos o relatorio_iniciar) e as de consulta; o pedido de relatório e o modelo em branco saem
+        long conversa = conversa();
+        jev.intencao("montar_relatorio", 0.98);
+        modelo.texto("Preciso de alguns números.").texto("Certo, vejo isso.").texto("Certo, vejo isso.");
+        falar(conversa, "monta o relatório");
+
+        for (String intencao : List.of("pergunta_documentos", "dados_parceria")) {
+            jev.limpar().intencao(intencao, 0.95);
+            int antes = modelo.pedidos().size();
+            falar(conversa, "qual a carga elétrica contratada da nossa parceria?");
+
+            List<String> ferramentas = nomesDasFerramentasDoPedido(antes);
+            assertThat(ferramentas).as(intencao).contains(FERRAMENTAS_DE_CONSULTA.toArray(String[]::new))
+                    .contains("relatorio_solicitar_campos", "relatorio_editar", "relatorio_finalizar")
+                    .doesNotContain("relatorio_iniciar", "pedido_de_relatorio", "gerar_modelo");
+        }
+    }
+
+    @Test
+    void perguntaQueCruzaDocumentoEDadoTemAsFerramentasDeAmbosOsLados() {
+        // "quantas aplicações faltam comprovar? o que acontece se eu não comprovar?": o JEV escolhe dados_parceria e a resposta está no
+        // contrato (buscar_documentos). O ramo não pode tirar a busca.
+        long conversa = conversa();
+        jev.intencao("dados_parceria", 0.93);
+        modelo.chamada("buscar_documentos", "{\"consulta\":\"o que acontece se não comprovar as aplicações\"}")
+                .texto("Não encontrei isso nos documentos do portal.");
+
+        falar(conversa, "quantas aplicações faltam comprovar? o que acontece se eu não comprovar?");
+
+        assertThat(nomesDasFerramentasDoPedido(0)).contains("buscar_documentos", "parceria_consultar");
+        assertThat(modelo.pedidos()).as("a busca rodou: houve uma segunda ida com o resultado dela").hasSize(2);
     }
 
     @Test

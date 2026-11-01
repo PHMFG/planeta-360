@@ -169,12 +169,15 @@ public class LoopDoAgente {
     public static final String RECUSA_DE_FORA_DE_ESCOPO = "Só posso ajudar com o portal e com a sua parceria no Planeta Atlântida.";
     /** A resposta fixa do JEV ativo a quem escreve os números do cartão na conversa: o cartão continua aberto. */
     public static final String RESPOSTA_DO_CARTAO_ABERTO = "Use o cartão acima para informar os números: assim eles ficam registrados com autor e data.";
-    /** As ferramentas do ramo "pergunta sobre os documentos" (as do relatório em montagem, se houver, ficam sempre). */
-    static final Set<String> FERRAMENTAS_DO_RAMO_DOCUMENTOS = Set.of(BuscarDocumentos.NOME, ConsultarPrazos.NOME, Calcular.NOME,
-            ContarDias.NOME);
-    /** As ferramentas do ramo "pergunta sobre os dados da parceria". */
-    static final Set<String> FERRAMENTAS_DO_RAMO_DADOS = Set.of(RelatorioFerramentas.CONSULTAR, ListarEntregas.NOME, ConsultarCota.NOME,
-            ConsultarPrazos.NOME, Calcular.NOME, ContarDias.NOME);
+    /**
+     * As ferramentas dos ramos {@code pergunta_documentos} e {@code dados_parceria} do JEV ativo: as mesmas nos dois, todas as de
+     * consulta. A fronteira entre "documentos" e "dados da parceria" não é nítida (a carga elétrica contratada está no anexo; "quantas
+     * faltam comprovar e o que acontece se eu não comprovar" cruza as duas coisas), e um ramo que tirasse a busca de quem precisava dela
+     * fazia o modelo responder "não encontrei" sem buscar. O ramo tira só o que não é consulta ({@code relatorio_iniciar},
+     * {@code pedido_de_relatorio}, {@code gerar_modelo}); as {@code relatorio_*} de um relatório aberto ficam.
+     */
+    static final Set<String> FERRAMENTAS_DE_CONSULTA = Set.of(BuscarDocumentos.NOME, RelatorioFerramentas.CONSULTAR, ListarEntregas.NOME,
+            ConsultarCota.NOME, ConsultarPrazos.NOME, Calcular.NOME, ContarDias.NOME);
     public static final String TEXTO_NAO_ENCONTREI = FRASE_NAO_ENCONTREI + " " + INDICACAO_DO_ATENDIMENTO;
     /**
      * As frases que o próprio loop grava como texto do assistente: no item {@code texto}, saem com {@code porModelo} falso. Entram
@@ -267,7 +270,7 @@ public class LoopDoAgente {
         /** Alguma ferramenta que não responde direto rodou neste turno (em qualquer rodada): o modelo ainda precisa responder a ela. */
         boolean outraFerramentaRodou;
         boolean pediuNovaRedacao;
-        /** O ramo que o JEV ativo escolheu (só as ferramentas dele, mais as do relatório em montagem); nulo: todas. */
+        /** O ramo que o JEV ativo escolheu (só as ferramentas de consulta, mais as do relatório em montagem); nulo: todas. */
         Set<String> ferramentasDoRamo;
         ResumosDoTurno resumos;
         // O desfecho, para a etapa SAIDA do traço: o que terminou o turno e a última mensagem que ele gravou.
@@ -644,8 +647,7 @@ public class LoopDoAgente {
                         AtlasJson.escrever(Map.of("modelo", ModeloBase.ATIVACAO_EVENTO)), "RELATORIO_INICIADO_JEV");
                 return false;
             }
-            case RAMO_DOCUMENTOS -> turno.ferramentasDoRamo = FERRAMENTAS_DO_RAMO_DOCUMENTOS;
-            case RAMO_DADOS -> turno.ferramentasDoRamo = FERRAMENTAS_DO_RAMO_DADOS;
+            case RAMO_DE_CONSULTA -> turno.ferramentasDoRamo = FERRAMENTAS_DE_CONSULTA;
             default -> {
             }
         }
@@ -871,7 +873,7 @@ public class LoopDoAgente {
         List<DefinicaoDeFerramenta> oferecidas = contexto.daRbs() ? ferramentas.oferecidasDaRbs(turno.diretasForaDaOferta)
                 : ferramentas.oferecidas(ativo, podePedirCartao, turno.diretasForaDaOferta);
         if (turno.ferramentasDoRamo != null) {
-            // O JEV ativo escolheu o ramo (documentos ou dados da parceria): só as ferramentas dele, e as do relatório em montagem ficam (abrir outro não).
+            // O JEV ativo escolheu o ramo (documentos ou dados da parceria): só as ferramentas de consulta, e as do relatório em montagem ficam (abrir outro não).
             oferecidas = oferecidas.stream().filter(f -> turno.ferramentasDoRamo.contains(f.nome())
                     || (f.nome().startsWith("relatorio_") && !f.nome().equals(RelatorioFerramentas.INICIAR))).toList();
         }

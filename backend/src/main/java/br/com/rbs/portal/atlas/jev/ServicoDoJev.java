@@ -68,8 +68,8 @@ public class ServicoDoJev {
         PEDIDO_DE_RELATORIO_DIRETO("respondeu o pedido de relatório sem o modelo", "responder o pedido de relatório sem o modelo"),
         GERAR_MODELO_DIRETO("entregou o modelo em branco sem o modelo", "entregar o modelo em branco sem o modelo"),
         INICIAR_RELATORIO("abriu o relatório em código e seguiu para o modelo", "abrir o relatório em código e seguir para o modelo"),
-        RAMO_DOCUMENTOS("deu ao modelo só as ferramentas dos documentos", "dar ao modelo só as ferramentas dos documentos"),
-        RAMO_DADOS("deu ao modelo só as ferramentas dos dados da parceria", "dar ao modelo só as ferramentas dos dados da parceria");
+        /** {@code pergunta_documentos} e {@code dados_parceria}: o modelo, só com as ferramentas de consulta (as mesmas nos dois ramos). */
+        RAMO_DE_CONSULTA("deu ao modelo só as ferramentas de consulta", "dar ao modelo só as ferramentas de consulta");
 
         private final String feita;
         private final String teria;
@@ -224,8 +224,7 @@ public class ServicoDoJev {
                     && situacao.modelosDisponiveis().contains(tipoDoModelo) ? AcaoDeIntencao.GERAR_MODELO_DIRETO : AcaoDeIntencao.NENHUMA;
             case "montar_relatorio" -> situacao.relatorioLigado() && !situacao.temRelatorioEmAndamento()
                     ? AcaoDeIntencao.INICIAR_RELATORIO : AcaoDeIntencao.NENHUMA;
-            case "pergunta_documentos" -> AcaoDeIntencao.RAMO_DOCUMENTOS;
-            case "dados_parceria" -> AcaoDeIntencao.RAMO_DADOS;
+            case "pergunta_documentos", "dados_parceria" -> AcaoDeIntencao.RAMO_DE_CONSULTA;
             default -> AcaoDeIntencao.NENHUMA;
         };
     }
