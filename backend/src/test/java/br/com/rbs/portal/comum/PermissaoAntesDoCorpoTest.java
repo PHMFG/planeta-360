@@ -255,10 +255,14 @@ class PermissaoAntesDoCorpoTest {
         assertThat(mapeadas).as("rota nova sem decisão: é só da RBS (PermissaoAntesDoCorpo.ROTAS_SO_DA_RBS), só do patrocinador "
                 + "(PermissaoAntesDoCorpo.ROTAS_SO_DO_PATROCINADOR) ou dos dois (ROTAS_DO_PATROCINADOR neste teste)?")
                 .containsExactlyInAnyOrderElementsOf(unir(PermissaoAntesDoCorpo.ROTAS_SO_DA_RBS,
-                        PermissaoAntesDoCorpo.ROTAS_SO_DO_PATROCINADOR, ROTAS_DO_PATROCINADOR));
-        assertThat(PermissaoAntesDoCorpo.ROTAS_SO_DA_RBS).as("uma rota não é das duas listas")
-                .doesNotContainAnyElementsOf(PermissaoAntesDoCorpo.ROTAS_SO_DO_PATROCINADOR);
-        assertThat(PermissaoAntesDoCorpo.ROTAS_SO_DO_PATROCINADOR).hasSize(7);
+                        PermissaoAntesDoCorpo.ROTAS_SO_DO_PATROCINADOR, PermissaoAntesDoCorpo.ROTAS_DA_CONVERSA_DO_ATLAS,
+                        ROTAS_DO_PATROCINADOR));
+        assertThat(PermissaoAntesDoCorpo.ROTAS_SO_DA_RBS).as("uma rota não é das listas do patrocinador")
+                .doesNotContainAnyElementsOf(PermissaoAntesDoCorpo.ROTAS_SO_DO_PATROCINADOR)
+                .doesNotContainAnyElementsOf(PermissaoAntesDoCorpo.ROTAS_DA_CONVERSA_DO_ATLAS);
+        assertThat(PermissaoAntesDoCorpo.ROTAS_SO_DO_PATROCINADOR).doesNotContainAnyElementsOf(PermissaoAntesDoCorpo.ROTAS_DA_CONVERSA_DO_ATLAS);
+        assertThat(PermissaoAntesDoCorpo.ROTAS_SO_DO_PATROCINADOR).hasSize(4);
+        assertThat(PermissaoAntesDoCorpo.ROTAS_DA_CONVERSA_DO_ATLAS).hasSize(3);
     }
 
     @SafeVarargs

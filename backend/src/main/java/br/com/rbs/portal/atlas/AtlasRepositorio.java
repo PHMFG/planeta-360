@@ -304,6 +304,22 @@ public class AtlasRepositorio {
                 .query(Long.class).single();
     }
 
+    /**
+     * Quantas mensagens do assistente que vieram do modelo de linguagem esta pessoa da RBS gastou hoje (dia de Brasília) nas conversas
+     * dela, que não têm parceria. As mesmas regras de {@link #mensagensDoModeloHoje}: as {@code sem_modelo} e as
+     * {@code fora_do_modelo} não contam. É o contador do teto diário do Atlas da RBS, por pessoa e não por parceria.
+     */
+    public long mensagensDoModeloHojeDaRbs(long usuarioId) {
+        return jdbc.sql("""
+                        SELECT count(*) FROM atlas_mensagem m JOIN atlas_conversa c ON c.id = m.conversa_id
+                        WHERE c.parceria_id IS NULL AND c.usuario_id = :usuario AND m.papel = 'assistant'
+                          AND m.criada_em >= (date_trunc('day', now() AT TIME ZONE 'America/Sao_Paulo') AT TIME ZONE 'America/Sao_Paulo')
+                          AND NOT m.sem_modelo AND NOT m.fora_do_modelo
+                        """)
+                .param("usuario", usuarioId)
+                .query(Long.class).single();
+    }
+
     /** Quanto uma parceria gastou do teto diário hoje (as mesmas mensagens que {@link #mensagensDoModeloHoje}). */
     public record UsoDoTeto(Long parceriaId, String parceria, Long usadas) {
     }
@@ -703,6 +719,11 @@ public class AtlasRepositorio {
                         """)
                 .param("id", parceriaId)
                 .query(EscopoDaParceria.class).optional();
+    }
+
+    /** A edição (o ano) de um evento: o que o texto de uma resposta pode dizer como "o ano da edição" na conversa da RBS. */
+    public int edicaoDoEvento(long eventoId) {
+        return jdbc.sql("SELECT edicao FROM evento WHERE id = :id").param("id", eventoId).query(Integer.class).single();
     }
 
     /** O código da cota da parceria (MASTER, SUBCOTA_G ou SUBCOTA). */

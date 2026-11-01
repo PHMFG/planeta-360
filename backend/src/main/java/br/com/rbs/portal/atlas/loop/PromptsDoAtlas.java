@@ -20,6 +20,9 @@ import org.springframework.core.io.ClassPathResource;
  * </ul>
  * O resultado ainda leva {@code @MARCA@} e {@code @DATA@}, que o {@link LoopDoAgente} troca a cada turno. Qualquer outro marcador
  * {@code @...@} que sobrar é erro de montagem: a API não sobe. Sem estado: tudo estático.
+ * <p>
+ * O Atlas da RBS (M8) tem o prompt dele, {@code rbs.txt}, inteiro e à parte ({@link #comporDaRbs}): fala com a equipe da RBS, não
+ * tem marca nem relatório, e só leva o {@code @DATA@}.
  */
 public final class PromptsDoAtlas {
 
@@ -51,6 +54,28 @@ public final class PromptsDoAtlas {
         var sobra = MARCADOR.matcher(MARCADOR_DO_TURNO.matcher(prompt).replaceAll(""));
         if (sobra.find()) {
             throw new IllegalStateException("Sobrou o marcador " + sobra.group() + " no prompt do Atlas.");
+        }
+        return prompt;
+    }
+
+    /** O limite do prompt da RBS, em caracteres: ele é escrito à mão para ser curto, e um corte acidental não passa despercebido. */
+    public static final int LIMITE_DO_PROMPT_DA_RBS = 6_000;
+
+    /**
+     * O prompt do Atlas da RBS, ainda com {@code @DATA@}. Não tem {@code @MARCA@}: a conversa não é de marca nenhuma.
+     *
+     * @throws IllegalStateException se sobrou outro marcador (inclusive {@code @MARCA@}), ou se passa de {@value #LIMITE_DO_PROMPT_DA_RBS}
+     *                               caracteres
+     */
+    public static String comporDaRbs() {
+        String prompt = ler("rbs");
+        var sobra = MARCADOR.matcher(prompt.replace("@DATA@", ""));
+        if (sobra.find()) {
+            throw new IllegalStateException("Sobrou o marcador " + sobra.group() + " no prompt da RBS.");
+        }
+        if (prompt.length() > LIMITE_DO_PROMPT_DA_RBS) {
+            throw new IllegalStateException("O prompt da RBS tem " + prompt.length() + " caracteres; o máximo é "
+                    + LIMITE_DO_PROMPT_DA_RBS + ".");
         }
         return prompt;
     }

@@ -255,9 +255,7 @@ public class ResumoDoRaciocinio {
         if (texto.isEmpty() || texto.contains("{{")) {
             return null;
         }
-        Veredito veredito = checagem.chat(
-                resolvedor.abrir(contexto.usuario(), contexto.parceriaId(), modelos.obter(ModeloBase.ATIVACAO_EVENTO).orElseThrow()),
-                texto);
+        Veredito veredito = checagem.chat(resolvedor.abrir(contexto, modelos.obter(ModeloBase.ATIVACAO_EVENTO).orElseThrow()), texto);
         return veredito.aprovado() ? veredito.texto() : null;
     }
 

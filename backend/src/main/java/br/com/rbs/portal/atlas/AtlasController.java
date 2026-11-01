@@ -21,9 +21,11 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * Rotas 42 a 45 do contrato (docs/api.md): a conversa da marca com o Atlas. O cartão de perguntas e o relatório (rotas 46 a 48)
  * estão no {@link AtlasRelatorioController}, que só existe com {@code atlas.relatorio.ligado=true}.
- * [ATLAS] [PERMISSAO] As rotas 42 a 46 são só do Admin Patrocinador: o PermissaoAntesDoCorpo responde 403 à RBS antes de o corpo
- * ser lido (lista ROTAS_SO_DO_PATROCINADOR). As rotas 47 e 48 são de quem é da parceria e da RBS. [ISOLAMENTO] Recurso de outra
- * parceria dá 404, e conversa ou cartão de outro usuário da mesma parceria também. Todas as regras estão no AtlasService; aqui
+ * [ATLAS] [PERMISSAO] As rotas 42, 43 e 46 são só do Admin Patrocinador: o PermissaoAntesDoCorpo responde 403 à RBS antes de o corpo
+ * ser lido (lista ROTAS_SO_DO_PATROCINADOR). As rotas 44, 45 (e a 49, no diagnóstico) são do dono da conversa: o patrocinador, na da
+ * parceria dele, e a RBS, na dela (o Atlas da RBS, M8, com {@code atlas.rbs.ligado}; veja {@link AtlasDaRbsController}); fora disso a
+ * RBS recebe 403 antes do corpo (lista ROTAS_DA_CONVERSA_DO_ATLAS). As rotas 47 e 48 são de quem é da parceria e da RBS. [ISOLAMENTO]
+ * Recurso de outra parceria dá 404, e conversa ou cartão de outro usuário da mesma parceria também. Todas as regras estão no AtlasService; aqui
  * só entram o corpo e o usuário da sessão. O corpo não leva Bean Validation de propósito: o service confere o formato depois do
  * 404 e do 403, para quem não pode nunca ver um erro de campo.
  */

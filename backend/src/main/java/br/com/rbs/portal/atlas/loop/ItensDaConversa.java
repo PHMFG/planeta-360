@@ -122,8 +122,10 @@ public class ItensDaConversa {
         repositorio.solicitacoesDaConversa(conversa.id()).forEach(s -> cartoes.put(s.toolCallId(), s));
         Map<String, String> ferramentas = new HashMap<>();
         Map<String, Long> mensagemDoPedido = new HashMap<>();   // diagnóstico: id do pedido de ferramenta -> mensagem do assistente que o fez
-        // Diagnóstico à vista da marca: a que turno do traço cada mensagem do assistente pertence (vazio com o diagnóstico fora).
-        Map<Long, String> turnos = modo.diagnosticoNaMarca() ? tracos.turnosDasMensagens(conversa.id()) : new HashMap<>();
+        // Diagnóstico à vista de quem lê: a que turno do traço cada mensagem do assistente pertence (vazio com o diagnóstico fora). A
+        // marca precisa de atlas.diagnostico.marca; a RBS, na conversa dela (sem parceria), só do diagnóstico ligado.
+        boolean comDiagnostico = conversa.parceriaId() == null ? modo.diagnosticoLigado() : modo.diagnosticoNaMarca();
+        Map<Long, String> turnos = comDiagnostico ? tracos.turnosDasMensagens(conversa.id()) : new HashMap<>();
         Map<Long, Especificacao> especificacoes = new HashMap<>();
         Contexto contexto = new Contexto(usuario, conversa);
         Map<String, String> resultados = new HashMap<>();   // debug: toolCallId -> o que a ferramenta devolveu ao modelo
@@ -302,8 +304,8 @@ public class ItensDaConversa {
      * relatório pode ter sido disponibilizado, ou a Pesquisa aberta ou fechada, depois do turno.
      */
     private Optional<ItemDaConversa> itemDoPedidoDeRelatorio(LinhaDeMensagem mensagem, String turno, Contexto contexto) {
-        if (respostaDoTipo(mensagem, PedidoDeRelatorio.TIPO_DO_RESULTADO).isEmpty()) {
-            return Optional.empty();
+        if (respostaDoTipo(mensagem, PedidoDeRelatorio.TIPO_DO_RESULTADO).isEmpty() || contexto.conversa.parceriaId() == null) {
+            return Optional.empty();   // a conversa da RBS não tem parceria nem pedido de relatório
         }
         long parceriaId = contexto.conversa.parceriaId();
         boolean relatorioOficial = relatorios.temVersaoParaVer(contexto.usuario, parceriaId);
@@ -424,11 +426,18 @@ public class ItensDaConversa {
             return vigentes;
         }
 
-        /** A resolução dos textos do chat. Um marcador {@code calc:} usa as contas do modelo-base, as mesmas de todo relatório dele. */
+        /**
+         * A resolução dos textos do chat. Um marcador {@code calc:} usa as contas do modelo-base, as mesmas de todo relatório dele. Na
+         * conversa da RBS (sem parceria) só vale {@code calc:}, e só as contas do chat que a releitura registra.
+         */
         Resolucao resolucao(ModeloBase modelos, ResolvedorDeReferencias resolvedor) {
             if (resolucao == null) {
-                Especificacao especificacao = modelos.obter(ModeloBase.ATIVACAO_EVENTO).orElseThrow();
-                resolucao = resolvedor.abrir(usuario, conversa.parceriaId(), especificacao);
+                if (conversa.parceriaId() == null) {
+                    resolucao = resolvedor.abrirSemParceria(usuario);
+                } else {
+                    Especificacao especificacao = modelos.obter(ModeloBase.ATIVACAO_EVENTO).orElseThrow();
+                    resolucao = resolvedor.abrir(usuario, conversa.parceriaId(), especificacao);
+                }
             }
             return resolucao;
         }

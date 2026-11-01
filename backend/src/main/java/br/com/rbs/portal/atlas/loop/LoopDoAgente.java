@@ -182,7 +182,7 @@ public class LoopDoAgente {
      */
     public static final Set<String> FRASES_DO_SERVIDOR = Set.of(FRASE_FIXA, FRASE_DO_LIMITE, FRASE_DA_FALHA, FRASE_DO_PRAZO,
             FRASE_SEM_RESPOSTA, FRASE_FIXA_NO_CHAT, FRASE_DO_LIMITE_NO_CHAT, FRASE_DA_FALHA_NO_CHAT, FRASE_DO_PRAZO_NO_CHAT,
-            FRASE_SEM_RESPOSTA_NO_CHAT, TEXTO_NAO_ENCONTREI, FRASE_SEM_CONSULTA, RECUSA_DE_FORA_DE_ESCOPO, RESPOSTA_DO_CARTAO_ABERTO);
+            FRASE_SEM_RESPOSTA_NO_CHAT, TEXTO_NAO_ENCONTREI, FRASE_NAO_ENCONTREI, FRASE_SEM_CONSULTA, RECUSA_DE_FORA_DE_ESCOPO, RESPOSTA_DO_CARTAO_ABERTO);
     /** A nota do prompt do turno quando o relatório mais novo da conversa foi descartado (pela tela, ou por ter ficado parado). */
     public static final String NOTA_DO_RELATORIO_DESCARTADO = "O relatório desta conversa foi descartado. Ele não segue mais: nunca diga "
             + "que está aberto nem que pode ser retomado. Se a pessoa quiser, comece outro com relatorio_iniciar.";
@@ -223,6 +223,7 @@ public class LoopDoAgente {
     private final ModelosEmBranco modelosEmBranco;
     private final Duration prazoDoTurno;
     private final String prompt;
+    private final String promptDaRbs;
 
     /** {@code prazoDoTurno} vem de {@code atlas.prazo-do-turno} (padrão {@link #PRAZO_DO_TURNO}); os testes o encurtam. */
     public LoopDoAgente(ProvedorAtual provedor, RegistroDeFerramentas ferramentas, HistoricoDaConversa historico,
@@ -245,6 +246,7 @@ public class LoopDoAgente {
         this.modelosEmBranco = modelosEmBranco;
         this.prazoDoTurno = prazoDoTurno;
         this.prompt = PromptsDoAtlas.compor(modo.relatorioLigado());
+        this.promptDaRbs = PromptsDoAtlas.comporDaRbs();
     }
 
     /**
@@ -381,7 +383,7 @@ public class LoopDoAgente {
     private void conduzirComOJev(AtlasContexto contexto, OuvinteDoTurno ouvinte, boolean comIntencao) {
         Turno turno = new Turno(prazoDoTurno, contexto.traco(), new FontesDoTurno(
                 repositorio.ultimaMensagemDaPessoa(contexto.conversaId()).orElse(""),
-                repositorio.escopoDaParceria(contexto.parceriaId()).edicao(), Datas.hoje())
+                edicaoDoContexto(contexto), Datas.hoje())
                 .comMensagensAnteriores(repositorio.mensagensAnterioresDaPessoa(contexto.conversaId(), MENSAGENS_ANTERIORES_DA_PESSOA,
                         PlanoBSemLlm.TEXTO_DO_BOTAO)),
                 repositorio.ultimaOrdem(contexto.conversaId()));
@@ -399,7 +401,7 @@ public class LoopDoAgente {
             ProvedorDeLlm llm = provedor.provedor().orElse(null);
             if (llm == null) {
                 // A chave do debug foi apagada entre a conferência do service e aqui: termina como uma falha do modelo.
-                gravarFrase(contexto, turno, frase(FRASE_DA_FALHA, FRASE_DA_FALHA_NO_CHAT), null, ouvinte, "SEM_MODELO",
+                gravarFrase(contexto, turno, frase(contexto, FRASE_DA_FALHA, FRASE_DA_FALHA_NO_CHAT), null, ouvinte, "SEM_MODELO",
                         ResultadoDaEtapa.ERRO);
                 registrarSaida(turno, ouvinte, 0, 0);
                 return;
@@ -420,6 +422,12 @@ public class LoopDoAgente {
         long inicioDaEspera = System.nanoTime();
         int pendentes = turno.resumos.esperar();
         registrarSaida(turno, ouvinte, (System.nanoTime() - inicioDaEspera) / 1_000_000, pendentes);
+    }
+
+    /** O ano da edição da conversa: o da parceria ou, na conversa da RBS, o do evento. */
+    private int edicaoDoContexto(AtlasContexto contexto) {
+        return contexto.daRbs() ? repositorio.edicaoDoEvento(contexto.eventoId())
+                : repositorio.escopoDaParceria(contexto.parceriaId()).edicao();
     }
 
     /**
@@ -450,7 +458,7 @@ public class LoopDoAgente {
                 return;   // cartão aberto: o turno para e espera a rota 46
             }
             if (turno.venceu()) {
-                gravarFrase(contexto, turno, frase(FRASE_DO_PRAZO, FRASE_DO_PRAZO_NO_CHAT), null, ouvinte, "PRAZO_DO_TURNO",
+                gravarFrase(contexto, turno, frase(contexto, FRASE_DO_PRAZO, FRASE_DO_PRAZO_NO_CHAT), null, ouvinte, "PRAZO_DO_TURNO",
                         ResultadoDaEtapa.ERRO);
                 return;
             }
@@ -487,7 +495,7 @@ public class LoopDoAgente {
                 if (filtro != null && filtro.saiuAlgo()) {
                     filtro.recusar();   // o texto pela metade sai da tela; a frase da falha vem a seguir
                 }
-                gravarFrase(contexto, turno, frase(FRASE_DA_FALHA, FRASE_DA_FALHA_NO_CHAT), null, ouvinte, "FALHA_DO_MODELO",
+                gravarFrase(contexto, turno, frase(contexto, FRASE_DA_FALHA, FRASE_DA_FALHA_NO_CHAT), null, ouvinte, "FALHA_DO_MODELO",
                         ResultadoDaEtapa.ERRO);
                 return;
             }
@@ -509,7 +517,7 @@ public class LoopDoAgente {
 
             if (resposta.chamadas().isEmpty()) {
                 if (texto == null) {
-                    gravarFrase(contexto, turno, frase(FRASE_SEM_RESPOSTA, FRASE_SEM_RESPOSTA_NO_CHAT), raciocinio, ouvinte,
+                    gravarFrase(contexto, turno, frase(contexto, FRASE_SEM_RESPOSTA, FRASE_SEM_RESPOSTA_NO_CHAT), raciocinio, ouvinte,
                             "SEM_RESPOSTA", ResultadoDaEtapa.ERRO);
                     return;
                 }
@@ -529,8 +537,10 @@ public class LoopDoAgente {
                     }
                     if (ehNaoEncontrei(texto)) {
                         // O modelo escreveu a frase certa: o servidor acrescenta a indicação do atendimento da RBS (o L2 do quadro).
-                        ouvinte.texto(" " + INDICACAO_DO_ATENDIMENTO);
-                        ida.mensagem(gravarTexto(contexto, turno, TEXTO_NAO_ENCONTREI, raciocinio));
+                        if (!contexto.daRbs()) {
+                            ouvinte.texto(" " + INDICACAO_DO_ATENDIMENTO);
+                        }
+                        ida.mensagem(gravarTexto(contexto, turno, naoEncontrei(contexto), raciocinio));
                         turno.tipoDaSaida = "TEXTO";
                         turno.motivoDaSaida = "NAO_ENCONTREI";
                         return;
@@ -541,7 +551,7 @@ public class LoopDoAgente {
                         if (filtro != null) {
                             filtro.recusar();
                         }
-                        gravarFrase(contexto, turno, TEXTO_NAO_ENCONTREI, raciocinio, ouvinte, "SEM_FONTE", ResultadoDaEtapa.RECUSADO);
+                        gravarFrase(contexto, turno, naoEncontrei(contexto), raciocinio, ouvinte, "SEM_FONTE", ResultadoDaEtapa.RECUSADO);
                         return;
                     }
                     ida.mensagem(gravarTexto(contexto, turno, texto, raciocinio));   // em fluxo, o texto já foi à tela pelo filtro
@@ -558,12 +568,12 @@ public class LoopDoAgente {
                         gravarFrase(contexto, turno, FRASE_SEM_CONSULTA, null, ouvinte, "TEXTO_RECUSADO", ResultadoDaEtapa.RECUSADO);
                     } else if (turno.fontes.temCalculo()) {
                         // a conta ou a contagem de dias está na tela: "não encontrei" diria o contrário do que ela mostra
-                        gravarFrase(contexto, turno, frase(FRASE_FIXA, FRASE_FIXA_NO_CHAT), null, ouvinte, "TEXTO_RECUSADO",
+                        gravarFrase(contexto, turno, frase(contexto, FRASE_FIXA, FRASE_FIXA_NO_CHAT), null, ouvinte, "TEXTO_RECUSADO",
                                 ResultadoDaEtapa.RECUSADO);
                     } else if (turno.fontes.buscas() > 0) {
-                        gravarFrase(contexto, turno, TEXTO_NAO_ENCONTREI, null, ouvinte, "TEXTO_RECUSADO", ResultadoDaEtapa.RECUSADO);
+                        gravarFrase(contexto, turno, naoEncontrei(contexto), null, ouvinte, "TEXTO_RECUSADO", ResultadoDaEtapa.RECUSADO);
                     } else {
-                        gravarFrase(contexto, turno, frase(FRASE_FIXA, FRASE_FIXA_NO_CHAT), null, ouvinte, "TEXTO_RECUSADO",
+                        gravarFrase(contexto, turno, frase(contexto, FRASE_FIXA, FRASE_FIXA_NO_CHAT), null, ouvinte, "TEXTO_RECUSADO",
                                 ResultadoDaEtapa.RECUSADO);
                     }
                     return;
@@ -777,7 +787,7 @@ public class LoopDoAgente {
             return false;
         }
         if (turno.limiteAtingido) {
-            gravarFrase(contexto, turno, frase(FRASE_DO_LIMITE, FRASE_DO_LIMITE_NO_CHAT), null, ouvinte, "LIMITE_DE_CHAMADAS",
+            gravarFrase(contexto, turno, frase(contexto, FRASE_DO_LIMITE, FRASE_DO_LIMITE_NO_CHAT), null, ouvinte, "LIMITE_DE_CHAMADAS",
                     ResultadoDaEtapa.RECUSADO);
             return true;
         }
@@ -858,7 +868,8 @@ public class LoopDoAgente {
         mensagens.addAll(transitorias);
         boolean podePedirCartao = ativo.isEmpty()
                 || repositorio.solicitacoesDoRelatorio(ativo.get().id()).size() < RelatorioAtlasService.LIMITE_DE_CARTOES;
-        List<DefinicaoDeFerramenta> oferecidas = ferramentas.oferecidas(ativo, podePedirCartao, turno.diretasForaDaOferta);
+        List<DefinicaoDeFerramenta> oferecidas = contexto.daRbs() ? ferramentas.oferecidasDaRbs(turno.diretasForaDaOferta)
+                : ferramentas.oferecidas(ativo, podePedirCartao, turno.diretasForaDaOferta);
         if (turno.ferramentasDoRamo != null) {
             // O JEV ativo escolheu o ramo (documentos ou dados da parceria): só as ferramentas dele, e as do relatório em montagem ficam (abrir outro não).
             oferecidas = oferecidas.stream().filter(f -> turno.ferramentasDoRamo.contains(f.nome())
@@ -876,9 +887,11 @@ public class LoopDoAgente {
      * e diz que o relatório está aberto.
      */
     private String promptDe(AtlasContexto contexto) {
-        String base = prompt.replace("@DATA@", DIA.format(Datas.hoje())).replace("@MARCA@", repositorio.nomeDaMarca(contexto.parceriaId()));
+        // A conversa da RBS tem o prompt dela (rbs.txt): sem marca, sem relatório.
+        String base = contexto.daRbs() ? promptDaRbs.replace("@DATA@", DIA.format(Datas.hoje()))
+                : prompt.replace("@DATA@", DIA.format(Datas.hoje())).replace("@MARCA@", repositorio.nomeDaMarca(contexto.parceriaId()));
         List<AtlasRepositorio.DocumentoRetirado> retirados = repositorio.documentosCitadosQueSairamDoAr(contexto.conversaId());
-        boolean descartado = modo.relatorioLigado() && repositorio.ultimoRelatorioDescartado(contexto.conversaId());
+        boolean descartado = modo.relatorioLigado() && !contexto.daRbs() && repositorio.ultimoRelatorioDescartado(contexto.conversaId());
         if (retirados.isEmpty() && !descartado) {
             return base;
         }
@@ -909,6 +922,14 @@ public class LoopDoAgente {
                 + "documento vão copiados exatamente como estão no trecho, com a citação [T#] na mesma frase; dado da parceria só com "
                 + "marcador {{ref}}; nada de termo interno, link ou endereço. Escreva exatamente \"" + FRASE_NAO_ENCONTREI + "\" só se "
                 + "nenhum trecho responde à pergunta; se os trechos trazem a resposta, não troque a resposta por essa frase.";
+    }
+
+    /**
+     * O texto fixo do "não encontrei": com a indicação do atendimento da RBS na conversa da marca; na da RBS, que é o atendimento, só a
+     * frase (a conversa da RBS grava a frase pura, que também é uma frase do servidor).
+     */
+    private static String naoEncontrei(AtlasContexto contexto) {
+        return contexto.daRbs() ? FRASE_NAO_ENCONTREI : TEXTO_NAO_ENCONTREI;
     }
 
     /** O texto é, só, a frase de "não encontrei" (sem importar a caixa, os espaços nem o ponto final). */
@@ -973,9 +994,12 @@ public class LoopDoAgente {
         }
     }
 
-    /** A frase do modo: a antiga (com o botão) com o relatório ligado, a do chat desligado. */
-    private String frase(String comRelatorio, String noChat) {
-        return modo.relatorioLigado() ? comRelatorio : noChat;
+    /**
+     * A frase do modo: a antiga (com o botão) com o relatório ligado, a do chat desligado. A conversa da RBS (M8) não tem relatório
+     * nem botão: a frase dela é sempre a do chat.
+     */
+    private String frase(AtlasContexto contexto, String comRelatorio, String noChat) {
+        return modo.relatorioLigado() && !contexto.daRbs() ? comRelatorio : noChat;
     }
 
     // ---------------------------------------------------------------------
@@ -1010,7 +1034,7 @@ public class LoopDoAgente {
      * {@code {{calc:nome}}} pelo mesmo valor, e a conta certa nunca vira "indisponível".
      */
     private Resolucao resolucao(AtlasContexto contexto, Turno turno) {
-        Resolucao resolucao = resolvedor.abrir(contexto.usuario(), contexto.parceriaId(), modelos.obter(ModeloBase.ATIVACAO_EVENTO).orElseThrow());
+        Resolucao resolucao = resolvedor.abrir(contexto, modelos.obter(ModeloBase.ATIVACAO_EVENTO).orElseThrow());
         for (Fonte conta : turno.fontes.contas()) {
             ContaDoChat.deDados(conta.dados()).ifPresent(resolucao::registrarConta);
         }

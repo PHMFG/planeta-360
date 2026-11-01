@@ -64,17 +64,22 @@ public class DiagnosticoService {
 
     /**
      * Rota 49. Os turnos da conversa, do mais antigo para o mais novo, com as etapas e os totais de tokens e custo. Só o dono da
-     * conversa (a RBS já recebeu 403 antes); conversa de outro dá 404. Sem o diagnóstico ligado para a marca, 404. [PERMISSAO] O
+     * conversa; conversa de outro dá 404. Sem o diagnóstico ligado para a marca, 404. A RBS lê a conversa dela (a do Atlas da RBS,
+     * sem parceria) com o diagnóstico ligado, e recebe 403 numa conversa de parceria (ou com o Atlas da RBS desligado). [PERMISSAO] O
      * {@code dados} das etapas sai sem o texto cru de erro (a mensagem da exceção e o corpo do erro do provedor): ver o SQL ou o que
      * um provedor respondeu não é da marca; a RBS os lê nas rotas 50 e 51.
      */
     public DiagnosticoDaConversaDto daConversa(UsuarioAutenticado usuario, long conversaId) {
-        if (!modo.diagnosticoNaMarca()) {
+        boolean daRbs = usuario.ehRbs();
+        if (!daRbs && !modo.diagnosticoNaMarca()) {
             throw new NaoEncontradoException(AtlasService.CONVERSA_NAO_ENCONTRADA);
         }
-        atlas.conversaDoDono(usuario, conversaId);
+        atlas.conversaDoDono(usuario, conversaId);   // a RBS só entra na conversa dela (403 e 404 como na rota 45)
+        if (daRbs && !modo.diagnosticoLigado()) {
+            throw new NaoEncontradoException(AtlasService.CONVERSA_NAO_ENCONTRADA);
+        }
         List<TurnoLido> lidos = repositorio.turnosDaConversa(conversaId);
-        Map<UUID, List<EtapaDto>> etapas = etapasPorTurno(lidos, true);
+        Map<UUID, List<EtapaDto>> etapas = etapasPorTurno(lidos, !daRbs);   // a RBS lê o texto de erro inteiro, como nas rotas 50 e 51
         List<TurnoDto> turnos = lidos.stream().map(l -> paraTurno(l, etapas.get(l.turno()))).toList();
         long entrada = turnos.stream().mapToLong(TurnoDto::tokensEntrada).sum();
         long saida = turnos.stream().mapToLong(TurnoDto::tokensSaida).sum();
