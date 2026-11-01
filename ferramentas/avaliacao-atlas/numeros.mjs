@@ -14,11 +14,10 @@ const EXTENSO = {
   seiscentos: 600, seiscentas: 600, setecentos: 700, setecentas: 700, oitocentos: 800, oitocentas: 800, novecentos: 900, novecentas: 900,
 }
 const PALAVRA = Object.keys(EXTENSO).join('|')
-const ESCALA = 'mil|milh(?:ão|ões|ao|oes)'
+const ESCALA = 'mil|milh(?:ão|ões|ao|oes)|bilh(?:ão|ões|ao|oes)'
 const UNIDADES = 'reais|real|dias?|horas?|minutos?|kva|kw|por cento|porcento|%|credenciais|credencial|cortesias?|inserç(?:ão|ões)|ingressos?|pulseiras?|metros?|semanas?|meses|aplicaç(?:ão|ões)|pessoas?|litros?|visitantes?|cadastros?|rodadas?|peças?|vezes'
-const PALAVRA_DE_ANO_ANTES = /(?<![\p{L}\p{N}])(?:edi[çc][ãa]o|edi[çc][õo]es|ano|em|de|desde|at[ée]|atl[âa]ntida)(?::\s*|\s+)$/iu
 const DEPOIS_UNIDADE = new RegExp(`^\\s*(?:de\\s+)?(?:${UNIDADES})(?![\\p{L}\\p{N}])`, 'iu')
-const DATA_COM_NUMERAL = new RegExp(`(?<![\\p{L}\\p{N}])((?:${PALAVRA})(?:\\s+(?:e\\s+)?(?:${PALAVRA}))*)\\s+de\\s+(${NOME_DO_MES})(?:\\s+de\\s+(\\d{4}))?(?![\\p{L}\\p{N}])`, 'giu')
+const DATA_COM_NUMERAL = new RegExp(`(?<![\\p{L}\\p{N}])(primeiro|(?:${PALAVRA})(?:\\s+(?:e\\s+)?(?:${PALAVRA}))*)\\s+de\\s+(${NOME_DO_MES})(?:\\s+de\\s+(\\d{4}))?(?![\\p{L}\\p{N}])`, 'giu')
 const CORRIDA_POR_EXTENSO = new RegExp(`(?<![\\p{L}\\p{N}])(?:(?<!\\bpor\\s{1,8})|(?!cento(?![\\p{L}\\p{N}])))((?:${PALAVRA}|${ESCALA})(?:\\s+(?:e\\s+)?(?:${PALAVRA}|${ESCALA}))*)(?![\\p{L}\\p{N}])(\\s+(?:de\\s+)?(?:${UNIDADES})(?![\\p{L}\\p{N}]))?`, 'giu')
 
 /** "1.250,50" vira "1250.5"; "312" fica "312". Ponto só é milhar quando separa grupos de 3. */
@@ -45,8 +44,8 @@ function porExtenso(palavras) {
   let temEscala = false
   let ultima = 4
   for (const palavra of palavras.toLowerCase().split(/\s+/).filter((p) => p !== 'e')) {
-    if (palavra === 'mil' || palavra.startsWith('milh')) {
-      total += (parcial || 1) * (palavra === 'mil' ? 1000 : 1_000_000)
+    if (palavra === 'mil' || palavra.startsWith('milh') || palavra.startsWith('bilh')) {
+      total += (parcial || 1) * (palavra === 'mil' ? 1000 : palavra.startsWith('milh') ? 1_000_000 : 1_000_000_000)
       parcial = 0
       temEscala = true
       ultima = 4
@@ -69,13 +68,24 @@ function porExtenso(palavras) {
 /** "um" e "uma" são artigo e nunca contam, nem na fonte. "dois" e "duas" só com unidade, na resposta. O resto conta sempre. */
 const contaComoNumero = ({ valor, temEscala }, unidade, fonte) => temEscala || (valor !== 1 && (fonte || valor !== 2 || Boolean(unidade)))
 
+/** Sem invisíveis, em NFC, com os algarismos comuns e um espaço só, nos dois lados da comparação, como no servidor. */
+export function preparar(texto) {
+  return texto
+    .replace(/[\p{Cf}\u034F\uFE00-\uFE0F\u180B-\u180D\u115F\u1160\u3164\uFFA0\u{E0100}-\u{E01EF}]/gu, '')
+    .normalize('NFC')
+    .replace(/[\p{No}\p{Nl}]/gu, (c) => c.normalize('NFKC'))
+    .replace(/[\p{Zs}\t\v\f]+/gu, ' ')
+}
+
+const dataValida = (d, m) => +d >= 1 && +d <= 31 && +m >= 1 && +m <= 12
+
 /**
  * Devolve os números e datas do texto. Datas e horas são consumidas antes dos números, para "04/12/2026" não virar 3 números.
  * Numa fonte (`fonte: true`), "duas rodadas" é a origem de "2 rodadas". Na resposta, "os dois manuais" e "um dia" não são números.
  */
 export function extrair(textoOriginal, { fonte = false } = {}) {
   const achados = []
-  let texto = ` ${textoOriginal} `.replace(/Planeta 360/g, ' ')
+  let texto = ` ${preparar(textoOriginal)} `.replace(/(?<![\p{L}\p{N}])planeta\s+360(?!\p{N})/giu, ' ')
   const consumir = (regex, montar) => {
     texto = texto.replace(regex, (...args) => {
       const novo = montar(...args)
@@ -87,39 +97,47 @@ export function extrair(textoOriginal, { fonte = false } = {}) {
   const nomeDoMes = (m) => MESES.indexOf(m.toLowerCase()) + 1
 
   consumir(/\b(\d{4})-(\d{2})-(\d{2})\b/g, (t, a, m, d) => umaData(t, +d, +m, a))
-  consumir(/\b(\d{1,2})\/(\d{1,2})\/(\d{4})\b/g, (t, d, m, a) => umaData(t, +d, +m, a))
-  consumir(/\b(\d{1,2})\/(\d{1,2})\/(\d{2})\b/g, (t, d, m, a) => umaData(t, +d, +m, `20${a}`))
-  consumir(/\b(\d{1,2})\/(\d{1,2})\b/g, (t, d, m) => umaData(t, +d, +m))
+  // Barra ou traço só são data com dia de 1 a 31 e mês de 1 a 12: "40/20" são dois números.
+  consumir(/\b(\d{1,2})[/-](\d{1,2})[/-](\d{4})\b/g, (t, d, m, a) => (dataValida(d, m) ? umaData(t, +d, +m, a) : null))
+  consumir(/\b(\d{1,2})\/(\d{1,2})\/(\d{2})\b/g, (t, d, m, a) => (dataValida(d, m) ? umaData(t, +d, +m, `20${a}`) : null))
+  consumir(/\b(\d{1,2})\/(\d{1,2})\b/g, (t, d, m) => (dataValida(d, m) ? umaData(t, +d, +m) : null))
   // "29 e 30 de janeiro", "de 25 a 28 de janeiro" e "4 de dezembro de 2026".
-  consumir(new RegExp(`\\b(\\d{1,2})º?((?:\\s*(?:,|\\be\\b|\\ba\\b|\\baté\\b)\\s*\\d{1,2}º?)*)\\s+de\\s+(${NOME_DO_MES})(?:\\s+de\\s+(\\d{4}))?`, 'gi'), (t, primeiro, outros, m, a) =>
+  consumir(new RegExp(`\\b(\\d{1,2})[º°]?((?:\\s*(?:,|\\be\\b|\\ba\\b|até(?!\\p{L}))\\s*\\d{1,2}[º°]?)*)\\s+de\\s+(${NOME_DO_MES})(?:\\s+de\\s+(\\d{4}))?`, 'giu'), (t, primeiro, outros, m, a) =>
     [primeiro, ...(outros.match(/\d{1,2}/g) ?? [])].map((d) => umaData(t, +d, nomeDoMes(m), a)),
   )
 
-  consumir(/\b(\d{1,2}):(\d{2})\b/g, (t, h, m) => umaHora(t, +h, +m))
-  consumir(/\b(\d{1,2})h(\d{2})?\b/gi, (t, h, m) => umaHora(t, +h, m ? +m : 0))
-  consumir(/\b(\d{1,3})\s*horas?\b/gi, (t, h) => (+h <= 24 ? umValor(t, `hora:${duasCasas(+h)}:00`, String(+h)) : umValor(t, String(+h))))
+  // A hora cheia também vale como o número da hora. Hora impossível são números.
+  const hora = (t, h, m) => {
+    if (+h > 24 || +(m ?? 0) > 59) return umValor(t, String(+h), ...(m === undefined ? [] : [String(+m)]))
+    return +(m ?? 0) === 0 ? umValor(t, `hora:${duasCasas(+h)}:00`, String(+h)) : umaHora(t, +h, +m)
+  }
+  consumir(/\b(\d{1,2}):(\d{2})(?: ?h(?:s|oras?)?)?(?![\p{L}\p{N}])/giu, (t, h, m) => hora(t, h, m))
+  consumir(/\b(\d{1,3}) ?h(?:s|oras?)?(?:(\d{2})(?: ?min(?:utos?)?)?)?(?![\p{L}\p{N}])/giu, (t, h, m) => hora(t, h, m))
 
   // "2 milhões", "1,5 milhão", "3 mil": o algarismo com a escala vale o número inteiro.
-  consumir(/(?<![\p{L}\p{N}.,])(\d+(?:,\d+)?)\s+(mil|milh(?:ão|ões|ao|oes))(?![\p{L}\p{N}])/giu, (t, numero, escala) =>
-    umValor(t, String(Number(numero.replace(',', '.')) * (escala.toLowerCase() === 'mil' ? 1000 : 1_000_000))))
+  consumir(/(?<![\p{L}\p{N}.,])(\d+(?:,\d+)?)\s+(mil|milh(?:ão|ões|ao|oes)|bilh(?:ão|ões|ao|oes))(?![\p{L}\p{N}])/giu, (t, numero, escala) =>
+    umValor(t, String(Number(numero.replace(',', '.')) * (escala.toLowerCase() === 'mil' ? 1000 : escala.toLowerCase().startsWith('milh') ? 1_000_000 : 1_000_000_000))))
   // "dez de dezembro" é uma data; "sete e oito de dezembro", duas.
-  consumir(DATA_COM_NUMERAL, (t, palavras, m, a) => porExtenso(palavras).map(({ valor }) => umaData(t, valor, nomeDoMes(m), a)))
+  consumir(DATA_COM_NUMERAL, (t, palavras, m, a) => (palavras.toLowerCase() === 'primeiro' ? umaData(t, 1, nomeDoMes(m), a) : porExtenso(palavras).map(({ valor }) => umaData(t, valor, nomeDoMes(m), a))))
   consumir(CORRIDA_POR_EXTENSO, (t, palavras, unidade) => {
     const contam = porExtenso(palavras).filter((grupo) => contaComoNumero(grupo, unidade, fonte))
     return contam.length ? contam.map(({ valor }) => umValor(t, String(valor))) : null
   })
 
   // O resto: números com milhar e decimal. A vírgula de uma lista ("19, 17") não é decimal, porque vem seguida de espaço.
-  // Quatro dígitos só são um ano depois de uma palavra de ano, sem "R$" antes nem unidade depois.
-  consumir(/(?<![\d.,])\d{1,3}(?:[ \u00A0\u202F]\d{3})+(?!\d)(?:,\d+)?|\d+(?:[.,]\d+)*/g, (t, posicao, todo) => {
-    if (/[ \u00A0\u202F]/.test(t)) {
+  consumir(/(?<![\d.,])\d{1,3}(?: \d{3})+(?!\d)(?:[.,]\d+)?|\d+(?:[.,]\d+)*/g, (t, posicao, todo) => {
+    if (t.includes(' ')) {
       // "2 220,00" é o inteiro. Numa fonte, as partes também valem, porque tabela tem colunas de números.
-      const partes = fonte ? t.split(/[ \u00A0\u202F]/).map(normalizarNumero) : []
-      return umValor(t, normalizarNumero(t.replace(/[ \u00A0\u202F]/g, '')), ...partes)
+      const partes = fonte ? t.split(' ').map(normalizarNumero) : []
+      return umValor(t, normalizarNumero(t.replaceAll(' ', '')), ...partes)
     }
-    const antes = todo.slice(0, posicao)
-    const ehAno = /^\d{4}$/.test(t) && !/R\$\s*$/.test(antes) && PALAVRA_DE_ANO_ANTES.test(antes) && !DEPOIS_UNIDADE.test(todo.slice(posicao + t.length))
-    return ehAno ? umValor(t, normalizarNumero(t), `ano:${t}`) : umValor(t, normalizarNumero(t))
+    const antes = todo.slice(Math.max(0, posicao - 8), posicao)
+    const ehAno = /^(?:19|20)\d{2}$/.test(t) && !/R\$\s*$/.test(antes) && !DEPOIS_UNIDADE.test(todo.slice(posicao + t.length))
+    if (ehAno) return umValor(t, ...(fonte ? [] : [normalizarNumero(t)]), `ano:${t}`)
+    const valor = normalizarNumero(t)
+    // "dia 4": casa com o dia de uma data da fonte citada. Sem a palavra, é um número comum.
+    const depoisDeDia = !fonte && /^[1-9]$|^[12]\d$|^3[01]$/.test(valor) && /(?<![\p{L}\p{N}])dias?\s+$/iu.test(todo.slice(Math.max(0, posicao - 7), posicao))
+    return depoisDeDia ? umValor(t, valor, `depoisDeDia:${valor}`) : umValor(t, valor)
   })
   return achados
 }
@@ -144,10 +162,28 @@ export class Origens {
           this.valores.add(`data:${ano}-${dia}`)
           this.valores.add(`dataComAno:${dia}`)
           this.valores.add(`ano:${ano}`)
-          this.valores.add(ano)
         }
       } else {
         for (const valor of achado.valores) this.valores.add(valor)
+      }
+    }
+    return this
+  }
+
+  /**
+   * O texto de uma fonte citada: além do que ele diz, os pedaços das datas. "sexta-feira, 29, e no sábado, 30 de janeiro de 2027" apoia
+   * "29/01/2027", e "04/12/2026" apoia "dia 4". Título, versão, página e seção não entram nesta conta.
+   */
+  adicionarFonteCitada(texto) {
+    this.adicionar(texto)
+    for (const achado of extrair(String(texto ?? ''), { fonte: true })) {
+      if (achado.data) {
+        const [mes, dia] = achado.data.dia.split('-')
+        this.valores.add(`dia:${Number(dia)}`)
+        this.valores.add(`mes:${mes}`)
+        this.valores.add(achado.data.ano ? `mesAno:${achado.data.ano}-${mes}` : `mesSemAno:${mes}`)
+      } else {
+        for (const valor of achado.valores) if (/^([1-9]|[12]\d|3[01])$/.test(valor)) this.valores.add(`numeroDoTexto:${valor}`)
       }
     }
     return this
@@ -168,11 +204,22 @@ export class Origens {
   }
 
   aceita(achado) {
-    if (!achado.data) return achado.valores.some((v) => this.valores.has(v))
+    if (!achado.data) {
+      return achado.valores.some((v) => this.valores.has(v) || (v.startsWith('depoisDeDia:') && this.valores.has(`dia:${v.slice(12)}`)))
+    }
     const { dia, ano } = achado.data
-    if (!ano) return this.valores.has(`data:${dia}`)
+    const anoAceito = !this.anosAceitos || this.anosAceitos.has(ano)
+    if (!ano) return this.valores.has(`data:${dia}`) || this.temPedacos(dia)
     if (this.valores.has(`data:${ano}-${dia}`)) return true
-    return this.valores.has(`data:${dia}`) && !this.valores.has(`dataComAno:${dia}`) && (!this.anosAceitos || this.anosAceitos.has(ano))
+    if (this.valores.has(`data:${dia}`) && !this.valores.has(`dataComAno:${dia}`) && anoAceito) return true
+    const [mes] = dia.split('-')
+    return this.temPedacos(dia) && (this.valores.has(`mesAno:${ano}-${mes}`) || (this.valores.has(`mesSemAno:${mes}`) && anoAceito))
+  }
+
+  /** O dia está no texto da fonte citada como número, e ela traz uma data desse mês. */
+  temPedacos(dia) {
+    const [mes, numero] = dia.split('-')
+    return this.valores.has(`numeroDoTexto:${Number(numero)}`) && this.valores.has(`mes:${mes}`)
   }
 }
 

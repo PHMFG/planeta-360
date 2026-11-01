@@ -142,19 +142,26 @@ export function numerosSemOrigem(turnos, hoje = new Date()) {
       if (item.nome === 'parceria_consultar') daParceria.adicionar(paraOrigem(item.resultado))
       const json = jsonDe(item.resultado)
       for (const fonte of [...(json?.trechos ?? []), ...(json?.registros ?? [])]) {
-        if (fonte.marcador) fontes.set(fonte.marcador, valoresDe(fonte))
+        if (fonte.marcador) fontes.set(fonte.marcador, fonte)
       }
-      if (json?.marcador) fontes.set(json.marcador, valoresDe(json))
+      if (json?.marcador) fontes.set(json.marcador, json)
     }
     for (const item of turno.itens.filter((i) => i.tipo === 'texto' && i.porModelo !== false)) {
       for (const frase of frases(semNumeracaoDeLista(item.texto))) {
         const citadas = citacoes(frase)
         for (const marcador of citadas.filter((m) => !fontes.has(m))) problemas.push(`${marcador} não veio de ferramenta neste turno: ${frase.slice(0, 140)}`)
-        const origens = new Origens(...citadas.map((m) => fontes.get(m)))
+        const origens = new Origens()
         origens.anosAceitos = anosAceitos
+        for (const fonte of citadas.map((m) => fontes.get(m)).filter(Boolean)) {
+          // Título, versão, página e seção valem como parte da fonte, mas só o texto dela apoia uma data em pedaços.
+          const { texto, ...metadados } = fonte
+          origens.adicionar(valoresDe(metadados))
+          origens.adicionarFonteCitada(texto ?? '')
+        }
         for (const achado of extrair(semCitacoes(frase))) {
           // A fonte citada disse o ano desta data: vale o que ela disse, mesmo que a pessoa tenha escrito a data sem ano.
-          const fonteDisseOAno = achado.data?.ano && origens.valores.has(`dataComAno:${achado.data.dia}`)
+          // A data inteira que a pessoa escreveu vale como está ("não é 04/12/2027: é 04/12/2026").
+          const fonteDisseOAno = achado.data?.ano && origens.valores.has(`dataComAno:${achado.data.dia}`) && !geral.valores.has(`data:${achado.data.ano}-${achado.data.dia}`)
           const temOrigem = fonteDisseOAno ? origens.aceita(achado) : geral.aceita(achado) || daParceria.aceita(achado) || origens.aceita(achado)
           if (!temOrigem) problemas.push(`"${achado.trecho}" em: ${frase.slice(0, 140)}`)
         }

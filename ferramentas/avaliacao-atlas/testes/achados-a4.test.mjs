@@ -96,7 +96,7 @@ test('fatos: comparar por valor, sem casar pedaço de número', () => {
   assert.equal(casa('Até 14 de dezembro.', '4 de dezembro'), false)
   assert.equal(casa('Até 12 de dezembro.', '2 de dezembro'), false)
   assert.equal(casa('Até 12/01/2027.', '12'), false)
-  assert.equal(casa('Aberto até as 17h.', '17'), false)
+  assert.equal(casa('Aberto até as 17h.', '17'), true) // a hora cheia também vale como o número, como no servidor
   assert.equal(casa('Até 4/12.', '04/12'), true)
   assert.equal(casa('Até 8 de janeiro de 2027.', '08/01/2027'), true)
   assert.equal(casa('Das 05:00 às 08:00.', '05h às 08h'), true)

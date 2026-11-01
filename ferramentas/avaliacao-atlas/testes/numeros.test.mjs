@@ -137,13 +137,45 @@ test('dado da parceria num turno seguinte: o servidor já resolveu o marcador', 
   assert.deepEqual(numerosSemOrigem(turnos), [])
 })
 
-test('grupos separados por espaço, zero e ano sem palavra de ano', () => {
+test('grupos separados por espaço, zero e o ano simples', () => {
   assert.equal(numerosSemOrigem(comTrecho('O custo total é R$ 2 220,00 [T1].', 'R$ 220,00 e 2 geradores')).length, 1)
+  assert.equal(numerosSemOrigem(comTrecho('O custo total é R$ 2\u2009220,00 [T1].', 'R$ 220,00 e 2 geradores')).length, 1)
   assert.deepEqual(numerosSemOrigem(comTrecho('São R$ 2 220,00 [T1].', 'Total de R$ 2 220,00')), [])
   assert.deepEqual(numerosSemOrigem(comTrecho('O valor é 220 [T1].', 'Colunas 2 220')), [])
   assert.equal(numerosSemOrigem(turnosCom('São zero geradores.')).length, 1)
-  assert.equal(numerosSemOrigem(turnosCom('São 2027 geradores.')).length, 1)
-  assert.deepEqual(numerosSemOrigem(turnosCom('Vale para o Planeta Atlântida 2027 e desde 2026.')), [])
+  for (const texto of ['Vale para o Planeta Atlântida 2027 e desde 2026.', 'Para 2027, o prazo muda.', 'Nas edições 2026 e 2027.', 'Consulte o Manual de Operações 2027.']) {
+    assert.deepEqual(numerosSemOrigem(turnosCom(texto)), [], texto)
+  }
+})
+
+test('o ano da data ou do título não vira valor', () => {
+  assert.equal(numerosSemOrigem(comTrecho('Custa R$ 2.026,00 [T1].', 'até 04/12/2026')).length, 1)
+  assert.equal(numerosSemOrigem(comTrecho('São 2026 credenciais [T1].', 'até 04/12/2026')).length, 1)
+  assert.equal(numerosSemOrigem(comTrecho('Custa R$ 2.027,00 [T1].', 'Manual de Operações 2027')).length, 1)
+  assert.deepEqual(numerosSemOrigem(comTrecho('São 1250 lugares [T1].', 'Capacidade de 1250 lugares')), [])
+})
+
+test('data em pedaços e "dia 4" só com a fonte citada', () => {
+  const festival = 'sexta-feira, 29, e no sábado, 30 de janeiro de 2027'
+  assert.deepEqual(numerosSemOrigem(comTrecho('O festival é nos dias 29 e 30 de janeiro de 2027 [T1].', festival)), [])
+  assert.deepEqual(numerosSemOrigem(comTrecho('29/01/2027 e 30/01/2027 [T1].', festival)), [])
+  assert.equal(numerosSemOrigem(comTrecho('É em 28/01/2027 [T1].', festival)).length, 1)
+  assert.deepEqual(numerosSemOrigem(comTrecho('É no dia 4 [T1].', 'até 04/12/2026')), [])
+  assert.equal(numerosSemOrigem(comTrecho('São 4 geradores [T1].', 'até 04/12/2026')).length, 1)
+  assert.equal(numerosSemOrigem(comTrecho('Custa R$ 4 [T1].', 'até 04/12/2026')).length, 1)
+  assert.equal(numerosSemOrigem(comTrecho('É no dia 9 [T1].', 'até 04/12/2026')).length, 1)
+})
+
+test('horas, formatos e a data inteira que a pessoa escreveu', () => {
+  assert.deepEqual(numerosSemOrigem(comTrecho('Leva 48h [T1].', 'Leva 48 horas')), [])
+  assert.deepEqual(numerosSemOrigem(comTrecho('Até 18h [T1].', 'Até 18h00min')), [])
+  assert.deepEqual(numerosSemOrigem(comTrecho('Até 05h [T1].', 'Até 05:00h')), [])
+  assert.deepEqual(numerosSemOrigem(comTrecho('Das 5 às 8h [T1].', 'das 05h às 08h')), [])
+  assert.deepEqual(numerosSemOrigem(comTrecho('São 40 cortesias [T1].', 'Master 40/20')), [])
+  assert.deepEqual(numerosSemOrigem(comTrecho('É em 15-01-2027 [T1].', 'até 15/01/2027')), [])
+  assert.deepEqual(numerosSemOrigem(comTrecho('Não é 04/12/2027: é 04/12/2026 [T1].', 'até 04/12/2026', 'É 04/12/2027?')), [])
+  assert.deepEqual(numerosSemOrigem(comTrecho('São 36 m² [T1].', 'São 36 m²')), [])
+  assert.equal(numerosSemOrigem(comTrecho('São 3\u034F12 reais [T1].', '3 ou 12')).length, 1)
 })
 
 test('"2 milhões" vale o inteiro, "por doze horas" conta e "por cento" não', () => {
