@@ -658,6 +658,10 @@ class FontesNoChatTest {
         // texto simples e sem cumprimento
         assertThat(prompt).contains("texto simples").contains("sem negrito, títulos nem outra marcação").contains("Boa tarde!")
                 .contains("vá direto à resposta");
+        // prazo em dias: a semana vira dias e a data relativa vira AAAA-MM-DD a partir de hoje, sem exigir que a pessoa tenha escrito o número
+        assertThat(prompt).contains("Semana vira dias (uma semana são 7)")
+                .contains("data relativa (ontem, dia 20, fim do mês) vira AAAA-MM-DD a partir de hoje").contains("Prazo de documento: busque antes.")
+                .doesNotContain("precisam vir da pessoa");
         // continua curto
         assertThat(prompt.length()).as("o prompt do chat tem de ficar curto").isLessThan(limiteDoPrompt());
     }
