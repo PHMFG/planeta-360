@@ -7,7 +7,7 @@ const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julh
 const NOME_DO_MES = MESES.join('|')
 
 const EXTENSO = {
-  um: 1, uma: 1, dois: 2, duas: 2, 'três': 3, tres: 3, quatro: 4, cinco: 5, seis: 6, sete: 7, oito: 8, nove: 9, dez: 10,
+  zero: 0, um: 1, uma: 1, dois: 2, duas: 2, 'três': 3, tres: 3, quatro: 4, cinco: 5, seis: 6, sete: 7, oito: 8, nove: 9, dez: 10,
   onze: 11, doze: 12, treze: 13, quatorze: 14, catorze: 14, quinze: 15, dezesseis: 16, dezessete: 17, dezoito: 18, dezenove: 19,
   vinte: 20, trinta: 30, quarenta: 40, cinquenta: 50, sessenta: 60, setenta: 70, oitenta: 80, noventa: 90, cem: 100, cento: 100,
   duzentos: 200, duzentas: 200, trezentos: 300, trezentas: 300, quatrocentos: 400, quatrocentas: 400, quinhentos: 500, quinhentas: 500,
@@ -16,9 +16,10 @@ const EXTENSO = {
 const PALAVRA = Object.keys(EXTENSO).join('|')
 const ESCALA = 'mil|milh(?:ão|ões|ao|oes)'
 const UNIDADES = 'reais|real|dias?|horas?|minutos?|kva|kw|por cento|porcento|%|credenciais|credencial|cortesias?|inserç(?:ão|ões)|ingressos?|pulseiras?|metros?|semanas?|meses|aplicaç(?:ão|ões)|pessoas?|litros?|visitantes?|cadastros?|rodadas?|peças?|vezes'
+const PALAVRA_DE_ANO_ANTES = /(?<![\p{L}\p{N}])(?:edi[çc][ãa]o|edi[çc][õo]es|ano|em|de|desde|at[ée]|atl[âa]ntida)(?::\s*|\s+)$/iu
 const DEPOIS_UNIDADE = new RegExp(`^\\s*(?:de\\s+)?(?:${UNIDADES})(?![\\p{L}\\p{N}])`, 'iu')
 const DATA_COM_NUMERAL = new RegExp(`(?<![\\p{L}\\p{N}])((?:${PALAVRA})(?:\\s+(?:e\\s+)?(?:${PALAVRA}))*)\\s+de\\s+(${NOME_DO_MES})(?:\\s+de\\s+(\\d{4}))?(?![\\p{L}\\p{N}])`, 'giu')
-const CORRIDA_POR_EXTENSO = new RegExp(`(?<![\\p{L}\\p{N}])(?<!por\\s)((?:${PALAVRA}|${ESCALA})(?:\\s+(?:e\\s+)?(?:${PALAVRA}|${ESCALA}))*)(?![\\p{L}\\p{N}])(\\s+(?:de\\s+)?(?:${UNIDADES})(?![\\p{L}\\p{N}]))?`, 'giu')
+const CORRIDA_POR_EXTENSO = new RegExp(`(?<![\\p{L}\\p{N}])(?:(?<!\\bpor\\s{1,8})|(?!cento(?![\\p{L}\\p{N}])))((?:${PALAVRA}|${ESCALA})(?:\\s+(?:e\\s+)?(?:${PALAVRA}|${ESCALA}))*)(?![\\p{L}\\p{N}])(\\s+(?:de\\s+)?(?:${UNIDADES})(?![\\p{L}\\p{N}]))?`, 'giu')
 
 /** "1.250,50" vira "1250.5"; "312" fica "312". Ponto só é milhar quando separa grupos de 3. */
 export function normalizarNumero(bruto) {
@@ -98,6 +99,9 @@ export function extrair(textoOriginal, { fonte = false } = {}) {
   consumir(/\b(\d{1,2})h(\d{2})?\b/gi, (t, h, m) => umaHora(t, +h, m ? +m : 0))
   consumir(/\b(\d{1,3})\s*horas?\b/gi, (t, h) => (+h <= 24 ? umValor(t, `hora:${duasCasas(+h)}:00`, String(+h)) : umValor(t, String(+h))))
 
+  // "2 milhões", "1,5 milhão", "3 mil": o algarismo com a escala vale o número inteiro.
+  consumir(/(?<![\p{L}\p{N}.,])(\d+(?:,\d+)?)\s+(mil|milh(?:ão|ões|ao|oes))(?![\p{L}\p{N}])/giu, (t, numero, escala) =>
+    umValor(t, String(Number(numero.replace(',', '.')) * (escala.toLowerCase() === 'mil' ? 1000 : 1_000_000))))
   // "dez de dezembro" é uma data; "sete e oito de dezembro", duas.
   consumir(DATA_COM_NUMERAL, (t, palavras, m, a) => porExtenso(palavras).map(({ valor }) => umaData(t, valor, nomeDoMes(m), a)))
   consumir(CORRIDA_POR_EXTENSO, (t, palavras, unidade) => {
@@ -106,9 +110,15 @@ export function extrair(textoOriginal, { fonte = false } = {}) {
   })
 
   // O resto: números com milhar e decimal. A vírgula de uma lista ("19, 17") não é decimal, porque vem seguida de espaço.
-  // Quatro dígitos podem ser um ano, menos "R$ 2027" e "2026 credenciais".
-  consumir(/\d+(?:[.,]\d+)*/g, (t, posicao, todo) => {
-    const ehAno = /^\d{4}$/.test(t) && !/R\$\s*$/.test(todo.slice(0, posicao)) && !DEPOIS_UNIDADE.test(todo.slice(posicao + t.length))
+  // Quatro dígitos só são um ano depois de uma palavra de ano, sem "R$" antes nem unidade depois.
+  consumir(/(?<![\d.,])\d{1,3}(?:[ \u00A0\u202F]\d{3})+(?!\d)(?:,\d+)?|\d+(?:[.,]\d+)*/g, (t, posicao, todo) => {
+    if (/[ \u00A0\u202F]/.test(t)) {
+      // "2 220,00" é o inteiro. Numa fonte, as partes também valem, porque tabela tem colunas de números.
+      const partes = fonte ? t.split(/[ \u00A0\u202F]/).map(normalizarNumero) : []
+      return umValor(t, normalizarNumero(t.replace(/[ \u00A0\u202F]/g, '')), ...partes)
+    }
+    const antes = todo.slice(0, posicao)
+    const ehAno = /^\d{4}$/.test(t) && !/R\$\s*$/.test(antes) && PALAVRA_DE_ANO_ANTES.test(antes) && !DEPOIS_UNIDADE.test(todo.slice(posicao + t.length))
     return ehAno ? umValor(t, normalizarNumero(t), `ano:${t}`) : umValor(t, normalizarNumero(t))
   })
   return achados
@@ -200,13 +210,60 @@ export function citacoes(texto) {
   return (texto.match(CITACAO) ?? []).flatMap((c) => c.match(/[TRC]\d+/g))
 }
 
+const ABREVIATURAS = new Set(['p', 'pp', 'pág', 'págs', 'pag', 'pags', 'art', 'arts', 'sr', 'sra', 'dr', 'dra', 'prof', 'av', 'tel', 'cel', 'ex', 'obs', 'cf', 'vol', 'fl', 'fls', 'cap', 'inc', 'sec', 'seç', 'nº', 'n'])
+const PONTUACAO = '.!?…'
+const FECHAMENTOS = '"\')»”’*_'
+const CITACAO_AQUI = /\[\s*[TRC]\d{1,3}(?:\s*,\s*[TRC]\d{1,3})*\s*\]/y
+
+function ehAbreviatura(texto, inicio, ponto) {
+  let comeco = ponto
+  while (comeco > inicio && /[\p{L}º]/u.test(texto[comeco - 1])) comeco--
+  return ABREVIATURAS.has(texto.slice(comeco, ponto).toLowerCase())
+}
+
 /**
- * Divide em frases como o servidor: pontuação seguida de espaço (`FIM_DE_FRASE`), ou quebra de linha.
- * As citações logo depois do ponto ficam com a frase.
+ * Divide em frases como o servidor (`Frases.java`): pontuação seguida de espaço, ou quebra de linha. O ponto de abreviatura ("p. 6") e o
+ * de dentro de um marcador não cortam, o negrito fecha a frase, e as citações logo depois do ponto ficam com ela.
  */
 export function frases(texto) {
-  return texto
-    .split(/(?<=[.!?…](?:\*{1,2}|_)?(?:\s*\[\s*[TRC]\d{1,3}(?:\s*,\s*[TRC]\d{1,3})*\s*\])*)\s+(?!\[\s*[TRC]\d)|\n+/)
-    .map((f) => f.trim())
-    .filter(Boolean)
+  const lista = []
+  let inicio = 0
+  const fechar = (fim) => {
+    const frase = texto.slice(inicio, fim).trim()
+    if (frase) lista.push(frase)
+    inicio = fim
+  }
+  for (let i = 0; i < texto.length; i++) {
+    const c = texto[i]
+    if (c === '{' && texto.startsWith('{{', i)) {
+      const fecha = texto.indexOf('}}', i + 2)
+      if (fecha < 0) break
+      i = fecha + 1
+    } else if (c === '\n') {
+      fechar(i)
+    } else if (PONTUACAO.includes(c)) {
+      let depois = i + 1
+      while (depois < texto.length && PONTUACAO.includes(texto[depois])) depois++
+      while (depois < texto.length && FECHAMENTOS.includes(texto[depois])) depois++
+      if (depois >= texto.length) break
+      if (!/\s/.test(texto[depois]) || (c === '.' && ehAbreviatura(texto, inicio, i))) {
+        i = depois - 1
+        continue
+      }
+      let fim = depois
+      let j = depois
+      for (;;) {
+        while (j < texto.length && /[^\S\n]/.test(texto[j])) j++
+        CITACAO_AQUI.lastIndex = j
+        const citacao = CITACAO_AQUI.exec(texto)
+        if (!citacao) break
+        j += citacao[0].length
+        fim = j
+      }
+      fechar(fim)
+      i = fim - 1
+    }
+  }
+  fechar(texto.length)
+  return lista
 }

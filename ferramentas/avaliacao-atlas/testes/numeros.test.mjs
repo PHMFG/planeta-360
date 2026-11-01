@@ -137,6 +137,29 @@ test('dado da parceria num turno seguinte: o servidor já resolveu o marcador', 
   assert.deepEqual(numerosSemOrigem(turnos), [])
 })
 
+test('grupos separados por espaço, zero e ano sem palavra de ano', () => {
+  assert.equal(numerosSemOrigem(comTrecho('O custo total é R$ 2 220,00 [T1].', 'R$ 220,00 e 2 geradores')).length, 1)
+  assert.deepEqual(numerosSemOrigem(comTrecho('São R$ 2 220,00 [T1].', 'Total de R$ 2 220,00')), [])
+  assert.deepEqual(numerosSemOrigem(comTrecho('O valor é 220 [T1].', 'Colunas 2 220')), [])
+  assert.equal(numerosSemOrigem(turnosCom('São zero geradores.')).length, 1)
+  assert.equal(numerosSemOrigem(turnosCom('São 2027 geradores.')).length, 1)
+  assert.deepEqual(numerosSemOrigem(turnosCom('Vale para o Planeta Atlântida 2027 e desde 2026.')), [])
+})
+
+test('"2 milhões" vale o inteiro, "por doze horas" conta e "por cento" não', () => {
+  assert.deepEqual(numerosSemOrigem(comTrecho('São 2 milhões de reais [T1].', 'R$ 2.000.000,00')), [])
+  assert.equal(numerosSemOrigem(turnosCom('Fica aberto por doze horas.')).length, 1)
+  assert.deepEqual(numerosSemOrigem(comTrecho('São 89,4 por cento [T1].', '89,4%')), [])
+})
+
+test('abreviatura não corta a frase; o ponto de "ver" corta', () => {
+  assert.deepEqual(numerosSemOrigem(comTrecho('Está na p. 5 do manual [T1].', 'S')), [])
+  assert.deepEqual(frases('Veja a p. 6 [T1]. E depois.'), ['Veja a p. 6 [T1].', 'E depois.'])
+  assert.deepEqual(frases('Como dá para ver. A tarifa [T1].'), ['Como dá para ver.', 'A tarifa [T1].'])
+  assert.deepEqual(frases('**Primeira.** Segunda. [T1] [T2]\nTerceira'), ['**Primeira.**', 'Segunda. [T1] [T2]', 'Terceira'])
+  assert.deepEqual(frases('O valor é {{cons:a.b}}. Fim.'), ['O valor é {{cons:a.b}}.', 'Fim.'])
+})
+
 test('número da pergunta da pessoa tem origem', () => {
   assert.deepEqual(numerosSemOrigem(turnosCom('Para 34 kVA, preciso da tarifa.', [], 'E por 34 kVA?')), [])
 })
