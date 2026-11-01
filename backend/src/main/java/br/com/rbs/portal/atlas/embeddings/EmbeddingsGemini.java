@@ -248,12 +248,20 @@ public class EmbeddingsGemini implements ProvedorDeEmbeddings {
         return ": " + (frase.length() > 200 ? frase.substring(0, 200) + "…" : frase);
     }
 
-    /**
-     * O vetor de um {@code values}: 768 números, todos finitos (como float), com norma maior que zero, e normalizado se a norma fugir de
-     * 1 por mais de 0,01. Valor que não é número ({@code null}, texto), número que estoura o float ({@code 1e40}) e vetor só de zeros
-     * são erro, e não um vetor: um vetor de zeros dá NaN no cosseno do pgvector, e um {@code null} contaria como 0.
-     */
+    /** O vetor de um {@code values}, conferido como na indexação: veja {@link #vetorDe(JsonNode, int)}. */
     private float[] vetorDe(JsonNode values) {
+        return vetorDe(values, dimensoes);
+    }
+
+    /**
+     * O vetor de um {@code values}: {@code dimensoes} números, todos finitos (como float), com norma maior que zero, e normalizado se a
+     * norma fugir de 1 por mais de 0,01. Valor que não é número ({@code null}, texto), número que estoura o float ({@code 1e40}) e vetor
+     * só de zeros são erro, e não um vetor: um vetor de zeros dá NaN no cosseno do pgvector, e um {@code null} contaria como 0. É a
+     * mesma conferência da indexação e do teste do provedor (rota 53, que chama este método).
+     *
+     * @throws EmbeddingsIndisponivelException se o vetor não serve
+     */
+    public static float[] vetorDe(JsonNode values, int dimensoes) {
         if (!values.isArray() || values.size() != dimensoes) {
             throw new EmbeddingsIndisponivelException("O Gemini devolveu " + (values.isArray() ? values.size() : 0)
                     + " dimensões e o Atlas espera " + dimensoes + ".");

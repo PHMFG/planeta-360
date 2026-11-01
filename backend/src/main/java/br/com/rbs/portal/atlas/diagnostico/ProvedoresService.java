@@ -9,6 +9,8 @@ import br.com.rbs.portal.atlas.diagnostico.DiagnosticoDtos.TesteDeProvedorDto;
 import br.com.rbs.portal.atlas.diagnostico.DiagnosticoDtos.TetoDiarioDto;
 import br.com.rbs.portal.atlas.diagnostico.DiagnosticoDtos.UsoDoTetoDto;
 import br.com.rbs.portal.atlas.diagnostico.TracoRepositorio.EstatisticasDoProvedor;
+import br.com.rbs.portal.atlas.embeddings.EmbeddingsGemini;
+import br.com.rbs.portal.atlas.embeddings.EmbeddingsIndisponivelException;
 import br.com.rbs.portal.atlas.loop.TetoDiario;
 import br.com.rbs.portal.atlas.provedor.FabricaDeProvedor;
 import br.com.rbs.portal.atlas.provedor.ProvedorAtual;
@@ -227,8 +229,13 @@ public class ProvedoresService {
                         .header("x-goog-api-key", config.geminiChave()).header("Content-Type", "application/json")
                         .POST(HttpRequest.BodyPublishers.ofString(corpo)).build(),
                 resposta -> {
-            int dimensoes = resposta.path("embedding").path("values").size();
-            return dimensoes == DIMENSOES ? dimensoes + " dimensões" : null;
+            JsonNode valores = resposta.path("embedding").path("values");
+            if (!valores.isArray() || valores.size() != DIMENSOES) {
+                return null;   // não é o formato esperado
+            }
+            // A mesma conferência da indexação: 768 zeros ou um valor que não é número finito são erro, e não "768 dimensões".
+            EmbeddingsGemini.vetorDe(valores, DIMENSOES);
+            return DIMENSOES + " dimensões";
         });
     }
 
@@ -256,6 +263,8 @@ public class ProvedoresService {
         } catch (InterruptedException interrompida) {
             Thread.currentThread().interrupt();
             return new TesteDeProvedorDto(nome, false, true, desde(inicio), modelo, null, "A chamada foi interrompida.");
+        } catch (EmbeddingsIndisponivelException vetorInvalido) {
+            return new TesteDeProvedorDto(nome, false, true, desde(inicio), modelo, null, vetorInvalido.getMessage());
         } catch (IOException | RuntimeException falha) {
             log.warn("Atlas: o teste do provedor {} falhou ({})", nome, falha.getClass().getSimpleName());
             return new TesteDeProvedorDto(nome, false, true, desde(inicio), modelo, null,

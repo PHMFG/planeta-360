@@ -1924,7 +1924,7 @@ O custo de uma ida (e de um resumo) é o `usage.opencode.list_cost` que o OpenCo
 | --- | --- |
 | `llm` | O modelo que vale agora (como o `POST /api/debug/llm/teste`): a mensagem `"Responda só com a palavra ok."`, sem ferramentas. |
 | `jev` | `POST {base}/v1/systemone` com `Authorization: Bearer` e o modelo `jev-1.14.0` (`ATLAS_JEV_MODELO`): um estado curto em português e uma pergunta `noul` (`"A mensagem pergunta sobre um prazo?"`). Dá certo se a resposta traz `answers.relevante.noul` numérico. |
-| `gemini` | `POST {base}/v1beta/models/gemini-embedding-2:embedContent` com o cabeçalho `x-goog-api-key` e `embedContentConfig.outputDimensionality` 768. Dá certo se a resposta traz o vetor de 768 números finitos que não sejam todos zero; qualquer outro vetor é erro (`"O Gemini devolveu um vetor inválido: ..."`) e, na indexação de um documento, leva-o a `ERRO`. |
+| `gemini` | `POST {base}/v1beta/models/gemini-embedding-2:embedContent` com o cabeçalho `x-goog-api-key` e `embedContentConfig.outputDimensionality` 768. Dá certo se a resposta traz o vetor de 768 números finitos que não sejam todos zero. Com 768 valores e algum que não é número finito (`null`, texto, `1e40`) ou todos zero, é erro (`"O Gemini devolveu um vetor inválido: todos os valores são zero."`, ou `"... a posição 7 não é um número finito."`): é a mesma conferência da indexação, que leva o documento a `ERRO`. Um vetor de outro tamanho cai em `"O provedor respondeu 200, mas não no formato esperado."`. |
 
 **200** sempre que a rota existe: `ok` diz se deu certo.
 

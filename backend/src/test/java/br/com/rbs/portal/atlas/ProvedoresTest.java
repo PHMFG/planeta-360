@@ -297,6 +297,33 @@ class ProvedoresTest {
         assertThat(lerJson(resposta, "$.erro")).isEqualTo("O provedor respondeu 200, mas não no formato esperado.");
     }
 
+    private static String umaListaDe768ComUmValor(int posicao, String valor) {
+        return IntStream.range(0, 768).mapToObj(i -> i == posicao ? valor : "0.03").collect(Collectors.joining(",", "[", "]"));
+    }
+
+    @Test
+    void testeDoGeminiQueDevolve768ZerosOuValorQueNaoEFinitoEErroComAMesmaConferenciaDaIndexacao() {
+        String zeros = IntStream.range(0, 768).mapToObj(i -> "0.0").collect(Collectors.joining(",", "[", "]"));
+        GEMINI.responder(200, "{\"embedding\":{\"values\":" + zeros + "}}");
+
+        MvcTestResult todosZero = rbs().post("/api/atlas/provedores/gemini/teste", null);
+
+        assertThat(lerJson(todosZero, "$.ok")).as("768 zeros dariam NaN no cosseno do pgvector").isEqualTo(false);
+        assertThat(lerJson(todosZero, "$.erro")).isEqualTo("O Gemini devolveu um vetor inválido: todos os valores são zero.");
+        assertThat(lerJson(todosZero, "$.chamou")).isEqualTo(true);
+
+        GEMINI.responder(200, "{\"embedding\":{\"values\":" + umaListaDe768ComUmValor(7, "null") + "}}");
+        assertThat(lerJson(rbs().post("/api/atlas/provedores/gemini/teste", null), "$.erro"))
+                .isEqualTo("O Gemini devolveu um vetor inválido: a posição 7 não é um número finito.");
+
+        GEMINI.responder(200, "{\"embedding\":{\"values\":" + umaListaDe768ComUmValor(3, "1e40") + "}}");
+        assertThat(lerJson(rbs().post("/api/atlas/provedores/gemini/teste", null), "$.erro"))
+                .isEqualTo("O Gemini devolveu um vetor inválido: a posição 3 não é um número finito.");
+
+        GEMINI.responder(200, "{\"embedding\":{\"values\":" + umaListaDe768ComUmValor(5, "\"0.1\"") + "}}");
+        assertThat(lerJson(rbs().post("/api/atlas/provedores/gemini/teste", null), "$.ok")).as("texto no lugar do número").isEqualTo(false);
+    }
+
     // ---------------------------------------------------------------------
     // Rota 53: o nome, o CSRF
     // ---------------------------------------------------------------------
