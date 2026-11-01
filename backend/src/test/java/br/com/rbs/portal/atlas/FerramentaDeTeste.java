@@ -34,7 +34,9 @@ public class FerramentaDeTeste implements Ferramenta {
          * Registra no turno um registro do portal ([R1], com o documento de origem em {@code dados}) e uma conta ([C1], de nome
          * {@code tarifa}), como o M5 faz, e devolve o resultado normalmente.
          */
-        REGISTRO_E_CONTA
+        REGISTRO_E_CONTA,
+        /** Responde direto à pessoa ({@code returnDirect}): o loop encerra o turno sem nova ida ao modelo. */
+        RESPOSTA_DIRETA
     }
 
     /** O documento de onde o registro do comportamento {@link Comportamento#REGISTRO_E_CONTA} diz ter vindo. */
@@ -152,6 +154,9 @@ public class FerramentaDeTeste implements Ferramenta {
             FontesDoTurno.Fonte fonteDaConta = turno.registrarCalculo("tarifa", "tarifa", "tarifa: preco = 312; area = 34; resultado = 10.608,00",
                     conta);
             return Execucao.resultado("{\"registro\":\"" + registro.marcador() + "\",\"conta\":\"" + fonteDaConta.marcador() + "\"}");
+        }
+        if (comportamento == Comportamento.RESPOSTA_DIRETA) {
+            return Execucao.direta("{\"direta\":true}");
         }
         return Execucao.resultado("{\"preparado\":\"" + preparado + "\"}");
     }

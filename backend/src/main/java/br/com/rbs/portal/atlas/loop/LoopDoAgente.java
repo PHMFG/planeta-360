@@ -76,6 +76,11 @@ import tools.jackson.core.JacksonException;
  *       seguintes da mesma rodada (inclusive outra {@code relatorio_solicitar_campos}) respondem erro. Assim toda
  *       {@code tool_call} tem resposta antes da próxima mensagem, menos a do cartão, que a rota 46 fecha. Não se usa o
  *       {@code ToolCallingManager}: ele responderia todas as chamadas da rodada de uma vez.</li>
+ *   <li><b>Resposta direta</b> (M5, o {@code returnDirect} feito no nosso loop): se a rodada tem uma ferramenta que respondeu direto
+ *       ({@link Execucao#direta()}), as outras chamadas da rodada rodam normalmente, a resposta de todas é gravada e o turno termina
+ *       ali, sem nova ida ao modelo. É diferente da pausa do cartão e do relatório pronto, depois dos quais as outras chamadas da
+ *       rodada não rodam; se a rodada também teve um deles, ele manda. O texto que veio junto na rodada, se aprovado, fica. Erro de
+ *       ferramenta nunca é resposta direta: volta ao modelo.</li>
  *   <li><b>Até {@value #LIMITE_DE_CHAMADAS_POR_TURNO} chamadas de ferramenta por turno</b> (contador nosso). Erro de ferramenta
  *       volta ao modelo como mensagem de ferramenta, nunca como 500.</li>
  *   <li><b>O modelo não escreve número sem origem nem termo interno.</b> O texto da resposta passa pela {@link ChecagemDeFontes}
@@ -464,7 +469,8 @@ public class LoopDoAgente {
 
     /**
      * Grava a mensagem do assistente com os pedidos de ferramenta e executa cada um, na ordem. Devolve verdadeiro se o turno
-     * acabou: o cartão abriu, o relatório ficou pronto ou o limite de chamadas estourou.
+     * acabou: o cartão abriu, o relatório ficou pronto, uma ferramenta respondeu direto ou o limite de chamadas estourou. A resposta
+     * direta vale antes do limite: a ferramenta que já rodou entregou o que a pessoa pediu, e a frase do limite só confundiria.
      */
     private boolean rodar(AtlasContexto contexto, Turno turno, String texto, List<ChamadaDeFerramenta> pedidos, String raciocinio,
                           OuvinteDoTurno ouvinte, Etapa ida) {
@@ -487,6 +493,7 @@ public class LoopDoAgente {
 
         boolean pausa = false;
         boolean pronto = false;
+        boolean direta = false;   // não para as chamadas seguintes: só encerra o turno no fim da rodada
         for (ChamadaDeFerramenta chamada : chamadas) {
             Etapa etapaDaFerramenta = turno.traco.abrir(EtapaDoTraco.FERRAMENTA).mensagem(mensagemId).dado("ferramenta", chamada.nome());
             if (pausa) {
@@ -507,14 +514,21 @@ public class LoopDoAgente {
                 Rodada rodada = executar(contexto, turno, mensagemId, chamada);
                 pausa = rodada.execucao().pausa();
                 pronto = rodada.execucao().pronto();
+                boolean respondeuDireto = rodada.execucao().direta();   // o erro de ferramenta nunca é direto: volta ao modelo
+                direta |= respondeuDireto;
                 avisarFerramenta(ouvinte, chamada, rodada.execucao().resultadoJson(), rodada.erro(), rodada.ms());
                 etapaDaFerramenta.dado("argumentos", chamada.argumentos()).dado("resultado", rodada.execucao().resultadoJson())
                         .dado("pausa", pausa ? true : null).dado("pronto", pronto ? true : null)
+                        .dado("direta", respondeuDireto ? true : null)
                         .fim(rodada.erro() ? ResultadoDaEtapa.ERRO : ResultadoDaEtapa.OK);
             }
         }
         if (pausa || pronto) {
             turno.tipoDaSaida = pausa ? "CARTAO" : "RELATORIO_PRONTO";
+            return true;
+        }
+        if (direta) {
+            turno.tipoDaSaida = "RESPOSTA_DIRETA";
             return true;
         }
         if (turno.limiteAtingido) {
