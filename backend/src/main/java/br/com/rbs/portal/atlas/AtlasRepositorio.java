@@ -427,6 +427,15 @@ public class AtlasRepositorio {
                 .query(LinhaDeRelatorio.class).optional();
     }
 
+    /**
+     * O relatório mais novo da conversa foi descartado? Então a conversa não tem relatório em andamento (o criar recusa um segundo
+     * em andamento, e o que está em andamento é sempre o mais novo). Um relatório pronto depois do descartado desfaz a resposta.
+     */
+    public boolean ultimoRelatorioDescartado(long conversaId) {
+        return jdbc.sql("SELECT status = 'DESCARTADO' FROM atlas_relatorio WHERE conversa_id = :id ORDER BY id DESC LIMIT 1")
+                .param("id", conversaId).query(Boolean.class).optional().orElse(false);
+    }
+
     public long criarRelatorio(long parceriaId, long conversaId, String modelo, String especificacaoJson, long usuarioId) {
         return jdbc.sql("""
                         INSERT INTO atlas_relatorio (parceria_id, conversa_id, modelo, status, especificacao, criado_por)

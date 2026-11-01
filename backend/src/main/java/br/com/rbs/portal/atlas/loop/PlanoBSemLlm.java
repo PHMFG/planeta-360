@@ -50,6 +50,8 @@ public class PlanoBSemLlm {
     public static final String AVISO_CARTAO_FECHADO = "Cartão fechado. Use Montar relatório para continuar.";
     /** O mesmo aviso quando o modelo de linguagem está ligado: a pessoa pode continuar pelo chat. */
     public static final String AVISO_CARTAO_FECHADO_COM_MODELO = "Cartão fechado. Quando tiver os números, peça para continuar.";
+    /** O aviso do cartão que se fechou porque o relatório foi descartado (pela tela ou por ter ficado parado): vale com ou sem modelo. */
+    public static final String AVISO_RELATORIO_DESCARTADO = "Relatório descartado. Você pode pedir um novo quando quiser.";
     public static final String CARTAO_ABERTO = "Este relatório está esperando a resposta do cartão. Responda ou feche o cartão antes de montar de novo.";
     static final String OBJETIVO = "Montar o relatório de ativação no evento, pelo botão";
 

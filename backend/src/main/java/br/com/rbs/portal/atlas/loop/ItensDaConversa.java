@@ -36,6 +36,7 @@ import br.com.rbs.portal.atlas.provedor.DisponibilidadeDoLlm;
 import br.com.rbs.portal.atlas.relatorio.ContaDoChat;
 import br.com.rbs.portal.atlas.relatorio.Especificacao;
 import br.com.rbs.portal.atlas.relatorio.ModeloBase;
+import br.com.rbs.portal.atlas.relatorio.RelatorioAtlasService;
 import br.com.rbs.portal.atlas.relatorio.ResolvedorDeReferencias;
 import br.com.rbs.portal.atlas.relatorio.ResolvedorDeReferencias.Resolucao;
 import br.com.rbs.portal.comum.UsuarioAutenticado;
@@ -70,7 +71,8 @@ import tools.jackson.core.type.TypeReference;
  *   <li>a resposta de {@code relatorio_finalizar} &rarr; item {@code relatorio_pronto};</li>
  *   <li>a resposta de {@code relatorio_solicitar_campos} com {@code cancel} &rarr; item {@code aviso} ("Cartão fechado..."): sem
  *       modelo de linguagem, "Use Montar relatório para continuar"; com ele ligado agora (o mesmo {@code llmDisponivel} da
- *       resposta), "Quando tiver os números, peça para continuar".</li>
+ *       resposta), "Quando tiver os números, peça para continuar". Se a resposta traz {@code relatorioDescartado} (o cartão se fechou
+ *       porque o relatório foi descartado), o aviso é outro: "Relatório descartado. Você pode pedir um novo quando quiser.".</li>
  *   <li>a resposta de {@code pedido_de_relatorio} &rarr; item {@code pedido_relatorio}, e a de {@code gerar_modelo} &rarr; item
  *       {@code modelo}, com o relatório ligado ou desligado. O item do pedido traz {@code relatorioOficial}, {@code modelos} e o
  *       texto de agora, relidos (a RBS pode ter disponibilizado o relatório depois); o do modelo traz o que a ferramenta entregou.
@@ -270,6 +272,9 @@ public class ItensDaConversa {
                     (String) resultado.get("titulo"), turno));
         }
         if ("relatorio_solicitar_campos".equals(ferramenta) && "cancel".equals(resultado.get("acao"))) {
+            if (Boolean.TRUE.equals(resultado.get(RelatorioAtlasService.RELATORIO_DESCARTADO))) {
+                return Optional.of(new ItemAviso(PlanoBSemLlm.AVISO_RELATORIO_DESCARTADO));   // o relatório se foi: não é um cartão fechado
+            }
             return Optional.of(new ItemAviso(llm.disponivel() ? PlanoBSemLlm.AVISO_CARTAO_FECHADO_COM_MODELO
                     : PlanoBSemLlm.AVISO_CARTAO_FECHADO));
         }

@@ -158,6 +158,9 @@ public class LoopDoAgente {
     public static final Set<String> FRASES_DO_SERVIDOR = Set.of(FRASE_FIXA, FRASE_DO_LIMITE, FRASE_DA_FALHA, FRASE_DO_PRAZO,
             FRASE_SEM_RESPOSTA, FRASE_FIXA_NO_CHAT, FRASE_DO_LIMITE_NO_CHAT, FRASE_DA_FALHA_NO_CHAT, FRASE_DO_PRAZO_NO_CHAT,
             FRASE_SEM_RESPOSTA_NO_CHAT, TEXTO_NAO_ENCONTREI, FRASE_SEM_CONSULTA);
+    /** A nota do prompt do turno quando o relatório mais novo da conversa foi descartado (pela tela, ou por ter ficado parado). */
+    public static final String NOTA_DO_RELATORIO_DESCARTADO = "O relatório desta conversa foi descartado. Ele não segue mais: nunca diga "
+            + "que está aberto nem que pode ser retomado. Se a pessoa quiser, comece outro com relatorio_iniciar.";
     public static final String ERRO_DO_LIMITE = "Limite de chamadas de ferramenta deste turno atingido. Não chame mais ferramentas.";
     public static final String ERRO_DA_DIRETA_JA_MOSTRADA = "O servidor já mostrou uma resposta direta neste turno e esta ferramenta não está "
             + "mais disponível. Responda o resto com texto, sem repetir o que já foi mostrado.";
@@ -671,18 +674,28 @@ public class LoopDoAgente {
     /**
      * O prompt de sistema com a data de hoje e o nome da marca; id de parceria, conversa ou usuário nunca entra. Se um documento que
      * a conversa já citou foi revogado ou substituído, o prompt do turno ganha a nota "<título> v<n> não vale mais: não use o que foi
-     * dito dele" (a lista vem de {@code atlas_fonte} e do estado de agora dos documentos; a nota não é gravada em lugar nenhum).
+     * dito dele" (a lista vem de {@code atlas_fonte} e do estado de agora dos documentos; a nota não é gravada em lugar nenhum). Com o
+     * relatório ligado, se o relatório mais novo da conversa foi descartado (e portanto nenhum está em andamento), ganha também
+     * {@link #NOTA_DO_RELATORIO_DESCARTADO}: sem ela, o modelo lê o histórico, que não mostra o descarte de um relatório em montagem,
+     * e diz que o relatório está aberto.
      */
     private String promptDe(AtlasContexto contexto) {
         String base = prompt.replace("@DATA@", DIA.format(Datas.hoje())).replace("@MARCA@", repositorio.nomeDaMarca(contexto.parceriaId()));
         List<AtlasRepositorio.DocumentoRetirado> retirados = repositorio.documentosCitadosQueSairamDoAr(contexto.conversaId());
-        if (retirados.isEmpty()) {
+        boolean descartado = modo.relatorioLigado() && repositorio.ultimoRelatorioDescartado(contexto.conversaId());
+        if (retirados.isEmpty() && !descartado) {
             return base;
         }
-        StringBuilder nota = new StringBuilder(base).append("\n\nDocumentos que esta conversa já citou e que mudaram:");
-        for (AtlasRepositorio.DocumentoRetirado documento : retirados) {
-            nota.append("\n- ").append(documento.titulo()).append(" v").append(documento.versao())
-                    .append(" não vale mais: não use o que foi dito dele.");
+        StringBuilder nota = new StringBuilder(base);
+        if (descartado) {
+            nota.append("\n\n").append(NOTA_DO_RELATORIO_DESCARTADO);
+        }
+        if (!retirados.isEmpty()) {
+            nota.append("\n\nDocumentos que esta conversa já citou e que mudaram:");
+            for (AtlasRepositorio.DocumentoRetirado documento : retirados) {
+                nota.append("\n- ").append(documento.titulo()).append(" v").append(documento.versao())
+                        .append(" não vale mais: não use o que foi dito dele.");
+            }
         }
         return nota.toString();
     }

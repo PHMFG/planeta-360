@@ -17,6 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import br.com.rbs.portal.acesso.SessaoDeApi;
 import br.com.rbs.portal.atlas.contexto.AtlasContexto;
 import br.com.rbs.portal.atlas.contexto.AtlasContextoFabrica;
+import br.com.rbs.portal.atlas.loop.DescarteDeRelatorios;
 import br.com.rbs.portal.atlas.loop.LoopDoAgente;
 import br.com.rbs.portal.atlas.loop.PlanoBSemLlm;
 import br.com.rbs.portal.atlas.loop.TetoDiario;
@@ -62,6 +63,9 @@ class AtlasSoChatTest {
 
     @Autowired
     PlanoBSemLlm planoB;
+
+    @Autowired
+    DescarteDeRelatorios descarte;
 
     @Autowired
     AtlasContextoFabrica fabrica;
@@ -348,6 +352,24 @@ class AtlasSoChatTest {
         assertThat(jdbc.sql("SELECT status FROM atlas_solicitacao WHERE id = :s").param("s", solicitacao).query(String.class).single())
                 .isEqualTo("CANCELADA");
         assertThat(lerLista(pessoa.get("/api/atlas/conversas/" + conversa), "$.itens[*].tipo")).containsExactly("usuario", "texto", "usuario", "texto");
+    }
+
+    @Test
+    void conversaAntigaComRelatorioDescartadoNaoGanhaANotaDoDescarteNemOAviso() {
+        SessaoDeApi pessoa = entrar(AMARELO);
+        long conversa = conversaAntigaComCartao();
+        // a rota 65 não existe no só chat, mas a conversa antiga pode ter sido descartada quando o relatório estava ligado
+        long relatorio = jdbc.sql("SELECT id FROM atlas_relatorio WHERE conversa_id = :c").param("c", conversa).query(Long.class).single();
+        assertThat(descarte.descartarDaTela(relatorio, usuario(jdbc, AMARELO), requisicao())).isTrue();
+        modelo.texto("Posso responder perguntas sobre a parceria.");
+
+        MvcTestResult turno = falar(pessoa, conversa, "E o relatório?");
+
+        assertThat(turno).hasStatus(HttpStatus.OK);
+        // só chat: o prompt é o de sempre, sem a nota do relatório descartado, e a conversa não ganha aviso
+        assertThat(modelo.ultimoPedido().mensagens().get(0).conteudo()).isEqualTo(ApoioDosPrompts.esperado(false, "Cliente Amarelo"));
+        assertThat(lerLista(turno, "$.itens[*].tipo")).containsExactly("usuario", "texto");
+        assertThat(lerLista(pessoa.get("/api/atlas/conversas/" + conversa), "$.itens[*].tipo")).doesNotContain("aviso", "cartao");
     }
 
     @Test

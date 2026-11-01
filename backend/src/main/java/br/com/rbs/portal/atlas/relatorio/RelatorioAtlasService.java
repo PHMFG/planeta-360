@@ -71,6 +71,8 @@ public class RelatorioAtlasService {
     public static final String SOLICITACAO_NAO_ENCONTRADA = "Não encontramos esta solicitação.";
     public static final String CARTAO_JA_RESPONDIDO = "Este cartão já foi respondido.";
     public static final String INFORME_ESTE_NUMERO = "Informe este número.";
+    /** O campo que a resposta do cartão ganha quando ele foi fechado porque o relatório foi descartado, e não porque a pessoa o cancelou. */
+    public static final String RELATORIO_DESCARTADO = "relatorioDescartado";
 
     /** As três respostas do cartão, com os mesmos nomes do formulário de elicitação do MCP (minúsculas no JSON). */
     public enum AcaoDoCartao {
@@ -126,6 +128,19 @@ public class RelatorioAtlasService {
             Map<String, Object> corpo = new LinkedHashMap<>();
             corpo.put("acao", acao.nome());
             corpo.put("campos", campos);
+            return AtlasJson.escrever(corpo);
+        }
+
+        /**
+         * A resposta de um cartão fechado porque o relatório foi descartado: o {@code cancel} de sempre, com
+         * {@code "relatorioDescartado": true}. Sem isso o histórico fingiria um cancelamento comum, e o modelo diria que o relatório
+         * continua aberto.
+         */
+        public String resultadoDoDescarteJson() {
+            Map<String, Object> corpo = new LinkedHashMap<>();
+            corpo.put("acao", acao.nome());
+            corpo.put("campos", campos);
+            corpo.put(RELATORIO_DESCARTADO, true);
             return AtlasJson.escrever(corpo);
         }
     }

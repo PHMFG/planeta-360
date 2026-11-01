@@ -23,7 +23,9 @@ import tools.jackson.core.type.TypeReference;
 /**
  * O descarte do relatório. [ATLAS] Dois caminhos, o mesmo miolo ({@link #descartar}): o relatório MONTANDO ou AGUARDANDO_RESPOSTA vira
  * DESCARTADO, o cartão pendente dele vira CANCELADA e a chamada de ferramenta que o cartão deixou aberta é fechada com
- * {@code cancel} na própria conversa, para o histórico não ficar com uma {@code tool_call} sem resposta.
+ * {@code cancel} na própria conversa, para o histórico não ficar com uma {@code tool_call} sem resposta. Essa resposta leva também
+ * {@code "relatorioDescartado": true}: é o que o modelo lê para não tratá-la como um cancelamento comum e dizer que o relatório
+ * segue aberto (a nota do prompt do turno, no {@link LoopDoAgente}, cobre o relatório descartado que não tinha cartão).
  * <ul>
  *   <li><b>O que ficou parado</b> ({@link #varrer}): sem nenhuma mensagem nova há mais de {@value #DIAS_PARADO} dias. Conferido
  *       quando a pessoa lista ou abre as conversas (não há tarefa agendada).</li>
@@ -89,7 +91,7 @@ public class DescarteDeRelatorios {
             if ("PENDENTE".equals(cartao.status())) {
                 repositorio.responderSolicitacao(cartao.id(), "CANCELADA");
                 String resultado = new RespostaDoCartao(cartao.id(), relatorioId, cartao.toolCallId(), AcaoDoCartao.CANCEL, List.of())
-                        .resultadoJson();
+                        .resultadoDoDescarteJson();
                 historico.resultado(conversaId, cartao.toolCallId(), resultado);
                 repositorio.concluirChamada(conversaId, cartao.toolCallId(), "relatorio_solicitar_campos", resultado);
             }
