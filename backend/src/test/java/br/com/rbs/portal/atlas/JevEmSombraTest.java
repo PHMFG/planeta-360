@@ -228,6 +228,36 @@ class JevEmSombraTest {
     }
 
     @Test
+    void lacunasECoerenciaEmSombraNaoMudamOCartaoNemOTextoDoRelatorio() {
+        String todosOsCampos = AtlasJson.escrever(Map.of("mensagem", "Preciso destes números.", "campos",
+                List.of(ApoioDoAtlas.VISITANTES, ApoioDoAtlas.CADASTROS, ApoioDoAtlas.DISPONIVEIS, ApoioDoAtlas.DISTRIBUIDOS)));
+        String edicao = AtlasJson.escrever(Map.of("operacoes", List.of(
+                Map.of("op", "definir_texto", "bloco", "b-resumo", "texto", JevCoerenciaTest.SUPEROU),
+                Map.of("op", "definir_texto", "bloco", "b-publico", "texto", JevCoerenciaTest.PUBLICO_OK))));
+        long conversa = semDiferenca("relatório",
+                j -> j.intencao("outro", 0.9).lacunas(estado -> 0.01).coerencia("incoerente", 0.99),
+                m -> m.chamada("relatorio_iniciar", LoopDoAgenteTest.ARGS_INICIAR).chamada("relatorio_solicitar_campos", todosOsCampos)
+                        .chamada("relatorio_editar", edicao).chamada("relatorio_finalizar", "{}"),
+                () -> {
+                    long nova = conversa();
+                    ConversaDto comCartao = falar(nova, "monta o relatório");
+                    long cartao = comCartao.itens().stream().filter(AtlasDtos.ItemCartao.class::isInstance)
+                            .map(AtlasDtos.ItemCartao.class::cast).findFirst().orElseThrow().solicitacaoId();
+                    // recusa o cartão (decline): nenhum dado informado fica gravado entre uma execução e a outra
+                    return atlas.responderCartao(marca(), cartao, new AtlasDtos.RespostaDoCartaoRequisicao("decline", List.of()), requisicao());
+                });
+
+        List<Map<String, Object>> linhas = jdbc.sql("SELECT d.ponto, d.acao FROM atlas_decisao d JOIN atlas_mensagem m ON m.id = d.mensagem_id "
+                + "WHERE m.conversa_id = :c ORDER BY d.id").param("c", conversa).query().listOfRows();
+        assertThat(linhas.stream().filter(l -> "lacunas".equals(l.get("ponto"))).map(l -> (String) l.get("acao")).toList())
+                .containsExactlyInAnyOrder("teria feito: tirar a lacuna do cartão", "teria feito: tirar a lacuna do cartão");
+        assertThat(linhas.stream().filter(l -> "coerencia".equals(l.get("ponto"))).map(l -> (String) l.get("acao")).toList())
+                .contains("teria feito: recusar o parágrafo e pedir nova redação");
+        assertThat(jdbc.sql("SELECT status FROM atlas_relatorio WHERE conversa_id = :c").param("c", conversa).query(String.class).single())
+                .isEqualTo("PRONTO");
+    }
+
+    @Test
     void emSombraAsDecisoesGravamOModoSombraEOLimiarDoPonto() {
         config.limpar().ligarTodos(ModoDoJev.SOMBRA);
         jev.limpar().intencao("outro", 0.5);

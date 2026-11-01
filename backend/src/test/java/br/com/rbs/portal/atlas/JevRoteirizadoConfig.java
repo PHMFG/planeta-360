@@ -14,8 +14,12 @@ public class JevRoteirizadoConfig {
 
     @Bean
     @Primary
-    JevRoteirizado jevRoteirizado() {
-        return new JevRoteirizado();
+    JevRoteirizado jevRoteirizado(javax.sql.DataSource fonteDeDados) {
+        JevRoteirizado jev = new JevRoteirizado();
+        if (fonteDeDados instanceof com.zaxxer.hikari.HikariDataSource hikari) {
+            jev.medirConexoesCom(() -> hikari.getHikariPoolMXBean() == null ? 0 : hikari.getHikariPoolMXBean().getActiveConnections());
+        }
+        return jev;
     }
 
     @Bean

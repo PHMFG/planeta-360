@@ -9,6 +9,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
@@ -19,12 +20,16 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  */
 public class JevRoteirizado implements ProvedorDeJev {
 
-    /** A requisição que o JEV recebeu e o ponto a que ela pertence (pelo nome das perguntas). */
-    public record Recebida(PontoDoJev ponto, PedidoAoJev pedido, boolean transacaoAberta) {
+    /**
+     * A requisição que o JEV recebeu e o ponto a que ela pertence (pelo nome das perguntas), se havia transação aberta na thread que
+     * chamou e quantas conexões do pool estavam em uso na hora (zero quando o turno não segura conexão enquanto espera o JEV).
+     */
+    public record Recebida(PontoDoJev ponto, PedidoAoJev pedido, boolean transacaoAberta, int conexoesEmUso) {
     }
 
     private final Map<PontoDoJev, Function<PedidoAoJev, RespostaDoJev>> regras = new ConcurrentHashMap<>();
     private final List<Recebida> recebidas = new CopyOnWriteArrayList<>();
+    private volatile Supplier<Integer> conexoesEmUso = () -> 0;
 
     public JevRoteirizado limpar() {
         regras.clear();
@@ -35,6 +40,12 @@ public class JevRoteirizado implements ProvedorDeJev {
     @Override
     public String modelo() {
         return "jev-de-teste";
+    }
+
+    /** De onde vem o número de conexões do pool em uso (o {@code JevRoteirizadoConfig} liga ao Hikari). */
+    public JevRoteirizado medirConexoesCom(Supplier<Integer> conexoesEmUso) {
+        this.conexoesEmUso = conexoesEmUso;
+        return this;
     }
 
     // ---------------------------------------------------------------------
@@ -122,7 +133,7 @@ public class JevRoteirizado implements ProvedorDeJev {
     @Override
     public RespostaDoJev perguntar(PedidoAoJev pedido) {
         PontoDoJev ponto = pontoDe(pedido);
-        recebidas.add(new Recebida(ponto, pedido, TransactionSynchronizationManager.isActualTransactionActive()));
+        recebidas.add(new Recebida(ponto, pedido, TransactionSynchronizationManager.isActualTransactionActive(), conexoesEmUso.get()));
         Function<PedidoAoJev, RespostaDoJev> regra = regras.get(ponto);
         if (regra == null) {
             throw new AssertionError("O JEV roteirizado não tem regra para o ponto " + ponto.nome() + ".");
@@ -164,6 +175,11 @@ public class JevRoteirizado implements ProvedorDeJev {
 
     public List<Recebida> recebidasDe(PontoDoJev ponto) {
         return recebidas.stream().filter(r -> r.ponto() == ponto).toList();
+    }
+
+    /** Em alguma requisição ao JEV o pool tinha uma conexão em uso? (Num teste de um turno só, nunca pode ter.) */
+    public boolean algumaComConexaoEmUso() {
+        return recebidas.stream().anyMatch(r -> r.conexoesEmUso() > 0);
     }
 
     /** Em alguma requisição ao JEV havia uma transação aberta? (Nunca pode haver.) */

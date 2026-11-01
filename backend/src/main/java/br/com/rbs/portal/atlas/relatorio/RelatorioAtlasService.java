@@ -496,6 +496,17 @@ public class RelatorioAtlasService {
      */
     @Transactional
     public ResultadoDaEdicao definirTextos(AtlasContexto contexto, long relatorioId, List<OperacaoDeTexto> operacoes) {
+        return definirTextos(contexto, relatorioId, operacoes, Map.of());
+    }
+
+    /**
+     * O mesmo, com as recusas do JEV (M7, ponto {@code coerencia}), por bloco: o texto que passou na {@link ChecagemDeTexto} mas que o
+     * JEV achou incoerente com os selos do servidor é recusado com o motivo dele, e conta como qualquer recusa: uma nova redação e, na
+     * segunda vez, a frase-modelo. O JEV roda antes, sem transação (esta é a transação do loop); aqui só se aplica o que ele decidiu.
+     */
+    @Transactional
+    public ResultadoDaEdicao definirTextos(AtlasContexto contexto, long relatorioId, List<OperacaoDeTexto> operacoes,
+                                           Map<String, String> recusasDoJev) {
         LinhaDeRelatorio relatorio = relatorioDoContexto(contexto, relatorioId, true);
         Especificacao original = ler(relatorio);
         verificador.exigirAbaLiberada(contexto.usuario(), contexto.parceriaId(), original.aba());
@@ -514,6 +525,9 @@ public class RelatorioAtlasService {
                 continue;
             }
             Veredito veredito = checagem.paragrafo(resolucao, operacao.texto());
+            if (veredito.aprovado() && recusasDoJev.containsKey(paragrafo.id())) {
+                veredito = Veredito.recusado(recusasDoJev.get(paragrafo.id()));
+            }
             if (veredito.aprovado()) {
                 especificacao = especificacao.comTexto(paragrafo.id(), veredito.texto(), "ATLAS");
                 resultados.add(new ResultadoDaOperacao(i, paragrafo.id(), "aplicada", null));
@@ -534,6 +548,20 @@ public class RelatorioAtlasService {
         List<String> semTexto = especificacao.redigiveis().stream().filter(p -> p.texto() == null || p.texto().isBlank())
                 .map(Especificacao.Paragrafo::id).toList();
         return new ResultadoDaEdicao(relatorioId, resultados, semTexto);
+    }
+
+    /**
+     * Os selos do servidor do relatório em montagem ("Comprovadas: abaixo do previsto"), calculados em código com os números de agora
+     * (veja {@link SelosDoRelatorio}); vazio quando o relatório não tem nenhum. É o que o ponto {@code coerencia} do JEV lê antes de
+     * {@code relatorio_editar}. Não confere permissão: o contexto já foi conferido.
+     */
+    @Transactional(readOnly = true)
+    public List<String> selosDoRelatorio(AtlasContexto contexto, long relatorioId) {
+        LinhaDeRelatorio relatorio = relatorioDoContexto(contexto, relatorioId, false);
+        Especificacao especificacao = ler(relatorio);
+        SnapshotDto montado = montador.montar(especificacao,
+                resolvedor.abrirDoRelatorio(contexto.usuario(), contexto.parceriaId(), especificacao, relatorioId));
+        return SelosDoRelatorio.frases(montado.secoes());
     }
 
     // ---------------------------------------------------------------------
