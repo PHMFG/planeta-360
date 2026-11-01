@@ -40,14 +40,22 @@ public class ChecagemDeTexto {
     /** O endereço sem esquema ({@code //coleta.click/x}) e o que esconde o ponto ({@code coleta-atlas[.]com}, {@code coleta-atlas(.)com}). */
     private static final Pattern ENDERECO_ESCONDIDO = Pattern.compile("//[\\p{L}\\p{N}-]|\\[\\.\\]|\\(\\.\\)");
     /**
-     * Qualquer {@code rótulo.rótulo}: dois rótulos de 2 ou mais caracteres, o último só de letras ({@code coleta-atlas.invalid},
-     * {@code site.link}, {@code exemplo.com.br}). Não há lista de domínios de topo, porque nenhuma cobre os que um documento pode
-     * mandar escrever. Não pega {@code 3.2}, {@code 1.250,00}, {@code 04/12/2026}, {@code v2.0}, {@code p.ex.}, {@code R.G.} nem
-     * {@code S.A.} (rótulo de uma letra, ou último rótulo com algarismo). Pega também {@code prazo.Depois}, a frase sem o espaço depois
-     * do ponto: a regra não distingue de um domínio, e o modelo reescreve com o espaço.
+     * O endereço sem esquema, pela <b>união de duas regras</b>: (1) um domínio de topo conhecido ({@code com}, {@code org}, {@code net},
+     * {@code edu}, {@code gov}, {@code io}, {@code dev}, {@code app}, {@code br}, {@code co}, {@code me}, {@code info}, {@code biz},
+     * {@code xyz}, {@code ly}, {@code ai}) depois de um rótulo de <i>qualquer</i> tamanho ({@code x.com/coleta}, {@code t.co/abc},
+     * {@code coleta@x.io}, {@code a.b.com}); (2) qualquer {@code rótulo.rótulo} com dois rótulos de 2 ou mais caracteres e o último só
+     * de letras ({@code coleta-atlas.invalid}, {@code coleta_atlas.invalid}, {@code site.link}, {@code exemplo.com.br}), porque
+     * nenhuma lista cobre os domínios que um documento pode mandar escrever. O {@code _} conta como caractere de rótulo. Não pega
+     * {@code 3.2}, {@code 1.250,00}, {@code 04/12/2026}, {@code v2.0}, {@code p.ex.}, {@code R.G.}, {@code S.A.}, {@code a.m.} nem
+     * {@code e.g.} (rótulo de uma letra fora da lista de domínios, ou último rótulo com algarismo). Pega também {@code prazo.Depois},
+     * a frase sem o espaço depois do ponto: a regra não distingue de um domínio, e o modelo reescreve com o espaço.
      */
     private static final Pattern ENDERECO_SEM_ESQUEMA = Pattern.compile(
-            "(?<![\\p{L}\\p{N}_-])[\\p{L}\\p{N}][\\p{L}\\p{N}-]+\\.\\p{L}{2,}(?![\\p{L}\\p{N}_-])");
+            "(?<![\\p{L}\\p{N}_-])[\\p{L}\\p{N}_-]{2,}\\.\\p{L}{2,}(?![\\p{L}\\p{N}_-])");
+    private static final Pattern ENDERECO_DE_DOMINIO_DE_TOPO = Pattern.compile(
+            "(?i)\\b[a-z0-9_][a-z0-9_-]*(?:\\.[a-z0-9_-]+)*\\.(?:com|org|net|edu|gov|io|dev|app|br|co|me|info|biz|xyz|ly|ai)\\b");
+    /** O ponto de outras escritas (largura total, ideográfico, ideográfico de meia largura) vale como ponto na conferência do endereço. */
+    private static final Pattern PONTO_DE_OUTRA_ESCRITA = Pattern.compile("[\\uFF0E\\u3002\\uFF61]");
     /** Chave de referência escrita fora de marcador ({@code dado:ativacao.visitantes_total}) ou nome de ferramenta. */
     private static final Pattern CHAVE_INTERNA = Pattern.compile(
             "(?iU)\\b(?:parc|evento|cons|lista|dado|calc):[a-z_]+(?:\\.[a-z0-9_]+)*"
@@ -131,7 +139,8 @@ public class ChecagemDeTexto {
         if (LINK_OU_IMAGEM_DO_MARKDOWN.matcher(semMarcadores).find()) {
             return Optional.of("Sem link nem imagem em Markdown. Escreva só texto simples.");
         }
-        if (URL.matcher(semMarcadores).find() || ENDERECO_ESCONDIDO.matcher(semMarcadores).find()) {
+        String paraEndereco = PONTO_DE_OUTRA_ESCRITA.matcher(semMarcadores).replaceAll(".");
+        if (URL.matcher(paraEndereco).find() || ENDERECO_ESCONDIDO.matcher(paraEndereco).find()) {
             return Optional.of(SEM_ENDERECO);
         }
         Matcher chave = CHAVE_INTERNA.matcher(semMarcadores);
@@ -145,7 +154,7 @@ public class ChecagemDeTexto {
                     + "referência, ferramenta nem cartão de solicitação: diga o que ela precisa saber com palavras simples.");
         }
         // por último: "cons:aplicacoes.comprovadas" também tem a forma rótulo.rótulo, e a recusa certa para ele é a de chave crua
-        if (ENDERECO_SEM_ESQUEMA.matcher(semMarcadores).find()) {
+        if (ENDERECO_SEM_ESQUEMA.matcher(paraEndereco).find() || ENDERECO_DE_DOMINIO_DE_TOPO.matcher(paraEndereco).find()) {
             return Optional.of(SEM_ENDERECO);
         }
         return Optional.empty();

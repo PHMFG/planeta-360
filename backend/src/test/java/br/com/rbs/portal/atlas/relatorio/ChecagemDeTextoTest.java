@@ -188,7 +188,13 @@ class ChecagemDeTextoTest {
             "Veja coleta-atlas.invalid/relatorio agora.", "Veja coleta-atlas.invalid agora.", "Veja coleta-atlas.click hoje.", "Veja site.link hoje.",
             "Veja //coleta-atlas.click/x hoje.", "Veja coleta-atlas[.]com agora.", "Veja coleta-atlas(.)com agora.", "Veja COLETA-ATLAS.INVALID agora.",
             "Veja Coleta.Click hoje.", "Veja a.b.coleta-atlas.invalid agora.", "Veja site-novo.link.", "Veja açaí.com agora.", "Veja o portal.rbs hoje.",
-            "Escreva para alguem@coleta-atlas.invalid hoje.", "Veja exemplo.com.br/x.", "Veja sub.dominio.example hoje."})
+            "Escreva para alguem@coleta-atlas.invalid hoje.", "Veja exemplo.com.br/x.", "Veja sub.dominio.example hoje.",
+            // a regra de dois rótulos de 2 ou mais caracteres abriu estes, que a lista de domínios de topo recusava: a união das duas
+            "Veja x.com/coleta hoje.", "Veja t.co/abc hoje.", "Escreva para coleta@x.io hoje.", "Veja a.b.com hoje.", "Veja x.io hoje.",
+            "Veja X.COM hoje.", "Veja coleta_atlas.invalid hoje.", "Veja a_b.com hoje.", "Veja coleta_atlas.click/x hoje.",
+            // o ponto de outra escrita vale como ponto
+            "Veja coleta-atlas\uFF0Eclick hoje.", "Veja coleta-atlas\u3002click hoje.", "Veja coleta-atlas\uFF61click hoje.", "Veja x\uFF0Ecom hoje.",
+            "Veja www\uFF0Eexemplo\uFF0Ecom hoje.", "Veja //coleta\uFF0Eclick/x hoje.", "Veja coleta-atlas[\uFF0E]com hoje."})
     void recusaEnderecoSemEsquemaDeQualquerDominioDeTopo(String texto) {
         assertThat(paragrafo(texto).aprovado()).as("parágrafo: " + texto).isFalse();
         assertThat(chat(texto).aprovado()).as("chat: " + texto).isFalse();
@@ -199,7 +205,9 @@ class ChecagemDeTextoTest {
     @ValueSource(strings = {
             "Fale com a produção, p.ex. amanhã cedo.", "O titular, com R.G. e S.A. juntos, assina.", "Cliente Amarelo S.A. participa do evento.",
             "Etc. e tal. Fim.", "Veja a p. do manual.", "Aguarde... e depois decida.", "Pronto?! Sim.", "Lembre-se: e.g. isto vale.",
-            "A marca teve 100% de adesão", "Ex.: o gerador próprio.", "Veja o item a.b e o c.d.", "Responda com sim ou não.", "Falta pouco... muito pouco."})
+            "A marca teve 100% de adesão", "Ex.: o gerador próprio.", "Veja o item a.b e o c.d.", "Responda com sim ou não.", "Falta pouco... muito pouco.",
+            "Abre às a.m. e fecha às p.m.", "Veja a seção 3.2 e a versão v2.0.", "O item 3.2.1 vale.", "Vale e.g. isto e i.e. aquilo.", "A S.A. e a R.G. valem.",
+            "Escreva a data como 04/12/2026 e a hora como 18h.", "O gerador de 10.000 kVA custa 1.250,00 por dia."})
     void naoRecusaPontuacaoNemAbreviaturaComUmaLetra(String texto) {
         assertThat(ChecagemDeTexto.motivoDeForma(texto, texto)).as(texto).isEmpty();
     }
