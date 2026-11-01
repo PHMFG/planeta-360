@@ -111,9 +111,14 @@ atlas:
     modelo: gemini-embedding-2
     base-url: ${ATLAS_GEMINI_BASE_URL:https://generativelanguage.googleapis.com}
     chave: ${GEMINI_API_KEY:}
-    # Quanto esperar antes de tentar de novo depois de um 429 do Gemini (cresce a cada tentativa; o Retry-After, se vier, vale). Só a
-    # ingestão dos documentos espera: a pergunta de um turno faz uma tentativa só.
+    # Quanto esperar antes de tentar de novo depois de um 429 do Gemini que não diz quanto esperar (cresce a cada tentativa). Quando diz,
+    # vale o que ele diz: o retryDelay do corpo do 429 (o Retry-After é a reserva). Só a ingestão dos documentos espera: a pergunta de um
+    # turno faz uma tentativa só.
     espera-no-429: PT5S
+    # A maior espera que a ingestão aceita no 429, e por isso o corte entre os dois limites do Gemini gratuito: até aqui é o limite por minuto
+    # (espera o que ele pediu mais 1 s e tenta de novo, até 6 tentativas por lote); acima é o limite do dia (1.000 por dia, renova em horas):
+    # o documento vai para ERRO na hora, sem esperar, com "A cota do dia do Gemini acabou; ...".
+    espera-maxima-no-429: PT90S
     # O tempo total que o embedding da pergunta tem para o Gemini responder (uma tentativa, sem esperar no 429 nem nos 5xx). Estourou
     # ou falhou: a busca segue só com a lista textual (EMBEDDING_FALHOU).
     limite-da-consulta: PT5S

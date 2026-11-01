@@ -97,15 +97,36 @@ class EmbeddingsDeTesteTest {
         ConfiguracaoDeProvedores config = new ConfiguracaoDeProvedores("", "", "", "none", "chave-do-gemini", "http://localhost:1", "gemini-embedding-2");
         EmbeddingsConfig escolha = new EmbeddingsConfig();
 
-        assertThat(escolha.provedorDeEmbeddings(config, "gemini", Duration.ZERO, Duration.ofSeconds(5))).isInstanceOf(EmbeddingsGemini.class);
-        assertThat(escolha.provedorDeEmbeddings(config, " TESTE ", Duration.ZERO, Duration.ofSeconds(5))).isInstanceOf(EmbeddingsDeTeste.class);
-        assertThat(escolha.provedorDeEmbeddings(config, "none", Duration.ZERO, Duration.ofSeconds(5))).isInstanceOf(EmbeddingsDesligado.class);
-        assertThat(escolha.provedorDeEmbeddings(config, "", Duration.ZERO, Duration.ofSeconds(5))).isInstanceOf(EmbeddingsDesligado.class);
-        assertThat(escolha.provedorDeEmbeddings(config, "inventado", Duration.ZERO, Duration.ofSeconds(5))).as("erro de digitação não derruba a API")
+        Duration cinco = Duration.ofSeconds(5);
+        Duration noventa = Duration.ofSeconds(90);
+        assertThat(escolha.provedorDeEmbeddings(config, "gemini", Duration.ZERO, cinco, noventa)).isInstanceOf(EmbeddingsGemini.class);
+        assertThat(escolha.provedorDeEmbeddings(config, " TESTE ", Duration.ZERO, cinco, noventa)).isInstanceOf(EmbeddingsDeTeste.class);
+        assertThat(escolha.provedorDeEmbeddings(config, "none", Duration.ZERO, cinco, noventa)).isInstanceOf(EmbeddingsDesligado.class);
+        assertThat(escolha.provedorDeEmbeddings(config, "", Duration.ZERO, cinco, noventa)).isInstanceOf(EmbeddingsDesligado.class);
+        assertThat(escolha.provedorDeEmbeddings(config, "inventado", Duration.ZERO, cinco, noventa)).as("erro de digitação não derruba a API")
                 .isInstanceOf(EmbeddingsDesligado.class);
-        assertThat(escolha.provedorDeEmbeddings(config, "gemini", Duration.ZERO, Duration.ofSeconds(5)).ligado()).isTrue();
+        assertThat(escolha.provedorDeEmbeddings(config, "gemini", Duration.ZERO, cinco, noventa).ligado()).isTrue();
         ConfiguracaoDeProvedores semChave = new ConfiguracaoDeProvedores("", "", "", "none", "", "http://localhost:1", "gemini-embedding-2");
-        assertThat(escolha.provedorDeEmbeddings(semChave, "gemini", Duration.ZERO, Duration.ofSeconds(5)).ligado()).isFalse();
+        assertThat(escolha.provedorDeEmbeddings(semChave, "gemini", Duration.ZERO, cinco, noventa).ligado()).isFalse();
+    }
+
+    @Test
+    void aEsperaMaximaDaConfiguracaoChegaAoClienteDoGemini() {
+        try (var servidor = br.com.rbs.portal.atlas.diagnostico.ServidorHttpFalso.iniciar()) {
+            String limite = "{\"error\":{\"details\":[{\"@type\":\"type.googleapis.com/google.rpc.RetryInfo\",\"retryDelay\":\"%s\"}]}}";
+            servidor.responder(429, limite.formatted("30s"));
+            ConfiguracaoDeProvedores config = new ConfiguracaoDeProvedores("", "", "", "none", "chave-do-gemini", servidor.urlBase(), "gemini-embedding-2");
+            // com a espera máxima de 10 s, um retryDelay de 30 s já é a cota do dia: falha na hora, sem esperar
+            ProvedorDeEmbeddings gemini = new EmbeddingsConfig().provedorDeEmbeddings(config, "gemini", Duration.ZERO, Duration.ofSeconds(5),
+                    Duration.ofSeconds(10));
+
+            long inicio = System.nanoTime();
+            assertThatThrownBy(() -> gemini.paraTrechos("Titulo", List.of(new ProvedorDeEmbeddings.TextoDoTrecho(null, "texto"))))
+                    .isInstanceOf(EmbeddingsIndisponivelException.class).hasMessageContaining("cota do dia");
+
+            assertThat(Duration.ofNanos(System.nanoTime() - inicio)).isLessThan(Duration.ofSeconds(2));
+            assertThat(servidor.recebidas()).hasSize(1);
+        }
     }
 
     @Test
@@ -113,7 +134,8 @@ class EmbeddingsDeTesteTest {
         try (var servidor = br.com.rbs.portal.atlas.diagnostico.ServidorHttpFalso.iniciar()) {
             servidor.responderDepoisDe(Duration.ofSeconds(3), 200, "{}");
             ConfiguracaoDeProvedores config = new ConfiguracaoDeProvedores("", "", "", "none", "chave-do-gemini", servidor.urlBase(), "gemini-embedding-2");
-            ProvedorDeEmbeddings gemini = new EmbeddingsConfig().provedorDeEmbeddings(config, "gemini", Duration.ZERO, Duration.ofMillis(300));
+            ProvedorDeEmbeddings gemini = new EmbeddingsConfig().provedorDeEmbeddings(config, "gemini", Duration.ZERO, Duration.ofMillis(300),
+                    Duration.ofSeconds(90));
 
             long inicio = System.nanoTime();
             assertThatThrownBy(() -> gemini.paraConsulta("p")).isInstanceOf(EmbeddingsIndisponivelException.class).hasMessageContaining("não respondeu");

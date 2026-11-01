@@ -24,10 +24,11 @@ public class EmbeddingsConfig {
     ProvedorDeEmbeddings provedorDeEmbeddings(ConfiguracaoDeProvedores config,
                                               @Value("${atlas.embeddings.provedor:none}") String provedor,
                                               @Value("${atlas.embeddings.espera-no-429:PT5S}") Duration esperaNo429,
-                                              @Value("${atlas.embeddings.limite-da-consulta:PT5S}") Duration limiteDaConsulta) {
+                                              @Value("${atlas.embeddings.limite-da-consulta:PT5S}") Duration limiteDaConsulta,
+                                              @Value("${atlas.embeddings.espera-maxima-no-429:PT90S}") Duration esperaMaximaNo429) {
         return switch (provedor == null ? "" : provedor.strip().toLowerCase(Locale.ROOT)) {
             case "gemini" -> new EmbeddingsGemini(config.geminiBaseUrl(), config.geminiChave(), config.geminiModelo(),
-                    ProvedorDeEmbeddings.DIMENSOES, esperaNo429, limiteDaConsulta);
+                    ProvedorDeEmbeddings.DIMENSOES, esperaNo429, limiteDaConsulta, esperaMaximaNo429);
             case "teste" -> new EmbeddingsDeTeste();
             case "none", "" -> new EmbeddingsDesligado();
             default -> {

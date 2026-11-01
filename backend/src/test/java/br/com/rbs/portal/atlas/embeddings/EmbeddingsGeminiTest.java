@@ -180,14 +180,14 @@ class EmbeddingsGeminiTest {
     }
 
     @Test
-    void seO429NaoPassaDepoisDe4TentativasNaIngestaoOErroDizOLimiteDeUso() {
-        for (int i = 0; i < 6; i++) {
+    void seO429NaoPassaDepoisDe6TentativasNaIngestaoOErroDizOLimiteDeUso() {
+        for (int i = 0; i < 8; i++) {
             servidor.responder(429, "{\"error\":{\"message\":\"Resource has been exhausted\"}}");
         }
 
         assertThatThrownBy(() -> gemini.paraTrechos("Titulo", trechos(1))).isInstanceOf(EmbeddingsIndisponivelException.class)
-                .hasMessage("O Gemini recusou por limite de uso (429) mesmo depois de 4 tentativas.");
-        assertThat(servidor.recebidas()).hasSize(4);
+                .hasMessage("O Gemini recusou por limite de uso (429) mesmo depois de 6 tentativas.");
+        assertThat(servidor.recebidas()).hasSize(6);
     }
 
     @Test
@@ -205,11 +205,248 @@ class EmbeddingsGeminiTest {
         servidor.responder(200, respostaDoLote(1));
 
         long inicio = System.nanoTime();
-        assertThat(gemini.paraTrechos("Titulo", trechos(1))).hasSize(1);
+        assertThat(comEsperasCurtas().paraTrechos("Titulo", trechos(1))).hasSize(1);
         Duration gasto = Duration.ofNanos(System.nanoTime() - inicio);
 
         assertThat(servidor.recebidas()).hasSize(2);
-        assertThat(gasto).as("a ingestão espera o Retry-After de 1 s").isGreaterThanOrEqualTo(Duration.ofMillis(900));
+        assertThat(gasto).as("a ingestão espera o Retry-After de 1 s, mais a folga").isGreaterThanOrEqualTo(Duration.ofMillis(1000));
+    }
+
+    // ---------------------------------------------------------------------
+    // M4: na ingestão, o 429 diz quanto esperar (retryDelay do corpo); espera longa é a cota do dia e falha na hora
+    // ---------------------------------------------------------------------
+
+    private static final String COTA_DO_DIA = "A cota do dia do Gemini acabou; tente de novo depois que ela renovar.";
+
+    /** O corpo real de um 429 do Gemini gratuito (forma conferida em 01/11/2026): a violação da cota e o RetryInfo. */
+    private static String limiteComRetryDelay(String retryDelayEmJson) {
+        return "{\"error\": {\"code\": 429, \"message\": \"You exceeded your current quota...\", \"status\": \"RESOURCE_EXHAUSTED\","
+                + " \"details\": [ {\"@type\": \"type.googleapis.com/google.rpc.QuotaFailure\","
+                + " \"violations\": [{\"quotaMetric\": \"generativelanguage.googleapis.com/embed_content_free_tier_requests\","
+                + " \"quotaId\": \"EmbedContentRequestsPerDayPerUserPerProjectPerModel-FreeTier\", \"quotaValue\": \"1000\"}]},"
+                + " {\"@type\": \"type.googleapis.com/google.rpc.RetryInfo\", \"retryDelay\": " + retryDelayEmJson + "} ]}}";
+    }
+
+    private static String limiteComRetryDelayEmSegundos(String segundos) {
+        return limiteComRetryDelay("\"" + segundos + "\"");
+    }
+
+    /** Um cliente de esperas curtas: sem espera configurada, folga de 50 ms e espera máxima de 2 s (o teste não dorme). */
+    private EmbeddingsGemini comEsperasCurtas() {
+        return comEsperasCurtas(Duration.ZERO, Duration.ofSeconds(2));
+    }
+
+    private EmbeddingsGemini comEsperasCurtas(Duration esperaNo429, Duration esperaMaxima) {
+        return new EmbeddingsGemini(servidor.urlBase(), CHAVE, "gemini-embedding-2", 768, esperaNo429, Duration.ofSeconds(5),
+                esperaMaxima, Duration.ofMillis(50));
+    }
+
+    @Test
+    void oRetryDelayCurtoDoCorpoEsperaEssePoucoMaisAFolgaETentaDeNovo() {
+        servidor.responder(429, limiteComRetryDelayEmSegundos("0.4s"));
+        servidor.responder(200, respostaDoLote(1));
+        EmbeddingsGemini cliente = new EmbeddingsGemini(servidor.urlBase(), CHAVE, "gemini-embedding-2", 768, Duration.ZERO,
+                Duration.ofSeconds(5), Duration.ofSeconds(2), Duration.ofMillis(100));
+
+        long inicio = System.nanoTime();
+        assertThat(cliente.paraTrechos("Titulo", trechos(1))).hasSize(1);
+        Duration gasto = Duration.ofNanos(System.nanoTime() - inicio);
+
+        assertThat(servidor.recebidas()).hasSize(2);
+        assertThat(gasto).as("0,4 s do retryDelay mais 0,1 s de folga, e não a espera configurada (zero)")
+                .isGreaterThanOrEqualTo(Duration.ofMillis(490)).isLessThan(Duration.ofSeconds(3));
+    }
+
+    @Test
+    void oRetryDelayDoDiaFalhaNaHoraComUmaChamadaSoEAMensagemClaraSemOCorpoDoProvedor() {
+        servidor.responder(429, limiteComRetryDelayEmSegundos("2209s"));
+        servidor.responder(200, respostaDoLote(1));
+
+        long inicio = System.nanoTime();
+        assertThatThrownBy(() -> gemini.paraTrechos("Titulo", trechos(1))).isInstanceOf(EmbeddingsIndisponivelException.class)
+                .hasMessage(COTA_DO_DIA);
+        Duration gasto = Duration.ofNanos(System.nanoTime() - inicio);
+
+        assertThat(servidor.recebidas()).as("uma chamada só: não insiste à toa").hasSize(1);
+        assertThat(gasto).as("sem esperar").isLessThan(Duration.ofSeconds(1));
+    }
+
+    @Test
+    void aCotaDoDiaVaiParaOErroSemNadaDoCorpoDoProvedorNemAChave() {
+        servidor.responder(429, "{\"error\":{\"message\":\"Quota exceeded for key " + CHAVE + "\",\"details\":[{\"@type\":"
+                + "\"type.googleapis.com/google.rpc.RetryInfo\",\"retryDelay\":\"2209s\"}]}}");
+
+        assertThatThrownBy(() -> gemini.paraTrechos("Titulo", trechos(1))).isInstanceOf(EmbeddingsIndisponivelException.class)
+                .hasMessage(COTA_DO_DIA).hasMessageNotContaining(CHAVE).hasMessageNotContaining("AIza").hasMessageNotContaining("Quota exceeded");
+    }
+
+    @Test
+    void passaDe90sPorPadraoEACotaDoDia() {
+        // até 90 s ainda espera (91 s com a folga), e este teste não dorme tudo isso: confere só o lado de lá do corte
+        servidor.responder(429, limiteComRetryDelayEmSegundos("91s"));
+        servidor.responder(429, limiteComRetryDelayEmSegundos("90.001s"));
+
+        assertThatThrownBy(() -> gemini.paraTrechos("Titulo", trechos(1))).hasMessage(COTA_DO_DIA);
+        assertThatThrownBy(() -> gemini.paraTrechos("Titulo", trechos(1))).hasMessage(COTA_DO_DIA);
+        assertThat(servidor.recebidas()).hasSize(2);
+    }
+
+    @Test
+    void aEsperaMaximaEConfiguravelEIgualAEsperaMaximaAindaEspera() {
+        EmbeddingsGemini cliente = comEsperasCurtas(Duration.ZERO, Duration.ofMillis(300));
+        servidor.responder(429, limiteComRetryDelayEmSegundos("0.3s"));
+        servidor.responder(200, respostaDoLote(1));
+        assertThat(cliente.paraTrechos("Titulo", trechos(1))).hasSize(1);
+        assertThat(servidor.recebidas()).as("0,3 s não passa de 0,3 s: espera").hasSize(2);
+
+        servidor.limpar();
+        servidor.responder(429, limiteComRetryDelayEmSegundos("0.4s"));
+        servidor.responder(200, respostaDoLote(1));
+        assertThatThrownBy(() -> cliente.paraTrechos("Titulo", trechos(1))).hasMessage(COTA_DO_DIA);
+        assertThat(servidor.recebidas()).as("0,4 s passa de 0,3 s: é a cota do dia").hasSize(1);
+    }
+
+    @Test
+    void esperaCurtaNaPrimeiraEDiaNaSegundaFalhaNaSegundaSemMaisEspera() {
+        servidor.responder(429, limiteComRetryDelayEmSegundos("0.1s"));
+        servidor.responder(429, limiteComRetryDelayEmSegundos("2209s"));
+        servidor.responder(200, respostaDoLote(1));
+
+        assertThatThrownBy(() -> comEsperasCurtas().paraTrechos("Titulo", trechos(1))).hasMessage(COTA_DO_DIA);
+        assertThat(servidor.recebidas()).hasSize(2);
+    }
+
+    @Test
+    void asSeisTentativasSaoPorLoteERetryDelayCurtoNaoMudaOTotal() {
+        for (int i = 0; i < 8; i++) {
+            servidor.responder(429, limiteComRetryDelayEmSegundos("0s"));
+        }
+
+        assertThatThrownBy(() -> comEsperasCurtas().paraTrechos("Titulo", trechos(1))).isInstanceOf(EmbeddingsIndisponivelException.class)
+                .hasMessage("O Gemini recusou por limite de uso (429) mesmo depois de 6 tentativas.").hasMessageNotContaining(CHAVE);
+        assertThat(servidor.recebidas()).hasSize(6);
+    }
+
+    @Test
+    void cadaLoteTemAsSuasSeisTentativas() {
+        // o 1º lote leva cinco 429 e passa na 6ª; o 2º também: nenhum esgota as suas
+        for (int i = 0; i < 5; i++) {
+            servidor.responder(429, limiteComRetryDelayEmSegundos("0s"));
+        }
+        servidor.responder(200, respostaDoLoteComVetoresDiferentes(0, 50));
+        for (int i = 0; i < 5; i++) {
+            servidor.responder(429, limiteComRetryDelayEmSegundos("0s"));
+        }
+        servidor.responder(200, respostaDoLoteComVetoresDiferentes(50, 10));
+
+        assertThat(comEsperasCurtas().paraTrechos("Titulo", trechos(60))).hasSize(60);
+        assertThat(servidor.recebidas()).hasSize(12);
+    }
+
+    @Test
+    void retryDelayQueNaoPrestaCaiNaEsperaConfiguradaSemExcecaoDeParse() {
+        List<String> corpos = List.of(
+                "isto não é json",
+                "",
+                "[1,2,3]",
+                "null",
+                "{\"error\":42}",
+                "{\"error\":{\"details\":\"x\"}}",
+                "{\"error\":{\"details\":[null,1,\"x\",{\"retryDelay\":null}]}}",
+                limiteComRetryDelay("\"abc\""),
+                limiteComRetryDelay("\"-5s\""),
+                limiteComRetryDelay("\"-0.5s\""),
+                limiteComRetryDelay("\"5\""),
+                limiteComRetryDelay("\"1e3s\""),
+                limiteComRetryDelay("\"s\""),
+                limiteComRetryDelay("\"PT5S\""),
+                limiteComRetryDelay("\"\""),
+                limiteComRetryDelay("5"),
+                limiteComRetryDelay("-5"),
+                limiteComRetryDelay("null"),
+                limiteComRetryDelay("{\"seconds\":5}"));
+        EmbeddingsGemini cliente = comEsperasCurtas(Duration.ofMillis(120), Duration.ofSeconds(2));
+
+        for (String corpo : corpos) {
+            servidor.limpar();
+            servidor.responder(429, corpo);
+            servidor.responder(200, respostaDoLote(1));
+
+            long inicio = System.nanoTime();
+            assertThat(cliente.paraTrechos("Titulo", trechos(1))).as(corpo).hasSize(1);
+            Duration gasto = Duration.ofNanos(System.nanoTime() - inicio);
+
+            assertThat(servidor.recebidas()).as(corpo).hasSize(2);
+            assertThat(gasto).as("a espera configurada de 120 ms, sem folga: " + corpo).isGreaterThanOrEqualTo(Duration.ofMillis(110));
+        }
+    }
+
+    @Test
+    void semRetryDelayNemRetryAfterVaiAEsperaConfiguradaQueCresceATentativa() {
+        servidor.responder(429, LIMITE_DE_USO);
+        servidor.responder(429, LIMITE_DE_USO);
+        servidor.responder(200, respostaDoLote(1));
+        EmbeddingsGemini cliente = comEsperasCurtas(Duration.ofMillis(100), Duration.ofSeconds(2));
+
+        long inicio = System.nanoTime();
+        assertThat(cliente.paraTrechos("Titulo", trechos(1))).hasSize(1);
+        Duration gasto = Duration.ofNanos(System.nanoTime() - inicio);
+
+        assertThat(gasto).as("100 ms na primeira e 200 ms na segunda").isGreaterThanOrEqualTo(Duration.ofMillis(290));
+    }
+
+    @Test
+    void oRetryAfterEAReservaQuandoOCorpoNaoTemRetryDelay() {
+        servidor.responderComCabecalho(429, "isto não é json", "Retry-After", "1");
+        servidor.responder(200, respostaDoLote(1));
+
+        long inicio = System.nanoTime();
+        assertThat(comEsperasCurtas().paraTrechos("Titulo", trechos(1))).hasSize(1);
+        Duration gasto = Duration.ofNanos(System.nanoTime() - inicio);
+
+        assertThat(gasto).isGreaterThanOrEqualTo(Duration.ofMillis(1000));
+    }
+
+    @Test
+    void umRetryAfterDeUmaHoraTambemECotaDoDiaEFalhaNaHora() {
+        servidor.responderComCabecalho(429, "{\"error\":{\"message\":\"Resource has been exhausted\"}}", "Retry-After", "3600");
+        servidor.responder(200, respostaDoLote(1));
+
+        long inicio = System.nanoTime();
+        assertThatThrownBy(() -> gemini.paraTrechos("Titulo", trechos(1))).hasMessage(COTA_DO_DIA);
+        Duration gasto = Duration.ofNanos(System.nanoTime() - inicio);
+
+        assertThat(servidor.recebidas()).hasSize(1);
+        assertThat(gasto).isLessThan(Duration.ofSeconds(1));
+    }
+
+    @Test
+    void oRetryDelayDoCorpoVenceORetryAfter() {
+        servidor.responderComCabecalho(429, limiteComRetryDelayEmSegundos("0.1s"), "Retry-After", "3600");
+        servidor.responder(200, respostaDoLote(1));
+
+        assertThat(comEsperasCurtas().paraTrechos("Titulo", trechos(1))).hasSize(1);
+        assertThat(servidor.recebidas()).hasSize(2);
+    }
+
+    @Test
+    void umRetryAfterQueEUmaDataCaiNaEsperaConfigurada() {
+        servidor.responderComCabecalho(429, "isto não é json", "Retry-After", "Wed, 21 Oct 2026 07:28:00 GMT");
+        servidor.responder(200, respostaDoLote(1));
+
+        assertThat(comEsperasCurtas().paraTrechos("Titulo", trechos(1))).hasSize(1);
+        assertThat(servidor.recebidas()).hasSize(2);
+    }
+
+    @Test
+    void aMensagemDeLimiteDeUsoDaIngestaoNuncaTemAChave() {
+        for (int i = 0; i < 6; i++) {
+            servidor.responder(429, "{\"error\":{\"message\":\"Quota exceeded for key " + CHAVE + "\",\"details\":[{\"retryDelay\":\"0s\"}]}}");
+        }
+
+        assertThatThrownBy(() -> comEsperasCurtas().paraTrechos("Titulo", trechos(1))).isInstanceOf(EmbeddingsIndisponivelException.class)
+                .hasMessage("O Gemini recusou por limite de uso (429) mesmo depois de 6 tentativas.")
+                .hasMessageNotContaining(CHAVE).hasMessageNotContaining("AIza");
     }
 
     // ---------------------------------------------------------------------
@@ -220,7 +457,8 @@ class EmbeddingsGeminiTest {
 
     /** Um cliente cujas esperas da ingestão são longas (2 s por tentativa): se a consulta esperasse, o teste notaria. */
     private EmbeddingsGemini comEsperaLonga(Duration limiteDaConsulta) {
-        return new EmbeddingsGemini(servidor.urlBase(), CHAVE, "gemini-embedding-2", 768, Duration.ofSeconds(2), limiteDaConsulta);
+        return new EmbeddingsGemini(servidor.urlBase(), CHAVE, "gemini-embedding-2", 768, Duration.ofSeconds(2), limiteDaConsulta,
+                EmbeddingsGemini.ESPERA_MAXIMA_PADRAO, EmbeddingsGemini.FOLGA_PADRAO);
     }
 
     @Test
@@ -251,6 +489,24 @@ class EmbeddingsGeminiTest {
 
         assertThat(servidor.recebidas()).hasSize(1);
         assertThat(gasto).isLessThan(Duration.ofMillis(1500));
+    }
+
+    @Test
+    void aPerguntaNaoEsperaNemORetryDelayCurtoDoCorpoNemOLongo() {
+        for (String retryDelay : List.of("0.3s", "1s", "2209s")) {
+            servidor.limpar();
+            servidor.responder(429, limiteComRetryDelayEmSegundos(retryDelay));
+            servidor.responder(200, "{\"embedding\":{\"values\":" + valores(true, 768) + "}}");
+            EmbeddingsGemini cliente = comEsperaLonga(Duration.ofSeconds(5));
+
+            long inicio = System.nanoTime();
+            assertThatThrownBy(() -> cliente.paraConsulta("pergunta")).as(retryDelay).isInstanceOf(EmbeddingsIndisponivelException.class)
+                    .hasMessage("O Gemini recusou por limite de uso (429).");
+            Duration gasto = Duration.ofNanos(System.nanoTime() - inicio);
+
+            assertThat(servidor.recebidas()).as(retryDelay + ": uma chamada só").hasSize(1);
+            assertThat(gasto).as(retryDelay + ": nenhuma espera").isLessThan(Duration.ofMillis(1500));
+        }
     }
 
     @Test
