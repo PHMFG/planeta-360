@@ -67,19 +67,19 @@ class RegistroDeFerramentasTest {
 
     @Test
     void semRelatorioOModeloRecebeAConsultaEAAberturaDoRelatorio() {
-        assertThat(nomes(registro.oferecidas(Optional.empty(), true))).containsExactly("parceria_consultar", "buscar_documentos", "contar_dias", "calcular", "gerar_modelo", "relatorio_iniciar");
+        assertThat(nomes(registro.oferecidas(Optional.empty(), true))).containsExactly("parceria_consultar", "buscar_documentos", "contar_dias", "calcular", "pedido_de_relatorio", "gerar_modelo", "relatorio_iniciar");
     }
 
     @Test
     void comRelatorioEmMontagemRecebeAsOutrasTresEPerdeAAbertura() {
         assertThat(nomes(registro.oferecidas(Optional.of(relatorio("MONTANDO")), true)))
-                .containsExactly("parceria_consultar", "buscar_documentos", "contar_dias", "calcular", "gerar_modelo", "relatorio_solicitar_campos", "relatorio_editar", "relatorio_finalizar");
+                .containsExactly("parceria_consultar", "buscar_documentos", "contar_dias", "calcular", "pedido_de_relatorio", "gerar_modelo", "relatorio_solicitar_campos", "relatorio_editar", "relatorio_finalizar");
     }
 
     @Test
     void depoisDeTresCartoesNaoPedeOutro() {
         assertThat(nomes(registro.oferecidas(Optional.of(relatorio("MONTANDO")), false)))
-                .containsExactly("parceria_consultar", "buscar_documentos", "contar_dias", "calcular", "gerar_modelo", "relatorio_editar", "relatorio_finalizar");
+                .containsExactly("parceria_consultar", "buscar_documentos", "contar_dias", "calcular", "pedido_de_relatorio", "gerar_modelo", "relatorio_editar", "relatorio_finalizar");
     }
 
     @Test
@@ -117,7 +117,7 @@ class RegistroDeFerramentasTest {
         AtlasContexto contexto = contexto(AMARELO, "Cliente Amarelo");
 
         // parceria_id é o ataque de sempre: nenhuma ferramenta o aceita, em nenhum estado
-        for (String ferramenta : List.of("parceria_consultar", "relatorio_iniciar", "gerar_modelo")) {
+        for (String ferramenta : List.of("parceria_consultar", "relatorio_iniciar", "pedido_de_relatorio", "gerar_modelo")) {
             var preparo = registro.preparar(contexto, turno(), ferramenta, "{\"parceria_id\": 3}");
             assertThatThrownBy(() -> registro.executar(contexto, turno(), preparo, "call_x"))
                     .isInstanceOf(DadosInvalidosException.class)

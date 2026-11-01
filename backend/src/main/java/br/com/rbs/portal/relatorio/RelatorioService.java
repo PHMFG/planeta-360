@@ -178,6 +178,17 @@ public class RelatorioService {
         return montar(cabecalho, usuario.ehRbs());
     }
 
+    /**
+     * A rota 35 sem montar o relatório: esta pessoa tem alguma versão para ver? É o mesmo critério de {@link #ver}, para o Atlas
+     * dizer à marca se há relatório oficial sem ler os números. [PERMISSAO] O patrocinador só tem a disponibilizada mais nova; a RBS,
+     * a mais nova de qualquer status. [ISOLAMENTO] Parceria de outro patrocinador: 404.
+     */
+    @Transactional(readOnly = true)
+    public boolean temVersaoParaVer(UsuarioAutenticado usuario, long parceriaId) {
+        verificador.exigirParceria(usuario, parceriaId);
+        return (usuario.ehRbs() ? repositorio.maisNovo(parceriaId) : repositorio.maisNovoDisponibilizado(parceriaId)).isPresent();
+    }
+
     // ---------------------------------------------------------------------
     // Rota 36: CSV de um relatório
     // ---------------------------------------------------------------------

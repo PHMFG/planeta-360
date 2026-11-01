@@ -15,6 +15,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import br.com.rbs.portal.acesso.SessaoDeApi;
 import br.com.rbs.portal.atlas.ApoioDoFluxo.Evento;
 import br.com.rbs.portal.atlas.ferramentas.GerarModelo;
+import br.com.rbs.portal.atlas.ferramentas.PedidoDeRelatorio;
 import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.MensagemDeChat;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
@@ -71,6 +72,22 @@ class RespostaDiretaEmFluxoTest {
         assertThat(sequencia(eventos)).containsExactly("etapa", "fim");
         assertThat(eventos.get(0).<String>ler("$.texto")).isEqualTo("Preparando o modelo…");
         fim(eventos);
+        assertThat(turnoSolto(jdbc, conversa)).isTrue();
+    }
+
+    @Test
+    void pedidoDeRelatorioEmFluxoFazUmaIdaSoComAEtapaDaResposta() {
+        SessaoDeApi pessoa = SessaoDeApi.entrar(mvc, AMARELO);
+        long conversa = conversa(pessoa, jdbc);
+        modelo.chamada(PedidoDeRelatorio.NOME, "{}");
+
+        List<Evento> eventos = eventos(falarEmFluxo(pessoa, conversa, "Quero o relatório da minha parceria."));
+
+        assertThat(modelo.pedidos()).hasSize(1);
+        assertThat(modelo.idasEmFluxo()).isEqualTo(1);
+        assertThat(modelo.sobraDoRoteiro()).isZero();
+        assertThat(sequencia(eventos)).containsExactly("etapa", "fim");
+        assertThat(eventos.get(0).<String>ler("$.texto")).isEqualTo("Preparando a resposta…");
         assertThat(turnoSolto(jdbc, conversa)).isTrue();
     }
 
