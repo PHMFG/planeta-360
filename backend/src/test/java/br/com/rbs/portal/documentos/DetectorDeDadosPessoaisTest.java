@@ -124,7 +124,6 @@ class DetectorDeDadosPessoaisTest {
             "cpf 12345678900",
             "CPF nº 123456789-00",
             "CPF 529 982 247 25",
-            "123  456  789   09",
             "CPF 529​982​247​25",
             "CPF ５２９９８２２４７２５",
             "Anexo (CPF 529.982.247-25)",
@@ -170,7 +169,7 @@ class DetectorDeDadosPessoaisTest {
         assertThat(marca("Série 52998224725-1 do lote")).as("hífen depois de dígito").isFalse();
         assertThat(marca("Pedido 529.982.247-253 recebido")).as("dígito colado").isFalse();
         assertThat(marca("Código 1529.982.247-25")).as("dígito colado antes").isFalse();
-        assertThat(marca("Vale 529.982.247-25,5 pontos")).as("vírgula e dígito depois").isFalse();
+        assertThat(marca("Vale 529.982.247-25,5 pontos")).as("o formato completo só é recusado com dígito colado").isTrue();
         assertThat(marca("CPF 529.982.247-25, residente")).as("vírgula depois").isTrue();
         assertThat(marca("CPF 529.982.247-25. Fim.")).as("ponto final depois").isTrue();
         assertThat(marca("titular-52998224725")).as("hífen depois de letra").isTrue();
@@ -180,7 +179,7 @@ class DetectorDeDadosPessoaisTest {
     void cpfSemAPalavraSoMarcaComDigitosVerificadoresCertos() {
         assertThat(marca("Documento 52998224725")).isTrue();
         assertThat(marca("Documento 529982247-25")).isTrue();
-        assertThat(marca("Documento 529 982 247 25")).isTrue();
+        assertThat(marca("Documento 529 982 247 25")).as("com espaços, só com a palavra CPF").isFalse();
         assertThat(marca("Documento 52998224726")).as("dígito verificador errado e sem a palavra").isFalse();
         assertThat(marca("Documento 529 982 247 26")).isFalse();
         assertThat(marca("CPF do titular, cadastrado em 2026: 52998224726")).as("a palavra está longe (mais de 20 caracteres)").isFalse();
@@ -190,7 +189,7 @@ class DetectorDeDadosPessoaisTest {
     @Test
     void asFormasDeTelefoneNovasContamComoContato() {
         // dois e-mails + um telefone na forma testada = 3 contatos diferentes = lista
-        for (String telefone : List.of("51-3333-4444", "(51) 3333 4444", "51 3333 4444", "+5551999998888", "(51)3333-4444", "51 99999-8888",
+        for (String telefone : List.of("51-3333-4444", "(51) 3333 4444", "+5551999998888", "(51)3333-4444", "51 99999-8888",
                 "+55 (51) 99999-8888", "+55 51 3333-4444")) {
             assertThat(marca("a@x.invalid", "b@x.invalid", telefone)).as(telefone).isTrue();
             assertThat(marca("a@x.invalid", telefone)).as("só 2 contatos: " + telefone).isFalse();
@@ -199,8 +198,8 @@ class DetectorDeDadosPessoaisTest {
 
     @Test
     void oMesmoTelefoneEscritoDeJeitosDiferentesContaUmaVez() {
-        assertThat(marca("(51) 3333-4444", "51 3333 4444", "51-3333-4444", "+55 51 3333 4444")).isFalse();
-        assertThat(DetectorDeDadosPessoais.contatos("(51) 3333-4444 e 51 3333 4444 e a@x.invalid")).hasSize(2);
+        assertThat(marca("(51) 3333-4444", "(051) 3333-4444", "51-3333-4444", "+55 51 3333 4444")).isFalse();
+        assertThat(DetectorDeDadosPessoais.contatos("(51) 3333-4444 e (051) 3333-4444 e a@x.invalid")).hasSize(2);
     }
 
     @Test
@@ -233,6 +232,154 @@ class DetectorDeDadosPessoaisTest {
         assertThat(marca("529.982.247‒25")).isTrue();
         assertThat(marca("R﻿G 12345678")).as("a palavra RG com um caractere invisível no meio").isTrue();
         assertThat(marca("C​P​F 12345678900")).as("a palavra CPF com caracteres invisíveis").isTrue();
+    }
+
+    // ---------------------------------------------------------------------
+    // M3, segunda rodada de correção
+    // ---------------------------------------------------------------------
+
+    @ParameterizedTest(name = "[{index}] marca: {0}")
+    @ValueSource(strings = {
+            "Joao 529.982.247-25,30,Porto",
+            "529.982.247-25,111.444.777-35",
+            "12.345.678-9,12.345.679-0",
+            "RG 1234567,1234568",
+            "1,529.982.247-25,Joao",
+            "Vale 529.982.247-25,5 pontos",
+            "529.982.247-25/111.444.777-35",
+            "2027-529.982.247-25",
+            "529. 982. 247-25",
+            "529.982.247 - 25",
+            "529 . 982 . 247 - 25",
+            "529.982.247 -25",
+            "CPF 529. 982. 247-25",
+    })
+    void oFormatoCompletoSoERecusadoComDigitoColadoAntesOuDepois(String linha) {
+        assertThat(marca(linha)).as(linha).isTrue();
+    }
+
+    @ParameterizedTest(name = "[{index}] não marca: {0}")
+    @ValueSource(strings = {
+            "Pedido 529.982.247-253",
+            "Código 1529.982.247-25",
+            "Pedido 12.345.678-90",
+            "529. 982. 247-26",
+            "529.982.247 - 26",
+    })
+    void digitoColadoOuDigitoVerificadorErradoNoFormatoComEspacosNaoMarca(String linha) {
+        assertThat(marca(linha)).as(linha).isFalse();
+    }
+
+    @Test
+    void cpfComEspacosSoMarcaComAPalavraCpfLogoAntes() {
+        assertThat(marca("Setor 100 200 400 40")).isFalse();
+        assertThat(marca("Setor 529 982 247 25")).as("o dígito verificador bate, mas a palavra CPF não está").isFalse();
+        assertThat(marca("CPF 529 982 247 25")).isTrue();
+        assertThat(marca("CPF 100 200 400 40")).as("com a palavra, o dígito verificador não importa").isTrue();
+        assertThat(marca("Documento 52998224725")).as("colado, o dígito verificador basta").isTrue();
+        assertThat(marca("Documento 529982247-25")).as("ddddddddd-dd, o dígito verificador basta").isTrue();
+        assertThat(marca("CPF 10000000000")).as("colado, a palavra basta").isTrue();
+        assertThat(marca("CPF 100000000-00")).as("ddddddddd-dd, a palavra basta").isTrue();
+    }
+
+    @Test
+    void tabelaDeNumerosNaoTravaUmDocumento() {
+        int marcadas = 0;
+        for (int a = 100; a <= 900; a += 100) {
+            for (int b = 100; b <= 900; b += 100) {
+                for (int c = 100; c <= 900; c += 100) {
+                    for (int d = 10; d <= 90; d += 10) {
+                        if (marca("Setor " + a + " " + b + " " + c + " " + d)) {
+                            marcadas++;
+                        }
+                    }
+                }
+            }
+        }
+        assertThat(marcadas).as("linhas de tabela com 3 grupos de 3 dígitos e 2 dígitos que por acaso fecham um CPF").isZero();
+    }
+
+    @Test
+    void telefoneSoComEspacosNaoContaMasOComHifenParentesesOuMais55Conta() {
+        assertThat(marca("Público 25 1500 2500", "Público 35 2500 3500", "Público 45 3500 4500")).isFalse();
+        for (String telefone : List.of("51 3333 4444", "51 99999 8888", "51 9 9999 8888")) {
+            assertThat(marca("a@x.invalid", "b@x.invalid", telefone)).as(telefone + " é só espaços").isFalse();
+        }
+        assertThat(marca("a@x.invalid", "b@x.invalid", "51 3333-4444")).isTrue();
+        assertThat(marca("a@x.invalid", "b@x.invalid", "(51) 3333 4444")).isTrue();
+        assertThat(marca("a@x.invalid", "b@x.invalid", "+55 51 3333 4444")).isTrue();
+    }
+
+    @Test
+    void numeroComDddEntreParentesesNaoEFaixaDeAnos() {
+        assertThat(marca("a@x.invalid", "b@x.invalid", "(11) 2050-2060")).isTrue();
+        assertThat(marca("a@x.invalid", "b@x.invalid", "(11) 2026-2027")).isTrue();
+        assertThat(marca("Lote 11 2026-2027", "Lote 12 2027-2028", "Lote 13 2028-2029")).as("sem parênteses continua sendo faixa de anos").isFalse();
+    }
+
+    @ParameterizedTest(name = "[{index}] marca: {0}")
+    @ValueSource(strings = {
+            "CPF 529.982.247.25",
+            "CPF 529.982.247/25",
+            "CPF 529-982-247-25",
+            "CPF: 529/982/247/25",
+            "CPF 529 982 247 25",
+            "RG 12 345 678-9",
+            "RG 12 345 678 9",
+            "RG do responsável: 1234567",
+            "RG:\n1234567",
+            "RG\n12345678",
+            "R. G. 1234567",
+            "R.G. 1234567",
+            "RG (Registro Geral): 1234567",
+            "RG do titular n.º 1234567",
+            "RG tem 2.500.000 habitantes",
+    })
+    void cpfERgComAPalavraEAsFormasQueFaltavam(String linha) {
+        assertThat(marca(linha)).as(linha).isTrue();
+    }
+
+    @ParameterizedTest(name = "[{index}] não marca: {0}")
+    @ValueSource(strings = {
+            "Unidade RG: R$ 1.500.000",
+            "Unidade RG 5% 1.500.000",
+            "Unidade RG 2026.2027",
+            "Unidade RG 2027-2028",
+            "Unidade RG 20262027",
+            "RG 123456",
+            "Documento 529.982.247.25",
+    })
+    void rgComValorOuComDoisAnosNaoMarca(String linha) {
+        assertThat(marca(linha)).as(linha).isFalse();
+    }
+
+    @ParameterizedTest(name = "[{index}] marca com invisível U+{0}")
+    @ValueSource(strings = {"2066", "2067", "2068", "2069", "061C", "180E", "034F", "FFF9", "200B", "00AD", "E0001"})
+    void qualquerCaractereDeFormatoInvisivelNoMeioDoCpfNaoEscondeOCpf(String codigo) {
+        String invisivel = new String(Character.toChars(Integer.parseInt(codigo, 16)));
+        assertThat(marca("529" + invisivel + ".982.247-25")).as("CPF formatado com U+" + codigo).isTrue();
+        assertThat(marca("CPF 5299822472" + invisivel + "5")).as("CPF colado com U+" + codigo).isTrue();
+        assertThat(marca("R" + invisivel + "G 12345678")).as("a palavra RG com U+" + codigo).isTrue();
+    }
+
+    @Test
+    void asFormasDeContatoQueFaltavam() {
+        // dois e-mails + o telefone da forma testada = 3 contatos diferentes = lista
+        for (String telefone : List.of("(51) 9 9999-8881", "(051) 3333-4441", "(51) 3333 - 4441", "51999998881", "51\t3333-4441")) {
+            assertThat(marca("a@x.invalid", "b@x.invalid", telefone)).as(telefone).isTrue();
+            assertThat(marca("a@x.invalid", telefone)).as("só 2 contatos: " + telefone).isFalse();
+        }
+    }
+
+    @Test
+    void oMesmoTelefoneComOuSemZeroNoDddOuColadoContaUmaVez() {
+        assertThat(DetectorDeDadosPessoais.contatos("(051) 3333-4441 e (51) 3333-4441")).hasSize(1);
+        assertThat(DetectorDeDadosPessoais.contatos("(51) 9 9999-8881, 51999998881 e +55 51 99999-8881")).hasSize(1);
+    }
+
+    @Test
+    void onzeDigitosColadosQueNaoSaoCelularNaoViramContato() {
+        assertThat(marca("Protocolo 12345678900", "Protocolo 12345678901", "Protocolo 12345678902")).isFalse();
     }
 
     @Test
