@@ -6,6 +6,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.regex.Pattern;
 
 /**
@@ -23,9 +24,11 @@ import java.util.regex.Pattern;
  *   <li>as constantes <b>exatas</b> {@code 0}, {@code 1}, {@code 2}, {@code 100} e {@code 1000}, <b>no máximo duas</b> no script
  *       (algarismo colado em letra, como {@code 1e3} ou {@code 2x}, e zero à esquerda, como {@code 0100}, são recusados);</li>
  *   <li>pelo menos uma variável, e toda variável declarada é usada;</li>
- *   <li><b>sem fabricar número com a própria variável</b>: cada variável aparece <b>no máximo duas vezes</b>; {@code x / x} e
- *       {@code x - x} (a mesma variável dos dois lados, também entre parênteses) e {@code pct}, {@code min} e {@code max} com a mesma
- *       variável nos dois argumentos são recusados, porque dão 1, 0 ou 100 sem origem nenhuma (somados, dariam qualquer número);</li>
+ *   <li><b>sem fabricar número com a própria variável</b>: cada variável aparece <b>no máximo duas vezes</b>, e nenhuma parte do
+ *       script pode dar <b>sempre o mesmo resultado</b>, qualquer que seja o valor das variáveis ({@code a / a}, {@code a - a},
+ *       {@code (a + b) / (b + a)}, {@code a / (a + 0)}, {@code pct(a, a + 0)}): dariam 1, 0 ou 100 sem origem nenhuma (somados,
+ *       dariam qualquer número). A conferência é por <i>significado</i>, e não pela forma do texto: a árvore do script é avaliada
+ *       com três atribuições fixas de valores não redondos (veja {@link #conferirSignificado}), e a parte que não muda é recusada;</li>
  *   <li><b>percentual só com {@code pct}</b>: a constante {@code 100} junto de uma divisão por algo que não é constante
  *       ({@code a * 100 / b}, {@code (a / b) * 100}) é recusada. A divisão do motor arredonda meio para cima e 459.999 de 460.000 daria
  *       "100%", o que o {@code fn_pct_truncado} do portal evita. {@code a * b / 100} continua valendo.</li>
@@ -50,6 +53,7 @@ final class ScriptDeConta {
             "min", "max");
     private static final Pattern NOME_DE_VARIAVEL = Pattern.compile("[a-z][a-z0-9_]{0,39}");
     private static final List<String> JUNTOS_PROIBIDOS = List.of("++", "--", "//", "/*", "*/");
+    private static final int TAMANHO_DA_PARTE_NA_RECUSA = 80;
 
     private enum Tipo { NUMERO, NOME, SINAL }
 
@@ -82,7 +86,7 @@ final class ScriptDeConta {
         }
         List<Token> tokens = separar(script);
         Analise analise = new Analise(tokens, variaveis);
-        analise.expressao(0);
+        No raiz = analise.expressao(0);
         if (!analise.fim()) {
             throw recusado("O script não é uma conta: sobrou \"" + analise.atual().texto() + "\" depois da expressão.");
         }
@@ -93,11 +97,12 @@ final class ScriptDeConta {
         if (variaveis.isEmpty() || analise.usadas.isEmpty()) {
             throw recusado("O script precisa usar pelo menos uma variável. Todo valor entra como variável, com a fonte dele.");
         }
-        for (String declarada : new java.util.TreeSet<>(variaveis)) {
+        for (String declarada : new TreeSet<>(variaveis)) {
             if (!analise.usadas.containsKey(declarada)) {
                 throw recusado("A variável " + declarada + " foi declarada, mas o script não a usa. Tire-a de variaveis ou use-a na conta.");
             }
         }
+        conferirSignificado(raiz, variaveis);
         if (analise.temCem && analise.dividePorNaoConstante) {
             throw recusado("Percentual se calcula com pct(parte, todo), que corta na primeira casa como o portal. Não use a constante 100 "
                     + "junto de uma divisão por variável (a * 100 / b, a / b * 100): a divisão arredondaria 99,9998% para 100%. A divisão "
@@ -162,16 +167,38 @@ final class ScriptDeConta {
     }
 
     // ---------------------------------------------------------------------
+    // A árvore do script (a gramática é fechada: nomes, constantes, pct, min, max, + - * / e parênteses)
+    // ---------------------------------------------------------------------
+
+    private sealed interface No permits Constante, Variavel, Negativo, Agrupado, Conta, Funcao {
+    }
+
+    private record Constante(String texto) implements No {
+    }
+
+    private record Variavel(String nome) implements No {
+    }
+
+    /** O sinal de menos na frente de um valor ({@code -a}). */
+    private record Negativo(No dentro) implements No {
+    }
+
+    /** Uma parte entre parênteses. */
+    private record Agrupado(No dentro) implements No {
+    }
+
+    /** {@code esquerda sinal direita}, com o sinal um de {@code + - * /}. */
+    private record Conta(char sinal, No esquerda, No direita) implements No {
+    }
+
+    /** {@code pct}, {@code min} ou {@code max}, sempre com dois argumentos. */
+    private record Funcao(String nome, No primeiro, No segundo) implements No {
+    }
+
+    // ---------------------------------------------------------------------
     // A gramática: expressao = termo (("+" | "-") termo)*; termo = sinal (("*" | "/") sinal)*;
     // sinal = ("-" | "+") sinal | valor; valor = NUMERO | VARIAVEL | FUNCAO "(" expressao "," expressao ")" | "(" expressao ")"
     // ---------------------------------------------------------------------
-
-    /**
-     * Um pedaço da expressão, para as recusas de {@code x / x}, {@code x - x} e da divisão por constante: a {@code assinatura} é o
-     * texto dele sem os parênteses (então {@code (a)} e {@code a} são o mesmo), e {@code constante} diz que é só um número.
-     */
-    private record Operando(String assinatura, boolean constante) {
-    }
 
     private static final class Analise {
 
@@ -200,67 +227,43 @@ final class ScriptDeConta {
             return !fim() && atual().tipo() == Tipo.SINAL && atual().texto().equals(texto);
         }
 
-        /** O texto dos tokens de {@code de} (inclusive) até {@code ate} (exclusive), sem parênteses nem espaços. */
-        private String assinatura(int de, int ate) {
-            StringBuilder texto = new StringBuilder();
-            for (Token token : tokens.subList(de, ate)) {
-                if (!token.texto().equals("(") && !token.texto().equals(")")) {
-                    texto.append(token.texto());
-                }
-            }
-            return texto.toString();
-        }
-
-        private static boolean mesmoOperando(Operando esquerda, Operando direita) {
-            return !esquerda.constante() && esquerda.assinatura().equals(direita.assinatura());
-        }
-
-        Operando expressao(int nivel) {
-            int inicio = posicao;
-            Operando esquerda = termo(nivel);
+        No expressao(int nivel) {
+            No esquerda = termo(nivel);
             while (sinal("+") || sinal("-")) {
-                boolean menos = sinal("-");
+                char sinal = atual().texto().charAt(0);
                 posicao++;
-                Operando direita = termo(nivel);
-                if (menos && mesmoOperando(esquerda, direita)) {
-                    throw recusado("\"" + esquerda.assinatura() + " - " + direita.assinatura() + "\" dá sempre zero: o mesmo valor não se "
-                            + "subtrai de si mesmo. Use valores diferentes.");
-                }
-                esquerda = new Operando(assinatura(inicio, posicao), false);
+                esquerda = new Conta(sinal, esquerda, termo(nivel));
             }
             return esquerda;
         }
 
-        private Operando termo(int nivel) {
-            int inicio = posicao;
-            Operando esquerda = comSinal(nivel);
+        private No termo(int nivel) {
+            No esquerda = comSinal(nivel);
             while (sinal("*") || sinal("/")) {
-                boolean dividir = sinal("/");
+                char sinal = atual().texto().charAt(0);
                 posicao++;
-                Operando direita = comSinal(nivel);
-                if (dividir) {
-                    if (mesmoOperando(esquerda, direita)) {
-                        throw recusado("\"" + esquerda.assinatura() + " / " + direita.assinatura() + "\" dá sempre 1: o mesmo valor não se "
-                                + "divide por si mesmo. Use valores diferentes.");
-                    }
-                    if (!direita.constante()) {
-                        dividePorNaoConstante = true;
-                    }
+                No direita = comSinal(nivel);
+                if (sinal == '/' && temVariavel(direita)) {
+                    dividePorNaoConstante = true;
                 }
-                esquerda = new Operando(assinatura(inicio, posicao), false);
+                esquerda = new Conta(sinal, esquerda, direita);
             }
             return esquerda;
         }
 
-        private Operando comSinal(int nivel) {
-            if (sinal("-") || sinal("+")) {
+        private No comSinal(int nivel) {
+            if (sinal("-")) {
+                posicao++;
+                return new Negativo(comSinal(nivel));
+            }
+            if (sinal("+")) {
                 posicao++;
                 return comSinal(nivel);
             }
             return valor(nivel);
         }
 
-        private Operando valor(int nivel) {
+        private No valor(int nivel) {
             if (fim()) {
                 throw recusado("O script termina antes da hora: falta um valor depois do último sinal.");
             }
@@ -270,7 +273,7 @@ final class ScriptDeConta {
                     constantes++;
                     temCem |= token.texto().equals("100");
                     posicao++;
-                    return new Operando(token.texto(), true);
+                    return new Constante(token.texto());
                 }
                 case NOME -> {
                     return nome(token, nivel);
@@ -280,14 +283,14 @@ final class ScriptDeConta {
                         throw recusado("O sinal \"" + token.texto() + "\" está fora do lugar: falta um valor antes dele.");
                     }
                     posicao++;
-                    Operando dentro = entreParenteses(nivel);
+                    No dentro = entreParenteses(nivel);
                     exigir(")", "Falta fechar o parêntese.");
-                    return dentro;
+                    return new Agrupado(dentro);
                 }
             }
         }
 
-        private Operando nome(Token token, int nivel) {
+        private No nome(Token token, int nivel) {
             String nome = token.texto();
             boolean funcao = FUNCOES.contains(nome);
             boolean chamada = posicao + 1 < tokens.size() && tokens.get(posicao + 1).tipo() == Tipo.SINAL
@@ -296,17 +299,12 @@ final class ScriptDeConta {
                 if (!chamada) {
                     throw recusado("A função " + nome + " é chamada com parênteses: " + nome + "(a, b).");
                 }
-                int inicio = posicao;
                 posicao += 2;
-                Operando primeiro = entreParenteses(nivel);
+                No primeiro = entreParenteses(nivel);
                 exigir(",", "A função " + nome + " leva dois argumentos, separados por vírgula: " + nome + "(a, b).");
-                Operando segundo = expressao(nivel + 1);
+                No segundo = expressao(nivel + 1);
                 exigir(")", "A função " + nome + " leva dois argumentos: " + nome + "(a, b).");
-                if (mesmoOperando(primeiro, segundo)) {
-                    throw recusado(nome + "(" + primeiro.assinatura() + ", " + segundo.assinatura() + ") com o mesmo valor nos dois "
-                            + "argumentos não é uma conta: dá sempre o mesmo resultado, sem origem. Use valores diferentes.");
-                }
-                return new Operando(assinatura(inicio, posicao), false);
+                return new Funcao(nome, primeiro, segundo);
             }
             if (!variaveis.contains(nome)) {
                 throw recusado("A palavra \"" + nome + "\" não é uma variável declarada nem uma das funções pct, min e max.");
@@ -321,10 +319,10 @@ final class ScriptDeConta {
                         + "como variável, com a fonte dele.");
             }
             posicao++;
-            return new Operando(nome, false);
+            return new Variavel(nome);
         }
 
-        private Operando entreParenteses(int nivel) {
+        private No entreParenteses(int nivel) {
             if (nivel + 1 > MAXIMO_DE_ANINHAMENTO) {
                 throw recusado("Parênteses demais, um dentro do outro: o máximo é " + MAXIMO_DE_ANINHAMENTO + ".");
             }
@@ -337,6 +335,189 @@ final class ScriptDeConta {
             }
             posicao++;
         }
+    }
+
+    // ---------------------------------------------------------------------
+    // O significado: parte do script que dá sempre o mesmo resultado
+    // ---------------------------------------------------------------------
+
+    /** Algum pedaço da árvore tem variável? Sem variável, é uma constante do script. */
+    private static boolean temVariavel(No no) {
+        return switch (no) {
+            case Constante constante -> false;
+            case Variavel variavel -> true;
+            case Negativo negativo -> temVariavel(negativo.dentro());
+            case Agrupado agrupado -> temVariavel(agrupado.dentro());
+            case Conta conta -> temVariavel(conta.esquerda()) || temVariavel(conta.direita());
+            case Funcao funcao -> temVariavel(funcao.primeiro()) || temVariavel(funcao.segundo());
+        };
+    }
+
+    /** Os números primos de onde saem os valores de teste: a raiz quadrada de cada um não é redonda nem tem relação com a de outro. */
+    private static final int[] PRIMOS = {2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97, 101,
+            103, 107, 109, 113, 127};
+    /** As três atribuições: a variável de ordem {@code i} recebe a raiz do primo de índice {@code (i * passo + inicio) % 31}. */
+    private static final int[] PASSO_DA_ATRIBUICAO = {1, 30, 7};
+    private static final int[] INICIO_DA_ATRIBUICAO = {0, 11, 5};
+    private static final int ATRIBUICOES = 3;
+    private static final double TOLERANCIA = 1e-9;
+
+    /**
+     * [VALIDACAO] A conferência por <b>significado</b> (não pelo texto): cada parte do script que tem variável é avaliada com três
+     * atribuições diferentes e fixas (as mesmas em toda execução, em {@code double}: a raiz quadrada de primos, que não é redonda e
+     * muda de uma variável para outra e de uma atribuição para outra). A parte cujo valor é o mesmo nas três (tolerância de 1e-9) não
+     * depende das variáveis: {@code (a + b) / (b + a)} dá 1, {@code a / (a + 0)} dá 1, {@code a - (a + 0)} dá 0 e
+     * {@code pct(a, a + 0)} dá 100, números sem origem que, somados, montariam qualquer valor. Uma divisão por zero numa atribuição
+     * pula aquela atribuição. Duas exceções, que não fabricam número: {@code x + x} e {@code x * x} dependem de {@code x}, e o piso
+     * ou o teto ({@code max(a - b, 0)}, {@code min(a, 1000)}) devolve a variável ou a constante que o script já contou; mas
+     * {@code min} ou {@code max} com o mesmo valor nos dois argumentos ({@code min(a, a + 0)}) não é conta nenhuma.
+     * Só mexe no que é decidido antes de rodar: a execução continua no JEXL.
+     */
+    private static void conferirSignificado(No raiz, Set<String> variaveis) {
+        Map<String, double[]> valores = new HashMap<>();
+        int ordem = 0;
+        for (String nome : new TreeSet<>(variaveis)) {
+            double[] daVariavel = new double[ATRIBUICOES];
+            for (int k = 0; k < ATRIBUICOES; k++) {
+                daVariavel[k] = Math.sqrt(PRIMOS[(ordem * PASSO_DA_ATRIBUICAO[k] + INICIO_DA_ATRIBUICAO[k]) % PRIMOS.length]);
+            }
+            valores.put(nome, daVariavel);
+            ordem++;
+        }
+        avaliar(raiz, valores);
+    }
+
+    /** Avalia a parte nas três atribuições (NaN onde não dá, como na divisão por zero), recusando a que não muda de uma para outra. */
+    private static double[] avaliar(No no, Map<String, double[]> valores) {
+        return switch (no) {
+            case Constante constante -> {
+                double[] fixo = new double[ATRIBUICOES];
+                java.util.Arrays.fill(fixo, Double.parseDouble(constante.texto()));
+                yield fixo;
+            }
+            case Variavel variavel -> valores.get(variavel.nome());
+            case Negativo negativo -> {
+                double[] dentro = avaliar(negativo.dentro(), valores);
+                double[] resultado = new double[ATRIBUICOES];
+                for (int k = 0; k < ATRIBUICOES; k++) {
+                    resultado[k] = -dentro[k];
+                }
+                yield resultado;
+            }
+            case Agrupado agrupado -> avaliar(agrupado.dentro(), valores);
+            case Conta conta -> {
+                double[] esquerda = avaliar(conta.esquerda(), valores);
+                double[] direita = avaliar(conta.direita(), valores);
+                double[] resultado = new double[ATRIBUICOES];
+                for (int k = 0; k < ATRIBUICOES; k++) {
+                    resultado[k] = switch (conta.sinal()) {
+                        case '+' -> esquerda[k] + direita[k];
+                        case '-' -> esquerda[k] - direita[k];
+                        case '*' -> esquerda[k] * direita[k];
+                        default -> direita[k] == 0 ? Double.NaN : esquerda[k] / direita[k];
+                    };
+                }
+                recusarSeNaoMuda(no, resultado);
+                yield resultado;
+            }
+            case Funcao funcao -> {
+                double[] primeiro = avaliar(funcao.primeiro(), valores);
+                double[] segundo = avaliar(funcao.segundo(), valores);
+                boolean pct = funcao.nome().equals("pct");
+                boolean doisComVariavel = temVariavel(funcao.primeiro()) && temVariavel(funcao.segundo());
+                double[] resultado = new double[ATRIBUICOES];
+                for (int k = 0; k < ATRIBUICOES; k++) {
+                    resultado[k] = switch (funcao.nome()) {
+                        case "pct" -> segundo[k] == 0 ? Double.NaN : cortarNaPrimeiraCasa(100 * primeiro[k] / segundo[k]);
+                        case "min" -> Math.min(primeiro[k], segundo[k]);
+                        default -> Math.max(primeiro[k], segundo[k]);
+                    };
+                }
+                if (!pct && doisComVariavel && mesmoNasAtribuicoes(primeiro, segundo)) {
+                    throw recusado(funcao.nome() + "(" + parte(funcao.primeiro()) + ", " + parte(funcao.segundo()) + ") com o mesmo valor nos "
+                            + "dois argumentos não é uma conta: dá sempre o mesmo resultado, sem origem. Use valores diferentes.");
+                }
+                // o piso e o teto (max(a - b, 0), min(a, 1000)) devolvem a variável ou a constante que o script já contou
+                boolean pisoOuTeto = !pct && !doisComVariavel;
+                if (!pisoOuTeto) {
+                    recusarSeNaoMuda(no, resultado);
+                }
+                yield resultado;
+            }
+        };
+    }
+
+    /**
+     * O corte do {@code pct} do portal (primeira casa, para zero), em {@code double}. O ruído da vírgula flutuante não pode virar
+     * degrau: 100 × x ÷ x dá 99,99999999999999 em alguns valores, e o corte daria 99,9 onde a conta exata dá 100.
+     */
+    private static double cortarNaPrimeiraCasa(double valor) {
+        double dezenas = valor * 10;
+        double inteiro = Math.rint(dezenas);
+        if (Math.abs(dezenas - inteiro) < 1e-7) {
+            dezenas = inteiro;
+        }
+        return (dezenas < 0 ? Math.ceil(dezenas) : Math.floor(dezenas)) / 10;
+    }
+
+    private static void recusarSeNaoMuda(No no, double[] resultado) {
+        if (temVariavel(no) && naoMuda(resultado)) {
+            throw recusado("Uma parte do script dá sempre o mesmo resultado, qualquer que seja o valor (" + parte(no) + "): isso não é uma "
+                    + "conta. Cada número tem de vir de uma variável com a fonte dele.");
+        }
+    }
+
+    /** O valor é o mesmo em todas as atribuições em que existe (há ao menos duas)? */
+    private static boolean naoMuda(double[] valores) {
+        int existentes = 0;
+        double base = Double.NaN;
+        for (double valor : valores) {
+            if (Double.isNaN(valor)) {
+                continue;
+            }
+            if (existentes > 0 && !proximos(base, valor)) {
+                return false;
+            }
+            base = existentes == 0 ? valor : base;
+            existentes++;
+        }
+        return existentes >= 2;
+    }
+
+    /** Os dois argumentos dão o mesmo valor em todas as atribuições em que os dois existem (há ao menos duas)? */
+    private static boolean mesmoNasAtribuicoes(double[] a, double[] b) {
+        int comparadas = 0;
+        for (int k = 0; k < ATRIBUICOES; k++) {
+            if (Double.isNaN(a[k]) || Double.isNaN(b[k])) {
+                continue;
+            }
+            if (!proximos(a[k], b[k])) {
+                return false;
+            }
+            comparadas++;
+        }
+        return comparadas >= 2;
+    }
+
+    private static boolean proximos(double x, double y) {
+        return Math.abs(x - y) <= TOLERANCIA * Math.max(1, Math.max(Math.abs(x), Math.abs(y)));
+    }
+
+    /** A parte do script escrita de novo, para a recusa mostrar onde está o problema. */
+    private static String parte(No no) {
+        String texto = escrever(no);
+        return texto.length() > TAMANHO_DA_PARTE_NA_RECUSA ? texto.substring(0, TAMANHO_DA_PARTE_NA_RECUSA) + "…" : texto;
+    }
+
+    private static String escrever(No no) {
+        return switch (no) {
+            case Constante constante -> constante.texto();
+            case Variavel variavel -> variavel.nome();
+            case Negativo negativo -> "-" + escrever(negativo.dentro());
+            case Agrupado agrupado -> "(" + escrever(agrupado.dentro()) + ")";
+            case Conta conta -> escrever(conta.esquerda()) + " " + conta.sinal() + " " + escrever(conta.direita());
+            case Funcao funcao -> funcao.nome() + "(" + escrever(funcao.primeiro()) + ", " + escrever(funcao.segundo()) + ")";
+        };
     }
 
     private static DadosInvalidosException recusado(String frase) {

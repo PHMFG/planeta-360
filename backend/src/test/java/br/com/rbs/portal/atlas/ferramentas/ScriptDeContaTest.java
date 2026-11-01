@@ -122,10 +122,80 @@ class ScriptDeContaTest {
 
     @Test
     void amensagemDaMesmaVariavelDizOQueFazer() {
-        assertThatThrownBy(() -> conferir("a / a", Set.of("a"))).hasMessageContaining("a / a").hasMessageContaining("sempre 1");
-        assertThatThrownBy(() -> conferir("a - a", Set.of("a"))).hasMessageContaining("a - a").hasMessageContaining("zero");
+        assertThatThrownBy(() -> conferir("a / a", Set.of("a"))).hasMessageContaining("a / a").hasMessageContaining("sempre o mesmo resultado")
+                .hasMessageContaining("isso não é uma conta");
+        assertThatThrownBy(() -> conferir("a - a", Set.of("a"))).hasMessageContaining("a - a").hasMessageContaining("sempre o mesmo resultado");
         assertThatThrownBy(() -> conferir("a + a + a", Set.of("a"))).hasMessageContaining("aparece mais de 2 vezes");
-        assertThatThrownBy(() -> conferir("pct(a, a)", Set.of("a"))).hasMessageContaining("pct(a, a)");
+        assertThatThrownBy(() -> conferir("pct(a, a)", Set.of("a"))).hasMessageContaining("pct(a, a)").hasMessageContaining("sempre o mesmo resultado");
+        assertThatThrownBy(() -> conferir("min(a, a)", Set.of("a"))).hasMessageContaining("min(a, a)").hasMessageContaining("mesmo valor nos dois");
+    }
+
+    // ---------------------------------------------------------------------
+    // A conferência por significado: parte do script que dá sempre o mesmo resultado
+    // ---------------------------------------------------------------------
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "(a + b) / (b + a)",
+            "a / (a + 0)",
+            "a / (a * 1)",
+            "a - (a + 0)",
+            "pct(a, a + 0)",
+            "(a + b) - (b + a)",
+            "(a * b) / (b * a)",
+            "(a - b) + (b - a)",
+            "a * 0",
+            "(a + b) * 0 + a",
+            "min(a, b) - min(b, a)",
+            "min(a, a + 0)",
+            "max(a + b, b + a)",
+            "1000 * ((a + b) / (b + a))",
+            "(a + b) / (a + b)",
+            "pct(a + b, b + a)",
+    })
+    void partedoScriptQueDaSempreOMesmoResultadoERecusadaMesmoDisfarcada(String script) {
+        assertThatThrownBy(() -> conferir(script, declaradas(script))).as(script).isInstanceOf(DadosInvalidosException.class);
+    }
+
+    @Test
+    void oAtaqueDe2000ComQuatroVariaveisQueSeDesfazemDuasADuasNaoFecha() {
+        // 1000 * ((a+b)/(b+a) + (c+d)/(d+c)) dava 2.000 com 3, 5, 7 e 9, com cada variável só duas vezes
+        Set<String> abcd = Set.of("a", "b", "c", "d");
+        assertThatThrownBy(() -> conferir("1000*((a+b)/(b+a)+(c+d)/(d+c))", abcd)).isInstanceOf(DadosInvalidosException.class)
+                .hasMessageContaining("sempre o mesmo resultado").hasMessageContaining("(a + b) / (b + a)");
+    }
+
+    @Test
+    void asContasDeVerdadeNaoSaoPegasPeloSignificado() {
+        Set<String> abc = Set.of("a", "b", "c");
+        Set<String> abcd = Set.of("a", "b", "c", "d");
+        assertThatCode(() -> conferir("kva * tarifa", Set.of("kva", "tarifa"))).doesNotThrowAnyException();
+        assertThatCode(() -> conferir("pct(a, b)", AB)).doesNotThrowAnyException();
+        assertThatCode(() -> conferir("(a + b) * c", abc)).doesNotThrowAnyException();
+        assertThatCode(() -> conferir("a * b + c * d", abcd)).doesNotThrowAnyException();
+        assertThatCode(() -> conferir("a - a * b / 100", AB)).doesNotThrowAnyException();
+        assertThatCode(() -> conferir("a + a", Set.of("a"))).as("x + x é o dobro, e vale").doesNotThrowAnyException();
+        assertThatCode(() -> conferir("a * a", Set.of("a"))).doesNotThrowAnyException();
+        assertThatCode(() -> conferir("min(a, b)", AB)).doesNotThrowAnyException();
+        assertThatCode(() -> conferir("(a + b) / c", abc)).doesNotThrowAnyException();
+        assertThatCode(() -> conferir("(a + b) / (a - b)", AB)).doesNotThrowAnyException();
+        assertThatCode(() -> conferir("(a - b) / (a + b)", AB)).doesNotThrowAnyException();
+        assertThatCode(() -> conferir("(a + b) * (a - b)", AB)).doesNotThrowAnyException();
+        assertThatCode(() -> conferir("pct(a - b, a + b)", AB)).doesNotThrowAnyException();
+        assertThatCode(() -> conferir("pct(a, a + b)", AB)).as("a parte e o total, com a parte dentro do total").doesNotThrowAnyException();
+        assertThatCode(() -> conferir("(a * b) / (a + b)", AB)).doesNotThrowAnyException();
+    }
+
+    @Test
+    void oPisoComMaxOuMinNaoEPegoPorDarSempreZeroNosValoresDeTeste() {
+        Set<String> abc = Set.of("a", "b", "c");
+        // max(0, a - b - c) pode dar 0 nos três valores de teste e continua sendo a conta de um piso em zero
+        assertThatCode(() -> conferir("max(0, a - b - c)", abc)).doesNotThrowAnyException();
+        assertThatCode(() -> conferir("max(a - b, 0)", AB)).doesNotThrowAnyException();
+        assertThatCode(() -> conferir("min(a - b, 1000)", AB)).doesNotThrowAnyException();
+        assertThatCode(() -> conferir("min(a, 0)", Set.of("a"))).doesNotThrowAnyException();
+        // mas o piso de uma parte que já dá sempre o mesmo resultado continua recusado
+        assertThatThrownBy(() -> conferir("max(a / a, 0)", Set.of("a"))).isInstanceOf(DadosInvalidosException.class);
     }
 
     @Test
