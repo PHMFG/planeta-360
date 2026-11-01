@@ -52,6 +52,27 @@ class EmbeddingsGeminiTest {
                 .collect(Collectors.joining(",")) + "]}";
     }
 
+    /** Um vetor unitário que tem 1 só na posição {@code k}: cada trecho do teste tem o seu, para a ordem da resposta aparecer. */
+    private static String umNaPosicao(int k) {
+        return IntStream.range(0, 768).mapToObj(i -> i == k ? "1.0" : "0.0").collect(Collectors.joining(",", "[", "]"));
+    }
+
+    /** Um lote cujo item {@code j} tem o 1 na posição {@code primeiro + j}. */
+    private static String respostaDoLoteComVetoresDiferentes(int primeiro, int quantos) {
+        return "{\"embeddings\":[" + IntStream.range(0, quantos).mapToObj(j -> "{\"values\":" + umNaPosicao(primeiro + j) + "}")
+                .collect(Collectors.joining(",")) + "]}";
+    }
+
+    /** A posição do 1 de um vetor unitário feito por {@link #umNaPosicao(int)}. */
+    private static int posicaoDoUm(float[] vetor) {
+        for (int i = 0; i < vetor.length; i++) {
+            if (vetor[i] == 1.0f) {
+                return i;
+            }
+        }
+        throw new AssertionError("o vetor não tem o 1");
+    }
+
     private static List<TextoDoTrecho> trechos(int quantos) {
         return IntStream.rangeClosed(1, quantos).mapToObj(i -> new TextoDoTrecho("4 Energia elétrica", "Texto do trecho " + i + ".")).toList();
     }
@@ -106,13 +127,15 @@ class EmbeddingsGeminiTest {
 
     @Test
     void maisDe50TrechosVaoEmLotesDeAte50EVoltamNaOrdem() {
-        servidor.responder(200, respostaDoLote(50));
-        servidor.responder(200, respostaDoLote(50));
-        servidor.responder(200, respostaDoLote(20));
+        servidor.responder(200, respostaDoLoteComVetoresDiferentes(0, 50));
+        servidor.responder(200, respostaDoLoteComVetoresDiferentes(50, 50));
+        servidor.responder(200, respostaDoLoteComVetoresDiferentes(100, 20));
 
         List<float[]> vetores = gemini.paraTrechos("Titulo", trechos(120));
 
         assertThat(vetores).hasSize(120);
+        assertThat(vetores.stream().mapToInt(EmbeddingsGeminiTest::posicaoDoUm)).as("o vetor k é o do trecho k, lote a lote")
+                .containsExactlyElementsOf(IntStream.range(0, 120).boxed().toList());
         assertThat(servidor.recebidas()).hasSize(3);
         assertThat(servidor.recebidas()).extracting(r -> corpo(r).path("requests").size()).containsExactly(50, 50, 20);
         assertThat(corpo(servidor.recebidas().get(2)).path("requests").get(19).path("content").path("parts").get(0).path("text").asString())
@@ -122,12 +145,14 @@ class EmbeddingsGeminiTest {
     @Test
     void num400DoLoteDivideAoMeioEJuntaAsMetades() {
         servidor.responder(400, "{\"error\":{\"message\":\"Request payload size exceeds the limit\"}}");
-        servidor.responder(200, respostaDoLote(2));
-        servidor.responder(200, respostaDoLote(2));
+        servidor.responder(200, respostaDoLoteComVetoresDiferentes(0, 2));
+        servidor.responder(200, respostaDoLoteComVetoresDiferentes(2, 2));
 
         List<float[]> vetores = gemini.paraTrechos("Titulo", trechos(4));
 
         assertThat(vetores).hasSize(4);
+        assertThat(vetores.stream().mapToInt(EmbeddingsGeminiTest::posicaoDoUm)).as("a primeira metade vem antes da segunda")
+                .containsExactly(0, 1, 2, 3);
         assertThat(servidor.recebidas()).extracting(r -> corpo(r).path("requests").size()).containsExactly(4, 2, 2);
         assertThat(corpo(servidor.recebidas().get(1)).path("requests").get(0).path("content").path("parts").get(0).path("text").asString())
                 .endsWith("Texto do trecho 1.");
