@@ -14,7 +14,9 @@ import br.com.rbs.portal.atlas.AtlasService;
 import br.com.rbs.portal.atlas.ProvedorRoteirizado;
 import br.com.rbs.portal.atlas.TesteComLlmRoteirizado;
 import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.MensagemDeChat;
+import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.PedidoAoLlm;
 import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.RespostaDoLlm;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
@@ -83,6 +85,103 @@ class ConversaComDocumentoRetiradoTest extends ApoioDeDocumentos {
                     null);
         });
         return ultimoTexto(falar(conversa, "Até quando informo os geradores?"));
+    }
+
+    /** Um trecho que a busca devolveu ao modelo: o marcador, o documento e o texto. */
+    record TrechoVisto(String marcador, String documento, String texto) {
+    }
+
+    /** Os trechos do último resultado de ferramenta do pedido (a busca que o modelo acabou de receber). */
+    static List<TrechoVisto> trechosDaUltimaBusca(PedidoAoLlm pedido) {
+        MensagemDeChat busca = pedido.mensagens().stream().filter(m -> m.papel().equals("tool")).reduce((a, b) -> b).orElseThrow();
+        List<?> trechos = (List<?>) AtlasJson.ler(busca.conteudo(), new TypeReference<Map<String, Object>>() {
+        }).get("trechos");
+        return trechos.stream().map(t -> (Map<?, ?>) t)
+                .map(t -> new TrechoVisto((String) t.get("marcador"), (String) t.get("documento"), (String) t.get("texto"))).toList();
+    }
+
+    static String marcadorDe(List<TrechoVisto> vistos, String documento, String trecho) {
+        return vistos.stream().filter(t -> t.documento().equals(documento) && t.texto().contains(trecho)).map(TrechoVisto::marcador)
+                .findFirst().orElseThrow(() -> new AssertionError("a busca não trouxe " + documento + " com " + trecho));
+    }
+
+    /**
+     * O roteiro inteiro, num teste só (M4, critério bloqueante). Turno 1: o modelo busca duas vezes e cita dois documentos, o manual
+     * (v2) e o FAQ. Entre os turnos, a RBS revoga o FAQ e publica a v3 do manual, pelas rotas de verdade. Turno 2: o modelo não busca
+     * de novo, e NO MESMO pedido a ele nenhuma mensagem, nem a de papel {@code tool}, traz o texto de nenhum dos dois documentos; o
+     * prompt de sistema traz a nota dos dois.
+     */
+    @Test
+    void roteiroInteiroDoisDocumentosCitadosUmRevogadoOutroSubstituidoENenhumTextoVoltaAoModelo() {
+        long conversa = abrir();
+        List<TrechoVisto> vistos = new ArrayList<>();
+        modelo.chamada(BUSCAR, AtlasJson.escrever(Map.of("consulta", "prazo para informar os geradores próprios")));
+        modelo.passo(pedido -> {
+            vistos.addAll(trechosDaUltimaBusca(pedido));
+            return new RespostaDoLlm(null, List.of(ProvedorRoteirizado.pedido(BUSCAR,
+                    AtlasJson.escrever(Map.of("consulta", "reunião de alinhamento com as marcas")))), null);
+        });
+        modelo.passo(pedido -> {
+            vistos.addAll(trechosDaUltimaBusca(pedido));
+            String manual = marcadorDe(vistos, "Manual de Operações 2027", PRAZO);
+            String faq = marcadorDe(vistos, "FAQ do patrocinador 2027", "10/12/2026");
+            return new RespostaDoLlm("O prazo dos geradores é " + PRAZO + " [" + manual + "]. A reunião de alinhamento é em 10/12/2026 [" + faq
+                    + "].", List.of(), null);
+        });
+
+        ItemTexto resposta = ultimoTexto(falar(conversa, "Até quando informo os geradores, e quando é a reunião?"));
+
+        assertThat(resposta.fontes()).extracting(FonteDoTexto::titulo).containsExactlyInAnyOrder("Manual de Operações 2027",
+                "FAQ do patrocinador 2027");
+        assertThat(vistos).as("os trechos que o modelo viu no turno 1").hasSizeGreaterThanOrEqualTo(2);
+        List<String> linhasDosDocumentos = vistos.stream().flatMap(t -> t.texto().lines()).map(String::strip).filter(l -> l.length() >= 30)
+                .distinct().toList();
+        assertThat(linhasDosDocumentos).isNotEmpty();
+        long manual = resposta.fontes().stream().filter(f -> f.titulo().startsWith("Manual")).findFirst().orElseThrow().documentoId();
+        long faq = resposta.fontes().stream().filter(f -> f.titulo().startsWith("FAQ")).findFirst().orElseThrow().documentoId();
+
+        // a RBS revoga o FAQ e publica a v3 do manual (que substitui a v2), pelas rotas
+        SessaoDeApi rbs = entrar(RBS);
+        assertThat(acao(rbs, faq, "REVOGAR", "O FAQ saiu do ar.")).hasStatus(HttpStatus.OK);
+        Map<String, String> campos = global("Manual de Operações 2027", "manual-operacoes");
+        campos.put("tipo", "MANUAL_OPERACOES");
+        long v3 = enviarOk(rbs, "manual-novo.pdf", KitDeDocumentos.por("D02").conteudo(), campos);
+        assertThat(acao(rbs, v3, "APROVAR")).hasStatus(HttpStatus.OK);
+        ingestao.processar(v3);
+        assertThat(statusDe(faq)).isEqualTo("REVOGADO");
+        assertThat(statusDe(manual)).isEqualTo("SUBSTITUIDO");
+        assertThat(statusDe(v3)).isEqualTo("INDEXADO");
+
+        // o turno 2: o modelo não busca, e a pergunta continua o assunto
+        modelo.limpar();
+        modelo.texto("Entendi. Vou considerar só o que vale hoje.");
+        falar(conversa, "E sobre isso, mudou alguma coisa?");
+
+        assertThat(modelo.pedidos()).as("uma ida só ao modelo, sem nova busca").hasSize(1);
+        List<MensagemDeChat> mensagens = modelo.pedidos().get(0).mensagens();
+        // 1) nenhuma mensagem, de nenhum papel, traz o texto dos dois documentos
+        for (MensagemDeChat mensagem : mensagens.subList(1, mensagens.size())) {
+            String conteudo = mensagem.conteudo() == null ? "" : mensagem.conteudo();
+            for (String linha : linhasDosDocumentos) {
+                assertThat(conteudo).as("mensagem de papel " + mensagem.papel() + " não traz o texto do documento").doesNotContain(linha);
+            }
+        }
+        // 2) o histórico tem as duas buscas, sem texto, só com os documentos e o aviso; as respostas do assistente não são tocadas
+        List<MensagemDeChat> resultados = mensagens.stream().filter(m -> m.papel().equals("tool")).toList();
+        assertThat(resultados).hasSize(2);
+        for (MensagemDeChat resultado : resultados) {
+            assertThat(resultado.conteudo()).contains("resultado_de_turno_anterior").contains("busque de novo")
+                    .doesNotContain("\"trechos\"").doesNotContain("\"texto\"").doesNotContain("\"marcador\"");
+        }
+        assertThat(resultados.stream().map(MensagemDeChat::conteudo).reduce("", String::concat)).contains("Manual de Operações 2027")
+                .contains("FAQ do patrocinador 2027");
+        assertThat(mensagens).filteredOn(m -> m.papel().equals("assistant") && m.chamadas().isEmpty()).hasSize(1);
+        // 3) o prompt de sistema do pedido traz a nota dos dois, uma vez cada
+        String prompt = mensagens.get(0).conteudo();
+        assertThat(prompt).contains(NOTA).contains("- Manual de Operações 2027 v2 não vale mais: não use o que foi dito dele.")
+                .contains("- FAQ do patrocinador 2027 v1 não vale mais: não use o que foi dito dele.");
+        assertThat(prompt.indexOf(NOTA)).isEqualTo(prompt.lastIndexOf(NOTA));
+        assertThat(prompt).as("a v3, que vale, não entra na nota").doesNotContain("Manual de Operações 2027 v3");
     }
 
     @Test
