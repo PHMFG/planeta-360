@@ -28,6 +28,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.FutureTask;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -129,8 +130,16 @@ public class IngestaoService {
     }
 
     private void despachar(long documentoId) {
-        Future<?> tarefa = executor.submit(() -> processar(documentoId));
+        // A tarefa entra no mapa ANTES de começar e sai dele quando termina: quem espera (aguardar) a encontra enquanto roda.
+        FutureTask<Void> tarefa = new FutureTask<>(() -> {
+            try {
+                processar(documentoId);
+            } finally {
+                emAndamento.remove(documentoId);
+            }
+        }, null);
         emAndamento.put(documentoId, tarefa);
+        executor.execute(tarefa);
         if (sincrona) {
             esperar(tarefa);
         }
