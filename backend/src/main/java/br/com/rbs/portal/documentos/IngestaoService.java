@@ -251,6 +251,11 @@ public class IngestaoService implements SmartInitializingSingleton {
         historico.registrar(AcaoHistorico.ALTERACAO_STATUS, quem, documento.parceriaId(), "documento", documento.id(), "PROCESSANDO", situacao,
                 trechos + " trechos, embeddings " + embeddings.modelo() + " em " + embeddingsMs + " ms", null);
         for (Long antigo : substituidos) {
+            // Só quem ficou SUBSTITUIDO de fato: uma versão revogada no meio da publicação continua REVOGADO, e o histórico não pode dizer
+            // que foi substituída. O status é lido depois da função, na mesma transação.
+            if (!"SUBSTITUIDO".equals(repositorio.statusDe(antigo).orElse(""))) {
+                continue;
+            }
             historico.registrar(AcaoHistorico.ALTERACAO_STATUS, quem, documento.parceriaId(), "documento", antigo, "INDEXADO", "SUBSTITUIDO",
                     "substituído pela versão " + documento.versao(), null);
         }

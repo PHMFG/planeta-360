@@ -2093,7 +2093,7 @@ Para montar o formulário: as edições vêm da rota 6, as parcerias (com a `cot
 | 409 | O status atual não aceita a ação (`"Só um documento aguardando aprovação pode ser aprovado. Este documento está indexado."`), ou o banco recusou (dado pessoal, nunca aprovado). Nada muda. |
 | 422 | `acao` ausente ou fora das quatro, ou `observacao` com mais de 500 caracteres ou com o caractere nulo (`"A observação tem caracteres inválidos."`). |
 
-**Histórico:** `ALTERACAO_STATUS` na entidade `documento`, com o status anterior e o novo. A indexação grava o seu: `PROCESSANDO` para `INDEXADO` (com o número de trechos, o modelo e o tempo) ou para `ERRO` (com o motivo), e `INDEXADO` para `SUBSTITUIDO` na versão anterior. Qualquer falha da indexação leva o documento a `ERRO`, também a da leitura do documento no começo (ele nunca fica preso em `PROCESSANDO`, de onde `REINDEXAR`, `RECUSAR` e `REVOGAR` dariam 409); o motivo não leva o caractere nulo e vai cortado em 500 caracteres.
+**Histórico:** `ALTERACAO_STATUS` na entidade `documento`, com o status anterior e o novo. A indexação grava o seu: `PROCESSANDO` para `INDEXADO` (com o número de trechos, o modelo e o tempo) ou para `ERRO` (com o motivo), e `INDEXADO` para `SUBSTITUIDO` na versão anterior, **só se ela ficou `SUBSTITUIDO` de fato**: uma versão revogada no meio da publicação da nova continua `REVOGADO`, sem essa linha. Qualquer falha da indexação leva o documento a `ERRO`, também a da leitura do documento no começo (ele nunca fica preso em `PROCESSANDO`, de onde `REINDEXAR`, `RECUSAR` e `REVOGAR` dariam 409); o motivo não leva o caractere nulo e vai cortado em 500 caracteres.
 
 ## 58. `GET /api/documentos/{id}/trechos`  · Atlas M3
 

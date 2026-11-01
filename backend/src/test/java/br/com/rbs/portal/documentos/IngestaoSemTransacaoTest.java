@@ -30,6 +30,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -108,10 +109,11 @@ class IngestaoSemTransacaoTest extends ApoioDeDocumentos {
         }
     }
 
-    /** O repositório de verdade, com um gancho: falhar ao ler o documento da ingestão. */
+    /** O repositório de verdade, com dois ganchos: falhar ao ler o documento da ingestão e fazer algo logo antes de a nova versão publicar. */
     static class RepositorioComGanchos extends DocumentoRepositorio {
 
         volatile boolean falharAoLer;
+        volatile Runnable antesDePublicar;
 
         RepositorioComGanchos(JdbcClient jdbc) {
             super(jdbc);
@@ -120,10 +122,15 @@ class IngestaoSemTransacaoTest extends ApoioDeDocumentos {
         // O repositório é um @Repository: o Spring o entrega por um proxy, então o teste mexe nele por métodos, e não pelos campos.
         public void limpar() {
             falharAoLer = false;
+            antesDePublicar = null;
         }
 
         public void falharAoLer(boolean falhar) {
             falharAoLer = falhar;
+        }
+
+        public void antesDePublicar(Runnable gancho) {
+            antesDePublicar = gancho;
         }
 
         @Override
@@ -132,6 +139,15 @@ class IngestaoSemTransacaoTest extends ApoioDeDocumentos {
                 throw new IllegalStateException("a conexão caiu na leitura do documento");
             }
             return super.paraIngestao(id);
+        }
+
+        @Override
+        public void publicar(long id) {
+            Runnable gancho = antesDePublicar;
+            if (gancho != null) {
+                gancho.run();
+            }
+            super.publicar(id);
         }
     }
 
@@ -436,5 +452,27 @@ class IngestaoSemTransacaoTest extends ApoioDeDocumentos {
         assertThat(erro).startsWith("O Gemini respondeu 400: chave inválida e a frase continua").hasSize(500);
         assertThat(contar("SELECT count(*) FROM historico WHERE entidade = 'documento' AND entidade_id = ? AND valor_novo = 'ERRO'", id)).isEqualTo(1);
         assertThat(acao(rbs, id, "RECUSAR")).as("e a RBS ainda recusa").hasStatus(HttpStatus.OK);
+    }
+
+    @Test
+    void revogarAVersaoAntigaNoMeioDaPublicacaoDaNovaNaoGravaNoHistoricoQueElaFoiSubstituida() {
+        SessaoDeApi rbs = entrar(RBS);
+        long v1 = enviarEAprovar(rbs, "teste-revoga-durante-a-troca");
+        acao(rbs, v1, "APROVAR");
+        assertThat(statusDe(v1)).isEqualTo("INDEXADO");
+        long v2 = enviarEAprovar(rbs, "teste-revoga-durante-a-troca");
+        long rbsId = contar("SELECT id FROM usuario WHERE email = ?", RBS);
+        TransactionTemplate emOutraConexao = new TransactionTemplate(gerenteDeTransacao);
+        emOutraConexao.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+        // a RBS revoga a v1 e confirma, no meio da publicação da v2 (depois de a v2 ler quais versões ela vai substituir)
+        repositorio.antesDePublicar(() -> emOutraConexao.executeWithoutResult(estado -> repositorio.revogar(v1, rbsId)));
+
+        acao(rbs, v2, "APROVAR");
+
+        assertThat(statusDe(v2)).isEqualTo("INDEXADO");
+        assertThat(statusDe(v1)).as("a v1 foi revogada, e a publicação da v2 não a toca").isEqualTo("REVOGADO");
+        assertThat(contar("SELECT count(*) FROM historico WHERE entidade = 'documento' AND entidade_id = ? AND valor_novo = 'SUBSTITUIDO'", v1))
+                .as("o histórico não pode dizer que a v1 foi substituída").isZero();
+        assertThat(contar("SELECT count(*) FROM historico WHERE entidade = 'documento' AND entidade_id = ? AND valor_novo = 'INDEXADO'", v2)).isEqualTo(1);
     }
 }
