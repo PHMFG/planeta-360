@@ -40,10 +40,11 @@ const ARTIGOS = new Set(['a', 'as', 'ao', 'aos', 'e', 'de', 'do', 'da', 'das', '
 
 /**
  * Se a resposta tem esse fato. Com número ou data, compara por valor: "14 de dezembro" não casa com "4 de dezembro", e "4/12" casa com "04/12".
- * As palavras em volta do número também contam ("Portão 5"). Sem número, casa do começo da palavra, sem acento.
+ * As palavras em volta do número também contam ("Portão 5"). Sem algarismo, casa do começo da palavra, sem acento: "dezessete"
+ * é a palavra, e o "17" que veio do marcador não conta como ela.
  */
 export function casa(texto, alternativa) {
-  const valores = extrair(alternativa, { fonte: true })
+  const valores = /\p{N}/u.test(alternativa) ? extrair(alternativa, { fonte: true }) : []
   if (valores.length) {
     const origens = new Origens(texto)
     if (!valores.every((v) => origens.aceita(v))) return false
@@ -77,6 +78,17 @@ export function resumirTurnos(turnos) {
 
 function jsonDe(texto) {
   try { return JSON.parse(texto) } catch { return null }
+}
+
+/** Os valores de uma fonte, separados por espaço. No JSON cru, a quebra de linha vira "\\n", e o "n" gruda no número seguinte. */
+function valoresDe(valor) {
+  if (valor === null || typeof valor !== 'object') return String(valor ?? '')
+  return Object.values(valor).map(valoresDe).join(' ')
+}
+
+const paraOrigem = (resultado) => {
+  const json = jsonDe(resultado)
+  return json === null ? resultado : valoresDe(json)
 }
 
 /** Os títulos que a marca recebeu: dos trechos das buscas e das fontes da resposta. */
@@ -121,12 +133,12 @@ export function numerosSemOrigem(turnos, hoje = new Date()) {
     for (const item of turno.itens) {
       if (item.tipo === 'usuario') geral.adicionar(item.texto)
       if (item.tipo !== 'ferramenta' || item.erro) continue
-      if (SEM_CITACAO.has(item.nome)) geral.adicionar(item.resultado)
+      if (SEM_CITACAO.has(item.nome)) geral.adicionar(paraOrigem(item.resultado))
       const json = jsonDe(item.resultado)
       for (const fonte of [...(json?.trechos ?? []), ...(json?.registros ?? [])]) {
-        if (fonte.marcador) fontes.set(fonte.marcador, JSON.stringify(fonte))
+        if (fonte.marcador) fontes.set(fonte.marcador, valoresDe(fonte))
       }
-      if (json?.marcador) fontes.set(json.marcador, item.resultado)
+      if (json?.marcador) fontes.set(json.marcador, valoresDe(json))
     }
     for (const item of turno.itens.filter((i) => i.tipo === 'texto' && i.porModelo !== false)) {
       for (const frase of frases(semNumeracaoDeLista(item.texto))) {

@@ -1,7 +1,7 @@
 // node --test ferramentas/avaliacao-atlas/testes/*.test.mjs
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { conferir, conferirTraco, numerosSemOrigem, resumirTurnos, vazamentos } from '../conferencias.mjs'
+import { casa, conferir, conferirTraco, numerosSemOrigem, resumirTurnos, vazamentos } from '../conferencias.mjs'
 import { extrair, frases, semCitacoes, semNumeracaoDeLista } from '../numeros.mjs'
 
 const valores = (texto) => extrair(texto).flatMap((a) => (a.data ? [`data:${a.data.dia}`, ...(a.data.ano ? [`ano:${a.data.ano}`] : [])] : a.valores))
@@ -65,6 +65,19 @@ test('número que veio da ferramenta tem origem', () => {
 
 test('número inventado não tem origem', () => {
   assert.equal(numerosSemOrigem(turnosCom('Previstas: 23.', ['{"valor":19}'])).length, 1)
+})
+
+test('data logo depois de uma quebra de linha no trecho tem origem', () => {
+  const resultado = JSON.stringify({ tipo: 'conteudo_de_documento', trechos: [{ marcador: 'T1', documento: 'Manual', versao: 2, pagina: 3, secao: 'Prazos', texto: 'Informar os geradores\n04/12/2026\nMarca' }] })
+  const turnos = [turno([{ tipo: 'usuario', texto: 'Quando?' }, { tipo: 'ferramenta', nome: 'buscar_documentos', resultado }, { tipo: 'texto', texto: 'Até 04/12/2026 [T1].', porModelo: true }])]
+  assert.deepEqual(numerosSemOrigem(turnos), [])
+  const semCitar = [turno([{ tipo: 'usuario', texto: 'Quando?' }, { tipo: 'ferramenta', nome: 'buscar_documentos', resultado }, { tipo: 'texto', texto: 'Até 05/12/2026 [T1].', porModelo: true }])]
+  assert.equal(numerosSemOrigem(semCitar).length, 1)
+})
+
+test('o numeral por extenso é a palavra: o 17 do marcador não conta como ele', () => {
+  assert.equal(casa('aplicações comprovadas: 17.', 'dezessete'), false)
+  assert.equal(casa('foram dezessete aplicações', 'dezessete'), true)
 })
 
 test('número da pergunta da pessoa tem origem', () => {
