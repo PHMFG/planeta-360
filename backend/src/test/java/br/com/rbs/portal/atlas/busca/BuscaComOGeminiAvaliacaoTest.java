@@ -26,7 +26,8 @@ import org.springframework.test.context.ActiveProfiles;
  * {@code ./mvnw test -Dgroups=avaliacao -Dtest=BuscaComOGeminiAvaliacaoTest -Dtestes.excluidos=}. O perfil {@code avaliacao}
  * liga {@code ATLAS_EMBEDDINGS=gemini} e importa {@code config/segredos.local.properties}; ao subir o contexto, o
  * {@code KitDeDocumentosDeTeste} envia, aprova e indexa os 13 documentos pelo Gemini. Sem a chave, o teste é pulado (e não falha).
- * O kit é fictício: nada de dado real sai da máquina. Os números saem no log (linha "[avaliacao]").
+ * O kit é fictício: nada de dado real sai da máquina. Os números saem no log (linha "[avaliacao]"). As consultas andam a no máximo 80
+ * por minuto, então as mais de 200 perguntas levam uns 3 minutos.
  */
 @Tag("avaliacao")
 @TesteDeIntegracao
@@ -52,23 +53,50 @@ class BuscaComOGeminiAvaliacaoTest {
                 .param("cliente", c).query((rs, n) -> new Escopo(rs.getLong(1), rs.getInt(2), rs.getLong(3))).single());
     }
 
-    /** O embedding da pergunta, com até 3 tentativas e uma pausa (a cota por minuto do Gemini pode segurar uma rodada de 200). */
+    /** No máximo 80 consultas por minuto (o Gemini gratuito segura 100): uma a cada 750 ms. */
+    private static final long INTERVALO_ENTRE_CONSULTAS_MS = 60_000L / 80;
+    /** Se a consulta falhar mesmo assim, espera 30 s (o limite por minuto passa sozinho) e tenta de novo, até 4 vezes. */
+    private static final long PAUSA_DEPOIS_DE_FALHAR_MS = 30_000L;
+    private static final int NOVAS_TENTATIVAS = 4;
+
+    private long ultimaConsultaEm;
+
+    private static void dormir(long milissegundos) {
+        try {
+            TimeUnit.MILLISECONDS.sleep(milissegundos);
+        } catch (InterruptedException interrompido) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("A espera do teste foi interrompida.", interrompido);
+        }
+    }
+
+    /** Espera o que falta para a consulta seguinte ficar a {@value #INTERVALO_ENTRE_CONSULTAS_MS} ms da anterior. */
+    private void andarNoRitmo() {
+        if (ultimaConsultaEm != 0) {
+            long falta = INTERVALO_ENTRE_CONSULTAS_MS - TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - ultimaConsultaEm);
+            if (falta > 0) {
+                dormir(falta);
+            }
+        }
+        ultimaConsultaEm = System.nanoTime();
+    }
+
+    /**
+     * O embedding da pergunta. {@code paraConsulta} faz uma tentativa só e não espera nada, então o teste é quem respeita o limite por
+     * minuto: anda a no máximo 80 consultas por minuto e, se o Gemini ainda assim recusar, espera 30 s e tenta de novo, até 4 vezes.
+     */
     private float[] vetorDe(String pergunta) {
-        RuntimeException ultima = null;
-        for (int tentativa = 0; tentativa < 3; tentativa++) {
+        for (int nova = 0; ; nova++) {
+            andarNoRitmo();
             try {
                 return embeddings.paraConsulta(pergunta);
             } catch (RuntimeException falhou) {
-                ultima = falhou;
-                try {
-                    TimeUnit.SECONDS.sleep(2L * (tentativa + 1));
-                } catch (InterruptedException interrompido) {
-                    Thread.currentThread().interrupt();
+                if (nova >= NOVAS_TENTATIVAS) {
                     throw falhou;
                 }
+                dormir(PAUSA_DEPOIS_DE_FALHAR_MS);
             }
         }
-        throw ultima;
     }
 
     private List<Candidato> hibrida(String cliente, String pergunta) {
