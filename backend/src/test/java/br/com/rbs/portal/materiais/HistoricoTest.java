@@ -34,12 +34,12 @@ class HistoricoTest extends ApoioDeMateriais {
     }
 
     /**
-     * Quantas linhas da parceria o patrocinador pode ver: tudo, menos login, falha de login, logout e as etapas internas do
-     * relatório (geração e validação).
+     * Quantas linhas da parceria o patrocinador pode ver: tudo, menos login, falha de login, logout, as etapas internas do
+     * relatório (geração e validação) e a entidade documento (os documentos do Atlas, que o kit confirma no banco de teste).
      */
     long linhasVisiveisDaParceria(long parceriaId) {
         return contar("""
-                SELECT count(*) FROM historico WHERE parceria_id = ?
+                SELECT count(*) FROM historico WHERE parceria_id = ? AND entidade <> 'documento'
                 AND acao NOT IN ('LOGIN', 'LOGIN_FALHOU', 'LOGOUT', 'GERACAO_RELATORIO', 'VALIDACAO')""", parceriaId);
     }
 
