@@ -1,0 +1,65 @@
+# Suíte do back e build do front, sem chave nenhuma: os testes usam provedores falsos. O e2e fica fora, porque precisa da API e dos navegadores.
+name: CI
+
+on:
+  push:
+    branches: [atlas-completo]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  back:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.7-pg18
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Usuário e banco de teste, como no README
+        run: |
+          psql -d postgres -v ON_ERROR_STOP=1 \
+            -c "CREATE ROLE portal LOGIN PASSWORD 'portal'" \
+            -c "CREATE DATABASE portal_teste OWNER portal"
+      - name: pgvector e papel atlas_ro
+        run: scripts/preparar-banco-atlas.sh portal_teste
+      - name: Testes
+        working-directory: backend
+        run: ./mvnw -B test
+
+  front:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npm run lint
