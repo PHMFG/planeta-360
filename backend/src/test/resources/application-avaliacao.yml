@@ -1,0 +1,15 @@
+# O perfil "avaliacao": os testes com @Tag("avaliacao"), que ficam FORA do ./mvnw test porque falam com os provedores de verdade
+# (Gemini hoje; o JEV entra no M7). Rodam com:  ./mvnw test -Dgroups=avaliacao -Dtestes.excluidos=
+# Cada classe declara @ActiveProfiles({"test", "avaliacao"}): o @ActiveProfiles("test") do @TesteDeIntegracao vence a variável
+# spring.profiles.active, por isso o perfil vem por anotação (conferido em 30/10/2026). As chaves vêm de config/segredos.local.properties
+# (fora do Git, relativo à pasta backend/) ou de variável de ambiente; nunca daqui.
+spring:
+  config:
+    import: optional:file:./config/segredos.local.properties
+
+atlas:
+  embeddings:
+    # Os embeddings de verdade: o kit de documentos é indexado pelo Gemini quando o contexto de teste sobe.
+    provedor: gemini
+  jev:
+    modo: ${ATLAS_JEV:sombra}
