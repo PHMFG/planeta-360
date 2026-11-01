@@ -1,6 +1,7 @@
 package br.com.rbs.portal.atlas;
 
 import static br.com.rbs.portal.ApoioDeTeste.lerJson;
+import static br.com.rbs.portal.ApoioDeTeste.lerLista;
 import static br.com.rbs.portal.atlas.ApoioDoAtlas.AMARELO;
 import static br.com.rbs.portal.atlas.ApoioDoAtlas.RBS;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -58,14 +59,16 @@ class ConversaSemParceriaTest {
 
     @Test
     void aListaDeConversasDaParceriaNaoTrazAConversaSemParceria() {
-        conversaDoEventoDe(AMARELO);
         SessaoDeApi marca = SessaoDeApi.entrar(mvc, AMARELO);
         long parceria = SessaoDeApi.parceriaDe2027(jdbc, "Cliente Amarelo");
+        MvcTestResult antes = marca.get("/api/parcerias/" + parceria + "/atlas/conversas");
+        long semParceria = conversaDoEventoDe(AMARELO);
 
         MvcTestResult lista = marca.get("/api/parcerias/" + parceria + "/atlas/conversas");
 
         assertThat(lista).hasStatus(HttpStatus.OK);
-        assertThat(lerJson(lista, "$.conversas.length()")).isEqualTo(0);
+        assertThat(lerJson(lista, "$.conversas.length()")).isEqualTo(lerJson(antes, "$.conversas.length()"));
+        assertThat(lerLista(lista, "$.conversas[*].id")).doesNotContain((int) semParceria);
     }
 
     @Test

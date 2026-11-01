@@ -2,6 +2,7 @@ package br.com.rbs.portal.atlas.contexto;
 
 import br.com.rbs.portal.atlas.AtlasRepositorio;
 import br.com.rbs.portal.atlas.AtlasRepositorio.EscopoDaParceria;
+import br.com.rbs.portal.atlas.jev.JevDoTurno;
 import br.com.rbs.portal.comum.UsuarioAutenticado;
 import br.com.rbs.portal.comum.VerificadorDeAcesso;
 import jakarta.servlet.http.HttpServletRequest;
@@ -22,11 +23,14 @@ public class AtlasContextoFabrica {
         this.repositorio = repositorio;
     }
 
-    /** O contexto da conversa. {@code parceriaId} é o da linha da conversa, nunca um id que veio da URL ou do corpo. */
+    /**
+     * O contexto da conversa, com o estado do JEV de um turno novo. {@code parceriaId} é o da linha da conversa, nunca um id que veio da URL
+     * ou do corpo.
+     */
     public AtlasContexto para(UsuarioAutenticado usuario, long parceriaId, long conversaId, HttpServletRequest requisicao) {
         verificador.exigirParceria(usuario, parceriaId);
         EscopoDaParceria escopo = repositorio.escopoDaParceria(parceriaId);
         return new AtlasContexto(usuario, parceriaId, escopo.eventoId(), escopo.cotaTipoId(), escopo.cotaCodigo(),
-                verificador.abasAbertas(usuario, parceriaId), conversaId, requisicao);
+                verificador.abasAbertas(usuario, parceriaId), conversaId, requisicao).comJev(new JevDoTurno());
     }
 }

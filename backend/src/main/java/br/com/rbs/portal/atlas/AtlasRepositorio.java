@@ -174,6 +174,39 @@ public class AtlasRepositorio {
                 .param("id", conversaId).query(String.class).optional();
     }
 
+    /** O id da última mensagem da pessoa na conversa: a que as decisões do JEV do turno apontam. */
+    public Optional<Long> idDaUltimaMensagemDaPessoa(long conversaId) {
+        return jdbc.sql("SELECT id FROM atlas_mensagem WHERE conversa_id = :id AND papel = 'user' ORDER BY ordem DESC LIMIT 1")
+                .param("id", conversaId).query(Long.class).optional();
+    }
+
+    /**
+     * Grava uma decisão do JEV (V15): onde foi consultado, no modo e com o limiar que valiam, o que respondeu e o que o servidor fez
+     * (ou, em sombra, teria feito). Chamar numa transação curta, depois das chamadas ao JEV. Nunca leva o estado enviado a ele.
+     */
+    public void inserirDecisao(long mensagemId, java.util.UUID turno, String ponto, String modo, double limiar, String pergunta,
+                               String escolha, Double confianca, String probabilidadesJson, String modelo, String decisaoLlm,
+                               Long latenciaMs, String erro, String acao, String alvo) {
+        jdbc.sql("""
+                        INSERT INTO atlas_decisao (mensagem_id, turno, ponto, modo, limiar, pergunta, escolha, confianca, probabilidades,
+                                                   modelo, decisao_llm, latencia_ms, erro, acao, alvo)
+                        VALUES (:mensagem, :turno, :ponto, :modo, :limiar, :pergunta, :escolha, :confianca, CAST(:probabilidades AS jsonb),
+                                :modelo, :decisaoLlm, :latencia, :erro, :acao, :alvo)
+                        """)
+                .param("mensagem", mensagemId).param("turno", turno).param("ponto", ponto).param("modo", modo)
+                .param("limiar", java.math.BigDecimal.valueOf(limiar)).param("pergunta", cortar(pergunta, 40))
+                .param("escolha", cortar(escolha, 40))
+                .param("confianca", confianca == null ? null : java.math.BigDecimal.valueOf(Math.max(0, Math.min(1, confianca))))
+                .param("probabilidades", probabilidadesJson).param("modelo", cortar(modelo, 40))
+                .param("decisaoLlm", cortar(decisaoLlm, 60)).param("latencia", latenciaMs == null ? null : (int) Math.min(Integer.MAX_VALUE, latenciaMs))
+                .param("erro", erro).param("acao", cortar(acao, 80)).param("alvo", cortar(alvo, 200))
+                .update();
+    }
+
+    private static String cortar(String texto, int maximo) {
+        return texto == null || texto.length() <= maximo ? texto : texto.substring(0, maximo);
+    }
+
     /**
      * O que a pessoa escreveu antes da última mensagem dela, da mais nova para a mais antiga, até {@code limite} (o botão "Montar
      * relatório" também grava uma mensagem {@code user}, mas não foi a pessoa que a escreveu: {@code textoDoBotao} a deixa de fora).

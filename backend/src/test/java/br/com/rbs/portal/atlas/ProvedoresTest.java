@@ -144,9 +144,12 @@ class ProvedoresTest {
         assertThat(((Number) lerJson(resposta, "$.provedores[0].latenciaP50Ms")).longValue()).isGreaterThanOrEqualTo(0);
         assertThat(((Number) lerJson(resposta, "$.provedores[0].latenciaP95Ms")).longValue())
                 .isGreaterThanOrEqualTo(((Number) lerJson(resposta, "$.provedores[0].latenciaP50Ms")).longValue());
-        // o JEV e o Gemini ainda não deixam traço
-        assertThat(lerLista(resposta, "$.provedores[1:3].chamadas24h")).containsExactly(0, 0);
-        assertThat(lerLista(resposta, "$.provedores[1:3].latenciaP50Ms")).containsOnlyNulls();
+        // o JEV está em sombra (atlas.jev.modo): cada mensagem de texto o consulta uma vez (a intenção), e o servidor falso, sem resposta
+        // enfileirada, responde 500, então as três consultas caem como erro. O Gemini não deixou traço (nenhuma busca)
+        assertThat(lerJson(resposta, "$.provedores[1].chamadas24h")).isEqualTo(3);
+        assertThat(lerJson(resposta, "$.provedores[1].erros24h")).isEqualTo(3);
+        assertThat(lerJson(resposta, "$.provedores[2].chamadas24h")).isEqualTo(0);
+        assertThat(lerLista(resposta, "$.provedores[2:3].latenciaP50Ms")).containsOnlyNulls();
         // o teto diário: as 3 mensagens do assistente que a parceria gastou hoje (duas respostas e a frase da falha)
         assertThat(lerLista(resposta, "$.tetoDiario.parcerias[*].parceria")).contains("Cliente Amarelo");
         assertThat(lerLista(resposta, "$.tetoDiario.parcerias[?(@.parceria=='Cliente Amarelo')].usadas")).containsExactly(3);

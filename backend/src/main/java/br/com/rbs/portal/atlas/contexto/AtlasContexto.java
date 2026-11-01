@@ -1,6 +1,7 @@
 package br.com.rbs.portal.atlas.contexto;
 
 import br.com.rbs.portal.atlas.diagnostico.Traco;
+import br.com.rbs.portal.atlas.jev.JevDoTurno;
 import br.com.rbs.portal.comum.UsuarioAutenticado;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.Set;
@@ -23,24 +24,32 @@ import java.util.Set;
  * @param requisicao  o pedido HTTP, para o histórico
  * @param traco       o traço do diagnóstico do turno em andamento ({@link Traco#NENHUM} fora de um turno ou com o diagnóstico
  *                    desligado): é por aqui que o loop, a checagem e o resumo do raciocínio deixam as etapas
+ * @param jev         o que o JEV guarda durante o turno (M7): o orçamento de requisições, as decisões ainda não gravadas e se o turno
+ *                    acabou na preparação. {@link JevDoTurno#NENHUM} fora de um turno: o JEV nunca é consultado
  */
 public record AtlasContexto(UsuarioAutenticado usuario, long parceriaId, long eventoId, int cotaTipoId, String cota,
-                            Set<String> abasAbertas, long conversaId, HttpServletRequest requisicao, Traco traco) {
+                            Set<String> abasAbertas, long conversaId, HttpServletRequest requisicao, Traco traco, JevDoTurno jev) {
 
     public AtlasContexto {
         abasAbertas = abasAbertas == null ? Set.of() : Set.copyOf(abasAbertas);
         traco = traco == null ? Traco.NENHUM : traco;
+        jev = jev == null ? JevDoTurno.NENHUM : jev;
     }
 
-    /** Um contexto sem traço (o diagnóstico desligado, ou fora de um turno). */
+    /** Um contexto sem traço nem JEV (o diagnóstico desligado, ou fora de um turno). */
     public AtlasContexto(UsuarioAutenticado usuario, long parceriaId, long eventoId, int cotaTipoId, String cota,
                          Set<String> abasAbertas, long conversaId, HttpServletRequest requisicao) {
-        this(usuario, parceriaId, eventoId, cotaTipoId, cota, abasAbertas, conversaId, requisicao, Traco.NENHUM);
+        this(usuario, parceriaId, eventoId, cotaTipoId, cota, abasAbertas, conversaId, requisicao, Traco.NENHUM, JevDoTurno.NENHUM);
     }
 
     /** O mesmo contexto, no turno deste traço. */
     public AtlasContexto comTraco(Traco novo) {
-        return new AtlasContexto(usuario, parceriaId, eventoId, cotaTipoId, cota, abasAbertas, conversaId, requisicao, novo);
+        return new AtlasContexto(usuario, parceriaId, eventoId, cotaTipoId, cota, abasAbertas, conversaId, requisicao, novo, jev);
+    }
+
+    /** O mesmo contexto, com este estado do JEV. */
+    public AtlasContexto comJev(JevDoTurno novo) {
+        return new AtlasContexto(usuario, parceriaId, eventoId, cotaTipoId, cota, abasAbertas, conversaId, requisicao, traco, novo);
     }
 
     public boolean abaAberta(String codigoDaAba) {

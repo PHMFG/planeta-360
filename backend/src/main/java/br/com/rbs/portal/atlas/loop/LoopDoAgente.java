@@ -23,10 +23,18 @@ import br.com.rbs.portal.atlas.ferramentas.ContarDias;
 import br.com.rbs.portal.atlas.ferramentas.Execucao;
 import br.com.rbs.portal.atlas.ferramentas.GerarModelo;
 import br.com.rbs.portal.atlas.ferramentas.ListarEntregas;
+import br.com.rbs.portal.atlas.ferramentas.ModelosEmBranco;
 import br.com.rbs.portal.atlas.ferramentas.PedidoDeRelatorio;
 import br.com.rbs.portal.atlas.ferramentas.RegistroDeFerramentas;
 import br.com.rbs.portal.atlas.ferramentas.RegistroDeFerramentas.Preparo;
 import br.com.rbs.portal.atlas.ferramentas.RelatorioFerramentas;
+import br.com.rbs.portal.atlas.jev.PontoDoJev;
+import br.com.rbs.portal.atlas.jev.ServicoDoJev;
+import br.com.rbs.portal.atlas.jev.ServicoDoJev.AcaoDeIntencao;
+import br.com.rbs.portal.atlas.jev.ServicoDoJev.ApoioDaResposta;
+import br.com.rbs.portal.atlas.jev.ServicoDoJev.DecisaoDeIntencao;
+import br.com.rbs.portal.atlas.jev.ServicoDoJev.DecisaoDoCartao;
+import br.com.rbs.portal.atlas.jev.ServicoDoJev.SituacaoDaIntencao;
 import br.com.rbs.portal.atlas.loop.HistoricoDaConversa.Chamada;
 import br.com.rbs.portal.atlas.loop.ResumoDoRaciocinio.ResumosDoTurno;
 import br.com.rbs.portal.atlas.provedor.ProvedorAtual;
@@ -57,12 +65,14 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.core.JacksonException;
+import tools.jackson.core.type.TypeReference;
 
 /**
  * O loop do agente: a conversa da marca com o modelo de linguagem (plano, seções 6.1, 10 e 11). [ATLAS] A cada passo remonta o
@@ -109,6 +119,11 @@ import tools.jackson.core.JacksonException;
  *       para cada mensagem gravada com raciocínio, pede ao {@link ResumoDoRaciocinio} um resumo, numa chamada à parte que não
  *       atrasa a ida seguinte. No fim do turno (qualquer saída normal de {@link #conduzir}) espera os resumos pendentes por até
  *       {@code atlas.prazo-do-resumo}; o que não ficou pronto sai sem resumo.</li>
+ *   <li><b>O JEV</b> (plano do Atlas completo, M7): na entrada do turno, o ponto {@code cartao} decide, antes de fechar o cartão aberto,
+ *       se a mensagem só pergunta dos números dele (resposta fixa, sem modelo, e o cartão continua aberto); o ponto {@code intencao}
+ *       decide a recusa fixa, as respostas diretas, o {@code relatorio_iniciar} em código ou o subconjunto de ferramentas do ramo; e
+ *       o ponto {@code resposta} confere se a fonte citada apoia cada frase antes de o texto ser aceito. O JEV nunca é barreira: abaixo
+ *       do limiar, em erro ou no tempo limite o turno segue o caminho do modelo, e em sombra nada muda.</li>
  *   <li><b>O diagnóstico</b> (plano do Atlas completo, M2): cada ida ao modelo, ferramenta, checagem do texto e resumo do raciocínio,
  *       e o fim do turno, viram uma etapa do {@link Traco} do contexto. O traço vive na memória e só vai ao banco no fim do turno
  *       (quem chama o {@code conduzir} o encerra): o loop nunca grava traço durante a chamada ao modelo. Nada do raciocínio cru,
@@ -150,6 +165,16 @@ public class LoopDoAgente {
     /** O texto fixo de um turno em que toda busca nos documentos deu erro: "não encontrei" seria falso, porque nada foi procurado. */
     public static final String FRASE_SEM_CONSULTA = "Não consegui consultar os documentos agora. Tente de novo em instantes.";
     public static final String INDICACAO_DO_ATENDIMENTO = "Para essa dúvida, fale com o atendimento da RBS.";
+    /** A recusa fixa do JEV ativo para o que está fora do escopo do Atlas: sem o modelo, só texto (a do exemplo do prompt). */
+    public static final String RECUSA_DE_FORA_DE_ESCOPO = "Só posso ajudar com o portal e com a sua parceria no Planeta Atlântida.";
+    /** A resposta fixa do JEV ativo a quem escreve os números do cartão na conversa: o cartão continua aberto. */
+    public static final String RESPOSTA_DO_CARTAO_ABERTO = "Use o cartão acima para informar os números: assim eles ficam registrados com autor e data.";
+    /** As ferramentas do ramo "pergunta sobre os documentos" (as do relatório em montagem, se houver, ficam sempre). */
+    static final Set<String> FERRAMENTAS_DO_RAMO_DOCUMENTOS = Set.of(BuscarDocumentos.NOME, ConsultarPrazos.NOME, Calcular.NOME,
+            ContarDias.NOME);
+    /** As ferramentas do ramo "pergunta sobre os dados da parceria". */
+    static final Set<String> FERRAMENTAS_DO_RAMO_DADOS = Set.of(RelatorioFerramentas.CONSULTAR, ListarEntregas.NOME, ConsultarCota.NOME,
+            ConsultarPrazos.NOME, Calcular.NOME, ContarDias.NOME);
     public static final String TEXTO_NAO_ENCONTREI = FRASE_NAO_ENCONTREI + " " + INDICACAO_DO_ATENDIMENTO;
     /**
      * As frases que o próprio loop grava como texto do assistente: no item {@code texto}, saem com {@code porModelo} falso. Entram
@@ -157,7 +182,7 @@ public class LoopDoAgente {
      */
     public static final Set<String> FRASES_DO_SERVIDOR = Set.of(FRASE_FIXA, FRASE_DO_LIMITE, FRASE_DA_FALHA, FRASE_DO_PRAZO,
             FRASE_SEM_RESPOSTA, FRASE_FIXA_NO_CHAT, FRASE_DO_LIMITE_NO_CHAT, FRASE_DA_FALHA_NO_CHAT, FRASE_DO_PRAZO_NO_CHAT,
-            FRASE_SEM_RESPOSTA_NO_CHAT, TEXTO_NAO_ENCONTREI, FRASE_SEM_CONSULTA);
+            FRASE_SEM_RESPOSTA_NO_CHAT, TEXTO_NAO_ENCONTREI, FRASE_SEM_CONSULTA, RECUSA_DE_FORA_DE_ESCOPO, RESPOSTA_DO_CARTAO_ABERTO);
     /** A nota do prompt do turno quando o relatório mais novo da conversa foi descartado (pela tela, ou por ter ficado parado). */
     public static final String NOTA_DO_RELATORIO_DESCARTADO = "O relatório desta conversa foi descartado. Ele não segue mais: nunca diga "
             + "que está aberto nem que pode ser retomado. Se a pessoa quiser, comece outro com relatorio_iniciar.";
@@ -194,6 +219,8 @@ public class LoopDoAgente {
     private final TransactionTemplate transacao;
     private final ResumoDoRaciocinio resumos;
     private final ModoDoAtlas modo;
+    private final ServicoDoJev jev;
+    private final ModelosEmBranco modelosEmBranco;
     private final Duration prazoDoTurno;
     private final String prompt;
 
@@ -201,6 +228,7 @@ public class LoopDoAgente {
     public LoopDoAgente(ProvedorAtual provedor, RegistroDeFerramentas ferramentas, HistoricoDaConversa historico,
                         AtlasRepositorio repositorio, PlanoBSemLlm planoB, ChecagemDeFontes checagem, ResolvedorDeReferencias resolvedor,
                         ModeloBase modelos, TransactionTemplate transacao, ResumoDoRaciocinio resumos, ModoDoAtlas modo,
+                        ServicoDoJev jev, ModelosEmBranco modelosEmBranco,
                         @Value("${atlas.prazo-do-turno:PT3M}") Duration prazoDoTurno) {
         this.provedor = provedor;
         this.ferramentas = ferramentas;
@@ -213,6 +241,8 @@ public class LoopDoAgente {
         this.transacao = transacao;
         this.resumos = resumos;
         this.modo = modo;
+        this.jev = jev;
+        this.modelosEmBranco = modelosEmBranco;
         this.prazoDoTurno = prazoDoTurno;
         this.prompt = PromptsDoAtlas.compor(modo.relatorioLigado());
     }
@@ -235,6 +265,8 @@ public class LoopDoAgente {
         /** Alguma ferramenta que não responde direto rodou neste turno (em qualquer rodada): o modelo ainda precisa responder a ela. */
         boolean outraFerramentaRodou;
         boolean pediuNovaRedacao;
+        /** O ramo que o JEV ativo escolheu (só as ferramentas dele, mais as do relatório em montagem); nulo: todas. */
+        Set<String> ferramentasDoRamo;
         ResumosDoTurno resumos;
         // O desfecho, para a etapa SAIDA do traço: o que terminou o turno e a última mensagem que ele gravou.
         String tipoDaSaida = "CARTAO_ABERTO";
@@ -274,12 +306,29 @@ public class LoopDoAgente {
      * fluxo roda antes de o fluxo abrir; depois vem {@link #conduzir}.
      */
     public void prepararConversa(AtlasContexto contexto, String texto) {
-        for (LinhaDeSolicitacao cartao : repositorio.solicitacoesDaConversa(contexto.conversaId())) {
-            if ("PENDENTE".equals(cartao.status())) {
-                planoB.registrarResposta(contexto, cartao.id(), AcaoDoCartao.CANCEL, List.of());
+        List<LinhaDeSolicitacao> abertos = repositorio.solicitacoesDaConversa(contexto.conversaId()).stream()
+                .filter(cartao -> "PENDENTE".equals(cartao.status())).toList();
+        if (!abertos.isEmpty() && modo.relatorioLigado()) {
+            // M7, ponto cartao: a decisão vem ANTES de fechar o cartão. Quem só pergunta dos números dele recebe a resposta fixa, sem modelo,
+            // e o cartão continua aberto; as duas mensagens ficam fora do modelo, para o histórico seguir válido com a chamada pendente.
+            List<String> chaves = abertos.stream().flatMap(cartao -> AtlasJson.ler(cartao.campos(), new TypeReference<List<String>>() {
+            }).stream()).toList();
+            Optional<DecisaoDoCartao> decisao = jev.cartao(contexto, texto, chaves);
+            if (decisao.isPresent() && decisao.get().responde()) {
+                transacao.executeWithoutResult(estado -> {
+                    historico.usuarioForaDoModelo(contexto.conversaId(), texto);
+                    historico.assistenteForaDoModelo(contexto.conversaId(), RESPOSTA_DO_CARTAO_ABERTO);
+                });
+                contexto.jev().encerrarNoPreparo();
+                jev.gravar(contexto);
+                return;
             }
         }
+        for (LinhaDeSolicitacao cartao : abertos) {
+            planoB.registrarResposta(contexto, cartao.id(), AcaoDoCartao.CANCEL, List.of());
+        }
         transacao.executeWithoutResult(estado -> historico.usuario(contexto.conversaId(), texto));
+        jev.gravar(contexto);   // a decisão do cartão em sombra, ou de quem mudou de assunto
     }
 
     /**
@@ -289,7 +338,7 @@ public class LoopDoAgente {
      */
     public void retomar(AtlasContexto contexto, long solicitacaoId, AcaoDoCartao acao, List<ValorRequisicao> valores) {
         prepararRetomada(contexto, solicitacaoId, acao, valores);
-        conduzir(contexto, OuvinteDoTurno.NENHUM);
+        conduzirRetomada(contexto, OuvinteDoTurno.NENHUM);
     }
 
     /**
@@ -310,6 +359,26 @@ public class LoopDoAgente {
      * {@link OuvinteDoTurno#NENHUM}, nada é transmitido e a resposta sai inteira no fim.
      */
     public void conduzir(AtlasContexto contexto, OuvinteDoTurno ouvinte) {
+        conduzir(contexto, ouvinte, true);
+    }
+
+    /**
+     * O turno que retoma depois da resposta do cartão (rota 46): não há mensagem nova da pessoa, então o ponto {@code intencao} do JEV
+     * não roda. O resto é o {@link #conduzir}.
+     */
+    public void conduzirRetomada(AtlasContexto contexto, OuvinteDoTurno ouvinte) {
+        conduzir(contexto, ouvinte, false);
+    }
+
+    private void conduzir(AtlasContexto contexto, OuvinteDoTurno ouvinte, boolean comIntencao) {
+        try {
+            conduzirComOJev(contexto, ouvinte, comIntencao);
+        } finally {
+            jev.gravar(contexto);   // as decisões do JEV vão ao banco no fim, numa transação curta; nunca durante uma chamada a ele
+        }
+    }
+
+    private void conduzirComOJev(AtlasContexto contexto, OuvinteDoTurno ouvinte, boolean comIntencao) {
         Turno turno = new Turno(prazoDoTurno, contexto.traco(), new FontesDoTurno(
                 repositorio.ultimaMensagemDaPessoa(contexto.conversaId()).orElse(""),
                 repositorio.escopoDaParceria(contexto.parceriaId()).edicao(), Datas.hoje())
@@ -317,6 +386,15 @@ public class LoopDoAgente {
                         PlanoBSemLlm.TEXTO_DO_BOTAO)),
                 repositorio.ultimaOrdem(contexto.conversaId()));
         try {
+            if (contexto.jev().encerradoNoPreparo()) {
+                // O cartão aberto recebeu a resposta fixa do JEV ainda na preparação (as duas mensagens já estão gravadas): o turno acaba aqui.
+                ouvinte.texto(RESPOSTA_DO_CARTAO_ABERTO);
+                turno.tipoDaSaida = "FRASE_FIXA";
+                turno.motivoDaSaida = "CARTAO_ABERTO_JEV";
+                turno.caracteresDaSaida = RESPOSTA_DO_CARTAO_ABERTO.length();
+                registrarSaida(turno, ouvinte, 0, 0);
+                return;
+            }
             // O provedor é pego UMA vez: se a chave do debug mudar no meio, este turno termina com o que começou.
             ProvedorDeLlm llm = provedor.provedor().orElse(null);
             if (llm == null) {
@@ -324,6 +402,10 @@ public class LoopDoAgente {
                 gravarFrase(contexto, turno, frase(FRASE_DA_FALHA, FRASE_DA_FALHA_NO_CHAT), null, ouvinte, "SEM_MODELO",
                         ResultadoDaEtapa.ERRO);
                 registrarSaida(turno, ouvinte, 0, 0);
+                return;
+            }
+            if (comIntencao && decidirIntencao(contexto, turno, ouvinte)) {
+                registrarSaida(turno, ouvinte, 0, 0);   // o JEV respondeu sem o modelo: não há raciocínio a resumir
                 return;
             }
             turno.resumos = resumos.abrir(contexto, llm, ouvinte);
@@ -419,6 +501,11 @@ public class LoopDoAgente {
                 filtro.fechar();
                 registrarRecusaDoFluxo(turno, filtro);
             }
+            if (turno.idas == 1) {
+                // O que o modelo fez na primeira ida, para comparar com a intenção que o JEV decidiu (em sombra, é a prova de que acertou).
+                contexto.jev().decisaoDoLlm(PontoDoJev.INTENCAO, resposta.chamadas().isEmpty() ? "texto"
+                        : limpar(resposta.chamadas().get(0).nome()));
+            }
 
             if (resposta.chamadas().isEmpty()) {
                 if (texto == null) {
@@ -427,6 +514,9 @@ public class LoopDoAgente {
                     return;
                 }
                 Veredito veredito = checarDoChat(contexto, turno, texto, "RESPOSTA");
+                if (veredito.aprovado()) {
+                    veredito = conferirApoio(contexto, turno, texto, veredito);   // M7, ponto resposta: a fonte citada apoia cada frase?
+                }
                 if (veredito.aprovado()) {
                     if (todaBuscaFalhouSemApoio(turno, texto)) {
                         // Toda busca deu erro e a resposta não cita fonte nem usa dado da parceria: nada foi procurado, e nem a frase de
@@ -495,6 +585,107 @@ public class LoopDoAgente {
                 return;
             }
         }
+    }
+
+    // ---------------------------------------------------------------------
+    // O JEV (M7): a intenção, as respostas diretas e a conferência do apoio
+    // ---------------------------------------------------------------------
+
+    /**
+     * O ponto {@code intencao}. Devolve verdadeiro se o JEV ativo respondeu o turno sem o modelo (a recusa fixa, o pedido de relatório
+     * ou o modelo em branco, como se o modelo tivesse chamado a ferramenta); falso para seguir ao loop, que pode ter sido preparado:
+     * {@code relatorio_iniciar} já aberto em código, ou só as ferramentas do ramo. Em sombra, ou abaixo do limiar, ou em erro, não muda nada.
+     */
+    private boolean decidirIntencao(AtlasContexto contexto, Turno turno, OuvinteDoTurno ouvinte) {
+        if (!jev.modo(contexto, PontoDoJev.INTENCAO).consulta()) {
+            return false;
+        }
+        boolean emAndamento = modo.relatorioLigado() && repositorio.relatorioAtivoDaConversa(contexto.conversaId()).isPresent();
+        Set<String> disponiveis = modelosEmBranco.disponiveis(contexto.usuario(), contexto.parceriaId()).stream()
+                .map(ModelosEmBranco.Tipo::name).collect(Collectors.toSet());
+        Optional<DecisaoDeIntencao> decisao = jev.intencao(contexto, turno.fontes.mensagemDaPessoa(),
+                new SituacaoDaIntencao(modo.relatorioLigado(), emAndamento, disponiveis));
+        if (decisao.isEmpty() || !decisao.get().age()) {
+            return false;
+        }
+        AcaoDeIntencao acao = decisao.get().acao();
+        switch (acao) {
+            case RECUSAR_FORA_DE_ESCOPO -> {
+                long mensagemId = transacao.execute(estado -> historico.assistenteDoServidor(contexto.conversaId(),
+                        RECUSA_DE_FORA_DE_ESCOPO, List.of()));
+                ouvinte.texto(RECUSA_DE_FORA_DE_ESCOPO);
+                turno.mensagemFinalId = mensagemId;
+                turno.caracteresDaSaida = RECUSA_DE_FORA_DE_ESCOPO.length();
+                turno.tipoDaSaida = "FRASE_FIXA";
+                turno.motivoDaSaida = "FORA_DE_ESCOPO_JEV";
+                turno.resultadoDaSaida = ResultadoDaEtapa.RECUSADO;
+                return true;
+            }
+            case PEDIDO_DE_RELATORIO_DIRETO -> {
+                return executarSemModelo(contexto, turno, ouvinte, PedidoDeRelatorio.NOME, "{}", "PEDIDO_DE_RELATORIO_JEV");
+            }
+            case GERAR_MODELO_DIRETO -> {
+                return executarSemModelo(contexto, turno, ouvinte, GerarModelo.NOME,
+                        AtlasJson.escrever(Map.of("tipo", decisao.get().tipoModelo())), "MODELO_EM_BRANCO_JEV");
+            }
+            case INICIAR_RELATORIO -> {
+                // relatorio_iniciar em código; depois o modelo segue com o relatório aberto (e vê a chamada no histórico).
+                executarSemModelo(contexto, turno, ouvinte, RelatorioFerramentas.INICIAR,
+                        AtlasJson.escrever(Map.of("modelo", ModeloBase.ATIVACAO_EVENTO)), "RELATORIO_INICIADO_JEV");
+                return false;
+            }
+            case RAMO_DOCUMENTOS -> turno.ferramentasDoRamo = FERRAMENTAS_DO_RAMO_DOCUMENTOS;
+            case RAMO_DADOS -> turno.ferramentasDoRamo = FERRAMENTAS_DO_RAMO_DADOS;
+            default -> {
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Roda uma ferramenta em código, no lugar do modelo: grava o histórico "como se o modelo a tivesse chamado" (a mensagem do
+     * assistente com o pedido, marcada {@code sem_modelo}, e a resposta dela), como o botão do plano B. Devolve verdadeiro se a ferramenta
+     * respondeu direto e o turno acabou; com erro, o histórico tem o erro como resposta e o turno segue ao modelo.
+     */
+    private boolean executarSemModelo(AtlasContexto contexto, Turno turno, OuvinteDoTurno ouvinte, String ferramenta, String argumentos,
+                                      String motivoDaSaida) {
+        String id = HistoricoDaConversa.novoIdDeChamada();
+        ChamadaDeFerramenta chamada = new ChamadaDeFerramenta(id, ferramenta, argumentos);
+        long mensagemId = transacao.execute(estado -> historico.assistenteDoServidor(contexto.conversaId(), null,
+                List.of(new Chamada(id, ferramenta, argumentos))));
+        turno.mensagemFinalId = mensagemId;
+        turno.chamadas++;
+        Etapa etapaDaFerramenta = turno.traco.abrir(EtapaDoTraco.FERRAMENTA).mensagem(mensagemId).dado("ferramenta", ferramenta)
+                .dado("origem", "JEV");
+        String frase = ETAPAS.get(ferramenta);
+        if (frase != null) {
+            ouvinte.etapa(frase);
+        }
+        Rodada rodada = executar(contexto, turno, mensagemId, chamada);
+        avisarFerramenta(ouvinte, chamada, rodada.execucao().resultadoJson(), rodada.erro(), rodada.ms());
+        boolean direta = rodada.execucao().direta();
+        etapaDaFerramenta.dado("argumentos", argumentos).dado("resultado", rodada.execucao().resultadoJson())
+                .dado("direta", direta ? true : null).fim(rodada.erro() ? ResultadoDaEtapa.ERRO : ResultadoDaEtapa.OK);
+        if (direta && !rodada.erro()) {
+            turno.tipoDaSaida = "RESPOSTA_DIRETA";
+            turno.motivoDaSaida = motivoDaSaida;
+            return true;
+        }
+        turno.outraFerramentaRodou = true;
+        return false;
+    }
+
+    /**
+     * O ponto {@code resposta}: o texto passou na checagem das fontes; o JEV ainda confere se a fonte citada apoia cada frase. Em
+     * {@code ATIVO}, uma frase que o trecho contradiz (ou que ele não diz, se tem número ou data) recusa o texto, com o motivo para a
+     * nova redação; na segunda recusa vale o L2, como na checagem. Em sombra, ou sem decisão, o veredito da checagem fica.
+     */
+    private Veredito conferirApoio(AtlasContexto contexto, Turno turno, String texto, Veredito aprovado) {
+        Optional<ApoioDaResposta> apoio = jev.resposta(contexto, turno.fontes, texto);
+        if (apoio.isPresent() && apoio.get().recusa()) {
+            return Veredito.recusado(apoio.get().motivo());
+        }
+        return aprovado;
     }
 
     /**
@@ -667,8 +858,13 @@ public class LoopDoAgente {
         mensagens.addAll(transitorias);
         boolean podePedirCartao = ativo.isEmpty()
                 || repositorio.solicitacoesDoRelatorio(ativo.get().id()).size() < RelatorioAtlasService.LIMITE_DE_CARTOES;
-        return new PedidoAoLlm(String.valueOf(contexto.conversaId()), mensagens,
-                ferramentas.oferecidas(ativo, podePedirCartao, turno.diretasForaDaOferta));
+        List<DefinicaoDeFerramenta> oferecidas = ferramentas.oferecidas(ativo, podePedirCartao, turno.diretasForaDaOferta);
+        if (turno.ferramentasDoRamo != null) {
+            // O JEV ativo escolheu o ramo (documentos ou dados da parceria): só as ferramentas dele, e as do relatório em montagem ficam (abrir outro não).
+            oferecidas = oferecidas.stream().filter(f -> turno.ferramentasDoRamo.contains(f.nome())
+                    || (f.nome().startsWith("relatorio_") && !f.nome().equals(RelatorioFerramentas.INICIAR))).toList();
+        }
+        return new PedidoAoLlm(String.valueOf(contexto.conversaId()), mensagens, oferecidas);
     }
 
     /**

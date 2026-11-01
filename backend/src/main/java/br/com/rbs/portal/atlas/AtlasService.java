@@ -319,7 +319,7 @@ public class AtlasService {
                     .dado("retomada", true);
             AtlasContexto doTurno = contexto.comTraco(traco);
             return comecarTurno(usuario, conversa, traco, limites, () -> loop.prepararRetomada(doTurno, solicitacaoId, acao, valores),
-                    ouvinte -> loop.conduzir(doTurno, ouvinte));
+                    ouvinte -> loop.conduzirRetomada(doTurno, ouvinte));
         }
         // Sem modelo, ou com o teto diário atingido: o cartão respondido segue o plano B (não gasta o modelo e a pessoa não fica
         // presa a um cartão aberto).
