@@ -20,7 +20,8 @@ public class HistoricoConsultaRepositorio {
      * LOGOUT: eles são da conta, não da parceria, e só aparecem no histórico geral. {@code semEtapasInternas} esconde
      * GERACAO_RELATORIO e VALIDACAO: são etapas de trabalho da RBS (a marca só deve ver a DISPONIBILIZACAO). Esconde também tudo da
      * entidade {@code documento} (envio, aprovação, recusa, revogação e visualização dos documentos do Atlas): título, autoria e motivo
-     * de um documento PARCERIA (como o D11) são justamente o que a rota 56 esconde da marca.
+     * de um documento PARCERIA (como o D11) são justamente o que a rota 56 esconde da marca. E tudo da entidade {@code prazo}
+     * (cadastro e desativação dos prazos do Atlas): é trabalho da RBS, como o dos documentos.
      */
     public record Filtro(Long parceriaId, Long usuarioId, List<String> acoes, String entidade, OffsetDateTime de,
                          OffsetDateTime ateExclusivo, String texto, boolean semAcessos, boolean semEtapasInternas) {
@@ -95,7 +96,7 @@ public class HistoricoConsultaRepositorio {
             onde.append(" AND h.acao NOT IN ('LOGIN', 'LOGIN_FALHOU', 'LOGOUT')");
         }
         if (f.semEtapasInternas()) {
-            onde.append(" AND h.acao NOT IN ('GERACAO_RELATORIO', 'VALIDACAO') AND h.entidade <> 'documento'");
+            onde.append(" AND h.acao NOT IN ('GERACAO_RELATORIO', 'VALIDACAO') AND h.entidade NOT IN ('documento', 'prazo')");
         }
         if (f.entidade() != null) {
             onde.append(" AND h.entidade = :entidade");

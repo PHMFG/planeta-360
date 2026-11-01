@@ -204,6 +204,7 @@ A V13 abre o M5 do plano do Atlas completo com os prazos: uma data que a marca p
 | `rn_prazo_imutavel` | Depois de criado, o prazo só se desativa: `ativo` passa de verdadeiro para falso e não volta, e nenhuma outra coluna muda. Para corrigir, desativa-se e cria-se outro. O prazo não se apaga pela API (a rota 64 desativa) |
 | O documento que sai do ar | O prazo guarda o `documento_id`, e é a leitura que olha o status: `consultar_prazos` só devolve o prazo cujo documento está `INDEXADO` e visível para a parceria, então revogar ou substituir o documento tira o prazo da resposta na hora, sem tocar na linha do prazo |
 | Sem acesso do `atlas_ro` | O `atlas_ro` não lê `prazo`: ela é do portal, e a ferramenta lê como o resto do portal, sempre pela parceria da conversa |
+| Histórico | `CRIACAO` ao cadastrar e `ALTERACAO_STATUS` ao desativar, na entidade `prazo`. Como o `documento`, a marca **não** vê essas linhas na rota 20 |
 | Limpeza nos testes | Nenhuma tabela aponta para `prazo`, então ela não entra nos mapas de `LoopSemTransacaoTest` e `ApoioDoFluxo`: os testes que cadastram prazos os apagam no fim (o `rn_prazo_imutavel` só vale em `UPDATE`; apagar uma linha o banco deixa, e é de propósito: só a API não apaga) |
 
 ## Tabelas por área

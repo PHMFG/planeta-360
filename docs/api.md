@@ -167,10 +167,13 @@ Todas prontas e testadas. A coluna "Etapa" mostra em que etapa do plano a rota e
 | 59 | `GET /api/documentos/{id}/conteudo` | Admin RBS, ou a marca pelo escopo | O arquivo do documento, para o visualizador abrir na página (inline) | Atlas M4 |
 | 60 | `GET /api/documentos/{id}/trechos/{trechoId}` | Admin RBS, ou a marca pelo escopo | Um trecho inteiro, com a página e o texto, para o destaque no visualizador | Atlas M4 |
 | 61 | `POST /api/atlas/busca-teste` | Admin RBS | A busca nos documentos como o modelo a faria para uma parceria, com as duas listas, o RRF e o que a parceria enxerga | Atlas M4 |
+| 62 | `GET /api/eventos/{id}/prazos` | Admin RBS | Lista os prazos da edição (da edição inteira, de uma cota ou de uma parceria), por data, hora e título; só os ativos, a menos que `incluirInativos=true` | Atlas M5 |
+| 63 | `POST /api/eventos/{id}/prazos` | Admin RBS | Cadastra um prazo, com o documento e a página de onde ele saiu, se tiver | Atlas M5 |
+| 64 | `DELETE /api/prazos/{id}` | Admin RBS | Desativa o prazo (não apaga): ele sai do Atlas e a linha fica | Atlas M5 |
 
-São 61 operações (método + caminho). A rota 5 (`ativar`) faz parte do contrato de autenticação, mas só é implementada na etapa 4. As rotas 37 em diante vieram com o Atlas: a coluna "Etapa" diz `Atlas 1` (plano de aplicações e dados informados), `Atlas 2` (conversa, cartão de perguntas e relatório), `Atlas M2` (o diagnóstico: rotas 49 a 53, veja "Diagnóstico do Atlas") `Atlas M3` (os documentos: rotas 54 a 58, veja "Os documentos do Atlas") ou `Atlas M4` (o visualizador, rotas 59 e 60, e a busca de teste, rota 61, veja "Busca nos documentos"). As rotas 54, 55, 57, 58 e 61 são só do Admin RBS (o outro perfil recebe **403** antes de o corpo ser lido); a 56, a 59 e a 60 são das duas pontas, e a marca só vê o que o escopo dela permite. A 49 é só do Admin Patrocinador, dono da conversa; as 50 a 53 são só do Admin RBS (o outro perfil recebe **403** antes de tudo). **As rotas 49 a 53 estão sempre mapeadas e respondem 404 com o diagnóstico desligado** (`atlas.diagnostico.ligado=false`, o padrão). Nas rotas 42 a 46 só o Admin Patrocinador chama (a RBS recebe **403** antes de o corpo ser lido); nas 47 e 48 chamam a marca da parceria e a RBS. **Neste MVP o relatório do Atlas está desligado** (`atlas.relatorio.ligado=false`, o padrão): as rotas **46, 47 e 48 não existem (404)**, e as rotas 42 e 44 só aceitam conversa por texto (`atalho` e `modelo` dão 422). Veja "Modo só chat". O contrato do relatório, nas rotas 42 a 48, vale com `atlas.relatorio.ligado=true`.
+São 64 operações (método + caminho). A rota 5 (`ativar`) faz parte do contrato de autenticação, mas só é implementada na etapa 4. As rotas 37 em diante vieram com o Atlas: a coluna "Etapa" diz `Atlas 1` (plano de aplicações e dados informados), `Atlas 2` (conversa, cartão de perguntas e relatório), `Atlas M2` (o diagnóstico: rotas 49 a 53, veja "Diagnóstico do Atlas") `Atlas M3` (os documentos: rotas 54 a 58, veja "Os documentos do Atlas") `Atlas M4` (o visualizador, rotas 59 e 60, e a busca de teste, rota 61, veja "Busca nos documentos") ou `Atlas M5` (os prazos: rotas 62 a 64, veja "Os prazos do Atlas"). As rotas 54, 55, 57, 58, 61, 62, 63 e 64 são só do Admin RBS (o outro perfil recebe **403** antes de o corpo ser lido); a 56, a 59 e a 60 são das duas pontas, e a marca só vê o que o escopo dela permite. A 49 é só do Admin Patrocinador, dono da conversa; as 50 a 53 são só do Admin RBS (o outro perfil recebe **403** antes de tudo). **As rotas 49 a 53 estão sempre mapeadas e respondem 404 com o diagnóstico desligado** (`atlas.diagnostico.ligado=false`, o padrão). Nas rotas 42 a 46 só o Admin Patrocinador chama (a RBS recebe **403** antes de o corpo ser lido); nas 47 e 48 chamam a marca da parceria e a RBS. **Neste MVP o relatório do Atlas está desligado** (`atlas.relatorio.ligado=false`, o padrão): as rotas **46, 47 e 48 não existem (404)**, e as rotas 42 e 44 só aceitam conversa por texto (`atalho` e `modelo` dão 422). Veja "Modo só chat". O contrato do relatório, nas rotas 42 a 48, vale com `atlas.relatorio.ligado=true`.
 
-As rotas de debug do modelo de linguagem (`/api/debug/llm`) são temporárias, só existem no perfil `dev`, são só da RBS e ficam fora desta tabela e da conta das 61: veja "Rotas de debug (temporárias)", no fim.
+As rotas de debug do modelo de linguagem (`/api/debug/llm`) são temporárias, só existem no perfil `dev`, são só da RBS e ficam fora desta tabela e da conta das 64: veja "Rotas de debug (temporárias)", no fim.
 
 ## Objetos que se repetem
 
@@ -751,6 +754,8 @@ O `filename*` leva o nome original em UTF-8 (com acentos e espaços codificados)
 **O que o patrocinador não vê** [PERMISSAO]: além do IP e do navegador, as etapas internas de trabalho da RBS no relatório: `GERACAO_RELATORIO` e `VALIDACAO`. Elas não aparecem nas linhas, nem no `total`, nem num filtro por `acao` (pedir `acao=VALIDACAO` devolve lista vazia). A `DISPONIBILIZACAO`, que é quando o relatório passa a existir para a marca, continua aparecendo. A RBS vê tudo.
 
 **Documentos do Atlas.** O patrocinador também não vê **nenhuma linha da entidade `documento`**: o envio, a aprovação, a recusa, a revogação e a visualização de um documento (nem o de escopo `PARCERIA` da própria parceria, como o anexo do Cliente Amarelo). Elas não aparecem nas linhas, nem no `total`, nem num filtro (`entidade=documento` devolve lista vazia): o título, o motivo da recusa e quem mexeu são justamente o que a rota 56 esconde dele. A RBS vê todas aqui e na rota 21.
+
+**Prazos do Atlas.** Também não vê **nenhuma linha da entidade `prazo`** (o cadastro e a desativação das rotas 63 e 64), pelo mesmo motivo e do mesmo jeito (`entidade=prazo` devolve lista vazia): é trabalho da RBS.
 
 **200**: uma página.
 
@@ -2300,9 +2305,67 @@ A busca de teste da RBS: ela escolhe uma parceria e uma consulta e vê o que a b
 
 ---
 
+# Os prazos do Atlas (rotas 62 a 64)
+
+Um **prazo** é uma data que a marca precisa cumprir (ou que a produção marcou) no alcance de toda a edição, de uma cota ou de uma parceria, com o documento e a página de onde ele saiu, se tiver. **Só a RBS os mantém** (o patrocinador recebe **403** antes de o corpo ser lido, em qualquer das três rotas). É o que a ferramenta `consultar_prazos` do Atlas lê, junto do prazo das entregas (veja "Consulta ao portal"). Um prazo **nunca se apaga nem se edita**: desativa-se (rota 64), e para corrigir um prazo desativa-se o errado e cadastra-se outro. O banco garante isso (V13, gatilho `rn_prazo_imutavel`).
+
+**O objeto Prazo** (rotas 62 e 63):
+
+```json
+{
+  "id": 7, "eventoId": 2, "escopo": "GLOBAL",
+  "cota": null, "parceria": null,
+  "titulo": "Informar os geradores próprios", "data": "2026-12-04", "hora": "18:00",
+  "descricao": "Informar à produção os geradores próprios que a marca vai levar.",
+  "documento": { "id": 14, "titulo": "Manual de Operações 2027", "versao": 2, "status": "INDEXADO" }, "pagina": 5,
+  "ativo": true,
+  "criadoPor": { "id": 1, "nome": "Equipe B2B RBS", "perfil": "ADMIN_RBS" }, "criadoEm": "2026-11-01T10:02:00-03:00"
+}
+```
+
+`escopo` é `GLOBAL` (todas as parcerias da edição), `COTA` (as parcerias dessa cota na edição; `cota` é `{ "codigo": "MASTER", "nome": "Master" }`) ou `PARCERIA` (uma só; `parceria` é `{ "id": 2, "patrocinador": "Cliente Amarelo" }`). `cota` e `parceria` vêm `null` fora do escopo deles. `data` é `AAAA-MM-DD` e `hora` é `HH:mm`, ou `null` quando o prazo vale o dia inteiro. `documento` e `pagina` são `null` quando o prazo não tem origem; `documento.status` é o de agora (um prazo cujo documento deixou de estar `INDEXADO` fica na lista da RBS, mas não vai para o Atlas).
+
+## 62. `GET /api/eventos/{id}/prazos`  · Atlas M5
+
+Os prazos da edição `{id}` (o `id` do evento, rota 6), **por data, hora e título** (o prazo do dia inteiro, sem hora, vem depois dos que têm hora no mesmo dia). **Quem chama:** Admin RBS; o patrocinador recebe **403** (`"Esta operação é restrita à equipe da RBS."`) com qualquer id e qualquer filtro.
+
+**Query:** `incluirInativos` (`true` ou `false`, o padrão): por padrão só os ativos.
+
+**200**: uma lista de Prazo (vazia se não há nenhum). **Erros:** 401 sem sessão; 403 não é Admin RBS; 404 edição que não existe (`"Não encontramos esta edição do festival."`) ou id que não é número; 400 `incluirInativos` que não é `true` nem `false`.
+
+## 63. `POST /api/eventos/{id}/prazos`  · Atlas M5
+
+Cadastra um prazo na edição `{id}`. **Quem chama:** Admin RBS (exige o token CSRF); o patrocinador recebe **403** antes de o corpo ser lido.
+
+**Corpo (JSON):** `{ "escopo": "COTA", "cota": "MASTER", "parceriaId": null, "titulo": "...", "data": "2026-12-04", "hora": "18:00", "descricao": "...", "documentoId": 14, "pagina": 5 }`. Só `escopo`, `titulo` e `data` são obrigatórios; `cota` (código, como no envio do documento: `MASTER`, `SUBCOTA_G` ou `SUBCOTA`) é obrigatória no escopo `COTA`; `parceriaId` é obrigatório no escopo `PARCERIA`. O resto é opcional.
+
+**201**, com o cabeçalho `Location: /api/prazos/{id}` e o objeto Prazo. Grava `CRIACAO` no histórico, na entidade `prazo`.
+
+**Erros**
+
+| Status | Quando |
+| --- | --- |
+| 400 | Corpo ausente ou que não é JSON, ou um campo de tipo errado (`parceriaId` que não é número). |
+| 401 | Sem sessão. |
+| 403 | Não é Admin RBS (antes de o corpo ser lido), ou falta o token CSRF. |
+| 404 | A edição `{id}` não existe, ou `{id}` não é um número. |
+| 422 | Os erros de campo vêm **todos juntos** em `campos`: `escopo` (ausente ou fora de `GLOBAL`, `COTA`, `PARCERIA`); `cota` (obrigatória só no escopo `COTA`: `"Informe a cota: MASTER, SUBCOTA_G ou SUBCOTA."`; fora dele: `"Só o prazo de escopo COTA leva cota."`); `parceriaId` (obrigatório só no escopo `PARCERIA`; que não existe; de outra edição: `"Esta parceria não é da edição do prazo."`; fora do escopo: `"Só o prazo de escopo PARCERIA leva parceria."`); `titulo` (em branco, com mais de **200** caracteres ou com o caractere nulo); `data` (ausente, que não existe, fora de `AAAA-MM-DD`, ou com o ano fora de **2000 a 2100**); `hora` (fora de `HH:mm`, de `00:00` a `23:59`, sem segundos); `descricao` (mais de **1.000** caracteres; em branco vale como sem descrição); `documentoId` (que não existe, que é de outra edição, ou que dá ao prazo **mais alcance que o do documento**, veja abaixo); `pagina` (sem `documentoId`, menor que 1 ou maior que as páginas do documento). |
+
+**Um prazo não pode ter alcance maior que o do documento de origem** (`campos.documentoId`, `"Um prazo não vale para mais gente que o documento de onde saiu. ..."`): documento `GLOBAL` aceita prazo de qualquer escopo; documento `COTA` só aceita prazo `COTA` **dessa cota** ou `PARCERIA` de uma parceria dela; documento `PARCERIA` só aceita prazo `PARCERIA` **dessa parceria**. Sem isso, o título de um documento restrito (o plano da Master, o anexo do Amarelo) chegaria a uma marca que não pode vê-lo. O banco repete a regra (`rn_prazo_coerente`, 409).
+
+## 64. `DELETE /api/prazos/{id}`  · Atlas M5
+
+**Desativa** o prazo (`ativo` passa a `false`); não apaga a linha. Ele sai da lista padrão da rota 62 e do Atlas, e fica no histórico. **Quem chama:** Admin RBS (exige o token CSRF); o patrocinador recebe **403**.
+
+**204**, sem corpo. **Desativar de novo também dá 204** e não grava outra linha no histórico. Grava `ALTERACAO_STATUS` (de `ATIVO` para `DESATIVADO`), na entidade `prazo`. **Erros:** 401, 403, 404 (prazo que não existe, ou `{id}` que não é número: `"Não encontramos este prazo."`).
+
+**O histórico do prazo é da RBS.** As linhas da entidade `prazo` não aparecem para a marca na rota 20, nem no `total`, nem num filtro; a RBS as vê nas rotas 20 e 21.
+
+---
+
 # Rotas de debug (temporárias)
 
-Um recurso **temporário**, para a equipe ligar o modelo de linguagem do Atlas pela tela (o botão "Debug"), sem reiniciar a API e sem variável de ambiente. Não faz parte das 61 rotas do contrato e sai antes da entrega final.
+Um recurso **temporário**, para a equipe ligar o modelo de linguagem do Atlas pela tela (o botão "Debug"), sem reiniciar a API e sem variável de ambiente. Não faz parte das 64 rotas do contrato e sai antes da entrega final.
 
 - **Só existem com `atlas.debug.chaves=true`.** A propriedade vem `false` por padrão, `true` no perfil `dev` e `false` no `test`. Sem ela, as quatro rotas respondem **404**, como uma rota que não existe.
 - **A chave fica só na memória da API.** Nunca vai ao banco, a arquivo ou ao log, e **some quando a API reinicia**. Nenhuma resposta devolve a chave inteira: só os 4 últimos caracteres (`finalDaChave`).
@@ -2411,12 +2474,12 @@ Ligada:
 
 | Quem | Pode |
 | --- | --- |
-| **Admin RBS** | Quase tudo: criar parcerias, autorizar e revogar e-mails, criar entregas, mudar status, mandar retorno, aprovar perguntas, subir cargas (inclusive o plano comercial), anexar as fotos de comprovação das aplicações, informar os dados da ativação no lugar da marca, gerar e disponibilizar relatórios, ver o histórico geral e o painel. **Não** conversa com o Atlas (rotas 42 a 46 e 49 dão 403), mas lê os relatórios que ele montou (rotas 47 e 48) e, com o diagnóstico ligado, o traço de todos os turnos, o estado dos provedores e o teste deles (rotas 50 a 53). Envia, lista, aprova, recusa, revoga e reindexa os documentos do Atlas e vê os trechos (rotas 54 a 58). Usa as rotas de debug da chave do modelo (só dela). |
+| **Admin RBS** | Quase tudo: criar parcerias, autorizar e revogar e-mails, criar entregas, mudar status, mandar retorno, aprovar perguntas, subir cargas (inclusive o plano comercial), anexar as fotos de comprovação das aplicações, informar os dados da ativação no lugar da marca, gerar e disponibilizar relatórios, ver o histórico geral e o painel. **Não** conversa com o Atlas (rotas 42 a 46 e 49 dão 403), mas lê os relatórios que ele montou (rotas 47 e 48) e, com o diagnóstico ligado, o traço de todos os turnos, o estado dos provedores e o teste deles (rotas 50 a 53). Envia, lista, aprova, recusa, revoga e reindexa os documentos do Atlas e vê os trechos (rotas 54 a 58). Lista, cadastra e desativa os prazos que o Atlas consulta (rotas 62 a 64). Usa as rotas de debug da chave do modelo (só dela). |
 | **Admin Patrocinador** | Ver a própria parceria, as entregas das abas liberadas, enviar materiais, baixar arquivos da parceria, ver o histórico dela, enviar as perguntas da pesquisa, ver a consolidação, o plano de aplicações com as fotos e informar os dados da ativação (aba `APLICACOES` aberta), ver um documento do Atlas que o escopo dela permite (rota 56: título, tipo, versão, páginas e se foi substituído) e abri-lo no visualizador, com o arquivo e o trecho citado (rotas 59 e 60), conversar com o Atlas e montar o relatório de ativação pelo botão ou, com o modelo de linguagem ligado, pelo texto livre (rotas 42 a 46, só ela; a conversa é de quem a abriu), ver os relatórios do Atlas da parceria (rotas 47 e 48), o diagnóstico das próprias conversas (rota 49, só com `atlas.diagnostico.marca` ligado) e o relatório disponibilizado. **Nunca** vê outra parceria nem as rotas da RBS. |
 
 ## O que a API grava no histórico
 
-[HISTORICO] Toda alteração relevante grava uma linha com **quem** fez, **quando**, **de que IP e navegador**, a **parceria**, a **entidade** e, quando há, o valor anterior e o novo. O histórico só aceita inserir: o banco recusa alterar ou apagar uma linha. A linha é gravada na mesma transação da alteração, então ou grava as duas coisas ou nenhuma. Os documentos do Atlas gravam na entidade `documento`: `CRIACAO` no envio (rota 54) e `ALTERACAO_STATUS` em cada mudança de status (rota 57 e a indexação); `DOWNLOAD` quando a RBS baixa o arquivo (rota 18). **Essas linhas não aparecem para a marca na rota 20**, nem no `total` nem num filtro; a RBS as vê nas rotas 20 e 21.
+[HISTORICO] Toda alteração relevante grava uma linha com **quem** fez, **quando**, **de que IP e navegador**, a **parceria**, a **entidade** e, quando há, o valor anterior e o novo. O histórico só aceita inserir: o banco recusa alterar ou apagar uma linha. A linha é gravada na mesma transação da alteração, então ou grava as duas coisas ou nenhuma. Os documentos do Atlas gravam na entidade `documento`: `CRIACAO` no envio (rota 54) e `ALTERACAO_STATUS` em cada mudança de status (rota 57 e a indexação); `DOWNLOAD` quando a RBS baixa o arquivo (rota 18). Os prazos gravam na entidade `prazo`: `CRIACAO` no cadastro (rota 63) e `ALTERACAO_STATUS` na desativação (rota 64). **Essas linhas, as dos documentos e as dos prazos, não aparecem para a marca na rota 20**, nem no `total` nem num filtro; a RBS as vê nas rotas 20 e 21.
 
 ## Mudanças em relação ao que o front já usava
 
