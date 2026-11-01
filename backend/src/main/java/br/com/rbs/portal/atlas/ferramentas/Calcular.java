@@ -86,7 +86,7 @@ public class Calcular implements Ferramenta {
                     + "registro R# ou da conta C# deste turno (o ano de uma data não é valor; um número solto como 2000 é), ou {\"fonte\": \"usuario\", \"valor\": \"312\"}, "
                     + "com um valor que a pessoa escreveu nesta conversa (nesta mensagem ou numa anterior). Cada variável aparece no "
                     + "máximo 2 vezes no script, e a mesma variável dos dois lados de uma divisão, subtração, pct, min ou max (a / a, "
-                    + "a - a) é recusada; duas variáveis com a mesma origem e o mesmo valor também (use uma só). Percentual se faz com "
+                    + "a - a) é recusada; duas variáveis com a mesma origem e o mesmo valor também, se o valor aparece uma vez só nessa origem (use uma só; '19 previstas e 19 comprovadas' são dois valores). Percentual se faz com "
                     + "pct(parte, todo); a * 100 / b é recusado. As duas constantes valem pela cadeia: contam também as das contas calc: "
                     + "do turno que o script usa. Não misture INSERCAO, CPM e APLICACAO (campo unidade da variável, quando a "
                     + "fonte não diz). formato: numero (padrão) ou moeda, que mostra sempre duas casas. Devolve o marcador [C#] para "
@@ -183,7 +183,7 @@ public class Calcular implements Ferramenta {
         if (!indisponiveis.isEmpty()) {
             return indisponivel(indisponiveis.get(0));
         }
-        semVariavelRedundante(entradas, erros);
+        semVariavelRedundante(entradas, turno, erros);
         int constantes = constantesPelaCadeia(constantesDoScript, entradas, erros);
         exigirSemErros(erros);
         String unidade = unidadeDaConta(entradas);
@@ -405,21 +405,64 @@ public class Calcular implements Ferramenta {
     }
 
     /**
-     * [VALIDACAO] Duas variáveis com a mesma origem e o mesmo valor são redundantes, e a redundância só serve para fabricar número
-     * (a / b dá 1, e 1 + 1 + 1... chega a qualquer valor): a recusa diz para usar uma só, que o script pode repetir até duas vezes.
+     * [VALIDACAO] Duas variáveis com a mesma origem e o mesmo valor, quando o valor aparece <b>uma só vez</b> naquela origem, são a
+     * mesma variável repetida, e a redundância só serve para fabricar número (a / b dá 1, e 1 + 1 + 1... chega a qualquer valor): a
+     * recusa diz para usar uma só, que o script pode repetir até duas vezes. Se o valor aparece duas vezes ou mais no texto da
+     * mensagem da pessoa ou da fonte ("19 previstas e 19 comprovadas"), são dois valores de verdade e a conta passa. A origem é
+     * normalizada: {@code {fonte: "C5"}} e {@code {ref: "calc:c5"}} são a mesma.
      */
-    private static void semVariavelRedundante(List<Entrada> entradas, Map<String, String> erros) {
+    private static void semVariavelRedundante(List<Entrada> entradas, FontesDoTurno turno, Map<String, String> erros) {
         for (int i = 0; i < entradas.size(); i++) {
             for (int j = i + 1; j < entradas.size(); j++) {
                 Entrada a = entradas.get(i);
                 Entrada b = entradas.get(j);
-                if (a.origem().equals(b.origem()) && a.numero().compareTo(b.numero()) == 0) {
+                if (a.numero().compareTo(b.numero()) != 0 || !origemNormalizada(a.origem(), turno).equals(origemNormalizada(b.origem(), turno))) {
+                    continue;
+                }
+                boolean doisRefs = ehReferencia(a.origem()) && ehReferencia(b.origem());
+                if (doisRefs || ocorrencias(origemNormalizada(a.origem(), turno), a.numero(), turno) <= 1) {
                     erros.put("variaveis." + b.nome(), "As variáveis " + a.nome() + " e " + b.nome() + " têm a mesma origem (" + a.origem()
-                            + ") e o mesmo valor: uma delas é redundante. Use uma só variável; o script pode usá-la até duas vezes.");
+                            + (a.origem().equals(b.origem()) ? "" : " e " + b.origem()) + ") e o mesmo valor, que aparece uma vez só: uma "
+                            + "delas é redundante. Use uma só variável; o script pode usá-la até duas vezes.");
                     return;
                 }
             }
         }
+    }
+
+    private static boolean ehReferencia(String origem) {
+        return origem.indexOf(':') >= 0;
+    }
+
+    /** A origem sem o disfarce: {@code calc:c5} de uma conta do turno é a fonte {@code C5}. */
+    private static String origemNormalizada(String origem, FontesDoTurno turno) {
+        if (origem.startsWith("calc:") && Referencias.valida(origem)) {
+            return turno.conta(Referencias.nome(origem)).map(Fonte::marcador).orElse(origem);
+        }
+        return origem;
+    }
+
+    /**
+     * Quantas vezes o número aparece no texto da origem: a mensagem da pessoa e as anteriores (cada uma por si) para {@code usuario},
+     * o texto da fonte para um marcador. Uma referência ({@code cons:}, {@code dado:}) é um valor só, sem texto: conta 1.
+     */
+    private static long ocorrencias(String origem, BigDecimal numero, FontesDoTurno turno) {
+        List<String> textos = new ArrayList<>();
+        if ("usuario".equals(origem)) {
+            textos.add(turno.mensagemDaPessoa());
+            textos.addAll(turno.mensagensAnterioresDaPessoa());
+        } else if (MARCADOR.matcher(origem).matches()) {
+            turno.fonte(origem).ifPresent(fonte -> textos.add(fonte.texto()));
+        } else {
+            return 1;
+        }
+        String procurado = numero.stripTrailingZeros().toPlainString();
+        long total = 0;
+        for (String texto : textos) {
+            total += NormalizadorDeNumeros.extrair(texto, true).stream()
+                    .filter(achado -> !achado.ehData() && achado.valores().contains(procurado)).count();
+        }
+        return total;
     }
 
     /**

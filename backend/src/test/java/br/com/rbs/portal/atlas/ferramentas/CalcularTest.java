@@ -577,13 +577,15 @@ class CalcularTest {
     // ---------------------------------------------------------------------
 
     @Test
-    void duasVariaveisComAMesmaOrigemEOMesmoValorSaoRedundantes() {
-        FontesDoTurno turno = new FontesDoTurno("São 34 kVA e 34 geradores e 17.", 2027, LocalDate.of(2026, 11, 1));
+    void duasVariaveisComAMesmaOrigemEOMesmoValorQueApareceUmaVezSaoRedundantes() {
+        FontesDoTurno turno = new FontesDoTurno("São 34 kVA e 17 geradores.", 2027, LocalDate.of(2026, 11, 1));
         turno.registrarRegistro("entrega", 1, "Geradores", null, "Há 34 geradores.", Map.of());
         AtlasContexto contexto = contexto();
 
         assertThat(erro(contexto, turno, "{\"nome\":\"x\",\"script\":\"a + b\",\"variaveis\":{\"a\":{\"fonte\":\"usuario\",\"valor\":\"34\"},"
                 + "\"b\":{\"fonte\":\"usuario\",\"valor\":\"34\"}}}")).contains("a", "b", "mesma origem");
+        assertThat(erro(contexto, turno, "{\"nome\":\"x\",\"script\":\"a + b\",\"variaveis\":{\"a\":{\"fonte\":\"R1\",\"valor\":\"34\"},"
+                + "\"b\":{\"fonte\":\"R1\",\"valor\":\"34\"}}}")).contains("mesma origem");
         assertThat(erro(contexto, turno, "{\"nome\":\"x\",\"script\":\"a + b\",\"variaveis\":{\"a\":{\"ref\":\"cons:aplicacoes.previstas\"},"
                 + "\"b\":{\"ref\":\"cons:aplicacoes.previstas\"}}}")).contains("mesma origem");
         assertThat(turno.contas()).isEmpty();
@@ -592,6 +594,44 @@ class CalcularTest {
                 + "\"b\":{\"fonte\":\"R1\",\"valor\":\"34\"}}}")).containsEntry("valorFormatado", "68");
         assertThat(rodar(contexto, turno, "{\"nome\":\"y\",\"script\":\"a + b\",\"variaveis\":{\"a\":{\"fonte\":\"usuario\",\"valor\":\"34\"},"
                 + "\"b\":{\"fonte\":\"usuario\",\"valor\":\"17\"}}}")).containsEntry("valorFormatado", "51");
+    }
+
+    @Test
+    void dois19NaMensagemDaPessoaSaoDoisValoresEOMesmoNumeroDuasVezesNumaFonteTambem() {
+        AtlasContexto contexto = contexto();
+        // "19 previstas e 19 comprovadas", "tinha 40 brindes e distribuí 40": o valor aparece duas vezes, são dois valores
+        FontesDoTurno previstas = new FontesDoTurno("19 previstas e 19 comprovadas.", 2027, LocalDate.of(2026, 11, 1));
+        assertThat(rodar(contexto, previstas, "{\"nome\":\"cumprimento\",\"script\":\"pct(feitas, previstas)\",\"variaveis\":{"
+                + "\"previstas\":{\"fonte\":\"usuario\",\"valor\":\"19\"},\"feitas\":{\"fonte\":\"usuario\",\"valor\":\"19\"}}}"))
+                .containsEntry("valorFormatado", "100");
+        FontesDoTurno brindes = new FontesDoTurno("Tinha 40 brindes e distribuí 40.", 2027, LocalDate.of(2026, 11, 1));
+        assertThat(rodar(contexto, brindes, "{\"nome\":\"sobra\",\"script\":\"tinha - distribuidos\",\"variaveis\":{"
+                + "\"tinha\":{\"fonte\":\"usuario\",\"valor\":\"40\"},\"distribuidos\":{\"fonte\":\"usuario\",\"valor\":\"40\"}}}"))
+                .containsEntry("valorFormatado", "0");
+        // numa fonte: duas linhas com o mesmo número
+        FontesDoTurno registro = new FontesDoTurno("Quanto?", 2027, LocalDate.of(2026, 11, 1));
+        registro.registrarRegistro("entrega", 1, "Brindes", null, "Previsto: 40 brindes. Entregue: 40 brindes.", Map.of());
+        assertThat(rodar(contexto, registro, "{\"nome\":\"total\",\"script\":\"a + b\",\"variaveis\":{"
+                + "\"a\":{\"fonte\":\"R1\",\"valor\":\"40\"},\"b\":{\"fonte\":\"R1\",\"valor\":\"40\"}}}")).containsEntry("valorFormatado", "80");
+        // a mesma pessoa em duas mensagens: o número aparece duas vezes na conversa
+        FontesDoTurno duasMensagens = new FontesDoTurno("E se distribuir 40?", 2027, LocalDate.of(2026, 11, 1))
+                .comMensagensAnteriores(List.of("Tenho 40 brindes."));
+        assertThat(rodar(contexto, duasMensagens, "{\"nome\":\"resto\",\"script\":\"tenho - dou\",\"variaveis\":{"
+                + "\"tenho\":{\"fonte\":\"usuario\",\"valor\":\"40\"},\"dou\":{\"fonte\":\"usuario\",\"valor\":\"40\"}}}"))
+                .containsEntry("valorFormatado", "0");
+    }
+
+    @Test
+    void aMesmaContaPorRefOuPorMarcadorEAMesmaOrigem() {
+        FontesDoTurno turno = turno();
+        AtlasContexto contexto = contexto();
+        rodar(contexto, turno, tarifa("tarifa", "moeda"));   // C1: o resultado 10.608,00 aparece uma vez no texto da fonte
+
+        assertThat(erro(contexto, turno, "{\"nome\":\"x\",\"script\":\"a + b\",\"variaveis\":{\"a\":{\"ref\":\"calc:tarifa\"},"
+                + "\"b\":{\"fonte\":\"C1\",\"valor\":\"10.608,00\"}}}")).contains("mesma origem", "C1");
+        assertThat(erro(contexto, turno, "{\"nome\":\"x\",\"script\":\"a + b\",\"variaveis\":{\"a\":{\"ref\":\"calc:tarifa\"},"
+                + "\"b\":{\"ref\":\"calc:tarifa\"}}}")).contains("mesma origem");
+        assertThat(turno.conta("x")).isEmpty();
     }
 
     @Test
