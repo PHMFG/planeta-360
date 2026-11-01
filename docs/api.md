@@ -1363,7 +1363,7 @@ Hoje são cinco campos, todos da aba `APLICACOES`. Quatro são inteiros a partir
       "vigente": {
         "valor": 1200, "origem": "PORTAL",
         "informadoPor": { "id": 3, "nome": "Marketing Amarelo", "perfil": "ADMIN_PATROCINADOR" },
-        "informadoEm": "2026-10-29T10:00:00-03:00"
+        "informadoEm": "2026-10-29T10:00:00-03:00", "arquivo": null
       }
     },
     {
@@ -1797,7 +1797,7 @@ O `fim` é a referência: o que a tela montou com os pedaços dá lugar aos iten
 | `relatorio_pronto` | O relatório ficou pronto; o front abre o A4 pela rota 47. **Só com `atlas.relatorio.ligado=true`**, como `cartao` e `aviso` | `relatorioId`, `titulo`, `turno` (só com `diagnosticoDisponivel`) |
 | `aviso` | Aviso do sistema: o cartão foi fechado. Cancelado pela pessoa: o texto segue o `llmDisponivel` da resposta, `"Cartão fechado. Use Montar relatório para continuar."` sem o modelo, `"Cartão fechado. Quando tiver os números, peça para continuar."` com ele. Fechado porque o relatório foi descartado (pela tela ou por ter ficado parado): `"Relatório descartado. Você pode pedir um novo quando quiser."`, com o modelo ou sem ele | `texto` |
 
-Cada item de `campos` do cartão é um campo do catálogo (rota 39) mais `obrigatorio` e `vigente`, que usa o formato da rota 40 (`{valor, origem, informadoPor, informadoEm}`, ou `null` se ninguém informou). O cartão pede, de uma vez, o que o relatório precisa e ainda não tem valor: primeiro as obrigatórias (visitantes e cadastros), depois as opcionais (brindes disponíveis e distribuídos). Não há campo de arquivo no cartão.
+Cada item de `campos` do cartão é um campo do catálogo (rota 39) mais `obrigatorio` e `vigente`, que usa o formato da rota 40 (`{valor, origem, informadoPor, informadoEm, arquivo}`, ou `null` se ninguém informou; `arquivo` vem sempre `null` aqui, porque não há campo de arquivo no cartão). O cartão pede, de uma vez, o que o relatório precisa e ainda não tem valor: primeiro as obrigatórias (visitantes e cadastros), depois as opcionais (brindes disponíveis e distribuídos). Não há campo de arquivo no cartão.
 
 ## 42. `POST /api/parcerias/{id}/atlas/conversas`  · Atlas 2
 
