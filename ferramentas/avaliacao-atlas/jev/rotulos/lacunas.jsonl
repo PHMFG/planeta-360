@@ -18,3 +18,9 @@
 {"pedido": "quero só o público no relatório da ativação", "chave": "ativacao.brindes_disponiveis", "rotulo_campo": "Brindes disponíveis", "rotulo": false, "split": "ajuste"}
 {"pedido": "relatório curto, sem brindes por favor", "chave": "ativacao.brindes_disponiveis", "rotulo_campo": "Brindes disponíveis", "rotulo": false, "split": "reserva"}
 {"pedido": "a ativação foi só um painel de led, sem brinde. monta o relatório", "chave": "ativacao.brindes_disponiveis", "rotulo_campo": "Brindes disponíveis", "rotulo": false, "split": "ajuste"}
+{"pedido": "quero o relatório", "chave": "ativacao.brindes_distribuidos", "rotulo_campo": "Brindes distribuídos", "rotulo": true, "split": "ajuste", "dificil": true}
+{"pedido": "monta o relatório da ativação", "chave": "ativacao.brindes_disponiveis", "rotulo_campo": "Brindes disponíveis", "rotulo": true, "split": "ajuste", "dificil": true}
+{"pedido": "gera o relatório do evento", "chave": "ativacao.brindes_distribuidos", "rotulo_campo": "Brindes distribuídos", "rotulo": true, "split": "reserva", "dificil": true}
+{"pedido": "relatório da ativação por favor", "chave": "ativacao.brindes_disponiveis", "rotulo_campo": "Brindes disponíveis", "rotulo": true, "split": "ajuste", "dificil": true}
+{"pedido": "quero o relatório", "chave": "ativacao.brindes_disponiveis", "rotulo_campo": "Brindes disponíveis", "rotulo": true, "split": "ajuste", "dificil": true}
+{"pedido": "monta o relatório da ativação", "chave": "ativacao.brindes_distribuidos", "rotulo_campo": "Brindes distribuídos", "rotulo": true, "split": "reserva", "dificil": true}

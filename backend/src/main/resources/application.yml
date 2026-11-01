@@ -178,15 +178,15 @@ atlas:
   diagnostico:
     ligado: ${ATLAS_DIAGNOSTICO:true}
     marca: ${ATLAS_DIAGNOSTICO_MARCA:true}
-  # O resultado de ferramentas/avaliacao-atlas/jev/calibrar-jev.mjs: fontes e coerencia não confirmaram no conjunto de reserva e
-  # ficam em sombra. Para desligar um ponto: ATLAS_JEV_<PONTO>=none.
+  # O resultado de ferramentas/avaliacao-atlas/jev/calibrar-jev.mjs: fontes, coerencia e lacunas não confirmaram no conjunto de reserva
+  # e ficam em sombra. Para desligar um ponto: ATLAS_JEV_<PONTO>=none.
   jev:
     intencao:
       modo: ${ATLAS_JEV_INTENCAO:ativo}
-      limiar: 0.77
+      limiar: 0.80
     cartao:
       modo: ${ATLAS_JEV_CARTAO:ativo}
-      limiar: 0.5
+      limiar: 0.87
     fontes:
       modo: ${ATLAS_JEV_FONTES:sombra}
       limiar: 0.97
@@ -195,10 +195,10 @@ atlas:
       limiar: 0.5
     coerencia:
       modo: ${ATLAS_JEV_COERENCIA:sombra}
-      limiar: 0.87
+      limiar: 0.5
     lacunas:
-      modo: ${ATLAS_JEV_LACUNAS:ativo}
-      limiar: 0.59
+      modo: ${ATLAS_JEV_LACUNAS:sombra}
+      limiar: 0.81
 
 ---
 spring:

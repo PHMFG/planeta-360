@@ -12,7 +12,7 @@ import { parseArgs } from 'node:util'
 const AQUI = path.dirname(fileURLToPath(import.meta.url))
 const RAIZ = path.resolve(AQUI, '../../..')
 const PASTA_DE_RODADAS = path.join(RAIZ, 'docs/atlas/controle/avaliacoes')
-const MODELOS = ['jev-1.14.0', 'jev-1.13.0']
+const MODELOS = ['jev-1.14.0', 'jev-1.13.0', 'jev-latest']
 const URL_DO_JEV = 'https://api.typesafe.ai/v1/systemone'
 const AO_MESMO_TEMPO = 4
 const LIMIARES = Array.from({ length: 50 }, (_, i) => Math.round((0.5 + i * 0.01) * 100) / 100)
@@ -282,8 +282,12 @@ function analisar(saida) {
     const media = (lista) => (lista.length ? lista.reduce((a, b) => a + (b ?? 0), 0) / lista.length : null)
     relatorio[modelo] = { decisoes, sinalDeInjecao: { hostis: media(injecao), normais: media(normais) } }
   }
-  // Fica a versão que liga mais pontos; empate, a mais nova, que vem primeiro.
-  const melhor = Object.entries(relatorio).sort((a, b) => Object.values(b[1].decisoes).filter((d) => d.liga).length - Object.values(a[1].decisoes).filter((d) => d.liga).length)[0][0]
+  // Fica a versão fixada que liga intenção e cartão e pega mais frases erradas. O `jev-latest` é apelido: serve só de comparação, porque o
+  // servidor fixa a versão.
+  const fixadas = Object.entries(relatorio).filter(([modelo]) => modelo !== 'jev-latest')
+  const candidatas = fixadas.filter(([, r]) => r.decisoes.intencao?.liga && r.decisoes.cartao?.liga)
+  const pega = (r) => r.decisoes.resposta?.ajuste?.pega ?? r.decisoes.resposta?.melhor?.pega ?? 0
+  const melhor = (candidatas.length ? candidatas : fixadas).sort((a, b) => pega(b[1]) - pega(a[1]))[0][0]
   return { melhor, relatorio }
 }
 

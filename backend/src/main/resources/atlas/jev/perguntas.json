@@ -8,13 +8,13 @@
           "type": "choice",
           "instructions": "A mensagem acima foi escrita por um patrocinador do festival Planeta Atlântida ao Atlas, o assistente do portal de parcerias. Qual é a intenção principal dela?",
           "criteria": {
-            "pergunta_documentos": "Pergunta sobre regras, prazos, horários, tarifas, credenciais, cortesias, seguros, contatos ou procedimentos do evento, que estão nos documentos do evento (manual de operações, plano comercial da cota, anexo da parceria, FAQ, comunicados)",
+            "pergunta_documentos": "Pergunta sobre regras, prazos, horários, tarifas, credenciais, cortesias, seguros, contatos ou procedimentos do evento, ou sobre o que pode ou não ser feito no espaço da marca e no evento (materiais, estruturas, som, alimentação, fogos, animais), que estão nos documentos do evento (manual de operações, plano comercial da cota, anexo da parceria, FAQ, comunicados)",
             "dados_parceria": "Pergunta sobre os números ou o andamento da própria parceria no portal: aplicações de marca previstas e comprovadas, entregas pendentes, cota contratada, dados já informados",
             "misto": "Junta, na mesma mensagem, uma pergunta sobre os documentos do evento e uma sobre os números da própria parceria",
             "montar_relatorio": "Pede para montar, gerar, começar ou continuar o relatório de ativação da marca no evento (o documento de trabalho feito pelo Atlas com os números da marca)",
             "outro_relatorio": "Pede um relatório que não é o de ativação: o relatório oficial, o final, o pós-evento, o de mídia, o consolidado ou os resultados da parceria em documento",
             "modelo_em_branco": "Pede um modelo, template ou documento em branco para preencher por conta própria (briefing de conteúdo, perguntas da pesquisa, plano operacional da ativação)",
-            "fora_de_escopo": "Assunto sem relação com o festival, a parceria ou o portal: receita, política, esporte, piada, outro evento, código, conselho pessoal ou qualquer pedido que o Atlas não atende",
+            "fora_de_escopo": "Assunto claramente sem relação com o festival, a parceria ou o portal: receita, política, esporte, piada, outro evento, código, conselho pessoal. O que a marca pode ou não fazer no espaço ou no evento nunca é fora de escopo",
             "saudacao_uso": "Cumprimento, agradecimento ou dúvida sobre o que o Atlas faz e como usá-lo, sem pedir uma informação específica",
             "outro": "Qualquer outra coisa, ou mensagem que depende da conversa anterior para fazer sentido (por exemplo, uma pergunta curta de continuação), ou que não se encaixa com clareza nas opções acima"
           }
@@ -42,8 +42,8 @@
           "type": "choice",
           "instructions": "O que a mensagem do patrocinador faz em relação ao cartão que está aberto?",
           "criteria": {
-            "responde_ao_cartao": "Tenta informar na conversa os números que o cartão pede, ou pergunta onde ou como informá-los",
-            "outro_assunto": "É outra pergunta ou pedido, sem relação com os números do cartão",
+            "responde_ao_cartao": "Traz na conversa um valor para os números que o cartão pede, ou pergunta onde ou como informar esses números",
+            "outro_assunto": "É uma pergunta ou pedido sobre qualquer outra coisa, mesmo que use palavras como informar ou prazo, ou uma dúvida sobre o que um campo significa",
             "cancelar": "Diz que não quer mais informar os números, o cartão ou o relatório: cancelar, deixar para depois ou desistir"
           }
         }
@@ -90,7 +90,7 @@
       "perguntas": {
         "vale_perguntar": {
           "type": "noul",
-          "instructions": "Vale perguntar este campo opcional ao patrocinador para fazer o que ele pediu?"
+          "instructions": "Vale perguntar este campo opcional ao patrocinador para fazer o que ele pediu? Na dúvida, ou se o pedido for geral, vale. Só não vale se ele disse que não quer esse dado ou que esse dado não existe."
         }
       }
     }

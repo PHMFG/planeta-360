@@ -88,7 +88,7 @@ function prepararResposta() {
   // Afirmação que o trecho não faz, com número: uma frase certa com um acréscimo que nenhum documento diz.
   unicas.slice(24, 34).forEach((c, i) => {
     const sem = semCitacoes(c.frase).trim().replace(/[.!]$/, '')
-    erradas.push({ frase: `${sem}, com desconto de 10% para quem pagar até 10/12/2026 [T1].`, trechos: c.trechos, caso: c.caso, rotulo: 'errada', origem: 'afirmacao_sem_apoio', split: split(i) })
+    erradas.push({ frase: `${sem}, com desconto de 10% para quem pagar até 10/12/2026 [T1].`, trechos: c.trechos, caso: c.caso, rotulo: 'errada', origem: 'afirmacao_sem_apoio', split: split(i + 24) })
   })
   gravar('resposta.jsonl', [...linhas, ...erradas])
   console.log(`resposta: ${linhas.length} certas (conferir à mão) e ${erradas.length} erradas`)

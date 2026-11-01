@@ -28,3 +28,13 @@
 {"mensagem": "para", "rotulo": "cancelar", "split": "ajuste"}
 {"mensagem": "não vou preencher agora", "rotulo": "cancelar", "split": "reserva"}
 {"mensagem": "fecha isso", "rotulo": "cancelar", "split": "ajuste"}
+{"mensagem": "o que conta como visitante?", "rotulo": "outro_assunto", "split": "ajuste", "dificil": true}
+{"mensagem": "isso é obrigatório?", "rotulo": "outro_assunto", "split": "ajuste", "dificil": true}
+{"mensagem": "tenho que informar os geradores até quando?", "rotulo": "outro_assunto", "split": "reserva", "dificil": true}
+{"mensagem": "como informo a lista de credenciados?", "rotulo": "outro_assunto", "split": "ajuste", "dificil": true}
+{"mensagem": "quem informa as cargas elétricas à produção?", "rotulo": "outro_assunto", "split": "ajuste", "dificil": true}
+{"mensagem": "quantos brindes? sei lá, uns 500", "rotulo": "responde_ao_cartao", "split": "ajuste", "dificil": true}
+{"mensagem": "uns 1200 mais ou menos", "rotulo": "responde_ao_cartao", "split": "ajuste", "dificil": true}
+{"mensagem": "foram 1200", "rotulo": "responde_ao_cartao", "split": "reserva", "dificil": true}
+{"mensagem": "onde coloco os visitantes?", "rotulo": "responde_ao_cartao", "split": "ajuste", "dificil": true}
+{"mensagem": "desisto, deixa pra lá", "rotulo": "cancelar", "split": "ajuste", "dificil": true}
