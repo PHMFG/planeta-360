@@ -12,6 +12,7 @@ import br.com.rbs.portal.atlas.relatorio.ResolvedorDeReferencias;
 import br.com.rbs.portal.atlas.relatorio.ResolvedorDeReferencias.Resolucao;
 import java.text.Normalizer;
 import java.time.LocalDate;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -284,9 +285,44 @@ class ChecagemDeFontesTest {
     }
 
     @Test
-    void oNumeroDeUmTurnoAnteriorDaPessoaNaoValeNesteTurno() {
-        // a mensagem da pessoa neste turno é o que vale: quem monta o turno passa só a dela
+    void oNumeroDeUmTurnoAnteriorDaPessoaSoValeSeQuemMontaOTurnoOPassa() {
+        // sem as mensagens anteriores, só a mensagem da pessoa neste turno vale
         recusa(turno("Qual o prazo?"), "O prazo para 34 kVA é 04/12/2026.");
+    }
+
+    @Test
+    void oQueAPessoaEscreveuEmQualquerMensagemDaConversaTemOrigem() {
+        // 12 kVA, depois "e se eu subir pra 20 kVA?", depois "coloca junto o cadastro de 2 geradores": os 12 e os 20 são dela
+        FontesDoTurno turno = turno("Coloca junto o cadastro de 2 geradores. Quanto fica tudo?")
+                .comMensagensAnteriores(List.of("E se eu subir pra 20 kVA?", "Quanto pago por 12 kVA em 03/11?"));
+
+        aprova(turno, "Com 20 kVA e 2 geradores, a conta muda.");
+        aprova(turno, "Antes eram 12 kVA, no dia 03/11/2026.");
+        recusa(turno, "Com 21 kVA e 2 geradores, a conta muda.");
+        // sem o turno que traz as mensagens anteriores, o 20 não tem origem
+        recusa(turno("Coloca junto o cadastro de 2 geradores. Quanto fica tudo?"), "Com 20 kVA e 2 geradores, a conta muda.");
+    }
+
+    @Test
+    void aDataExataSoValeComAMensagemDoTurnoEAsAnterioresNaoSobrepoemOAnoDaFonte() {
+        FontesDoTurno turno = turno("Quando é o prazo?", PRAZO).comMensagensAnteriores(List.of("Será 04/12/2027?"));
+
+        aprova(turno, "O prazo é 04/12/2026 [T1].");
+        // a fonte citada disse o ano desta data, e a data com ano de uma mensagem anterior não a contradiz (só a deste turno faz isso)
+        recusa(turno, "Não é 04/12/2027: é 04/12/2026 [T1].");
+        aprova(turno("É 04/12/2027?", PRAZO).comMensagensAnteriores(List.of("Qualquer coisa.")), "Não é 04/12/2027: é 04/12/2026 [T1].");
+        assertThat(turno.mensagemDaPessoa()).isEqualTo("Quando é o prazo?");
+        assertThat(turno.mensagensAnterioresDaPessoa()).containsExactly("Será 04/12/2027?");
+    }
+
+    @Test
+    void oQueOAssistenteEscreveuNaoViraOrigemEOMarcadorDeUmTurnoAnteriorContinuaSemValer() {
+        // quem monta o turno só passa o que a pessoa escreveu; o texto do assistente e os marcadores ficam de fora
+        FontesDoTurno turno = turno("Quanto fica?").comMensagensAnteriores(List.of("Quanto pago por 12 kVA?"));
+
+        recusa(turno, "A conta deu R$ 3.744,00 no turno passado.");
+        recusa(turno, "A conta deu 3.744 [C1].");
+        recusa(turno, "A conta é {{calc:tarifa}}.");
     }
 
     @Test

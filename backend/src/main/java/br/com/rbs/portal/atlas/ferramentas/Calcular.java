@@ -44,8 +44,8 @@ import org.springframework.stereotype.Component;
  *   <li><b>Cada variável tem origem.</b> {@code {ref}}: {@code cons:}, {@code dado:} ou {@code calc:} (uma conta anterior do turno
  *       ou uma fórmula fixa do modelo), resolvida só para a parceria da conversa (o {@link AtlasContexto}; nunca argumento).
  *       {@code {fonte, valor}}: o {@code valor} literal tem de estar no {@code texto} da fonte citada <b>deste turno</b>
- *       ({@code T#}, {@code R#}, {@code C#}; não o título nem a página) ou, com {@code usuario}, na mensagem da pessoa neste turno,
- *       comparado por valor ({@link Origens}).</li>
+ *       ({@code T#}, {@code R#}, {@code C#}; não o título nem a página) ou, com {@code usuario}, no que a pessoa escreveu nesta
+ *       conversa (a mensagem do turno e as últimas 20 anteriores), comparado por valor ({@link Origens}).</li>
  *   <li><b>O script não tem número escrito</b>: passa antes pela lista de tokens do {@link ScriptDeConta} (variáveis, {@code pct},
  *       {@code min}, {@code max}, {@code + - * / ( ) ,} e as constantes 0, 1, 2, 100 e 1000, no máximo duas).</li>
  *   <li><b>Não mistura unidades</b>: INSERCAO, CPM e APLICACAO (a de cada variável vem da referência, do {@code dados.unidade} da
@@ -406,8 +406,8 @@ public class Calcular implements Ferramenta {
         String onde;
         String unidadeDaFonte = null;
         if ("usuario".equals(marcador)) {
-            origens = new Origens(turno.mensagemDaPessoa());
-            onde = "na mensagem da pessoa neste turno (fonte usuario)";
+            origens = turno.origensDaPessoa();
+            onde = "no que a pessoa escreveu nesta conversa (fonte usuario)";
         } else if (MARCADOR.matcher(marcador).matches()) {
             Optional<Fonte> fonte = turno.fonte(marcador);
             if (fonte.isEmpty()) {

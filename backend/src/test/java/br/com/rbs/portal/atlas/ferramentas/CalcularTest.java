@@ -309,6 +309,24 @@ class CalcularTest {
     }
 
     @Test
+    void valorDaPessoaTambemPodeEstarNumaMensagemAnteriorDaConversa() {
+        // 12 kVA, depois "e se eu subir pra 20 kVA?", depois "coloca junto 2 geradores": o 20 é dela, de outro turno
+        FontesDoTurno turno = new FontesDoTurno("Coloca junto o cadastro de 2 geradores. Quanto fica tudo?", 2027, LocalDate.of(2026, 11, 1))
+                .comMensagensAnteriores(List.of("E se eu subir pra 20 kVA?", "Quanto pago por 12 kVA?"));
+
+        Map<String, Object> resultado = rodar(contexto(), turno, "{\"nome\":\"total\",\"script\":\"kva * geradores\",\"variaveis\":{"
+                + "\"kva\":{\"fonte\":\"usuario\",\"valor\":\"20\"},\"geradores\":{\"fonte\":\"usuario\",\"valor\":\"2\"}}}");
+
+        assertThat(resultado).containsEntry("valorFormatado", "40");
+        // o que nenhuma mensagem da pessoa tem continua recusado
+        assertThat(erro(contexto(), turno, "{\"nome\":\"outro\",\"script\":\"kva * 2\",\"variaveis\":{\"kva\":{\"fonte\":\"usuario\","
+                + "\"valor\":\"21\"}}}")).contains("usuario", "21");
+        // sem as mensagens anteriores o 20 não tem origem
+        assertThat(erro(contexto(), turno(), "{\"nome\":\"outro\",\"script\":\"kva * 2\",\"variaveis\":{\"kva\":{\"fonte\":\"usuario\","
+                + "\"valor\":\"20\"}}}")).contains("usuario", "20");
+    }
+
+    @Test
     void valorQueNaoEUmNumeroEErro() {
         FontesDoTurno turno = turno();
 

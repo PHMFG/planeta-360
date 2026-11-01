@@ -1,5 +1,6 @@
 package br.com.rbs.portal.atlas.checagem;
 
+import br.com.rbs.portal.atlas.checagem.NormalizadorDeNumeros.Origens;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -83,6 +84,7 @@ public final class FontesDoTurno {
     }
 
     private final String mensagemDaPessoa;
+    private List<String> mensagensAnteriores = List.of();
     private final int anoDaEdicao;
     private final LocalDate hoje;
     private final Map<String, Fonte> fontes = new LinkedHashMap<>();
@@ -108,6 +110,29 @@ public final class FontesDoTurno {
 
     public String mensagemDaPessoa() {
         return mensagemDaPessoa;
+    }
+
+    /**
+     * As mensagens que a pessoa escreveu antes, nesta conversa (as últimas 20, sem as do botão), da mais nova para a mais antiga. Os
+     * números dela valem como origem em qualquer uma delas ({@link #origensDaPessoa}), mas a regra "a pessoa escreveu a data inteira,
+     * com o ano" ({@link #mensagemDaPessoa}) continua só com a deste turno. Só o que a pessoa escreveu entra aqui: o que o assistente
+     * disse, o marcador {@code [C#]} e o {@code {{calc:}}} de um turno anterior não valem.
+     */
+    public FontesDoTurno comMensagensAnteriores(List<String> mensagens) {
+        this.mensagensAnteriores = mensagens == null ? List.of() : List.copyOf(mensagens);
+        return this;
+    }
+
+    public List<String> mensagensAnterioresDaPessoa() {
+        return mensagensAnteriores;
+    }
+
+    /** Tudo o que a pessoa escreveu nesta conversa (a mensagem deste turno e as anteriores) como origem de números e datas. */
+    public Origens origensDaPessoa() {
+        List<String> textos = new ArrayList<>();
+        textos.add(mensagemDaPessoa);
+        textos.addAll(mensagensAnteriores);
+        return new Origens(textos.toArray(String[]::new));
     }
 
     public int anoDaEdicao() {

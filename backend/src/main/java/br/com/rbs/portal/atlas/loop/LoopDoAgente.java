@@ -116,6 +116,8 @@ import tools.jackson.core.JacksonException;
 public class LoopDoAgente {
 
     public static final int LIMITE_DE_CHAMADAS_POR_TURNO = 8;
+    /** Quantas mensagens anteriores da pessoa valem como origem de número, além da deste turno. */
+    public static final int MENSAGENS_ANTERIORES_DA_PESSOA = 20;
     /**
      * O turno vale por 5 minutos (a trava de {@code turno_desde}). O loop não começa uma nova ida ao modelo depois de 3 minutos,
      * porque a última ainda pode levar até 2 (60 segundos de limite e uma nova tentativa) e o turno não pode vencer sob ele.
@@ -298,7 +300,9 @@ public class LoopDoAgente {
     public void conduzir(AtlasContexto contexto, OuvinteDoTurno ouvinte) {
         Turno turno = new Turno(prazoDoTurno, contexto.traco(), new FontesDoTurno(
                 repositorio.ultimaMensagemDaPessoa(contexto.conversaId()).orElse(""),
-                repositorio.escopoDaParceria(contexto.parceriaId()).edicao(), Datas.hoje()),
+                repositorio.escopoDaParceria(contexto.parceriaId()).edicao(), Datas.hoje())
+                .comMensagensAnteriores(repositorio.mensagensAnterioresDaPessoa(contexto.conversaId(), MENSAGENS_ANTERIORES_DA_PESSOA,
+                        PlanoBSemLlm.TEXTO_DO_BOTAO)),
                 repositorio.ultimaOrdem(contexto.conversaId()));
         try {
             // O provedor é pego UMA vez: se a chave do debug mudar no meio, este turno termina com o que começou.

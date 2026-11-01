@@ -171,6 +171,20 @@ public class AtlasRepositorio {
                 .param("id", conversaId).query(String.class).optional();
     }
 
+    /**
+     * O que a pessoa escreveu antes da última mensagem dela, da mais nova para a mais antiga, até {@code limite} (o botão "Montar
+     * relatório" também grava uma mensagem {@code user}, mas não foi a pessoa que a escreveu: {@code textoDoBotao} a deixa de fora).
+     */
+    public List<String> mensagensAnterioresDaPessoa(long conversaId, int limite, String textoDoBotao) {
+        return jdbc.sql("""
+                        SELECT conteudo FROM atlas_mensagem
+                        WHERE conversa_id = :id AND papel = 'user' AND conteudo <> :botao
+                          AND ordem < coalesce((SELECT max(ordem) FROM atlas_mensagem WHERE conversa_id = :id AND papel = 'user'), 0)
+                        ORDER BY ordem DESC LIMIT :limite
+                        """)
+                .param("id", conversaId).param("botao", textoDoBotao).param("limite", limite).query(String.class).list();
+    }
+
     public int ultimaOrdem(long conversaId) {
         return jdbc.sql("SELECT coalesce(max(ordem), 0) FROM atlas_mensagem WHERE conversa_id = :id")
                 .param("id", conversaId)

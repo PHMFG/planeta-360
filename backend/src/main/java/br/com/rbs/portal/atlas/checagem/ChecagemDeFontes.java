@@ -27,7 +27,7 @@ import org.springframework.stereotype.Component;
  *       ({@link FontesDoTurno}). Citação de outro turno, inventada ({@code [T9]}, {@code [X1]}, {@code [t1]}, {@code [T 1]}) ou em
  *       outro formato com número ({@code [1]}) é recusada.</li>
  *   <li>Todo número ou data fora de um marcador {@code {{ref}}} aparece <b>numa fonte citada na MESMA frase</b>, no resultado de uma
- *       conta ou contagem de dias deste turno, ou na mensagem da pessoa neste turno. A página, a seção, a versão e o título da fonte
+ *       conta ou contagem de dias deste turno, ou no que a pessoa escreveu nesta conversa (a mensagem do turno e as anteriores). A página, a seção, a versão e o título da fonte
  *       valem como parte dela. A numeração de lista no começo da linha só não conta se estiver em sequência (1, 2, 3...). A data de hoje vale sem fonte; o ano da edição e o
  *       de hoje valem só como ano (veja {@link NormalizadorDeNumeros}), nunca como valor. A comparação é por valor ({@link NormalizadorDeNumeros}): {@code 1.250.000,00} e {@code 1250000}, {@code R$ 312} e
  *       {@code 312}, {@code 04/12/2026}, {@code 4/12}, {@code 4 de dezembro} e {@code 2026-12-04}, {@code 6h30} e {@code 06:30},
@@ -193,8 +193,8 @@ public class ChecagemDeFontes {
         int edicao = fontes.anoDaEdicao();
         int anoDeHoje = fontes.hoje().getYear();
         Set<String> anosAceitos = new LinkedHashSet<>(List.of(String.valueOf(edicao), String.valueOf(edicao - 1), String.valueOf(anoDeHoje)));
-        Origens daPessoa = new Origens(fontes.mensagemDaPessoa());   // só o que ela escreveu: a data com ano vale como está
-        Origens geral = new Origens(fontes.mensagemDaPessoa()).anosAceitos(anosAceitos);
+        Origens daPessoa = new Origens(fontes.mensagemDaPessoa());   // só a deste turno: a data com ano vale como está
+        Origens geral = fontes.origensDaPessoa().anosAceitos(anosAceitos);   // o que a pessoa escreveu em qualquer mensagem da conversa
         geral.adicionarAnoLivre(edicao).adicionarAnoLivre(anoDeHoje).adicionarData(fontes.hoje());
         fontes.numerosLivres().forEach(geral::adicionar);
         for (String frase : Frases.dividir(NormalizadorDeNumeros.semNumeracaoDeLista(texto))) {

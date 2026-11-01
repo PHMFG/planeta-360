@@ -219,6 +219,36 @@ class CalcularNoChatTest {
         assertThat(pedidoDeNovaRedacao.conteudo()).contains("[C1]", "não existe nos resultados deste turno");
     }
 
+    @Test
+    void aContaQueContinuaUmNumeroDeUmTurnoAnteriorDaPessoaFunciona() {
+        SessaoDeApi pessoa = SessaoDeApi.entrar(mvc, AMARELO);
+        long conversa = conversa(pessoa, jdbc);
+        String energia = "{\"nome\":\"energia\",\"script\":\"kva * tarifa\",\"formato\":\"moeda\",\"variaveis\":{"
+                + "\"kva\":{\"fonte\":\"usuario\",\"valor\":\"%s\"},\"tarifa\":{\"fonte\":\"usuario\",\"valor\":\"312\"}}}";
+        modelo.chamada(CALCULAR, energia.formatted("12")).texto("Com 12 kVA, a energia é R$ {{calc:energia}} [C1].");
+        assertThat(textos(falar(pessoa, conversa, "Quanto pago por 12 kVA, a R$ 312,00 por kVA?")))
+                .containsExactly("Com 12 kVA, a energia é R$ 3.744,00 [C1].");
+        // o 20 e o 312 são de mensagens anteriores
+        modelo.limpar();
+        modelo.chamada(CALCULAR, energia.formatted("20")).texto("Com 20 kVA, a energia é R$ {{calc:energia}} [C1].");
+        assertThat(textos(falar(pessoa, conversa, "E se eu subir pra 20 kVA?"))).containsExactly("Com 20 kVA, a energia é R$ 6.240,00 [C1].");
+        modelo.limpar();
+        String junto = "{\"nome\":\"total\",\"script\":\"kva * tarifa + geradores\",\"formato\":\"moeda\",\"variaveis\":{"
+                + "\"kva\":{\"fonte\":\"usuario\",\"valor\":\"20\"},\"tarifa\":{\"fonte\":\"usuario\",\"valor\":\"312\"},"
+                + "\"geradores\":{\"fonte\":\"usuario\",\"valor\":\"2\"}}}";
+        modelo.chamada(CALCULAR, junto).texto("Com 20 kVA e 2 geradores, fica R$ {{calc:total}} [C1].");
+
+        MvcTestResult resposta = falar(pessoa, conversa, "Coloca junto o cadastro de 2 geradores, quanto fica tudo?");
+
+        assertThat(textos(resposta)).containsExactly("Com 20 kVA e 2 geradores, fica R$ 6.242,00 [C1].");
+        assertThat(modelo.pedidos()).as("nenhuma nova redação foi pedida").hasSize(2);
+        // o que o assistente escreveu não vale como origem
+        modelo.limpar();
+        modelo.texto("Seriam R$ 3.744,00 como na primeira conta.").texto("Não sei dizer agora.");
+        MvcTestResult sem = falar(pessoa, conversa, "E a primeira conta mesmo?");
+        assertThat(textos(sem)).containsExactly("Não sei dizer agora.");
+    }
+
     // ---------------------------------------------------------------------
     // As citações [C#]
     // ---------------------------------------------------------------------
