@@ -15,6 +15,8 @@ import java.util.Set;
  *
  * @param usuario     quem pede (a sessão)
  * @param parceriaId  a parceria da conversa
+ * @param eventoId    a edição do festival da parceria (M4): a busca nos documentos só enxerga documentos desta edição
+ * @param cotaTipoId  o tipo de cota da parceria (M4): a busca enxerga os documentos da cota dela
  * @param cota        o código da cota da parceria (MASTER, SUBCOTA_G ou SUBCOTA)
  * @param abasAbertas os códigos das abas abertas para este usuário nesta parceria (a RBS: todas)
  * @param conversaId  a conversa em andamento
@@ -22,8 +24,8 @@ import java.util.Set;
  * @param traco       o traço do diagnóstico do turno em andamento ({@link Traco#NENHUM} fora de um turno ou com o diagnóstico
  *                    desligado): é por aqui que o loop, a checagem e o resumo do raciocínio deixam as etapas
  */
-public record AtlasContexto(UsuarioAutenticado usuario, long parceriaId, String cota, Set<String> abasAbertas, long conversaId,
-                            HttpServletRequest requisicao, Traco traco) {
+public record AtlasContexto(UsuarioAutenticado usuario, long parceriaId, long eventoId, int cotaTipoId, String cota,
+                            Set<String> abasAbertas, long conversaId, HttpServletRequest requisicao, Traco traco) {
 
     public AtlasContexto {
         abasAbertas = abasAbertas == null ? Set.of() : Set.copyOf(abasAbertas);
@@ -31,14 +33,14 @@ public record AtlasContexto(UsuarioAutenticado usuario, long parceriaId, String 
     }
 
     /** Um contexto sem traço (o diagnóstico desligado, ou fora de um turno). */
-    public AtlasContexto(UsuarioAutenticado usuario, long parceriaId, String cota, Set<String> abasAbertas, long conversaId,
-                         HttpServletRequest requisicao) {
-        this(usuario, parceriaId, cota, abasAbertas, conversaId, requisicao, Traco.NENHUM);
+    public AtlasContexto(UsuarioAutenticado usuario, long parceriaId, long eventoId, int cotaTipoId, String cota,
+                         Set<String> abasAbertas, long conversaId, HttpServletRequest requisicao) {
+        this(usuario, parceriaId, eventoId, cotaTipoId, cota, abasAbertas, conversaId, requisicao, Traco.NENHUM);
     }
 
     /** O mesmo contexto, no turno deste traço. */
     public AtlasContexto comTraco(Traco novo) {
-        return new AtlasContexto(usuario, parceriaId, cota, abasAbertas, conversaId, requisicao, novo);
+        return new AtlasContexto(usuario, parceriaId, eventoId, cotaTipoId, cota, abasAbertas, conversaId, requisicao, novo);
     }
 
     public boolean abaAberta(String codigoDaAba) {

@@ -11,8 +11,11 @@ import br.com.rbs.portal.atlas.diagnostico.EtapaDoTraco;
 import br.com.rbs.portal.atlas.diagnostico.ResultadoDaEtapa;
 import br.com.rbs.portal.atlas.diagnostico.Traco;
 import br.com.rbs.portal.atlas.diagnostico.Traco.Etapa;
+import br.com.rbs.portal.atlas.checagem.FontesDoTurno;
+import br.com.rbs.portal.atlas.ferramentas.Execucao;
+import br.com.rbs.portal.atlas.ferramentas.RegistroDeFerramentas;
+import br.com.rbs.portal.atlas.ferramentas.RegistroDeFerramentas.Preparo;
 import br.com.rbs.portal.atlas.ferramentas.RelatorioFerramentas;
-import br.com.rbs.portal.atlas.ferramentas.RelatorioFerramentas.Execucao;
 import br.com.rbs.portal.atlas.loop.HistoricoDaConversa.Chamada;
 import br.com.rbs.portal.atlas.loop.ResumoDoRaciocinio.ResumosDoTurno;
 import br.com.rbs.portal.atlas.provedor.ProvedorAtual;
@@ -130,7 +133,7 @@ public class LoopDoAgente {
     private static final DateTimeFormatter DIA = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     private final ProvedorAtual provedor;
-    private final RelatorioFerramentas ferramentas;
+    private final RegistroDeFerramentas ferramentas;
     private final HistoricoDaConversa historico;
     private final AtlasRepositorio repositorio;
     private final PlanoBSemLlm planoB;
@@ -144,7 +147,7 @@ public class LoopDoAgente {
     private final String prompt;
 
     /** {@code prazoDoTurno} vem de {@code atlas.prazo-do-turno} (padrão {@link #PRAZO_DO_TURNO}); os testes o encurtam. */
-    public LoopDoAgente(ProvedorAtual provedor, RelatorioFerramentas ferramentas, HistoricoDaConversa historico,
+    public LoopDoAgente(ProvedorAtual provedor, RegistroDeFerramentas ferramentas, HistoricoDaConversa historico,
                         AtlasRepositorio repositorio, PlanoBSemLlm planoB, ChecagemDeTexto checagem, ResolvedorDeReferencias resolvedor,
                         ModeloBase modelos, TransactionTemplate transacao, ResumoDoRaciocinio resumos, ModoDoAtlas modo,
                         @Value("${atlas.prazo-do-turno:PT3M}") Duration prazoDoTurno) {
@@ -170,6 +173,7 @@ public class LoopDoAgente {
     private static final class Turno {
         final long prazo;
         final Traco traco;
+        final FontesDoTurno fontes;
         int chamadas;
         int idas;
         boolean limiteAtingido;
@@ -182,9 +186,10 @@ public class LoopDoAgente {
         Long mensagemFinalId;
         int caracteresDaSaida;
 
-        Turno(Duration prazoDoTurno, Traco traco) {
+        Turno(Duration prazoDoTurno, Traco traco, FontesDoTurno fontes) {
             this.prazo = System.nanoTime() + prazoDoTurno.toNanos();
             this.traco = traco;
+            this.fontes = fontes;
         }
 
         boolean venceu() {
@@ -247,7 +252,9 @@ public class LoopDoAgente {
      * {@link OuvinteDoTurno#NENHUM}, nada é transmitido e a resposta sai inteira no fim.
      */
     public void conduzir(AtlasContexto contexto, OuvinteDoTurno ouvinte) {
-        Turno turno = new Turno(prazoDoTurno, contexto.traco());
+        Turno turno = new Turno(prazoDoTurno, contexto.traco(), new FontesDoTurno(
+                repositorio.ultimaMensagemDaPessoa(contexto.conversaId()).orElse(""),
+                repositorio.escopoDaParceria(contexto.parceriaId()).edicao(), Datas.hoje()));
         try {
             // O provedor é pego UMA vez: se a chave do debug mudar no meio, este turno termina com o que começou.
             ProvedorDeLlm llm = provedor.provedor().orElse(null);
@@ -430,7 +437,7 @@ public class LoopDoAgente {
                 if (etapa != null) {
                     ouvinte.etapa(etapa);
                 }
-                Rodada rodada = executar(contexto, mensagemId, chamada);
+                Rodada rodada = executar(contexto, turno, mensagemId, chamada);
                 pausa = rodada.execucao().pausa();
                 pronto = rodada.execucao().pronto();
                 avisarFerramenta(ouvinte, chamada, rodada.execucao().resultadoJson(), rodada.erro(), rodada.ms());
@@ -452,15 +459,19 @@ public class LoopDoAgente {
     }
 
     /**
-     * Executa a ferramenta e grava a resposta (ou, no cartão, só a trilha) na MESMA transação: se a ferramenta falha, nada dela
-     * fica, e a falha é gravada como a resposta da ferramenta, que volta ao modelo.
+     * Executa a ferramenta em duas fases: o preparo, sem transação, e depois a execução e a gravação da resposta (ou, no cartão, só
+     * a trilha) na MESMA transação. Se a ferramenta falha, nada dela fica, e a falha é gravada como a resposta da ferramenta, que
+     * volta ao modelo.
      */
-    private Rodada executar(AtlasContexto contexto, long mensagemId, ChamadaDeFerramenta chamada) {
+    private Rodada executar(AtlasContexto contexto, Turno turno, long mensagemId, ChamadaDeFerramenta chamada) {
         long inicio = System.nanoTime();
         int[] medido = new int[1];   // o mesmo tempo que a trilha guarda, para o evento do debug dizer igual
         try {
+            // Fase 1, SEM transação: a ferramenta que chama um provedor (os embeddings da busca) faz a chamada aqui, e a conexão do
+            // pool só é pega na fase 2. Os argumentos errados e a ferramenta que não existe sobem daqui, como erro de ferramenta.
+            Preparo preparo = ferramentas.preparar(contexto, turno.fontes, chamada.nome(), chamada.argumentos());
             Execucao feita = transacao.execute(estado -> {
-                Execucao execucao = ferramentas.executar(contexto, chamada.nome(), chamada.argumentos(), chamada.id());
+                Execucao execucao = ferramentas.executar(contexto, turno.fontes, preparo, chamada.id());
                 int ms = (int) ((System.nanoTime() - inicio) / 1_000_000);
                 medido[0] = ms;
                 if (execucao.pausa()) {

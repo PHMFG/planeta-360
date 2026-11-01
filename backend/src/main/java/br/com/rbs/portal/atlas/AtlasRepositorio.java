@@ -163,6 +163,12 @@ public class AtlasRepositorio {
     // ---------------------------------------------------------------------
 
     /** A ordem da última mensagem da conversa (0 se não tem nenhuma). */
+    /** A última coisa que a pessoa escreveu na conversa (vale como origem dos números do turno), ou vazio se ainda não escreveu. */
+    public Optional<String> ultimaMensagemDaPessoa(long conversaId) {
+        return jdbc.sql("SELECT conteudo FROM atlas_mensagem WHERE conversa_id = :id AND papel = 'user' ORDER BY ordem DESC LIMIT 1")
+                .param("id", conversaId).query(String.class).optional();
+    }
+
     public int ultimaOrdem(long conversaId) {
         return jdbc.sql("SELECT coalesce(max(ordem), 0) FROM atlas_mensagem WHERE conversa_id = :id")
                 .param("id", conversaId)
@@ -451,6 +457,21 @@ public class AtlasRepositorio {
         return jdbc.sql("SELECT p.nome_canonico FROM parceria pa JOIN patrocinador p ON p.id = pa.patrocinador_id WHERE pa.id = :id")
                 .param("id", parceriaId)
                 .query(String.class).single();
+    }
+
+    /** O evento (a edição do festival), a cota e o ano da parceria: o que a busca nos documentos usa para saber o que a marca enxerga. */
+    public record EscopoDaParceria(Long eventoId, Integer cotaTipoId, String cotaCodigo, Integer edicao) {
+    }
+
+    /** O escopo da parceria nos documentos (M4): a edição do festival e a cota. Parceria sempre tem os dois. */
+    public EscopoDaParceria escopoDaParceria(long parceriaId) {
+        return jdbc.sql("""
+                        SELECT pa.evento_id, pa.cota_tipo_id, ct.codigo AS cota_codigo, ev.edicao
+                        FROM parceria pa JOIN cota_tipo ct ON ct.id = pa.cota_tipo_id JOIN evento ev ON ev.id = pa.evento_id
+                        WHERE pa.id = :id
+                        """)
+                .param("id", parceriaId)
+                .query(EscopoDaParceria.class).single();
     }
 
     /** O código da cota da parceria (MASTER, SUBCOTA_G ou SUBCOTA). */

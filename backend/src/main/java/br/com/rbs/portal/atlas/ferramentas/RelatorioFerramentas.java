@@ -1,9 +1,15 @@
 package br.com.rbs.portal.atlas.ferramentas;
 
+import static br.com.rbs.portal.atlas.ferramentas.Argumentos.desconhecidos;
+import static br.com.rbs.portal.atlas.ferramentas.Argumentos.exigirSemErros;
+import static br.com.rbs.portal.atlas.ferramentas.Argumentos.lista;
+import static br.com.rbs.portal.atlas.ferramentas.Argumentos.texto;
+
 import br.com.rbs.portal.atlas.AtlasJson;
 import br.com.rbs.portal.atlas.AtlasRepositorio;
 import br.com.rbs.portal.atlas.AtlasRepositorio.LinhaDeRelatorio;
 import br.com.rbs.portal.atlas.ModoDoAtlas;
+import br.com.rbs.portal.atlas.checagem.FontesDoTurno;
 import br.com.rbs.portal.atlas.contexto.AtlasContexto;
 import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.DefinicaoDeFerramenta;
 import br.com.rbs.portal.atlas.relatorio.ConsultaDaParceria;
@@ -25,8 +31,6 @@ import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-import tools.jackson.core.JacksonException;
-import tools.jackson.core.type.TypeReference;
 
 /**
  * As ferramentas que o modelo de linguagem chama (plano, seção 10.2): {@code relatorio_iniciar},
@@ -40,9 +44,9 @@ import tools.jackson.core.type.TypeReference;
  *       não está no esquema (um {@code parceria_id}, por exemplo) é recusado, e o resultado não muda de parceria nunca.</li>
  *   <li><b>A validação dos argumentos é nossa</b>, em Java (o modo {@code strict} dos provedores é beta e não vale aqui): tipo,
  *       tamanho e argumento desconhecido. O JSON Schema que vai ao modelo só o orienta.</li>
- *   <li><b>O servidor oferece só as ferramentas do estado atual</b> (seção 10.1): sem relatório, {@code parceria_consultar} e
- *       {@code relatorio_iniciar}; em montagem, {@code parceria_consultar} e as outras três; com o cartão aberto, nenhuma (o
- *       loop nem chama o modelo).</li>
+ *   <li><b>O servidor oferece só as ferramentas do estado atual</b> (seção 10.1): quem escolhe é o
+ *       {@link RegistroDeFerramentas}, que recebe daqui as cinco ({@link #ferramentas()}) e as junta às outras do Atlas (a busca
+ *       nos documentos, desde o M4). Com o cartão aberto, nenhuma é oferecida (o loop nem chama o modelo).</li>
  * </ul>
  * Erro de ferramenta não é exceção para quem chama o modelo: {@link #erroComoJson} o transforma na mensagem de ferramenta que
  * volta ao modelo, e o loop nunca devolve 500 por causa dele.
@@ -55,14 +59,6 @@ public class RelatorioFerramentas {
     public static final String EDITAR = "relatorio_editar";
     public static final String FINALIZAR = "relatorio_finalizar";
     public static final String CONSULTAR = "parceria_consultar";
-
-    /** O que uma ferramenta fez: o JSON do resultado; {@code pausa} se abriu o cartão (sem resultado até a pessoa responder). */
-    public record Execucao(String resultadoJson, boolean pausa, boolean pronto) {
-
-        static Execucao resultado(String json) {
-            return new Execucao(json, false, false);
-        }
-    }
 
     private static final Logger log = LoggerFactory.getLogger(RelatorioFerramentas.class);
 
@@ -137,61 +133,90 @@ public class RelatorioFerramentas {
     }
 
     // ---------------------------------------------------------------------
-    // O que é oferecido ao modelo
+    // As ferramentas (o RegistroDeFerramentas escolhe quais oferecer em cada estado)
     // ---------------------------------------------------------------------
 
     /**
-     * As ferramentas do estado atual (plano, seção 10.1). {@code ativo} é o relatório em montagem da conversa, se houver;
-     * {@code podePedirCartao} é falso quando ele já usou os três cartões que o modelo pode pedir. Com o relatório desligado
-     * ({@code atlas.relatorio.ligado=false}), só {@code parceria_consultar}, qualquer que seja o estado.
+     * As cinco ferramentas desta classe, na ordem em que o registro as oferece: a consulta (sempre), e, com o relatório ligado,
+     * {@code relatorio_iniciar} (sem relatório em andamento) ou as outras três (em montagem, {@code relatorio_solicitar_campos}
+     * só enquanto couber outro cartão). Com o cartão aberto nenhuma é oferecida (o loop nem chama o modelo). Com o relatório
+     * desligado ({@code atlas.relatorio.ligado=false}) só a consulta existe: histórico antigo pode induzir o modelo a chamar uma
+     * {@code relatorio_*}, e isso volta como erro de ferramenta, sem criar nada.
      */
-    public List<DefinicaoDeFerramenta> oferecidas(Optional<LinhaDeRelatorio> ativo, boolean podePedirCartao) {
-        if (!modo.relatorioLigado()) {
-            return List.of(DEFINICAO_CONSULTAR);
-        }
-        if (ativo.isEmpty()) {
-            return List.of(DEFINICAO_CONSULTAR, DEFINICAO_INICIAR);
-        }
-        if (!"MONTANDO".equals(ativo.get().status())) {
-            return List.of();   // AGUARDANDO_RESPOSTA: nenhuma ferramenta do relatório roda até o cartão voltar
-        }
-        List<DefinicaoDeFerramenta> ferramentas = new ArrayList<>();
-        ferramentas.add(DEFINICAO_CONSULTAR);
-        if (podePedirCartao) {
-            ferramentas.add(DEFINICAO_SOLICITAR);
-        }
-        ferramentas.add(DEFINICAO_EDITAR);
-        ferramentas.add(DEFINICAO_FINALIZAR);
-        return ferramentas;
+    List<Ferramenta> ferramentas() {
+        return List.of(
+                new FerramentaDoRelatorio(CONSULTAR, 10, DEFINICAO_CONSULTAR, e -> !e.cartaoAberto(), false,
+                        (contexto, argumentos, ativo, chamadaId) -> consultar(contexto, argumentos)),
+                new FerramentaDoRelatorio(INICIAR, 100, DEFINICAO_INICIAR, EstadoDaConversa::semRelatorio, true,
+                        (contexto, argumentos, ativo, chamadaId) -> iniciar(contexto, argumentos)),
+                new FerramentaDoRelatorio(SOLICITAR_CAMPOS, 110, DEFINICAO_SOLICITAR, e -> e.montando() && e.podePedirCartao(), true,
+                        (contexto, argumentos, ativo, chamadaId) -> solicitarCampos(contexto, argumentos, exigirMontando(ativo), chamadaId)),
+                new FerramentaDoRelatorio(EDITAR, 120, DEFINICAO_EDITAR, EstadoDaConversa::montando, true,
+                        (contexto, argumentos, ativo, chamadaId) -> editar(contexto, argumentos, exigirMontando(ativo))),
+                new FerramentaDoRelatorio(FINALIZAR, 130, DEFINICAO_FINALIZAR, EstadoDaConversa::montando, true,
+                        (contexto, argumentos, ativo, chamadaId) -> finalizar(contexto, argumentos, exigirMontando(ativo))));
     }
 
-    // ---------------------------------------------------------------------
-    // Executar
-    // ---------------------------------------------------------------------
+    /** Como cada ferramenta do relatório roda: com o relatório em andamento da conversa, se houver. */
+    @FunctionalInterface
+    private interface Corpo {
 
-    /**
-     * Executa o pedido do modelo no contexto da conversa. {@code chamadaId} é o id do pedido (liga o cartão à resposta que vai
-     * chegar depois). Qualquer problema sobe como exceção, que o loop transforma em {@link #erroComoJson}: 422 (argumentos),
-     * 409 (o relatório não está nesse estado), 403/404 (acesso).
-     */
-    public Execucao executar(AtlasContexto contexto, String nome, String argumentosJson, String chamadaId) {
-        if (!modo.relatorioLigado() && !CONSULTAR.equals(nome)) {
-            // Histórico antigo pode induzir o modelo a chamar uma ferramenta do relatório: erro de ferramenta, nada é criado.
-            throw new DadosInvalidosException(ferramentaInexistente(nome), Map.of());
-        }
-        Map<String, Object> argumentos = lerArgumentos(argumentosJson);
-        Optional<LinhaDeRelatorio> ativo = repositorio.relatorioAtivoDaConversa(contexto.conversaId());
-        return switch (nome) {
-            case CONSULTAR -> consultar(contexto, argumentos);
-            case INICIAR -> iniciar(contexto, argumentos);
-            case SOLICITAR_CAMPOS -> solicitarCampos(contexto, argumentos, exigirMontando(ativo), chamadaId);
-            case EDITAR -> editar(contexto, argumentos, exigirMontando(ativo));
-            case FINALIZAR -> finalizar(contexto, argumentos, exigirMontando(ativo));
-            default -> throw new DadosInvalidosException(ferramentaInexistente(nome), Map.of());
-        };
+        Execucao rodar(AtlasContexto contexto, Map<String, Object> argumentos, Optional<LinhaDeRelatorio> ativo, String chamadaId);
     }
 
-    private static String ferramentaInexistente(String nome) {
+    /** Uma das cinco ferramentas, sem a fase de preparo (nenhuma chama provedor). */
+    private final class FerramentaDoRelatorio implements Ferramenta {
+
+        private final String nome;
+        private final int ordem;
+        private final DefinicaoDeFerramenta definicao;
+        private final java.util.function.Predicate<EstadoDaConversa> oferecida;
+        private final boolean doRelatorio;
+        private final Corpo corpo;
+
+        FerramentaDoRelatorio(String nome, int ordem, DefinicaoDeFerramenta definicao,
+                              java.util.function.Predicate<EstadoDaConversa> oferecida, boolean doRelatorio, Corpo corpo) {
+            this.nome = nome;
+            this.ordem = ordem;
+            this.definicao = definicao;
+            this.oferecida = oferecida;
+            this.doRelatorio = doRelatorio;
+            this.corpo = corpo;
+        }
+
+        @Override
+        public String nome() {
+            return nome;
+        }
+
+        @Override
+        public DefinicaoDeFerramenta definicao() {
+            return definicao;
+        }
+
+        @Override
+        public int ordem() {
+            return ordem;
+        }
+
+        @Override
+        public boolean oferecida(EstadoDaConversa estado) {
+            return (!doRelatorio || estado.relatorioLigado()) && oferecida.test(estado);
+        }
+
+        @Override
+        public Execucao executar(AtlasContexto contexto, FontesDoTurno turno, Map<String, Object> argumentos, String chamadaId,
+                                 Object preparado) {
+            if (doRelatorio && !modo.relatorioLigado()) {
+                // Histórico antigo pode induzir o modelo a chamar uma ferramenta do relatório: erro de ferramenta, nada é criado.
+                throw new DadosInvalidosException(ferramentaInexistente(nome), Map.of());
+            }
+            return corpo.rodar(contexto, argumentos, doRelatorio ? repositorio.relatorioAtivoDaConversa(contexto.conversaId())
+                    : Optional.empty(), chamadaId);
+        }
+    }
+
+    static String ferramentaInexistente(String nome) {
         return "Não existe a ferramenta " + nome + ". Use só as ferramentas oferecidas.";
     }
 
@@ -279,74 +304,6 @@ public class RelatorioFerramentas {
 
     /** A frase de erro de toda ferramenta chamada com o cartão aberto. */
     public static final String AGUARDANDO_O_CARTAO = "Aguardando a resposta do cartão. Nenhuma ferramenta do relatório roda até ela voltar.";
-
-    // ---------------------------------------------------------------------
-    // Validação dos argumentos (nossa, em Java)
-    // ---------------------------------------------------------------------
-
-    private static Map<String, Object> lerArgumentos(String json) {
-        if (json == null || json.isBlank()) {
-            return new LinkedHashMap<>();
-        }
-        try {
-            Map<String, Object> argumentos = AtlasJson.ler(json, new TypeReference<Map<String, Object>>() {
-            });
-            return argumentos == null ? new LinkedHashMap<>() : argumentos;
-        } catch (JacksonException | ClassCastException formatoInvalido) {
-            throw new DadosInvalidosException("Os argumentos da ferramenta não são um objeto JSON válido.", Map.of());
-        }
-    }
-
-    private static void desconhecidos(Map<String, Object> argumentos, Set<String> aceitos, Map<String, String> erros) {
-        for (String nome : argumentos.keySet()) {
-            if (!aceitos.contains(nome)) {
-                erros.put(nome, "Argumento desconhecido: esta ferramenta não aceita " + nome + ".");
-            }
-        }
-    }
-
-    private static String texto(Map<String, Object> argumentos, String nome, boolean obrigatorio, Map<String, String> erros) {
-        Object valor = argumentos.get(nome);
-        if (valor == null) {
-            if (obrigatorio) {
-                erros.put(nome, "Informe " + nome + ".");
-            }
-            return null;
-        }
-        if (!(valor instanceof String texto)) {
-            erros.put(nome, nome + " tem de ser um texto.");
-            return null;
-        }
-        if (obrigatorio && texto.isBlank()) {
-            erros.put(nome, "Informe " + nome + ".");
-            return null;
-        }
-        return texto;
-    }
-
-    private static List<String> lista(Map<String, Object> argumentos, String nome, Map<String, String> erros) {
-        Object valor = argumentos.get(nome);
-        if (!(valor instanceof List<?> itens)) {
-            erros.put(nome, nome + " tem de ser uma lista de textos.");
-            return List.of();
-        }
-        List<String> textos = new ArrayList<>();
-        for (Object item : itens) {
-            if (item instanceof String texto) {
-                textos.add(texto);
-            } else {
-                erros.put(nome, nome + " tem de ser uma lista de textos.");
-                return List.of();
-            }
-        }
-        return textos;
-    }
-
-    private static void exigirSemErros(Map<String, String> erros) {
-        if (!erros.isEmpty()) {
-            throw new DadosInvalidosException("Os argumentos da ferramenta estão errados.", erros);
-        }
-    }
 
     // ---------------------------------------------------------------------
     // Erro de ferramenta volta ao modelo
