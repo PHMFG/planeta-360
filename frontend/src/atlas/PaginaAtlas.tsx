@@ -281,7 +281,8 @@ export function PaginaAtlas() {
 
   function abrirFonte(fonte: FonteDaResposta) {
     origemDaFonte.current = document.activeElement as HTMLElement | null
-    setFonteAberta(fonte)
+    // Um objeto novo a cada clique: o mesmo chip, depois de paginar, volta à página citada.
+    setFonteAberta({ ...fonte })
   }
 
   const fecharFonte = useCallback(() => {
