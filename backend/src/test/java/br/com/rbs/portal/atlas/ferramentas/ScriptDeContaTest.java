@@ -51,7 +51,6 @@ class ScriptDeContaTest {
             "(a + b) * 2",
             "max(a, 0)",
             "min(a, b) / 1000",
-            "a * 100 / b",
             "-a + b",
             "a * -b",
             "( a + b )",
@@ -60,6 +59,106 @@ class ScriptDeContaTest {
     })
     void contasDeAritmeticaPassam(String script) {
         assertThatCode(() -> conferir(script, declaradas(script))).doesNotThrowAnyException();
+    }
+
+    @Test
+    void asContasDoDiaADiaContinuamPassando() {
+        Set<String> kvaTarifa = Set.of("kva", "tarifa");
+        assertThatCode(() -> conferir("kva * tarifa", kvaTarifa)).doesNotThrowAnyException();
+        assertThatCode(() -> conferir("pct(a, b)", AB)).doesNotThrowAnyException();
+        assertThatCode(() -> conferir("(a + b) * c", Set.of("a", "b", "c"))).doesNotThrowAnyException();
+        assertThatCode(() -> conferir("a * b + c * d", Set.of("a", "b", "c", "d"))).doesNotThrowAnyException();
+        assertThatCode(() -> conferir("a - a * b / 100", AB)).as("a aparece duas vezes, e a divisão é por constante").doesNotThrowAnyException();
+        assertThatCode(() -> conferir("min(a, b)", AB)).doesNotThrowAnyException();
+        assertThatCode(() -> conferir("a * b / 100", AB)).doesNotThrowAnyException();
+        assertThatCode(() -> conferir("a / b", AB)).doesNotThrowAnyException();
+        assertThatCode(() -> conferir("(a - b) / b", AB)).as("variação como fração, sem o 100").doesNotThrowAnyException();
+        assertThatCode(() -> conferir("pct(a - b, b)", AB)).doesNotThrowAnyException();
+        assertThatCode(() -> conferir("a * a", Set.of("a"))).doesNotThrowAnyException();
+        assertThatCode(() -> conferir("a * 100 / 100", Set.of("a"))).as("dividir por constante").doesNotThrowAnyException();
+    }
+
+    @Test
+    void oConferirDevolveQuantasConstantesOScriptTem() {
+        assertThat(conferirEContar("a * b", AB)).isZero();
+        assertThat(conferirEContar("a * 2", Set.of("a"))).isEqualTo(1);
+        assertThat(conferirEContar("a * 2 + 1", Set.of("a"))).isEqualTo(2);
+        assertThat(conferirEContar("a * 100 / 1000", Set.of("a"))).isEqualTo(2);
+    }
+
+    static int conferirEContar(String script, Set<String> variaveis) {
+        return ScriptDeConta.conferir(script, variaveis);
+    }
+
+    // ---------------------------------------------------------------------
+    // Fabricar número com a própria variável (critério bloqueante: número sem origem)
+    // ---------------------------------------------------------------------
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "a + a + a",
+            "a * a * a",
+            "100*(a/a+a/a+a/a)+(a/a+a/a+a/a+a/a+a/a+a/a+a/a+a/a+a/a+a/a+a/a+a/a)",
+            "1000*1000*(a/a)",
+            "a / a",
+            "a - a",
+            "(a) / (a)",
+            "a / (a)",
+            "(a) - a",
+            "-a / a",
+            "a / -a",
+            "(a) - (a) + b",
+            "b * (a / a)",
+            "pct(a, a)",
+            "min(a, a)",
+            "max(a, (a))",
+            "pct((a), a)",
+            "a + a - a",
+            "min(a, b) / min(a, b)",
+    })
+    void aMesmaVariavelNaoFabricaNumero(String script) {
+        assertThatThrownBy(() -> conferir(script, declaradas(script))).as(script).isInstanceOf(DadosInvalidosException.class);
+    }
+
+    @Test
+    void amensagemDaMesmaVariavelDizOQueFazer() {
+        assertThatThrownBy(() -> conferir("a / a", Set.of("a"))).hasMessageContaining("a / a").hasMessageContaining("sempre 1");
+        assertThatThrownBy(() -> conferir("a - a", Set.of("a"))).hasMessageContaining("a - a").hasMessageContaining("zero");
+        assertThatThrownBy(() -> conferir("a + a + a", Set.of("a"))).hasMessageContaining("aparece mais de 2 vezes");
+        assertThatThrownBy(() -> conferir("pct(a, a)", Set.of("a"))).hasMessageContaining("pct(a, a)");
+    }
+
+    @Test
+    void duasVezesCadaVariavelPassaEATerceiraNao() {
+        assertThatCode(() -> conferir("(a + b) * (a - b)", AB)).as("a e b duas vezes").doesNotThrowAnyException();
+        assertThatCode(() -> conferir("a * b + a * b", AB)).doesNotThrowAnyException();
+        assertThatThrownBy(() -> conferir("a * b + a * b + a", AB)).isInstanceOf(DadosInvalidosException.class).hasMessageContaining("a aparece");
+    }
+
+    // ---------------------------------------------------------------------
+    // Percentual à mão escapa do corte da primeira casa
+    // ---------------------------------------------------------------------
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "a * 100 / b",
+            "(a / b) * 100",
+            "a / b * 100",
+            "100 * a / b",
+            "a * 100 / (a + b)",
+            "100 * (a - b) / b",
+    })
+    void percentualFeitoAMaoComDivisaoPorVariavelEhRecusadoComAIndicacaoDoPct(String script) {
+        assertThatThrownBy(() -> conferir(script, declaradas(script))).as(script).isInstanceOf(DadosInvalidosException.class)
+                .hasMessageContaining("pct(parte, todo)");
+    }
+
+    @Test
+    void aConstanteCemSemDivisaoPorVariavelContinuaValendo() {
+        assertThatCode(() -> conferir("a * b / 100", AB)).doesNotThrowAnyException();
+        assertThatCode(() -> conferir("pct(a, b) * 100", AB)).doesNotThrowAnyException();
+        assertThatCode(() -> conferir("a * 100", Set.of("a"))).doesNotThrowAnyException();
+        assertThatCode(() -> conferir("a / b * 2", AB)).as("divisão por variável, mas sem o 100").doesNotThrowAnyException();
     }
 
     @Test
@@ -197,7 +296,7 @@ class ScriptDeContaTest {
     @ParameterizedTest
     @ValueSource(strings = {"new", "var", "if", "else", "for", "while", "do", "true", "false", "null", "empty", "size", "and", "or",
             "not", "eq", "ne", "lt", "le", "gt", "ge", "div", "mod", "in", "function", "return", "continue", "break", "let", "const",
-            "pct", "min", "max"})
+            "pct", "min", "max", "default", "case", "try", "catch", "finally", "throw", "switch", "instanceof", "class"})
     void palavraReservadaDoJexlEAsFuncoesNaoSaoNomeDeVariavel(String nome) {
         assertThat(ScriptDeConta.nomeDeVariavelValido(nome)).as(nome).isFalse();
     }

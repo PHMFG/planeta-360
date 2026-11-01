@@ -2,7 +2,7 @@ package br.com.rbs.portal.atlas.ferramentas;
 
 import br.com.rbs.portal.comum.DadosInvalidosException;
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -22,7 +22,13 @@ import java.util.regex.Pattern;
  *   <li>os sinais {@code + - * / ( ) ,} (menos como sinal do número também);</li>
  *   <li>as constantes <b>exatas</b> {@code 0}, {@code 1}, {@code 2}, {@code 100} e {@code 1000}, <b>no máximo duas</b> no script
  *       (algarismo colado em letra, como {@code 1e3} ou {@code 2x}, e zero à esquerda, como {@code 0100}, são recusados);</li>
- *   <li>pelo menos uma variável, e toda variável declarada é usada.</li>
+ *   <li>pelo menos uma variável, e toda variável declarada é usada;</li>
+ *   <li><b>sem fabricar número com a própria variável</b>: cada variável aparece <b>no máximo duas vezes</b>; {@code x / x} e
+ *       {@code x - x} (a mesma variável dos dois lados, também entre parênteses) e {@code pct}, {@code min} e {@code max} com a mesma
+ *       variável nos dois argumentos são recusados, porque dão 1, 0 ou 100 sem origem nenhuma (somados, dariam qualquer número);</li>
+ *   <li><b>percentual só com {@code pct}</b>: a constante {@code 100} junto de uma divisão por algo que não é constante
+ *       ({@code a * 100 / b}, {@code (a / b) * 100}) é recusada. A divisão do motor arredonda meio para cima e 459.999 de 460.000 daria
+ *       "100%", o que o {@code fn_pct_truncado} do portal evita. {@code a * b / 100} continua valendo.</li>
  * </ul>
  * Sem aspas, sem {@code =~}, sem ponto, sem quebra de linha, sem os pares de sinais de incremento e de comentário, sem caractere
  * fora do ASCII, com até 2.000 caracteres e no máximo {@value #MAXIMO_DE_ANINHAMENTO} parênteses aninhados. A forma é conferida por uma gramática
@@ -33,12 +39,15 @@ final class ScriptDeConta {
     static final int LIMITE_DE_CARACTERES = 2_000;
     static final int MAXIMO_DE_CONSTANTES = 2;
     static final int MAXIMO_DE_ANINHAMENTO = 8;
+    /** Quantas vezes uma mesma variável pode aparecer no script. */
+    static final int MAXIMO_DE_USOS_DA_VARIAVEL = 2;
     static final Set<String> CONSTANTES = Set.of("0", "1", "2", "100", "1000");
     static final Set<String> FUNCOES = Set.of("pct", "min", "max");
     /** As palavras que o JEXL reserva (e as três funções): nenhuma serve de nome de variável. */
     static final Set<String> RESERVADAS = Set.of("new", "var", "if", "else", "for", "while", "do", "true", "false", "null", "empty",
             "size", "and", "or", "not", "eq", "ne", "lt", "le", "gt", "ge", "div", "mod", "in", "function", "return", "continue",
-            "break", "let", "const", "pct", "min", "max");
+            "break", "let", "const", "default", "case", "try", "catch", "finally", "throw", "switch", "instanceof", "class", "pct",
+            "min", "max");
     private static final Pattern NOME_DE_VARIAVEL = Pattern.compile("[a-z][a-z0-9_]{0,39}");
     private static final List<String> JUNTOS_PROIBIDOS = List.of("++", "--", "//", "/*", "*/");
 
@@ -55,8 +64,11 @@ final class ScriptDeConta {
         return nome != null && NOME_DE_VARIAVEL.matcher(nome).matches() && !RESERVADAS.contains(nome);
     }
 
-    /** Confere o script contra as variáveis declaradas; sobe {@link DadosInvalidosException} (campo {@code script}) se não passa. */
-    static void conferir(String script, Set<String> variaveis) {
+    /**
+     * Confere o script contra as variáveis declaradas; sobe {@link DadosInvalidosException} (campo {@code script}) se não passa.
+     * Devolve quantas constantes o script tem (0 a 2): o {@link Calcular} soma as das contas {@code calc:} que ele usa.
+     */
+    static int conferir(String script, Set<String> variaveis) {
         if (script == null || script.isBlank()) {
             throw recusado("Escreva o script da conta.");
         }
@@ -82,10 +94,16 @@ final class ScriptDeConta {
             throw recusado("O script precisa usar pelo menos uma variável. Todo valor entra como variável, com a fonte dele.");
         }
         for (String declarada : new java.util.TreeSet<>(variaveis)) {
-            if (!analise.usadas.contains(declarada)) {
+            if (!analise.usadas.containsKey(declarada)) {
                 throw recusado("A variável " + declarada + " foi declarada, mas o script não a usa. Tire-a de variaveis ou use-a na conta.");
             }
         }
+        if (analise.temCem && analise.dividePorNaoConstante) {
+            throw recusado("Percentual se calcula com pct(parte, todo), que corta na primeira casa como o portal. Não use a constante 100 "
+                    + "junto de uma divisão por variável (a * 100 / b, a / b * 100): a divisão arredondaria 99,9998% para 100%. A divisão "
+                    + "por uma constante, como a * b / 100, continua valendo.");
+        }
+        return analise.constantes;
     }
 
     // ---------------------------------------------------------------------
@@ -148,13 +166,22 @@ final class ScriptDeConta {
     // sinal = ("-" | "+") sinal | valor; valor = NUMERO | VARIAVEL | FUNCAO "(" expressao "," expressao ")" | "(" expressao ")"
     // ---------------------------------------------------------------------
 
+    /**
+     * Um pedaço da expressão, para as recusas de {@code x / x}, {@code x - x} e da divisão por constante: a {@code assinatura} é o
+     * texto dele sem os parênteses (então {@code (a)} e {@code a} são o mesmo), e {@code constante} diz que é só um número.
+     */
+    private record Operando(String assinatura, boolean constante) {
+    }
+
     private static final class Analise {
 
         private final List<Token> tokens;
         private final Set<String> variaveis;
         private int posicao;
         int constantes;
-        final Set<String> usadas = new HashSet<>();
+        boolean temCem;
+        boolean dividePorNaoConstante;
+        final Map<String, Integer> usadas = new HashMap<>();
 
         Analise(List<Token> tokens, Set<String> variaveis) {
             this.tokens = tokens;
@@ -173,32 +200,67 @@ final class ScriptDeConta {
             return !fim() && atual().tipo() == Tipo.SINAL && atual().texto().equals(texto);
         }
 
-        void expressao(int nivel) {
-            termo(nivel);
+        /** O texto dos tokens de {@code de} (inclusive) até {@code ate} (exclusive), sem parênteses nem espaços. */
+        private String assinatura(int de, int ate) {
+            StringBuilder texto = new StringBuilder();
+            for (Token token : tokens.subList(de, ate)) {
+                if (!token.texto().equals("(") && !token.texto().equals(")")) {
+                    texto.append(token.texto());
+                }
+            }
+            return texto.toString();
+        }
+
+        private static boolean mesmoOperando(Operando esquerda, Operando direita) {
+            return !esquerda.constante() && esquerda.assinatura().equals(direita.assinatura());
+        }
+
+        Operando expressao(int nivel) {
+            int inicio = posicao;
+            Operando esquerda = termo(nivel);
             while (sinal("+") || sinal("-")) {
+                boolean menos = sinal("-");
                 posicao++;
-                termo(nivel);
+                Operando direita = termo(nivel);
+                if (menos && mesmoOperando(esquerda, direita)) {
+                    throw recusado("\"" + esquerda.assinatura() + " - " + direita.assinatura() + "\" dá sempre zero: o mesmo valor não se "
+                            + "subtrai de si mesmo. Use valores diferentes.");
+                }
+                esquerda = new Operando(assinatura(inicio, posicao), false);
             }
+            return esquerda;
         }
 
-        private void termo(int nivel) {
-            comSinal(nivel);
+        private Operando termo(int nivel) {
+            int inicio = posicao;
+            Operando esquerda = comSinal(nivel);
             while (sinal("*") || sinal("/")) {
+                boolean dividir = sinal("/");
                 posicao++;
-                comSinal(nivel);
+                Operando direita = comSinal(nivel);
+                if (dividir) {
+                    if (mesmoOperando(esquerda, direita)) {
+                        throw recusado("\"" + esquerda.assinatura() + " / " + direita.assinatura() + "\" dá sempre 1: o mesmo valor não se "
+                                + "divide por si mesmo. Use valores diferentes.");
+                    }
+                    if (!direita.constante()) {
+                        dividePorNaoConstante = true;
+                    }
+                }
+                esquerda = new Operando(assinatura(inicio, posicao), false);
             }
+            return esquerda;
         }
 
-        private void comSinal(int nivel) {
+        private Operando comSinal(int nivel) {
             if (sinal("-") || sinal("+")) {
                 posicao++;
-                comSinal(nivel);
-            } else {
-                valor(nivel);
+                return comSinal(nivel);
             }
+            return valor(nivel);
         }
 
-        private void valor(int nivel) {
+        private Operando valor(int nivel) {
             if (fim()) {
                 throw recusado("O script termina antes da hora: falta um valor depois do último sinal.");
             }
@@ -206,21 +268,26 @@ final class ScriptDeConta {
             switch (token.tipo()) {
                 case NUMERO -> {
                     constantes++;
+                    temCem |= token.texto().equals("100");
                     posicao++;
+                    return new Operando(token.texto(), true);
                 }
-                case NOME -> nome(token, nivel);
-                case SINAL -> {
+                case NOME -> {
+                    return nome(token, nivel);
+                }
+                default -> {
                     if (!token.texto().equals("(")) {
                         throw recusado("O sinal \"" + token.texto() + "\" está fora do lugar: falta um valor antes dele.");
                     }
                     posicao++;
-                    entreParenteses(nivel);
+                    Operando dentro = entreParenteses(nivel);
                     exigir(")", "Falta fechar o parêntese.");
+                    return dentro;
                 }
             }
         }
 
-        private void nome(Token token, int nivel) {
+        private Operando nome(Token token, int nivel) {
             String nome = token.texto();
             boolean funcao = FUNCOES.contains(nome);
             boolean chamada = posicao + 1 < tokens.size() && tokens.get(posicao + 1).tipo() == Tipo.SINAL
@@ -229,12 +296,17 @@ final class ScriptDeConta {
                 if (!chamada) {
                     throw recusado("A função " + nome + " é chamada com parênteses: " + nome + "(a, b).");
                 }
+                int inicio = posicao;
                 posicao += 2;
-                entreParenteses(nivel);
+                Operando primeiro = entreParenteses(nivel);
                 exigir(",", "A função " + nome + " leva dois argumentos, separados por vírgula: " + nome + "(a, b).");
-                expressao(nivel + 1);
+                Operando segundo = expressao(nivel + 1);
                 exigir(")", "A função " + nome + " leva dois argumentos: " + nome + "(a, b).");
-                return;
+                if (mesmoOperando(primeiro, segundo)) {
+                    throw recusado(nome + "(" + primeiro.assinatura() + ", " + segundo.assinatura() + ") com o mesmo valor nos dois "
+                            + "argumentos não é uma conta: dá sempre o mesmo resultado, sem origem. Use valores diferentes.");
+                }
+                return new Operando(assinatura(inicio, posicao), false);
             }
             if (!variaveis.contains(nome)) {
                 throw recusado("A palavra \"" + nome + "\" não é uma variável declarada nem uma das funções pct, min e max.");
@@ -242,15 +314,21 @@ final class ScriptDeConta {
             if (chamada) {
                 throw recusado("\"" + nome + "\" é uma variável, não uma função: não pode ser chamada com parênteses.");
             }
-            usadas.add(nome);
+            int usos = usadas.merge(nome, 1, Integer::sum);
+            if (usos > MAXIMO_DE_USOS_DA_VARIAVEL) {
+                throw recusado("A variável " + nome + " aparece mais de " + MAXIMO_DE_USOS_DA_VARIAVEL + " vezes no script: o máximo é "
+                        + MAXIMO_DE_USOS_DA_VARIAVEL + ". Repetir a mesma variável para montar um número não vale; todo valor entra "
+                        + "como variável, com a fonte dele.");
+            }
             posicao++;
+            return new Operando(nome, false);
         }
 
-        private void entreParenteses(int nivel) {
+        private Operando entreParenteses(int nivel) {
             if (nivel + 1 > MAXIMO_DE_ANINHAMENTO) {
                 throw recusado("Parênteses demais, um dentro do outro: o máximo é " + MAXIMO_DE_ANINHAMENTO + ".");
             }
-            expressao(nivel + 1);
+            return expressao(nivel + 1);
         }
 
         private void exigir(String sinal, String frase) {
