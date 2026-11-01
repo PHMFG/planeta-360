@@ -103,4 +103,45 @@ class FontesDoTurnoTest {
         assertThat(turno.nenhumaBuscaTrouxeTrecho()).as("o resultado dessa busca não chegou ao modelo").isTrue();
         assertThat(turno.fontes()).isEmpty();
     }
+
+    @Test
+    void todasAsBuscasFalharamSoQuandoNenhumaChegouAUmResultadoNemQueVazio() {
+        FontesDoTurno turno = turno();
+        assertThat(turno.todasAsBuscasFalharam()).as("sem buscar").isFalse();
+
+        turno.contarBusca();   // caiu
+        assertThat(turno.todasAsBuscasFalharam()).isTrue();
+        turno.contarBusca();   // caiu
+        assertThat(turno.todasAsBuscasFalharam()).as("duas caíram").isTrue();
+
+        turno.contarBusca();
+        turno.concluirBusca(true);   // voltou vazia
+        assertThat(turno.todasAsBuscasFalharam()).as("uma voltou vazia: é o L2, e não falha").isFalse();
+        assertThat(turno.nenhumaBuscaTrouxeTrecho()).isTrue();
+    }
+
+    @Test
+    void umaBuscaVaziaMaisUmaQueCaiuNaoEFalhaTotal() {
+        FontesDoTurno turno = turno();
+        turno.contarBusca();
+        turno.concluirBusca(true);
+        turno.contarBusca();   // caiu
+
+        assertThat(turno.todasAsBuscasFalharam()).isFalse();
+        assertThat(turno.nenhumaBuscaTrouxeTrecho()).isTrue();
+    }
+
+    @Test
+    void desfazerTambemVoltaAContagemDasBuscasQueChegaramAoResultado() {
+        FontesDoTurno turno = turno();
+        turno.contarBusca();
+        FontesDoTurno.Marca antes = turno.marcar();
+        turno.registrarTrecho(10, 1, "Manual", 2, 3, "S", "Texto.");
+        turno.concluirBusca(false);
+        assertThat(turno.todasAsBuscasFalharam()).isFalse();
+
+        turno.desfazer(antes);
+
+        assertThat(turno.todasAsBuscasFalharam()).as("o resultado dessa busca não chegou ao modelo: para ele, a busca falhou").isTrue();
+    }
 }

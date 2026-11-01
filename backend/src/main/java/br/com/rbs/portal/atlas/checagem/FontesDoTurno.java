@@ -79,6 +79,7 @@ public final class FontesDoTurno {
     private final List<String> numerosLivres = new ArrayList<>();
     private int buscas;
     private int buscasComTrecho;
+    private int buscasConcluidas;
 
     /**
      * @param mensagemDaPessoa o que a pessoa escreveu neste turno (os números dela valem na resposta: "por 34 kVA", "em 03/11")
@@ -123,6 +124,7 @@ public final class FontesDoTurno {
 
     /** Anota o fim de uma busca que chegou a um resultado (com trechos ou sem nenhum). A que falhou nunca chega aqui. */
     public void concluirBusca(boolean vazia) {
+        buscasConcluidas++;
         if (!vazia) {
             buscasComTrecho++;
         }
@@ -134,6 +136,15 @@ public final class FontesDoTurno {
      */
     public boolean nenhumaBuscaTrouxeTrecho() {
         return buscas > 0 && buscasComTrecho == 0;
+    }
+
+    /**
+     * O turno buscou e <b>nenhuma</b> busca chegou a um resultado, nem vazio: todas deram erro (ou o resultado não chegou ao modelo).
+     * Dizer "não encontrei" nesse caso seria falso, porque nada foi procurado de fato. Uma busca que voltou vazia, mesmo ao lado de
+     * outras que caíram, é "não encontrei" de verdade.
+     */
+    public boolean todasAsBuscasFalharam() {
+        return buscas > 0 && buscasConcluidas == 0;
     }
 
     // ---------------------------------------------------------------------
@@ -187,13 +198,13 @@ public final class FontesDoTurno {
      * busca falha).
      */
     public record Marca(Map<String, Fonte> fontes, Map<Long, String> marcadorDoTrecho, Map<Tipo, Integer> contadores,
-                        List<String> numerosLivres, int buscasComTrecho) {
+                        List<String> numerosLivres, int buscasComTrecho, int buscasConcluidas) {
     }
 
     /** Tira a fotografia, antes de a ferramenta rodar. */
     public Marca marcar() {
         return new Marca(new LinkedHashMap<>(fontes), new HashMap<>(marcadorDoTrecho), new HashMap<>(contadores),
-                new ArrayList<>(numerosLivres), buscasComTrecho);
+                new ArrayList<>(numerosLivres), buscasComTrecho, buscasConcluidas);
     }
 
     /**
@@ -211,6 +222,7 @@ public final class FontesDoTurno {
         numerosLivres.clear();
         numerosLivres.addAll(marca.numerosLivres());
         buscasComTrecho = marca.buscasComTrecho();
+        buscasConcluidas = marca.buscasConcluidas();
     }
 
     // ---------------------------------------------------------------------

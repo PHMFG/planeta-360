@@ -81,7 +81,8 @@ import tools.jackson.core.JacksonException;
  *       vez; se falhar de novo, troca pelo texto fixo: {@link #TEXTO_NAO_ENCONTREI} num turno que buscou nos documentos,
  *       {@link #FRASE_FIXA} num que não buscou. O histórico guarda o texto com os marcadores e as citações; quem exibe os resolve.
  *       A frase {@code "Não encontrei isso nos documentos do portal."} escrita pelo modelo ganha a indicação do atendimento, e a
- *       resposta de um turno que buscou, nada achou e não cita nada vira o mesmo texto fixo.</li>
+ *       resposta de um turno que buscou, nada achou e não cita nada vira o mesmo texto fixo. Se <b>toda</b> busca do turno deu erro,
+ *       "não encontrei" seria falso: a resposta sem citação nem marcador (e a recusada duas vezes) vira {@link #FRASE_SEM_CONSULTA}.</li>
  *   <li><b>Falha do modelo não quebra o histórico</b>: o turno termina com uma frase fixa gravada, e tudo o que já foi feito
  *       fica salvo.</li>
  *   <li>O id de cada pedido de ferramenta é nosso ({@code call_<uuid>}), único na conversa.</li>
@@ -127,6 +128,8 @@ public class LoopDoAgente {
      * acrescenta a indicação do atendimento da RBS. O avaliador de conversas reconhece a primeira parte.
      */
     public static final String FRASE_NAO_ENCONTREI = "Não encontrei isso nos documentos do portal.";
+    /** O texto fixo de um turno em que toda busca nos documentos deu erro: "não encontrei" seria falso, porque nada foi procurado. */
+    public static final String FRASE_SEM_CONSULTA = "Não consegui consultar os documentos agora. Tente de novo em instantes.";
     public static final String INDICACAO_DO_ATENDIMENTO = "Para essa dúvida, fale com o atendimento da RBS.";
     public static final String TEXTO_NAO_ENCONTREI = FRASE_NAO_ENCONTREI + " " + INDICACAO_DO_ATENDIMENTO;
     /**
@@ -135,7 +138,7 @@ public class LoopDoAgente {
      */
     public static final Set<String> FRASES_DO_SERVIDOR = Set.of(FRASE_FIXA, FRASE_DO_LIMITE, FRASE_DA_FALHA, FRASE_DO_PRAZO,
             FRASE_SEM_RESPOSTA, FRASE_FIXA_NO_CHAT, FRASE_DO_LIMITE_NO_CHAT, FRASE_DA_FALHA_NO_CHAT, FRASE_DO_PRAZO_NO_CHAT,
-            FRASE_SEM_RESPOSTA_NO_CHAT, TEXTO_NAO_ENCONTREI);
+            FRASE_SEM_RESPOSTA_NO_CHAT, TEXTO_NAO_ENCONTREI, FRASE_SEM_CONSULTA);
     public static final String ERRO_DO_LIMITE = "Limite de chamadas de ferramenta deste turno atingido. Não chame mais ferramentas.";
     /** A frase da etapa {@code etapa} da resposta em fluxo, por ferramenta: a marca lê o que está acontecendo, nunca o nome dela. */
     public static final Map<String, String> ETAPAS = Map.of(
@@ -388,6 +391,15 @@ public class LoopDoAgente {
                 }
                 Veredito veredito = checarDoChat(contexto, turno, texto, "RESPOSTA");
                 if (veredito.aprovado()) {
+                    if (todaBuscaFalhouSemApoio(turno, texto)) {
+                        // Toda busca deu erro e a resposta não cita fonte nem usa dado da parceria: nada foi procurado, e nem a frase de
+                        // "não encontrei" do modelo seria verdade. Sai o texto fixo de que não deu para consultar.
+                        if (filtro != null) {
+                            filtro.recusar();
+                        }
+                        gravarFrase(contexto, turno, FRASE_SEM_CONSULTA, raciocinio, ouvinte, "BUSCA_FALHOU", ResultadoDaEtapa.RECUSADO);
+                        return;
+                    }
                     if (ehNaoEncontrei(texto)) {
                         // O modelo escreveu a frase certa: o servidor acrescenta a indicação do atendimento da RBS (o L2 do quadro).
                         ouvinte.texto(" " + INDICACAO_DO_ATENDIMENTO);
@@ -413,8 +425,11 @@ public class LoopDoAgente {
                     filtro.recusar();   // a checagem completa recusou o que o filtro deixou passar
                 }
                 if (turno.pediuNovaRedacao) {
-                    // Segunda recusa: num turno que buscou, o texto fixo do L2; num que não buscou, a frase de sempre.
-                    if (turno.fontes.buscas() > 0) {
+                    // Segunda recusa: num turno que buscou, o texto fixo do L2 (ou o de que toda busca deu erro); num que não buscou, a
+                    // frase de sempre.
+                    if (turno.fontes.todasAsBuscasFalharam()) {
+                        gravarFrase(contexto, turno, FRASE_SEM_CONSULTA, null, ouvinte, "TEXTO_RECUSADO", ResultadoDaEtapa.RECUSADO);
+                    } else if (turno.fontes.buscas() > 0) {
                         gravarFrase(contexto, turno, TEXTO_NAO_ENCONTREI, null, ouvinte, "TEXTO_RECUSADO", ResultadoDaEtapa.RECUSADO);
                     } else {
                         gravarFrase(contexto, turno, frase(FRASE_FIXA, FRASE_FIXA_NO_CHAT), null, ouvinte, "TEXTO_RECUSADO",
@@ -628,6 +643,14 @@ public class LoopDoAgente {
      */
     private static boolean semApoioNosDocumentos(Turno turno, String texto) {
         return turno.fontes.nenhumaBuscaTrouxeTrecho() && Frases.citacoes(texto).isEmpty() && Referencias.marcadores(texto).isEmpty();
+    }
+
+    /**
+     * O turno buscou e toda busca deu erro (nenhuma chegou a um resultado, nem vazio), e a resposta não cita fonte nem usa marcador
+     * de dado da parceria. Busca vazia ao lado de busca com erro não entra aqui: é o L2 ({@link #semApoioNosDocumentos}).
+     */
+    private static boolean todaBuscaFalhouSemApoio(Turno turno, String texto) {
+        return turno.fontes.todasAsBuscasFalharam() && Frases.citacoes(texto).isEmpty() && Referencias.marcadores(texto).isEmpty();
     }
 
     /** Grava, na transação da mensagem, as fontes de trecho que o texto citou ({@code atlas_fonte}); o texto já passou pela checagem. */

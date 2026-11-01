@@ -17,6 +17,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
@@ -31,6 +32,7 @@ import tools.jackson.core.type.TypeReference;
  * item do {@code fim}. Não é {@code @Transactional}: o turno em fluxo roda em outra thread (veja o ApoioDoFluxo).
  */
 @TesteComLlmRoteirizado
+@Import(EmbeddingsControlavelConfig.class)
 @TestPropertySource(properties = {"atlas.relatorio.ligado=false", "atlas.debug.ferramentas=false"})
 class FontesNoFluxoTest {
 
@@ -47,11 +49,15 @@ class FontesNoFluxoTest {
     @Autowired
     ProvedorRoteirizado modelo;
 
+    @Autowired
+    EmbeddingsControlavel embeddings;
+
     private ApoioDoFluxo.Limpeza limpeza;
 
     @BeforeEach
     void guardarOQueJaExiste() {
         modelo.limpar();
+        embeddings.limpar();
         limpeza = new ApoioDoFluxo.Limpeza(jdbc);
         limpeza.guardar();
     }
@@ -200,6 +206,25 @@ class FontesNoFluxoTest {
         assertThat(nomes(eventos)).containsSubsequence("texto", "texto_recusado", "texto", "fim");
         assertThat(queATelaMostra(eventos)).isEqualTo(LoopDoAgente.TEXTO_NAO_ENCONTREI);
         assertThat(textoDoFim(fim(eventos))).isEqualTo(LoopDoAgente.TEXTO_NAO_ENCONTREI);
+        List<Boolean> porModelo = fim(eventos).ler("$.itens[?(@.tipo=='texto')].porModelo");
+        assertThat(porModelo.get(porModelo.size() - 1)).isFalse();
+    }
+
+    @Test
+    void todaBuscaComErroTrocaARespostaPeloTextoFixoDeQueNaoDeuParaConsultar() {
+        SessaoDeApi pessoa = SessaoDeApi.entrar(mvc, AMARELO);
+        long conversa = conversa(pessoa, jdbc);
+        embeddings.falharAsProximasBuscas(1);
+        // a busca cai; o modelo diz que não consegue buscar, sem número e sem citação
+        modelo.chamada(BUSCAR, busca(CONSULTA)).textoEmPedacos(null, "Não consegui buscar ", "esse dado agora.");
+
+        List<Evento> eventos = eventos(falarEmFluxo(pessoa, conversa, "Qual o prazo?"));
+
+        // o texto do modelo foi à tela (não tinha número); o servidor mandou descartá-lo e trocou pelo texto fixo da busca que falhou
+        assertThat(nomes(eventos)).containsSubsequence("texto", "texto_recusado", "texto", "fim");
+        assertThat(queATelaMostra(eventos)).isEqualTo(LoopDoAgente.FRASE_SEM_CONSULTA)
+                .isEqualTo("Não consegui consultar os documentos agora. Tente de novo em instantes.");
+        assertThat(textoDoFim(fim(eventos))).isEqualTo(LoopDoAgente.FRASE_SEM_CONSULTA);
         List<Boolean> porModelo = fim(eventos).ler("$.itens[?(@.tipo=='texto')].porModelo");
         assertThat(porModelo.get(porModelo.size() - 1)).isFalse();
     }

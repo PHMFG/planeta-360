@@ -424,25 +424,26 @@ class FontesNoChatTest {
     }
 
     @Test
-    void turnoEmQueTodaBuscaDeuErroEResponderSemCitacaoViraOTextoFixo() {
+    void turnoEmQueTodaBuscaDeuErroEResponderSemCitacaoViraOTextoFixoDaBuscaQueFalhou() {
         long conversa = abrir();
         embeddings.falharAsProximasBuscas(1);
         modelo.chamada(BUSCAR, busca(CONSULTA)).texto("O prazo costuma ser no fim do ano.");
 
         ItemTexto texto = textoFinal(falar(conversa, "Qual o prazo?"));
 
-        // a busca caiu: o modelo não tem trecho nenhum, e a resposta sem citação não tem de onde ter saído
-        assertThat(texto.texto()).isEqualTo(LoopDoAgente.TEXTO_NAO_ENCONTREI);
+        // a busca caiu: dizer "não encontrei" seria falso, porque nada foi procurado. O texto fixo diz que não deu para consultar
+        assertThat(texto.texto()).isEqualTo(LoopDoAgente.FRASE_SEM_CONSULTA)
+                .isEqualTo("Não consegui consultar os documentos agora. Tente de novo em instantes.");
         assertThat(texto.porModelo()).isFalse();
         Linha saida = primeira(ultimoTurno(conversa), "SAIDA");
         assertThat(saida.resultado()).isEqualTo("RECUSADO");
-        assertThat(saida.dados()).containsEntry("motivo", "SEM_FONTE");
+        assertThat(saida.dados()).containsEntry("tipo", "FRASE_FIXA").containsEntry("motivo", "BUSCA_FALHOU");
         assertThat(primeira(ultimoTurno(conversa), "BUSCA").resultado()).isEqualTo("ERRO");
-        assertThat(textosDoAssistente(conversa)).doesNotContain("fim do ano");
+        assertThat(textosDoAssistente(conversa)).doesNotContain("fim do ano").doesNotContain("Não encontrei");
     }
 
     @Test
-    void asTresBuscasDeramErroEResponderSemCitacaoViraOTextoFixo() {
+    void asTresBuscasDeramErroEResponderSemCitacaoViraOTextoFixoDaBuscaQueFalhou() {
         long conversa = abrir();
         embeddings.falharAsProximasBuscas(3);
         modelo.chamada(BUSCAR, busca(CONSULTA)).chamada(BUSCAR, busca(CONSULTA + " novamente")).chamada(BUSCAR, busca("outro assunto"))
@@ -450,8 +451,64 @@ class FontesNoChatTest {
 
         ItemTexto texto = textoFinal(falar(conversa, "Qual o prazo?"));
 
+        assertThat(texto.texto()).isEqualTo(LoopDoAgente.FRASE_SEM_CONSULTA);
+        assertThat(texto.porModelo()).isFalse();
+        assertThat(primeira(ultimoTurno(conversa), "SAIDA").dados()).containsEntry("motivo", "BUSCA_FALHOU");
+    }
+
+    @Test
+    void oModeloQueDizNaoConseguirBuscarOuNaoEncontreiDepoisDeTodaBuscaFalharTambemViraOTextoFixoDaBuscaQueFalhou() {
+        for (String escrita : List.of("Não consegui buscar esse dado agora.", "Não encontrei isso nos documentos do portal.")) {
+            modelo.limpar();
+            embeddings.falharAsProximasBuscas(1);
+            long conversa = abrir();
+            modelo.chamada(BUSCAR, busca(CONSULTA)).texto(escrita);
+
+            ItemTexto texto = textoFinal(falar(conversa, "Qual o prazo?"));
+
+            assertThat(texto.texto()).as(escrita).isEqualTo(LoopDoAgente.FRASE_SEM_CONSULTA);
+            assertThat(texto.porModelo()).isFalse();
+            assertThat(primeira(ultimoTurno(conversa), "SAIDA").dados()).containsEntry("motivo", "BUSCA_FALHOU");
+        }
+    }
+
+    @Test
+    void buscaVaziaMaisBuscaComErroContinuaSendoOL2() {
+        long conversa = abrir();
+        embeddings.falharAsProximasBuscas(1);
+        // a primeira busca cai; a segunda chega ao fim e volta sem trecho (só palavras vazias)
+        modelo.chamada(BUSCAR, busca(CONSULTA)).chamada(BUSCAR, busca("de a o que para")).texto("O prazo costuma ser no fim do ano.");
+
+        ItemTexto texto = textoFinal(falar(conversa, "Qual o prazo?"));
+
         assertThat(texto.texto()).isEqualTo(LoopDoAgente.TEXTO_NAO_ENCONTREI);
+        assertThat(texto.porModelo()).isFalse();
         assertThat(primeira(ultimoTurno(conversa), "SAIDA").dados()).containsEntry("motivo", "SEM_FONTE");
+    }
+
+    @Test
+    void todaBuscaComErroMasRespostaComDadoDaParceriaOuComAFraseCertaDoModeloNaoViraOTextoFixo() {
+        long conversa = abrir();
+        embeddings.falharAsProximasBuscas(1);
+        modelo.chamada(BUSCAR, busca(CONSULTA)).texto("Para {{parc:patrocinador}}, não consegui consultar os documentos agora.");
+
+        ItemTexto texto = textoFinal(falar(conversa, "Qual a regra?"));
+
+        assertThat(texto.texto()).isEqualTo("Para Cliente Amarelo, não consegui consultar os documentos agora.");
+        assertThat(primeira(ultimoTurno(conversa), "SAIDA").dados()).doesNotContainEntry("motivo", "BUSCA_FALHOU");
+    }
+
+    @Test
+    void duasRecusasSeguidasDepoisDeTodaBuscaFalharViramOTextoFixoDaBuscaQueFalhou() {
+        long conversa = abrir();
+        embeddings.falharAsProximasBuscas(1);
+        modelo.chamada(BUSCAR, busca(CONSULTA)).texto("O prazo é " + PRAZO + " para todas as marcas.")
+                .texto("O prazo é " + PRAZO + " e vale para todas as marcas.");
+
+        ItemTexto texto = textoFinal(falar(conversa, "Qual o prazo?"));
+
+        assertThat(texto.texto()).isEqualTo(LoopDoAgente.FRASE_SEM_CONSULTA);
+        assertThat(primeira(ultimoTurno(conversa), "SAIDA").dados()).containsEntry("motivo", "TEXTO_RECUSADO");
     }
 
     @Test
