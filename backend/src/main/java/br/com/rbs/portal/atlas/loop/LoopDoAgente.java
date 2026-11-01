@@ -85,8 +85,9 @@ import tools.jackson.core.JacksonException;
  *       haver laço, e o resultado delas diz ao modelo que o servidor já mostrou a resposta. É diferente da pausa do cartão e do
  *       relatório pronto, depois dos quais as outras chamadas da rodada não rodam; se a rodada também teve um deles, ele manda. O
  *       texto que veio junto na rodada, se aprovado, fica. Erro de ferramenta nunca é resposta direta: volta ao modelo.</li>
- *   <li><b>Até {@value #LIMITE_DE_CHAMADAS_POR_TURNO} chamadas de ferramenta por turno</b> (contador nosso). Erro de ferramenta
- *       volta ao modelo como mensagem de ferramenta, nunca como 500.</li>
+ *   <li><b>Até {@value #LIMITE_DE_CHAMADAS_POR_TURNO} chamadas de ferramenta por turno</b> (contador nosso), contando também o pedido
+ *       repetido de uma resposta direta que já saiu da oferta (o modelo que insiste não ganha uma ida de graça por insistência). Erro
+ *       de ferramenta volta ao modelo como mensagem de ferramenta, nunca como 500.</li>
  *   <li><b>O modelo não escreve número sem origem nem termo interno.</b> O texto da resposta passa pela {@link ChecagemDeFontes}
  *       (M4; no relatório e no resumo do raciocínio vale a regra antiga da {@link ChecagemDeTexto}, sem nenhum algarismo): com
  *       número ou data que nenhuma fonte citada na mesma frase traz, citação que não existe neste turno, chave crua
@@ -521,9 +522,16 @@ public class LoopDoAgente {
         for (ChamadaDeFerramenta chamada : chamadas) {
             Etapa etapaDaFerramenta = turno.traco.abrir(EtapaDoTraco.FERRAMENTA).mensagem(mensagemId).dado("ferramenta", chamada.nome());
             if (turno.diretasForaDaOferta && ferramentas.ehDireta(chamada.nome())) {
-                // o modelo pediu uma resposta direta que não lhe foi oferecida: o servidor já mostrou a anterior
-                responderComErro(contexto, mensagemId, chamada, ERRO_DA_DIRETA_JA_MOSTRADA, ouvinte);
-                etapaDaFerramenta.dado("motivo", "RESPOSTA_DIRETA_JA_MOSTRADA").fim(ResultadoDaEtapa.RECUSADO);
+                // o modelo pediu uma resposta direta que não lhe foi oferecida: o servidor já mostrou a anterior. O pedido conta no
+                // limite de chamadas do turno como qualquer outro: sem isso, um modelo que insiste fazia uma ida por insistência (27 idas)
+                if (++turno.chamadas > LIMITE_DE_CHAMADAS_POR_TURNO) {
+                    turno.limiteAtingido = true;
+                    responderComErro(contexto, mensagemId, chamada, ERRO_DO_LIMITE, ouvinte);
+                    etapaDaFerramenta.dado("motivo", "LIMITE_DE_CHAMADAS").fim(ResultadoDaEtapa.RECUSADO);
+                } else {
+                    responderComErro(contexto, mensagemId, chamada, ERRO_DA_DIRETA_JA_MOSTRADA, ouvinte);
+                    etapaDaFerramenta.dado("motivo", "RESPOSTA_DIRETA_JA_MOSTRADA").fim(ResultadoDaEtapa.RECUSADO);
+                }
             } else if (pausa) {
                 responderComErro(contexto, mensagemId, chamada, RelatorioFerramentas.AGUARDANDO_O_CARTAO, ouvinte);
                 etapaDaFerramenta.dado("motivo", "AGUARDANDO_O_CARTAO").fim(ResultadoDaEtapa.PULADO);

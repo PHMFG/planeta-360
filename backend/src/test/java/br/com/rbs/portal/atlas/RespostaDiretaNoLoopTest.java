@@ -209,6 +209,31 @@ class RespostaDiretaNoLoopTest {
     }
 
     @Test
+    void diretaPedidaDeNovoDepoisDeSairDaOfertaContaNoLimiteDeChamadasEOTurnoAcaba() {
+        long conversa = abrir();
+        // a primeira rodada tem uma consulta e uma direta (2 chamadas); o modelo insiste na direta em toda ida, 30 vezes
+        modelo.chamadas(null, null, pedido(LoopDoAgenteTest.CONSULTAR, "{}"), pedido(DIRETA, "{}"));
+        for (int i = 0; i < 30; i++) {
+            modelo.chamada(DIRETA, "{}");
+        }
+        modelo.texto("Pronto.");
+
+        ConversaDto turno = falar(conversa, "Preciso disto e dos números.");
+
+        // 2 chamadas na primeira ida, mais uma por ida repetida: a oitava é a ida 7, e a da ida 8 estoura o limite
+        assertThat(modelo.pedidos()).as("a direta repetida conta no limite: uma ida por chamada, e não uma por insistência do roteiro")
+                .hasSize(LoopDoAgente.LIMITE_DE_CHAMADAS_POR_TURNO);
+        assertThat(modelo.sobraDoRoteiro()).isGreaterThan(20);
+        List<String> respostas = respostas(conversa);
+        assertThat(respostas.get(respostas.size() - 1)).contains(LoopDoAgente.ERRO_DO_LIMITE);
+        assertThat(respostas.get(respostas.size() - 2)).contains(LoopDoAgente.ERRO_DA_DIRETA_JA_MOSTRADA);
+        assertThat(ferramenta.registros()).as("a direta só rodou uma vez").extracting(FerramentaDeTeste.Registro::fase)
+                .containsExactly("preparar", "executar");
+        assertThat(turno.itens().stream().filter(ItemTexto.class::isInstance).map(ItemTexto.class::cast).map(ItemTexto::texto))
+                .containsExactly(LoopDoAgente.FRASE_DO_LIMITE);
+    }
+
+    @Test
     void outraFerramentaDaRodadaQueDaErroTambemFazOTurnoSeguirParaOModeloVerOErro() {
         long conversa = abrir();
         // relatorio_finalizar sem relatório em montagem dá erro: ele não é uma resposta direta, e volta ao modelo
