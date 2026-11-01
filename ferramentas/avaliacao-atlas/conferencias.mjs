@@ -197,7 +197,8 @@ export function numerosSemOrigem(turnos, hoje = new Date()) {
  */
 export function numerosDoRelatorioSemFonte(relatorio) {
   const blocos = (relatorio?.secoes ?? []).flatMap((secao) => secao.blocos)
-  const origens = new Origens()
+  // O ano da edição vem do marcador {{evento:edicao}}, e vale como ano, nunca como valor.
+  const origens = new Origens().adicionarAnoLivre('2026').adicionarAnoLivre('2027')
   for (const item of blocos.find((bloco) => bloco.tipo === 'fontes')?.itens ?? []) origens.adicionar(item.valor ?? '')
   const conferir = (texto, onde) => extrair(String(texto ?? '')).filter((achado) => !origens.aceita(achado)).map((achado) => `"${achado.trecho}" em ${onde}`)
   return blocos.flatMap((bloco) => {
