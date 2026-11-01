@@ -131,11 +131,26 @@ public class ProvedorRoteirizado implements ProvedorDeLlm {
         return passo(pedido -> new RespostaDoLlm(String.join("", pedacos), List.of(), raciocinio));
     }
 
+    /** O modelo manda estes pedaços de texto, em fluxo, e cai antes de terminar (o provedor não responde). */
+    public ProvedorRoteirizado textoEmPedacosEFalha(String... pedacos) {
+        pedacosDoPasso.put(registrados, new Pedacos(List.of(), List.of(pedacos)));
+        return falha();
+    }
+
     @Override
     public RespostaDoLlm responderEmFluxo(PedidoAoLlm pedido, OuvinteDoFluxo ouvinte) {
         Pedacos pedacos = pedacosDoPasso.remove(pedidos.size());   // o passo que esta ida vai consumir
         idasEmFluxo.add(pedidos.size());
-        RespostaDoLlm resposta = responder(pedido);
+        RespostaDoLlm resposta;
+        try {
+            resposta = responder(pedido);
+        } catch (RuntimeException falha) {
+            // o modelo caiu no meio do texto: o que já tinha chegado foi entregue antes da falha
+            if (pedacos != null) {
+                pedacos.texto().forEach(ouvinte::texto);
+            }
+            throw falha;
+        }
         if (pedacos == null) {
             if (resposta.raciocinio() != null) {
                 ouvinte.raciocinio(resposta.raciocinio());

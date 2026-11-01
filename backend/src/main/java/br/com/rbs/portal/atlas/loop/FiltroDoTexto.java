@@ -1,6 +1,7 @@
 package br.com.rbs.portal.atlas.loop;
 
 import br.com.rbs.portal.atlas.relatorio.ChecagemDeTexto;
+import br.com.rbs.portal.atlas.relatorio.ChecagemDeTexto.Veredito;
 import br.com.rbs.portal.atlas.relatorio.Referencias;
 import br.com.rbs.portal.atlas.relatorio.ResolvedorDeReferencias.Resolucao;
 import java.util.ArrayList;
@@ -20,9 +21,14 @@ import java.util.regex.Matcher;
  *       filtro para de repassar e avisa uma vez ({@code texto_recusado}). O que já saiu tinha passado pela checagem.</li>
  * </ul>
  * No fim da ida ({@link #fechar}) o resto sai, se a checagem do texto inteiro aprovar. A checagem completa do loop continua
- * valendo depois disso. Não é seguro para várias threads: roda na thread do turno.
+ * valendo depois disso. Quando a checagem recusa, o filtro guarda o motivo e até onde tinha conferido ({@link #motivoDaRecusa},
+ * {@link #caracteresNaRecusa}), para o loop deixar a etapa {@code CHECAGEM} de origem {@code FLUXO} no traço. Não é seguro para
+ * várias threads: roda na thread do turno.
  */
 final class FiltroDoTexto {
+
+    /** O motivo, no traço, de o texto já exibido não ser o começo do texto resolvido de novo. */
+    static final String TEXTO_MUDOU_NA_TELA = "O texto que já estava na tela mudou quando o trecho seguinte chegou.";
 
     private final Resolucao resolucao;
     private final ChecagemDeTexto checagem;
@@ -31,6 +37,8 @@ final class FiltroDoTexto {
     private int aceito;               // quantos caracteres de "recebido" já passaram pelo filtro
     private String exibido = "";      // o que já foi à tela: paraExibicao(recebido[0, aceito])
     private boolean recusado;
+    private String motivoDaRecusa;    // a frase da checagem que recusou; nulo se não recusou, ou se foi o loop que mandou recusar
+    private int caracteresNaRecusa;   // quanto do texto cru a checagem tinha conferido quando recusou
 
     FiltroDoTexto(Resolucao resolucao, ChecagemDeTexto checagem, OuvinteDoTurno ouvinte) {
         this.resolucao = resolucao;
@@ -64,12 +72,34 @@ final class FiltroDoTexto {
         return !exibido.isEmpty();
     }
 
+    /**
+     * Por que a checagem do texto recusou o trecho (a frase dela), ou nulo se o filtro não recusou ou se só o loop mandou recusar
+     * ({@link #recusar()}: a checagem completa recusou, ou o modelo caiu no meio do texto).
+     */
+    String motivoDaRecusa() {
+        return motivoDaRecusa;
+    }
+
+    /** Quantos caracteres do texto cru a checagem tinha conferido quando recusou o trecho; 0 se ela não recusou. */
+    int caracteresNaRecusa() {
+        return caracteresNaRecusa;
+    }
+
     /** Recusa o texto desta ida, se ainda não recusou: para de repassar e avisa a tela, uma vez ({@code texto_recusado}). */
     void recusar() {
         if (!recusado) {
             recusado = true;
             ouvinte.textoRecusado();
         }
+    }
+
+    /** A checagem recusou o trecho: guarda o motivo e o tamanho conferido (só da primeira vez) e recusa a ida. */
+    private void recusarPelaChecagem(String motivo, int caracteres) {
+        if (!recusado) {
+            motivoDaRecusa = motivo;
+            caracteresNaRecusa = caracteres;
+        }
+        recusar();
     }
 
     private void avancar(int corte) {
@@ -80,13 +110,15 @@ final class FiltroDoTexto {
         if (candidato.isBlank()) {
             return;   // nada para mostrar ainda (e a checagem recusaria o texto vazio)
         }
-        if (!checagem.chat(resolucao, candidato).aprovado()) {
-            recusar();
+        Veredito veredito = checagem.chat(resolucao, candidato);
+        if (!veredito.aprovado()) {
+            recusarPelaChecagem(veredito.motivo(), candidato.length());
             return;
         }
         String agora = resolucao.paraExibicao(candidato);
         if (!agora.startsWith(exibido)) {
-            recusar();   // não deveria acontecer (o corte nunca cai num marcador); na dúvida, nada de meio texto na tela
+            // não deveria acontecer (o corte nunca cai num marcador); na dúvida, nada de meio texto na tela
+            recusarPelaChecagem(TEXTO_MUDOU_NA_TELA, candidato.length());
             return;
         }
         String novo = agora.substring(exibido.length());

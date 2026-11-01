@@ -14,6 +14,7 @@ import static br.com.rbs.portal.atlas.ApoioDoFluxo.conversa;
 import static br.com.rbs.portal.atlas.ApoioDoFluxo.eventos;
 import static br.com.rbs.portal.atlas.ApoioDoFluxo.falarEmFluxo;
 import static br.com.rbs.portal.atlas.ApoioDoFluxo.fim;
+import static br.com.rbs.portal.atlas.ApoioDoFluxo.sequencia;
 import static br.com.rbs.portal.atlas.ProvedorRoteirizado.pedido;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -420,5 +421,78 @@ class DiagnosticoDoTurnoTest {
         // o evento fim já traz o id do turno nos itens do assistente (o traço foi gravado antes dele)
         assertThat(fim(eventos(resposta)).<List<String>>ler("$.itens[?(@.tipo=='texto')].turno"))
                 .containsExactly(traco.get(0).turno().toString());
+    }
+
+    @Test
+    void trechoRecusadoPeloFiltroDoFluxoDeixaACheckagemDeOrigemFluxoAntesDaDaResposta() {
+        SessaoDeApi pessoa = SessaoDeApi.entrar(mvc, AMARELO);
+        long conversa = conversa(pessoa, jdbc);
+        modelo.textoEmPedacos(null, "Foram ", "muitas, ", "mais de ", "1", "0 mil.")
+                .textoEmPedacos(null, "Foram muitas, ", "segundo {{parc:patrocinador}}.");
+
+        MvcTestResult resposta = falarEmFluxo(pessoa, conversa, "Quantas?");
+
+        assertThat(sequencia(eventos(resposta))).contains("texto_recusado");
+        List<Linha> traco = tracoDoTurno(jdbc, conversa);
+        assertThat(etapas(traco)).containsExactly("G1_LIMITES", "LLM_IDA", "CHECAGEM", "CHECAGEM", "LLM_IDA", "CHECAGEM", "SAIDA");
+        assertThat(resultados(traco)).containsExactly("OK", "OK", "RECUSADO", "RECUSADO", "OK", "OK", "OK");
+        exigirCoerencia(traco);
+        List<Linha> checagens = todas(traco, "CHECAGEM");
+        // o filtro cortou o texto na tela assim que viu o algarismo: foi o que ele tinha checado até ali
+        assertThat(checagens.get(0).dados()).containsEntry("origem", "FLUXO").containsEntry("aprovado", false)
+                .containsEntry("caracteres", "Foram muitas, mais de 10 ".length());
+        assertThat((String) checagens.get(0).dados().get("motivo")).contains("algarismo");
+        // a checagem do texto inteiro vem depois, como sempre
+        assertThat(checagens.get(1).dados()).containsEntry("origem", "RESPOSTA").containsEntry("aprovado", false);
+        assertThat(checagens.get(2).dados()).containsEntry("origem", "RESPOSTA").containsEntry("aprovado", true);
+        assertThat(primeira(traco, "SAIDA").dados().get("fluxo")).isInstanceOfSatisfying(Map.class,
+                fluxo -> assertThat(((Map<?, ?>) fluxo.get("eventos")).get("texto_recusado")).isEqualTo(1));
+    }
+
+    @Test
+    void marcadorQueNuncaFechaRecusadoNoFimDaIdaTambemDeixaACheckagemDoFluxo() {
+        SessaoDeApi pessoa = SessaoDeApi.entrar(mvc, AMARELO);
+        long conversa = conversa(pessoa, jdbc);
+        String aberto = "Para {{parc:patrocinador e fim.";
+        modelo.textoEmPedacos(null, "Para ", "{{parc:patrocinador e fim.").textoEmPedacos(null, "Tudo certo.");
+
+        falarEmFluxo(pessoa, conversa, "Oi");
+
+        List<Linha> traco = tracoDoTurno(jdbc, conversa);
+        assertThat(etapas(traco)).containsExactly("G1_LIMITES", "LLM_IDA", "CHECAGEM", "CHECAGEM", "LLM_IDA", "CHECAGEM", "SAIDA");
+        // sem espaço depois do marcador aberto, o filtro só recusa quando a ida termina e ele confere o texto inteiro
+        assertThat(todas(traco, "CHECAGEM").get(0).dados()).containsEntry("origem", "FLUXO").containsEntry("aprovado", false)
+                .containsEntry("caracteres", aberto.length());
+        assertThat(todas(traco, "CHECAGEM").get(0).resultado()).isEqualTo("RECUSADO");
+        exigirCoerencia(traco);
+    }
+
+    @Test
+    void textoQueONaoFoiRecusadoPeloFiltroNaoDeixaChecagemDoFluxo() {
+        SessaoDeApi pessoa = SessaoDeApi.entrar(mvc, AMARELO);
+        long conversa = conversa(pessoa, jdbc);
+        modelo.textoEmPedacos(null, "Posso ", "ajudar ", "você.");
+
+        falarEmFluxo(pessoa, conversa, "Oi");
+
+        List<Linha> traco = tracoDoTurno(jdbc, conversa);
+        assertThat(todas(traco, "CHECAGEM")).hasSize(1);
+        assertThat(primeira(traco, "CHECAGEM").dados()).containsEntry("origem", "RESPOSTA");
+    }
+
+    @Test
+    void modeloQueCaiDepoisDoFiltroRecusarUmTrechoDeixaAChecagemDoFluxoEAIdaComErro() {
+        SessaoDeApi pessoa = SessaoDeApi.entrar(mvc, AMARELO);
+        long conversa = conversa(pessoa, jdbc);
+        modelo.textoEmPedacosEFalha("Foram ", "mais de ", "10 ", "mil ", "visitas.");
+
+        falarEmFluxo(pessoa, conversa, "Quantas?");
+
+        List<Linha> traco = tracoDoTurno(jdbc, conversa);
+        assertThat(etapas(traco)).containsExactly("G1_LIMITES", "LLM_IDA", "CHECAGEM", "SAIDA");
+        assertThat(resultados(traco)).containsExactly("OK", "ERRO", "RECUSADO", "ERRO");
+        assertThat(todas(traco, "CHECAGEM").get(0).dados()).containsEntry("origem", "FLUXO").containsEntry("aprovado", false);
+        assertThat(primeira(traco, "SAIDA").dados()).containsEntry("motivo", "FALHA_DO_MODELO");
+        exigirCoerencia(traco);
     }
 }

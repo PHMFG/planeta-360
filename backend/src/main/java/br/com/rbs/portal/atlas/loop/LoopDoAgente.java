@@ -331,6 +331,9 @@ public class LoopDoAgente {
             } catch (RuntimeException falha) {
                 log.warn("Atlas: o modelo não respondeu na conversa {} ({})", contexto.conversaId(), falha.getClass().getSimpleName());
                 ida.dado("erro", falha.getClass().getSimpleName()).dado("detalhe", falha.getMessage()).fim(ResultadoDaEtapa.ERRO);
+                if (filtro != null) {
+                    registrarRecusaDoFluxo(turno, filtro);   // o filtro pode ter recusado um trecho antes de o modelo cair
+                }
                 if (filtro != null && filtro.saiuAlgo()) {
                     filtro.recusar();   // o texto pela metade sai da tela; a frase da falha vem a seguir
                 }
@@ -345,6 +348,7 @@ public class LoopDoAgente {
                     .dado("comTexto", texto != null).dado("comRaciocinio", raciocinio != null).fim(ResultadoDaEtapa.OK);
             if (filtro != null) {
                 filtro.fechar();
+                registrarRecusaDoFluxo(turno, filtro);
             }
 
             if (resposta.chamadas().isEmpty()) {
@@ -547,6 +551,19 @@ public class LoopDoAgente {
         etapa.dado("aprovado", veredito.aprovado()).dado("motivo", veredito.motivo())
                 .fim(veredito.aprovado() ? ResultadoDaEtapa.OK : ResultadoDaEtapa.RECUSADO);
         return veredito;
+    }
+
+    /**
+     * Se o filtro do fluxo recusou um trecho desta ida na checagem (e já avisou a tela com {@code texto_recusado}), deixa a etapa
+     * {@code CHECAGEM} de origem {@code FLUXO}: a frase da recusa e quanto do texto o filtro tinha conferido. A checagem do texto
+     * inteiro, de origem {@code RESPOSTA}, vem depois e também fica no traço. Sem recusa do filtro, não deixa nada.
+     */
+    private void registrarRecusaDoFluxo(Turno turno, FiltroDoTexto filtro) {
+        if (filtro.motivoDaRecusa() == null) {
+            return;
+        }
+        turno.traco.abrir(EtapaDoTraco.CHECAGEM).dado("origem", "FLUXO").dado("caracteres", filtro.caracteresNaRecusa())
+                .dado("aprovado", false).dado("motivo", filtro.motivoDaRecusa()).fim(ResultadoDaEtapa.RECUSADO);
     }
 
     /** Uma resolução nova dos marcadores do chat, contra a parceria da conversa e com o perfil de quem pede. */
