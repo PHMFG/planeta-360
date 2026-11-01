@@ -150,14 +150,16 @@ Com o banco recém-criado (amostra original):
 
 ### Roteiro do Atlas
 
-Nesta versão o Atlas é só o chat: a marca pergunta sobre os números da própria parceria. Ele precisa do modelo de linguagem ligado (veja abaixo). O relatório montado pelo Atlas está desabilitado até entrarem o JEV e as outras ferramentas de que ele precisa: o botão aparece, sem funcionar.
+Nesta versão o Atlas é o chat: a marca pergunta sobre os números da própria parceria e sobre os documentos do evento, e o que vem de documento cita a fonte. Ele precisa do modelo de linguagem ligado (veja abaixo). O relatório montado pelo Atlas está desabilitado até entrarem o JEV e as outras ferramentas de que ele precisa: o botão aparece, sem funcionar.
 
 1. Como `b2b@rbs.example`, em **Patrocinadores**, cadastre a parceria "Cliente Teste" na edição 2027. Em **Cargas**, escolha "Plano comercial" e envie `docs/exemplos/plano.csv`: 8 linhas entram, 1 é duplicada e 2 são rejeitadas, com o motivo (mídia sem tipo e uma marca sem parceria).
 2. Abra a parceria do Cliente Amarelo, em **Aplicações da marca**: o plano linha a linha, com as fotos de comprovação. Use "Anexar foto" numa linha sem foto, e o total de comprovadas sobe.
 3. Entre como `marketing@amarelo.example` e, em **Aplicações**, informe os números que só a marca sabe (visitantes, cadastros e brindes): eles ficam com o seu nome e a data.
 4. Toque em **atlas**, no menu (ou use a caixa "atlas · como posso ajudar?" em Minha parceria). O Atlas abre numa janela própria, com o menu à vista. Pergunte "quantas aplicações já foram comprovadas?": a resposta chega enquanto o modelo escreve, e os números vêm do portal.
 5. No perfil `dev`, cada resposta mostra, em caixas amarelas de debug, as ferramentas que o modelo usou, com o que ele pediu e o que recebeu de volta. Sem ferramenta, a resposta diz isso.
-6. Peça os números de outra marca: o Atlas não tem como consultá-los e responde só "Não encontrei isso nos documentos do portal. Para essa dúvida, fale com o atendimento da RBS.", sem dizer se existem e sem número nenhum.
+6. Pergunte "até quando preciso informar os geradores?": a resposta traz a data com um chip, como `T1`, e a lista "Fontes" embaixo. O chip abre o manual ao lado da conversa, na página citada, com o trecho destacado.
+7. Peça os números de outra marca: o Atlas não tem como consultá-los e responde só "Não encontrei isso nos documentos do portal. Para essa dúvida, fale com o atendimento da RBS.", sem dizer se existem e sem número nenhum.
+8. Como `b2b@rbs.example`, em **Atlas**, abra **Busca de teste**, escolha uma parceria e escreva uma consulta: aparecem as duas listas da busca, o que o modelo receberia e o que essa parceria enxerga, sem gastar o modelo.
 
 ### Ligar o modelo de linguagem (opcional)
 
@@ -189,10 +191,10 @@ No Windows (PowerShell): `$env:ATLAS_LLM="openai"; $env:OPENCODE_API_KEY="sua-ch
 | `ATLAS_DEBUG_FERRAMENTAS` | `false` (`true` no perfil `dev`) | Mostra na conversa as ferramentas que o modelo usou, com argumentos e resultado. Temporário |
 | `ATLAS_DIAGNOSTICO` | `false` (`true` no perfil `dev`) | O diagnóstico: cada turno do Atlas deixa um traço (etapas, tempos, tokens, custo) que a RBS lê pelas rotas 50 a 53. Desligado, nada é gravado e as rotas respondem 404. Veja `docs/api.md`, "Diagnóstico do Atlas" |
 | `ATLAS_DIAGNOSTICO_MARCA` | `false` (`true` no perfil `dev`) | A marca vê o diagnóstico das próprias conversas (rota 49). Só vale com o diagnóstico ligado |
-| `ATLAS_EMBEDDINGS`, `GEMINI_API_KEY` | `none`, — | Os embeddings dos documentos do Atlas: `gemini` (o Gemini de verdade, com a chave), `teste` (determinístico e sem rede, **só em banco descartável** como o `portal_e2e`: os vetores não têm o significado dos do Gemini) ou `none`. Com `none`, a API sobe do mesmo jeito, aprovar um documento o deixa em `ERRO` com o motivo, e a amostra do `dev` não cria os documentos de exemplo (avisa no log; quando a chave chega, a próxima subida cria e indexa o kit). Veja `docs/api.md`, "Os documentos do Atlas" |
+| `ATLAS_EMBEDDINGS`, `GEMINI_API_KEY` | `none`, — | Os embeddings dos documentos do Atlas: `gemini` (o Gemini de verdade, com a chave), `teste` (determinístico e sem rede, **só em banco descartável** como o `portal_e2e`: os vetores não têm o significado dos do Gemini) ou `none`. Com `none`, a API sobe do mesmo jeito, aprovar um documento o deixa em `ERRO` com o motivo, e a amostra do `dev` não cria os documentos de exemplo (avisa no log; quando a chave chega, a próxima subida cria e indexa o kit). A cota gratuita do Gemini é de 1.000 chamadas por dia: sem cota, a busca segue só com a lista textual, e documento novo fica em `ERRO` até reindexar. Veja `docs/api.md`, "Os documentos do Atlas" |
 | `ATLAS_JEV`, `TYPESAFE_API_KEY` | `none`, — | O JEV (modo e chave): por enquanto só a rota 52 mostra o estado dele e a 53 testa a conexão |
 
-O Atlas nunca escreve um número: os números do chat vêm da base do portal ou do que a marca informou, sempre com a origem. Use só dados fictícios enquanto o provedor estiver em teste.
+Todo número do chat tem origem: vem da base do portal, do que a marca informou ou de um documento citado na mesma frase. O servidor confere isso antes de a frase chegar à tela. Use só dados fictícios enquanto o provedor estiver em teste.
 
 **Regras de envio.** Arquivos de até 20 MB nos formatos PDF, PNG, JPG (e JPEG), DOCX, XLSX, PPTX, CSV, MP4, MP3 e ZIP. A API confere o conteúdo, e não só o nome. O download sai sempre como anexo. Cada envio aceita uma observação (até 500 caracteres), que fica na versão e no histórico. As planilhas de carga são CSV em UTF-8 com vírgula como separador (no Excel, "Salvar como" e "CSV UTF-8"); as colunas estão em `docs/banco.md` e há exemplos em `docs/exemplos/`. Linha com data ou quantidade ilegível é rejeitada com o motivo e o formato esperado, e o resto do arquivo entra.
 
@@ -230,14 +232,14 @@ Com as chaves no arquivo de segredos, `scripts/fumaca-provedores.sh` confere o O
 - Corrigir uma linha do plano comercial: o reenvio com outra quantidade conta como duplicado (vale a primeira versão), e não há tela para editar a linha.
 - Telas próprias de Cortesias, Credenciamento e Contrato: nesta versão cada uma dessas abas mostra as próprias entregas.
 - Relatório montado pelo Atlas: desabilitado nesta versão (`ATLAS_RELATORIO`), até entrarem o JEV e as outras ferramentas de que ele precisa. O código continua no projeto e as tabelas ficam sem uso.
-- Atlas com o modelo de linguagem: testado contra um servidor falso e com a chave de verdade do OpenCode Go. Para decidir com a equipe: os termos de uso do OpenCode, que falam em uso interno de quem assina, e o acordo de retenção zero do DeepSeek no Go, que vence em 31/10/2026 e é renovado mês a mês.
+- Atlas com o modelo de linguagem: testado contra um servidor falso e com a chave de verdade do OpenCode Go. Para decidir com a equipe: os termos de uso do OpenCode, que falam em uso interno de quem assina, e o acordo de retenção zero do DeepSeek no Go, que vale até 30/11/2026 e é renovado mês a mês.
 - Dado pessoal no modelo: a consulta do Atlas leva ao modelo o nome de quem informou cada dado ("Informado por ... em ..."). Fica assim por decisão do dono do produto.
 - Dados informados pela marca entram sem aprovação da RBS, com o nome de quem informou e a data.
 - E-mail automático do código de ativação; recuperação de senha.
 - PDF do relatório: pela impressão do navegador.
 - A confirmar com a RBS: abas por cota (hoje todas liberadas, Pesquisa só para Master), limite de usuários por parceria, quem envia as fotos de comprovação, formato dos resultados da pesquisa, quem aprova as perguntas, a lista final de formatos de arquivo (o `.ai` do Illustrator ficou de fora) e o limite de 20 MB.
 - Segurança para produção: limite de tentativas de login e cookie de sessão `Secure` atrás de HTTPS.
-- Fora desta versão: no Atlas, perguntas e respostas com fontes, o cálculo livre pedido pelo modelo e as fotos dentro do relatório; JEV, n8n, Open Staff, cifra de arquivos, Docker e Swagger.
+- Fora desta versão: no Atlas, o cálculo livre pedido pelo modelo e as fotos dentro do relatório; JEV, n8n, Open Staff, cifra de arquivos, Docker e Swagger.
 
 ## Pastas
 
