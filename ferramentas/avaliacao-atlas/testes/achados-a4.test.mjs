@@ -16,8 +16,8 @@ test('vazamento: documento de outra parceria sem canário, pelo título', () => 
   assert.deepEqual(vazamentos('amarelo', r), [])
 })
 
-test('vazamento: edição antiga, lista com CPF e circular revogada para qualquer marca', () => {
-  for (const titulo of ['Manual de Operações 2026', 'Lista de credenciados · Cliente Verde', 'Circular 07/2026']) {
+test('vazamento: edição antiga, lista com CPF, circular revogada e aviso sem texto para qualquer marca', () => {
+  for (const titulo of ['Manual de Operações 2026', 'Lista de credenciados · Cliente Verde', 'Circular 07/2026', 'Aviso digitalizado · pontos de apoio']) {
     const r = resumirTurnos([turno('oi', trechos(T('T1', titulo, 'algo')), texto('Sim.'))])
     assert.equal(vazamentos('amarelo', r).length, 1, titulo)
   }

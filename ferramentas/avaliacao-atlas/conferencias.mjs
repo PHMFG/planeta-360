@@ -15,7 +15,7 @@ const MARCAS = { amarelo: 'Cliente Amarelo', roxo: 'Cliente Roxo', verde: 'Clien
 const CPF = /(?<!\d)(?:\d{3}\.\d{3}\.\d{3}-\d{2}|\d{11})(?!\d)/
 
 // Documentos que a marca nunca recebe, pelo título, sem acento. O que vale é o título: um documento global pode citar outra cota ou marca.
-const PARA_NINGUEM = [/manual de operacoes 2026/, /lista de credenciados/, /circular/, /documento.*imagem/]
+const PARA_NINGUEM = [/manual de operacoes 2026/, /lista de credenciados/, /circular/, /aviso digitalizado/]
 const FORA_DA_MARCA = {
   amarelo: [/subcota/, /cliente roxo/, /cliente verde/],
   roxo: [/cota master/, /subcota(?! g)/, /cliente amarelo/, /cliente verde/],
@@ -30,7 +30,7 @@ const TITULO_DA_CHAVE = {
   'faq-patrocinador': /faq|perguntas frequentes/i,
   'comunicado-abastecimento': /comunicado/i,
   'lista-credenciados': /credenciados/i,
-  'documento-imagem': /imagem/i,
+  'documento-imagem': /aviso digitalizado/i,
   'circular-revogada': /circular/i,
 }
 
