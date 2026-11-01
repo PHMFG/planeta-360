@@ -130,10 +130,11 @@ public final class NormalizadorDeNumeros {
      * O dia solto de um trecho de documento: o número de 1 ou 2 algarismos que vem logo depois de um dia da semana ou da palavra "dia",
      * com a vírgula ou os dois pontos opcionais ({@code sexta-feira, 29}, {@code sábado 30}, {@code dia 29}, {@code Dia: 29}). Não é o
      * dia o número depois de {@code Portão}, {@code seção}, {@code item} ou de outro número, nem o que é parte de um número maior
-     * ({@code 29,5}, {@code 29/12}, {@code 29:30}, {@code 29h}). {@code meio-dia} não é "dia".
+     * ({@code 29,5}, {@code 29/12}, {@code 29:30}, {@code 29h}). {@code meio-dia} não é "dia", e "dias" (no plural) é a duração, não
+     * o dia: em "10 dias, 5 cópias" o 5 não é o dia 5. O plural só marca o dia dentro de uma data por extenso ("dias 29 e 30 de janeiro").
      */
     private static final Pattern DIA_SOLTO_DEPOIS_DE_DIA_DA_SEMANA = Pattern.compile("(?<![\\p{L}\\p{N}-])(?:(?:domingo|segunda|ter[çc]a|quarta|quinta"
-            + "|sexta|s[áa]bado)(?:[- ]feira)?|(?:dom|seg|ter|qua|qui|sex|s[áa]b)\\.|dias?)\\s*[,:]?\\s*(\\d{1,2})(?![\\p{L}\\p{N}]|[/:.,]\\d)",
+            + "|sexta|s[áa]bado)(?:[- ]feira)?|(?:dom|seg|ter|qua|qui|sex|s[áa]b)\\.|dia)\\s*[,:]?\\s*(\\d{1,2})(?![\\p{L}\\p{N}]|[/:.,]\\d)",
             Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     private static final Pattern SEPARADOR_DE_GRUPO = Pattern.compile(ESPACO_DE_GRUPO);
     private static final Pattern REAL_ANTES = Pattern.compile("R\\$\\s*$");

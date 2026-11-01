@@ -669,6 +669,22 @@ class NormalizadorDeNumerosTest {
         assertThat(aceitaDaFonte("Foram 12 itens, 9 pessoas e 04/12/2026.", "12/12/2026")).isFalse();
     }
 
+    @Test
+    void aPalavraDiasNoPluralNaoFazDoNumeroSeguinteUmDiaSolto() {
+        // "10 dias, 5 cópias": o 5 é a quantidade de cópias, não o dia 5; 05/12/2026 não tem origem só porque o trecho tem 04/12/2026
+        String prazo = "Prazo de 10 dias, 5 cópias. Entrega em 04/12/2026.";
+        assertThat(aceitaDaFonte(prazo, "04/12/2026")).isTrue();
+        assertThat(aceitaDaFonte(prazo, "05/12/2026")).isFalse();
+        assertThat(aceitaDaFonte(prazo, "05/12")).isFalse();
+        assertThat(aceitaDaFonte(prazo, "5 de dezembro")).isFalse();
+        assertThat(aceitaDaFonte("São 3 dias 5 cópias e a entrega é em 04/12/2026.", "5 de dezembro")).isFalse();
+        // "dia", no singular, continua dizendo o dia, com ou sem os dois pontos, e o dia da semana também
+        assertThat(aceitaDaFonte("Dia: 29 e sábado, 30 de janeiro de 2027.", "29 de janeiro de 2027")).isTrue();
+        assertThat(aceitaDaFonte("Dia 29 e sábado, 30 de janeiro de 2027.", "29 de janeiro de 2027")).isTrue();
+        assertThat(aceitaDaFonte("Sexta-feira, 29, e sábado, 30 de janeiro de 2027.", "29 de janeiro de 2027")).isTrue();
+        assertThat(aceitaDaFonte("Sexta-feira, 29, e sábado, 30 de janeiro de 2027.", "28 de janeiro de 2027")).isFalse();
+    }
+
     @ParameterizedTest(name = "\"{0}\" diz o dia 29")
     @ValueSource(strings = {"Na sexta-feira, 29, e no sábado, 30 de janeiro de 2027.", "Abre sábado 29 e fecha dia 30 de janeiro de 2027.",
             "Montagem no dia 29 e a abertura em 30 de janeiro de 2027.", "Domingo, 29, é o último; sábado, 30 de janeiro de 2027.",

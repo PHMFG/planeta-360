@@ -848,6 +848,19 @@ class ChecagemDeFontesTest {
     }
 
     @Test
+    void aQuantidadeDepoisDeDiasNoPluralNaoEODiaDeUmaDataDoTrecho() {
+        // "10 dias, 5 cópias": o 5 é a quantidade de cópias; 05/12/2026 não tem origem só porque o trecho diz 04/12/2026
+        FontesDoTurno prazo = turno("Qual o prazo?", "Prazo de 10 dias, 5 cópias. Entrega em 04/12/2026.");
+        aprova(prazo, "A entrega é em 04/12/2026 [T1].");
+        aprova(prazo, "A entrega é no dia 4 [T1].");
+        aprova(prazo, "São 5 cópias [T1].");
+        recusa(prazo, "A entrega é em 05/12/2026 [T1].");
+        recusa(prazo, "A entrega é em 5 de dezembro [T1].");
+        // "dia" no singular continua dizendo o dia
+        aprova(turno("Qual dia?", "Dia: 29 e sábado, 30 de janeiro de 2027."), "O festival abre em 29/01/2027 [T1].");
+    }
+
+    @Test
     void oRegistroEAContaTambemDizemODiaDeUmaDataQueTrazemPorInteiro() {
         FontesDoTurno comRegistro = turno("Quando?");
         comRegistro.registrarRegistro("prazo", 1, "Informar os geradores", "Prazos", "Informar os geradores. Prazo: 04/12/2026 às 18h.",
