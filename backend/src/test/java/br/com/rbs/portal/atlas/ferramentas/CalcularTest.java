@@ -221,30 +221,49 @@ class CalcularTest {
     }
 
     @Test
-    void oAnoNaoEValorNoLiteralDoCalcular() {
-        FontesDoTurno turno = new FontesDoTurno("Para 2027 quero 3 geradores.", 2027, LocalDate.of(2026, 11, 1));
-        turno.registrarRegistro("parceria", 1, "Cota da parceria", null, "Cota Master. Edição: Planeta Atlântida 2027. Multa de R$ 2.026,00.",
-                Map.of());
+    void soOAnoDeUmaDataNaoEValorNoLiteralDoCalcular() {
         AtlasContexto contexto = contexto();
-
-        // o 2027 da edição (R1) e o da própria mensagem da pessoa são anos, e nunca o valor 2027
-        assertThat(erro(contexto, turno, "{\"nome\":\"ano\",\"script\":\"a * 2\",\"variaveis\":{\"a\":{\"fonte\":\"R1\",\"valor\":\"2027\"}}}"))
+        // o ano de uma data da fonte (o 2026 de 04/12/2026) e o da edição, que nenhum texto diz solto, nunca são valor
+        FontesDoTurno data = new FontesDoTurno("Quanto?", 2027, LocalDate.of(2026, 11, 1));
+        data.registrarRegistro("prazo", 1, "Prazo", null, "Prazo: 04/12/2026.", Map.of());
+        assertThat(erro(contexto, data, "{\"nome\":\"d\",\"script\":\"a * 2\",\"variaveis\":{\"a\":{\"fonte\":\"R1\",\"valor\":\"2026\"}}}"))
+                .contains("2026");
+        assertThat(erro(contexto, data, "{\"nome\":\"e\",\"script\":\"a * 2\",\"variaveis\":{\"a\":{\"fonte\":\"usuario\",\"valor\":\"2027\"}}}"))
                 .contains("2027");
-        assertThat(erro(contexto, turno, "{\"nome\":\"ano\",\"script\":\"a * 2\",\"variaveis\":{\"a\":{\"fonte\":\"usuario\",\"valor\":\"2027\"}}}"))
-                .contains("2027");
-        assertThat(turno.contas()).isEmpty();
-        // "R$ 2.026,00" é um valor de verdade na fonte, e o ano 2026 de uma data não é: só o primeiro vale
-        assertThat(rodar(contexto, turno, "{\"nome\":\"multa\",\"script\":\"a * 2\",\"variaveis\":{\"a\":{\"fonte\":\"R1\",\"valor\":\"2026\"}}}"))
+        assertThat(data.contas()).isEmpty();
+        // "R$ 2.026,00" é um valor de verdade na fonte
+        FontesDoTurno multa = new FontesDoTurno("Quanto?", 2027, LocalDate.of(2026, 11, 1));
+        multa.registrarRegistro("parceria", 1, "Cota da parceria", null, "Cota Master. Multa de R$ 2.026,00 até 04/12/2026.", Map.of());
+        assertThat(rodar(contexto, multa, "{\"nome\":\"multa\",\"script\":\"a * 2\",\"variaveis\":{\"a\":{\"fonte\":\"R1\",\"valor\":\"2026\"}}}"))
                 .containsEntry("valorFormatado", "4.052");
         // com unidade depois, os quatro dígitos são valor também na mensagem da pessoa
         FontesDoTurno credenciais = new FontesDoTurno("Quero 2027 credenciais.", 2027, LocalDate.of(2026, 11, 1));
         assertThat(rodar(contexto, credenciais, "{\"nome\":\"c\",\"script\":\"a * 2\",\"variaveis\":{\"a\":{\"fonte\":\"usuario\",\"valor\":\"2027\"}}}"))
                 .containsEntry("valorFormatado", "4.054");
-        // o ano de uma data da fonte também não é valor
-        FontesDoTurno data = new FontesDoTurno("Quanto?", 2027, LocalDate.of(2026, 11, 1));
-        data.registrarRegistro("prazo", 1, "Prazo", null, "Prazo: 04/12/2026.", Map.of());
-        assertThat(erro(contexto, data, "{\"nome\":\"d\",\"script\":\"a * 2\",\"variaveis\":{\"a\":{\"fonte\":\"R1\",\"valor\":\"2026\"}}}"))
-                .contains("2026");
+    }
+
+    @Test
+    void numeroEntre1900E2099EscritoSoltoValeComoValorNaMensagemDaPessoaENaFonte() {
+        AtlasContexto contexto = contexto();
+        // "quanto é 10% de 2000?"
+        FontesDoTurno porcento = new FontesDoTurno("quanto é 10% de 2000?", 2027, LocalDate.of(2026, 11, 1));
+        assertThat(rodar(contexto, porcento, "{\"nome\":\"dez\",\"script\":\"total * p / 100\",\"variaveis\":{"
+                + "\"total\":{\"fonte\":\"usuario\",\"valor\":\"2000\"},\"p\":{\"fonte\":\"usuario\",\"valor\":\"10\"}}}"))
+                .containsEntry("valorFormatado", "200");
+        // "2000 brindes a R$ 3" e "1950 mais 1980"
+        FontesDoTurno brindes = new FontesDoTurno("2000 brindes a R$ 3 cada, e 1950 mais 1980 de outro lote.", 2027, LocalDate.of(2026, 11, 1));
+        assertThat(rodar(contexto, brindes, "{\"nome\":\"brindes\",\"script\":\"n * preco\",\"variaveis\":{"
+                + "\"n\":{\"fonte\":\"usuario\",\"valor\":\"2000\"},\"preco\":{\"fonte\":\"usuario\",\"valor\":\"3\"}}}"))
+                .containsEntry("valorFormatado", "6.000");
+        assertThat(rodar(contexto, brindes, "{\"nome\":\"soma\",\"script\":\"a + b\",\"variaveis\":{"
+                + "\"a\":{\"fonte\":\"usuario\",\"valor\":\"1950\"},\"b\":{\"fonte\":\"usuario\",\"valor\":\"1980\"}}}"))
+                .containsEntry("valorFormatado", "3.930");
+        // uma tabela da fonte: "Diária | 1950"
+        FontesDoTurno tabela = new FontesDoTurno("Quanto fica com 3 diárias?", 2027, LocalDate.of(2026, 11, 1));
+        tabela.registrarTrecho(10, 1, "Tabela de diárias", 1, 2, "Diárias", "Item | Valor\nDiária | 1950\nPrazo: 04/12/2026.");
+        assertThat(rodar(contexto, tabela, "{\"nome\":\"diarias\",\"script\":\"d * n\",\"variaveis\":{"
+                + "\"d\":{\"fonte\":\"T1\",\"valor\":\"1950\"},\"n\":{\"fonte\":\"usuario\",\"valor\":\"3\"}}}"))
+                .containsEntry("valorFormatado", "5.850");
     }
 
     // ---------------------------------------------------------------------
@@ -701,7 +720,7 @@ class CalcularTest {
     void aDefinicaoDizAoModeloAsRegrasDaOrigemDoScriptEDaCadeia() {
         String descricao = calcular.definicao().descricao();
 
-        assertThat(descricao).contains("nesta conversa", "no máximo 2 vezes", "pct(parte, todo)", "a * 100 / b é recusado", "mesma origem", "o ano não é valor",
+        assertThat(descricao).contains("nesta conversa", "no máximo 2 vezes", "pct(parte, todo)", "a * 100 / b é recusado", "mesma origem", "o ano de uma data não é valor",
                 "pela cadeia");
         assertThat(calcular.definicao().esquema()).contains("^[a-z][a-z0-9_]{0,59}$");
     }

@@ -486,8 +486,10 @@ public final class NormalizadorDeNumeros {
      * Tudo o que um conjunto de textos permite afirmar. Data com ano só vale no ano certo, se a fonte disser o ano. Se ela não disser
      * (data sem ano), vale com qualquer ano na resposta, a menos que {@link #anosAceitos} limite quais.
      * <p>
-     * <b>O ano não é valor.</b> O ano de uma data da fonte e os quatro dígitos que são ano (título, "Para 2027") valem só como ano
-     * ({@code ano:2027}); "R$ 2.026,00" e "2026 credenciais" precisam do número escrito como número.
+     * <b>O ano não é valor, na resposta.</b> O ano de uma data da fonte e os quatro dígitos que são ano (título, "Para 2027") valem só
+     * como ano ({@code ano:2027}); "R$ 2.026,00" e "2026 credenciais" precisam do número escrito como número. O literal do
+     * {@code calcular} é outra regra ({@link #aceitaComoValor}): o número escrito solto no texto vale como valor, e só o ano de uma data
+     * não.
      * <p>
      * <b>A fonte citada diz mais</b> ({@link #adicionarFonteCitada}): o dia de uma de suas datas vale como o número que vem logo
      * depois de "dia" ou "dias" na resposta ({@code dia 4}, {@code no dia 4} com a fonte em 04/12/2026; {@code 4 geradores} e {@code
@@ -500,6 +502,12 @@ public final class NormalizadorDeNumeros {
     public static final class Origens {
 
         private final Set<String> valores = new HashSet<>();
+        /**
+         * Os quatro dígitos entre 1900 e 2099 escritos soltos no texto ({@code Diária | 1950}, {@code 10% de 2000}): na resposta valem só
+         * como ano, e para o literal do {@code calcular} ({@link #aceitaComoValor}) valem como o número que são. O ano de uma data não
+         * entra aqui: a data é consumida antes.
+         */
+        private final Set<String> numerosSoltosComoAno = new HashSet<>();
         private Set<String> anosAceitos;
 
         public Origens(String... textos) {
@@ -535,6 +543,9 @@ public final class NormalizadorDeNumeros {
                     }
                 } else {
                     boolean ehAno = achado.valores().stream().anyMatch(v -> v.startsWith("ano:"));
+                    if (ehAno) {
+                        numerosSoltosComoAno.add(achado.valores().get(0));   // o primeiro valor é o número; o segundo, "ano:AAAA"
+                    }
                     for (String valor : achado.valores()) {
                         if (!ehAno || valor.startsWith("ano:")) {   // o ano vale como ano, e não como o número
                             valores.add(valor);
@@ -599,16 +610,18 @@ public final class NormalizadorDeNumeros {
         }
 
         /**
-         * O número como <b>valor</b>: só vale se a origem o trouxe como número. Nunca pela regra do ano ({@code ano:2027} não faz
-         * {@code 2027} valer como valor, nem o ano de uma data da fonte), pelo dia solto depois de "dia" nem por pedaço de data. É o
-         * que o literal do {@code calcular} exige; a regra da resposta ({@link #aceita}) não muda.
+         * O número como <b>valor</b>: só vale se a origem o trouxe como número, e um número escrito solto no texto vale mesmo entre
+         * 1900 e 2099 ({@code 10% de 2000}, {@code Diária | 1950}). Nunca pela regra do ano ({@code ano:2027} não faz {@code 2027}
+         * valer como valor, nem o ano que está dentro de uma data, nem o da edição ou o de hoje), pelo dia solto depois de "dia" nem
+         * por pedaço de data. É o que o literal do {@code calcular} exige; a regra da resposta ({@link #aceita}) não muda.
          */
         public boolean aceitaComoValor(Achado achado) {
             if (achado.ehData()) {
                 return false;
             }
             for (String valor : achado.valores()) {
-                if (!valor.startsWith("ano:") && !valor.startsWith(PREFIXO_DEPOIS_DE_DIA) && valores.contains(valor)) {
+                if (!valor.startsWith("ano:") && !valor.startsWith(PREFIXO_DEPOIS_DE_DIA)
+                        && (valores.contains(valor) || numerosSoltosComoAno.contains(valor))) {
                     return true;
                 }
             }

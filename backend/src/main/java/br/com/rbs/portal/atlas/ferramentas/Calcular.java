@@ -83,7 +83,7 @@ public class Calcular implements Ferramenta {
                     + "máximo, duas constantes entre 0, 1, 2, 100 e 1000. Qualquer outro número entra como variável. Cada variável é "
                     + "{\"ref\": ...} com uma referência que as ferramentas devolveram (cons:, dado: ou calc:, inclusive de uma conta "
                     + "anterior deste turno), ou {\"fonte\": \"T2\", \"valor\": \"312\"}, com o valor copiado do trecho T#, do "
-                    + "registro R# ou da conta C# deste turno (o ano não é valor), ou {\"fonte\": \"usuario\", \"valor\": \"312\"}, "
+                    + "registro R# ou da conta C# deste turno (o ano de uma data não é valor; um número solto como 2000 é), ou {\"fonte\": \"usuario\", \"valor\": \"312\"}, "
                     + "com um valor que a pessoa escreveu nesta conversa (nesta mensagem ou numa anterior). Cada variável aparece no "
                     + "máximo 2 vezes no script, e a mesma variável dos dois lados de uma divisão, subtração, pct, min ou max (a / a, "
                     + "a - a) é recusada; duas variáveis com a mesma origem e o mesmo valor também (use uma só). Percentual se faz com "

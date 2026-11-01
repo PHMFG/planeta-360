@@ -714,16 +714,22 @@ class NormalizadorDeNumerosTest {
     }
 
     @Test
-    void oLiteralDoCalcularSoValeComoValorNuncaComoAnoNemPorPedacoDeData() {
-        Origens edicao = new Origens("Edição: Planeta Atlântida 2027. Prazo: 04/12/2026.");
+    void oLiteralDoCalcularSoValeComoValorNuncaComoAnoDeUmaDataNemPorPedacoDeData() {
+        Origens edicao = new Origens("Prazo: 04/12/2026.").adicionarAnoLivre(2027);
+        Origens solto = new Origens("Edição: Planeta Atlântida 2027. Prazo: 04/12/2026.");
         Origens valor = new Origens("A multa é de R$ 2.027,00 e fica em 04/12.");
 
-        // a regra da resposta aceita o ano ("em 2027"), e o literal do calcular não
+        // a regra da resposta aceita o ano ("em 2027"), e o literal do calcular só o número escrito solto no texto
         assertThat(edicao.aceita(NormalizadorDeNumeros.extrair("2027", false).get(0))).isTrue();
-        assertThat(edicao.aceitaComoValor(NormalizadorDeNumeros.extrair("2027", false).get(0))).isFalse();
+        assertThat(edicao.aceitaComoValor(NormalizadorDeNumeros.extrair("2027", false).get(0))).as("a edição não é texto da fonte").isFalse();
         assertThat(edicao.aceitaComoValor(NormalizadorDeNumeros.extrair("2026", false).get(0))).as("o ano de uma data").isFalse();
+        assertThat(solto.aceitaComoValor(NormalizadorDeNumeros.extrair("2027", false).get(0))).as("escrito solto no texto").isTrue();
+        assertThat(solto.aceitaComoValor(NormalizadorDeNumeros.extrair("2026", false).get(0))).as("o ano de uma data").isFalse();
         assertThat(valor.aceitaComoValor(NormalizadorDeNumeros.extrair("2027", false).get(0))).isTrue();
         assertThat(valor.aceitaComoValor(NormalizadorDeNumeros.extrair("2.027,00", false).get(0))).isTrue();
+        // a regra da resposta não muda: "R$ 2.027,00" e "R$ 2027" não valem só porque o texto diz "Para 2027"
+        assertThat(new Origens("Para 2027.").aceita(NormalizadorDeNumeros.extrair("R$ 2.027,00", false).get(0))).isFalse();
+        assertThat(new Origens("Para 2027.").aceita(NormalizadorDeNumeros.extrair("R$ 2027", false).get(0))).isFalse();
         // data nunca é valor, e o dia solto depois de "dia" também não
         assertThat(valor.aceitaComoValor(NormalizadorDeNumeros.extrair("04/12", false).get(0))).isFalse();
         assertThat(new Origens("Vence 04/12/2026.").adicionarFonteCitada("Vence no dia 4.").aceitaComoValor(NormalizadorDeNumeros.extrair("4", false).get(0)))
