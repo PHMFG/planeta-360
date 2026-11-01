@@ -2,7 +2,7 @@
 
 Este documento é o **contrato entre o back-end e o front-end**. Quem faz a tela lê aqui o que cada rota pede, o que devolve e quais erros esperar, sem precisar abrir o código.
 
-- Todas as 66 rotas estão implementadas e cobertas por testes de integração (`cd backend && ./mvnw test`), inclusive o isolamento entre parcerias. A coluna "Etapa" diz em que etapa do plano cada rota entrou (as do Atlas, 37 em diante, entram como `Atlas 1`, `Atlas 2`, `Atlas M2`, `Atlas M3`, `Atlas M4`, `Atlas M5` e `Atlas M6`). Mudança de formato daqui em diante entra neste arquivo no mesmo commit do código.
+- Todas as 68 rotas estão implementadas e cobertas por testes de integração (`cd backend && ./mvnw test`), inclusive o isolamento entre parcerias. A coluna "Etapa" diz em que etapa do plano cada rota entrou (as do Atlas, 37 em diante, entram como `Atlas 1`, `Atlas 2`, `Atlas M2`, `Atlas M3`, `Atlas M4`, `Atlas M5`, `Atlas M6` e `Atlas M8`). Mudança de formato daqui em diante entra neste arquivo no mesmo commit do código.
 - O banco está descrito em [`docs/banco.md`](banco.md). Os nomes de status, cotas e abas são os mesmos do banco.
 
 ## Como falar com a API
@@ -172,10 +172,12 @@ Todas prontas e testadas. A coluna "Etapa" mostra em que etapa do plano a rota e
 | 64 | `DELETE /api/prazos/{id}` | Admin RBS | Desativa o prazo (não apaga): ele sai do Atlas e a linha fica | Atlas M5 |
 | 65 | `POST /api/atlas/relatorios/{id}/descartar` | Admin Patrocinador que criou o relatório | Descarta o relatório do Atlas que está em montagem ou esperando o cartão; devolve o mesmo corpo da rota 47 | Atlas M6 |
 | 66 | `POST /api/parcerias/{id}/dados-informados/{chave}/arquivo` | Patrocinador da parceria, ou Admin RBS | Envia o arquivo de um campo de arquivo do catálogo (a planilha da agência: xlsx, xls ou csv); devolve o valor vigente | Atlas M6 |
+| 67 | `POST /api/eventos/{eventoId}/atlas/conversas` | Admin RBS (com `atlas.rbs.ligado`) | Abre uma conversa da RBS com o Atlas nesta edição, sem parceria | Atlas M8 |
+| 68 | `GET /api/eventos/{eventoId}/atlas/conversas` | Admin RBS (com `atlas.rbs.ligado`) | As conversas de quem pede nesta edição | Atlas M8 |
 
-São 66 operações (método + caminho). A rota 5 (`ativar`) faz parte do contrato de autenticação, mas só é implementada na etapa 4. As rotas 37 em diante vieram com o Atlas: a coluna "Etapa" diz `Atlas 1` (plano de aplicações e dados informados), `Atlas 2` (conversa, cartão de perguntas e relatório), `Atlas M2` (o diagnóstico: rotas 49 a 53, veja "Diagnóstico do Atlas") `Atlas M3` (os documentos: rotas 54 a 58, veja "Os documentos do Atlas") `Atlas M4` (o visualizador, rotas 59 e 60, e a busca de teste, rota 61, veja "Busca nos documentos") `Atlas M5` (os prazos: rotas 62 a 64, veja "Os prazos do Atlas") ou `Atlas M6` (o relatório religado: a rota 65, veja "Descarte do relatório parado"; e a planilha da agência: a rota 66, veja "Dados informados pela marca"). As rotas 54, 55, 57, 58, 61, 62, 63 e 64 são só do Admin RBS (o outro perfil recebe **403** antes de o corpo ser lido); a 56, a 59 e a 60 são das duas pontas, e a marca só vê o que o escopo dela permite; a 66 é da marca da parceria e da RBS. A 49 é só do Admin Patrocinador, dono da conversa; as 50 a 53 são só do Admin RBS (o outro perfil recebe **403** antes de tudo). **As rotas 49 a 53 estão sempre mapeadas e respondem 404 com o diagnóstico desligado** (`atlas.diagnostico.ligado=false`, o padrão). Nas rotas 42 a 46 e 65 só o Admin Patrocinador chama (a RBS recebe **403** antes de o corpo ser lido); nas 47 e 48 chamam a marca da parceria e a RBS. **O relatório do Atlas está ligado nos perfis `dev` e `test` e desligado no padrão** (`atlas.relatorio.ligado=false`, `ATLAS_RELATORIO`). Desligado, as rotas **46, 47, 48 e 65 não existem (404)**, e as rotas 42 e 44 só aceitam conversa por texto (`atalho` e `modelo` dão 422): é o modo só chat, que continua existindo e testado. Veja "Modo só chat". O contrato do relatório, nas rotas 42 a 48 e 65, vale com `atlas.relatorio.ligado=true`.
+São 68 operações (método + caminho). A rota 5 (`ativar`) faz parte do contrato de autenticação, mas só é implementada na etapa 4. As rotas 37 em diante vieram com o Atlas: a coluna "Etapa" diz `Atlas 1` (plano de aplicações e dados informados), `Atlas 2` (conversa, cartão de perguntas e relatório), `Atlas M2` (o diagnóstico: rotas 49 a 53, veja "Diagnóstico do Atlas") `Atlas M3` (os documentos: rotas 54 a 58, veja "Os documentos do Atlas") `Atlas M4` (o visualizador, rotas 59 e 60, e a busca de teste, rota 61, veja "Busca nos documentos") `Atlas M5` (os prazos: rotas 62 a 64, veja "Os prazos do Atlas") `Atlas M6` (o relatório religado: a rota 65, veja "Descarte do relatório parado"; e a planilha da agência: a rota 66, veja "Dados informados pela marca") ou `Atlas M8` (o Atlas da RBS: as rotas 67 e 68, veja "O Atlas da RBS"). As rotas 54, 55, 57, 58, 61, 62, 63, 64, 67 e 68 são só do Admin RBS (o outro perfil recebe **403** antes de o corpo ser lido); a 56, a 59 e a 60 são das duas pontas, e a marca só vê o que o escopo dela permite; a 66 é da marca da parceria e da RBS. A 49 é só do Admin Patrocinador, dono da conversa; as 50 a 53 são só do Admin RBS (o outro perfil recebe **403** antes de tudo). **As rotas 49 a 53 estão sempre mapeadas e respondem 404 com o diagnóstico desligado** (`atlas.diagnostico.ligado=false`, o padrão). Nas rotas 42 a 46 e 65 só o Admin Patrocinador chama (a RBS recebe **403** antes de o corpo ser lido); nas 47 e 48 chamam a marca da parceria e a RBS. **O relatório do Atlas está ligado nos perfis `dev` e `test` e desligado no padrão** (`atlas.relatorio.ligado=false`, `ATLAS_RELATORIO`). Desligado, as rotas **46, 47, 48 e 65 não existem (404)**, e as rotas 42 e 44 só aceitam conversa por texto (`atalho` e `modelo` dão 422): é o modo só chat, que continua existindo e testado. Veja "Modo só chat". O contrato do relatório, nas rotas 42 a 48 e 65, vale com `atlas.relatorio.ligado=true`.
 
-As rotas de debug do modelo de linguagem (`/api/debug/llm`) são temporárias, só existem no perfil `dev`, são só da RBS e ficam fora desta tabela e da conta das 66: veja "Rotas de debug (temporárias)", no fim.
+As rotas de debug do modelo de linguagem (`/api/debug/llm`) são temporárias, só existem no perfil `dev`, são só da RBS e ficam fora desta tabela e da conta das 68: veja "Rotas de debug (temporárias)", no fim.
 
 ## Objetos que se repetem
 
@@ -2550,11 +2552,54 @@ Cadastra um prazo na edição `{id}`. **Quem chama:** Admin RBS (exige o token C
 
 **O histórico do prazo é da RBS.** As linhas da entidade `prazo` não aparecem para a marca na rota 20, nem no `total`, nem num filtro; a RBS as vê nas rotas 20 e 21.
 
+## O Atlas da RBS (`atlas.rbs.ligado`)
+
+A equipe da RBS também conversa com o Atlas: uma conversa **por edição, sem parceria**, para tirar dúvidas operacionais sobre os **documentos globais da edição** (manual de operações, FAQ, comunicados) e fazer contas e contagens de dias. Não fala de marca nenhuma: não consulta parceria, cota, entregas, prazos nem número do portal, e não monta relatório. **Vem desligado por padrão** (`atlas.rbs.ligado=false`, `ATLAS_RBS`) e ligado nos perfis `dev` e `demo`; no `test` é desligado, e cada classe de teste do Atlas da RBS o liga. Desligado, as rotas 67 e 68 respondem **404** à RBS (`"Não encontramos o que você pediu."`) e **nada muda no resto**: a RBS segue sem conversar pelas rotas 44, 45 e 49, com o 403 de sempre. A marca recebe 403 nas rotas 67 e 68 com a propriedade ligada ou desligada.
+
+- **A conversa é de um evento e de quem a abriu.** No banco, `atlas_conversa.parceria_id` é nulo e `evento_id` traz a edição (V15). A RBS só lista as conversas dela: a de outra pessoa da RBS não aparece. A marca não vê nenhuma conversa da RBS (404 com a frase de sempre, `"Não encontramos esta conversa."`, nas rotas 44, 45 e 49), e a lista de conversas da marca (rota 43) nunca traz uma.
+- **As rotas.** A **67** abre a conversa e a **68** lista as da pessoa na edição, no desenho das rotas 42 e 43.
+
+## 67. `POST /api/eventos/{eventoId}/atlas/conversas`  · Atlas M8
+
+**Quem chama:** Admin RBS, com `atlas.rbs.ligado` (exige o token CSRF). Abre uma conversa **nova** da pessoa, vazia, nesta edição. Não lê o corpo: qualquer corpo é ignorado.
+
+**201**: o objeto Conversa (veja "O objeto Conversa"), com `itens: []`. No Atlas da RBS, `relatorioDisponivel` é sempre `false` (não há relatório) e `diagnosticoDisponivel` é `true` quando o diagnóstico está ligado (`atlas.diagnostico.ligado`): a RBS vê o diagnóstico da conversa dela, sem depender de `atlas.diagnostico.marca`.
+
+```json
+{ "conversaId": 31, "llmDisponivel": true, "relatorioDisponivel": false, "debugDeFerramentas": false,
+  "diagnosticoDisponivel": true, "itens": [] }
+```
+
+**Erros**
+
+| Status | Quando |
+| --- | --- |
+| 401 | Sem sessão. |
+| 403 | A marca (`"Esta operação é restrita à equipe da RBS."`), antes de tudo e com qualquer corpo ou edição; falta o token CSRF. |
+| 404 | O Atlas da RBS está desligado (`"Não encontramos o que você pediu."`); a edição não existe, ou `{eventoId}` não é número (`"Não encontramos esta edição do festival."`). |
+
+## 68. `GET /api/eventos/{eventoId}/atlas/conversas`  · Atlas M8
+
+**Quem chama:** Admin RBS, com `atlas.rbs.ligado`. Lista as conversas **desta pessoa** nesta edição, da mexida há menos tempo para a mais antiga, **até 20**. A conversa de outra pessoa da RBS, a de outra edição e a de uma marca não aparecem.
+
+**200**
+
+```json
+{ "llmDisponivel": true,
+  "conversas": [ { "id": 31, "criadaEm": "2026-11-02T10:00:00-03:00", "atualizadaEm": "2026-11-02T10:05:00-03:00",
+                   "previa": "Qual é o prazo para informar os geradores?" },
+                 { "id": 30, "criadaEm": "2026-11-02T09:00:00-03:00", "atualizadaEm": "2026-11-02T09:00:00-03:00", "previa": null } ] }
+```
+
+`atualizadaEm` é a hora da última mensagem (ou a criação, se não há mensagem). `previa` é o começo (até **80 caracteres**) da primeira mensagem que a pessoa escreveu na conversa, ou `null` se ela ainda não escreveu. Não há relatório na lista (nem `relatorioDisponivel`).
+
+**Erros:** 401; 403 (a marca); 404 (Atlas da RBS desligado; edição que não existe ou `{eventoId}` que não é número).
+
 ---
 
 # Rotas de debug (temporárias)
 
-Um recurso **temporário**, para a equipe ligar o modelo de linguagem do Atlas pela tela (o botão "Debug"), sem reiniciar a API e sem variável de ambiente. Não faz parte das 66 rotas do contrato e sai antes da entrega final.
+Um recurso **temporário**, para a equipe ligar o modelo de linguagem do Atlas pela tela (o botão "Debug"), sem reiniciar a API e sem variável de ambiente. Não faz parte das 68 rotas do contrato e sai antes da entrega final.
 
 - **Só existem com `atlas.debug.chaves=true`.** A propriedade vem `false` por padrão, `true` no perfil `dev` e `false` no `test`. Sem ela, as quatro rotas respondem **404**, como uma rota que não existe.
 - **A chave fica só na memória da API.** Nunca vai ao banco, a arquivo ou ao log, e **some quando a API reinicia**. Nenhuma resposta devolve a chave inteira: só os 4 últimos caracteres (`finalDaChave`).

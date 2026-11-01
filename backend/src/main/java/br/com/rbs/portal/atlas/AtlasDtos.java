@@ -204,6 +204,17 @@ public final class AtlasDtos {
     public record ConversasDaParceriaDto(boolean llmDisponivel, boolean relatorioDisponivel, List<ConversaResumoDto> conversas) {
     }
 
+    /**
+     * Uma conversa da RBS na lista da rota 68. {@code previa} é o começo (até 80 caracteres) da primeira mensagem que a pessoa escreveu
+     * nela, ou {@code null} se ainda não escreveu.
+     */
+    public record ConversaDaRbsResumoDto(Long id, OffsetDateTime criadaEm, OffsetDateTime atualizadaEm, String previa) {
+    }
+
+    /** A resposta da rota 68: as conversas de quem pede neste evento. O Atlas da RBS não tem relatório. */
+    public record ConversasDaRbsDto(boolean llmDisponivel, List<ConversaDaRbsResumoDto> conversas) {
+    }
+
     // ---------------------------------------------------------------------
     // Entrada (a conferência é do AtlasService, para vir depois do 404 e do 403)
     // ---------------------------------------------------------------------

@@ -1,5 +1,6 @@
 package br.com.rbs.portal.atlas;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -18,6 +19,9 @@ import org.springframework.stereotype.Component;
  *   <li>{@code atlas.diagnostico.marca} (desligada por padrão e no teste, ligada no perfil dev): a marca vê o diagnóstico das
  *       próprias conversas (rota 49, o campo {@code diagnosticoDisponivel} e o {@code turno} dos itens). Só vale com o
  *       diagnóstico ligado.</li>
+ *   <li>{@code atlas.rbs.ligado} ({@code ATLAS_RBS}, desligada por padrão e no teste, ligada nos perfis dev e demo): o Atlas da RBS,
+ *       a conversa da equipe da RBS por edição, sem parceria (rotas 67 e 68, e as 44, 45 e 49 na conversa dela). Desligada, as
+ *       rotas 67 e 68 respondem 404 à RBS e a RBS segue sem conversar pelas outras (403): nada muda.</li>
  * </ul>
  */
 @Component
@@ -30,15 +34,24 @@ public class ModoDoAtlas {
     private final boolean debugDeFerramentas;
     private final boolean diagnosticoLigado;
     private final boolean diagnosticoNaMarca;
+    private final boolean rbsLigado;
 
+    @Autowired
     public ModoDoAtlas(@Value("${atlas.relatorio.ligado:false}") boolean relatorioLigado,
                        @Value("${atlas.debug.ferramentas:false}") boolean debugDeFerramentas,
                        @Value("${atlas.diagnostico.ligado:false}") boolean diagnosticoLigado,
-                       @Value("${atlas.diagnostico.marca:false}") boolean diagnosticoNaMarca) {
+                       @Value("${atlas.diagnostico.marca:false}") boolean diagnosticoNaMarca,
+                       @Value("${atlas.rbs.ligado:false}") boolean rbsLigado) {
         this.relatorioLigado = relatorioLigado;
         this.debugDeFerramentas = debugDeFerramentas;
         this.diagnosticoLigado = diagnosticoLigado;
         this.diagnosticoNaMarca = diagnosticoNaMarca;
+        this.rbsLigado = rbsLigado;
+    }
+
+    /** O modo sem o Atlas da RBS (os testes que não o usam). */
+    public ModoDoAtlas(boolean relatorioLigado, boolean debugDeFerramentas, boolean diagnosticoLigado, boolean diagnosticoNaMarca) {
+        this(relatorioLigado, debugDeFerramentas, diagnosticoLigado, diagnosticoNaMarca, false);
     }
 
     public boolean relatorioLigado() {
@@ -57,5 +70,10 @@ public class ModoDoAtlas {
     /** A marca vê o diagnóstico das próprias conversas: o diagnóstico ligado E {@code atlas.diagnostico.marca}. */
     public boolean diagnosticoNaMarca() {
         return diagnosticoLigado && diagnosticoNaMarca;
+    }
+
+    /** O Atlas da RBS está ligado: as rotas 67 e 68 existem e a RBS conversa pelas rotas 44, 45 e 49 na conversa dela. */
+    public boolean rbsLigado() {
+        return rbsLigado;
     }
 }

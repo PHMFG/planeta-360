@@ -19,8 +19,16 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class AtlasRepositorio {
 
-    /** A conversa, com o dono e o turno em andamento (nulo = livre). */
-    public record LinhaDeConversa(Long id, Long parceriaId, Long usuarioId, OffsetDateTime criadaEm, OffsetDateTime turnoDesde) {
+    /**
+     * A conversa, com o dono e o turno em andamento (nulo = livre). Uma conversa é de uma parceria (a da marca) ou de um evento (a da
+     * RBS, V15): {@code parceriaId} é nulo na do evento, e {@code eventoId} só vem nela.
+     */
+    public record LinhaDeConversa(Long id, Long parceriaId, Long eventoId, Long usuarioId, OffsetDateTime criadaEm,
+                                  OffsetDateTime turnoDesde) {
+    }
+
+    /** Uma conversa da RBS na lista da rota 68: quando foi mexida pela última vez e o começo da primeira mensagem da pessoa. */
+    public record LinhaDeConversaDaRbs(Long id, OffsetDateTime criadaEm, OffsetDateTime atualizadaEm, String previa) {
     }
 
     /** Uma conversa da lista da rota 43: quando foi mexida pela última vez e o relatório mais novo dela, se houver. */
@@ -108,8 +116,19 @@ public class AtlasRepositorio {
                 .query(Long.class).single();
     }
 
+    /** Abre a conversa da RBS: de uma pessoa da RBS num evento, sem parceria (V15). */
+    public long criarConversaDaRbs(long eventoId, long usuarioId) {
+        return jdbc.sql("INSERT INTO atlas_conversa (parceria_id, evento_id, usuario_id) VALUES (NULL, :evento, :usuario) RETURNING id")
+                .param("evento", eventoId).param("usuario", usuarioId)
+                .query(Long.class).single();
+    }
+
+    public boolean eventoExiste(long eventoId) {
+        return jdbc.sql("SELECT EXISTS (SELECT 1 FROM evento WHERE id = :id)").param("id", eventoId).query(Boolean.class).single();
+    }
+
     public Optional<LinhaDeConversa> conversa(long conversaId) {
-        return jdbc.sql("SELECT id, parceria_id, usuario_id, criada_em, turno_desde FROM atlas_conversa WHERE id = :id")
+        return jdbc.sql("SELECT id, parceria_id, evento_id, usuario_id, criada_em, turno_desde FROM atlas_conversa WHERE id = :id")
                 .param("id", conversaId)
                 .query(LinhaDeConversa.class).optional();
     }
@@ -154,6 +173,26 @@ public class AtlasRepositorio {
                         """)
                 .param("parceria", parceriaId).param("usuario", usuarioId).param("limite", limite)
                 .query(LinhaDeConversaResumo.class).list();
+    }
+
+    /**
+     * As conversas da RBS desta pessoa neste evento (sem parceria), da mexida há menos tempo para a mais antiga. {@code previa} é o
+     * começo (80 caracteres) da primeira mensagem que a pessoa escreveu, ou nulo se ela ainda não escreveu.
+     */
+    public List<LinhaDeConversaDaRbs> conversasDaRbs(long eventoId, long usuarioId, int limite) {
+        return jdbc.sql("""
+                        SELECT c.id, c.criada_em,
+                               greatest(c.criada_em, coalesce((SELECT max(m.criada_em) FROM atlas_mensagem m WHERE m.conversa_id = c.id),
+                                                              c.criada_em)) AS atualizada_em,
+                               (SELECT left(m.conteudo, 80) FROM atlas_mensagem m
+                                WHERE m.conversa_id = c.id AND m.papel = 'user' ORDER BY m.ordem LIMIT 1) AS previa
+                        FROM atlas_conversa c
+                        WHERE c.parceria_id IS NULL AND c.evento_id = :evento AND c.usuario_id = :usuario
+                        ORDER BY atualizada_em DESC, c.id DESC
+                        LIMIT :limite
+                        """)
+                .param("evento", eventoId).param("usuario", usuarioId).param("limite", limite)
+                .query(LinhaDeConversaDaRbs.class).list();
     }
 
     /** Os ids das conversas de uma pessoa nesta parceria (para o descarte). */

@@ -74,6 +74,10 @@ public class PermissaoAntesDoCorpo implements HandlerInterceptor, WebMvcConfigur
             "GET /api/eventos/{id}/prazos",
             "POST /api/eventos/{id}/prazos",
             "DELETE /api/prazos/{id}",
+            // O Atlas da RBS (rotas 67 e 68): abrir e listar as conversas da RBS por edição. Sempre mapeadas; com atlas.rbs.ligado=false
+            // a RBS recebe 404 do service.
+            "POST /api/eventos/{eventoId}/atlas/conversas",
+            "GET /api/eventos/{eventoId}/atlas/conversas",
             // As rotas de debug da chave do modelo (temporárias, só no perfil dev): só a RBS as usa. Só existem com
             // atlas.debug.chaves=true; o teste de classificação liga a propriedade, porque no perfil test elas não existem.
             "GET /api/debug/llm",

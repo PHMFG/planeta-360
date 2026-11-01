@@ -81,6 +81,13 @@ atlas:
   # desliga no dev.
   relatorio:
     ligado: ${ATLAS_RELATORIO:false}
+  # [ATLAS] O Atlas da RBS (M8): a conversa da equipe da RBS por edição, sem parceria, que tira dúvidas operacionais dos documentos
+  # globais da edição (rotas 67 e 68; a mensagem, a leitura e o diagnóstico usam as rotas 44, 45 e 49). Desligado por padrão e na
+  # suíte (ligado por classe de teste); ligado nos perfis dev e demo. Desligado, as rotas 67 e 68 respondem 404 à RBS e nada muda.
+  # teto-diario é o teto da pessoa da RBS (as mensagens do modelo que ela gastou no dia de Brasília), no lugar do teto por parceria.
+  rbs:
+    ligado: ${ATLAS_RBS:false}
+    teto-diario: ${ATLAS_RBS_TETO_DIARIO:200}
   # [ATLAS] O diagnóstico (M2 do plano do Atlas completo): cada turno deixa um traço em atlas_traco (V10) e as rotas 49 a 53 existem.
   # Desligado por padrão e na suíte (ligado por classe de teste); ligado no perfil dev, abaixo. Desligado, nada é gravado e as rotas
   # respondem 404. O traço nunca leva o raciocínio cru, chave nem o prompt de sistema.
@@ -175,6 +182,8 @@ atlas:
     ferramentas: ${ATLAS_DEBUG_FERRAMENTAS:true}
   relatorio:
     ligado: ${ATLAS_RELATORIO:true}
+  rbs:
+    ligado: ${ATLAS_RBS:true}
   diagnostico:
     ligado: ${ATLAS_DIAGNOSTICO:true}
     marca: ${ATLAS_DIAGNOSTICO_MARCA:true}
@@ -199,6 +208,17 @@ atlas:
     lacunas:
       modo: ${ATLAS_JEV_LACUNAS:sombra}
       limiar: 0.80
+
+---
+spring:
+  config:
+    activate:
+      on-profile: demo
+
+# [ATLAS] O Atlas da RBS (M8) vai à apresentação: ligado no perfil demo, como no dev.
+atlas:
+  rbs:
+    ligado: ${ATLAS_RBS:true}
 
 ---
 spring:
@@ -232,6 +252,9 @@ atlas:
     ferramentas: false
   relatorio:
     ligado: true
+  # O Atlas da RBS fica desligado no contexto de teste normal; as classes dele o ligam (@TesteDoAtlasDaRbs).
+  rbs:
+    ligado: false
   # O diagnóstico fica desligado no contexto de teste normal (nada é gravado em atlas_traco); a classe de teste que o confere o liga.
   diagnostico:
     ligado: false

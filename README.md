@@ -189,6 +189,8 @@ No Windows (PowerShell): `$env:ATLAS_LLM="openai"; $env:OPENCODE_API_KEY="sua-ch
 | `ATLAS_PRAZO_DO_RESUMO` | `PT15S` | Quanto o fim do turno espera pelos resumos do raciocínio; o que passar do prazo aparece na próxima leitura da conversa |
 | `ATLAS_TETO_DIARIO` | `200` | Mensagens do Atlas por parceria por dia; depois disso, o chat responde 429 |
 | `ATLAS_RELATORIO` | `false` (`true` no perfil `dev`) | Liga o relatório montado pelo Atlas (pedido no chat, botão, cartão e documento). Desligado, o Atlas é só o chat e as rotas do relatório respondem 404 |
+| `ATLAS_RBS` | `false` (`true` nos perfis `dev` e `demo`) | O Atlas da RBS: a equipe da RBS conversa com o Atlas por edição, sem parceria, para tirar dúvidas dos documentos globais da edição (rotas 67 e 68 e, na conversa dela, as 44, 45 e 49). Desligado, as rotas 67 e 68 respondem 404 e nada muda. Veja `docs/api.md`, "O Atlas da RBS" |
+| `ATLAS_RBS_TETO_DIARIO` | `200` | Mensagens do modelo por pessoa da RBS por dia no Atlas da RBS; depois disso, 429 |
 | `ATLAS_DEBUG_FERRAMENTAS` | `false` (`true` no perfil `dev`) | Mostra na conversa as ferramentas que o modelo usou, com argumentos e resultado. Temporário |
 | `ATLAS_DIAGNOSTICO` | `false` (`true` no perfil `dev`) | O diagnóstico: cada turno do Atlas deixa um traço (etapas, tempos, tokens, custo) que a RBS lê pelas rotas 50 a 53. Desligado, nada é gravado e as rotas respondem 404. Veja `docs/api.md`, "Diagnóstico do Atlas" |
 | `ATLAS_DIAGNOSTICO_MARCA` | `false` (`true` no perfil `dev`) | A marca vê o diagnóstico das próprias conversas (rota 49). Só vale com o diagnóstico ligado |
