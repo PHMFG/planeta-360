@@ -173,7 +173,7 @@ class DiagnosticoDoTurnoTest {
         // o roteiro dos testes não mede tokens: só o que o loop sabe (o nome do modelo é o do provedor, que o roteiro não tem)
         assertThat(ida.dados()).containsEntry("ida", 1).containsEntry("emFluxo", false).containsEntry("mensagens", 2)
                 .containsEntry("chamadas", 0).containsEntry("comTexto", true).containsEntry("comRaciocinio", false)
-                .containsEntry("ferramentas", List.of("parceria_consultar", "buscar_documentos", "contar_dias", "calcular", "pedido_de_relatorio", "gerar_modelo", "relatorio_iniciar")).doesNotContainKey("tokensEntrada")
+                .containsEntry("ferramentas", List.of("parceria_consultar", "buscar_documentos", "listar_entregas", "contar_dias", "calcular", "pedido_de_relatorio", "gerar_modelo", "relatorio_iniciar")).doesNotContainKey("tokensEntrada")
                 .doesNotContainKey("novaRedacao");
         assertThat(primeira(traco, "CHECAGEM").dados()).containsEntry("origem", "RESPOSTA").containsEntry("aprovado", true)
                 .containsEntry("caracteres", "Posso ajudar com os dados da sua parceria.".length());
@@ -203,7 +203,7 @@ class DiagnosticoDoTurnoTest {
         assertThat(primeiraIda.mensagemId()).isEqualTo(mensagens.get(0));
         assertThat(primeiraIda.dados()).containsEntry("chamadas", 1).containsEntry("comTexto", false).containsEntry("mensagens", 2);
         assertThat(todas(traco, "LLM_IDA").get(1).dados()).containsEntry("ida", 2).containsEntry("mensagens", 4)
-                .containsEntry("ferramentas", List.of("parceria_consultar", "buscar_documentos", "contar_dias", "calcular", "pedido_de_relatorio", "gerar_modelo", "relatorio_iniciar"));
+                .containsEntry("ferramentas", List.of("parceria_consultar", "buscar_documentos", "listar_entregas", "contar_dias", "calcular", "pedido_de_relatorio", "gerar_modelo", "relatorio_iniciar"));
         Linha ferramenta = primeira(traco, "FERRAMENTA");
         assertThat(ferramenta.mensagemId()).isEqualTo(mensagens.get(0));
         assertThat(ferramenta.dados()).containsEntry("ferramenta", "parceria_consultar").containsEntry("argumentos", "{}")
