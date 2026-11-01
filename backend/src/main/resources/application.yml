@@ -230,17 +230,6 @@ atlas:
       limiar: 0.80
 
 ---
-spring:
-  config:
-    activate:
-      on-profile: demo
-
-# [ATLAS] O Atlas da RBS (M8) vai à apresentação: ligado no perfil demo, como no dev.
-atlas:
-  rbs:
-    ligado: ${ATLAS_RBS:true}
-
----
 # [ATLAS] O perfil demo (M8): o portal como vai à apresentação. Sobe como o dev (a amostra, os arquivos de exemplo e o kit de documentos
 # aprovados e indexados, com as chaves do mesmo arquivo de segredos), com o relatório e o diagnóstico ligados e os pontos do JEV da
 # calibração, mas SEM as rotas de debug da chave do modelo (404) e sem a caixa de debug das ferramentas: o diagnóstico da RBS e o da marca
@@ -254,6 +243,8 @@ spring:
     locations: classpath:db/migration,classpath:db/dev
 
 atlas:
+  rbs:
+    ligado: ${ATLAS_RBS:true}
   debug:
     chaves: false
     ferramentas: false
@@ -266,10 +257,10 @@ atlas:
   jev:
     intencao:
       modo: ${ATLAS_JEV_INTENCAO:ativo}
-      limiar: 0.77
+      limiar: 0.92
     cartao:
       modo: ${ATLAS_JEV_CARTAO:ativo}
-      limiar: 0.5
+      limiar: 0.98
     fontes:
       modo: ${ATLAS_JEV_FONTES:sombra}
       limiar: 0.97
@@ -278,10 +269,10 @@ atlas:
       limiar: 0.5
     coerencia:
       modo: ${ATLAS_JEV_COERENCIA:sombra}
-      limiar: 0.87
+      limiar: 0.92
     lacunas:
-      modo: ${ATLAS_JEV_LACUNAS:ativo}
-      limiar: 0.59
+      modo: ${ATLAS_JEV_LACUNAS:sombra}
+      limiar: 0.80
 
 ---
 spring:
