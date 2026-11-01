@@ -189,6 +189,22 @@ class FontesNoChatTest {
     }
 
     @Test
+    void caractereInvisivelNaRespostaDoModeloNaoVaiParaATelaNemParaOHistorico() {
+        long conversa = abrir();
+        modelo.chamada(BUSCAR, busca(CONSULTA));
+        escrever(pedido -> "Os geradores próprios devem ser informados à produção até 04/12/20\u200B26\u202E [" + marcador(pedido, PRAZO, true)
+                + "].");
+
+        ItemTexto texto = textoFinal(falar(conversa, "Até quando informo os geradores?"));
+
+        // o que se conferiu é o que a pessoa lê e o que fica: sem o espaço de largura zero nem o override da escrita
+        assertThat(texto.texto()).isEqualTo(frasePrazo(texto.fontes().get(0).marcador()));
+        assertThat(texto.texto()).doesNotContain("\u200B").doesNotContain("\u202E");
+        assertThat(textosDoAssistente(conversa)).doesNotContain("\u200B").doesNotContain("\u202E");
+        assertThat(fontesGravadas(conversa)).hasSize(1);
+    }
+
+    @Test
     void fraseSemNumeroEmCitacaoNenhumaPassaSemFontes() {
         long conversa = abrir();
         modelo.chamada(BUSCAR, busca(CONSULTA)).texto("Os geradores próprios devem ser informados à produção antes do evento.");

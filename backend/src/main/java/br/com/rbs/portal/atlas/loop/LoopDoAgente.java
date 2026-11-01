@@ -369,7 +369,8 @@ public class LoopDoAgente {
                         ResultadoDaEtapa.ERRO);
                 return;
             }
-            String texto = limpar(resposta.texto());
+            // O texto do chat sai sem os caracteres invisíveis: o que a checagem confere é o que a tela mostra e o histórico guarda.
+            String texto = limpar(ChecagemDeFontes.semInvisiveis(resposta.texto()));
             String raciocinio = limpar(resposta.raciocinio());
             // A ida termina quando o modelo acaba de responder; o que vem a seguir (checagem, gravação) tem etapa própria.
             ida.dados(turno.traco.dadosDoUso(resposta.uso(), llm.modelo())).dado("chamadas", resposta.chamadas().size())

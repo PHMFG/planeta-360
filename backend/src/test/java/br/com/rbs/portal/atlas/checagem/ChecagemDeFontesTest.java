@@ -13,6 +13,7 @@ import br.com.rbs.portal.atlas.relatorio.ResolvedorDeReferencias.Resolucao;
 import java.time.LocalDate;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
@@ -569,9 +570,57 @@ class ChecagemDeFontesTest {
     }
 
     @Test
-    void digitoPartidoPorCaractereInvisivelNaoVira17() {
-        recusa(turno("Quantas?", "Foram 17 cotas."), "Foram 1​7 cotas [T1].");
-        recusa(turno("Quantas?", "Foram 17 cotas."), "Foram 1­7 cotas [T1].");
+    void caractereInvisivelNoMeioDoNumeroSaiAntesDaConferencia() {
+        // o leitor vê "17": é o que se confere, e o que sai é o texto sem o invisível
+        Veredito sem = chat(turno("Quantas?", "Foram 17 cotas."), "Foram 1\u200B7 cotas [T1].");
+        assertThat(sem.aprovado()).isTrue();
+        assertThat(sem.texto()).isEqualTo("Foram 17 cotas [T1].");
+        assertThat(chat(turno("Quantas?", "Foram 17 cotas."), "Foram 1\u00AD7 cotas [T1].").texto()).isEqualTo("Foram 17 cotas [T1].");
+        // e a fonte que traz "1" e "7" separados não é a origem do 17
+        recusa(turno("Quantas?", "Foram 1 cota e 7 pulseiras."), "Foram 1\u200B7 cotas [T1].");
+        recusa(turno("Quantas?", "Foram 3 ou 12."), "São 3\u200B12 reais [T1].");
+        aprova(turno("Quantas?", "São 312 reais."), "São 3\u200B12 reais [T1].");
+        recusa(turno("Quantas?"), "Foram 1\u200B7 cotas.");
+    }
+
+    @ParameterizedTest(name = "U+{0} é invisível")
+    @ValueSource(strings = {"200B", "200C", "200D", "2060", "FEFF", "00AD", "202E", "202D", "202A", "2066", "200E", "200F", "180E", "E0041"})
+    void todoCaractereDeFormatoSaiDoTexto(String codigo) {
+        String invisivel = new String(Character.toChars(Integer.parseInt(codigo, 16)));
+        Veredito veredito = chat(turno("Quanto?", TARIFA), "A tarifa é de R$ 3" + invisivel + "12,00 por kVA [T1].");
+
+        assertThat(veredito.aprovado()).as(codigo).isTrue();
+        assertThat(veredito.texto()).isEqualTo("A tarifa é de R$ 312,00 por kVA [T1].");
+        recusa(turno("Quanto?", TARIFA), "A tarifa é de R$ 3" + invisivel + "21,00 por kVA [T1].");
+    }
+
+    @Test
+    void ordemInvisivelDaEscritaDaDireitaParaAEsquerdaNaoReordenaONumero() {
+        // com o override, "R$ 213" aparece como "312" na tela: o texto aprovado não pode levá-lo
+        Veredito veredito = chat(turno("Quanto?", TARIFA), "A tarifa é de R$ \u202E213\u202C por kVA [T1].");
+
+        assertThat(veredito.aprovado()).isFalse();
+        assertThat(veredito.motivo()).contains("213");
+        assertThat(ChecagemDeFontes.semInvisiveis("a\u202Eb\u200Bc\u00AD")).isEqualTo("abc");
+        assertThat(ChecagemDeFontes.semInvisiveis(null)).isNull();
+    }
+
+    @ParameterizedTest(name = "\"{0}\" é um número em outra escrita")
+    @ValueSource(strings = {"São ௰ dias.", "São ፲ dias.", "São Ⅳ dias.", "São ⅷ dias.", "São 〇 dias.", "São ㊀ dias.", "São ௰ dias [T1].", "São Ⅳ dias [T1].",
+            "São ፲ dias [T1]."})
+    void numeralDeOutraEscritaSemAlgarismoComumEhRecusadoComOuSemFonte(String texto) {
+        String motivo = recusa(turno("Quantos?", "São 4 dias, 10 dias ou 0 dias."), texto);
+
+        assertThat(motivo).contains("algarismos comuns");
+    }
+
+    @ParameterizedTest(name = "\"{0}\" vira algarismo comum")
+    @CsvSource(delimiter = '|', value = {"²|2", "①|1", "⑩|10", "٣١٢|312", "३१२|312", "３１２|312", "𝟑𝟏𝟐|312"})
+    void numeralQueTemEquivalenteComumContaComoEsse(String escrito, String comum) {
+        FontesDoTurno turno = turno("Quanto?", "O valor é " + comum + " reais.");
+
+        aprova(turno, "O valor é " + escrito + " reais [T1].");
+        recusa(turno("Quanto?"), "O valor é " + escrito + " reais.");
     }
 
     // ---------------------------------------------------------------------

@@ -233,6 +233,23 @@ class FiltroDoTextoComFontesTest {
     }
 
     @Test
+    void caractereInvisivelNoMeioDoNumeroSaiDoTextoQueVaiATela() {
+        FontesDoTurno turno = turno(PRAZO);
+        Anotador anotador = new Anotador();
+        FiltroDoTexto filtro = new FiltroDoTexto(doAmarelo(), checagem, turno, anotador);
+
+        filtro.receber("O prazo é 04/12/20");
+        filtro.receber("\u200B");
+        filtro.receber("26\u202E [T1]. Fim.");
+        filtro.fechar();
+
+        assertThat(anotador.eventos).containsExactly("texto:O prazo é 04/12/2026 [T1].", "texto: Fim.");
+        assertThat(filtro.recusado()).isFalse();
+        // o que tem número em outra escrita, sem equivalente, é recusado na tela também
+        assertThat(passar(turno(PRAZO), "São Ⅳ dias [T1].").eventos()).containsExactly("texto_recusado");
+    }
+
+    @Test
     void negritoFechaAFraseNoFluxoEACitacaoDaOutraNaoApoiaONumero() {
         FontesDoTurno turno = turno("A multa era 09/09/2026.", "A tarifa é R$ 312,00.");
         String texto = "**A multa é 09/09/2026.** A tarifa é R$ 312,00 [T2].";

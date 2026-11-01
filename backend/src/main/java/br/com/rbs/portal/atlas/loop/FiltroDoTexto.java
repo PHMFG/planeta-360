@@ -49,7 +49,9 @@ final class FiltroDoTexto {
     }
 
     /** Um pedaço do texto cru, como o modelo o mandou. */
-    void receber(String pedaco) {
+    void receber(String bruto) {
+        // Sem os caracteres invisíveis, como o texto que o loop confere e grava: um deles, sozinho, é um pedaço vazio.
+        String pedaco = ChecagemDeFontes.semInvisiveis(bruto);
         if (recusado || pedaco == null || pedaco.isEmpty()) {
             return;
         }
