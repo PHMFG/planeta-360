@@ -11,12 +11,14 @@ import java.util.regex.Pattern;
  * ponto de decisão. A doc do JEV diz que contexto irrelevante derruba o acerto, e o provedor é de fora; os dois motivos pedem o menos
  * possível.
  * <p>
- * Os formatos mascarados: CPF e CNPJ com pontuação, ou só algarismos (11 e 14); telefone com DDD entre parênteses, com DDD e espaço,
- * com {@code +55}, só com hífen ({@code 99999-9999}, {@code 3333-4444}) e a sequência de 10 a 13 algarismos sem separador. Data
- * ({@code 04/12/2026} e {@code 2026-12-04}), hora, valor em reais ({@code R$ 1.250,00}), tabela de números ({@code 100 200 400 40}) e
- * números pequenos não são mascarados: não são dado pessoal, e sem eles a pergunta perde o sentido (a frase "o trecho apoia R$ 312"
- * precisa do 312). O preço é um falso positivo raro, como um intervalo de anos {@code 2026-2027}, que só tira informação do que o
- * JEV lê.
+ * Os formatos mascarados: CPF e CNPJ com pontuação, ou só algarismos (11 e 14); telefone com DDD entre parênteses, com DDD solto, com
+ * {@code +55}, ou só o número ({@code 99999-9999}, {@code 3333-4444}), com hífen, ponto ou espaço entre os grupos em qualquer
+ * combinação ({@code 51-99999-9999}, {@code (51) 99999.9999}, {@code 99999 9999}, {@code (51) 9 9999-9999}), e a sequência de 10 a 13
+ * algarismos sem separador. Data ({@code 04/12/2026}, {@code 04.12.2026} e {@code 2026-12-04}), hora, valor em reais
+ * ({@code R$ 1.250,00} e {@code 2.000.000,00}), CEP ({@code 90010-000}), número de página, tabela de números
+ * ({@code 100 200 400 40}) e números pequenos não são mascarados: não são dado pessoal, e sem eles a pergunta perde o sentido (a frase
+ * "o trecho apoia R$ 312" precisa do 312). O preço é um falso positivo raro, como um intervalo de anos {@code 2026-2027} ou dois
+ * números de quatro algarismos seguidos ({@code 1200 1500}), que só tira informação do que o JEV lê.
  */
 public final class MascaraDoJev {
 
@@ -28,6 +30,8 @@ public final class MascaraDoJev {
      */
     private static final String ANTES = "(?<!\\d)(?<!\\d[.,/:\\-])";
     private static final String DEPOIS = "(?!\\d)(?![.,/:\\-]\\d)";
+    /** O que separa os grupos de um telefone: hífen, ponto ou espaço. */
+    private static final String SEPARADOR = "[\\s.\\-]";
 
     private static final List<Pattern> DADOS_PESSOAIS = List.of(
             // e-mail
@@ -35,11 +39,13 @@ public final class MascaraDoJev {
             // CNPJ e CPF com pontuação
             Pattern.compile(ANTES + "\\d{2}\\.\\d{3}\\.\\d{3}/\\d{4}-\\d{2}" + DEPOIS),
             Pattern.compile(ANTES + "\\d{3}\\.\\d{3}\\.\\d{3}-\\d{2}" + DEPOIS),
-            // telefone: com o DDD entre parênteses, com +55, com o DDD e espaço, só com hífen
-            Pattern.compile("(?<![\\d])(?:\\+\\d{1,3}\\s?)?\\(\\d{2}\\)\\s?9?\\d{4}[\\s-]?\\d{4}" + DEPOIS),
-            Pattern.compile(ANTES + "\\+\\d{1,3}[\\s.-]?\\d{2}[\\s.-]?9?\\d{4}[\\s.-]?\\d{4}" + DEPOIS),
-            Pattern.compile(ANTES + "\\d{2}\\s9?\\d{4}[\\s-]\\d{4}" + DEPOIS),
-            Pattern.compile(ANTES + "9?\\d{4}-\\d{4}" + DEPOIS),
+            // telefone: o separador entre os grupos pode ser hífen, ponto ou espaço, com ou sem o DDD, com o 9 do celular colado ou solto
+            Pattern.compile("(?<![\\d])(?:\\+\\d{1,3}\\s?)?\\(\\d{2}\\)" + SEPARADOR + "?9?" + SEPARADOR + "?\\d{4}" + SEPARADOR + "?\\d{4}"
+                    + DEPOIS),
+            Pattern.compile(ANTES + "\\+\\d{1,3}" + SEPARADOR + "?\\d{2}" + SEPARADOR + "?9?" + SEPARADOR + "?\\d{4}" + SEPARADOR + "?\\d{4}"
+                    + DEPOIS),
+            Pattern.compile(ANTES + "\\d{2}" + SEPARADOR + "9?" + SEPARADOR + "?\\d{4}" + SEPARADOR + "\\d{4}" + DEPOIS),
+            Pattern.compile(ANTES + "9?\\d{4}" + SEPARADOR + "\\d{4}" + DEPOIS),
             // CPF, CNPJ e telefone só com algarismos
             Pattern.compile(ANTES + "\\d{10,14}" + DEPOIS));
 

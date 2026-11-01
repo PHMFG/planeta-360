@@ -30,6 +30,28 @@ class MascaraDoJevTest {
     }
 
     @Test
+    void telefoneComHifenPontoOuEspacoEntreOsGruposViraRemovido() {
+        // os separadores valem em qualquer combinação, com ou sem o DDD, com o 9 do celular colado ou solto
+        for (String telefone : List.of("51-99999-9999", "51.99999.9999", "51 99999 9999", "(51) 99999.9999", "(51) 99999 9999",
+                "(51)99999-9999", "(51) 9 9999-9999", "51 9 9999 9999", "51-3333-4444", "51.3333.4444", "51 3333 4444",
+                "(51) 3333 4444", "(51) 3333.4444", "+55 (51) 99999-9999", "+55-51-99999-9999", "+55.51.99999.9999", "+55 51 9 9999 9999",
+                "99999 9999", "99999.9999", "99999-9999", "3333.4444", "3333 4444")) {
+            assertThat(mascarar("Me liga no " + telefone + " hoje")).as(telefone).isEqualTo("Me liga no [removido] hoje");
+            assertThat(mascarar("Meu número: " + telefone + ".")).as(telefone + " no fim da frase").isEqualTo("Meu número: [removido].");
+        }
+    }
+
+    @Test
+    void dataValorCepEPaginaNaoSaoTelefone() {
+        for (String texto : List.of("em 04/12/2026 e 2026-12-04", "em 04.12.2026 ou 04-12-2026", "às 18:30 de 12/12", "R$ 1.250,00", "R$ 12.500.000,00",
+                "valor de 2.000.000,00 reais", "R$ 1.234,56 e 10.000,5", "CEP 90010-000", "CEP 90.010-000", "CEP 90010 000",
+                "veja a página 1234 e a pág. 12", "páginas 12-14", "p. 1200", "Foram 1.200 visitantes e 34,5%", "34 kVA e 312 reais",
+                "Setor 100 200 400 40", "de 10 a 20 dias, 2026", "ano 2026 e edição 2027", "1.200 2.500 3.100")) {
+            assertThat(mascarar(texto)).as(texto).isEqualTo(texto);
+        }
+    }
+
+    @Test
     void cpfComEQuemSemPontuacaoViraRemovido() {
         assertThat(mascarar("Meu CPF é 123.456.789-09.")).isEqualTo("Meu CPF é [removido].");
         assertThat(mascarar("cpf 12345678909 ok")).isEqualTo("cpf [removido] ok");
