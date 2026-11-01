@@ -1,6 +1,6 @@
 // Aba Documentos do Atlas na gestão da RBS: envio, estado da indexação, aprovar, recusar, revogar, reindexar e os trechos (rotas 54 a 58). [ATLAS]
 // A indexação roda em segundo plano e a tela não é em tempo real: ela busca de novo ao voltar à aba do navegador ou no botão Atualizar.
-import { useState, type FormEvent, type ReactNode } from 'react'
+import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { ErroApi } from '../../api/cliente'
 import {
   enviarDocumento,
@@ -57,7 +57,7 @@ const ACOES: Record<AcaoDoDocumento, { nome: string; titulo: string; texto: (doc
     titulo: 'Aprovar o documento',
     texto: (documento) =>
       documento.versao > 1
-        ? 'A indexação começa agora. Quando terminar, esta versão entra no Atlas e a anterior sai ao mesmo tempo.'
+        ? 'A indexação começa agora. Quando terminar, esta versão entra no Atlas no lugar da anterior; se já houver uma mais nova no ar, é a mais nova que fica.'
         : 'A indexação começa agora. Quando terminar, o documento entra no Atlas para quem está no escopo dele.',
   },
   RECUSAR: {
@@ -392,6 +392,12 @@ export function AbaDocumentos() {
   }
   const itens = documentos.dado?.itens ?? []
   const processando = itens.filter((documento) => documento.status === 'PROCESSANDO').length
+  // Agir no último item de uma página com filtro pode esvaziá-la, e a página vazia não mostra a paginação: volta para a última que existe.
+  const paginaVazia = documentos.pronto && pagina > 0 && itens.length === 0
+  const ultimaPagina = documentos.dado ? Math.max(0, Math.ceil(documentos.dado.total / documentos.dado.tamanho) - 1) : 0
+  useEffect(() => {
+    if (paginaVazia) setPagina(ultimaPagina)
+  }, [paginaVazia, ultimaPagina])
 
   return (
     <div className="flex min-w-0 flex-col gap-4">
