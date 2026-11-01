@@ -60,6 +60,13 @@ spring:
 # Com o teto atingido, a rota 44 com texto responde 429. Serve para uma rodada de testes não gastar o limite do provedor.
 atlas:
   teto-diario-por-parceria: ${ATLAS_TETO_DIARIO:200}
+  # [ATLAS] Os limites por usuário (Bucket4j, na memória; M8): mensagens de texto por hora (rota 44) e relatórios por dia que o modelo
+  # monta (relatorio_iniciar). O botão não conta. Acima do limite, a mensagem recebe 429 com quanto falta, e o relatório do modelo
+  # volta como erro de ferramenta. A ficha volta aos poucos, sem esperar a hora inteira. No perfil test os valores são altos: o
+  # balde fica na memória e o rollback dos testes não o zera.
+  limites:
+    mensagens-por-hora: ${ATLAS_LIMITE_MENSAGENS_POR_HORA:20}
+    relatorios-por-dia: ${ATLAS_LIMITE_RELATORIOS_POR_DIA:3}
   # [ATLAS] O raciocínio do modelo (o "thinking" do DeepSeek, {"type":"enabled"} ou "disabled"). Ligado, o reasoning_content de cada
   # resposta é gravado e volta ao modelo em todas as idas seguintes (com ferramentas, o DeepSeek responde 400 sem ele), mas NUNCA
   # sai do servidor: a conversa recebe só um resumo curto dele, gerado numa chamada à parte (o item "raciocinio" com "resumo", e os
@@ -244,9 +251,14 @@ spring:
       chat: none
 
 # [ATLAS] As rotas de debug ficam desligadas no contexto de teste normal; a classe de teste delas as liga.
+# [ATLAS] Os limites por usuário ficam altos no teste normal (o contexto do Spring é compartilhado e o balde não volta no rollback);
+# o LimitesPorUsuarioTest usa os valores padrão num contexto próprio.
 # [ATLAS] No teste o relatório fica ligado (os testes dele continuam valendo) e o debug das ferramentas, desligado; as classes de
 # teste do modo só chat e do debug mudam isso com @TestPropertySource.
 atlas:
+  limites:
+    mensagens-por-hora: 100000
+    relatorios-por-dia: 100000
   debug:
     chaves: false
     ferramentas: false

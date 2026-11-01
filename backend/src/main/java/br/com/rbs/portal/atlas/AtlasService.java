@@ -18,6 +18,7 @@ import br.com.rbs.portal.atlas.diagnostico.RegistroDoTraco;
 import br.com.rbs.portal.atlas.diagnostico.ResultadoDaEtapa;
 import br.com.rbs.portal.atlas.diagnostico.Traco;
 import br.com.rbs.portal.atlas.diagnostico.Traco.Etapa;
+import br.com.rbs.portal.atlas.limites.LimitesPorUsuario;
 import br.com.rbs.portal.atlas.loop.DescarteDeRelatorios;
 import br.com.rbs.portal.atlas.loop.ItensDaConversa;
 import br.com.rbs.portal.atlas.loop.LoopDoAgente;
@@ -44,9 +45,11 @@ import br.com.rbs.portal.comum.VerificadorDeAcesso;
 import br.com.rbs.portal.dados.DadosDtos.ValorRequisicao;
 import jakarta.annotation.PreDestroy;
 import jakarta.servlet.http.HttpServletRequest;
+import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -102,6 +105,7 @@ public class AtlasService {
     private final PlanoBSemLlm planoB;
     private final LoopDoAgente loop;
     private final TetoDiario teto;
+    private final LimitesPorUsuario limitesPorUsuario;
     private final ItensDaConversa itens;
     private final DescarteDeRelatorios descarte;
     private final RelatorioAtlasService relatorios;
@@ -112,15 +116,16 @@ public class AtlasService {
     private final TetoDaRbs tetoDaRbs;
 
     public AtlasService(AtlasRepositorio repositorio, AtlasContextoFabrica contextos, VerificadorDeAcesso verificador,
-                        PlanoBSemLlm planoB, LoopDoAgente loop, TetoDiario teto, ItensDaConversa itens, DescarteDeRelatorios descarte,
-                        RelatorioAtlasService relatorios, DisponibilidadeDoLlm llm, ModeloBase modelos, ModoDoAtlas modo,
-                        RegistroDoTraco registro, TetoDaRbs tetoDaRbs) {
+                        PlanoBSemLlm planoB, LoopDoAgente loop, TetoDiario teto, LimitesPorUsuario limitesPorUsuario,
+                        ItensDaConversa itens, DescarteDeRelatorios descarte, RelatorioAtlasService relatorios, DisponibilidadeDoLlm llm,
+                        ModeloBase modelos, ModoDoAtlas modo, RegistroDoTraco registro, TetoDaRbs tetoDaRbs) {
         this.repositorio = repositorio;
         this.contextos = contextos;
         this.verificador = verificador;
         this.planoB = planoB;
         this.loop = loop;
         this.teto = teto;
+        this.limitesPorUsuario = limitesPorUsuario;
         this.itens = itens;
         this.descarte = descarte;
         this.relatorios = relatorios;
@@ -191,8 +196,9 @@ public class AtlasService {
      * cartão com as lacunas que faltam); com cartão pendente, 409. Com {@code texto}: o loop do modelo de linguagem; sem modelo de
      * linguagem, 503 com a frase "use o botão"; com cartão aberto, a mensagem nova primeiro o fecha com {@code cancel}. Ordem das
      * respostas: 403 (RBS), 404 (conversa que não é sua), 403 (aba), 422 (texto vazio, com o caractere nulo ou acima de 1.000
-     * caracteres; nem texto nem atalho; os dois), 503, 429 (teto diário da parceria; só o texto, o botão não conta), 409 (turno em andamento; cartão aberto
-     * no atalho). Com o relatório desligado, {@code atalho} ou {@code modelo} dão 422 em {@code campos.atalho} e só o texto vale.
+     * caracteres; nem texto nem atalho; os dois), 503, 429 (teto diário da parceria e, depois dele, o limite de mensagens por hora do usuário; só o texto, o
+     * botão não conta), 409 (turno em andamento; cartão aberto no atalho). A ficha do limite por hora é gasta depois do 409, ao
+     * começar o turno: a tentativa recusada antes não gasta cota. Com o relatório desligado, {@code atalho} ou {@code modelo} dão 422 em {@code campos.atalho} e só o texto vale.
      */
     public ConversaDto enviarMensagem(UsuarioAutenticado usuario, long conversaId, MensagemRequisicao corpo,
                                       HttpServletRequest requisicao) {
@@ -254,10 +260,18 @@ public class AtlasService {
                 throw atingido;
             }
             try {
+                // 429: o limite de mensagens por hora do usuário. Só olha; a ficha é gasta depois do 409, ao começar o turno.
+                Optional<Duration> espera = limitesPorUsuario.esperaPelaMensagem(usuario.id());
+                if (espera.isPresent()) {
+                    limites.dado("motivo", "LIMITE_POR_HORA").dado("esperaSegundos", (espera.get().toMillis() + 999) / 1000)
+                            .fim(ResultadoDaEtapa.RECUSADO);
+                    traco.encerrar(ResultadoDaEtapa.RECUSADO, "RECUSADO_ANTES_DO_TURNO", "LIMITE_POR_HORA");
+                    throw limitesPorUsuario.recusaDaMensagem(espera.get());
+                }
                 String texto = corpo.texto().strip();
                 AtlasContexto contexto = contextos.para(usuario, conversa.parceriaId(), conversa.id(), requisicao).comTraco(traco);
-                return comecarTurno(usuario, conversa, traco, limites, reserva, () -> loop.prepararConversa(contexto, texto),
-                        ouvinte -> loop.conduzir(contexto, ouvinte));
+                return comecarTurno(usuario, conversa, traco, limites, reserva, () -> limitesPorUsuario.consumirMensagem(usuario.id()),
+                        () -> loop.prepararConversa(contexto, texto), ouvinte -> loop.conduzir(contexto, ouvinte));
             } catch (RuntimeException | Error semTurno) {
                 reserva.soltar();   // o que falhou antes de o turno começar não pode deixar a vaga marcada
                 throw semTurno;
@@ -265,7 +279,7 @@ public class AtlasService {
         }
         String modeloDoAtalho = modelo;
         AtlasContexto contexto = contextos.para(usuario, conversa.parceriaId(), conversa.id(), requisicao);
-        return comecarTurno(usuario, conversa, Traco.NENHUM, Traco.NENHUM.abrir(EtapaDoTraco.G1_LIMITES), null,
+        return comecarTurno(usuario, conversa, Traco.NENHUM, Traco.NENHUM.abrir(EtapaDoTraco.G1_LIMITES), null, null,
                 () -> planoB.montar(contexto, modeloDoAtalho), null);
     }
 
@@ -327,14 +341,17 @@ public class AtlasService {
             throw new ConflitoException(RelatorioAtlasService.CARTAO_JA_RESPONDIDO);
         }
         AtlasContexto contexto = contextos.para(usuario, conversa.parceriaId(), conversa.id(), requisicao);
-        Reserva reserva = llm.disponivel() ? teto.tentarReservar(conversa.parceriaId()).orElse(null) : null;
+        // Acima do teto diário da parceria ou do limite de mensagens do usuário, o cartão respondido segue o plano B (sem 429). A
+        // retomada não gasta ficha: o limite por hora é das mensagens de texto da rota 44.
+        Reserva reserva = llm.disponivel() && limitesPorUsuario.mensagemDisponivel(usuario.id())
+                ? teto.tentarReservar(conversa.parceriaId()).orElse(null) : null;
         if (reserva != null) {
             Traco traco = registro.abrir(conversa.parceriaId(), conversa.id());
             Etapa limites = traco.abrir(EtapaDoTraco.G1_LIMITES).dado("tetoPorParceria", teto.teto()).dado("usadasHoje", reserva.usadas())
                     .dado("retomada", true);
             AtlasContexto doTurno = contexto.comTraco(traco);
             try {
-                return comecarTurno(usuario, conversa, traco, limites, reserva,
+                return comecarTurno(usuario, conversa, traco, limites, reserva, null,
                         () -> loop.prepararRetomada(doTurno, solicitacaoId, acao, valores),
                         ouvinte -> loop.conduzirRetomada(doTurno, ouvinte));
             } catch (RuntimeException | Error semTurno) {
@@ -342,9 +359,9 @@ public class AtlasService {
                 throw semTurno;
             }
         }
-        // Sem modelo, ou com o teto diário atingido: o cartão respondido segue o plano B (não gasta o modelo e a pessoa não fica
-        // presa a um cartão aberto).
-        return comecarTurno(usuario, conversa, Traco.NENHUM, Traco.NENHUM.abrir(EtapaDoTraco.G1_LIMITES), null,
+        // Sem modelo, ou com um limite atingido: o cartão respondido segue o plano B (não gasta o modelo e a pessoa não fica presa a
+        // um cartão aberto).
+        return comecarTurno(usuario, conversa, Traco.NENHUM, Traco.NENHUM.abrir(EtapaDoTraco.G1_LIMITES), null, null,
                 () -> planoB.responder(contexto, solicitacaoId, acao, valores), null);
     }
 
@@ -439,9 +456,11 @@ public class AtlasService {
      * Começa o turno (409 se outro está em andamento) e faz {@code antes} nele; se {@code antes} falha (o 422 dos valores do
      * cartão, por exemplo), o turno termina e o erro sobe, ainda antes de qualquer fluxo abrir. A {@code reserva} é a vaga do teto
      * diário que o pedido marcou (nula no botão): se o turno não começa, ela é solta aqui; se começa, o turno a solta ao acabar.
+     * {@code consumir} gasta a ficha do limite por usuário (nulo no botão e na retomada do cartão): roda só com a trava da conversa
+     * na mão, depois do 409, e se recusa (429) o turno não começa.
      */
     private TurnoAberto comecarTurno(UsuarioAutenticado usuario, LinhaDeConversa conversa, Traco traco, Etapa limites,
-                                     Reserva reserva, Runnable antes, Consumer<OuvinteDoTurno> resto) {
+                                     Reserva reserva, Runnable consumir, Runnable antes, Consumer<OuvinteDoTurno> resto) {
         int ordem = repositorio.ultimaOrdem(conversa.id());
         boolean comecou = false;
         try {
@@ -455,6 +474,19 @@ public class AtlasService {
             limites.dado("motivo", "TURNO_EM_ANDAMENTO").fim(ResultadoDaEtapa.RECUSADO);
             traco.encerrar(ResultadoDaEtapa.RECUSADO, "RECUSADO_ANTES_DO_TURNO", "TURNO_EM_ANDAMENTO");
             throw new ConflitoException(TURNO_EM_ANDAMENTO);
+        }
+        if (consumir != null) {
+            try {
+                consumir.run();
+            } catch (LimiteDeUsoException atingido) {
+                repositorio.encerrarTurno(conversa.id());
+                if (reserva != null) {
+                    reserva.soltar();
+                }
+                limites.dado("motivo", "LIMITE_POR_HORA").fim(ResultadoDaEtapa.RECUSADO);
+                traco.encerrar(ResultadoDaEtapa.RECUSADO, "RECUSADO_ANTES_DO_TURNO", "LIMITE_POR_HORA");
+                throw atingido;
+            }
         }
         limites.fim(ResultadoDaEtapa.OK);   // a etapa dos limites termina com a trava na mão
         TurnoAberto turno = new TurnoAberto(usuario, conversa, ordem, resto, traco, reserva);
@@ -666,7 +698,7 @@ public class AtlasService {
         }
         String texto = corpo.texto().strip();
         AtlasContexto contexto = contextos.paraARbs(usuario, conversa.eventoId(), conversa.id(), requisicao).comTraco(traco);
-        return comecarTurno(usuario, conversa, traco, limites, () -> loop.prepararConversa(contexto, texto),
+        return comecarTurno(usuario, conversa, traco, limites, null, null, () -> loop.prepararConversa(contexto, texto),
                 ouvinte -> loop.conduzir(contexto, ouvinte));
     }
 

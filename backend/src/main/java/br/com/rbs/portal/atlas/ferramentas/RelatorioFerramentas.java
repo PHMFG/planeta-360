@@ -15,6 +15,7 @@ import br.com.rbs.portal.atlas.jev.PontoDoJev;
 import br.com.rbs.portal.atlas.jev.ServicoDoJev;
 import br.com.rbs.portal.atlas.jev.ServicoDoJev.LacunaOpcional;
 import br.com.rbs.portal.atlas.jev.ServicoDoJev.ParagrafoParaJulgar;
+import br.com.rbs.portal.atlas.limites.LimitesPorUsuario;
 import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.DefinicaoDeFerramenta;
 import br.com.rbs.portal.atlas.relatorio.ConsultaDaParceria;
 import br.com.rbs.portal.atlas.relatorio.RelatorioAtlasService;
@@ -138,14 +139,16 @@ public class RelatorioFerramentas {
     private final AtlasRepositorio repositorio;
     private final ModoDoAtlas modo;
     private final ServicoDoJev jev;
+    private final LimitesPorUsuario limitesPorUsuario;
 
     public RelatorioFerramentas(RelatorioAtlasService relatorios, ConsultaDaParceria consulta, AtlasRepositorio repositorio,
-                                ModoDoAtlas modo, ServicoDoJev jev) {
+                                ModoDoAtlas modo, ServicoDoJev jev, LimitesPorUsuario limitesPorUsuario) {
         this.relatorios = relatorios;
         this.consulta = consulta;
         this.repositorio = repositorio;
         this.modo = modo;
         this.jev = jev;
+        this.limitesPorUsuario = limitesPorUsuario;
     }
 
     // ---------------------------------------------------------------------
@@ -271,7 +274,17 @@ public class RelatorioFerramentas {
         String modelo = texto(argumentos, "modelo", true, erros);
         String objetivo = texto(argumentos, "objetivo", false, erros);
         exigirSemErros(erros);
-        return Execucao.resultado(AtlasJson.escrever(relatorios.iniciar(contexto, modelo, objetivo)));
+        // O limite de relatórios por dia do usuário (M8): do 4º em diante o modelo recebe um erro e sugere o botão. A ficha é gasta
+        // antes (dois turnos do mesmo usuário em conversas diferentes não passam juntos) e volta se o relatório não chegou a nascer.
+        if (!limitesPorUsuario.consumirRelatorio(contexto.usuario().id())) {
+            throw new ConflitoException(LimitesPorUsuario.FRASE_DO_RELATORIO);
+        }
+        try {
+            return Execucao.resultado(AtlasJson.escrever(relatorios.iniciar(contexto, modelo, objetivo)));
+        } catch (RuntimeException semRelatorio) {
+            limitesPorUsuario.devolverRelatorio(contexto.usuario().id());
+            throw semRelatorio;
+        }
     }
 
     private Execucao solicitarCampos(AtlasContexto contexto, Map<String, Object> argumentos, LinhaDeRelatorio relatorio, String chamadaId,

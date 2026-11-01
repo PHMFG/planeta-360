@@ -32,6 +32,8 @@
         <pdfbox.version>3.0.8</pdfbox.version>
         <!-- [ATLAS] JEXL do `calcular` (M5): fixado na 3.7.1, que traz pragmaTest e namespaceInstantiation. -->
         <jexl.version>3.7.1</jexl.version>
+        <!-- [ATLAS] Limites por usuário (M8): o balde de fichas na memória. O artefato jdk17 serve ao Java 21. -->
+        <bucket4j.version>8.21.0</bucket4j.version>
         <!--
           [ATLAS] Os grupos de teste que o ./mvnw test NÃO roda. Os testes que precisam das chaves dos provedores levam
           @Tag("avaliacao") e rodam com: ./mvnw test -Dgroups=avaliacao -Dtestes.excluidos=
@@ -119,6 +121,13 @@
             <groupId>org.apache.commons</groupId>
             <artifactId>commons-jexl3</artifactId>
             <version>${jexl.version}</version>
+        </dependency>
+
+        <!-- [ATLAS] O limite de mensagens por hora e de relatórios por dia de cada usuário (M8), na memória: veja atlas/limites/LimitesPorUsuario. -->
+        <dependency>
+            <groupId>com.bucket4j</groupId>
+            <artifactId>bucket4j_jdk17-core</artifactId>
+            <version>${bucket4j.version}</version>
         </dependency>
 
         <!-- Testes: MockMvc/MockMvcTester e utilidades de sessão e CSRF -->
