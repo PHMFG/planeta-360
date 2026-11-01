@@ -519,6 +519,10 @@ public class AtlasService {
     private LinhaDeConversa conversaDoUsuario(UsuarioAutenticado usuario, long conversaId, String frase404) {
         verificador.exigirPatrocinador(usuario, VerificadorDeAcesso.SO_PATROCINADOR_USA_O_ATLAS);
         LinhaDeConversa conversa = repositorio.conversa(conversaId).orElseThrow(() -> new NaoEncontradoException(frase404));
+        if (conversa.parceriaId() == null) {
+            // Conversa de um evento, sem parceria (o Atlas da RBS, V15): não é de nenhuma marca, e para a marca é como a que não existe.
+            throw new NaoEncontradoException(frase404);
+        }
         try {
             verificador.exigirParceria(usuario, conversa.parceriaId());
         } catch (NaoEncontradoException semVinculo) {

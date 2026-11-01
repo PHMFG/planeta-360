@@ -1,6 +1,6 @@
--- Confere o banco depois de V1 a V13 e da amostra R__amostra.sql: contagens, cargas, relatórios, órfãos e uma tentativa de violar cada regra.
+-- Confere o banco depois de V1 a V15 e da amostra R__amostra.sql: contagens, cargas, relatórios, órfãos e uma tentativa de violar cada regra.
 -- Atende o item 1 da Entrega 2 (amostra e verificações), prova as 8 correções do item 8 e, na seção 8, o plano comercial, o
--- catálogo e os dados informados da V7 e, na seção 9, as tabelas do Atlas da V8, o resumo do raciocínio da V9 e o traço do diagnóstico da V10 e, na seção 10, os documentos, os trechos, a busca sem acento e a RLS da V11 e, na seção 11, as fontes citadas, o documento congelado e o plural da busca da V12 e, na seção 12, os prazos da V13. Nenhuma linha fica gravada: as tentativas são desfeitas (só as sequências avançam).
+-- catálogo e os dados informados da V7 e, na seção 9, as tabelas do Atlas da V8, o resumo do raciocínio da V9 e o traço do diagnóstico da V10 e, na seção 10, os documentos, os trechos, a busca sem acento e a RLS da V11 e, na seção 11, as fontes citadas, o documento congelado e o plural da busca da V12 e, na seção 12, os prazos da V13 e, na seção 14, o JEV e a conversa sem parceria da V15. Nenhuma linha fica gravada: as tentativas são desfeitas (só as sequências avançam).
 
 -- Como rodar (banco de dev ou de teste com a amostra carregada; sem meta-comandos, serve também para JDBC com o texto inteiro):
 --   PGPASSWORD=portal psql -X -P pager=off -v ON_ERROR_STOP=1 -h localhost -U portal -d <banco> -f verificacao.sql
@@ -77,7 +77,7 @@ BEGIN
     PERFORM pg_temp.confere('ESTRUTURA', 'funções fn_carregar_veiculacoes, fn_carregar_pesquisa, fn_carregar_plano, fn_gerar_relatorio', 4,
        (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
          WHERE n.nspname = 'public' AND p.proname IN ('fn_carregar_veiculacoes', 'fn_carregar_pesquisa', 'fn_carregar_plano', 'fn_gerar_relatorio')));
-    PERFORM pg_temp.confere('ESTRUTURA', 'gatilhos de regra (rn_*)', 28,
+    PERFORM pg_temp.confere('ESTRUTURA', 'gatilhos de regra (rn_*)', 29,
        (SELECT count(*) FROM pg_trigger WHERE NOT tgisinternal AND tgname LIKE 'rn\_%'));
     PERFORM pg_temp.confere('BASE', 'tipos de cota', 3, (SELECT count(*) FROM cota_tipo));
     PERFORM pg_temp.confere('BASE', 'abas do menu', 7, (SELECT count(*) FROM aba));
@@ -2282,7 +2282,128 @@ BEGIN
 END $$;
 
 -- ---------------------------------------------------------------------
--- 14. Resultado: a lista de conferências e, se alguma falhou, o erro final (saída diferente de zero com ON_ERROR_STOP)
+-- 14. V15: o JEV nos pontos de decisão e a conversa sem parceria (M7, com a reserva do M8)
+-- ---------------------------------------------------------------------
+-- A V15 só acrescenta colunas e regras: atlas_decisao (ponto, modo, limiar, acao, alvo e turno), atlas_mensagem (fora_do_modelo e
+-- sem_modelo) e, para o Atlas da RBS, a conversa e o traço sem parceria (evento_id na conversa, a regra "parceria ou evento" e o gatilho que
+-- impede um traço sem parceria numa conversa de parceria).
+DO $$
+DECLARE
+    -- O molde de cada tentativa: uma conversa do Amarelo com uma mensagem da pessoa e uma decisão do JEV com o ponto (%1$s), o modo (%2$s)
+    -- e o limiar (%3$s) dados.
+    c_decisao CONSTANT TEXT := $c$
+        DO $d$
+        DECLARE v_conversa BIGINT; v_mensagem BIGINT;
+        BEGIN
+            INSERT INTO atlas_conversa (parceria_id, usuario_id)
+            SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example')
+            RETURNING id INTO v_conversa;
+            INSERT INTO atlas_mensagem (conversa_id, ordem, papel, conteudo) VALUES (v_conversa, 1, 'user', 'oi') RETURNING id INTO v_mensagem;
+            INSERT INTO atlas_decisao (mensagem_id, pergunta, escolha, confianca, ponto, modo, limiar, acao, alvo, turno)
+            VALUES (v_mensagem, 'intencao', 'saudacao_uso', 0.9876, %1$s, %2$s, %3$s, 'teria respondido sem o modelo', NULL, gen_random_uuid());
+        END $d$ $c$;
+    -- Uma mensagem (%1$s papel, %2$s fora_do_modelo, %3$s sem_modelo) numa conversa do Amarelo.
+    c_mensagem CONSTANT TEXT := $c$
+        DO $d$
+        DECLARE v_conversa BIGINT;
+        BEGIN
+            INSERT INTO atlas_conversa (parceria_id, usuario_id)
+            SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example')
+            RETURNING id INTO v_conversa;
+            INSERT INTO atlas_mensagem (conversa_id, ordem, papel, conteudo, tool_call_id, fora_do_modelo, sem_modelo)
+            VALUES (v_conversa, 1, '%1$s', 'texto', CASE WHEN '%1$s' = 'tool' THEN 'call_x' END, %2$s, %3$s);
+        END $d$ $c$;
+BEGIN
+    PERFORM pg_temp.confere('V15 ESTRUTURA', 'as 6 colunas novas de atlas_decisao', 6,
+        (SELECT count(*) FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'atlas_decisao'
+            AND column_name IN ('ponto', 'modo', 'limiar', 'acao', 'alvo', 'turno')));
+    PERFORM pg_temp.afirma('V15 ESTRUTURA', 'fora_do_modelo e sem_modelo: obrigatórias, falsas por padrão',
+        (SELECT count(*) = 2 AND bool_and(is_nullable = 'NO' AND column_default = 'false') FROM information_schema.columns
+          WHERE table_schema = 'public' AND table_name = 'atlas_mensagem' AND column_name IN ('fora_do_modelo', 'sem_modelo')));
+    PERFORM pg_temp.afirma('V15 ESTRUTURA', 'parceria_id deixou de ser obrigatório em atlas_conversa e em atlas_traco',
+        (SELECT count(*) = 2 AND bool_and(is_nullable = 'YES') FROM information_schema.columns
+          WHERE table_schema = 'public' AND column_name = 'parceria_id' AND table_name IN ('atlas_conversa', 'atlas_traco')));
+    PERFORM pg_temp.afirma('V15 ESTRUTURA', 'atlas_conversa.evento_id existe e aponta para evento',
+        EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_atlas_conversa_evento' AND contype = 'f' AND conrelid = 'atlas_conversa'::regclass
+                  AND confrelid = 'evento'::regclass));
+    PERFORM pg_temp.afirma('V15 ESTRUTURA', 'o gatilho rn_atlas_traco_parceria existe',
+        EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'rn_atlas_traco_parceria' AND NOT tgisinternal));
+    PERFORM pg_temp.confere('V15 ESTRUTURA', 'a amostra não traz decisão do JEV', 0, (SELECT count(*) FROM atlas_decisao));
+    PERFORM pg_temp.confere('V15 ESTRUTURA', 'nenhuma conversa da amostra está sem parceria', 0,
+        (SELECT count(*) FROM atlas_conversa WHERE parceria_id IS NULL));
+
+    -- atlas_decisao
+    PERFORM pg_temp.aceita('V15 DECISAO', 'uma decisão em sombra, com ponto, modo, limiar, ação e turno', format(c_decisao, '''intencao''', '''SOMBRA''', '0.9'));
+    PERFORM pg_temp.aceita('V15 DECISAO', 'uma decisão ativa de outro ponto', format(c_decisao, '''fontes''', '''ATIVO''', '0.5'));
+    PERFORM pg_temp.recusa('V15 DECISAO', 'ponto fora da lista', 'ck_atlas_decisao_ponto', format(c_decisao, '''inventado''', '''SOMBRA''', '0.9'));
+    PERFORM pg_temp.recusa('V15 DECISAO', 'o modo DESLIGADO nunca grava', 'ck_atlas_decisao_modo', format(c_decisao, '''intencao''', '''DESLIGADO''', '0.9'));
+    PERFORM pg_temp.recusa('V15 DECISAO', 'limiar acima de 1', 'ck_atlas_decisao_limiar', format(c_decisao, '''intencao''', '''SOMBRA''', '1.5'));
+
+    -- atlas_mensagem
+    PERFORM pg_temp.aceita('V15 MENSAGEM', 'a mensagem da pessoa fora do modelo', format(c_mensagem, 'user', 'TRUE', 'FALSE'));
+    PERFORM pg_temp.aceita('V15 MENSAGEM', 'a mensagem do assistente fora do modelo e sem modelo', format(c_mensagem, 'assistant', 'TRUE', 'TRUE'));
+    PERFORM pg_temp.recusa('V15 MENSAGEM', 'mensagem de ferramenta fora do modelo (deixaria o pedido dela sem resposta)', 'ck_atlas_mensagem_fora_do_modelo',
+        format(c_mensagem, 'tool', 'TRUE', 'FALSE'));
+    PERFORM pg_temp.recusa('V15 MENSAGEM', 'mensagem da pessoa marcada como sem modelo', 'ck_atlas_mensagem_sem_modelo', format(c_mensagem, 'user', 'FALSE', 'TRUE'));
+    PERFORM pg_temp.recusa('V15 MENSAGEM', 'mensagem de ferramenta marcada como sem modelo', 'ck_atlas_mensagem_sem_modelo', format(c_mensagem, 'tool', 'FALSE', 'TRUE'));
+
+    -- A conversa sem parceria
+    PERFORM pg_temp.aceita('V15 CONVERSA', 'uma conversa de um evento, sem parceria', $q$
+        INSERT INTO atlas_conversa (parceria_id, evento_id, usuario_id)
+        VALUES (NULL, (SELECT id FROM evento WHERE edicao = 2027), (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example')) $q$);
+    PERFORM pg_temp.recusa('V15 CONVERSA', 'conversa sem parceria e sem evento', 'ck_atlas_conversa_dono', $q$
+        INSERT INTO atlas_conversa (parceria_id, evento_id, usuario_id)
+        VALUES (NULL, NULL, (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example')) $q$);
+    PERFORM pg_temp.recusa('V15 CONVERSA', 'conversa de um evento que não existe', 'fk_atlas_conversa_evento', $q$
+        INSERT INTO atlas_conversa (parceria_id, evento_id, usuario_id)
+        VALUES (NULL, -1, (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example')) $q$);
+    PERFORM pg_temp.aceita('V15 TRACO', 'o traço sem parceria de uma conversa sem parceria', $q$
+        DO $d$
+        DECLARE v_conversa BIGINT;
+        BEGIN
+            INSERT INTO atlas_conversa (parceria_id, evento_id, usuario_id)
+            VALUES (NULL, (SELECT id FROM evento WHERE edicao = 2027), (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example'))
+            RETURNING id INTO v_conversa;
+            INSERT INTO atlas_traco (parceria_id, conversa_id, turno, ordem, etapa, resultado, iniciada_em, duracao_ms)
+            VALUES (NULL, v_conversa, gen_random_uuid(), 1, 'LLM_IDA', 'OK', now(), 1);
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V15 ISOLAMENTO', 'traço sem parceria numa conversa de parceria', 'rn_atlas_traco_parceria', $q$
+        DO $d$
+        DECLARE v_conversa BIGINT;
+        BEGIN
+            INSERT INTO atlas_conversa (parceria_id, usuario_id)
+            SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example')
+            RETURNING id INTO v_conversa;
+            INSERT INTO atlas_traco (parceria_id, conversa_id, turno, ordem, etapa, resultado, iniciada_em, duracao_ms)
+            VALUES (NULL, v_conversa, gen_random_uuid(), 1, 'LLM_IDA', 'OK', now(), 1);
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V15 ISOLAMENTO', 'traço com parceria numa conversa sem parceria', 'fk_atlas_traco_conversa', $q$
+        DO $d$
+        DECLARE v_conversa BIGINT;
+        BEGIN
+            INSERT INTO atlas_conversa (parceria_id, evento_id, usuario_id)
+            VALUES (NULL, (SELECT id FROM evento WHERE edicao = 2027), (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example'))
+            RETURNING id INTO v_conversa;
+            INSERT INTO atlas_traco (parceria_id, conversa_id, turno, ordem, etapa, resultado, iniciada_em, duracao_ms)
+            VALUES ((SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), v_conversa, gen_random_uuid(), 1, 'LLM_IDA', 'OK', now(), 1);
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V15 ISOLAMENTO', 'relatório do Atlas numa conversa sem parceria', 'fk_atlas_relatorio_conversa', $q$
+        DO $d$
+        DECLARE v_conversa BIGINT;
+        BEGIN
+            INSERT INTO atlas_conversa (parceria_id, evento_id, usuario_id)
+            VALUES (NULL, (SELECT id FROM evento WHERE edicao = 2027), (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example'))
+            RETURNING id INTO v_conversa;
+            INSERT INTO atlas_relatorio (parceria_id, conversa_id, modelo, status, especificacao, criado_por)
+            VALUES ((SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), v_conversa, 'ATIVACAO_EVENTO', 'MONTANDO', '{}',
+                    (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example'));
+        END $d$ $q$);
+    PERFORM pg_temp.confere('V15 CONVERSA', 'as tentativas não deixaram conversa sem parceria', 0,
+        (SELECT count(*) FROM atlas_conversa WHERE parceria_id IS NULL));
+END $$;
+
+-- ---------------------------------------------------------------------
+-- 15. Resultado: a lista de conferências e, se alguma falhou, o erro final (saída diferente de zero com ON_ERROR_STOP)
 -- ---------------------------------------------------------------------
 SELECT grupo, conferencia, esperado, obtido, CASE WHEN ok THEN 'ok' ELSE 'FALHOU' END AS resultado FROM _ver ORDER BY ordem;
 SELECT count(*) AS conferencias, count(*) FILTER (WHERE ok) AS ok, count(*) FILTER (WHERE NOT ok) AS falhas FROM _ver;
