@@ -119,6 +119,12 @@ class ProvedoresTest {
         assertThat(lerJson(resposta, "$.provedores[2].baseUrl")).isEqualTo(GEMINI.urlBase());
         assertThat(lerJson(resposta, "$.provedores[2].finalDaChave")).isEqualTo(CHAVE_DO_GEMINI.substring(CHAVE_DO_GEMINI.length() - 4));
         assertThat(lerLista(resposta, "$.provedores[?(@.nome=='gemini')].modo")).containsOnlyNulls();
+        // os pontos de decisão do JEV (M7): o modo e o limiar que valem em cada um; os outros provedores não têm a lista
+        assertThat(lerLista(resposta, "$.provedores[1].pontos[*].ponto"))
+                .containsExactly("intencao", "cartao", "fontes", "resposta", "coerencia", "lacunas");
+        assertThat(lerLista(resposta, "$.provedores[1].pontos[*].modo")).containsOnly("SOMBRA");
+        assertThat(lerLista(resposta, "$.provedores[1].pontos[*].limiar")).containsExactly(0.9, 0.9, 0.3, 0.9, 0.9, 0.3);
+        assertThat(lerLista(resposta, "$.provedores[?(@.nome!='jev')].pontos")).containsOnlyNulls();
         // o disjuntor é do M8: nulo por enquanto, nos três
         assertThat(lerLista(resposta, "$.provedores[*].disjuntor")).containsOnlyNulls().hasSize(3);
         assertThat(lerJson(resposta, "$.tetoDiario.limite")).isEqualTo(200);

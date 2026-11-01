@@ -3,6 +3,7 @@ package br.com.rbs.portal.atlas.diagnostico;
 import br.com.rbs.portal.atlas.ModoDoAtlas;
 import br.com.rbs.portal.atlas.AtlasRepositorio;
 import br.com.rbs.portal.atlas.AtlasRepositorio.UsoDoTeto;
+import br.com.rbs.portal.atlas.diagnostico.DiagnosticoDtos.PontoDoJevDto;
 import br.com.rbs.portal.atlas.diagnostico.DiagnosticoDtos.ProvedorDto;
 import br.com.rbs.portal.atlas.diagnostico.DiagnosticoDtos.ProvedoresDto;
 import br.com.rbs.portal.atlas.diagnostico.DiagnosticoDtos.TesteDeProvedorDto;
@@ -11,6 +12,8 @@ import br.com.rbs.portal.atlas.diagnostico.DiagnosticoDtos.UsoDoTetoDto;
 import br.com.rbs.portal.atlas.diagnostico.TracoRepositorio.EstatisticasDoProvedor;
 import br.com.rbs.portal.atlas.embeddings.EmbeddingsGemini;
 import br.com.rbs.portal.atlas.embeddings.EmbeddingsIndisponivelException;
+import br.com.rbs.portal.atlas.jev.ConfiguracaoDoJev;
+import br.com.rbs.portal.atlas.jev.PontoDoJev;
 import br.com.rbs.portal.atlas.loop.TetoDiario;
 import br.com.rbs.portal.atlas.provedor.FabricaDeProvedor;
 import br.com.rbs.portal.atlas.provedor.ProvedorAtual;
@@ -78,6 +81,7 @@ public class ProvedoresService {
     private final ProvedorAtual provedorAtual;
     private final FabricaDeProvedor fabrica;
     private final ConfiguracaoDeProvedores config;
+    private final ConfiguracaoDoJev jevPorPonto;
     private final TracoRepositorio tracos;
     private final AtlasRepositorio atlas;
     private final TetoDiario teto;
@@ -87,11 +91,12 @@ public class ProvedoresService {
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(PRAZO_DA_CONEXAO).followRedirects(HttpClient.Redirect.NEVER).build();
 
     public ProvedoresService(ProvedorAtual provedorAtual, FabricaDeProvedor fabrica, ConfiguracaoDeProvedores config,
-                             TracoRepositorio tracos, AtlasRepositorio atlas, TetoDiario teto, ModoDoAtlas modo,
-                             VerificadorDeAcesso verificador) {
+                             ConfiguracaoDoJev jevPorPonto, TracoRepositorio tracos, AtlasRepositorio atlas, TetoDiario teto,
+                             ModoDoAtlas modo, VerificadorDeAcesso verificador) {
         this.provedorAtual = provedorAtual;
         this.fabrica = fabrica;
         this.config = config;
+        this.jevPorPonto = jevPorPonto;
         this.tracos = tracos;
         this.atlas = atlas;
         this.teto = teto;
@@ -127,11 +132,15 @@ public class ProvedoresService {
     }
 
     private ProvedorDto doJev() {
-        EstatisticasDoProvedor estatisticas = tracos.estatisticas(List.of(EtapaDoTraco.J1_INTENCAO.name(), EtapaDoTraco.J1_CARTAO.name()));
+        // cada etapa do JEV é uma rodada de requisições (a do R3, por exemplo, leva uma por trecho)
+        EstatisticasDoProvedor estatisticas = tracos.estatisticas(java.util.Arrays.stream(PontoDoJev.values())
+                .map(ponto -> ponto.etapa().name()).toList());
         boolean configurado = config.jevTemChave();
+        List<PontoDoJevDto> pontos = java.util.Arrays.stream(PontoDoJev.values())
+                .map(ponto -> new PontoDoJevDto(ponto.nome(), jevPorPonto.modo(ponto).name(), jevPorPonto.limiar(ponto))).toList();
         return new ProvedorDto(JEV, configurado, configurado ? Origem.AMBIENTE.name() : Origem.NENHUM.name(), config.jevModelo(),
                 config.jevBaseUrl(), finalDa(config.jevChave()), config.jevModo(), chamadas(estatisticas), erros(estatisticas),
-                p50(estatisticas), p95(estatisticas), null);
+                p50(estatisticas), p95(estatisticas), null, pontos);
     }
 
     private ProvedorDto doGemini() {

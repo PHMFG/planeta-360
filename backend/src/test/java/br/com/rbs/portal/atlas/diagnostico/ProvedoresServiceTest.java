@@ -46,7 +46,7 @@ class ProvedoresServiceTest {
         TetoDiario teto = mock(TetoDiario.class);
         when(teto.teto()).thenReturn(200);
         return new ProvedoresService(new ProvedorAtual(semModelo), new FabricaDeProvedor(new MockEnvironment(), semObservacao), config,
-                tracos, atlas, teto, new ModoDoAtlas(false, false, diagnosticoLigado, false), new VerificadorDeAcesso(null));
+                new br.com.rbs.portal.atlas.jev.ConfiguracaoDoJev(new MockEnvironment()), tracos, atlas, teto, new ModoDoAtlas(false, false, diagnosticoLigado, false), new VerificadorDeAcesso(null));
     }
 
     ConfiguracaoDeProvedores configuracao(String chaveDoJev, String urlDoJev, String chaveDoGemini, String urlDoGemini) {

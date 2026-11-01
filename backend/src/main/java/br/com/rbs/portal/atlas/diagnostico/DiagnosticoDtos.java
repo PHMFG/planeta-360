@@ -55,10 +55,22 @@ public final class DiagnosticoDtos {
     /**
      * Um provedor na rota 52. {@code origem}: {@code AMBIENTE}, {@code DEBUG} (só o modelo de linguagem) ou {@code NENHUM}. Nunca a
      * chave inteira: só os 4 últimos caracteres. {@code modo} é o do JEV ({@code DESLIGADO}, {@code SOMBRA} ou {@code ATIVO}) e
-     * nulo nos outros. {@code disjuntor} é nulo até o M8. A latência e os erros são das últimas 24 horas, do traço.
+     * nulo nos outros. {@code pontos} só vem no JEV (M7): o modo e o limiar de cada um dos seis pontos. {@code disjuntor} é nulo até o M8. A latência e os erros são das últimas 24 horas, do traço.
      */
     public record ProvedorDto(String nome, boolean configurado, String origem, String modelo, String baseUrl, String finalDaChave,
-                              String modo, long chamadas24h, long erros24h, Long latenciaP50Ms, Long latenciaP95Ms, String disjuntor) {
+                              String modo, long chamadas24h, long erros24h, Long latenciaP50Ms, Long latenciaP95Ms, String disjuntor,
+                              List<PontoDoJevDto> pontos) {
+
+        /** O provedor que não é o JEV: sem a lista de pontos. */
+        public ProvedorDto(String nome, boolean configurado, String origem, String modelo, String baseUrl, String finalDaChave,
+                           String modo, long chamadas24h, long erros24h, Long latenciaP50Ms, Long latenciaP95Ms, String disjuntor) {
+            this(nome, configurado, origem, modelo, baseUrl, finalDaChave, modo, chamadas24h, erros24h, latenciaP50Ms, latenciaP95Ms,
+                    disjuntor, null);
+        }
+    }
+
+    /** Um ponto de decisão do JEV (M7): o modo e o limiar que valem nele ({@code atlas.jev.<ponto>.modo} e {@code .limiar}). */
+    public record PontoDoJevDto(String ponto, String modo, double limiar) {
     }
 
     /** Quantas mensagens do modelo uma parceria gastou hoje (dia de Brasília). */

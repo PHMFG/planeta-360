@@ -219,13 +219,17 @@ public class TracoRepositorio {
                 .query(EtapaLida.class).list();
     }
 
-    /** Chamadas, erros e latência (p50 e p95, em ms) das etapas dadas nas últimas 24 horas. */
+    /**
+     * Chamadas, erros e latência (p50 e p95, em ms) das etapas dadas nas últimas 24 horas. A etapa {@code PULADO} (o ponto do JEV que
+     * não chegou a chamar ninguém) não é chamada; a latência é a das que o provedor respondeu ({@code OK}, {@code RECUSADO} ou
+     * {@code SOMBRA}).
+     */
     public EstatisticasDoProvedor estatisticas(Collection<String> etapas) {
         return jdbc.sql("""
-                        SELECT count(*) AS chamadas,
+                        SELECT count(*) FILTER (WHERE resultado <> 'PULADO') AS chamadas,
                                count(*) FILTER (WHERE resultado = 'ERRO') AS erros,
-                               percentile_cont(0.5) WITHIN GROUP (ORDER BY duracao_ms) FILTER (WHERE resultado = 'OK') AS p50,
-                               percentile_cont(0.95) WITHIN GROUP (ORDER BY duracao_ms) FILTER (WHERE resultado = 'OK') AS p95
+                               percentile_cont(0.5) WITHIN GROUP (ORDER BY duracao_ms) FILTER (WHERE resultado IN ('OK', 'RECUSADO', 'SOMBRA')) AS p50,
+                               percentile_cont(0.95) WITHIN GROUP (ORDER BY duracao_ms) FILTER (WHERE resultado IN ('OK', 'RECUSADO', 'SOMBRA')) AS p95
                         FROM atlas_traco
                         WHERE etapa IN (:etapas) AND iniciada_em >= now() - interval '24 hours'
                         """)

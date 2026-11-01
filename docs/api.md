@@ -2202,7 +2202,10 @@ O custo de uma ida (e de um resumo) é o `usage.opencode.list_cost` que o OpenCo
       "baseUrl": "https://opencode.ai/inference/go/openai/v1", "finalDaChave": "a1b2", "modo": null,
       "chamadas24h": 120, "erros24h": 2, "latenciaP50Ms": 1400, "latenciaP95Ms": 3100, "disjuntor": null },
     { "nome": "jev", "configurado": true, "origem": "AMBIENTE", "modelo": "jev-1.14.0", "baseUrl": "https://api.typesafe.ai",
-      "finalDaChave": "c3d4", "modo": "SOMBRA", "chamadas24h": 0, "erros24h": 0, "latenciaP50Ms": null, "latenciaP95Ms": null, "disjuntor": null },
+      "finalDaChave": "c3d4", "modo": "SOMBRA", "chamadas24h": 0, "erros24h": 0, "latenciaP50Ms": null, "latenciaP95Ms": null, "disjuntor": null,
+      "pontos": [ { "ponto": "intencao", "modo": "ATIVO", "limiar": 0.9 }, { "ponto": "cartao", "modo": "SOMBRA", "limiar": 0.9 },
+                  { "ponto": "fontes", "modo": "SOMBRA", "limiar": 0.3 }, { "ponto": "resposta", "modo": "SOMBRA", "limiar": 0.9 },
+                  { "ponto": "coerencia", "modo": "SOMBRA", "limiar": 0.9 }, { "ponto": "lacunas", "modo": "SOMBRA", "limiar": 0.3 } ] },
     { "nome": "gemini", "configurado": false, "origem": "NENHUM", "modelo": "gemini-embedding-2",
       "baseUrl": "https://generativelanguage.googleapis.com", "finalDaChave": null, "modo": null,
       "chamadas24h": 0, "erros24h": 0, "latenciaP50Ms": null, "latenciaP95Ms": null, "disjuntor": null } ],
@@ -2212,8 +2215,8 @@ O custo de uma ida (e de um resumo) é o `usage.opencode.list_cost` que o OpenCo
 - **Sempre os três, nesta ordem:** `llm`, `jev`, `gemini`.
 - `configurado` é `true` quando há chave. `origem`: `AMBIENTE` (a chave vem de variável de ambiente ou do arquivo de segredos do perfil `dev`), `DEBUG` (só o `llm`: a chave posta pelas rotas de debug, que vale antes da do ambiente) ou `NENHUM`. A chave: `OPENCODE_API_KEY` (`llm`), `TYPESAFE_API_KEY` (`jev`) e `GEMINI_API_KEY` (`gemini`). As URLs base e os modelos são configuráveis (`ATLAS_LLM_BASE_URL`/`ATLAS_LLM_MODELO`, `ATLAS_JEV_BASE_URL`/`ATLAS_JEV_MODELO`, `ATLAS_GEMINI_BASE_URL`).
 - **Nunca a chave inteira**: `finalDaChave` traz só os 4 últimos caracteres, e só de chave com 8 ou mais; senão `null`.
-- `modo` é o do JEV (`ATLAS_JEV`): `DESLIGADO` (`none`, o padrão), `SOMBRA` ou `ATIVO`; `null` nos outros dois.
-- `chamadas24h`, `erros24h`, `latenciaP50Ms` e `latenciaP95Ms` vêm do traço das últimas 24 horas: as etapas `LLM_IDA` (`llm`), `J1_INTENCAO` e `J1_CARTAO` (`jev`) e `BUSCA` (`gemini`). A latência é das que terminaram bem; sem nenhuma, `null`. Por enquanto só o `llm` deixa traço.
+- `modo` é o do JEV (`ATLAS_JEV`, o padrão de todos os pontos): `DESLIGADO` (`none`, o padrão), `SOMBRA` ou `ATIVO`; `null` nos outros dois. `pontos` (só no `jev`; `null` nos outros) traz o modo e o limiar que **valem** em cada um dos seis pontos de decisão, nesta ordem: `intencao`, `cartao`, `fontes`, `resposta`, `coerencia`, `lacunas` (veja "O JEV nos pontos de decisão").
+- `chamadas24h`, `erros24h`, `latenciaP50Ms` e `latenciaP95Ms` vêm do traço das últimas 24 horas: as etapas `LLM_IDA` (`llm`), as seis do JEV (`J1_INTENCAO`, `J1_CARTAO`, `R3_FONTES`, `R5_RESPOSTA`, `V2_COERENCIA` e `LACUNAS`; cada etapa é uma rodada de requisições) e `BUSCA` (`gemini`). A latência é das que terminaram bem; sem nenhuma, `null`.
 - `disjuntor` é **`null` até o M8** (o estado do disjuntor de cada provedor).
 - `tetoDiario`: o `limite` (`atlas.teto-diario-por-parceria`) e, das parcerias que gastaram alguma mensagem do modelo **hoje** (dia de Brasília), quantas `usadas`, da que mais gastou para a que menos.
 
