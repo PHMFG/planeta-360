@@ -14,8 +14,14 @@ import java.util.Set;
  * dela e não consegue pedir os dados de outra marca. {@code requisicao} é o pedido HTTP em curso, só para o histórico gravar IP e
  * navegador; o Atlas roda dentro do pedido, na mesma thread.
  *
+ * <p>
+ * <b>O Atlas da RBS (M8)</b> não tem parceria: o contexto dele tem {@code parceriaId} {@link #SEM_PARCERIA}, {@code cotaTipoId} zero,
+ * {@code cota} nula, nenhuma aba e o JEV desligado ({@link JevDoTurno#NENHUM}), e {@code eventoId} é a edição da conversa. Nenhuma
+ * parceria tem id zero, então uma ferramenta que, por engano, usasse {@code parceriaId} não acharia nada; mesmo assim o
+ * {@code RegistroDeFerramentas} só deixa rodar as ferramentas da RBS ({@link #daRbs()}).
+ *
  * @param usuario     quem pede (a sessão)
- * @param parceriaId  a parceria da conversa
+ * @param parceriaId  a parceria da conversa ({@link #SEM_PARCERIA} na conversa da RBS)
  * @param eventoId    a edição do festival da parceria (M4): a busca nos documentos só enxerga documentos desta edição
  * @param cotaTipoId  o tipo de cota da parceria (M4): a busca enxerga os documentos da cota dela
  * @param cota        o código da cota da parceria (MASTER, SUBCOTA_G ou SUBCOTA)
@@ -29,6 +35,9 @@ import java.util.Set;
  */
 public record AtlasContexto(UsuarioAutenticado usuario, long parceriaId, long eventoId, int cotaTipoId, String cota,
                             Set<String> abasAbertas, long conversaId, HttpServletRequest requisicao, Traco traco, JevDoTurno jev) {
+
+    /** O {@code parceriaId} da conversa da RBS, que não tem parceria. Nenhuma parceria de verdade tem id zero (as chaves começam em 1). */
+    public static final long SEM_PARCERIA = 0;
 
     public AtlasContexto {
         abasAbertas = abasAbertas == null ? Set.of() : Set.copyOf(abasAbertas);
@@ -50,6 +59,11 @@ public record AtlasContexto(UsuarioAutenticado usuario, long parceriaId, long ev
     /** O mesmo contexto, com este estado do JEV. */
     public AtlasContexto comJev(JevDoTurno novo) {
         return new AtlasContexto(usuario, parceriaId, eventoId, cotaTipoId, cota, abasAbertas, conversaId, requisicao, traco, novo);
+    }
+
+    /** É o contexto do Atlas da RBS: a conversa de um evento, sem parceria, cota nem abas? */
+    public boolean daRbs() {
+        return parceriaId == SEM_PARCERIA;
     }
 
     public boolean abaAberta(String codigoDaAba) {

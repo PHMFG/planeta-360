@@ -6,6 +6,7 @@ import br.com.rbs.portal.aplicacoes.AplicacaoDtos.LinhaDto;
 import br.com.rbs.portal.aplicacoes.AplicacaoService;
 import br.com.rbs.portal.atlas.AtlasJson;
 import br.com.rbs.portal.atlas.AtlasRepositorio;
+import br.com.rbs.portal.atlas.contexto.AtlasContexto;
 import br.com.rbs.portal.atlas.relatorio.Calculadora.Resultado;
 import br.com.rbs.portal.atlas.relatorio.Especificacao.Calculo;
 import br.com.rbs.portal.atlas.relatorio.RelatorioAtlasDtos.CalculoDto;
@@ -124,6 +125,24 @@ public class ResolvedorDeReferencias {
     }
 
     /**
+     * A resolução do contexto do Atlas: a da parceria dele ou, na conversa da RBS (M8), a {@link #abrirSemParceria sem parceria}. É o
+     * que o chat usa em todo lugar que resolve marcador, para nenhum caminho esquecer a conversa que não tem parceria.
+     */
+    public Resolucao abrir(AtlasContexto contexto, Especificacao especificacao) {
+        return contexto.daRbs() ? abrirSemParceria(contexto.usuario()) : abrir(contexto.usuario(), contexto.parceriaId(), especificacao);
+    }
+
+    /**
+     * A resolução da conversa da RBS (M8), que não tem parceria: <b>só vale {@code calc:}</b>, e só as contas do chat que a resolução
+     * recebeu ({@link Resolucao#registrarConta}). Qualquer outra referência ({@code parc:}, {@code evento:}, {@code cons:},
+     * {@code dado:}) é {@link ReferenciaDesconhecidaException}, nunca um dado de marca. Não tem modelo-base: uma fórmula fixa de
+     * relatório também não existe aqui.
+     */
+    public Resolucao abrirSemParceria(UsuarioAutenticado usuario) {
+        return new Resolucao(usuario, null, null);
+    }
+
+    /**
      * A resolução de um relatório em montagem (M5): a de {@link #abrir}, mais as contas do {@code calcular} que a conversa gravou em
      * {@code atlas_calculo} para ele. É assim que o texto de um bloco usa {@code {{calc:nome}}} de uma conta feita no chat, e que
      * "Fontes e cálculos" a lista como lista as fórmulas fixas.
@@ -141,7 +160,7 @@ public class ResolvedorDeReferencias {
     public final class Resolucao {
 
         private final UsuarioAutenticado usuario;
-        private final long parceriaId;
+        private final Long parceriaId;   // nulo na conversa da RBS
         private final Especificacao especificacao;
         private final Map<String, Valor> valores = new HashMap<>();
         private final Map<String, ContaDoChat> contasDoChat = new LinkedHashMap<>();
@@ -151,7 +170,7 @@ public class ResolvedorDeReferencias {
         private Map<String, CampoDto> catalogo;
         private Map<String, VigenteDto> vigentes;
 
-        private Resolucao(UsuarioAutenticado usuario, long parceriaId, Especificacao especificacao) {
+        private Resolucao(UsuarioAutenticado usuario, Long parceriaId, Especificacao especificacao) {
             this.usuario = usuario;
             this.parceriaId = parceriaId;
             this.especificacao = especificacao;
@@ -198,6 +217,9 @@ public class ResolvedorDeReferencias {
         private Valor resolver(String ref) {
             if (!Referencias.valida(ref)) {
                 throw new ReferenciaDesconhecidaException("Referência desconhecida: " + ref);
+            }
+            if (parceriaId == null && !"calc".equals(Referencias.prefixo(ref))) {
+                throw new ReferenciaDesconhecidaException("O Atlas da RBS não tem dado de parceria: " + ref + ". Use só as contas deste turno.");
             }
             String nome = Referencias.nome(ref);
             return switch (Referencias.prefixo(ref)) {
@@ -260,7 +282,7 @@ public class ResolvedorDeReferencias {
         }
 
         private Valor calculo(String ref, String nome) {
-            Calculo calculo = especificacao.calculos().get(nome);
+            Calculo calculo = especificacao == null ? null : especificacao.calculos().get(nome);
             if (calculo == null) {
                 throw new ReferenciaDesconhecidaException("O modelo não define o cálculo " + nome + ": " + ref);
             }
@@ -297,6 +319,7 @@ public class ResolvedorDeReferencias {
 
         /** A tabela de {@code lista:aplicacoes}: aplicação, previsto, comprovadas e fotos, uma linha por aplicação do plano. */
         public Lista tabela(String ref) {
+            exigirParceria();
             if (!"lista:aplicacoes".equals(ref)) {
                 throw new ReferenciaDesconhecidaException("Não existe a tabela " + ref);
             }
@@ -318,6 +341,7 @@ public class ResolvedorDeReferencias {
 
         /** As fotos de {@code lista:comprovacoes}, na ordem das aplicações do plano e, em cada uma, da mais antiga à mais nova. */
         public List<FotoDto> fotos(String ref) {
+            exigirParceria();
             if (!"lista:comprovacoes".equals(ref)) {
                 throw new ReferenciaDesconhecidaException("Não existe a galeria " + ref);
             }
@@ -378,7 +402,7 @@ public class ResolvedorDeReferencias {
          */
         public List<CalculoDto> calculos() {
             List<CalculoDto> contas = new ArrayList<>();
-            especificacao.calculos().forEach((nome, calculo) -> {
+            (especificacao == null ? Map.<String, Calculo>of() : especificacao.calculos()).forEach((nome, calculo) -> {
                 Valor resultado = valor("calc:" + nome);
                 List<VariavelDto> variaveis = new ArrayList<>();
                 entradasDe(calculo).forEach((variavel, entrada) ->
@@ -400,6 +424,7 @@ public class ResolvedorDeReferencias {
         // -----------------------------------------------------------------
 
         private ParceriaDetalheDto<EmailResumoDto> detalhe() {
+            exigirParceria();
             if (parceria == null) {
                 parceria = parcerias.detalhe(usuario, parceriaId);
             }
@@ -407,6 +432,7 @@ public class ResolvedorDeReferencias {
         }
 
         private ConsolidacaoDtos.AplicacoesDto consolidadas() {
+            exigirParceria();
             if (consolidadas == null) {
                 consolidadas = consolidacao.consolidar(usuario, parceriaId).aplicacoes();
             }
@@ -414,6 +440,7 @@ public class ResolvedorDeReferencias {
         }
 
         private AplicacoesDto plano() {
+            exigirParceria();
             if (plano == null) {
                 plano = aplicacoes.listar(usuario, parceriaId);
             }
@@ -429,10 +456,18 @@ public class ResolvedorDeReferencias {
         }
 
         private Map<String, VigenteDto> vigentes() {
+            exigirParceria();
             if (vigentes == null) {
                 vigentes = dados.vigentes(parceriaId);
             }
             return vigentes;
+        }
+
+        /** Os dados de parceria só existem com parceria: a resolução da conversa da RBS nunca os busca. */
+        private void exigirParceria() {
+            if (parceriaId == null) {
+                throw new ReferenciaDesconhecidaException("O Atlas da RBS não tem dado de parceria.");
+            }
         }
 
         private String formatar(BigDecimal numero) {

@@ -107,6 +107,33 @@ public class Calcular implements Ferramenta {
              "required":["nome","script","variaveis"],"additionalProperties":false}""");
 
     /**
+     * O que o modelo da RBS lê (M8): a mesma conta, mas sem dado de parceria. As variáveis vêm de um trecho T# ou de uma conta C# deste
+     * turno, do que a pessoa escreveu ({@code usuario}) ou de uma conta anterior deste turno ({@code calc:}); {@code cons:} e
+     * {@code dado:} não existem na conversa da RBS e voltam como erro.
+     */
+    private static final DefinicaoDeFerramenta DEFINICAO_DA_RBS = new DefinicaoDeFerramenta(NOME,
+            "Faz uma conta no servidor, com a origem de cada número conferida. Use sempre que a resposta precisar de soma, subtração, "
+                    + "multiplicação, divisão ou percentual; nunca faça a conta de cabeça nem escreva um resultado que esta ferramenta "
+                    + "não devolveu. nome é o nome da conta (começa por letra minúscula e aceita algarismo e sublinhado, como energia_20kva; sem repetir neste turno). script é só a "
+                    + "forma da conta: os nomes das variáveis, + - * / ( ), as funções pct(parte, todo), min(a, b) e max(a, b) e, no "
+                    + "máximo, duas constantes entre 0, 1, 2, 100 e 1000. Qualquer outro número entra como variável. Cada variável é "
+                    + "{\"fonte\": \"T2\", \"valor\": \"312\"}, com o valor copiado do trecho T# ou da conta C# deste turno (o ano de uma "
+                    + "data não é valor; um número solto como 2000 é), ou {\"fonte\": \"usuario\", \"valor\": \"312\"}, com um valor que a "
+                    + "pessoa escreveu nesta conversa (nesta mensagem ou numa anterior), ou {\"ref\": \"calc:nome\"}, com uma conta anterior "
+                    + "deste turno. Não há dado de parceria aqui: nenhuma outra referência vale. Cada variável aparece no máximo 2 vezes "
+                    + "no script, e nenhuma parte do script pode dar sempre o mesmo resultado, qualquer que seja o valor (a / a, a - a, "
+                    + "(a + b) / (b + a), a / (a + 0)) é recusada; duas variáveis com a mesma origem e o mesmo valor também, se o valor "
+                    + "aparece uma vez só nessa origem (use uma só). Percentual se faz com pct(parte, todo); a * 100 / b é recusado, mas "
+                    + "dividir por 100 vale (p * v / 100 / n). As duas constantes valem pela cadeia: contam também as das contas calc: "
+                    + "do turno que o script usa. Não misture INSERCAO, CPM e APLICACAO (campo unidade da variável, quando a "
+                    + "fonte não diz). formato: numero (padrão) ou moeda, que mostra sempre duas casas. Devolve o marcador [C#] para "
+                    + "citar a conta e a referência calc:nome: na resposta, escreva o resultado só com o marcador {{calc:nome}} (com "
+                    + "R$ antes, se for moeda), nunca com o número. Se vier indisponivel, diga com palavras que não dá para calcular.",
+            DEFINICAO.esquema()
+                    .replace("\"description\":\"cons:..., dado:... ou calc:...\"", "\"description\":\"calc:... de uma conta anterior deste turno.\"")
+                    .replace("\"description\":\"T#, R# ou C# deste turno, ou usuario.\"", "\"description\":\"T# ou C# deste turno, ou usuario.\""));
+
+    /**
      * Uma variável já resolvida: o número (exato, é o que entra na conta), de onde veio, a unidade, se tem, o número como a conta
      * o mostra (o de uma conta anterior sai arredondado em duas casas; os outros, como estão) e as constantes que ela carrega pela
      * cadeia (as de uma conta {@code calc:} do turno; a fórmula fixa do modelo e os outros valores, zero).
@@ -141,6 +168,16 @@ public class Calcular implements Ferramenta {
     @Override
     public DefinicaoDeFerramenta definicao() {
         return DEFINICAO;
+    }
+
+    @Override
+    public DefinicaoDeFerramenta definicaoDaRbs() {
+        return DEFINICAO_DA_RBS;
+    }
+
+    @Override
+    public boolean daRbs() {
+        return true;
     }
 
     @Override
@@ -342,7 +379,7 @@ public class Calcular implements Ferramenta {
 
     /** A resolução da parceria da conversa com as contas que este turno já fez ({@code calc:} de conta anterior). */
     private Resolucao resolucaoDoTurno(AtlasContexto contexto, FontesDoTurno turno) {
-        Resolucao resolucao = resolvedor.abrir(contexto.usuario(), contexto.parceriaId(), modelos.obter(ModeloBase.ATIVACAO_EVENTO).orElseThrow());
+        Resolucao resolucao = resolvedor.abrir(contexto, modelos.obter(ModeloBase.ATIVACAO_EVENTO).orElseThrow());
         for (Fonte conta : turno.contas()) {
             ContaDoChat.deDados(conta.dados()).ifPresent(resolucao::registrarConta);
         }

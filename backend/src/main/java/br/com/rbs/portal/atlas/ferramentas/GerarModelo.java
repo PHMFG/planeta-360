@@ -23,8 +23,9 @@ import org.springframework.stereotype.Component;
  * turno termina ali, sem nova ida ao modelo de linguagem. O conteúdo vem de {@code resources/atlas/modelos-em-branco/*.txt}
  * ({@link ModelosEmBranco}), sem algarismo nem campo de valor, e o modelo não o reescreve.
  * <ul>
- *   <li>{@code tipo} é obrigatório: {@code BRIEFING_CONTEUDO}, {@code PERGUNTAS_PESQUISA} ou {@code PLANO_OPERACIONAL_ATIVACAO}.
- *       Outro valor volta ao modelo como erro, com os tipos válidos.</li>
+ *   <li>{@code tipo} é obrigatório: {@code BRIEFING_CONTEUDO}, {@code PERGUNTAS_PESQUISA} ou {@code PLANO_OPERACIONAL_ATIVACAO}, e,
+ *       só na conversa da RBS, também {@code ESQUELETO_RELATORIO_COTA}. Outro valor volta ao modelo como erro, com os tipos
+ *       válidos.</li>
  *   <li>[PERMISSAO] A Pesquisa é só da Master (decisão do projeto): {@code PERGUNTAS_PESQUISA} para quem não tem a aba Pesquisa aberta
  *       volta como erro, em palavras, para o modelo explicar à pessoa.</li>
  *   <li>[ISOLAMENTO] A parceria vem do {@link AtlasContexto}: {@code parceria_id} e qualquer outro argumento é argumento
@@ -55,6 +56,21 @@ public class GerarModelo implements Ferramenta {
                       "description":"O modelo pedido."}},
              "required":["tipo"],"additionalProperties":false}""");
 
+    /** O que o modelo da RBS lê (M8): os mesmos três tipos e o esqueleto do relatório da cota, que é só dela; nenhuma Pesquisa a barra. */
+    private static final DefinicaoDeFerramenta DEFINICAO_DA_RBS = new DefinicaoDeFerramenta(NOME,
+            "Entrega à pessoa um modelo em branco de documento para ela preencher por conta própria: BRIEFING_CONTEUDO (briefing de "
+                    + "conteúdo para a produção), PERGUNTAS_PESQUISA (perguntas personalizadas da pesquisa com o público), "
+                    + "PLANO_OPERACIONAL_ATIVACAO (plano operacional da ativação no festival) ou ESQUELETO_RELATORIO_COTA (esqueleto do "
+                    + "relatório de uma cota, sem número, com as seções do relatório oficial). Use quando a pessoa pedir um modelo, um "
+                    + "template ou um documento em branco. O servidor mostra o modelo pronto, com os botões de baixar e de copiar, e o "
+                    + "turno termina ali: você não recebe o conteúdo de volta para comentar nem reescrever, então não prometa preencher "
+                    + "o modelo por ela.",
+            """
+            {"type":"object","properties":{
+              "tipo":{"type":"string","enum":["BRIEFING_CONTEUDO","PERGUNTAS_PESQUISA","PLANO_OPERACIONAL_ATIVACAO","ESQUELETO_RELATORIO_COTA"],
+                      "description":"O modelo pedido."}},
+             "required":["tipo"],"additionalProperties":false}""");
+
     private final ModelosEmBranco modelos;
 
     public GerarModelo(ModelosEmBranco modelos) {
@@ -69,6 +85,16 @@ public class GerarModelo implements Ferramenta {
     @Override
     public DefinicaoDeFerramenta definicao() {
         return DEFINICAO;
+    }
+
+    @Override
+    public DefinicaoDeFerramenta definicaoDaRbs() {
+        return DEFINICAO_DA_RBS;
+    }
+
+    @Override
+    public boolean daRbs() {
+        return true;
     }
 
     @Override
@@ -92,9 +118,10 @@ public class GerarModelo implements Ferramenta {
         Map<String, String> erros = new LinkedHashMap<>();
         desconhecidos(argumentos, ARGUMENTOS, erros);
         String pedido = texto(argumentos, "tipo", true, erros);
-        List<Tipo> disponiveis = modelos.disponiveis(contexto.usuario(), contexto.parceriaId());
+        List<Tipo> disponiveis = contexto.daRbs() ? modelos.disponiveisDaRbs()
+                : modelos.disponiveis(contexto.usuario(), contexto.parceriaId());
         // O tipo que é só da RBS não existe para a marca: o erro dela não o nomeia (nem pede a aba de uma Pesquisa que não é o caso).
-        Tipo tipo = pedido == null ? null : Tipo.deNome(pedido).filter(t -> !t.soDaRbs()).orElse(null);
+        Tipo tipo = pedido == null ? null : Tipo.deNome(pedido).filter(t -> contexto.daRbs() || !t.soDaRbs()).orElse(null);
         if (pedido != null && tipo == null) {
             erros.put("tipo", "Tipo desconhecido.");
         }

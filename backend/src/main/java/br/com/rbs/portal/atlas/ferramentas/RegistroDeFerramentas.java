@@ -77,6 +77,16 @@ public class RegistroDeFerramentas {
                 .filter(ferramenta -> ferramenta.oferecida(estado)).map(Ferramenta::definicao).toList();
     }
 
+    /**
+     * As ferramentas da conversa da RBS (M8), nesta ordem: {@code buscar_documentos}, {@code contar_dias}, {@code calcular} e
+     * {@code gerar_modelo}. Não depende de relatório nem de cartão: a RBS não tem relatório. {@code semDiretas} tira as de resposta
+     * direta, como em {@link #oferecidas(Optional, boolean, boolean)}.
+     */
+    public List<DefinicaoDeFerramenta> oferecidasDaRbs(boolean semDiretas) {
+        return porNome.values().stream().filter(Ferramenta::daRbs).filter(ferramenta -> !(semDiretas && ferramenta.direta()))
+                .map(Ferramenta::definicaoDaRbs).toList();
+    }
+
     /** O nome é o de uma ferramenta de resposta direta? */
     public boolean ehDireta(String nome) {
         Ferramenta ferramenta = porNome.get(nome);
@@ -90,7 +100,9 @@ public class RegistroDeFerramentas {
     public Preparo preparar(AtlasContexto contexto, FontesDoTurno turno, String nome, String argumentosJson) {
         Map<String, Object> argumentos = Argumentos.ler(argumentosJson);
         Ferramenta ferramenta = porNome.get(nome);
-        if (ferramenta == null) {
+        // [ISOLAMENTO] Na conversa da RBS só rodam as ferramentas dela: o modelo pode pedir pelo nome uma que ele não recebeu, e
+        // "parceria_consultar" ali é como uma ferramenta que não existe.
+        if (ferramenta == null || (contexto.daRbs() && !ferramenta.daRbs())) {
             throw new DadosInvalidosException(RelatorioFerramentas.ferramentaInexistente(nome), Map.of());
         }
         return new Preparo(ferramenta, argumentos, ferramenta.preparar(contexto, turno, argumentos));

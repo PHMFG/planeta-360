@@ -110,6 +110,11 @@ public class ContarDias implements Ferramenta {
     }
 
     @Override
+    public boolean daRbs() {
+        return true;
+    }
+
+    @Override
     public int ordem() {
         return 30;
     }
