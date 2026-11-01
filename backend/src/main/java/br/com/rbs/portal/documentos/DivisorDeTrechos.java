@@ -17,18 +17,23 @@ import org.springframework.stereotype.Component;
  * Corta o texto de um documento em trechos para a busca do Atlas (I4 da ingestão, M3 do plano do Atlas completo). [ATLAS] Sem rede,
  * sem banco e sem estado: é uma conta sobre as páginas que o {@link ExtratorDeTexto} entregou. As regras:
  * <ul>
- *   <li>antes de cortar, tira as linhas iguais no topo e no pé de 2 ou mais páginas (cabeçalho e rodapé, com o número da página
- *       ignorado), que sujariam os trechos e partiriam a frase na quebra de página;</li>
- *   <li>corta por seção e título: numeração ({@code 3.2 Tarifa de energia}) ou linha em caixa alta; cada trecho leva o caminho da
- *       seção ({@code 3 Energia › 3.2 Tarifa}) e as páginas onde começa e termina;</li>
+ *   <li>antes de cortar, tira as linhas iguais no topo e no pé de 2 ou mais páginas (cabeçalho e rodapé; topo com topo e pé com pé,
+ *       letra por letra, e só a numeração de página fica de fora da comparação), que sujariam os trechos e partiriam a frase na
+ *       quebra de página. A linha repetida que tem um número de dado ({@code Ingressos: 40/20/10/2}) fica uma vez, na primeira;</li>
+ *   <li>corta por seção e título: numeração ({@code 3.2 Tarifa de energia}) ou linha em caixa alta sem data nem número de dado; cada
+ *       trecho leva o caminho da seção ({@code 3 Energia › 3.2 Tarifa}) e as páginas onde começa e termina. <b>Nenhuma linha some</b>:
+ *       duas ou mais linhas com cara de título em sequência são lista (um sumário, os documentos exigidos) e ficam no texto, e o
+ *       título sem texto depois dele também;</li>
  *   <li>tabela inteira num trecho: a sequência de linhas com colunas alinhadas que o extrator marcou nunca é cortada (acima de
  *       {@value #LIMITE_DE_TOKENS} tokens ela se parte nas linhas, repetindo a legenda e o cabeçalho);</li>
  *   <li>de {@value #MINIMO_DE_TOKENS} a {@value #ALVO_DE_TOKENS} tokens por trecho (estimativa de 4 caracteres por token) e no máximo
  *       {@value #LIMITE_DE_TOKENS}. O Gemini corta <b>em silêncio</b> o que passa de 8.192 tokens, então o limite fica longe disso.
  *       Seções pequenas se juntam (com o título delas dentro do texto); a seção grande se parte nas frases;</li>
- *   <li>uma frase de sobreposição entre dois trechos da mesma seção partida; nunca entre seções.</li>
+ *   <li>uma frase de sobreposição entre dois trechos da mesma seção partida; nunca entre seções, e só se o trecho ainda couber nos
+ *       {@value #LIMITE_DE_TOKENS} tokens com ela.</li>
  * </ul>
- * A frase que cruza a quebra de página fica inteira no mesmo trecho: o corte só acontece entre frases.
+ * A frase que cruza a quebra de página fica inteira no mesmo trecho: o corte só acontece entre frases. A palavra partida por hífen na
+ * quebra de linha ({@code sexta-} e {@code feira}) volta inteira, com o hífen.
  */
 @Component
 public class DivisorDeTrechos {
@@ -103,36 +108,83 @@ public class DivisorDeTrechos {
 
     private static final int JANELA_DA_BORDA = 3;
 
+    /** As linhas que sobram depois de tirar o cabeçalho e o rodapé repetidos: é o que os testes comparam com os trechos. */
+    static List<String> linhasMantidas(List<Pagina> paginas) {
+        return semCabecalhoERodape(paginas).stream().map(LinhaDoDocumento::texto).toList();
+    }
+
+    /** A numeração de página no fim da linha ("... Página 3 de 11", "Pág. 3", "Page 3 of 4", "3/11"). */
+    private static final Pattern NUMERACAO_NO_FIM = Pattern.compile(
+            "\\b(?:p[aá]gina|p[aá]g\\.?|page|p\\.)\\s*\\d+(?:\\s*(?:de|of|/)\\s*\\d+)?\\s*$", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+    /** A numeração de página no começo da linha ("Página 3 de 11 · Manual"). */
+    private static final Pattern NUMERACAO_NO_INICIO = Pattern.compile(
+            "^\\s*(?:p[aá]gina|p[aá]g\\.?|page|p\\.)\\s*\\d+(?:\\s*(?:de|of|/)\\s*\\d+)?(?!\\d)", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+    /** A linha que é só o número da página ("3", "3/11", "3 de 11", "- 3 -"). */
+    private static final Pattern SO_A_NUMERACAO = Pattern.compile(
+            "^[\\s\\-–—|•·]*\\d{1,4}(?:\\s*(?:/|de|of)\\s*\\d{1,4})?[\\s\\-–—|•·]*$", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+    /** O número que é dado e não numeração: com separador no meio (40/20/10/2, 312,00, 1.800, 15:30), em reais, em % ou depois de "rótulo:". */
+    private static final Pattern NUMERO_DE_DADO = Pattern.compile("\\d[/,.:]\\d|R\\$\\s*\\d|\\d\\s*%|:\\s*\\d");
+
     /**
-     * Tira a linha que se repete na borda (as 3 primeiras ou as 3 últimas) de 2 ou mais páginas, e de pelo menos metade delas: um
-     * cabeçalho de verdade aparece em quase todas, e o título de uma seção que também está no sumário, não. O que conta é o texto
-     * sem os números ("Página 3 de 11" e "Página 4 de 11" são a mesma linha). Linha de tabela nunca sai. Documento de uma página
-     * só não tem o que comparar.
+     * Tira o cabeçalho e o rodapé: a linha que se repete na borda (as 3 primeiras ou as 3 últimas) de pelo menos metade das páginas, e
+     * de 2 no mínimo. O topo só se compara com o topo, e o pé com o pé (o pé de uma página e o topo da seguinte não se repetem). A
+     * linha tem de ser igual, letra por letra, e só a numeração de página fica de fora da comparação ("Página 3 de 11", "Pág. 3",
+     * "3/11" ou o número sozinho): "Tarifa por kVA: R$ 312,00" e "Tarifa por kVA: R$ 450,00" são duas linhas, e nenhuma sai. A linha
+     * repetida que carrega um número de dado ("Ingressos: 40/20/10/2" no pé de 4 páginas) sai das repetições, mas fica uma vez, onde
+     * apareceu primeiro. Linha de tabela nunca sai. Documento de uma página só compara o topo com o pé dela mesma (o TXT). Numa página
+     * curta (menos de 6 linhas) as duas janelas se cruzam e a linha do meio conta nas duas.
      */
     private static List<LinhaDoDocumento> semCabecalhoERodape(List<Pagina> paginas) {
-        Map<String, Integer> ocorrencias = new HashMap<>();
+        Map<String, Integer> noTopo = new HashMap<>();
+        Map<String, Integer> noPe = new HashMap<>();
         for (Pagina pagina : paginas) {
-            Set<String> chaves = new HashSet<>();
-            Set<String> noTopo = new HashSet<>();
-            Set<String> noPe = new HashSet<>();
+            Set<String> chavesDoTopo = new HashSet<>();
+            Set<String> chavesDoPe = new HashSet<>();
+            Set<String> soNoTopo = new HashSet<>();
+            Set<String> soNoPe = new HashSet<>();
             List<Linha> linhas = pagina.linhas();
-            for (int indice : indicesDaBorda(linhas)) {
-                String texto = linhas.get(indice).texto();
-                chaves.add(chaveDaBorda(texto));
-                (indice < JANELA_DA_BORDA ? noTopo : noPe).add(texto.strip().toLowerCase(Locale.ROOT));
+            for (int i = 0; i < linhas.size(); i++) {
+                if (!podeSerCabecalho(linhas.get(i))) {
+                    continue;
+                }
+                String chave = chaveDaBorda(linhas.get(i).texto());
+                if (i < JANELA_DA_BORDA) {
+                    chavesDoTopo.add(chave);
+                    soNoTopo.add(chave);
+                }
+                if (i >= linhas.size() - JANELA_DA_BORDA) {
+                    chavesDoPe.add(chave);
+                    if (i >= JANELA_DA_BORDA) {
+                        soNoPe.add(chave);
+                    }
+                }
             }
-            chaves.forEach(chave -> ocorrencias.merge(chave, 1, Integer::sum));
-            // A MESMA linha, igual até nos números, no topo e no pé da página vale por mais uma: é o cabeçalho e o rodapé de um
-            // documento de uma página só (o TXT). "A regra 1" no topo e "A regra 99" no pé não são a mesma linha.
-            noTopo.stream().filter(noPe::contains).forEach(exata -> ocorrencias.merge(chaveDaBorda(exata), 1, Integer::sum));
+            chavesDoTopo.forEach(chave -> noTopo.merge(chave, 1, Integer::sum));
+            chavesDoPe.forEach(chave -> noPe.merge(chave, 1, Integer::sum));
+            if (paginas.size() == 1) {
+                // A MESMA linha no topo e (mais abaixo) no pé da única página é o cabeçalho e o rodapé dela (o TXT): vale por mais uma.
+                soNoTopo.stream().filter(soNoPe::contains).forEach(chave -> {
+                    noTopo.merge(chave, 1, Integer::sum);
+                    noPe.merge(chave, 1, Integer::sum);
+                });
+            }
         }
         int minimo = Math.max(2, (paginas.size() + 1) / 2);
+        Set<String> jaFicouUma = new HashSet<>();
         List<LinhaDoDocumento> resultado = new ArrayList<>();
         for (Pagina pagina : paginas) {
-            Set<Integer> borda = new HashSet<>(indicesDaBorda(pagina.linhas()));
-            for (int i = 0; i < pagina.linhas().size(); i++) {
-                Linha linha = pagina.linhas().get(i);
-                boolean repetida = borda.contains(i) && !linha.tabela() && ocorrencias.getOrDefault(chaveDaBorda(linha.texto()), 0) >= minimo;
+            List<Linha> linhas = pagina.linhas();
+            for (int i = 0; i < linhas.size(); i++) {
+                Linha linha = linhas.get(i);
+                boolean repetida = false;
+                if (podeSerCabecalho(linha)) {
+                    String chave = chaveDaBorda(linha.texto());
+                    repetida = (i < JANELA_DA_BORDA && noTopo.getOrDefault(chave, 0) >= minimo)
+                            || (i >= linhas.size() - JANELA_DA_BORDA && noPe.getOrDefault(chave, 0) >= minimo);
+                    if (repetida && NUMERO_DE_DADO.matcher(chave).find() && jaFicouUma.add(chave)) {
+                        repetida = false;   // a primeira ocorrência de uma linha com dado fica: o dado não pode sumir do índice
+                    }
+                }
                 if (!repetida) {
                     resultado.add(new LinhaDoDocumento(linha.texto(), pagina.numero(), linha.tabela()));
                 }
@@ -141,20 +193,18 @@ public class DivisorDeTrechos {
         return resultado;
     }
 
-    private static List<Integer> indicesDaBorda(List<Linha> linhas) {
-        List<Integer> indices = new ArrayList<>();
-        for (int i = 0; i < linhas.size(); i++) {
-            boolean noTopo = i < JANELA_DA_BORDA;
-            boolean noPe = i >= linhas.size() - JANELA_DA_BORDA;
-            if ((noTopo || noPe) && !linhas.get(i).texto().isBlank()) {
-                indices.add(i);
-            }
-        }
-        return indices;
+    private static boolean podeSerCabecalho(Linha linha) {
+        return !linha.tabela() && !linha.texto().isBlank();
     }
 
-    private static String chaveDaBorda(String texto) {
-        return texto.toLowerCase(Locale.ROOT).replaceAll("\\d+", "#").replaceAll("\\s+", " ").strip();
+    /** A linha sem a numeração de página (que vira "#"), com os espaços unidos. O resto fica como está, letra por letra. */
+    static String chaveDaBorda(String texto) {
+        String linha = texto.strip().replaceAll("\\s+", " ");
+        if (SO_A_NUMERACAO.matcher(linha).matches()) {
+            return "#";
+        }
+        linha = NUMERACAO_NO_FIM.matcher(linha).replaceFirst("#");
+        return NUMERACAO_NO_INICIO.matcher(linha).replaceFirst("#");
     }
 
     // ---------------------------------------------------------------------
@@ -185,21 +235,106 @@ public class DivisorDeTrechos {
             return new Titulo(1, linha);
         }
         long letras = linha.chars().filter(Character::isLetter).count();
-        if (letras >= 4 && TITULO_EM_CAIXA_ALTA.matcher(linha).matches() && ultimo != '.') {
+        if (letras >= 4 && TITULO_EM_CAIXA_ALTA.matcher(linha).matches() && ultimo != '.' && !temDadoNumerico(linha)) {
             return new Titulo(1, linha);
         }
         return null;
     }
 
-    /** Junta as linhas em seções: cada título abre uma; o texto, as frases e as tabelas vão para a seção aberta. */
+    /**
+     * A linha em caixa alta que carrega dado ({@code PRAZO FINAL 15/01/2027}, {@code MASTER 40 20}, {@code CORTESIAS 25%}) é linha de
+     * texto, e não título: tem data, número com separador ou percentual, ou dois números soltos ou mais. Um número solto só
+     * ({@code PLANETA 360 · OPERAÇÕES DO FESTIVAL}, {@code ... ATLÂNTIDA 2027}) não desfaz o título.
+     */
+    private static boolean temDadoNumerico(String linha) {
+        int soltos = 0;
+        for (String pedaco : linha.split("\\s+")) {
+            if (pedaco.matches("\\d+")) {
+                soltos++;
+            } else if (pedaco.matches(".*\\d.*") && pedaco.matches(".*[/,.:%].*")) {
+                return true;
+            }
+        }
+        return soltos >= 2;
+    }
+
+    // ---------------------------------------------------------------------
+    // Quais linhas com cara de título são título de verdade
+    // ---------------------------------------------------------------------
+
+    private static boolean emBranco(LinhaDoDocumento linha) {
+        return !linha.tabela() && linha.texto().isBlank();
+    }
+
+    private static boolean temCaraDeTitulo(LinhaDoDocumento linha) {
+        return !linha.tabela() && !linha.texto().isBlank() && titulo(linha.texto()) != null;
+    }
+
+    /**
+     * Diz, linha a linha, quais das que têm cara de título abrem uma seção. Nenhuma linha do documento pode sumir do índice, e uma
+     * seção só existe com texto (ou com um filho que tenha). Por isso, de cada sequência de linhas com cara de título (as linhas em
+     * branco entre elas não a interrompem; o texto e a tabela, sim):
+     * <ul>
+     *   <li>uma linha só, seguida de texto ou de tabela, é título;</li>
+     *   <li>duas ou mais são uma lista (os itens de um sumário, de documentos exigidos, de ingressos por setor), e nenhuma vira caminho:
+     *       ficam no texto. A exceção é a hierarquia que termina em texto: o último título e os que o contêm, de nível mais raso
+     *       cada vez ({@code 3 Energia}, {@code 3.2 Tarifa}), são títulos, e o resto da sequência fica no texto, como o sumário que
+     *       vem antes do {@code 1. Apresentação} de verdade;</li>
+     *   <li>sem texto depois (o fim do documento), nenhuma é título.</li>
+     * </ul>
+     */
+    private static boolean[] titulosDeSecao(List<LinhaDoDocumento> linhas) {
+        boolean[] titulo = new boolean[linhas.size()];
+        int i = 0;
+        while (i < linhas.size()) {
+            if (!temCaraDeTitulo(linhas.get(i))) {
+                i++;
+                continue;
+            }
+            List<Integer> sequencia = new ArrayList<>();
+            int j = i;
+            while (j < linhas.size() && (emBranco(linhas.get(j)) || temCaraDeTitulo(linhas.get(j)))) {
+                if (!emBranco(linhas.get(j))) {
+                    sequencia.add(j);
+                }
+                j++;
+            }
+            boolean seguidaDeTexto = j < linhas.size();
+            if (seguidaDeTexto && sequencia.size() == 1) {
+                titulo[sequencia.get(0)] = true;
+            } else if (seguidaDeTexto) {
+                List<Integer> hierarquia = new ArrayList<>();
+                int nivelDoUltimo = Integer.MAX_VALUE;
+                for (int k = sequencia.size() - 1; k >= 0; k--) {
+                    int nivel = titulo(linhas.get(sequencia.get(k)).texto()).nivel();
+                    if (nivel < nivelDoUltimo) {
+                        hierarquia.add(sequencia.get(k));
+                        nivelDoUltimo = nivel;
+                    }
+                }
+                if (hierarquia.size() >= 2) {
+                    hierarquia.forEach(indice -> titulo[indice] = true);
+                }
+            }
+            i = j;
+        }
+        return titulo;
+    }
+
+    /**
+     * Junta as linhas em seções: cada título abre uma; o texto, as frases, as tabelas e as linhas de lista (que têm cara de título
+     * e não são) vão para a seção aberta, cada item de lista numa linha própria.
+     */
     private static List<Secao> secoes(List<LinhaDoDocumento> linhas) {
+        boolean[] ehTitulo = titulosDeSecao(linhas);
         List<Secao> secoes = new ArrayList<>();
         List<String> pilha = new ArrayList<>();
         Secao atual = new Secao(List.of());
         secoes.add(atual);
         List<LinhaDoDocumento> paragrafo = new ArrayList<>();
         List<LinhaDoDocumento> tabela = new ArrayList<>();
-        for (LinhaDoDocumento linha : linhas) {
+        for (int i = 0; i < linhas.size(); i++) {
+            LinhaDoDocumento linha = linhas.get(i);
             if (linha.tabela()) {
                 encerrarParagrafo(atual, paragrafo);
                 tabela.add(linha);
@@ -210,8 +345,8 @@ public class DivisorDeTrechos {
                 encerrarParagrafo(atual, paragrafo);
                 continue;
             }
-            Titulo titulo = titulo(linha.texto());
-            if (titulo != null) {
+            if (ehTitulo[i]) {
+                Titulo titulo = titulo(linha.texto());
                 encerrarParagrafo(atual, paragrafo);
                 while (pilha.size() >= titulo.nivel()) {
                     pilha.remove(pilha.size() - 1);
@@ -219,6 +354,11 @@ public class DivisorDeTrechos {
                 pilha.add(titulo.rotulo());
                 atual = new Secao(List.copyOf(pilha));
                 secoes.add(atual);
+                continue;
+            }
+            if (titulo(linha.texto()) != null) {
+                encerrarParagrafo(atual, paragrafo);
+                atual.atomos.add(new Atomo(linha.texto().strip(), "\n", linha.pagina(), linha.pagina(), false));
                 continue;
             }
             paragrafo.add(linha);
@@ -258,7 +398,12 @@ public class DivisorDeTrechos {
         for (int i = 0; i < paragrafo.size(); i++) {
             LinhaDoDocumento linha = paragrafo.get(i);
             if (i > 0) {
-                texto.append(terminaFrase(paragrafo.get(i - 1).texto()) && comecaFrase(linha.texto()) ? '\n' : ' ');
+                String anterior = paragrafo.get(i - 1).texto();
+                if (partidaPorHifen(anterior, linha.texto())) {
+                    // "sexta-" + "feira": a palavra volta inteira, com o hífen; a hifenização tipográfica ("inser-" + "ção") fica como está
+                } else {
+                    texto.append(terminaFrase(anterior) && comecaFrase(linha.texto()) ? '\n' : ' ');
+                }
             }
             inicios.add(new int[] {texto.length(), linha.pagina()});
             texto.append(linha.texto().strip());
@@ -301,6 +446,14 @@ public class DivisorDeTrechos {
             }
         }
         return pagina;
+    }
+
+    /** A linha termina em letra e hífen e a seguinte começa em minúscula: é a mesma palavra partida na quebra de linha. */
+    private static boolean partidaPorHifen(String anterior, String seguinte) {
+        String fim = anterior.strip();
+        String inicio = seguinte.strip();
+        return fim.length() >= 2 && fim.charAt(fim.length() - 1) == '-' && Character.isLetter(fim.charAt(fim.length() - 2))
+                && !inicio.isEmpty() && Character.isLowerCase(inicio.codePointAt(0));
     }
 
     private static boolean terminaFrase(String linha) {
@@ -377,7 +530,8 @@ public class DivisorDeTrechos {
                 fechar(unidades, secao, atual);
                 atual = new ArrayList<>();
                 tokens = 0;
-                if (!ultimo.tabela()) {   // a frase de sobreposição: a última do trecho que fechou abre o seguinte
+                // A frase de sobreposição: a última do trecho que fechou abre o seguinte, se o trecho ainda couber no limite com ela.
+                if (!ultimo.tabela() && ultimo.tokens() + atomo.tokens() <= LIMITE_DE_TOKENS) {
                     atual.add(new Atomo(ultimo.texto(), "\n", ultimo.paginaInicio(), ultimo.paginaFim(), false));
                     tokens = atual.get(0).tokens();
                 }

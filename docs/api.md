@@ -2108,7 +2108,7 @@ Para montar o formulário: as edições vêm da rota 6, as parcerias (com a `cot
   "inicioDoTexto": "4.1 Pontos de energia\nCada ativação recebe da produção um ponto de energia 220 V com a carga contratada em kVA..." }
 ```
 
-`secao` é o caminho da seção (`"3 Energia › 3.2 Tarifa"`, ou `null` se o documento não tem títulos) e `inicioDoTexto` traz os primeiros 240 caracteres. `tokens` é uma estimativa de 4 caracteres por token. Um documento que ainda não foi indexado, ou que deu erro, devolve `total: 0`.
+`secao` é o caminho da seção (`"3 Energia › 3.2 Tarifa"`, ou `null` se o documento não tem títulos) e `inicioDoTexto` traz os primeiros 240 caracteres. `tokens` é uma estimativa de 4 caracteres por token, e nenhum trecho passa de 1.500 (de 300 a 700 é o normal; a frase de sobreposição entre dois trechos da mesma seção só entra se couber). **Nenhuma linha do documento some do índice**, exceto o cabeçalho e o rodapé que se repetem: um sumário ou uma lista de itens (duas ou mais linhas seguidas com cara de título) fica no texto do trecho, e não vira `secao`; uma linha com número que se repete no pé das páginas (`Ingressos: 40/20/10/2`) fica uma vez, na primeira. Um documento que ainda não foi indexado, ou que deu erro, devolve `total: 0`.
 
 **Erros:** 401; 403; 404 (`"Não encontramos este documento."`); 422 (`pagina`/`tamanho` fora dos limites).
 
