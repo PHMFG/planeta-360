@@ -2,7 +2,10 @@ package br.com.rbs.portal.atlas.loop;
 
 import br.com.rbs.portal.atlas.AtlasDtos.CampoDoCartaoDto;
 import br.com.rbs.portal.atlas.AtlasDtos.ItemAviso;
+import br.com.rbs.portal.atlas.AtlasDtos.FeriadoConsiderado;
+import br.com.rbs.portal.atlas.AtlasDtos.ItemCalculo;
 import br.com.rbs.portal.atlas.AtlasDtos.ItemCartao;
+import br.com.rbs.portal.atlas.AtlasDtos.VariavelDoCalculo;
 import br.com.rbs.portal.atlas.AtlasDtos.DadosDaFerramenta;
 import br.com.rbs.portal.atlas.AtlasDtos.ItemDaConversa;
 import br.com.rbs.portal.atlas.AtlasDtos.ItemFerramenta;
@@ -22,7 +25,10 @@ import br.com.rbs.portal.atlas.AtlasRepositorio.LinhaDeSolicitacao;
 import br.com.rbs.portal.atlas.ModoDoAtlas;
 import br.com.rbs.portal.atlas.checagem.Frases;
 import br.com.rbs.portal.atlas.diagnostico.TracoRepositorio;
+import br.com.rbs.portal.atlas.ferramentas.Calcular;
+import br.com.rbs.portal.atlas.ferramentas.ContarDias;
 import br.com.rbs.portal.atlas.provedor.DisponibilidadeDoLlm;
+import br.com.rbs.portal.atlas.relatorio.ContaDoChat;
 import br.com.rbs.portal.atlas.relatorio.Especificacao;
 import br.com.rbs.portal.atlas.relatorio.ModeloBase;
 import br.com.rbs.portal.atlas.relatorio.ResolvedorDeReferencias;
@@ -132,9 +138,16 @@ public class ItensDaConversa {
                         itens.add(new ItemRaciocinio(mensagem.resumoDoRaciocinio(), turno));
                     }
                     if (doTurno && mensagem.conteudo() != null && !mensagem.conteudo().isBlank()) {
-                        itens.add(new ItemTexto(contexto.resolucao(modelos, resolvedor).paraExibicao(mensagem.conteudo()),
+                        List<LinhaDeFonte> fontesDaMensagem = fontes.getOrDefault(mensagem.id(), List.of());
+                        // As contas desta mensagem, e só as dela: duas mensagens podem ter contas de mesmo nome e valores diferentes.
+                        Resolucao resolucao = contexto.resolucao(modelos, resolvedor);
+                        resolucao.esquecerContas();
+                        fontesDaMensagem.stream().filter(f -> "CALCULO".equals(f.tipo()) && f.dados() != null)
+                                .map(f -> ContaDoChat.deDados(AtlasJson.ler(f.dados(), new TypeReference<Map<String, Object>>() {
+                                }))).flatMap(Optional::stream).forEach(resolucao::registrarConta);
+                        itens.add(new ItemTexto(resolucao.paraExibicao(mensagem.conteudo()),
                                 escritoPeloModelo(mensagem.conteudo(), chamadas), turno,
-                                fontesDoTexto(mensagem.conteudo(), fontes.getOrDefault(mensagem.id(), List.of()))));
+                                fontesDoTexto(mensagem.conteudo(), fontesDaMensagem)));
                     }
                     List<LinhaDeChamada> trilhaDaMensagem = trilha.getOrDefault(mensagem.id(), List.of());
                     int posicao = 0;
@@ -219,7 +232,14 @@ public class ItensDaConversa {
     }
 
     private Optional<ItemDaConversa> itemDaResposta(LinhaDeMensagem mensagem, String ferramenta, String turno) {
-        if (ferramenta == null || mensagem.conteudo() == null || !modo.relatorioLigado()) {
+        if (ferramenta == null || mensagem.conteudo() == null) {
+            return Optional.empty();
+        }
+        // A conta e a contagem de dias valem com o relatório ligado ou desligado.
+        if (Calcular.NOME.equals(ferramenta) || ContarDias.NOME.equals(ferramenta)) {
+            return itemDeCalculo(mensagem, ferramenta, turno);
+        }
+        if (!modo.relatorioLigado()) {
             return Optional.empty();   // só chat: o relatório pronto e o aviso do cartão de uma conversa antiga não saem
         }
         Map<String, Object> resultado = AtlasJson.ler(mensagem.conteudo(), new TypeReference<Map<String, Object>>() {
@@ -233,6 +253,41 @@ public class ItensDaConversa {
                     : PlanoBSemLlm.AVISO_CARTAO_FECHADO));
         }
         return Optional.empty();
+    }
+
+    /**
+     * O "Como calculei" de uma conta ou de uma contagem de dias: só da resposta que deu certo. Erro de ferramenta
+     * ({@code {"erro": ...}}) e conta indisponível ({@code {"indisponivel": true, ...}}) não geram item: não há conta a mostrar.
+     */
+    @SuppressWarnings("unchecked")
+    private Optional<ItemDaConversa> itemDeCalculo(LinhaDeMensagem mensagem, String ferramenta, String turno) {
+        Map<String, Object> resposta;
+        try {
+            resposta = AtlasJson.ler(mensagem.conteudo(), new TypeReference<Map<String, Object>>() {
+            });
+        } catch (RuntimeException naoEObjeto) {
+            return Optional.empty();
+        }
+        if (resposta.containsKey("erro") || Boolean.TRUE.equals(resposta.get("indisponivel")) || !(resposta.get("marcador") instanceof String marcador)) {
+            return Optional.empty();
+        }
+        if (ContarDias.NOME.equals(ferramenta)) {
+            List<FeriadoConsiderado> feriados = new ArrayList<>();
+            for (Object feriado : (List<Object>) resposta.getOrDefault("feriadosConsiderados", List.of())) {
+                Map<String, Object> item = (Map<String, Object>) feriado;
+                feriados.add(new FeriadoConsiderado((String) item.get("data"), (String) item.get("nome")));
+            }
+            return Optional.of(new ItemCalculo(marcador, ferramenta, null, null, List.of(), (String) resposta.get("resultado"),
+                    (String) resposta.get("regra"), feriados, turno));
+        }
+        List<VariavelDoCalculo> variaveis = new ArrayList<>();
+        for (Object variavel : (List<Object>) resposta.getOrDefault("variaveis", List.of())) {
+            Map<String, Object> item = (Map<String, Object>) variavel;
+            variaveis.add(new VariavelDoCalculo((String) item.get("nome"), (String) item.get("origem"), (String) item.get("valor")));
+        }
+        String ref = (String) resposta.get("ref");
+        return Optional.of(new ItemCalculo(marcador, ferramenta, ref == null ? null : ref.substring(ref.indexOf(':') + 1),
+                (String) resposta.get("script"), variaveis, (String) resposta.get("valorFormatado"), null, List.of(), turno));
     }
 
     private ItemCartao cartao(Contexto contexto, LinhaDeSolicitacao cartao, Map<Long, Especificacao> especificacoes, String turno) {

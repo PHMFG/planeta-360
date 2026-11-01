@@ -188,6 +188,7 @@ class LoopDoAgenteTest {
             case ItemAviso a -> "aviso";
             case ItemCartao c -> "cartao";
             case ItemRelatorioPronto p -> "relatorio_pronto";
+            case AtlasDtos.ItemCalculo c -> "calculo";
         }).toList();
     }
 

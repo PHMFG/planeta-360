@@ -52,9 +52,10 @@ public final class AtlasDtos {
             @JsonSubTypes.Type(value = ItemFerramenta.class, name = "ferramenta"),
             @JsonSubTypes.Type(value = ItemAviso.class, name = "aviso"),
             @JsonSubTypes.Type(value = ItemCartao.class, name = "cartao"),
-            @JsonSubTypes.Type(value = ItemRelatorioPronto.class, name = "relatorio_pronto")})
+            @JsonSubTypes.Type(value = ItemRelatorioPronto.class, name = "relatorio_pronto"),
+            @JsonSubTypes.Type(value = ItemCalculo.class, name = "calculo")})
     public sealed interface ItemDaConversa permits ItemUsuario, ItemRaciocinio, ItemTexto, ItemFerramenta, ItemAviso, ItemCartao,
-            ItemRelatorioPronto {
+            ItemRelatorioPronto, ItemCalculo {
     }
 
     /** O que a pessoa disse (o botão aparece como "Montar o relatório da ativação"). */
@@ -141,6 +142,28 @@ public final class AtlasDtos {
     /** O relatório que ficou pronto; o front abre o A4 pela rota 47. */
     public record ItemRelatorioPronto(Long relatorioId, String titulo, @JsonInclude(JsonInclude.Include.NON_NULL) String turno)
             implements ItemDaConversa {
+    }
+
+    /** Uma variável de uma conta do {@code calcular}: o nome, de onde veio (a referência, o marcador da fonte ou {@code usuario}) e o valor que entrou. */
+    public record VariavelDoCalculo(String nome, String origem, String valor) {
+    }
+
+    /** Um feriado que a contagem de dias pulou: a data como {@code dd/MM/aaaa} e o nome. */
+    public record FeriadoConsiderado(String data, String nome) {
+    }
+
+    /**
+     * O "Como calculei" (M5): a conta que o {@code calcular} ou o {@code contar_dias} fez no turno, derivada da resposta da ferramenta
+     * (sem erro e sem {@code indisponivel}), com o relatório ligado ou desligado. Vem depois do que a mensagem do assistente que a
+     * pediu tem, na ordem em que rodou. {@code ferramenta} é {@code calcular} ou {@code contar_dias}; {@code marcador} é o {@code C#} do
+     * turno em que a conta foi feita. {@code resultado} é o valor formatado da conta ou o resultado da contagem (a data
+     * {@code dd/MM/aaaa} ou a quantidade de dias). No {@code calcular}: {@code nome}, {@code script} e {@code variaveis} (a origem de
+     * cada valor); {@code regra} é nula e {@code feriadosConsiderados} vazio. No {@code contar_dias}: {@code regra} e
+     * {@code feriadosConsiderados}; {@code nome} e {@code script} nulos e {@code variaveis} vazio.
+     */
+    public record ItemCalculo(String marcador, String ferramenta, String nome, String script, List<VariavelDoCalculo> variaveis,
+                              String resultado, String regra, List<FeriadoConsiderado> feriadosConsiderados,
+                              @JsonInclude(JsonInclude.Include.NON_NULL) String turno) implements ItemDaConversa {
     }
 
     /** Uma conversa da lista da rota 43. */
