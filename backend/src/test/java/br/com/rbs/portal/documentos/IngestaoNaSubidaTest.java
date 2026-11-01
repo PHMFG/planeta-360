@@ -138,8 +138,8 @@ class IngestaoNaSubidaTest extends ApoioDeDocumentos {
 
         assertThat(contar("SELECT count(*) FROM documento")).isEqualTo(antes);
         assertThat(log.list).anyMatch(e -> e.getLevel() == Level.INFO && e.getFormattedMessage().contains("o kit já estava no banco"));
-        assertThat(log.list).anyMatch(e -> e.getLevel() == Level.INFO && e.getFormattedMessage().contains("8 prazos do Manual de Operações 2027 v2 criados"));
-        assertThat(contar("SELECT count(*) FROM prazo")).as("a amostra de dev cria os prazos do D02, uma vez só").isEqualTo(8L);
+        assertThat(log.list).anyMatch(e -> e.getLevel() == Level.INFO && e.getFormattedMessage().contains("16 prazos do Manual de Operações 2027 v2 e dos planos comerciais criados"));
+        assertThat(contar("SELECT count(*) FROM prazo")).as("a amostra de dev cria os prazos do D02 e dos planos D03 a D05, uma vez só").isEqualTo(16L);
     }
 
     @Test

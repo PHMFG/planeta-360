@@ -20,10 +20,11 @@ import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.JsonNode;
 
 /**
- * [ATLAS] Os prazos do Manual de Operações 2027 v2 na demonstração (M5): <b>nenhum prazo inventado</b>. A data, a página e a descrição
- * de cada um saem do gabarito do kit, e aqui se confere no texto que o PDFBox extrai do D02, na página que o prazo cita. Depois, o
- * cadastro de verdade: a RBS, o escopo da edição inteira, o documento e a página, a hora das 18h e o "de forma segura sobre um banco
- * que já os tem" (rodar de novo não duplica, e o prazo desativado não ressuscita).
+ * [ATLAS] Os prazos do Manual de Operações 2027 v2 e dos planos comerciais das três cotas na demonstração (M5): <b>nenhum prazo
+ * inventado</b>. A data, a página e a descrição de cada um saem do gabarito do kit, e aqui se confere no texto que o PDFBox extrai do
+ * documento (D02, D03, D04 e D05), na página que o prazo cita. Depois, o cadastro de verdade: a RBS, o escopo da edição inteira para
+ * o manual e o da cota para cada plano, o documento e a página, a hora das 18h e o "de forma segura sobre um banco que já os tem"
+ * (rodar de novo não duplica, e o prazo desativado não ressuscita). Prazo relativo ("18 dias úteis após o briefing") não entra.
  */
 @TesteDeIntegracao
 @Transactional
@@ -69,6 +70,49 @@ class PrazosDaAmostraTest {
             assertThat(pagina).as(p.titulo() + ": a descrição é o trecho do manual").contains(normalizar(p.descricao()));
             assertThat(p.titulo()).isNotBlank().hasSizeLessThanOrEqualTo(200);
             assertThat(p.descricao()).hasSizeLessThanOrEqualTo(1000);
+        }
+    }
+
+    private static Extracao extracaoDe(String id) {
+        KitDeDocumentos.Documento documento = KitDeDocumentos.por(id);
+        return new ExtratorDeTexto().extrair(TipoDeArquivo.daExtensao(documento.arquivo()).orElseThrow(), documento.conteudo());
+    }
+
+    @Test
+    void cadaPrazoDosPlanosTemADataNaPaginaQueCitaNoTextoDoPdfEDescricaoQueEOTrecho() {
+        int conferidos = 0;
+        for (String plano : List.of("D03", "D04", "D05")) {
+            Extracao extracao = extracaoDe(plano);
+            for (PrazoLido p : PrazosDaAmostra.lerDoPlano(PrazosDaAmostra.gabarito(), plano)) {
+                assertThat(p.pagina()).as(plano + " " + p.titulo()).isBetween(1, extracao.totalDePaginas());
+                String pagina = normalizar(extracao.paginas().get(p.pagina() - 1).texto());
+                assertThat(pagina).as(plano + " " + p.titulo() + ": a data na página " + p.pagina()).contains(DIA.format(p.data()));
+                assertThat(pagina).as(plano + " " + p.titulo() + ": a descrição é o trecho do plano").contains(normalizar(p.descricao()));
+                assertThat(p.hora()).isEqualTo(LocalTime.of(18, 0));
+                assertThat(p.titulo()).isNotBlank().hasSizeLessThanOrEqualTo(200);
+                assertThat(p.descricao()).hasSizeLessThanOrEqualTo(1000);
+                conferidos++;
+            }
+        }
+        assertThat(conferidos).isEqualTo(8);
+    }
+
+    @Test
+    void osPrazosDosPlanosTemAsDatasDoBriefingEDoLimiteDeCadaCotaEOsRelativosFicamDeFora() {
+        Map<String, List<LocalDate>> esperadas = Map.of(
+                "D03", List.of(LocalDate.of(2027, 1, 15), LocalDate.of(2026, 11, 4), LocalDate.of(2026, 12, 1), LocalDate.of(2026, 12, 11)),
+                "D04", List.of(LocalDate.of(2026, 11, 11), LocalDate.of(2026, 12, 3)),
+                "D05", List.of(LocalDate.of(2026, 11, 18), LocalDate.of(2026, 12, 7)));
+
+        esperadas.forEach((plano, datas) -> assertThat(PrazosDaAmostra.lerDoPlano(PrazosDaAmostra.gabarito(), plano))
+                .extracting(PrazoLido::data).as(plano).containsExactlyElementsOf(datas));
+        // o roxo (D04) briefing até 11/11 e a verde (D05) até 18/11, que o testador não achava
+        assertThat(PrazosDaAmostra.lerDoPlano(PrazosDaAmostra.gabarito(), "D04")).filteredOn(p -> p.titulo().equals("Entregar o briefing completo"))
+                .singleElement().satisfies(p -> assertThat(p.descricao()).contains("briefing completo entregue em 11/11/2026"));
+        // "15 dias úteis após o briefing completo" e "12 dias úteis" não têm data: nenhum prazo dos planos fala em dias úteis
+        for (String plano : List.of("D03", "D04", "D05")) {
+            assertThat(PrazosDaAmostra.lerDoPlano(PrazosDaAmostra.gabarito(), plano)).extracting(PrazoLido::titulo)
+                    .noneMatch(titulo -> titulo.toLowerCase().contains("úteis"));
         }
     }
 
@@ -129,13 +173,13 @@ class PrazosDaAmostraTest {
     // ---------------------------------------------------------------------
 
     @Test
-    void criaOsOitoPrazosComoARbsNoEscopoDaEdicaoComODocumentoEAPagina() {
+    void criaOsDezesseisPrazosComoARbsOsDoManualNaEdicaoEOsDosPlanosNaCotaComODocumentoEAPagina() {
         long d02 = jdbc.sql("SELECT id FROM documento WHERE titulo = 'Manual de Operações 2027' AND versao = 2").query(Long.class).single();
         assertThat(jdbc.sql("SELECT count(*) FROM prazo WHERE documento_id = :d").param("d", d02).query(Long.class).single()).isZero();
 
         int criados = amostra.criar(rbs());
 
-        assertThat(criados).isEqualTo(8);
+        assertThat(criados).isEqualTo(16);
         List<Map<String, Object>> linhas = jdbc.sql("""
                 SELECT titulo, data, hora, escopo, documento_id, pagina, criado_por_perfil, ativo, descricao,
                        (SELECT edicao FROM evento WHERE id = prazo.evento_id) AS edicao
@@ -152,7 +196,31 @@ class PrazosDaAmostraTest {
         assertThat(String.valueOf(linhas.get(0).get("data"))).isEqualTo("2026-12-04");
         assertThat(String.valueOf(linhas.get(0).get("hora"))).isEqualTo("18:00:00");
         assertThat(jdbc.sql("SELECT count(*) FROM historico WHERE entidade = 'prazo' AND acao = 'CRIACAO'").query(Long.class).single())
-                .as("o cadastro grava o histórico, como pela rota 63").isGreaterThanOrEqualTo(8L);
+                .as("o cadastro grava o histórico, como pela rota 63").isGreaterThanOrEqualTo(16L);
+    }
+
+    @Test
+    void cadaPlanoComercialTemOsPrazosDaCotaDelaComODocumentoEAPaginaDeOndeSairam() {
+        amostra.criar(rbs());
+
+        List<Map<String, Object>> linhas = jdbc.sql("""
+                SELECT ct.codigo AS cota, d.titulo AS documento, p.titulo, p.data, p.hora, p.pagina, p.escopo, p.parceria_id, p.criado_por_perfil, p.ativo
+                FROM prazo p JOIN documento d ON d.id = p.documento_id JOIN cota_tipo ct ON ct.id = p.cota_tipo_id
+                WHERE p.escopo = 'COTA' ORDER BY ct.codigo, p.data, p.titulo
+                """).query().listOfRows();
+
+        assertThat(linhas).hasSize(8).allSatisfy(l -> assertThat(l).containsEntry("criado_por_perfil", "ADMIN_RBS").containsEntry("ativo", true)
+                .containsEntry("parceria_id", null));
+        assertThat(linhas).extracting(l -> l.get("cota") + " | " + l.get("documento") + " | " + l.get("titulo") + " | " + l.get("data") + " | " + l.get("pagina"))
+                .containsExactly(
+                        "MASTER | Plano comercial · Cota Master 2027 | Entregar o briefing completo | 2026-11-04 | 4",
+                        "MASTER | Plano comercial · Cota Master 2027 | Prazo-limite de entrega do conteúdo | 2026-12-01 | 4",
+                        "MASTER | Plano comercial · Cota Master 2027 | Enviar à RBS as três perguntas da pesquisa | 2026-12-11 | 5",
+                        "MASTER | Plano comercial · Cota Master 2027 | Informar no portal os convidados das cortesias | 2027-01-15 | 2",
+                        "SUBCOTA | Plano comercial · Subcota 2027 | Entregar o briefing completo | 2026-11-18 | 4",
+                        "SUBCOTA | Plano comercial · Subcota 2027 | Prazo-limite de entrega do conteúdo | 2026-12-07 | 4",
+                        "SUBCOTA_G | Plano comercial · Subcota G 2027 | Entregar o briefing completo | 2026-11-11 | 4",
+                        "SUBCOTA_G | Plano comercial · Subcota G 2027 | Prazo-limite de entrega do conteúdo | 2026-12-03 | 4");
     }
 
     @Test
@@ -180,5 +248,32 @@ class PrazosDaAmostraTest {
         assertThat(completou).isEqualTo(2);
         assertThat(jdbc.sql("SELECT count(*) FROM prazo WHERE documento_id = (SELECT id FROM documento WHERE titulo = 'Manual de Operações 2027' AND versao = 2)")
                 .query(Long.class).single()).isEqualTo(8L);
+    }
+
+    @Test
+    void umBancoQueJaTemOsPrazosDoManualGanhaSoOsDosPlanosENadaDuplica() {
+        // o banco de quem subiu a API antes desta mudança: os 8 do manual e nenhum dos planos
+        amostra.criar(rbs());
+        jdbc.sql("DELETE FROM prazo WHERE escopo = 'COTA'").update();
+        jdbc.sql("UPDATE prazo SET ativo = FALSE WHERE titulo = 'Informar os geradores próprios à produção'").update();
+
+        int completou = amostra.criar(rbs());
+
+        assertThat(completou).isEqualTo(8);
+        assertThat(jdbc.sql("SELECT count(*) FROM prazo").query(Long.class).single()).isEqualTo(16L);
+        assertThat(jdbc.sql("SELECT ativo FROM prazo WHERE titulo = 'Informar os geradores próprios à produção'").query(Boolean.class).single())
+                .as("o que a RBS desativou segue desativado").isFalse();
+        assertThat(amostra.criar(rbs())).as("e rodar de novo não faz nada").isZero();
+    }
+
+    @Test
+    void oPrazoDeUmPlanoDesativadoNaoRessuscitaEOutroPlanoNaoMuda() {
+        amostra.criar(rbs());
+        jdbc.sql("UPDATE prazo SET ativo = FALSE WHERE titulo = 'Entregar o briefing completo' AND cota_tipo_id = (SELECT id FROM cota_tipo WHERE codigo = 'SUBCOTA_G')")
+                .update();
+
+        assertThat(amostra.criar(rbs())).isZero();
+        assertThat(jdbc.sql("SELECT count(*) FROM prazo WHERE titulo = 'Entregar o briefing completo'").query(Long.class).single()).isEqualTo(3L);
+        assertThat(jdbc.sql("SELECT count(*) FROM prazo WHERE titulo = 'Entregar o briefing completo' AND ativo").query(Long.class).single()).isEqualTo(2L);
     }
 }
