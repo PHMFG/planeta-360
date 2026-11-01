@@ -1,10 +1,12 @@
 package br.com.rbs.portal.atlas.ferramentas;
 
 import br.com.rbs.portal.comum.EntregasDaMarca;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -21,6 +23,40 @@ public class RegistrosDoPortal {
     /** Uma entrega com a aba, a data de atualização (no dia de Brasília) e o último recado da RBS, se houver. */
     public record Entrega(Long id, String aba, String abaNome, String titulo, String status, LocalDate prazo, LocalDate atualizadoEm,
                           String observacaoDaRbs) {
+    }
+
+    /**
+     * [ISOLAMENTO] O documento {@code d} é visível para a parceria {@code p}: indexado, da edição dela e do escopo dela (GLOBAL da
+     * edição, COTA da cota dela, PARCERIA dela). A mesma regra da RLS do {@code atlas_ro} e da rota 56, repetida aqui porque estas
+     * consultas rodam como o resto do portal, e não como o papel da busca.
+     */
+    static final String DOCUMENTO_VISIVEL = """
+            d.status = 'INDEXADO' AND d.evento_id = p.evento_id
+              AND (d.escopo = 'GLOBAL'
+                   OR (d.escopo = 'COTA' AND d.cota_tipo_id = p.cota_tipo_id)
+                   OR (d.escopo = 'PARCERIA' AND d.parceria_id = p.id))""";
+
+    /** A cota, o produto e a edição da parceria. Nunca o valor do investimento nem a base dele. */
+    public record DadosDaCota(Long parceriaId, String cotaCodigo, String cotaNome, String produto, String eventoNome, Integer edicao) {
+    }
+
+    /** Uma aba da parceria: aberta para a marca (liberada e visível) e se a cota a inclui. */
+    public record AbaDaCota(String codigo, String nome, boolean aberta, boolean naCota) {
+    }
+
+    /** Uma linha do plano comercial previsto. */
+    public record Previsto(Long id, String categoria, String bloco, String veiculo, String formato, String espacoPrograma, String janela,
+                           String tipoMidia, BigDecimal quantidadePrevista, String unidade) {
+    }
+
+    public record Cortesia(Long id, String setor, String dia, Integer quantidade, boolean comShuttle, String acesso) {
+    }
+
+    public record Credencial(Long id, String setor, String beneficiario, Integer quantidadePorDia) {
+    }
+
+    /** O documento do plano comercial que serve de origem ao previsto. */
+    public record PlanoComercial(Long documentoId, String titulo, Integer versao) {
     }
 
     private final JdbcClient jdbc;
@@ -83,5 +119,71 @@ public class RegistrosDoPortal {
     public long contarEntregas(long parceriaId, String status, String aba) {
         return jdbc.sql("SELECT count(*) " + ENTREGAS_DA_MARCA)
                 .param("parceria", parceriaId).param("status", status).param("aba", aba).query(Long.class).single();
+    }
+
+    // ---------------------------------------------------------------------
+    // consultar_cota
+    // ---------------------------------------------------------------------
+
+    public Optional<DadosDaCota> cota(long parceriaId) {
+        return jdbc.sql("""
+                        SELECT p.id AS parceria_id, ct.codigo AS cota_codigo, ct.nome AS cota_nome, p.nome_produto AS produto,
+                               ev.nome AS evento_nome, ev.edicao
+                        FROM parceria p JOIN cota_tipo ct ON ct.id = p.cota_tipo_id JOIN evento ev ON ev.id = p.evento_id
+                        WHERE p.id = :parceria
+                        """)
+                .param("parceria", parceriaId).query(DadosDaCota.class).optional();
+    }
+
+    /** As sete abas na ordem do menu, com o estado de cada uma para a parceria. */
+    public List<AbaDaCota> abasDaCota(long parceriaId) {
+        return jdbc.sql("""
+                        SELECT a.codigo, a.nome, coalesce(pab.liberada AND pab.visivel, FALSE) AS aberta,
+                               EXISTS (SELECT 1 FROM cota_tipo_aba cta WHERE cta.cota_tipo_id = p.cota_tipo_id AND cta.aba_id = a.id) AS na_cota
+                        FROM parceria p CROSS JOIN aba a
+                        LEFT JOIN parceria_aba pab ON pab.parceria_id = p.id AND pab.aba_id = a.id
+                        WHERE p.id = :parceria ORDER BY a.ordem
+                        """)
+                .param("parceria", parceriaId).query(AbaDaCota.class).list();
+    }
+
+    public long contarPrevisto(long parceriaId, List<String> categorias) {
+        return jdbc.sql("SELECT count(*) FROM aproveitamento_previsto WHERE parceria_id = :parceria AND categoria IN (:categorias)")
+                .param("parceria", parceriaId).param("categorias", categorias).query(Long.class).single();
+    }
+
+    /** O previsto das categorias dadas (as de aba aberta), na ordem em que o plano foi carregado. */
+    public List<Previsto> previsto(long parceriaId, List<String> categorias, int limite) {
+        return jdbc.sql("""
+                        SELECT id, categoria, bloco, veiculo, formato, espaco_programa, janela, tipo_midia, quantidade_prevista, unidade
+                        FROM aproveitamento_previsto WHERE parceria_id = :parceria AND categoria IN (:categorias)
+                        ORDER BY id LIMIT :limite
+                        """)
+                .param("parceria", parceriaId).param("categorias", categorias).param("limite", limite).query(Previsto.class).list();
+    }
+
+    public List<Cortesia> cortesias(long parceriaId) {
+        return jdbc.sql("SELECT id, setor, dia, quantidade, com_shuttle, acesso FROM cortesia_cota WHERE parceria_id = :parceria ORDER BY id")
+                .param("parceria", parceriaId).query(Cortesia.class).list();
+    }
+
+    public List<Credencial> credenciais(long parceriaId) {
+        return jdbc.sql("SELECT id, setor, beneficiario, quantidade_por_dia FROM credencial_cota WHERE parceria_id = :parceria ORDER BY id")
+                .param("parceria", parceriaId).query(Credencial.class).list();
+    }
+
+    /**
+     * O plano comercial indexado e visível para a parceria, se houver: o mais específico (o da parceria, depois o da cota, depois o
+     * da edição) e, nele, a versão mais nova. Documento revogado, substituído, ainda sem aprovação ou de outra cota nunca serve.
+     */
+    public Optional<PlanoComercial> planoComercial(long parceriaId) {
+        return jdbc.sql("""
+                        SELECT d.id AS documento_id, d.titulo, d.versao
+                        FROM parceria p JOIN documento d ON d.tipo = 'PLANO_COMERCIAL' AND %s
+                        WHERE p.id = :parceria
+                        ORDER BY CASE d.escopo WHEN 'PARCERIA' THEN 0 WHEN 'COTA' THEN 1 ELSE 2 END, d.versao DESC, d.id DESC
+                        LIMIT 1
+                        """.formatted(DOCUMENTO_VISIVEL))
+                .param("parceria", parceriaId).query(PlanoComercial.class).optional();
     }
 }
