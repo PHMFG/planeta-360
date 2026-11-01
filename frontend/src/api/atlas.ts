@@ -160,7 +160,8 @@ export const responderCartao = (solicitacaoId: number, resposta: RespostaDoCarta
 export type StatusRelatorioAtlas = 'MONTANDO' | 'AGUARDANDO_RESPOSTA' | 'PRONTO' | 'DESCARTADO'
 
 /** Um número do relatório: já formatado, ou indisponível com o motivo. Nunca zero no lugar de "sem dado". */
-export type ItemKpi = { rotulo: string; valor: string | null; indisponivel: string | null; ref: string | null }
+/** {@code selo}: calculado pelo servidor ("acima do previsto", "abaixo do previsto"), só nos indicadores que têm previsto e exibido. */
+export type ItemKpi = { rotulo: string; valor: string | null; indisponivel: string | null; ref: string | null; selo?: string | null }
 
 export type Bloco =
   | { id: string; tipo: 'capa'; titulo: string; subtitulo: string | null; edicao: string | null }

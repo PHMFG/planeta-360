@@ -74,6 +74,8 @@ export type EstadoDoProvedor = {
   latenciaP50Ms: number | null
   latenciaP95Ms: number | null
   disjuntor: string | null
+  /** Só no JEV: o modo e o limiar de cada ponto de decisão. */
+  pontos?: { ponto: string; modo: string; limiar: number }[] | null
 }
 
 export type EstadoDosProvedores = {

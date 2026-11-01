@@ -27,6 +27,7 @@ function Kpi({ item, referencias }: { item: ItemKpi; referencias: Referencias })
         <p className="text-lg leading-tight font-semibold text-[#111]">
           {item.valor}
           <Citacao ref_={item.ref} referencias={referencias} />
+          {item.selo && <span className="mt-0.5 block text-[10px] font-medium text-[#444]">{item.selo}</span>}
         </p>
       )}
     </div>

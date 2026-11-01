@@ -44,7 +44,7 @@ const COR_DA_BARRA: Record<ResultadoDaEtapa, string> = {
 }
 
 // Rodam ao lado do caminho crítico: ficam fora da soma do turno (seção 8.4 do plano) e aparecem numa faixa própria.
-const EM_PARALELO = new Set(['RESUMO', 'R3_FONTES'])
+const EM_PARALELO = new Set(['RESUMO', 'R3_FONTES', 'V2_COERENCIA', 'LACUNAS'])
 
 // Os campos de cada tipo de etapa, na ordem de leitura. O que não estiver aqui aparece depois, com o nome cru, e o JSON inteiro fica como reserva.
 const CAMPOS_DA_ETAPA: Record<string, [string, string][]> = {
@@ -70,7 +70,22 @@ const CAMPOS_DA_ETAPA: Record<string, [string, string][]> = {
   RESUMO: [['noPrazo', 'No prazo'], ['pendente', 'Pendente'], ['modelo', 'Modelo'], ['tokensEntrada', 'Tokens de entrada'], ['tokensSaida', 'Tokens de saída'], ['latenciaMs', 'Latência (ms)'], ['caracteres', 'Caracteres']],
   SAIDA: [['tipo', 'Tipo'], ['caracteres', 'Caracteres'], ['idasAoModelo', 'Idas ao modelo'], ['chamadasDeFerramenta', 'Chamadas de ferramenta'], ['resumosPendentes', 'Resumos pendentes'], ['esperaDosResumosMs', 'Espera dos resumos (ms)']],
 }
-const CAMPOS_DO_JEV: [string, string][] = [['modo', 'Modo'], ['modelo', 'Modelo'], ['pergunta', 'Pergunta'], ['resposta', 'Resposta'], ['confianca', 'Confiança'], ['limiar', 'Limiar'], ['acao', 'Ação']]
+const CAMPOS_DO_JEV: [string, string][] = [
+  ['acao', 'Ação'],
+  ['modo', 'Modo'],
+  ['limiar', 'Limiar'],
+  ['escolha', 'Escolha'],
+  ['confianca', 'Confiança'],
+  ['tipoModelo', 'Tipo de modelo'],
+  ['sinalDeInjecao', 'Sinal de injeção'],
+  ['motivo', 'Motivo'],
+  ['modelo', 'Modelo'],
+  ['latenciaMs', 'Latência (ms)'],
+  ['requisicoes', 'Requisições'],
+  ['selos', 'Selos'],
+  ['probabilidades', 'Probabilidades'],
+  ['itens', 'Cada item'],
+]
 
 const camposDe = (etapa: string) => CAMPOS_DA_ETAPA[etapa] ?? (etapa.startsWith('J1_') || ['R3_FONTES', 'R5_RESPOSTA', 'V2_COERENCIA', 'LACUNAS'].includes(etapa) ? CAMPOS_DO_JEV : [])
 

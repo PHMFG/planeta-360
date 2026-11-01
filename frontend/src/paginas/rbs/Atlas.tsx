@@ -189,6 +189,11 @@ function CartaoDoProvedor({ provedor }: { provedor: EstadoDoProvedor }) {
         <LinhaDoProvedor rotulo="Endereço">{provedor.baseUrl ?? '—'}</LinhaDoProvedor>
         <LinhaDoProvedor rotulo="Fim da chave">{provedor.finalDaChave ? `…${provedor.finalDaChave}` : '—'}</LinhaDoProvedor>
         {provedor.modo && <LinhaDoProvedor rotulo="Modo">{provedor.modo}</LinhaDoProvedor>}
+        {provedor.pontos?.map((ponto) => (
+          <LinhaDoProvedor key={ponto.ponto} rotulo={`Ponto ${ponto.ponto}`}>
+            {ponto.modo} · limiar {ponto.limiar}
+          </LinhaDoProvedor>
+        ))}
         <LinhaDoProvedor rotulo="Chamadas em 24 h">{numero(provedor.chamadas24h)}</LinhaDoProvedor>
         <LinhaDoProvedor rotulo="Erros em 24 h">{numero(provedor.erros24h)}</LinhaDoProvedor>
         <LinhaDoProvedor rotulo="Latência p50 e p95">
