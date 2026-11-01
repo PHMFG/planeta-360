@@ -67,6 +67,17 @@ atlas:
   limites:
     mensagens-por-hora: ${ATLAS_LIMITE_MENSAGENS_POR_HORA:20}
     relatorios-por-dia: ${ATLAS_LIMITE_RELATORIOS_POR_DIA:3}
+  # [ATLAS] Os disjuntores do modelo de linguagem, do JEV e do Gemini (Resilience4j; M8). Cada um abre com 5 falhas seguidas ou 50% das
+  # 10 últimas chamadas e deixa uma chamada de prova passar depois de 60 s; aberto, o modelo dá a frase fixa de falha na hora, o JEV fica
+  # como se estivesse desligado e a busca segue só na lista textual. O estado está na rota 52 (disjuntor) e a recusa no traço (DISJUNTOR).
+  # ligado=false desliga os três (as chamadas passam direto): é o que o perfil test faz, porque o estado fica na memória e o contexto do
+  # Spring é compartilhado; os testes dos disjuntores ligam num contexto próprio.
+  disjuntores:
+    ligado: ${ATLAS_DISJUNTORES:true}
+    falhas-seguidas: 5
+    taxa-de-falha: 50
+    janela: 10
+    espera: PT60S
   # [ATLAS] O raciocínio do modelo (o "thinking" do DeepSeek, {"type":"enabled"} ou "disabled"). Ligado, o reasoning_content de cada
   # resposta é gravado e volta ao modelo em todas as idas seguintes (com ferramentas, o DeepSeek responde 400 sem ele), mas NUNCA
   # sai do servidor: a conversa recebe só um resumo curto dele, gerado numa chamada à parte (o item "raciocinio" com "resumo", e os
@@ -259,6 +270,8 @@ atlas:
   limites:
     mensagens-por-hora: 100000
     relatorios-por-dia: 100000
+  disjuntores:
+    ligado: false
   debug:
     chaves: false
     ferramentas: false

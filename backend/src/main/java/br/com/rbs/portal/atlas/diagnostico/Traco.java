@@ -1,5 +1,6 @@
 package br.com.rbs.portal.atlas.diagnostico;
 
+import br.com.rbs.portal.atlas.disjuntor.DisjuntorAbertoException;
 import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.UsoDoLlm;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -7,7 +8,9 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,6 +43,7 @@ public final class Traco {
     private final UUID turno;
     private final Object trava = new Object();
     private final List<Etapa> etapas = new ArrayList<>();
+    private final Set<String> disjuntoresAvisados = ConcurrentHashMap.newKeySet();
     private boolean gravado;
     private boolean temSaida;
 
@@ -80,6 +84,18 @@ public final class Traco {
             }
         }
         return etapa;
+    }
+
+    /**
+     * O disjuntor de um provedor recusou a chamada neste turno: a etapa {@code DISJUNTOR} (o provedor, o estado e quanto falta para a
+     * chamada de prova), com resultado {@code RECUSADO}. Uma por provedor por turno, por mais chamadas que ele recuse.
+     */
+    public void disjuntorAberto(DisjuntorAbertoException recusa) {
+        if (!ativo() || !disjuntoresAvisados.add(recusa.provedor())) {
+            return;
+        }
+        abrir(EtapaDoTraco.DISJUNTOR).dado("provedor", recusa.provedor()).dado("estado", recusa.estado())
+                .dado("tentaDeNovoEmSegundos", (recusa.falta().toMillis() + 999) / 1000).fim(ResultadoDaEtapa.RECUSADO);
     }
 
     /** Uma falha inesperada do turno: a etapa {@code ERRO}, com o nome da exceção e uma frase curta e limpa (nunca a pilha). */

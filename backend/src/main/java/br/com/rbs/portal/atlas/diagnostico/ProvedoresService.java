@@ -10,6 +10,7 @@ import br.com.rbs.portal.atlas.diagnostico.DiagnosticoDtos.TesteDeProvedorDto;
 import br.com.rbs.portal.atlas.diagnostico.DiagnosticoDtos.TetoDiarioDto;
 import br.com.rbs.portal.atlas.diagnostico.DiagnosticoDtos.UsoDoTetoDto;
 import br.com.rbs.portal.atlas.diagnostico.TracoRepositorio.EstatisticasDoProvedor;
+import br.com.rbs.portal.atlas.disjuntor.DisjuntoresDosProvedores;
 import br.com.rbs.portal.atlas.embeddings.EmbeddingsGemini;
 import br.com.rbs.portal.atlas.embeddings.EmbeddingsIndisponivelException;
 import br.com.rbs.portal.atlas.jev.ConfiguracaoDoJev;
@@ -87,12 +88,13 @@ public class ProvedoresService {
     private final TetoDiario teto;
     private final ModoDoAtlas modo;
     private final VerificadorDeAcesso verificador;
+    private final DisjuntoresDosProvedores disjuntores;
     // Sem seguir redirecionamento: a chave vai no cabeçalho, e só para o endereço configurado.
     private final HttpClient http = HttpClient.newBuilder().connectTimeout(PRAZO_DA_CONEXAO).followRedirects(HttpClient.Redirect.NEVER).build();
 
     public ProvedoresService(ProvedorAtual provedorAtual, FabricaDeProvedor fabrica, ConfiguracaoDeProvedores config,
                              ConfiguracaoDoJev jevPorPonto, TracoRepositorio tracos, AtlasRepositorio atlas, TetoDiario teto,
-                             ModoDoAtlas modo, VerificadorDeAcesso verificador) {
+                             ModoDoAtlas modo, VerificadorDeAcesso verificador, DisjuntoresDosProvedores disjuntores) {
         this.provedorAtual = provedorAtual;
         this.fabrica = fabrica;
         this.config = config;
@@ -102,6 +104,7 @@ public class ProvedoresService {
         this.teto = teto;
         this.modo = modo;
         this.verificador = verificador;
+        this.disjuntores = disjuntores;
     }
 
     // ---------------------------------------------------------------------
@@ -122,12 +125,12 @@ public class ProvedoresService {
         return switch (escolha.origem()) {
             case DEBUG -> new ProvedorDto(LLM, true, Origem.DEBUG.name(), escolha.debug().modelo(), escolha.debug().baseUrl(),
                     escolha.debug().finalDaChave(), null, chamadas(estatisticas), erros(estatisticas), p50(estatisticas),
-                    p95(estatisticas), null);
+                    p95(estatisticas), disjuntores.llm().estado());
             case AMBIENTE -> new ProvedorDto(LLM, true, Origem.AMBIENTE.name(), fabrica.modeloPadrao(), fabrica.baseUrlPadrao(),
                     finalDa(fabrica.chaveDoAmbiente()), null, chamadas(estatisticas), erros(estatisticas), p50(estatisticas),
-                    p95(estatisticas), null);
+                    p95(estatisticas), disjuntores.llm().estado());
             case NENHUM -> new ProvedorDto(LLM, false, Origem.NENHUM.name(), fabrica.modeloPadrao(), fabrica.baseUrlPadrao(), null, null,
-                    chamadas(estatisticas), erros(estatisticas), p50(estatisticas), p95(estatisticas), null);
+                    chamadas(estatisticas), erros(estatisticas), p50(estatisticas), p95(estatisticas), disjuntores.llm().estado());
         };
     }
 
@@ -140,7 +143,7 @@ public class ProvedoresService {
                 .map(ponto -> new PontoDoJevDto(ponto.nome(), jevPorPonto.modo(ponto).name(), jevPorPonto.limiar(ponto))).toList();
         return new ProvedorDto(JEV, configurado, configurado ? Origem.AMBIENTE.name() : Origem.NENHUM.name(), config.jevModelo(),
                 config.jevBaseUrl(), finalDa(config.jevChave()), config.jevModo(), chamadas(estatisticas), erros(estatisticas),
-                p50(estatisticas), p95(estatisticas), null, pontos);
+                p50(estatisticas), p95(estatisticas), disjuntores.jev().estado(), pontos);
     }
 
     private ProvedorDto doGemini() {
@@ -148,7 +151,7 @@ public class ProvedoresService {
         boolean configurado = config.geminiTemChave();
         return new ProvedorDto(GEMINI, configurado, configurado ? Origem.AMBIENTE.name() : Origem.NENHUM.name(), config.geminiModelo(),
                 config.geminiBaseUrl(), finalDa(config.geminiChave()), null, chamadas(estatisticas), erros(estatisticas),
-                p50(estatisticas), p95(estatisticas), null);
+                p50(estatisticas), p95(estatisticas), disjuntores.gemini().estado());
     }
 
     private static long chamadas(EstatisticasDoProvedor e) {

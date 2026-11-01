@@ -8,6 +8,9 @@ import br.com.rbs.portal.atlas.checagem.NormalizadorDeNumeros;
 import br.com.rbs.portal.atlas.contexto.AtlasContexto;
 import br.com.rbs.portal.atlas.diagnostico.ResultadoDaEtapa;
 import br.com.rbs.portal.atlas.diagnostico.Traco.Etapa;
+import br.com.rbs.portal.atlas.disjuntor.DisjuntorAbertoException;
+import br.com.rbs.portal.atlas.disjuntor.DisjuntorDoProvedor;
+import br.com.rbs.portal.atlas.disjuntor.DisjuntoresDosProvedores;
 import br.com.rbs.portal.atlas.jev.JevDoTurno.Decisao;
 import br.com.rbs.portal.atlas.jev.ProvedorDeJev.PedidoAoJev;
 import br.com.rbs.portal.atlas.jev.ProvedorDeJev.PerguntaAoJev;
@@ -127,6 +130,7 @@ public class ServicoDoJev {
     }
 
     private final ConfiguracaoDoJev config;
+    private final DisjuntoresDosProvedores disjuntores;
     private final ProvedorDeJev provedor;
     private final PerguntasDoJev perguntas;
     private final AtlasRepositorio repositorio;
@@ -134,9 +138,10 @@ public class ServicoDoJev {
     private final TransactionTemplate transacao;
     private final ExecutorService emParalelo = Executors.newVirtualThreadPerTaskExecutor();
 
-    public ServicoDoJev(ConfiguracaoDoJev config, ProvedorDeJev provedor, PerguntasDoJev perguntas, AtlasRepositorio repositorio,
-                        DadoInformadoService dados, TransactionTemplate transacao) {
+    public ServicoDoJev(ConfiguracaoDoJev config, DisjuntoresDosProvedores disjuntores, ProvedorDeJev provedor, PerguntasDoJev perguntas,
+                        AtlasRepositorio repositorio, DadoInformadoService dados, TransactionTemplate transacao) {
         this.config = config;
+        this.disjuntores = disjuntores;
         this.provedor = provedor;
         this.perguntas = perguntas;
         this.repositorio = repositorio;
@@ -149,9 +154,22 @@ public class ServicoDoJev {
         emParalelo.shutdown();
     }
 
-    /** O modo do ponto neste turno: {@code DESLIGADO} num contexto sem turno de JEV. */
+    /**
+     * O modo do ponto neste turno: {@code DESLIGADO} num contexto sem turno de JEV. [M8] Com o disjuntor do JEV aberto (e dentro da
+     * espera), o ponto também fica {@code DESLIGADO}: o caminho segue como se o JEV não existisse, sem chamá-lo, e o traço guarda a
+     * etapa {@code DISJUNTOR}. Passada a espera, a próxima chamada é a de prova.
+     */
     public ModoDoJev modo(AtlasContexto contexto, PontoDoJev ponto) {
-        return contexto.jev().ativo() ? config.modo(ponto) : ModoDoJev.DESLIGADO;
+        if (!contexto.jev().ativo()) {
+            return ModoDoJev.DESLIGADO;
+        }
+        ModoDoJev modo = config.modo(ponto);
+        DisjuntorDoProvedor disjuntor = disjuntores.jev();
+        if (modo.consulta() && disjuntor.bloqueado()) {
+            contexto.traco().disjuntorAberto(new DisjuntorAbertoException(DisjuntoresDosProvedores.JEV, disjuntor.estado(), disjuntor.falta()));
+            return ModoDoJev.DESLIGADO;
+        }
+        return modo;
     }
 
     public double limiar(PontoDoJev ponto) {
@@ -620,14 +638,25 @@ public class ServicoDoJev {
     private Chamada chamar(PedidoAoJev pedido) {
         long inicio = System.nanoTime();
         try {
-            RespostaDoJev resposta = provedor.perguntar(pedido);
+            RespostaDoJev resposta = disjuntores.jev().executar(() -> provedor.perguntar(pedido), ServicoDoJev::falhaDoJev);
             return new Chamada(resposta, null, (System.nanoTime() - inicio) / 1_000_000);
+        } catch (DisjuntorAbertoException aberto) {
+            // Outra chamada do mesmo turno fechou a porta no meio (ou a de prova já está ocupada): é como se o JEV não respondesse.
+            return new Chamada(null, "DISJUNTOR_ABERTO", 0);
         } catch (JevIndisponivelException falha) {
             return new Chamada(null, falha.motivo(), (System.nanoTime() - inicio) / 1_000_000);
         } catch (RuntimeException falha) {
             log.warn("Atlas: o JEV falhou por um motivo inesperado ({})", falha.getClass().getSimpleName());
             return new Chamada(null, "ERRO_" + falha.getClass().getSimpleName(), (System.nanoTime() - inicio) / 1_000_000);
         }
+    }
+
+    /**
+     * O que conta como falha do JEV para o disjuntor: tudo, menos a chave que falta (nada foi chamado) e a chamada que o próprio
+     * servidor interrompeu.
+     */
+    private static boolean falhaDoJev(RuntimeException falha) {
+        return !(falha instanceof JevIndisponivelException jev) || !("SEM_CHAVE".equals(jev.motivo()) || "INTERROMPIDO".equals(jev.motivo()));
     }
 
     /** As requisições em paralelo, na ordem dos pedidos: uma rodada de espera. Uma que não volta no tempo é erro, e as outras valem. */

@@ -34,6 +34,8 @@
         <jexl.version>3.7.1</jexl.version>
         <!-- [ATLAS] Limites por usuário (M8): o balde de fichas na memória. O artefato jdk17 serve ao Java 21. -->
         <bucket4j.version>8.21.0</bucket4j.version>
+        <!-- [ATLAS] Disjuntores (M8): só o módulo do disjuntor, sem o starter do Spring. -->
+        <resilience4j.version>2.4.0</resilience4j.version>
         <!--
           [ATLAS] Os grupos de teste que o ./mvnw test NÃO roda. Os testes que precisam das chaves dos provedores levam
           @Tag("avaliacao") e rodam com: ./mvnw test -Dgroups=avaliacao -Dtestes.excluidos=
@@ -128,6 +130,13 @@
             <groupId>com.bucket4j</groupId>
             <artifactId>bucket4j_jdk17-core</artifactId>
             <version>${bucket4j.version}</version>
+        </dependency>
+
+        <!-- [ATLAS] O disjuntor em volta do modelo de linguagem, do JEV e do Gemini (M8): veja atlas/disjuntor/DisjuntorDoProvedor. -->
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-circuitbreaker</artifactId>
+            <version>${resilience4j.version}</version>
         </dependency>
 
         <!-- Testes: MockMvc/MockMvcTester e utilidades de sessão e CSRF -->

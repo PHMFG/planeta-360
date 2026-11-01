@@ -7,6 +7,7 @@ import br.com.rbs.portal.atlas.AtlasRepositorio.LinhaDeRelatorio;
 import br.com.rbs.portal.atlas.AtlasRepositorio.LinhaDeSolicitacao;
 import br.com.rbs.portal.atlas.ModoDoAtlas;
 import br.com.rbs.portal.atlas.contexto.AtlasContexto;
+import br.com.rbs.portal.atlas.disjuntor.DisjuntorAbertoException;
 import br.com.rbs.portal.atlas.diagnostico.EtapaDoTraco;
 import br.com.rbs.portal.atlas.diagnostico.ResultadoDaEtapa;
 import br.com.rbs.portal.atlas.diagnostico.Traco;
@@ -493,6 +494,9 @@ public class LoopDoAgente {
             } catch (RuntimeException falha) {
                 log.warn("Atlas: o modelo não respondeu na conversa {} ({})", contexto.conversaId(), falha.getClass().getSimpleName());
                 ida.dado("erro", falha.getClass().getSimpleName()).dado("detalhe", falha.getMessage()).fim(ResultadoDaEtapa.ERRO);
+                if (falha instanceof DisjuntorAbertoException aberto) {
+                    turno.traco.disjuntorAberto(aberto);   // M8: a ida nem saiu; a frase fixa de falha vem na hora
+                }
                 if (filtro != null) {
                     registrarRecusaDoFluxo(turno, filtro);   // o filtro pode ter recusado um trecho antes de o modelo cair
                 }

@@ -33,7 +33,7 @@ final class ApoioDoDiagnostico {
 
         /** Fora da soma do caminho crítico: o resumo, que corre em paralelo, e a busca, que está dentro da ferramenta. */
         boolean emParalelo() {
-            return java.util.Set.of("RESUMO", "BUSCA", "R3_FONTES", "V2_COERENCIA", "LACUNAS").contains(etapa);
+            return java.util.Set.of("RESUMO", "BUSCA", "R3_FONTES", "V2_COERENCIA", "LACUNAS", "DISJUNTOR").contains(etapa);
         }
     }
 

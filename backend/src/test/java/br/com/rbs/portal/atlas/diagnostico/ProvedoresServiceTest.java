@@ -10,6 +10,7 @@ import br.com.rbs.portal.atlas.ModoDoAtlas;
 import br.com.rbs.portal.atlas.diagnostico.DiagnosticoDtos.ProvedoresDto;
 import br.com.rbs.portal.atlas.diagnostico.DiagnosticoDtos.TesteDeProvedorDto;
 import br.com.rbs.portal.atlas.diagnostico.TracoRepositorio.EstatisticasDoProvedor;
+import br.com.rbs.portal.atlas.disjuntor.DisjuntoresDosProvedores;
 import br.com.rbs.portal.atlas.loop.TetoDiario;
 import br.com.rbs.portal.atlas.provedor.FabricaDeProvedor;
 import br.com.rbs.portal.atlas.provedor.ProvedorAtual;
@@ -45,8 +46,10 @@ class ProvedoresServiceTest {
         when(atlas.mensagensDoModeloHojePorParceria()).thenReturn(List.of());
         TetoDiario teto = mock(TetoDiario.class);
         when(teto.teto()).thenReturn(200);
-        return new ProvedoresService(new ProvedorAtual(semModelo), new FabricaDeProvedor(new MockEnvironment(), semObservacao), config,
-                new br.com.rbs.portal.atlas.jev.ConfiguracaoDoJev(new MockEnvironment()), tracos, atlas, teto, new ModoDoAtlas(false, false, diagnosticoLigado, false), new VerificadorDeAcesso(null));
+        DisjuntoresDosProvedores disjuntores = new DisjuntoresDosProvedores(false, 5, 50f, 10, java.time.Duration.ofSeconds(60), java.time.Clock.systemUTC());
+        return new ProvedoresService(new ProvedorAtual(semModelo, disjuntores), new FabricaDeProvedor(new MockEnvironment(), semObservacao), config,
+                new br.com.rbs.portal.atlas.jev.ConfiguracaoDoJev(new MockEnvironment()), tracos, atlas, teto, new ModoDoAtlas(false, false, diagnosticoLigado, false),
+                new VerificadorDeAcesso(null), disjuntores);
     }
 
     ConfiguracaoDeProvedores configuracao(String chaveDoJev, String urlDoJev, String chaveDoGemini, String urlDoGemini) {

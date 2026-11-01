@@ -125,8 +125,8 @@ class ProvedoresTest {
         assertThat(lerLista(resposta, "$.provedores[1].pontos[*].modo")).containsOnly("SOMBRA");
         assertThat(lerLista(resposta, "$.provedores[1].pontos[*].limiar")).containsExactly(0.9, 0.9, 0.3, 0.9, 0.9, 0.3);
         assertThat(lerLista(resposta, "$.provedores[?(@.nome!='jev')].pontos")).containsOnlyNulls();
-        // o disjuntor é do M8: nulo por enquanto, nos três
-        assertThat(lerLista(resposta, "$.provedores[*].disjuntor")).containsOnlyNulls().hasSize(3);
+        // os disjuntores ficam desligados no contexto normal da suíte (DisjuntoresDosProvedoresTest liga num contexto próprio)
+        assertThat(lerLista(resposta, "$.provedores[*].disjuntor")).containsOnly("DESLIGADO").hasSize(3);
         assertThat(lerJson(resposta, "$.tetoDiario.limite")).isEqualTo(200);
         // nunca a chave inteira
         assertThat(corpo(resposta)).doesNotContain(CHAVE_DO_JEV).doesNotContain(CHAVE_DO_GEMINI);

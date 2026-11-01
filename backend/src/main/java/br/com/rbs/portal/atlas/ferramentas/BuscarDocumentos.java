@@ -175,6 +175,9 @@ public class BuscarDocumentos implements Ferramenta {
                     : new Escopo(contexto.eventoId(), contexto.cotaTipoId(), contexto.parceriaId());
             Consultada consultada = consultas.consultar(escopo, consulta, tipo);
             registrarNoTraco(etapa, consultada);
+            if (consultada.recusadoPeloDisjuntor() != null) {
+                contexto.traco().disjuntorAberto(consultada.recusadoPeloDisjuntor());   // M8: o Gemini está com o disjuntor aberto
+            }
             etapa.fim(ResultadoDaEtapa.OK);
             return aposOJev(contexto, consulta, consultada.resultado());
         } catch (RuntimeException falha) {
