@@ -728,6 +728,9 @@ class ChecagemDeFontesTest {
         String entrega = "Entregue até 09/12/2026.";
         aprova(turno("Qual dia?", entrega), "É no dia 9 [T1].");
         aprova(turno("Qual dia?", entrega), "É no dia 09 [T1].");
+        aprova(turno("Qual dia?", entrega), "Dia 9 [T1].");
+        recusa(turno("Qual dia?", entrega), "São 9 geradores [T1].");
+        recusa(turno("Qual dia?", entrega), "Custa R$ 9 [T1].");
         recusa(turno("Qual dia?", entrega), "É no dia 7 [T1].");
         recusa(turno("Qual dia?", entrega), "É no dia 12 [T1].");
         // a pessoa escreveu a data inteira: o dia solto não é o que ela escreveu

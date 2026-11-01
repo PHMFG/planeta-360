@@ -622,6 +622,25 @@ class NormalizadorDeNumerosTest {
     }
 
     @Test
+    void oDiaSoCasaQuandoADiaOuDiasVemLogoAntesDoNumeroNaResposta() {
+        String fonte = "Informe até 04/12/2026, às 18h.";
+
+        assertThat(aceitaDaFonte(fonte, "no dia 4")).isTrue();
+        assertThat(aceitaDaFonte(fonte, "Dia 4")).isTrue();
+        assertThat(aceitaDaFonte(fonte, "nos dias 4")).isTrue();
+        assertThat(aceitaDaFonte(fonte, "no dia  4")).isTrue();
+        assertThat(aceitaDaFonte(fonte, "são 4 geradores")).as("número comum").isFalse();
+        assertThat(aceitaDaFonte(fonte, "custa R$ 4")).as("número comum").isFalse();
+        assertThat(aceitaDaFonte(fonte, "4")).isFalse();
+        assertThat(aceitaDaFonte(fonte, "no dia 5")).isFalse();
+        assertThat(aceitaDaFonte(fonte, "mediadia 4")).as("a palavra tem de ser inteira").isFalse();
+        assertThat(aceitaDaFonte(fonte, "dia 4,5")).as("não é um dia inteiro").isFalse();
+        assertThat(aceitaDaFonte(fonte, "dias 4 e 5")).as("só o primeiro número depois de dias").isFalse();
+        // com o número escrito na fonte, é um número comum e vale
+        assertThat(aceitaDaFonte("Informe até 04/12/2026 para 4 geradores.", "são 4 geradores")).isTrue();
+    }
+
+    @Test
     void dataSemAnoNaFonteComDiaSoltoSoLiberaOsAnosAceitos() {
         Origens fonte = new Origens().anosAceitos(Set.of("2026", "2027")).adicionarFonteCitada("Sexta, 29, e sábado, 30 de janeiro.");
         assertThat(aceita(fonte, "29 de janeiro de 2027")).isTrue();

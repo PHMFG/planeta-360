@@ -122,6 +122,10 @@ public final class NormalizadorDeNumeros {
     private static final Pattern NUMERO = Pattern.compile("\\d{1,3}(?:" + ESPACO_DE_GRUPO + "\\d{3})+(?!\\d)(?:[.,]\\d+)?|\\d+(?:[.,]\\d+)*");
     private static final Pattern ANO = Pattern.compile("^\\d{4}$");
     private static final Pattern DIA_DO_MES = Pattern.compile("[1-9]|[12][0-9]|3[01]");
+    /** A palavra "dia" ou "dias" (inteira) no fim do trecho antes de um número. */
+    private static final Pattern DIA_ANTES = Pattern.compile("(?<![\\p{L}\\p{N}])dias?\\s+$", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+    /** O valor extra de um número da resposta que vem logo depois de "dia"/"dias": só uma fonte citada o confirma ({@code dia:N}). */
+    private static final String PREFIXO_DEPOIS_DE_DIA = "depoisDeDia:";
     private static final Pattern SEPARADOR_DE_GRUPO = Pattern.compile(ESPACO_DE_GRUPO);
     private static final Pattern REAL_ANTES = Pattern.compile("R\\$\\s*$");
     private static final Pattern UNIDADE_DEPOIS = Pattern.compile("\\s*(?:de\\s+)?(?:" + UNIDADES + ")" + NAO_ACABA_A_PALAVRA,
@@ -382,8 +386,15 @@ public final class NormalizadorDeNumeros {
                 }
                 return List.of(valor(trecho, valores.toArray(new String[0])));
             }
-            return List.of(ehAno(m, todo) ? valor(trecho, normalizarNumero(trecho), "ano:" + trecho)
-                    : valor(trecho, normalizarNumero(trecho)));
+            if (ehAno(m, todo)) {
+                return List.of(valor(trecho, normalizarNumero(trecho), "ano:" + trecho));
+            }
+            String numero = normalizarNumero(trecho);
+            if (!fonte && Origens.ehDiaDoMes(numero) && depoisDaPalavraDia(todo, m.start())) {
+                // "dia 4", "no dia 4": na resposta, o número logo depois de "dia" ou "dias" também pode ser o dia de uma data da fonte
+                return List.of(valor(trecho, numero, PREFIXO_DEPOIS_DE_DIA + numero));
+            }
+            return List.of(valor(trecho, numero));
         });
         return achados;
     }
@@ -407,6 +418,11 @@ public final class NormalizadorDeNumeros {
             return false;
         }
         return !UNIDADE_DEPOIS.matcher(todo).region(numero.end(), todo.length()).lookingAt();
+    }
+
+    /** A palavra "dia" ou "dias" logo antes (só espaços entre ela e o número)? A janela de 7 caracteres basta: "dias " tem 5. */
+    private static boolean depoisDaPalavraDia(String todo, int inicioDoNumero) {
+        return DIA_ANTES.matcher(todo.substring(Math.max(0, inicioDoNumero - 7), inicioDoNumero)).find();
     }
 
     /** Um número escrito por extenso: o valor e se teve escala (mil, milhão, bilhão). */
@@ -473,8 +489,9 @@ public final class NormalizadorDeNumeros {
      * <b>O ano não é valor.</b> O ano de uma data da fonte e os quatro dígitos que são ano (título, "Para 2027") valem só como ano
      * ({@code ano:2027}); "R$ 2.026,00" e "2026 credenciais" precisam do número escrito como número.
      * <p>
-     * <b>A fonte citada diz mais</b> ({@link #adicionarFonteCitada}): o dia de uma de suas datas vale como o número solto ({@code
-     * dia 4} com a fonte em 04/12/2026), e uma data da resposta vale se o <i>texto</i> da fonte tem o dia como número e alguma data
+     * <b>A fonte citada diz mais</b> ({@link #adicionarFonteCitada}): o dia de uma de suas datas vale como o número que vem logo
+     * depois de "dia" ou "dias" na resposta ({@code dia 4}, {@code no dia 4} com a fonte em 04/12/2026; {@code 4 geradores} e {@code
+     * R$ 4} são números comuns e precisam estar na fonte como número), e uma data da resposta vale se o <i>texto</i> da fonte tem o dia como número e alguma data
      * do mesmo mês (e do mesmo ano, se a resposta o disse): "29 e 30 de janeiro de 2027" com a fonte "sexta-feira, 29, e no sábado, 30
      * de janeiro de 2027". O número da página, da seção e da versão da fonte ({@link #adicionar}) não é o dia: com a fonte na página
      * 5, "05/12/2026" não vale só porque a fonte tem a data 04/12/2026. A mensagem da pessoa, a data de hoje e as contas também não
@@ -568,7 +585,8 @@ public final class NormalizadorDeNumeros {
         public boolean aceita(Achado achado) {
             if (!achado.ehData()) {
                 for (String valor : achado.valores()) {
-                    if (valores.contains(valor) || (ehDiaDoMes(valor) && valores.contains("dia:" + valor))) {
+                    if (valores.contains(valor)
+                            || (valor.startsWith(PREFIXO_DEPOIS_DE_DIA) && valores.contains("dia:" + valor.substring(PREFIXO_DEPOIS_DE_DIA.length())))) {
                         return true;
                     }
                 }
@@ -606,7 +624,7 @@ public final class NormalizadorDeNumeros {
         }
 
         /** Um número inteiro de 1 a 31, escrito como {@link #normalizarNumero} o escreve (sem zero à esquerda). */
-        private static boolean ehDiaDoMes(String valor) {
+        static boolean ehDiaDoMes(String valor) {
             return DIA_DO_MES.matcher(valor).matches();
         }
     }
