@@ -529,7 +529,13 @@ public class Calcular implements Ferramenta {
             erros.put(campo, "O valor " + valorLiteral + " não está " + onde + ". Copie o valor exatamente como está lá.");
             return null;
         }
-        return comUnidades(nome, marcador, numero, declarada, unidadeDaFonte, erros);
+        Entrada entrada = comUnidades(nome, marcador, numero, declarada, unidadeDaFonte, erros);
+        if (entrada == null || !marcador.startsWith("C")) {
+            return entrada;
+        }
+        // o valor copiado do texto de uma conta do turno leva as constantes dela, como o ref: sem isso o literal zerava o limite da cadeia
+        int constantes = turno.fonte(marcador).flatMap(fonte -> ContaDoChat.deDados(fonte.dados())).map(ContaDoChat::constantes).orElse(0);
+        return new Entrada(entrada.nome(), entrada.origem(), entrada.numero(), entrada.unidade(), entrada.paraExibir(), constantes);
     }
 
     /** O valor literal como número, ou nulo se não são só algarismos (com a vírgula, o milhar ou o ponto decimal). */

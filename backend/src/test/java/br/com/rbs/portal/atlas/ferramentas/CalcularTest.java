@@ -693,6 +693,40 @@ class CalcularTest {
     }
 
     @Test
+    void oValorLiteralDeUmaContaCDaFonteHerdaAsConstantesDelaComoORef() {
+        FontesDoTurno turno = new FontesDoTurno("Quero 7 unidades.", 2027, LocalDate.of(2026, 11, 1));
+        AtlasContexto contexto = contexto();
+        // a + 100 + 100 dá 207, com as duas constantes que o script pode ter
+        assertThat(rodar(contexto, turno, "{\"nome\":\"ca\",\"script\":\"a + 100 + 100\",\"variaveis\":{"
+                + "\"a\":{\"fonte\":\"usuario\",\"valor\":\"7\"}}}")).containsEntry("valorFormatado", "207");
+
+        // pelo ref a cadeia já pegava; pelo literal copiado do texto de C1 o limite zerava
+        assertThat(erro(contexto, turno, "{\"nome\":\"cb\",\"script\":\"t + 100\",\"variaveis\":{\"t\":{\"ref\":\"calc:ca\"}}}"))
+                .contains("constantes", "cadeia");
+        assertThat(erro(contexto, turno, "{\"nome\":\"cc\",\"script\":\"t + 100\",\"variaveis\":{\"t\":{\"fonte\":\"C1\",\"valor\":\"207\"}}}"))
+                .contains("3 constantes", "cadeia");
+        assertThat(turno.contas()).hasSize(1);
+        // sem constante nova, o literal da conta passa, e leva as duas adiante
+        assertThat(rodar(contexto, turno, "{\"nome\":\"cd\",\"script\":\"t * u\",\"variaveis\":{\"t\":{\"fonte\":\"C1\",\"valor\":\"207\"},"
+                + "\"u\":{\"fonte\":\"usuario\",\"valor\":\"7\"}}}")).containsEntry("marcador", "C2");
+        assertThat(ContaDoChat.deDados(turno.fonte("C2").orElseThrow().dados()).orElseThrow().constantes()).isEqualTo(2);
+    }
+
+    @Test
+    void oValorLiteralDeUmaContagemDeDiasNaoCarregaConstante() {
+        FontesDoTurno turno = new FontesDoTurno("Quero 7 unidades.", 2027, LocalDate.of(2026, 11, 1));
+        AtlasContexto contexto = contexto();
+        turno.registrarCalculo(null, "Contagem de dias", "Contei 5 dias corridos depois de 03/11/2026. Resultado: 08/11/2026.",
+                Map.of("ferramenta", "contar_dias", "resultado", "5"));
+
+        Map<String, Object> resultado = rodar(contexto, turno, "{\"nome\":\"cd\",\"script\":\"t * 2 + 1\",\"variaveis\":{"
+                + "\"t\":{\"fonte\":\"C1\",\"valor\":\"5\"}}}");
+
+        assertThat(resultado).containsEntry("valorFormatado", "11");
+        assertThat(ContaDoChat.deDados(turno.fonte("C2").orElseThrow().dados()).orElseThrow().constantes()).isEqualTo(2);
+    }
+
+    @Test
     void oAtaqueDeEncadearContasParaChegarEm312NaoFecha() {
         // x + 100 + 100 numa conta e y + 100 + 2, y + 2 + 2... depois: com a cadeia, a terceira conta já não passa
         FontesDoTurno turno = new FontesDoTurno("Quero 7 e 5 unidades.", 2027, LocalDate.of(2026, 11, 1));
