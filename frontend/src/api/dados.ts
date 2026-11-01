@@ -20,6 +20,8 @@ export type CampoCatalogo = {
 
 export type ValorVigente = {
   valor: number
+  /** Só num campo do tipo ARQUIVO: o valor fica nulo, e a planilha sai pela rota de download. */
+  arquivo?: { id: number; nomeOriginal: string } | null
   origem: 'PORTAL' | 'ATLAS'
   informadoPor: UsuarioResumo | null
   informadoEm: string
@@ -39,3 +41,10 @@ export const obterDados = (parceriaId: number, aba: CodigoAba) =>
 /** Grava um valor novo por campo; a correção é uma linha nova, e a anterior fica no histórico. */
 export const informarDados = (parceriaId: number, valores: ValorInformado[]) =>
   pedir<DadosDaAba>(`/parcerias/${parceriaId}/dados`, { metodo: 'POST', corpo: { valores } })
+
+/** Envia o arquivo de um campo do tipo ARQUIVO (planilha da agência). Não passa pelo cartão do Atlas nem entra no relatório. */
+export function enviarArquivoDoCampo(parceriaId: number, chave: string, arquivo: File) {
+  const formulario = new FormData()
+  formulario.append('arquivo', arquivo)
+  return pedir<ValorVigente>(`/parcerias/${parceriaId}/dados-informados/${chave}/arquivo`, { metodo: 'POST', formulario })
+}

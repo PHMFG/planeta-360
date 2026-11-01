@@ -1,6 +1,6 @@
 // Aplicações de marca (aba APLICACOES): o plano comercial linha a linha, as fotos que comprovam cada aplicação, os números da
 // ativação que a marca informa e as entregas da aba. [ITEM-5] [UPLOAD]
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import {
   EXTENSOES_FOTO,
   baixarComprovacao,
@@ -12,9 +12,11 @@ import {
   type PlanoDeAplicacoes,
 } from '../../api/aplicacoes'
 import { ErroApi } from '../../api/cliente'
-import { informarDados, obterDados } from '../../api/dados'
+import { enviarArquivoDoCampo, informarDados, obterDados, type CampoComValor } from '../../api/dados'
+import { baixarArquivo } from '../../api/materiais'
 import { useDados } from '../../api/useDados'
 import { AvisoAbaFechada, estadoAbaNaParceria } from '../../componentes/AbaFechada'
+import { LinhaArquivo } from '../../componentes/Arquivo'
 import { Aviso } from '../../componentes/Aviso'
 import { Botao } from '../../componentes/Botao'
 import { CabecalhoSecao } from '../../componentes/CabecalhoSecao'
@@ -279,7 +281,7 @@ function DadosDaAtivacao({ rbs }: { rbs: boolean }) {
       <Carregando dados={dados} vazio={(dado) => dado.campos.length === 0} textoVazio="Nenhum número para informar nesta aba.">
         {(dado) => (
           <FormularioDadosInformados
-            campos={dado.campos}
+            campos={dado.campos.filter((campo) => campo.tipo !== 'ARQUIVO')}
             somenteMudados
             textoEnviar="Salvar números"
             aoEnviar={async (valores) => {
@@ -292,6 +294,78 @@ function DadosDaAtivacao({ rbs }: { rbs: boolean }) {
         )}
       </Carregando>
       {salvo && <Aviso titulo="Números salvos" className="mt-4" />}
+      {dados.dado?.campos
+        .filter((campo) => campo.tipo === 'ARQUIVO')
+        .map((campo) => <ArquivoDaAtivacao key={campo.chave} campo={campo} aoEnviar={dados.recarregar} />)}
     </Cartao>
+  )
+}
+
+/** Um campo do tipo ARQUIVO (planilha da agência): fica só aqui, fora do cartão do Atlas e dos números do relatório. */
+function ArquivoDaAtivacao({ campo, aoEnviar }: { campo: CampoComValor; aoEnviar: () => void }) {
+  const parceria = useParceria()
+  const entrada = useRef<HTMLInputElement>(null)
+  const [enviando, setEnviando] = useState(false)
+  const [falha, setFalha] = useState<string | null>(null)
+  const atual = campo.vigente?.arquivo ?? null
+
+  async function enviar(arquivo: File) {
+    setEnviando(true)
+    setFalha(null)
+    try {
+      await enviarArquivoDoCampo(parceria.id, campo.chave, arquivo)
+      aoEnviar()
+    } catch (erro) {
+      setFalha(erro instanceof ErroApi ? (erro.campos.arquivo ?? erro.message) : 'Não foi possível enviar a planilha.')
+    } finally {
+      setEnviando(false)
+    }
+  }
+
+  async function abrir(arquivo: { id: number; nomeOriginal: string }) {
+    setFalha(null)
+    try {
+      await baixarArquivo(arquivo)
+    } catch (erro) {
+      setFalha(erro instanceof ErroApi ? erro.message : 'Não foi possível baixar a planilha.')
+    }
+  }
+
+  return (
+    <div className="mt-5 flex flex-col gap-3 border-t border-borda pt-5">
+      <div>
+        <p className="text-sm font-semibold">{campo.rotulo}</p>
+        {campo.ajuda && <p className="mt-0.5 text-xs font-medium text-texto-2">{campo.ajuda}</p>}
+      </div>
+      {atual && campo.vigente && (
+        <LinhaArquivo
+          titulo={atual.nomeOriginal}
+          meta={`Enviada por ${campo.vigente.informadoPor?.nome ?? '—'} em ${dataHora(campo.vigente.informadoEm)}`}
+          acoes={
+            <Botao variante="secundario" icone="ri-download-line" className="min-w-0" onClick={() => abrir(atual)}>
+              Baixar
+            </Botao>
+          }
+        />
+      )}
+      {falha && <Aviso tipo="falha" titulo={falha} />}
+      <div>
+        <Botao variante="secundario" icone="ri-upload-2-line" carregando={enviando} onClick={() => entrada.current?.click()}>
+          {atual ? 'Enviar outra planilha' : 'Enviar planilha'}
+        </Botao>
+        <input
+          ref={entrada}
+          type="file"
+          accept=".xlsx,.xls,.csv"
+          className="hidden"
+          aria-label={campo.rotulo}
+          onChange={(evento) => {
+            const arquivo = evento.target.files?.[0]
+            if (arquivo) void enviar(arquivo)
+            evento.target.value = ''
+          }}
+        />
+      </div>
+    </div>
   )
 }
