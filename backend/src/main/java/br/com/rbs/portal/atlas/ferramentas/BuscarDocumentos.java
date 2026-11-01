@@ -15,6 +15,9 @@ import br.com.rbs.portal.atlas.checagem.FontesDoTurno.Fonte;
 import br.com.rbs.portal.atlas.contexto.AtlasContexto;
 import br.com.rbs.portal.atlas.diagnostico.EtapaDoTraco;
 import br.com.rbs.portal.atlas.diagnostico.ResultadoDaEtapa;
+import br.com.rbs.portal.atlas.jev.ServicoDoJev;
+import br.com.rbs.portal.atlas.jev.ServicoDoJev.JuizoDoTrecho;
+import br.com.rbs.portal.atlas.jev.ServicoDoJev.TrechoParaJulgar;
 import br.com.rbs.portal.atlas.diagnostico.Traco.Etapa;
 import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.DefinicaoDeFerramenta;
 import br.com.rbs.portal.comum.DadosInvalidosException;
@@ -43,6 +46,11 @@ import org.springframework.stereotype.Component;
  *   <li><b>Sem embeddings</b> (desligado, sem chave, provedor fora do ar), a busca segue só com a lista textual.</li>
  * </ul>
  * O traço do turno ganha a etapa {@code BUSCA}: a consulta, as duas listas, os escolhidos, o modo degradado e os tempos.
+ * <p>
+ * <b>O JEV (M7, ponto {@code fontes}, R3).</b> Depois da busca e ainda na fase sem transação, o JEV julga a relevância de cada trecho
+ * escolhido (uma requisição por trecho, em paralelo, com só a consulta e aquele trecho no {@code state}). Em {@code ATIVO}, o trecho
+ * com a {@code noul} abaixo do limiar sai do resultado; sem nenhum, a ferramenta diz "nenhum trecho relevante; reformule a consulta ou
+ * diga que não encontrou". O trecho que o JEV não julgou (erro, tempo limite, orçamento do turno) segue. Em sombra, nada sai.
  */
 @Component
 public class BuscarDocumentos implements Ferramenta {
@@ -69,14 +77,21 @@ public class BuscarDocumentos implements Ferramenta {
                       "description":"Opcional: busca só neste tipo de documento."}},
              "required":["consulta"],"additionalProperties":false}""");
 
-    /** O que a fase 1 deixa para a fase 2: o que a busca devolveu. */
-    record Preparado(ResultadoDaBusca resultado) {
+    /**
+     * O que a fase 1 deixa para a fase 2: o que a busca devolveu, os trechos que ficam depois do JEV e se o JEV tirou algum (para a
+     * observação "nenhum trecho relevante").
+     */
+    record Preparado(ResultadoDaBusca resultado, List<Candidato> trechos, boolean jevTirouAlgum) {
     }
 
-    private final ConsultaAosDocumentos consultas;
+    public static final String OBSERVACAO_SEM_TRECHO_RELEVANTE = "nenhum trecho relevante; reformule a consulta ou diga que não encontrou";
 
-    public BuscarDocumentos(ConsultaAosDocumentos consultas) {
+    private final ConsultaAosDocumentos consultas;
+    private final ServicoDoJev jev;
+
+    public BuscarDocumentos(ConsultaAosDocumentos consultas, ServicoDoJev jev) {
         this.consultas = consultas;
+        this.jev = jev;
     }
 
     @Override
@@ -135,20 +150,37 @@ public class BuscarDocumentos implements Ferramenta {
                     consulta, tipo);
             registrarNoTraco(etapa, consultada);
             etapa.fim(ResultadoDaEtapa.OK);
-            return new Preparado(consultada.resultado());
+            return aposOJev(contexto, consulta, consultada.resultado());
         } catch (RuntimeException falha) {
             etapa.dado("erro", falha.getClass().getSimpleName()).fim(ResultadoDaEtapa.ERRO);
             throw falha;
         }
     }
 
+    /**
+     * O R3: pergunta ao JEV a relevância de cada trecho escolhido, ainda sem transação. Os que ele julga irrelevantes saem (só em
+     * {@code ATIVO}); os outros, e os que ele não julgou, ficam, na ordem da busca.
+     */
+    private Preparado aposOJev(AtlasContexto contexto, String consulta, ResultadoDaBusca resultado) {
+        List<Candidato> escolhidos = resultado.escolhidos();
+        List<JuizoDoTrecho> juizos = jev.fontes(contexto, consulta, escolhidos.stream()
+                .map(c -> new TrechoParaJulgar("trecho:" + c.trechoId(), c.texto())).toList());
+        if (juizos.stream().noneMatch(JuizoDoTrecho::tirar)) {
+            return new Preparado(resultado, escolhidos, false);
+        }
+        java.util.Set<String> tirados = juizos.stream().filter(JuizoDoTrecho::tirar).map(JuizoDoTrecho::alvo)
+                .collect(java.util.stream.Collectors.toSet());
+        return new Preparado(resultado, escolhidos.stream().filter(c -> !tirados.contains("trecho:" + c.trechoId())).toList(), true);
+    }
+
     /** Fase 2, na transação do loop: numera os trechos (o mesmo trecho mantém o marcador) e monta o resultado. */
     @Override
     public Execucao executar(AtlasContexto contexto, FontesDoTurno turno, Map<String, Object> argumentos, String chamadaId,
                              Object preparado) {
-        ResultadoDaBusca resultado = ((Preparado) preparado).resultado();
+        Preparado feito = (Preparado) preparado;
+        ResultadoDaBusca resultado = feito.resultado();
         List<Map<String, Object>> trechos = new ArrayList<>();
-        for (Candidato c : resultado.escolhidos()) {
+        for (Candidato c : feito.trechos()) {
             Fonte fonte = turno.registrarTrecho(c.trechoId(), c.documentoId(), c.documento(), c.versao(), c.pagina(), c.secao(), c.texto());
             Map<String, Object> trecho = new LinkedHashMap<>();
             trecho.put("marcador", fonte.marcador());
@@ -165,6 +197,8 @@ public class BuscarDocumentos implements Ferramenta {
         json.put("aviso", AVISO);
         if (resultado.semTermoUtil()) {
             json.put("observacao", "A consulta não tem nenhuma palavra útil para buscar. Escreva as palavras-chave do assunto.");
+        } else if (trechos.isEmpty() && feito.jevTirouAlgum()) {
+            json.put("observacao", OBSERVACAO_SEM_TRECHO_RELEVANTE);
         } else if (trechos.isEmpty()) {
             json.put("observacao", "Nenhum trecho dos documentos do portal responde a esta consulta.");
         }

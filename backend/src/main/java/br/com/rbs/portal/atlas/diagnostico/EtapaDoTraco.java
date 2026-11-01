@@ -2,14 +2,15 @@ package br.com.rbs.portal.atlas.diagnostico;
 
 /**
  * As etapas que um turno do Atlas pode deixar no traço ({@code atlas_traco.etapa}, o {@code CHECK} da V10 tem exatamente esta
- * lista, também as dos marcos seguintes). [ATLAS] Hoje a API grava {@link #G1_LIMITES}, {@link #LLM_IDA}, {@link #FERRAMENTA},
- * {@link #CHECAGEM}, {@link #RESUMO}, {@link #BUSCA}, {@link #SAIDA} e {@link #ERRO}; as outras (intenção e cartão do JEV, fontes,
- * resposta, coerência, lacunas e disjuntor) entram com os marcos seguintes.
+ * lista, também as dos marcos seguintes). [ATLAS] Hoje a API grava {@link #G1_LIMITES}, {@link #J1_INTENCAO}, {@link #J1_CARTAO},
+ * {@link #LLM_IDA}, {@link #FERRAMENTA}, {@link #CHECAGEM}, {@link #RESUMO}, {@link #BUSCA}, {@link #R3_FONTES}, {@link #R5_RESPOSTA},
+ * {@link #V2_COERENCIA}, {@link #LACUNAS}, {@link #SAIDA} e {@link #ERRO}; só o disjuntor entra com o marco seguinte.
  * <p>
  * {@link #RESUMO} corre em paralelo com o resto do turno (o resumo do raciocínio roda em outra thread e pode terminar depois do
- * fim do turno), e {@link #BUSCA} acontece DENTRO da etapa {@link #FERRAMENTA} da busca nos documentos (é o detalhe dela: as duas
- * listas, o RRF, os tempos). As duas ficam fora da soma do caminho crítico, cada uma em faixa separada; todas as outras são
- * sequenciais e nunca se sobrepõem: a soma das durações delas não passa do tempo do turno.
+ * fim do turno), e {@link #BUSCA}, {@link #R3_FONTES}, {@link #V2_COERENCIA} e {@link #LACUNAS} acontecem DENTRO da etapa
+ * {@link #FERRAMENTA} (são o detalhe dela: a busca, o JEV julgando os trechos, o parágrafo do relatório e as lacunas do cartão). Essas
+ * cinco ficam fora da soma do caminho crítico, cada uma em faixa separada; todas as outras são sequenciais e nunca se sobrepõem: a
+ * soma das durações delas não passa do tempo do turno.
  */
 public enum EtapaDoTraco {
     /** O teto diário da parceria e a trava de um turno por vez na conversa. */
@@ -36,8 +37,11 @@ public enum EtapaDoTraco {
     /** Uma falha inesperada (a exceção, sem rastro de pilha). */
     ERRO;
 
-    /** As etapas que ficam fora da soma do caminho crítico: o resumo, que corre em paralelo, e a busca, que está dentro da ferramenta. */
+    /**
+     * As etapas que ficam fora da soma do caminho crítico: o resumo, que corre em paralelo, e as quatro que estão dentro de uma
+     * ferramenta (a busca e o JEV julgando o que ela mexe: os trechos, o parágrafo, as lacunas).
+     */
     public boolean emParalelo() {
-        return this == RESUMO || this == BUSCA;
+        return this == RESUMO || this == BUSCA || this == R3_FONTES || this == V2_COERENCIA || this == LACUNAS;
     }
 }

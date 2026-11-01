@@ -54,8 +54,8 @@ public class TracoRepositorio {
     private static final String TURNOS_ANTES = """
             WITH turnos AS (
                 SELECT t.turno, t.conversa_id, t.parceria_id,
-                       min(t.iniciada_em) FILTER (WHERE t.etapa NOT IN ('RESUMO', 'BUSCA')) AS iniciado_em,
-                       max(t.iniciada_em + t.duracao_ms * interval '1 millisecond') FILTER (WHERE t.etapa NOT IN ('RESUMO', 'BUSCA')) AS terminado_em,
+                       min(t.iniciada_em) FILTER (WHERE t.etapa NOT IN ('RESUMO', 'BUSCA', 'R3_FONTES', 'V2_COERENCIA', 'LACUNAS')) AS iniciado_em,
+                       max(t.iniciada_em + t.duracao_ms * interval '1 millisecond') FILTER (WHERE t.etapa NOT IN ('RESUMO', 'BUSCA', 'R3_FONTES', 'V2_COERENCIA', 'LACUNAS')) AS terminado_em,
                        count(*) AS etapas,
                        max(t.mensagem_id) AS mensagem_id,
                        coalesce((array_agg(t.resultado ORDER BY t.ordem DESC) FILTER (WHERE t.etapa = 'SAIDA'))[1], 'ERRO') AS resultado,

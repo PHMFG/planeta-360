@@ -209,6 +209,25 @@ class JevEmSombraTest {
     }
 
     @Test
+    void buscaERespostaEmSombraNaoTiramTrechoNemRecusamATexto() {
+        long conversa = semDiferenca("busca e resposta",
+                j -> j.intencao("pergunta_documentos", 0.99).fontes(estado -> 0.01).resposta(frase -> "contradiz", 0.99),
+                m -> m.chamada(FontesNoChatTest.BUSCAR, FontesNoChatTest.busca(FontesNoChatTest.CONSULTA)).passo(pedido ->
+                        new br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.RespostaDoLlm(FontesNoChatTest.frasePrazo(
+                                FontesNoChatTest.marcador(pedido, FontesNoChatTest.PRAZO, true)), List.of(), null)),
+                () -> falar(conversa(), "Qual o prazo para informar os geradores próprios?"));
+
+        List<Map<String, Object>> linhas = jdbc.sql("SELECT d.ponto, d.modo, d.acao FROM atlas_decisao d JOIN atlas_mensagem m ON m.id = d.mensagem_id "
+                + "WHERE m.conversa_id = :c ORDER BY d.id").param("c", conversa).query().listOfRows();
+        assertThat(linhas).extracting(l -> l.get("ponto")).contains("intencao", "fontes", "resposta");
+        assertThat(linhas).extracting(l -> l.get("modo")).containsOnly("SOMBRA");
+        assertThat(linhas.stream().filter(l -> "fontes".equals(l.get("ponto"))).map(l -> (String) l.get("acao")).toList())
+                .isNotEmpty().allSatisfy(acao -> assertThat(acao).startsWith("teria feito: tirar o trecho"));
+        assertThat(linhas.stream().filter(l -> "resposta".equals(l.get("ponto"))).map(l -> l.get("acao")).toList())
+                .containsExactly("teria feito: recusar a resposta e pedir nova redação");
+    }
+
+    @Test
     void emSombraAsDecisoesGravamOModoSombraEOLimiarDoPonto() {
         config.limpar().ligarTodos(ModoDoJev.SOMBRA);
         jev.limpar().intencao("outro", 0.5);
