@@ -641,6 +641,45 @@ class NormalizadorDeNumerosTest {
     }
 
     @Test
+    void numeroSoltoDoTrechoSoVaiParaPedacoDeDiaDepoisDeDiaDaSemanaOuDaPalavraDia() {
+        // o 5 de "Portão 5" e de "seção 5" não é o dia 5: 05/12/2026 não tem origem só porque a fonte tem 04/12/2026
+        String prazo = "Informe os geradores até 04/12/2026. Entrada pelo Portão 5, seção 5, item 7.";
+        assertThat(aceitaDaFonte(prazo, "04/12/2026")).isTrue();
+        assertThat(aceitaDaFonte(prazo, "05/12/2026")).isFalse();
+        assertThat(aceitaDaFonte(prazo, "05/12")).isFalse();
+        assertThat(aceitaDaFonte(prazo, "07/12/2026")).isFalse();
+        assertThat(aceitaDaFonte(prazo, "5 de dezembro")).isFalse();
+        // o dia da semana com o dia: "sexta, 4" vale, e o "Portão 6" do fim não faz 06/12
+        String semana = "Na sexta, 4, e no sábado, 5 de dezembro, o Portão 6 abre cedo.";
+        assertThat(aceitaDaFonte(semana, "04/12")).isTrue();
+        assertThat(aceitaDaFonte(semana, "05/12")).isTrue();
+        assertThat(aceitaDaFonte(semana, "06/12")).isFalse();
+        // número qualquer antes do número também não vale
+        assertThat(aceitaDaFonte("Foram 12 itens, 9 pessoas e 04/12/2026.", "09/12/2026")).isFalse();
+        assertThat(aceitaDaFonte("Foram 12 itens, 9 pessoas e 04/12/2026.", "12/12/2026")).isFalse();
+    }
+
+    @ParameterizedTest(name = "\"{0}\" diz o dia 29")
+    @ValueSource(strings = {"Na sexta-feira, 29, e no sábado, 30 de janeiro de 2027.", "Abre sábado 29 e fecha dia 30 de janeiro de 2027.",
+            "Montagem no dia 29 e a abertura em 30 de janeiro de 2027.", "Domingo, 29, é o último; sábado, 30 de janeiro de 2027.",
+            "Segunda-feira 29 e terça-feira 30 de janeiro de 2027.", "Dias 29 e 30 de janeiro de 2027.", "Na sex. 29 e no sáb. 30 de janeiro de 2027.",
+            "Quarta feira, 29, e quinta feira, 30 de janeiro de 2027."})
+    void odiaSoltoDepoisDeDiaDaSemanaOuDeDiaContaComoPedacoDeData(String fonte) {
+        assertThat(aceitaDaFonte(fonte, "29 de janeiro de 2027")).as(fonte).isTrue();
+        assertThat(aceitaDaFonte(fonte, "29/01/2027")).as(fonte).isTrue();
+        assertThat(aceitaDaFonte(fonte, "28 de janeiro de 2027")).as(fonte).isFalse();
+    }
+
+    @ParameterizedTest(name = "\"{0}\" não diz o dia 29")
+    @ValueSource(strings = {"Portão 29 e sábado, 30 de janeiro de 2027.", "Seção 29. O evento é em 30 de janeiro de 2027.",
+            "Item 29 do contrato: 30 de janeiro de 2027.", "Foram 29 pessoas em 30 de janeiro de 2027.", "Valor de R$ 29 por 30 de janeiro de 2027.",
+            "Sexta, 29/12 e sábado, 30 de janeiro de 2027.", "A sexta tem 29h de montagem e o sábado, 30 de janeiro de 2027.",
+            "Sexta 29,5 e sábado, 30 de janeiro de 2027.", "Meio-dia 29 minutos e 30 de janeiro de 2027."})
+    void numeroSoltoDepoisDeOutraPalavraNaoContaComoPedacoDeData(String fonte) {
+        assertThat(aceitaDaFonte(fonte, "29 de janeiro de 2027")).as(fonte).isFalse();
+    }
+
+    @Test
     void dataSemAnoNaFonteComDiaSoltoSoLiberaOsAnosAceitos() {
         Origens fonte = new Origens().anosAceitos(Set.of("2026", "2027")).adicionarFonteCitada("Sexta, 29, e sábado, 30 de janeiro.");
         assertThat(aceita(fonte, "29 de janeiro de 2027")).isTrue();

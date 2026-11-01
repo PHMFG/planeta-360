@@ -126,6 +126,15 @@ public final class NormalizadorDeNumeros {
     private static final Pattern DIA_ANTES = Pattern.compile("(?<![\\p{L}\\p{N}])dias?\\s+$", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     /** O valor extra de um número da resposta que vem logo depois de "dia"/"dias": só uma fonte citada o confirma ({@code dia:N}). */
     private static final String PREFIXO_DEPOIS_DE_DIA = "depoisDeDia:";
+    /**
+     * O dia solto de um trecho de documento: o número de 1 ou 2 algarismos que vem logo depois de um dia da semana ou da palavra "dia",
+     * com a vírgula ou os dois pontos opcionais ({@code sexta-feira, 29}, {@code sábado 30}, {@code dia 29}, {@code Dia: 29}). Não é o
+     * dia o número depois de {@code Portão}, {@code seção}, {@code item} ou de outro número, nem o que é parte de um número maior
+     * ({@code 29,5}, {@code 29/12}, {@code 29:30}, {@code 29h}). {@code meio-dia} não é "dia".
+     */
+    private static final Pattern DIA_SOLTO_DEPOIS_DE_DIA_DA_SEMANA = Pattern.compile("(?<![\\p{L}\\p{N}-])(?:(?:domingo|segunda|ter[çc]a|quarta|quinta"
+            + "|sexta|s[áa]bado)(?:[- ]feira)?|(?:dom|seg|ter|qua|qui|sex|s[áa]b)\\.|dias?)\\s*[,:]?\\s*(\\d{1,2})(?![\\p{L}\\p{N}]|[/:.,]\\d)",
+            Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     private static final Pattern SEPARADOR_DE_GRUPO = Pattern.compile(ESPACO_DE_GRUPO);
     private static final Pattern REAL_ANTES = Pattern.compile("R\\$\\s*$");
     private static final Pattern UNIDADE_DEPOIS = Pattern.compile("\\s*(?:de\\s+)?(?:" + UNIDADES + ")" + NAO_ACABA_A_PALAVRA,
@@ -493,9 +502,11 @@ public final class NormalizadorDeNumeros {
      * <p>
      * <b>A fonte citada diz mais</b> ({@link #adicionarFonteCitada}): o dia de uma de suas datas vale como o número que vem logo
      * depois de "dia" ou "dias" na resposta ({@code dia 4}, {@code no dia 4} com a fonte em 04/12/2026; {@code 4 geradores} e {@code
-     * R$ 4} são números comuns e precisam estar na fonte como número), e uma data da resposta vale se o <i>texto</i> da fonte tem o dia como número e alguma data
+     * R$ 4} são números comuns e precisam estar na fonte como número), e uma data da resposta vale se o <i>texto</i> da fonte tem o dia solto e alguma data
      * do mesmo mês (e do mesmo ano, se a resposta o disse): "29 e 30 de janeiro de 2027" com a fonte "sexta-feira, 29, e no sábado, 30
-     * de janeiro de 2027". O número da página, da seção e da versão da fonte ({@link #adicionar}) não é o dia: com a fonte na página
+     * de janeiro de 2027". <b>O dia solto</b> é o número que vem logo depois de um dia da semana ou da palavra "dia", com a vírgula
+     * opcional ("sexta-feira, 29", "sábado 30", "dia 29"): o 5 de "Portão 5", de "seção 5" ou de "item 5" não é o dia 5, e "05/12/2026" não
+     * vale só porque o trecho tem um 5 solto e a data 04/12/2026. O número da página, da seção e da versão da fonte ({@link #adicionar}) não é o dia: com a fonte na página
      * 5, "05/12/2026" não vale só porque a fonte tem a data 04/12/2026. A mensagem da pessoa e a data de hoje também não dizem isso.
      * <p>
      * <b>O registro e a conta citados dizem o dia, e só o dia</b> ({@link #adicionarRegistro}): "O prazo é o dia 4 [R1]" vale com
@@ -565,9 +576,16 @@ public final class NormalizadorDeNumeros {
                         if (!ehAno || valor.startsWith("ano:")) {   // o ano vale como ano, e não como o número
                             valores.add(valor);
                         }
-                        if (emPedacos && ehDiaDoMes(valor)) {
-                            valores.add("numeroDoTexto:" + valor);
-                        }
+                    }
+                }
+            }
+            if (emPedacos) {
+                // o dia solto: só o número que vem logo depois de dia da semana ou de "dia" (o 5 de "Portão 5" não é o dia 5)
+                Matcher diaSolto = DIA_SOLTO_DEPOIS_DE_DIA_DA_SEMANA.matcher(paraConferir(texto));
+                while (diaSolto.find()) {
+                    String dia = normalizarNumero(diaSolto.group(1));
+                    if (ehDiaDoMes(dia)) {
+                        valores.add("numeroDoTexto:" + dia);
                     }
                 }
             }

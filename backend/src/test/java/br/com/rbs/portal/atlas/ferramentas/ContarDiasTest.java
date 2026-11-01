@@ -346,21 +346,27 @@ class ContarDiasTest {
         trecho.registrarTrecho(1, 1, "Manual de Operações 2027", 2, 2, "Datas", "O festival acontece na sexta-feira, 29, e no sábado, 30 de janeiro de 2027.");
         assertThat(contarComOQueTem(ferramenta, trecho, "{\"inicio\":\"2026-11-01\",\"fim\":\"2027-01-29\"}")).containsEntry("resultado", "89");
         FontesDoTurno trechoComPedacos = new FontesDoTurno("Quantos dias?", 2027, HOJE);
-        trechoComPedacos.registrarTrecho(1, 1, "Manual", 2, 2, "Datas", "Reenvio do VT em até 15 segundos. Atualizada em 27/05/2027.");
-        assertThat(contarComOQueTem(ferramenta, trechoComPedacos, "{\"inicio\":\"2027-05-15\",\"fim\":\"2027-05-27\"}")).containsEntry("resultado", "12");
+        trechoComPedacos.registrarTrecho(1, 1, "Manual", 2, 2, "Datas", "O evento acontece na sexta-feira, 14, e no sábado, 15 de maio de 2027.");
+        assertThat(contarComOQueTem(ferramenta, trechoComPedacos, "{\"inicio\":\"2027-05-14\",\"fim\":\"2027-05-15\"}")).containsEntry("resultado", "1");
+        // um número solto ("até 15 segundos") não é o dia de uma data
+        FontesDoTurno numeroSolto = new FontesDoTurno("Quantos dias?", 2027, HOJE);
+        numeroSolto.registrarTrecho(1, 1, "Manual", 2, 2, "Datas", "Reenvio do VT em até 15 segundos. Atualizada em 27/05/2027.");
+        assertThat(camposSemOrigem(numeroSolto, "{\"inicio\":\"2027-05-15\",\"fim\":\"2027-05-27\"}")).containsOnlyKeys("inicio");
     }
 
     @Test
     void osPedacosDeUmaDataSoValemDentroDaMesmaFonte() {
         // T1 "R$ 20,00" e T2 "04/12/2026" aceitavam 20/12 juntando o 20 de uma com o mês da outra
         FontesDoTurno duasFontes = new FontesDoTurno("Quantos dias?", 2027, HOJE);
-        duasFontes.registrarTrecho(1, 1, "Tabela", 1, 1, "Valores", "Diária: R$ 20,00 por pessoa.");
+        duasFontes.registrarTrecho(1, 1, "Tabela", 1, 1, "Valores", "Diária: R$ 20,00 por pessoa. Reunião na sexta-feira, 14.");
         duasFontes.registrarTrecho(2, 1, "Calendário", 1, 2, "Prazos", "A entrega é em 10/05/2027.");
         assertThat(camposSemOrigem(duasFontes, "{\"inicio\":\"2027-05-10\",\"fim\":\"2027-05-20\"}")).containsOnlyKeys("fim");
-        // na mesma fonte, o 20 e o mês 05 da data dela fazem 20/05/2027
+        assertThat(camposSemOrigem(duasFontes, "{\"inicio\":\"2027-05-10\",\"fim\":\"2027-05-14\"}")).as("o 14 de uma fonte e o mês da outra")
+                .containsOnlyKeys("fim");
+        // na mesma fonte, o dia depois de "sexta-feira," e o mês da data dela fazem 14/05/2027
         FontesDoTurno mesmaFonte = new FontesDoTurno("Quantos dias?", 2027, HOJE);
-        mesmaFonte.registrarTrecho(1, 1, "Manual", 1, 1, "Prazos", "Diária: R$ 20,00 por pessoa. A entrega é em 10/05/2027.");
-        assertThat(contarComOQueTem(ferramenta, mesmaFonte, "{\"inicio\":\"2027-05-10\",\"fim\":\"2027-05-20\"}")).containsEntry("resultado", "10");
+        mesmaFonte.registrarTrecho(1, 1, "Manual", 1, 1, "Prazos", "Reunião na sexta-feira, 14. A entrega é em 10/05/2027.");
+        assertThat(contarComOQueTem(ferramenta, mesmaFonte, "{\"inicio\":\"2027-05-10\",\"fim\":\"2027-05-14\"}")).containsEntry("resultado", "4");
     }
 
     @Test

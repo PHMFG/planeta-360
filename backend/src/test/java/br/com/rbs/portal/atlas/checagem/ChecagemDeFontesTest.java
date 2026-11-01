@@ -781,8 +781,10 @@ class ChecagemDeFontesTest {
         String reenvio = "Reenvio do VT em até 30 segundos. Atualizada em 27/10/2026.";
         String contagem = "Contei 10 dias depois de 03/11/2026, sem contar o dia de início. Resultado: 13/11/2026.";
 
-        // como trecho de documento, as datas em pedaços valem: o 30 e o mês 10 da fonte dão 30/10
-        aprova(turno("Quando?", reenvio), "Reenvie o VT até 30/10/2026 [T1].");
+        // como trecho de documento, as datas em pedaços valem só com o dia depois de dia da semana ou de "dia" (veja o teste da data
+        // errada com citação certa): o "até 30 segundos" e o mês 10 da fonte não fazem 30/10
+        recusa(turno("Quando?", reenvio), "Reenvie o VT até 30/10/2026 [T1].");
+        aprova(turno("Quando?", "Reenvio na sexta-feira, 30, e atualizada em 27/10/2026."), "Reenvie o VT até 30/10/2026 [T1].");
         // como registro do portal ou como conta, a fonte vale pelo que diz por inteiro: nada de montar a data 30/10/2026
         FontesDoTurno comRegistro = turno("Quando?");
         comRegistro.registrarRegistro("entrega", 1, "Reenvio do VT", "Mídia", reenvio, java.util.Map.of());
@@ -795,6 +797,29 @@ class ChecagemDeFontesTest {
         recusa(comConta, "Fica pronto no dia 10 de novembro [C1].");
         aprova(comConta, "Contei 10 dias a partir de 03/11/2026 [C1].");
         aprova(comConta, "Fica pronto em 13/11/2026 [C1].");
+    }
+
+    @Test
+    void dataErradaComCitacaoCertaNaoPassaPorUmNumeroSoltoDoTrecho() {
+        // o trecho do prazo dos geradores diz 04/12/2026, e tem um 5 solto em "Portão 5" e "seção 5"
+        FontesDoTurno prazo = turno("Qual o prazo?", "Os geradores devem ser informados até 04/12/2026, às 18h. Entrada pelo Portão 5, conforme a seção 5.");
+        aprova(prazo, "O prazo é 04/12/2026 [T1].");
+        aprova(prazo, "O prazo é o dia 4 [T1].");
+        recusa(prazo, "O prazo é 05/12/2026 [T1].");
+        recusa(prazo, "O prazo é 05/12 [T1].");
+        recusa(prazo, "O prazo é 5 de dezembro [T1].");
+        // "sexta, 4, e sábado, 5 de dezembro. Portão 6." aprovava 06/12
+        FontesDoTurno semana = turno("Quando?", "Na sexta, 4, e no sábado, 5 de dezembro. Entrada pelo Portão 6.");
+        aprova(semana, "É em 04/12 [T1].");
+        aprova(semana, "É em 5 de dezembro [T1].");
+        recusa(semana, "É em 06/12 [T1].");
+        // a forma do kit continua apoiando as duas datas, e a de 2026 também
+        FontesDoTurno festival = turno("Quando é o festival?", MANUAL_DO_FESTIVAL);
+        aprova(festival, "O festival é em 29/01/2027 e 30/01/2027 [T1].");
+        aprova(festival, "O festival é nos dias 29 e 30 de janeiro de 2027 [T1].");
+        recusa(festival, "O festival é em 31/01/2027 [T1].");
+        aprova(turno("Quando foi?", "O festival aconteceu na sexta-feira, 30, e no sábado, 31 de janeiro de 2026."),
+                "Foi em 30/01/2026 e 31/01/2026 [T1].");
     }
 
     @Test
