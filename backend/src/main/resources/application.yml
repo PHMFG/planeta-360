@@ -3,6 +3,8 @@
 # Três jeitos de rodar:
 #   sem perfil  -> banco "portal", só as migrações de todos os ambientes (db/migration). É o jeito de produção.
 #   perfil dev  -> banco "portal", migrações + a amostra de exemplo (db/dev). Uso diário de quem desenvolve.
+#   perfil demo -> a amostra, o kit de documentos, o relatório e o diagnóstico ligados, como na apresentação: sem as rotas de debug da
+#                  chave e sem a caixa de debug das ferramentas (o diagnóstico as substitui). Veja o bloco "demo", abaixo.
 #   perfil test -> banco "portal_teste", igual ao dev, e os testes o apagam e recriam a cada execução.
 #
 # Usuário, senha e endereço do banco vêm de variáveis de ambiente; o padrão serve para a máquina de desenvolvimento.
@@ -237,6 +239,49 @@ spring:
 atlas:
   rbs:
     ligado: ${ATLAS_RBS:true}
+
+---
+# [ATLAS] O perfil demo (M8): o portal como vai à apresentação. Sobe como o dev (a amostra, os arquivos de exemplo e o kit de documentos
+# aprovados e indexados, com as chaves do mesmo arquivo de segredos), com o relatório e o diagnóstico ligados e os pontos do JEV da
+# calibração, mas SEM as rotas de debug da chave do modelo (404) e sem a caixa de debug das ferramentas: o diagnóstico da RBS e o da marca
+# fazem esse papel. Uso: SPRING_PROFILES_ACTIVE=demo, num banco descartável (a amostra se carrega a cada subida).
+spring:
+  config:
+    activate:
+      on-profile: demo
+    import: optional:file:./config/segredos.local.properties
+  flyway:
+    locations: classpath:db/migration,classpath:db/dev
+
+atlas:
+  debug:
+    chaves: false
+    ferramentas: false
+  relatorio:
+    ligado: ${ATLAS_RELATORIO:true}
+  diagnostico:
+    ligado: ${ATLAS_DIAGNOSTICO:true}
+    marca: ${ATLAS_DIAGNOSTICO_MARCA:true}
+  # O mesmo resultado da calibração do perfil dev (ferramentas/avaliacao-atlas/jev/calibrar-jev.mjs).
+  jev:
+    intencao:
+      modo: ${ATLAS_JEV_INTENCAO:ativo}
+      limiar: 0.77
+    cartao:
+      modo: ${ATLAS_JEV_CARTAO:ativo}
+      limiar: 0.5
+    fontes:
+      modo: ${ATLAS_JEV_FONTES:sombra}
+      limiar: 0.97
+    resposta:
+      modo: ${ATLAS_JEV_RESPOSTA:ativo}
+      limiar: 0.5
+    coerencia:
+      modo: ${ATLAS_JEV_COERENCIA:sombra}
+      limiar: 0.87
+    lacunas:
+      modo: ${ATLAS_JEV_LACUNAS:ativo}
+      limiar: 0.59
 
 ---
 spring:

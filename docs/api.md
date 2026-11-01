@@ -177,7 +177,7 @@ Todas prontas e testadas. A coluna "Etapa" mostra em que etapa do plano a rota e
 
 São 68 operações (método + caminho). A rota 5 (`ativar`) faz parte do contrato de autenticação, mas só é implementada na etapa 4. As rotas 37 em diante vieram com o Atlas: a coluna "Etapa" diz `Atlas 1` (plano de aplicações e dados informados), `Atlas 2` (conversa, cartão de perguntas e relatório), `Atlas M2` (o diagnóstico: rotas 49 a 53, veja "Diagnóstico do Atlas") `Atlas M3` (os documentos: rotas 54 a 58, veja "Os documentos do Atlas") `Atlas M4` (o visualizador, rotas 59 e 60, e a busca de teste, rota 61, veja "Busca nos documentos") `Atlas M5` (os prazos: rotas 62 a 64, veja "Os prazos do Atlas") `Atlas M6` (o relatório religado: a rota 65, veja "Descarte do relatório parado"; e a planilha da agência: a rota 66, veja "Dados informados pela marca") ou `Atlas M8` (o Atlas da RBS: as rotas 67 e 68, veja "O Atlas da RBS"). As rotas 54, 55, 57, 58, 61, 62, 63, 64, 67 e 68 são só do Admin RBS (o outro perfil recebe **403** antes de o corpo ser lido); a 56, a 59 e a 60 são das duas pontas, e a marca só vê o que o escopo dela permite; a 66 é da marca da parceria e da RBS. A 49 é do dono da conversa (a marca, ou a RBS na conversa do Atlas da RBS); as 50 a 53 são só do Admin RBS (o outro perfil recebe **403** antes de tudo). **As rotas 49 a 53 estão sempre mapeadas e respondem 404 com o diagnóstico desligado** (`atlas.diagnostico.ligado=false`, o padrão). Nas rotas 42, 43, 46 e 65 só o Admin Patrocinador chama (a RBS recebe **403** antes de o corpo ser lido); nas 44, 45 e 49 chama o dono da conversa: a marca na conversa da parceria dela e, com `atlas.rbs.ligado`, a RBS na conversa dela, a do Atlas da RBS (a RBS recebe **403** antes do corpo em qualquer outra conversa, e sempre com a propriedade desligada); nas 47 e 48 chamam a marca da parceria e a RBS. **O relatório do Atlas está ligado nos perfis `dev` e `test` e desligado no padrão** (`atlas.relatorio.ligado=false`, `ATLAS_RELATORIO`). Desligado, as rotas **46, 47, 48 e 65 não existem (404)**, e as rotas 42 e 44 só aceitam conversa por texto (`atalho` e `modelo` dão 422): é o modo só chat, que continua existindo e testado. Veja "Modo só chat". O contrato do relatório, nas rotas 42 a 48 e 65, vale com `atlas.relatorio.ligado=true`.
 
-As rotas de debug do modelo de linguagem (`/api/debug/llm`) são temporárias, só existem no perfil `dev`, são só da RBS e ficam fora desta tabela e da conta das 68: veja "Rotas de debug (temporárias)", no fim.
+As rotas de debug do modelo de linguagem (`/api/debug/llm`) são temporárias, só existem no perfil `dev` (o perfil `demo`, da apresentação, as deixa em 404), são só da RBS e ficam fora desta tabela e da conta das 68: veja "Rotas de debug (temporárias)", no fim.
 
 ## Objetos que se repetem
 
@@ -2072,9 +2072,18 @@ Cada turno do Atlas (uma mensagem de texto da pessoa ou a resposta do cartão, a
 
 | Propriedade | Variável | Padrão | O que faz |
 | --- | --- | --- | --- |
-| `atlas.diagnostico.ligado` | `ATLAS_DIAGNOSTICO` | `false`; `true` no perfil `dev`; `false` no `test` (ligado por classe de teste) | Desligado, **nada é gravado** em `atlas_traco` e as rotas 49 a 53 respondem **404**, como uma rota que não existe (a ordem das conferências continua a de sempre: a rota da RBS dá 403 ao patrocinador antes). |
-| `atlas.diagnostico.marca` | `ATLAS_DIAGNOSTICO_MARCA` | `false`; `true` no perfil `dev`; `false` no `test` | A marca vê o diagnóstico **das próprias conversas**: a rota 49 responde, `diagnosticoDisponivel` sai `true` e os itens do assistente trazem o `turno`. Só vale com o diagnóstico ligado. Desligada, a rota 49 responde 404 também ao dono da conversa. |
+| `atlas.diagnostico.ligado` | `ATLAS_DIAGNOSTICO` | `false`; `true` nos perfis `dev` e `demo`; `false` no `test` (ligado por classe de teste) | Desligado, **nada é gravado** em `atlas_traco` e as rotas 49 a 53 respondem **404**, como uma rota que não existe (a ordem das conferências continua a de sempre: a rota da RBS dá 403 ao patrocinador antes). |
+| `atlas.diagnostico.marca` | `ATLAS_DIAGNOSTICO_MARCA` | `false`; `true` nos perfis `dev` e `demo`; `false` no `test` | A marca vê o diagnóstico **das próprias conversas**: a rota 49 responde, `diagnosticoDisponivel` sai `true` e os itens do assistente trazem o `turno`. Só vale com o diagnóstico ligado. Desligada, a rota 49 responde 404 também ao dono da conversa. |
 | `atlas.diagnostico.preco-por-milhao.entrada` e `.saida` | `ATLAS_PRECO_ENTRADA`, `ATLAS_PRECO_SAIDA` | `0.30` e `1.20` | Preço em dólares por milhão de tokens, **só** para a resposta que não traz o custo. Veja "Custo". |
+
+**Limites e disjuntores** (veja "Teto diário" e "Limites por usuário", na seção do modelo de linguagem, e as etapas `DISJUNTOR` e `G1_LIMITES` abaixo):
+
+| Propriedade | Variável | Padrão | O que faz |
+| --- | --- | --- | --- |
+| `atlas.limites.mensagens-por-hora` | `ATLAS_LIMITE_MENSAGENS_POR_HORA` | `20`; `100000` no `test` | Mensagens de texto por hora de cada usuário (rota 44); acima, 429 com quanto falta |
+| `atlas.limites.relatorios-por-dia` | `ATLAS_LIMITE_RELATORIOS_POR_DIA` | `3`; `100000` no `test` | Relatórios por dia que o modelo monta (`relatorio_iniciar`) para cada usuário; acima, erro de ferramenta |
+| `atlas.disjuntores.ligado` | `ATLAS_DISJUNTORES` | `true`; `false` no `test` (ligado por classe de teste) | Os disjuntores do modelo, do JEV e do Gemini. Desligado, as chamadas passam direto e a rota 52 diz `DESLIGADO` |
+| `atlas.disjuntores.falhas-seguidas`, `.taxa-de-falha`, `.janela`, `.espera` | — | `5`, `50` (%), `10`, `PT60S` | Abre com 5 falhas seguidas ou 50% das 10 últimas chamadas e deixa uma de prova passar depois de 60 s |
 
 ## O traço de um turno
 
@@ -2612,7 +2621,7 @@ A equipe da RBS também conversa com o Atlas: uma conversa **por edição, sem p
 
 Um recurso **temporário**, para a equipe ligar o modelo de linguagem do Atlas pela tela (o botão "Debug"), sem reiniciar a API e sem variável de ambiente. Não faz parte das 68 rotas do contrato e sai antes da entrega final.
 
-- **Só existem com `atlas.debug.chaves=true`.** A propriedade vem `false` por padrão, `true` no perfil `dev` e `false` no `test`. Sem ela, as quatro rotas respondem **404**, como uma rota que não existe.
+- **Só existem com `atlas.debug.chaves=true`.** A propriedade vem `false` por padrão, `true` no perfil `dev` e `false` no `demo` e no `test`. Sem ela, as quatro rotas respondem **404**, como uma rota que não existe.
 - **A chave fica só na memória da API.** Nunca vai ao banco, a arquivo ou ao log, e **some quando a API reinicia**. Nenhuma resposta devolve a chave inteira: só os 4 últimos caracteres (`finalDaChave`).
 - **Precedência:** a chave posta aqui &rarr; a das variáveis de ambiente (`ATLAS_LLM=openai` e `OPENCODE_API_KEY`) &rarr; nenhuma (o Atlas fica no botão "Montar relatório"). Pôr ou apagar a chave muda na hora o `llmDisponivel` das rotas 42 a 46; um turno que já começou termina com o modelo com que começou.
 - O modelo montado com a chave usa as mesmas opções do `application.yml` (temperatura 0.2, 1 nova tentativa, 60 segundos de limite, o `User-Agent` `PlanetaAtlas/0.1` e o `x-opencode-session` por conversa) e o raciocínio (`thinking`) do `atlas.raciocinio` (`ATLAS_RACIOCINIO`, ligado por padrão), que o `PUT` pode trocar.
@@ -2682,7 +2691,7 @@ Também **temporário**: mostra os comandos que o agente usa, para quem desenvol
 
 | Propriedade | Variável | Padrão |
 | --- | --- | --- |
-| `atlas.debug.ferramentas` | `ATLAS_DEBUG_FERRAMENTAS` | `false`; `true` no perfil `dev`; `false` no `test` |
+| `atlas.debug.ferramentas` | `ATLAS_DEBUG_FERRAMENTAS` | `false`; `true` no perfil `dev`; `false` no `demo` (fixo: o diagnóstico substitui o debug cru na apresentação) e no `test` |
 
 Ligada:
 

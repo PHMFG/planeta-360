@@ -17,12 +17,12 @@ import org.springframework.stereotype.Component;
  * ganha um conteúdo pequeno e válido para a extensão (veja ConteudoDeExemplo), e a linha do banco passa a ter o tamanho e o
  * hash do arquivo criado.
  *
- * <p>[UPLOAD] Só roda no perfil dev: em produção a classe nem entra no contexto. Nunca mexe em arquivo enviado de verdade:
+ * <p>[UPLOAD] Só roda nos perfis dev e demo (o da apresentação, M8): em produção a classe nem entra no contexto. Nunca mexe em arquivo enviado de verdade:
  * o envio de verdade grava com nome gerado (UUID), e este passo ignora esses caminhos; e a criação é CREATE_NEW, que não
  * sobrescreve nada que já exista. Rodar de novo não muda nada.
  */
 @Component
-@Profile("dev")
+@Profile({"dev", "demo"})
 public class ArquivosDaAmostra implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(ArquivosDaAmostra.class);

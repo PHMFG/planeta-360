@@ -27,7 +27,7 @@ Os números: **48 tabelas de negócio (mais a `flyway_schema_history`, do Flyway
 | `backend/src/main/resources/db/migration/V15__jev_e_conversa_sem_parceria.sql` | O JEV nos pontos de decisão (as colunas de `atlas_decisao`, e `fora_do_modelo` e `sem_modelo` em `atlas_mensagem`) e a conversa sem parceria, reservada ao Atlas da RBS (veja "O que a V15 mudou") | Todos os ambientes |
 | `backend/src/main/resources/db/dev/R__amostra.sql` | A amostra: Amarelo, Roxo e Verde, usuários, planos, entregas com arquivos, cargas, relatórios | Só dev e test |
 | `backend/src/main/resources/dev/documentos/` | O kit de 13 documentos fictícios do Atlas (12 PDFs e 1 TXT) e o `gabarito.json`, que diz o que cada página contém | Só dev e test (o `DocumentosDaAmostra` e o fixture dos testes os sobem) |
-| `backend/src/main/resources/dev/exemplos/` | Arquivos de exemplo (png, jpg, mp4, mp3, docx, xlsx, pptx, zip) que a API copia para o armazenamento no perfil dev | Só dev |
+| `backend/src/main/resources/dev/exemplos/` | Arquivos de exemplo (png, jpg, mp4, mp3, docx, xlsx, pptx, zip) que a API copia para o armazenamento nos perfis dev e demo | Só dev e demo |
 | `backend/src/test/resources/db/verificacao.sql` | As conferências (contagens, órfãos, uma tentativa de violar cada regra) | Quando se quiser conferir |
 | `docs/exemplos/veiculacao.csv`, `pesquisa.csv` e `plano.csv` | Exemplos de planilha para as três cargas | Teste manual |
 
@@ -129,7 +129,7 @@ A V8 abre a segunda parte do MVP do Atlas: o relatório de ativação que a marc
 | Isolamento | Chaves compostas com a parceria: o relatório só se liga a uma conversa da própria parceria (`fk_atlas_relatorio_conversa`) e o cartão só a um relatório da própria parceria (`fk_atlas_solicitacao_relatorio`) |
 | Relatório pronto não muda | O gatilho `rn_atlas_relatorio_congelado` (função `tg_atlas_relatorio_congelado`) recusa `UPDATE` de `especificacao`, `snapshot` e `status` quando o relatório está `PRONTO` ou `DESCARTADO` (os dois são finais) e o `DELETE` de um relatório `PRONTO`. O que está montando muda à vontade e sai por `PRONTO` (com o snapshot, na mesma operação) ou `DESCARTADO` |
 | Histórico | Não muda: `CRIACAO` e `EDICAO` já existem e `historico.entidade` não tem `CHECK`, então o relatório do Atlas grava essas ações com a entidade `atlas_relatorio` |
-| Relatório desligado | Com `atlas.relatorio.ligado=false` (o padrão; o perfil `dev` e o `test` ligam a propriedade; veja `docs/api.md`, "Modo só chat"), `atlas_relatorio`, `atlas_solicitacao` e `atlas_calculo` **ficam sem uso**: nada as escreve nem as lê, e nenhuma migração muda (o relatório volta com a propriedade ligada). `atlas_conversa`, `atlas_mensagem` e `atlas_tool_call` seguem em uso pelo chat e pelo debug das ferramentas |
+| Relatório desligado | Com `atlas.relatorio.ligado=false` (o padrão; os perfis `dev` e `demo` e o `test` ligam a propriedade; veja `docs/api.md`, "Modo só chat"), `atlas_relatorio`, `atlas_solicitacao` e `atlas_calculo` **ficam sem uso**: nada as escreve nem as lê, e nenhuma migração muda (o relatório volta com a propriedade ligada). `atlas_conversa`, `atlas_mensagem` e `atlas_tool_call` seguem em uso pelo chat e pelo debug das ferramentas |
 
 O que a V8 acrescentou além do desenho do plano: os nomes explícitos das chaves compostas e dos limites (para a conferência e a API se referirem a eles), os dois índices parciais acima e os índices de apoio das consultas por parceria, conversa e relatório.
 
@@ -634,7 +634,7 @@ Os 14 indisponíveis são: "O festival em números" e a pesquisa geral das 3 mar
 
 Toda entrega Enviado, Em análise ou Aprovado tem o arquivo que a marca mandou; as duas que esperam a RBS (peça de 30" do Amarelo e cortesias da Verde) aparecem na fila de materiais. O histórico conta a mesma história que as versões: o envio, o status que muda sozinho com ele e a decisão da RBS.
 
-**Os arquivos da amostra** existem só como linhas da tabela `arquivo`. No perfil `dev`, ao subir, a API cria no armazenamento (`backend/armazenamento/`) um arquivo pequeno e válido para cada um que falta (PDF e CSV montados na hora com o nome do arquivo; os outros vêm de `backend/src/main/resources/dev/exemplos/`) e acerta o tamanho e o hash da linha. Assim o botão "Baixar" funciona na demonstração. Nunca mexe em arquivo enviado de verdade (nome gerado com UUID) nem sobrescreve um arquivo que já exista.
+**Os arquivos da amostra** existem só como linhas da tabela `arquivo`. Nos perfis `dev` e `demo`, ao subir, a API cria no armazenamento (`backend/armazenamento/`) um arquivo pequeno e válido para cada um que falta (PDF e CSV montados na hora com o nome do arquivo; os outros vêm de `backend/src/main/resources/dev/exemplos/`) e acerta o tamanho e o hash da linha. Assim o botão "Baixar" funciona na demonstração. Nunca mexe em arquivo enviado de verdade (nome gerado com UUID) nem sobrescreve um arquivo que já exista.
 
 **Usuários da amostra** (senha `senha123` para todos): `b2b@rbs.example` e `pesquisa@rbs.example` (Admin RBS);
 `marketing@amarelo.example`, `atendimento@agencia-x.example`, `marketing@roxo.example` e `marketing@verde.example` (Admin Patrocinador).

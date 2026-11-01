@@ -80,7 +80,7 @@ cd backend
 .\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=dev"
 ```
 
-A API está pronta quando aparece `Started PortalApplication`. O perfil `dev` carrega a amostra de demonstração e, ao subir, cria em `backend/armazenamento/` um arquivo de exemplo para cada arquivo da amostra (é o que faz o botão "Baixar" funcionar na demonstração); sem perfil, sobe só a estrutura (como em produção, sem amostra e sem arquivos de exemplo). A 8080 é só a API: as telas ficam no front (passo 3).
+A API está pronta quando aparece `Started PortalApplication`. O perfil `dev` carrega a amostra de demonstração e, ao subir, cria em `backend/armazenamento/` um arquivo de exemplo para cada arquivo da amostra (é o que faz o botão "Baixar" funcionar na demonstração); sem perfil, sobe só a estrutura (como em produção, sem amostra e sem arquivos de exemplo). O perfil `demo` (`SPRING_PROFILES_ACTIVE=demo`, ou `ATLAS_PERFIL=demo scripts/atlas-dev.sh start`) é o da apresentação: sobe como o `dev` (amostra, arquivos de exemplo e o kit de documentos do Atlas, com as chaves do mesmo arquivo de segredos), com o relatório e o diagnóstico ligados, mas **sem** as rotas de debug da chave do modelo (404) e sem a caixa de debug das ferramentas. Use um banco descartável com ele. A 8080 é só a API: as telas ficam no front (passo 3).
 
 **PostgreSQL em outra porta** (a Sprint 1 usava a 5433)? Informe a URL do banco no mesmo terminal, antes de subir a API:
 
@@ -177,7 +177,7 @@ ATLAS_LLM=openai OPENCODE_API_KEY=sua-chave ./mvnw spring-boot:run -Dspring-boot
 
 No Windows (PowerShell): `$env:ATLAS_LLM="openai"; $env:OPENCODE_API_KEY="sua-chave"` antes do `.\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=dev"`.
 
-**Pelo arquivo de segredos (perfil `dev`).** Copie `backend/config/segredos.exemplo.properties` para `backend/config/segredos.local.properties` e preencha as chaves. A API lê esse arquivo ao subir a partir de `backend/`, e o Git o ignora. Sem ele, o portal sobe normalmente, com o Atlas desligado. Variável de ambiente vence o arquivo.
+**Pelo arquivo de segredos (perfis `dev` e `demo`).** Copie `backend/config/segredos.exemplo.properties` para `backend/config/segredos.local.properties` e preencha as chaves. A API lê esse arquivo ao subir a partir de `backend/`, e o Git o ignora. Sem ele, o portal sobe normalmente, com o Atlas desligado. Variável de ambiente vence o arquivo.
 
 | Variável | Padrão | Para quê |
 | --- | --- | --- |
@@ -188,12 +188,14 @@ No Windows (PowerShell): `$env:ATLAS_LLM="openai"; $env:OPENCODE_API_KEY="sua-ch
 | `ATLAS_RACIOCINIO` | `true` | O raciocínio do modelo, com o resumo na conversa. Ligado, cada resposta demora uns segundos a mais e gasta mais do limite do provedor |
 | `ATLAS_PRAZO_DO_RESUMO` | `PT15S` | Quanto o fim do turno espera pelos resumos do raciocínio; o que passar do prazo aparece na próxima leitura da conversa |
 | `ATLAS_TETO_DIARIO` | `200` | Mensagens do Atlas por parceria por dia; depois disso, o chat responde 429 |
-| `ATLAS_RELATORIO` | `false` (`true` no perfil `dev`) | Liga o relatório montado pelo Atlas (pedido no chat, botão, cartão e documento). Desligado, o Atlas é só o chat e as rotas do relatório respondem 404 |
+| `ATLAS_LIMITE_MENSAGENS_POR_HORA`, `ATLAS_LIMITE_RELATORIOS_POR_DIA` | `20`, `3` | Por usuário: mensagens de texto por hora (acima, 429 com quanto falta) e relatórios por dia que o modelo monta (acima, o modelo sugere o botão). O botão não conta. Ficam na memória: reiniciar a API zera |
+| `ATLAS_DISJUNTORES` | `true` | Os disjuntores do modelo, do JEV e do Gemini: com 5 falhas seguidas (ou 50% das 10 últimas) o provedor para de ser chamado por 60 s, e o Atlas segue sem ele (frase fixa de falha, sem JEV, busca só textual). O estado está na aba Provedores |
+| `ATLAS_RELATORIO` | `false` (`true` nos perfis `dev` e `demo`) | Liga o relatório montado pelo Atlas (pedido no chat, botão, cartão e documento). Desligado, o Atlas é só o chat e as rotas do relatório respondem 404 |
 | `ATLAS_RBS` | `false` (`true` nos perfis `dev` e `demo`) | O Atlas da RBS: a equipe da RBS conversa com o Atlas por edição, sem parceria, para tirar dúvidas dos documentos globais da edição (rotas 67 e 68 e, na conversa dela, as 44, 45 e 49). Desligado, as rotas 67 e 68 respondem 404 e nada muda. Veja `docs/api.md`, "O Atlas da RBS" |
 | `ATLAS_RBS_TETO_DIARIO` | `200` | Mensagens do modelo por pessoa da RBS por dia no Atlas da RBS; depois disso, 429 |
-| `ATLAS_DEBUG_FERRAMENTAS` | `false` (`true` no perfil `dev`) | Mostra na conversa as ferramentas que o modelo usou, com argumentos e resultado. Temporário |
-| `ATLAS_DIAGNOSTICO` | `false` (`true` no perfil `dev`) | O diagnóstico: cada turno do Atlas deixa um traço (etapas, tempos, tokens, custo) que a RBS lê pelas rotas 50 a 53. Desligado, nada é gravado e as rotas respondem 404. Veja `docs/api.md`, "Diagnóstico do Atlas" |
-| `ATLAS_DIAGNOSTICO_MARCA` | `false` (`true` no perfil `dev`) | A marca vê o diagnóstico das próprias conversas (rota 49). Só vale com o diagnóstico ligado |
+| `ATLAS_DEBUG_FERRAMENTAS` | `false` (`true` no perfil `dev`; sempre `false` no `demo`) | Mostra na conversa as ferramentas que o modelo usou, com argumentos e resultado. Temporário |
+| `ATLAS_DIAGNOSTICO` | `false` (`true` nos perfis `dev` e `demo`) | O diagnóstico: cada turno do Atlas deixa um traço (etapas, tempos, tokens, custo) que a RBS lê pelas rotas 50 a 53. Desligado, nada é gravado e as rotas respondem 404. Veja `docs/api.md`, "Diagnóstico do Atlas" |
+| `ATLAS_DIAGNOSTICO_MARCA` | `false` (`true` nos perfis `dev` e `demo`) | A marca vê o diagnóstico das próprias conversas (rota 49). Só vale com o diagnóstico ligado |
 | `ATLAS_EMBEDDINGS`, `GEMINI_API_KEY` | `none`, — | Os embeddings dos documentos do Atlas: `gemini` (o Gemini de verdade, com a chave), `teste` (determinístico e sem rede, **só em banco descartável** como o `portal_e2e`: os vetores não têm o significado dos do Gemini) ou `none`. Com `none`, a API sobe do mesmo jeito, aprovar um documento o deixa em `ERRO` com o motivo, e a amostra do `dev` não cria os documentos de exemplo (avisa no log; quando a chave chega, a próxima subida cria e indexa o kit). A cota gratuita do Gemini é de 1.000 chamadas por dia: sem cota, a busca segue só com a lista textual, e documento novo fica em `ERRO` (na hora, com "A cota do dia do Gemini acabou; ...") até reindexar. O limite por minuto, ao contrário, a indexação espera sozinha, pelo tempo que o Gemini pede (até `atlas.embeddings.espera-maxima-no-429`, 90 s). Veja `docs/api.md`, "Os documentos do Atlas" |
 | `ATLAS_JEV`, `TYPESAFE_API_KEY` | `none`, — | O JEV (modo e chave): por enquanto só a rota 52 mostra o estado dele e a 53 testa a conexão |
 

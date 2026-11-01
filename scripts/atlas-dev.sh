@@ -2,6 +2,7 @@
 # API do perfil dev em segundo plano, para o avaliador e os testes no navegador. [Planeta 360]
 # Uso: scripts/atlas-dev.sh start | stop | status | log [linhas]
 #   ATLAS_DEV_PORTA  porta da API (padrão 8080). Cada porta tem o próprio processo.
+#   ATLAS_PERFIL     o perfil do Spring (padrão dev; demo sobe como na apresentação, sem as rotas de debug da chave).
 #   As outras variáveis (PORTAL_BD_URL, ATLAS_TETO_DIARIO...) passam direto para a API.
 # As chaves vêm de backend/config/segredos.local.properties: a API o lê ao subir a partir de backend/.
 # O .jar, o PID e o log ficam em .atlas-dev/ (fora do Git). O stop derruba só o processo que este script subiu.
@@ -40,7 +41,7 @@ iniciar() {
   cp "$RAIZ"/backend/target/portal-*.jar "$JAR"
   (
     cd "$RAIZ/backend" || exit 1
-    SERVER_PORT="$PORTA" SPRING_PROFILES_ACTIVE=dev nohup java -jar "$JAR" < /dev/null > "$LOG" 2>&1 &
+    SERVER_PORT="$PORTA" SPRING_PROFILES_ACTIVE="${ATLAS_PERFIL:-dev}" nohup java -jar "$JAR" < /dev/null > "$LOG" 2>&1 &
     echo $! > "$PID"
   )
   for _ in $(seq 1 "$ESPERA_SEGUNDOS"); do
@@ -85,5 +86,5 @@ case "${1:-}" in
     if pid="$(pid_no_ar)"; then echo "no ar: PID $pid, porta $PORTA"; else echo "parada (porta $PORTA)"; fi
     ;;
   log) tail -n "${2:-100}" "$LOG" ;;
-  *) sed -n '2,7p' "$0"; exit 1 ;;
+  *) sed -n '2,8p' "$0"; exit 1 ;;
 esac
