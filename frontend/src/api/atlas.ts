@@ -199,6 +199,9 @@ export type RelatorioAtlasResumo = Omit<RelatorioAtlas, 'parceriaId' | 'patrocin
 
 export const obterRelatorioAtlas = (relatorioId: number) => pedir<RelatorioAtlas>(`/atlas/relatorios/${relatorioId}`)
 
+/** Descarta um relatório em montagem: o cartão aberto é cancelado junto, e um pedido novo começa outro relatório. */
+export const descartarRelatorioAtlas = (relatorioId: number) => pedir<RelatorioAtlas>(`/atlas/relatorios/${relatorioId}/descartar`, { metodo: 'POST' })
+
 export const listarRelatoriosAtlas = (parceriaId: number) => pedir<RelatorioAtlasResumo[]>(`/parcerias/${parceriaId}/atlas/relatorios`)
 
 export const NOME_STATUS_ATLAS: Record<StatusRelatorioAtlas, string> = {

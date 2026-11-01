@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 import { ErroApi } from '../../api/cliente'
 import { NOME_STATUS_ATLAS, listarRelatoriosAtlas, obterRelatorioAtlas, type RelatorioAtlasResumo } from '../../api/atlas'
+import { BotaoDescartar } from '../../atlas/BotaoDescartar'
 import { useDados } from '../../api/useDados'
 import { Aviso } from '../../componentes/Aviso'
 import { Botao, LinkBotao } from '../../componentes/Botao'
@@ -15,6 +16,16 @@ import { Tabela } from '../../componentes/Tabela'
 import { useSessao } from '../../sessao/Sessao'
 import { dataHora } from '../../util/formatar'
 import { useParceria, useRecarregarSeAbaFechou } from './ContextoParceria'
+
+/** Abre a impressão quando as fotos da galeria já chegaram (até 8 s): uma foto a caminho sairia em branco no A4. */
+function imprimirComAsFotos() {
+  const inicio = Date.now()
+  const tentar = () => {
+    if (document.querySelector('[data-foto-carregando]') && Date.now() - inicio < 8000) window.setTimeout(tentar, 150)
+    else window.print()
+  }
+  window.setTimeout(tentar, 300)
+}
 
 export function RelatorioAtlas() {
   const parceria = useParceria()
@@ -31,7 +42,7 @@ export function RelatorioAtlas() {
     if (!pronto || impresso.current || busca.get('imprimir') !== '1') return
     impresso.current = true
     setBusca({}, { replace: true })
-    window.setTimeout(() => window.print(), 300)
+    imprimirComAsFotos()
   }, [pronto, busca, setBusca])
   useRecarregarSeAbaFechou(relatorio)
 
@@ -51,17 +62,18 @@ export function RelatorioAtlas() {
             {dado.status !== 'PRONTO' && (
               <Aviso tipo="ausente" titulo={`Relatório ${NOME_STATUS_ATLAS[dado.status].toLowerCase()}`}>
                 {dado.status === 'DESCARTADO'
-                  ? 'Ficou parado por mais de 7 dias e foi descartado. Peça um relatório novo ao Atlas.'
+                  ? 'Este relatório não segue mais. Peça um relatório novo ao Atlas.'
                   : 'Ainda não terminou: os números abaixo são os de agora e podem mudar até o Atlas finalizar.'}
               </Aviso>
             )}
             <div className="flex flex-wrap gap-3 print:hidden">
-              <Botao variante="secundario" icone="ri-printer-line" onClick={() => window.print()}>
+              <Botao variante="secundario" icone="ri-printer-line" onClick={imprimirComAsFotos}>
                 Imprimir ou salvar PDF
               </Botao>
               <LinkBotao to={`/parceria/${parceria.id}/relatorio`} variante="secundario" icone="ri-arrow-left-line">
                 Voltar aos relatórios
               </LinkBotao>
+              {!rbs && (dado.status === 'MONTANDO' || dado.status === 'AGUARDANDO_RESPOSTA') && <BotaoDescartar relatorioId={dado.id} aoDescartar={relatorio.recarregar} />}
             </div>
             <p className="text-xs font-medium text-texto-2 print:hidden">
               Pedido por {dado.criadoPor?.nome ?? '—'} em {dataHora(dado.criadoEm)}

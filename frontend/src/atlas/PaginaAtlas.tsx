@@ -29,6 +29,7 @@ import { LinkBotao } from '../componentes/Botao'
 import { CabecalhoSecao } from '../componentes/CabecalhoSecao'
 import { nomeCota } from '../componentes/Menu'
 import { RenderizadorDeRelatorio } from '../componentes/relatorio/RenderizadorDeRelatorio'
+import { BotaoDescartar } from './BotaoDescartar'
 import { useParceria } from '../paginas/parceria/ContextoParceria'
 import { useSessao } from '../sessao/Sessao'
 import { aplicar, SEM_RESPOSTA, type RespostaAoVivo } from './AoVivo'
@@ -249,6 +250,18 @@ export function PaginaAtlas() {
     }
   }
 
+  /** Descartado o documento, volta à conversa: o cartão aberto agora aparece cancelado, e um pedido novo começa outro relatório. */
+  async function aposDescartar() {
+    if (conversa === null) return
+    const lista = await listarConversas(parceria.id)
+    const { atual, documento } = await lerConversa(conversa.conversaId, lista)
+    setConversas(lista)
+    setConversa(atual)
+    setRelatorio(documento)
+    setDocumentoAberto(false)
+    setVistaMovel('documento')
+  }
+
   function montar() {
     if (!relatorioDisponivel) return
     turno(() => (conversa ? montarRelatorio(conversa.conversaId) : abrirConversa(parceria.id, true)), { emFluxo: false })
@@ -382,6 +395,9 @@ export function PaginaAtlas() {
             <div className="min-h-0 flex-1 overflow-y-auto px-1 py-6 sm:px-6">
               <div className="mx-auto flex w-full max-w-[680px] flex-col gap-4">
                 <div className="flex flex-wrap justify-end gap-2.5">
+                  {EM_MONTAGEM.includes(relatorio.status) && (
+                    <BotaoDescartar relatorioId={relatorio.id} noAtlas desabilitado={pensando} aoDescartar={aposDescartar} />
+                  )}
                   <ChipLink to={`${base}/relatorios-atlas/${relatorio.id}`} icone="ri-external-link-line">
                     Página inteira
                   </ChipLink>

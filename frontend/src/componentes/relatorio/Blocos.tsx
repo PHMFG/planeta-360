@@ -1,8 +1,10 @@
 // O catálogo fechado de blocos do relatório do Atlas, no estilo do documento do Figma (AT05, 202:1863): sóbrio, sem elementos
 // da marca, tipografia neutra, divisores finos e referências numeradas. [ATLAS] [RELATORIO]
-// Cada bloco só desenha o que o servidor mandou, já resolvido e formatado: nada é buscado nem calculado aqui, e todo texto
-// entra como texto (o React escapa), nunca como HTML.
+// Cada bloco só desenha o que o servidor mandou, já resolvido e formatado: nada é calculado aqui, e todo texto entra como texto
+// (o React escapa), nunca como HTML. A única coisa que se busca é a imagem de uma foto da galeria, pela rota de download.
+import { useEffect, useState } from 'react'
 import type { Bloco, ItemKpi } from '../../api/atlas'
+import { pedirArquivo } from '../../api/cliente'
 import { dataHora } from '../../util/formatar'
 
 /** O número da referência de cada fonte ([1], [2]...), na ordem do bloco "fontes". */
@@ -28,6 +30,66 @@ function Kpi({ item, referencias }: { item: ItemKpi; referencias: Referencias })
         </p>
       )}
     </div>
+  )
+}
+
+type FotoDoRelatorio = Extract<Bloco, { tipo: 'galeria_comprovacoes' }>['itens'][number]
+
+/**
+ * Uma foto da galeria. A rota de download só responde como anexo, então a imagem vem por fetch e vira um endereço blob: (cada
+ * visualização grava um DOWNLOAD no histórico). {@code data-foto-carregando} segura a impressão até a imagem chegar.
+ */
+function FotoDaGaleria({ item }: { item: FotoDoRelatorio }) {
+  const [endereco, setEndereco] = useState<string | null>(null)
+  const [situacao, setSituacao] = useState<'carregando' | 'pronta' | 'indisponivel'>('carregando')
+  const legenda = item.descricao || item.nomeOriginal
+
+  useEffect(() => {
+    const pedido = new AbortController()
+    let criado: string | null = null
+    pedirArquivo(`/arquivos/${item.arquivoId}`, pedido.signal)
+      .then((arquivo) => {
+        if (pedido.signal.aborted) return
+        if (!arquivo.type.startsWith('image/')) {
+          setSituacao('indisponivel')
+          return
+        }
+        criado = URL.createObjectURL(arquivo)
+        setEndereco(criado)
+      })
+      .catch(() => {
+        if (!pedido.signal.aborted) setSituacao('indisponivel')
+      })
+    return () => {
+      pedido.abort()
+      if (criado) URL.revokeObjectURL(criado)
+    }
+  }, [item.arquivoId])
+
+  return (
+    <figure className="rel-bloco flex min-w-0 flex-col gap-1.5" data-foto-carregando={situacao === 'carregando' ? '' : undefined}>
+      <div className="grid aspect-[4/3] place-items-center overflow-hidden rounded-sm bg-[#f2f2f2]">
+        {situacao === 'indisponivel' ? (
+          <span className="px-3 text-center text-[10px] text-[#6b6b6b]">Foto indisponível</span>
+        ) : (
+          endereco && (
+            <img
+              src={endereco}
+              alt={legenda}
+              decoding="sync"
+              className="size-full object-cover"
+              // A impressão só desenha a imagem já decodificada: sem isso, as últimas fotos saem em branco no A4.
+              onLoad={(evento) => void evento.currentTarget.decode().catch(() => undefined).finally(() => setSituacao('pronta'))}
+              onError={() => setSituacao('indisponivel')}
+            />
+          )
+        )}
+      </div>
+      <figcaption className="text-[10px] leading-snug text-[#6b6b6b]">
+        <span className="block break-words text-[#222]">{legenda}</span>
+        {item.aplicacao} · {dataHora(item.registradoEm)}
+      </figcaption>
+    </figure>
   )
 }
 
@@ -92,20 +154,14 @@ export function BlocoDoRelatorio({ bloco, referencias }: { bloco: Bloco; referen
         </div>
       )
     case 'galeria_comprovacoes':
-      // A lista das fotos, sem a imagem: a foto em si fica na aba Aplicações (botão Baixar).
       return bloco.itens.length === 0 ? (
         <p className="rel-bloco text-[11px] text-[#6b6b6b]">Nenhuma foto de comprovação registrada.</p>
       ) : (
-        <ul className="rel-bloco flex flex-col text-[11px]">
+        <div className="grid grid-cols-2 gap-3 @md:grid-cols-3 print:grid-cols-3">
           {bloco.itens.map((item) => (
-            <li key={item.arquivoId} className="flex gap-3 border-b border-[#e6e6e6] py-[7px] text-[#222]">
-              <span className="min-w-0 flex-1 break-words">{item.descricao || item.nomeOriginal}</span>
-              <span className="shrink-0 text-[#6b6b6b]">
-                {item.aplicacao} · {dataHora(item.registradoEm)}
-              </span>
-            </li>
+            <FotoDaGaleria key={item.arquivoId} item={item} />
           ))}
-        </ul>
+        </div>
       )
     case 'campo_informado':
       return (
