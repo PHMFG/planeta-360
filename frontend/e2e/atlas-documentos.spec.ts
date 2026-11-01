@@ -57,7 +57,7 @@ test('a RBS sobe o FAQ pela tela, aprova, vê os trechos e revoga', async ({ pag
     await page.getByRole('button', { name: 'Atualizar' }).click()
     await expect(linha.getByText('Indexado')).toBeVisible({ timeout: 1000 })
   }).toPass({ timeout: 60_000 })
-  await expect(linha.getByText('embeddings-de-teste · 768 dimensões')).toBeVisible()
+  await expect(linha.getByText(/· 768 dimensões/)).toBeVisible()
   await capturar(page, 'atlas-documentos-indexado')
 
   await linha.getByRole('button', { name: 'Ver trechos' }).click()

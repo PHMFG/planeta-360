@@ -19,13 +19,30 @@ export type FerramentaUsada = {
   duracaoMs: number | null
 }
 
+/**
+ * De onde veio o que a resposta cita: o marcador [T1] do texto aponta para uma destas. Título, versão, página e seção são os do
+ * momento da resposta; {@code substituido} e {@code revogado}, os de agora. O documento revogado não abre mais.
+ */
+export type FonteDaResposta = {
+  marcador: string
+  tipo: 'TRECHO' | 'REGISTRO' | 'CALCULO'
+  documentoId?: number
+  titulo?: string
+  versao?: number
+  pagina?: number
+  secao?: string | null
+  trechoId?: number
+  substituido?: boolean
+  revogado?: boolean
+}
+
 /** {@code turno}: o turno do diagnóstico que escreveu o item. Só vem com o diagnóstico ligado para quem está na tela. */
 export type ItemDaConversa = { turno?: string } & (
   | { tipo: 'usuario'; texto: string }
   /** O resumo do raciocínio do modelo, escrito no servidor e conferido como o texto. O raciocínio cru não sai do servidor. */
   | { tipo: 'raciocinio'; resumo: string }
   /** {@code porModelo} falso: frase fixa do servidor (o botão, sem modelo), que a tela não apresenta como fala do Atlas. */
-  | { tipo: 'texto'; texto: string; porModelo?: boolean }
+  | { tipo: 'texto'; texto: string; porModelo?: boolean; fontes?: FonteDaResposta[] }
   | { tipo: 'aviso'; texto: string }
   | { tipo: 'cartao'; solicitacaoId: number; relatorioId: number; mensagem: string; status: StatusCartao; campos: CampoDoCartao[] }
   | { tipo: 'relatorio_pronto'; relatorioId: number; titulo: string }

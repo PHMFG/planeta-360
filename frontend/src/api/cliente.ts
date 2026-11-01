@@ -116,6 +116,20 @@ export async function pedir<T = void>(caminho: string, opcoes: Opcoes = {}): Pro
   return (tipo.includes('json') ? await resposta.json() : await resposta.text()) as T
 }
 
+/** Um arquivo que a tela mostra ela mesma, como o documento no visualizador do Atlas. Os erros vêm como os de {@link pedir}. */
+export async function pedirArquivo(caminho: string, sinal?: AbortSignal): Promise<Blob> {
+  let resposta: Response
+  try {
+    resposta = await fetch(`${BASE}${caminho}`, { credentials: 'same-origin', signal: sinal })
+  } catch (erro) {
+    if (sinal?.aborted) throw erro
+    throw new ErroApi(0, SEM_API)
+  }
+  if (resposta.status === 401) aoPerderSessao?.()
+  if (!resposta.ok) throw await lerErro(resposta)
+  return resposta.blob()
+}
+
 /** Um evento de uma resposta em fluxo (text/event-stream): o nome ("event:") e os dados ("data:"), já lidos do JSON. */
 export type EventoDoFluxo = { nome: string; dados: unknown }
 

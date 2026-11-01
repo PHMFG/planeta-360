@@ -1,5 +1,5 @@
-// Os documentos do Atlas: envio, lista, aprovação e trechos (rotas 54 a 58 do docs/api.md). [ATLAS]
-import { consulta, pedir, type Pagina } from './cliente'
+// Os documentos do Atlas: envio, lista, aprovação, trechos, o visualizador e a busca de teste (rotas 54 a 61 do docs/api.md). [ATLAS]
+import { consulta, pedir, pedirArquivo, type Pagina } from './cliente'
 import type { UsuarioResumo } from './parcerias'
 import type { ParceriaResumo } from './tipos'
 
@@ -52,6 +52,52 @@ export type TrechoDoDocumento = {
   inicioDoTexto: string
 }
 
+/** O trecho inteiro, para o destaque no visualizador (rota 60). O texto é o que foi indexado. */
+export type TrechoInteiro = {
+  id: number
+  documentoId: number
+  ordem: number
+  paginaInicio: number
+  paginaFim: number
+  secao: string | null
+  texto: string
+}
+
+/** Um trecho numa das listas da busca de teste. A posição, a distância e a nota ficam nulas na lista em que ele não entrou. */
+export type ItemDaBuscaDeTeste = {
+  trechoId: number
+  documentoId: number
+  documento: string
+  versao: number
+  tipo: TipoDoDocumento
+  pagina: number
+  secao: string | null
+  posicaoVetorial: number | null
+  distancia: number | null
+  posicaoTextual: number | null
+  nota: number | null
+  rrf: number
+  inicioDoTexto: string
+}
+
+export type ResultadoDaBuscaDeTeste = {
+  parceria: { id: number; patrocinador: string; edicao: number; cota: CodigoDaCota }
+  consulta: string
+  tipo: TipoDoDocumento | null
+  k: number
+  degradado: boolean
+  motivoDoDegradado: 'EMBEDDINGS_DESLIGADOS' | 'EMBEDDING_FALHOU' | null
+  erroDoEmbedding: string | null
+  semTermoUtil: boolean
+  embeddingMs: number | null
+  sqlMs: number | null
+  trechosDeOutroModelo: number
+  vetorial: ItemDaBuscaDeTeste[]
+  textual: ItemDaBuscaDeTeste[]
+  escolhidos: ItemDaBuscaDeTeste[]
+  visiveis: { documentoId: number; titulo: string; versao: number; tipo: TipoDoDocumento; escopo: EscopoDoDocumento; trechos: number }[]
+}
+
 export type NovoDocumento = {
   arquivo: File
   titulo: string
@@ -91,3 +137,12 @@ export const mudarStatusDoDocumento = (id: number, acao: AcaoDoDocumento, observ
   pedir<Documento>(`/documentos/${id}/status`, { metodo: 'PATCH', corpo: { acao, observacao: observacao || undefined } })
 
 export const listarTrechos = (id: number, pagina = 0) => pedir<Pagina<TrechoDoDocumento>>(`/documentos/${id}/trechos${consulta({ pagina })}`)
+
+/** O arquivo do documento, para o visualizador (rota 59). Cada abertura entra no histórico. */
+export const lerConteudoDoDocumento = (id: number, sinal?: AbortSignal) => pedirArquivo(`/documentos/${id}/conteudo`, sinal)
+
+export const obterTrechoInteiro = (documentoId: number, trechoId: number) => pedir<TrechoInteiro>(`/documentos/${documentoId}/trechos/${trechoId}`)
+
+/** A busca como o modelo a faria para esta parceria, sem o modelo (rota 61). */
+export const buscarComoTeste = (corpo: { parceriaId: number | null; consulta: string; tipo?: string }) =>
+  pedir<ResultadoDaBuscaDeTeste>('/atlas/busca-teste', { metodo: 'POST', corpo })

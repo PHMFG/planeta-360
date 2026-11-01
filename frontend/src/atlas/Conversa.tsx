@@ -6,8 +6,9 @@
 // A resposta do modelo chega em tempo real: o tempo pensando com o resumo do raciocínio, o texto e o que ele está fazendo; no
 // fim do turno, a conversa gravada toma o lugar da versão ao vivo. Com o debug ligado no servidor, as ferramentas que o modelo
 // usou aparecem na ordem em que rodaram. Com o relatório desligado na API, o botão dele aparece desabilitado.
-import { useEffect, useRef } from 'react'
-import type { ItemDaConversa, RespostaDoCartao } from '../api/atlas'
+// O que a resposta cita dos documentos vira chip no texto e entra na lista "Fontes", e abre no visualizador.
+import { Fragment, useEffect, useRef } from 'react'
+import type { FonteDaResposta, ItemDaConversa, RespostaDoCartao } from '../api/atlas'
 import type { ParceriaResumo } from '../api/tipos'
 import type { RespostaAoVivo } from './AoVivo'
 import { CartaoDocumento } from './CartaoDocumento'
@@ -16,6 +17,7 @@ import { Compositor } from './Compositor'
 import { BotaoDiagnostico } from './Diagnostico'
 import { AvisoAtlas, BlocoDoAtlas, BlocoDoSistema, Chip, LinhaBuscando, MensagemVoce, TextoDoAtlas, TextoDoSistema } from './Elementos'
 import { FerramentaDebug, SemFerramentaDebug } from './FerramentaDebug'
+import { ListaDeFontes, TextoComCitacoes } from './Fontes'
 import { Raciocinio } from './Raciocinio'
 
 /** Na tela, pensamentos seguidos viram uma caixa só, com o resumo de cada um. */
@@ -71,6 +73,7 @@ type Props = {
   aoMontar: () => void
   aoResponder: (solicitacaoId: number, resposta: RespostaDoCartao) => Promise<void>
   aoAbrirDocumento: (aba: 'conversa' | 'fontes') => void
+  aoAbrirFonte: (fonte: FonteDaResposta) => void
   compacta?: boolean
 }
 
@@ -91,6 +94,7 @@ export function AreaDaConversa({
   aoMontar,
   aoResponder,
   aoAbrirDocumento,
+  aoAbrirFonte,
   compacta = false,
 }: Props) {
   const fim = useRef<HTMLDivElement>(null)
@@ -126,7 +130,16 @@ export function AreaDaConversa({
       case 'ferramenta':
         return <FerramentaDebug key={posicao} ferramenta={item} />
       case 'texto':
-        return doModelo(item) ? <TextoDoAtlas key={posicao}>{item.texto}</TextoDoAtlas> : <TextoDoSistema key={posicao}>{item.texto}</TextoDoSistema>
+        return doModelo(item) ? (
+          <Fragment key={posicao}>
+            <TextoDoAtlas>
+              <TextoComCitacoes texto={item.texto} fontes={item.fontes ?? []} aoAbrir={aoAbrirFonte} />
+            </TextoDoAtlas>
+            {item.fontes && <ListaDeFontes fontes={item.fontes} aoAbrir={aoAbrirFonte} />}
+          </Fragment>
+        ) : (
+          <TextoDoSistema key={posicao}>{item.texto}</TextoDoSistema>
+        )
       case 'aviso':
         return <TextoDoSistema key={posicao}>{item.texto}</TextoDoSistema>
       case 'cartao':
@@ -175,7 +188,7 @@ export function AreaDaConversa({
                   <FerramentaDebug key={posicao} ferramenta={parte} />
                 ) : (
                   <TextoDoAtlas key={posicao} digitando={posicao === aoVivo.partes.length - 1 && !aoVivo.etapa}>
-                    {parte.texto}
+                    <TextoComCitacoes texto={parte.texto} />
                   </TextoDoAtlas>
                 ),
               )}
@@ -203,7 +216,7 @@ export function AreaDaConversa({
         </div>
         {llm && <Compositor valor={texto} aoMudar={aoMudarTexto} aoEnviar={aoEnviar} rotuloEnviar="Enviar" ocupado={pensando} habilitado compacto={compacta} />}
         {!llm && !relatorioDisponivel && <AvisoAtlas titulo="O Atlas está sem o modelo de linguagem agora">Dá para ler a conversa, mas não enviar mensagens. Tente de novo mais tarde.</AvisoAtlas>}
-        <p className="pb-1 text-center text-xs text-white/55 max-sm:hidden">Só os dados desta parceria · o Atlas não escreve números por conta própria</p>
+        <p className="pb-1 text-center text-xs text-white/55 max-sm:hidden">Só os dados desta parceria · todo número do Atlas vem de uma fonte</p>
       </div>
     </div>
   )

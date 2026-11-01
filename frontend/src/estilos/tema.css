@@ -167,3 +167,10 @@
   background-repeat: repeat;
   background-position: -24px -60px;
 }
+
+/* O trecho citado no visualizador do Atlas: a marca fica por cima do PDF, e o texto da camada continua invisível. */
+.textLayer mark {
+  background: rgb(255 210 1 / 45%);
+  color: transparent;
+  border-radius: 2px;
+}
