@@ -67,19 +67,19 @@ class RegistroDeFerramentasTest {
 
     @Test
     void semRelatorioOModeloRecebeAConsultaEAAberturaDoRelatorio() {
-        assertThat(nomes(registro.oferecidas(Optional.empty(), true))).containsExactly("parceria_consultar", "relatorio_iniciar");
+        assertThat(nomes(registro.oferecidas(Optional.empty(), true))).containsExactly("parceria_consultar", "buscar_documentos", "relatorio_iniciar");
     }
 
     @Test
     void comRelatorioEmMontagemRecebeAsOutrasTresEPerdeAAbertura() {
         assertThat(nomes(registro.oferecidas(Optional.of(relatorio("MONTANDO")), true)))
-                .containsExactly("parceria_consultar", "relatorio_solicitar_campos", "relatorio_editar", "relatorio_finalizar");
+                .containsExactly("parceria_consultar", "buscar_documentos", "relatorio_solicitar_campos", "relatorio_editar", "relatorio_finalizar");
     }
 
     @Test
     void depoisDeTresCartoesNaoPedeOutro() {
         assertThat(nomes(registro.oferecidas(Optional.of(relatorio("MONTANDO")), false)))
-                .containsExactly("parceria_consultar", "relatorio_editar", "relatorio_finalizar");
+                .containsExactly("parceria_consultar", "buscar_documentos", "relatorio_editar", "relatorio_finalizar");
     }
 
     @Test

@@ -48,7 +48,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
  * dentro de um try/finally que o liga de novo). Os testes de comportamento do loop estão em LoopDoAgenteTest.
  */
 @TesteComLlmRoteirizado
-@Import(FerramentaDeTesteConfig.class)
+@Import({FerramentaDeTesteConfig.class, EmbeddingsControlavelConfig.class})
 class LoopSemTransacaoTest {
 
     /** Da que depende das outras para a que não depende de ninguém, e os gatilhos de imutabilidade de cada uma. */
@@ -83,12 +83,16 @@ class LoopSemTransacaoTest {
     @Autowired
     ProvedorAtual provedorAtual;
 
+    @Autowired
+    EmbeddingsControlavel embeddings;
+
     private final Map<String, Long> ultimoIdAntes = new LinkedHashMap<>();
 
     @BeforeEach
     void guardarOQueJaExiste() {
         modelo.limpar();
         ferramentaDeTeste.limpar();
+        embeddings.limpar();
         TABELAS_E_GATILHOS.keySet().forEach(tabela -> ultimoIdAntes.put(tabela,
                 jdbc.sql("SELECT coalesce(max(id), 0) FROM " + tabela).query(Long.class).single()));
     }
@@ -222,9 +226,17 @@ class LoopSemTransacaoTest {
 
         final List<Boolean> transacaoAtiva = new CopyOnWriteArrayList<>();
         final long demoraEmMs;
+        final String ferramenta;
+        final String argumentos;
 
         ModeloLento(long demoraEmMs) {
+            this(demoraEmMs, FerramentaDeTeste.NOME, "{}");
+        }
+
+        ModeloLento(long demoraEmMs, String ferramenta, String argumentos) {
             this.demoraEmMs = demoraEmMs;
+            this.ferramenta = ferramenta;
+            this.argumentos = argumentos;
         }
 
         @Override
@@ -239,7 +251,7 @@ class LoopSemTransacaoTest {
             if ("tool".equals(ultima.papel())) {
                 return new RespostaDoLlm("Pronto.", List.of(), null);
             }
-            return new RespostaDoLlm(null, List.of(ProvedorRoteirizado.pedido(FerramentaDeTeste.NOME, "{}")), null);
+            return new RespostaDoLlm(null, List.of(ProvedorRoteirizado.pedido(ferramenta, argumentos)), null);
         }
     }
 
@@ -277,6 +289,105 @@ class LoopSemTransacaoTest {
                     .param("c", conversa).query(String.class).single()).isEqualTo("Pronto.");
             assertThat(jdbc.sql("SELECT turno_desde IS NULL FROM atlas_conversa WHERE id = :c").param("c", conversa).query(Boolean.class)
                     .single()).isTrue();
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // buscar_documentos: o embedding é pedido sem transação, e sem embeddings a busca segue
+    // ---------------------------------------------------------------------
+
+    private String resultadoDaBusca(long conversa) {
+        return jdbc.sql("SELECT conteudo FROM atlas_mensagem WHERE conversa_id = :c AND papel = 'tool' ORDER BY ordem LIMIT 1")
+                .param("c", conversa).query(String.class).single();
+    }
+
+    @Test
+    void oEmbeddingDaConsultaEPedidoSemTransacaoENaoSegura() {
+        UsuarioAutenticado pessoa = marca();
+        long conversa = atlas.abrirConversa(pessoa, amarelo(), null, requisicao()).conversaId();
+        modelo.chamada("buscar_documentos", "{\"consulta\":\"prazo para informar os geradores\"}")
+                .chamada("buscar_documentos", "{\"consulta\":\"tarifa de energia\"}").texto("Veja o manual.");
+
+        atlas.enviarMensagem(pessoa, conversa, new MensagemRequisicao("Prazo dos geradores e energia?", null, null), requisicao());
+
+        assertThat(embeddings.consultas()).containsExactly("prazo para informar os geradores", "tarifa de energia");
+        assertThat(embeddings.transacaoNaConsulta()).as("transação aberta em cada pedido de embedding").containsOnly(false);
+        assertThat(modelo.transacaoAtivaEmCadaPedido()).containsOnly(false);
+        assertThat(resultadoDaBusca(conversa)).contains("04/12/2026");
+    }
+
+    @Test
+    void semEmbeddingsABuscaSegueSoComAListaTextualEAindaAchaOTrecho() {
+        UsuarioAutenticado pessoa = marca();
+        long conversa = atlas.abrirConversa(pessoa, amarelo(), null, requisicao()).conversaId();
+        embeddings.desligado(true);
+        modelo.chamada("buscar_documentos", "{\"consulta\":\"Até quando preciso informar os geradores na Arena\"}").texto("Veja o manual.");
+
+        atlas.enviarMensagem(pessoa, conversa, new MensagemRequisicao("Até quando informo os geradores?", null, null), requisicao());
+
+        assertThat(embeddings.consultas()).as("desligado: o provedor nem é chamado").isEmpty();
+        assertThat(resultadoDaBusca(conversa)).contains("04/12/2026").contains("Manual de Operações 2027");
+    }
+
+    @Test
+    void seOEmbeddingFalhaOTurnoNaoCaiEABuscaSegueSoComATextual() {
+        UsuarioAutenticado pessoa = marca();
+        long conversa = atlas.abrirConversa(pessoa, amarelo(), null, requisicao()).conversaId();
+        embeddings.falharNaConsulta(true);
+        modelo.chamada("buscar_documentos", "{\"consulta\":\"prazo para informar os geradores\"}").texto("Veja o manual.");
+
+        atlas.enviarMensagem(pessoa, conversa, new MensagemRequisicao("Prazo dos geradores?", null, null), requisicao());
+
+        assertThat(embeddings.transacaoNaConsulta()).containsExactly(false);
+        assertThat(resultadoDaBusca(conversa)).contains("04/12/2026").doesNotContain("\"erro\"");
+        assertThat(jdbc.sql("SELECT erro IS NULL FROM atlas_tool_call t JOIN atlas_mensagem m ON m.id = t.mensagem_id WHERE m.conversa_id = :c")
+                .param("c", conversa).query(Boolean.class).single()).isTrue();
+    }
+
+    @Test
+    void semEmbeddingsUmaConsultaSemNenhumTrechoQueResponderVoltaVaziaEComUmAviso() {
+        UsuarioAutenticado pessoa = marca();
+        long conversa = atlas.abrirConversa(pessoa, amarelo(), null, requisicao()).conversaId();
+        embeddings.desligado(true);
+        modelo.chamada("buscar_documentos", "{\"consulta\":\"zzzqqq xyzzy\"}").texto("Veja o manual.");
+
+        atlas.enviarMensagem(pessoa, conversa, new MensagemRequisicao("Quanto custa o zzzqqq?", null, null), requisicao());
+
+        assertThat(resultadoDaBusca(conversa)).contains("\"trechos\":[]").contains("Nenhum trecho dos documentos do portal responde");
+    }
+
+    @Test
+    void dozeTurnosSimultaneosComEmbeddingELlmLentosBuscandoDeVerdadeTerminamSemTimeoutDeConexao() throws Exception {
+        UsuarioAutenticado pessoa = marca();
+        ModeloLento lento = new ModeloLento(300, "buscar_documentos", "{\"consulta\":\"prazo para informar os geradores\"}");
+        provedorAtual.usarChaveDoDebug(new ChaveDoDebug(lento, "http://127.0.0.1", "modelo-lento", false, "xxxx", null, null));
+        embeddings.demora(300);
+        List<Long> conversas = new ArrayList<>();
+        for (int i = 0; i < 12; i++) {
+            conversas.add(atlas.abrirConversa(pessoa, amarelo(), null, requisicao()).conversaId());
+        }
+        ExecutorService threads = Executors.newFixedThreadPool(12);
+        try {
+            List<Future<Boolean>> turnos = new ArrayList<>();
+            for (long conversa : conversas) {
+                turnos.add(threads.submit(() -> {
+                    atlas.enviarMensagem(pessoa, conversa, new MensagemRequisicao("Rode.", null, null), requisicao());
+                    return true;
+                }));
+            }
+            for (Future<Boolean> turno : turnos) {
+                assertThat(turno.get(40, TimeUnit.SECONDS)).isTrue();
+            }
+        } finally {
+            threads.shutdownNow();
+        }
+
+        assertThat(lento.transacaoAtiva).as("idas ao modelo").hasSize(24).containsOnly(false);
+        assertThat(embeddings.transacaoNaConsulta()).as("pedidos de embedding").hasSize(12).containsOnly(false);
+        for (long conversa : conversas) {
+            assertThat(resultadoDaBusca(conversa)).contains("04/12/2026");
+            assertThat(jdbc.sql("SELECT conteudo FROM atlas_mensagem WHERE conversa_id = :c AND papel = 'assistant' ORDER BY ordem DESC LIMIT 1")
+                    .param("c", conversa).query(String.class).single()).isEqualTo("Pronto.");
         }
     }
 }

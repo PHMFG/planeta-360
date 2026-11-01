@@ -12,6 +12,7 @@ import br.com.rbs.portal.atlas.diagnostico.ResultadoDaEtapa;
 import br.com.rbs.portal.atlas.diagnostico.Traco;
 import br.com.rbs.portal.atlas.diagnostico.Traco.Etapa;
 import br.com.rbs.portal.atlas.checagem.FontesDoTurno;
+import br.com.rbs.portal.atlas.ferramentas.BuscarDocumentos;
 import br.com.rbs.portal.atlas.ferramentas.Execucao;
 import br.com.rbs.portal.atlas.ferramentas.RegistroDeFerramentas;
 import br.com.rbs.portal.atlas.ferramentas.RegistroDeFerramentas.Preparo;
@@ -124,6 +125,7 @@ public class LoopDoAgente {
     /** A frase da etapa {@code etapa} da resposta em fluxo, por ferramenta: a marca lê o que está acontecendo, nunca o nome dela. */
     public static final Map<String, String> ETAPAS = Map.of(
             RelatorioFerramentas.CONSULTAR, "Consultando os números da parceria…",
+            BuscarDocumentos.NOME, "Buscando nos documentos do portal…",
             RelatorioFerramentas.INICIAR, "Abrindo o relatório…",
             RelatorioFerramentas.SOLICITAR_CAMPOS, "Preparando as perguntas…",
             RelatorioFerramentas.EDITAR, "Redigindo o documento…",
@@ -619,16 +621,49 @@ public class LoopDoAgente {
         return limpo.isBlank() ? null : limpo;
     }
 
-    /** Os argumentos como JSON para a trilha: o que o modelo mandou, se for JSON; senão o texto dele como string JSON. */
+    /**
+     * Os argumentos como JSON para a trilha: o que o modelo mandou, se for JSON; senão o texto dele como string JSON. O PostgreSQL não
+     * guarda o caractere nulo no jsonb, e o JSON pode trazê-lo como o escape de nulo de seis caracteres (o {@link #limpar} só tira o
+     * nulo cru, não o escape): um
+     * argumento com ele derrubaria a gravação da trilha, e com ela o turno. Cada nulo vira o caractere de substituição.
+     */
     private static String argumentosParaATrilha(String argumentos) {
         if (argumentos == null || argumentos.isBlank()) {
             return "{}";
         }
         try {
-            AtlasJson.ler(argumentos, Object.class);
-            return argumentos;
+            Object lido = AtlasJson.ler(argumentos, Object.class);
+            return temNulo(lido) ? AtlasJson.escrever(semNulo(lido)) : argumentos;
         } catch (JacksonException naoEJson) {
-            return AtlasJson.escrever(argumentos);
+            return AtlasJson.escrever(semNulo(argumentos));
         }
+    }
+
+    private static boolean temNulo(Object valor) {
+        if (valor instanceof String texto) {
+            return texto.indexOf('\u0000') >= 0;
+        }
+        if (valor instanceof Map<?, ?> mapa) {
+            return mapa.entrySet().stream().anyMatch(e -> temNulo(e.getKey()) || temNulo(e.getValue()));
+        }
+        if (valor instanceof List<?> lista) {
+            return lista.stream().anyMatch(LoopDoAgente::temNulo);
+        }
+        return false;
+    }
+
+    private static Object semNulo(Object valor) {
+        if (valor instanceof String texto) {
+            return texto.replace('\u0000', '\uFFFD');
+        }
+        if (valor instanceof Map<?, ?> mapa) {
+            Map<Object, Object> limpo = new java.util.LinkedHashMap<>();
+            mapa.forEach((chave, conteudo) -> limpo.put(semNulo(chave), semNulo(conteudo)));
+            return limpo;
+        }
+        if (valor instanceof List<?> lista) {
+            return lista.stream().map(LoopDoAgente::semNulo).toList();
+        }
+        return valor;
     }
 }

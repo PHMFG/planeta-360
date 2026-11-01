@@ -31,8 +31,9 @@ final class ApoioDoDiagnostico {
             return iniciadaEm.plus(Duration.ofMillis(duracaoMs));
         }
 
+        /** Fora da soma do caminho crítico: o resumo, que corre em paralelo, e a busca, que está dentro da ferramenta. */
         boolean emParalelo() {
-            return "RESUMO".equals(etapa);
+            return "RESUMO".equals(etapa) || "BUSCA".equals(etapa);
         }
     }
 

@@ -28,7 +28,7 @@ public class TracoRepositorio {
 
     /**
      * Um turno como o banco o resume, com a parceria e o dono da conversa já ligados. {@code iniciadoEm} e {@code terminadoEm}
-     * cobrem as etapas sequenciais (o resumo do raciocínio, em paralelo, fica de fora); {@code resultado} é o da etapa SAIDA
+     * cobrem as etapas sequenciais (o resumo do raciocínio, em paralelo, e a busca, que está dentro da ferramenta, ficam de fora); {@code resultado} é o da etapa SAIDA
      * (ERRO se o turno não a tem); {@code mensagemId} é a última mensagem do assistente que o turno tocou; os tokens e o custo
      * somam as etapas que os trazem em {@code dados}.
      */
@@ -54,8 +54,8 @@ public class TracoRepositorio {
     private static final String TURNOS_ANTES = """
             WITH turnos AS (
                 SELECT t.turno, t.conversa_id, t.parceria_id,
-                       min(t.iniciada_em) FILTER (WHERE t.etapa <> 'RESUMO') AS iniciado_em,
-                       max(t.iniciada_em + t.duracao_ms * interval '1 millisecond') FILTER (WHERE t.etapa <> 'RESUMO') AS terminado_em,
+                       min(t.iniciada_em) FILTER (WHERE t.etapa NOT IN ('RESUMO', 'BUSCA')) AS iniciado_em,
+                       max(t.iniciada_em + t.duracao_ms * interval '1 millisecond') FILTER (WHERE t.etapa NOT IN ('RESUMO', 'BUSCA')) AS terminado_em,
                        count(*) AS etapas,
                        max(t.mensagem_id) AS mensagem_id,
                        coalesce((array_agg(t.resultado ORDER BY t.ordem DESC) FILTER (WHERE t.etapa = 'SAIDA'))[1], 'ERRO') AS resultado,
