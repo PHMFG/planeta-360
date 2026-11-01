@@ -22,12 +22,14 @@ import br.com.rbs.portal.atlas.jev.ModoDoJev;
 import br.com.rbs.portal.atlas.jev.PontoDoJev;
 import br.com.rbs.portal.atlas.jev.ServicoDoJev;
 import br.com.rbs.portal.atlas.jev.ServicoDoJev.JuizoDoTrecho;
+import br.com.rbs.portal.atlas.jev.ServicoDoJev.LacunaOpcional;
 import br.com.rbs.portal.atlas.jev.ServicoDoJev.TrechoParaJulgar;
 import br.com.rbs.portal.atlas.loop.LoopDoAgente;
 import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.RespostaDoLlm;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -40,7 +42,7 @@ import org.springframework.test.context.TestPropertySource;
  * relevância de cada trecho que a busca devolveu. Em ATIVO, o trecho abaixo do limiar sai do resultado que o modelo recebe, e, sem
  * nenhum, a ferramenta diz "nenhum trecho relevante; reformule a consulta ou diga que não encontrou"; em SOMBRA nada sai; o trecho
  * que o JEV não julgou (erro, orçamento) segue. As requisições de uma busca saem em paralelo, sem transação aberta, e o orçamento do
- * turno é de 20. Não é {@code @Transactional}: o traço e as decisões vão ao banco no fim do turno e o teste apaga o que confirmou.
+ * turno é de 20 nos pontos ativos e de 12, à parte, nos pontos em sombra. Não é {@code @Transactional}: o traço e as decisões vão ao banco no fim do turno e o teste apaga o que confirmou.
  */
 @TesteComJevRoteirizado
 @TestPropertySource(properties = {"atlas.diagnostico.ligado=true", "atlas.diagnostico.marca=true", "atlas.prazo-do-resumo=PT0.5S"})
@@ -315,6 +317,80 @@ class JevFontesTest {
         Map<String, Object> cortada = AtlasJson.ler((String) etapas.get(1).get("dados"), new tools.jackson.core.type.TypeReference<Map<String, Object>>() {
         });
         assertThat(cortada).containsEntry("requisicoes", 5).containsEntry("semJev", 5).containsEntry("motivoDoCorte", "ORCAMENTO_ESGOTADO");
+        assertThat(etapas.get(2).get("resultado")).isEqualTo("PULADO");
+        assertThat((String) etapas.get(2).get("dados")).contains("\"motivo\": \"ORCAMENTO_ESGOTADO\"");
+    }
+
+    // ---------------------------------------------------------------------
+    // Sombra e ativo não dividem o orçamento
+    // ---------------------------------------------------------------------
+
+    @Test
+    void asRequisicoesEmSombraTemLimiteProprioDeDozeEPoupamOOrcamentoDoPontoAtivo() {
+        // 4 buscas de 6 trechos em SOMBRA gastavam as 20 requisições do turno e o ponto ATIVO que vinha depois ficava sem JEV
+        config.ligar(PontoDoJev.FONTES, ModoDoJev.SOMBRA).ligar(PontoDoJev.LACUNAS, ModoDoJev.ATIVO);
+        jev.fontes(estado -> 0.5).lacunas(estado -> 0.01);
+        long conversa = conversa();
+        AtlasContexto contexto = contextos.para(usuario(jdbc, AMARELO), SessaoDeApi.parceriaDe2027(jdbc, "Cliente Amarelo"), conversa, requisicao());
+
+        List<Integer> julgados = new ArrayList<>();
+        for (int busca = 0; busca < 4; busca++) {
+            julgados.add(servico.fontes(contexto, "pergunta", trechos(6, busca * 10)).size());
+        }
+
+        assertThat(julgados).as("12 em sombra: duas buscas inteiras, as outras seguem sem JEV").containsExactly(6, 6, 0, 0);
+        assertThat(jev.recebidasDe(PontoDoJev.FONTES)).hasSize(12);
+        assertThat(contexto.jev().requisicoes()).as("o orçamento do ponto ativo está intacto").isZero();
+        assertThat(contexto.jev().restante()).isEqualTo(20);
+        assertThat(contexto.jev().requisicoesEmSombra()).isEqualTo(12);
+        assertThat(contexto.jev().restanteEmSombra()).isZero();
+
+        Set<String> dispensadas = servico.lacunas(contexto, "só o público", List.of(new LacunaOpcional("ativacao.brindes_disponiveis", "Brindes disponíveis"),
+                new LacunaOpcional("ativacao.brindes_distribuidos", "Brindes distribuídos")));
+
+        assertThat(dispensadas).as("o ponto ativo ainda consulta o JEV").containsExactlyInAnyOrder("ativacao.brindes_disponiveis", "ativacao.brindes_distribuidos");
+        assertThat(jev.recebidasDe(PontoDoJev.LACUNAS)).hasSize(2);
+        assertThat(contexto.jev().restante()).isEqualTo(18);
+    }
+
+    @Test
+    void osVinteDoPontoAtivoNaoTiramOsDozeDaSombra() {
+        config.ligar(PontoDoJev.FONTES, ModoDoJev.ATIVO).ligar(PontoDoJev.LACUNAS, ModoDoJev.SOMBRA);
+        jev.fontes(estado -> 0.5).lacunas(estado -> 0.01);
+        long conversa = conversa();
+        AtlasContexto contexto = contextos.para(usuario(jdbc, AMARELO), SessaoDeApi.parceriaDe2027(jdbc, "Cliente Amarelo"), conversa, requisicao());
+
+        assertThat(servico.fontes(contexto, "pergunta", trechos(20, 0))).hasSize(20);
+        assertThat(contexto.jev().restante()).isZero();
+        Set<String> dispensadas = servico.lacunas(contexto, "só o público", List.of(new LacunaOpcional("ativacao.brindes_disponiveis", "Brindes disponíveis")));
+
+        assertThat(dispensadas).as("em sombra nada sai do cartão").isEmpty();
+        assertThat(jev.recebidasDe(PontoDoJev.LACUNAS)).as("a sombra tem o limite dela").hasSize(1);
+        assertThat(contexto.jev().requisicoesEmSombra()).isEqualTo(1);
+        assertThat(contexto.jev().requisicoes()).isEqualTo(20);
+    }
+
+    @Test
+    void oLimiteDaSombraEstouradoApareceNoTracoComOMotivo() {
+        config.ligar(PontoDoJev.FONTES, ModoDoJev.SOMBRA);
+        jev.fontes(estado -> 0.5);
+        long conversa = conversa();
+        long parceria = SessaoDeApi.parceriaDe2027(jdbc, "Cliente Amarelo");
+        var traco = registro.abrir(parceria, conversa);
+        AtlasContexto contexto = contextos.para(usuario(jdbc, AMARELO), parceria, conversa, requisicao()).comTraco(traco);
+
+        servico.fontes(contexto, "pergunta", trechos(7, 0));
+        servico.fontes(contexto, "pergunta", trechos(7, 100));
+        servico.fontes(contexto, "pergunta", trechos(3, 200));
+        traco.encerrar();
+
+        assertThat(jev.recebidasDe(PontoDoJev.FONTES)).hasSize(12);
+        List<Map<String, Object>> etapas = jdbc.sql("SELECT resultado, dados::text AS dados FROM atlas_traco WHERE conversa_id = :c "
+                + "AND etapa = 'R3_FONTES' ORDER BY ordem").param("c", conversa).query().listOfRows();
+        assertThat(etapas).hasSize(3);
+        Map<String, Object> cortada = AtlasJson.ler((String) etapas.get(1).get("dados"), new tools.jackson.core.type.TypeReference<Map<String, Object>>() {
+        });
+        assertThat(cortada).containsEntry("requisicoes", 5).containsEntry("semJev", 2).containsEntry("motivoDoCorte", "ORCAMENTO_ESGOTADO");
         assertThat(etapas.get(2).get("resultado")).isEqualTo("PULADO");
         assertThat((String) etapas.get(2).get("dados")).contains("\"motivo\": \"ORCAMENTO_ESGOTADO\"");
     }

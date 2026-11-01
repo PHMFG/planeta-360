@@ -45,8 +45,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  *       limite ou com o orçamento do turno gasto, o que ele decidiria não acontece e o turno segue o caminho do modelo de linguagem.</li>
  *   <li><b>O {@code state} é o mínimo</b>, mascarado ({@link MascaraDoJev}): a mensagem (ou o trecho, ou a frase) do ponto, nunca
  *       nome nem id de parceria.</li>
- *   <li><b>Orçamento:</b> até {@value JevDoTurno#MAXIMO_DE_REQUISICOES} requisições por turno. Depois disso o que falta segue sem JEV, e
- *       a etapa do traço diz {@code ORCAMENTO_ESGOTADO}.</li>
+ *   <li><b>Orçamento:</b> até {@value JevDoTurno#MAXIMO_DE_REQUISICOES} requisições por turno nos pontos {@code ATIVO}, e
+ *       {@value JevDoTurno#MAXIMO_DE_REQUISICOES_EM_SOMBRA} nos pontos em {@code SOMBRA}, contadas à parte (a sombra só observa e não
+ *       gasta o que o ponto que age precisa). Depois disso o que falta segue sem JEV, e a etapa do traço diz {@code ORCAMENTO_ESGOTADO}.</li>
  *   <li><b>Registro:</b> cada pergunta respondida (ou que falhou) vira uma {@code atlas_decisao} com o ponto, o modo, o limiar, a ação
  *       ("fez: X" em {@code ATIVO}, "teria feito: X" em {@code SOMBRA}) e o alvo; cada rodada vira uma etapa do traço
  *       ({@code J1_INTENCAO}, {@code J1_CARTAO}, {@code R3_FONTES}, {@code R5_RESPOSTA}, {@code V2_COERENCIA}, {@code LACUNAS}).</li>
@@ -173,7 +174,7 @@ public class ServicoDoJev {
         }
         double limiar = config.limiar(PontoDoJev.INTENCAO);
         Etapa etapa = abrirEtapa(contexto, PontoDoJev.INTENCAO, modo);
-        if (contexto.jev().reservar(1) == 0) {
+        if (contexto.jev().reservar(1, modo) == 0) {
             etapa.dado("motivo", "ORCAMENTO_ESGOTADO").fim(ResultadoDaEtapa.PULADO);
             return Optional.empty();
         }
@@ -246,7 +247,7 @@ public class ServicoDoJev {
         }
         double limiar = config.limiar(PontoDoJev.CARTAO);
         Etapa etapa = abrirEtapa(contexto, PontoDoJev.CARTAO, modo);
-        if (contexto.jev().reservar(1) == 0) {
+        if (contexto.jev().reservar(1, modo) == 0) {
             etapa.dado("motivo", "ORCAMENTO_ESGOTADO").fim(ResultadoDaEtapa.PULADO);
             return Optional.empty();
         }
@@ -295,7 +296,7 @@ public class ServicoDoJev {
         }
         double limiar = config.limiar(PontoDoJev.FONTES);
         Etapa etapa = abrirEtapa(contexto, PontoDoJev.FONTES, modo);
-        int concedidas = contexto.jev().reservar(trechos.size());
+        int concedidas = contexto.jev().reservar(trechos.size(), modo);
         if (concedidas == 0) {
             etapa.dado("motivo", "ORCAMENTO_ESGOTADO").fim(ResultadoDaEtapa.PULADO);
             return List.of();
@@ -373,7 +374,7 @@ public class ServicoDoJev {
             etapa.dado("motivo", "SEM_FRASE_COM_CITACAO").fim(ResultadoDaEtapa.PULADO);
             return Optional.empty();
         }
-        if (contexto.jev().reservar(1) == 0) {
+        if (contexto.jev().reservar(1, modo) == 0) {
             etapa.dado("motivo", "ORCAMENTO_ESGOTADO").fim(ResultadoDaEtapa.PULADO);
             return Optional.empty();
         }
@@ -455,7 +456,7 @@ public class ServicoDoJev {
             etapa.dado("motivo", "SEM_SELO").fim(ResultadoDaEtapa.PULADO);
             return Map.of();
         }
-        int concedidas = contexto.jev().reservar(paragrafos.size());
+        int concedidas = contexto.jev().reservar(paragrafos.size(), modo);
         if (concedidas == 0) {
             etapa.dado("motivo", "ORCAMENTO_ESGOTADO").fim(ResultadoDaEtapa.PULADO);
             return Map.of();
@@ -520,7 +521,7 @@ public class ServicoDoJev {
         }
         double limiar = config.limiar(PontoDoJev.LACUNAS);
         Etapa etapa = abrirEtapa(contexto, PontoDoJev.LACUNAS, modo);
-        int concedidas = contexto.jev().reservar(opcionais.size());
+        int concedidas = contexto.jev().reservar(opcionais.size(), modo);
         if (concedidas == 0) {
             etapa.dado("motivo", "ORCAMENTO_ESGOTADO").fim(ResultadoDaEtapa.PULADO);
             return Set.of();

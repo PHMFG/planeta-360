@@ -5,16 +5,21 @@ import java.util.List;
 
 /**
  * O que o JEV tem de guardar durante UM turno (plano do Atlas completo, M7). [ATLAS] Nasce com o contexto do turno (a fábrica de
- * contexto o cria) e morre com ele: o orçamento de requisições (no máximo {@value #MAXIMO_DE_REQUISICOES} por turno; depois disso o
- * que falta segue sem JEV, e o traço registra), as decisões que ainda não foram para {@code atlas_decisao} (elas só vão ao banco no
- * fim, numa transação curta: nenhum ponto grava durante uma chamada ao JEV) e se o turno já terminou antes do modelo (a resposta
- * fixa de um cartão aberto). Seguro para duas threads: o turno e as requisições em paralelo do R3.
+ * contexto o cria) e morre com ele: o orçamento de requisições (os pontos {@code ATIVO} têm no máximo {@value #MAXIMO_DE_REQUISICOES}
+ * por turno, e os pontos em {@code SOMBRA}, {@value #MAXIMO_DE_REQUISICOES_EM_SOMBRA} contados à parte, para a sombra, que só observa,
+ * não gastar o que o ponto que age precisa; passado o limite, o que falta segue sem JEV, e o traço registra), as decisões que ainda
+ * não foram para {@code atlas_decisao} (elas só vão ao banco no fim, numa transação curta: nenhum ponto grava durante uma chamada ao
+ * JEV) e se o turno já terminou antes do modelo (a resposta fixa de um cartão aberto). Seguro para duas threads: o turno e as
+ * requisições em paralelo do R3.
  * <p>
  * {@link #NENHUM} é o estado de quem não tem turno (um contexto montado à mão): inerte, o JEV nunca é consultado.
  */
 public final class JevDoTurno {
 
+    /** O limite de requisições dos pontos {@code ATIVO} em um turno. */
     public static final int MAXIMO_DE_REQUISICOES = 20;
+    /** O limite, à parte, dos pontos em {@code SOMBRA}: a sombra só observa e não pode gastar o orçamento de quem age. */
+    public static final int MAXIMO_DE_REQUISICOES_EM_SOMBRA = 12;
 
     /** O estado sem turno: não consulta o JEV, não guarda nada. */
     public static final JevDoTurno NENHUM = new JevDoTurno(false);
@@ -56,6 +61,7 @@ public final class JevDoTurno {
     private final boolean ativo;
     private final List<Decisao> decisoes = new ArrayList<>();
     private int requisicoes;
+    private int requisicoesEmSombra;
     private boolean encerradoNoPreparo;
     private Long mensagemDoPreparo;
     private String marca;
@@ -73,20 +79,38 @@ public final class JevDoTurno {
         return ativo;
     }
 
-    /** Quantas requisições ao JEV este turno ainda pode fazer. */
+    /** Quantas requisições ao JEV os pontos {@code ATIVO} ainda podem fazer neste turno. */
     public synchronized int restante() {
         return ativo ? MAXIMO_DE_REQUISICOES - requisicoes : 0;
     }
 
-    /** Quantas requisições ao JEV este turno já fez (as que contam no orçamento). */
+    /** Quantas requisições ao JEV os pontos em {@code SOMBRA} ainda podem fazer neste turno (o limite deles é à parte). */
+    public synchronized int restanteEmSombra() {
+        return ativo ? MAXIMO_DE_REQUISICOES_EM_SOMBRA - requisicoesEmSombra : 0;
+    }
+
+    /** Quantas requisições ao JEV os pontos {@code ATIVO} já fizeram neste turno (as que contam no orçamento deles). */
     public synchronized int requisicoes() {
         return requisicoes;
     }
 
-    /** Reserva até {@code quantas} requisições e devolve quantas coube: 0 quando o orçamento do turno acabou. */
-    synchronized int reservar(int quantas) {
+    /** Quantas requisições ao JEV os pontos em {@code SOMBRA} já fizeram neste turno (as que contam no limite deles). */
+    public synchronized int requisicoesEmSombra() {
+        return requisicoesEmSombra;
+    }
+
+    /**
+     * Reserva até {@code quantas} requisições do ponto que está neste {@code modo} e devolve quantas coube: 0 quando o limite dele
+     * acabou. {@code SOMBRA} gasta o limite da sombra; os outros modos ({@code ATIVO}), o do ponto ativo.
+     */
+    synchronized int reservar(int quantas, ModoDoJev modo) {
         if (!ativo) {
             return 0;
+        }
+        if (modo == ModoDoJev.SOMBRA) {
+            int concedidas = Math.max(0, Math.min(quantas, MAXIMO_DE_REQUISICOES_EM_SOMBRA - requisicoesEmSombra));
+            requisicoesEmSombra += concedidas;
+            return concedidas;
         }
         int concedidas = Math.max(0, Math.min(quantas, MAXIMO_DE_REQUISICOES - requisicoes));
         requisicoes += concedidas;
