@@ -14,7 +14,7 @@ import org.springframework.stereotype.Component;
 /**
  * Dá documentos de verdade à demonstração do Atlas: ao subir a API nos perfis dev e demo, sobe o kit de 13 documentos fictícios como a
  * RBS (aprova e indexa o D01, publica o D02 que o substitui, tenta aprovar o D11 e registra a recusa esperada, deixa o D12 em ERRO e
- * indexa e revoga o D13). [ATLAS] No molde do {@code ArquivosDaAmostra}: idempotente (pelo grupo e a versão), só nesses perfis, e
+ * indexa e revoga o D13) e cadastra os prazos do D02 ({@link PrazosDaAmostra}). [ATLAS] No molde do {@code ArquivosDaAmostra}: idempotente (pelo grupo e a versão), só nesses perfis, e
  * nunca mexe no que a RBS enviou de verdade. Roda no final da subida, depois de a API já estar de pé: com o Gemini, indexar o kit
  * leva alguns segundos.
  *
@@ -30,10 +30,12 @@ public class DocumentosDaAmostra implements ApplicationRunner {
 
     private final CarregadorDoKit carregador;
     private final ProvedorDeEmbeddings embeddings;
+    private final PrazosDaAmostra prazos;
 
-    public DocumentosDaAmostra(CarregadorDoKit carregador, ProvedorDeEmbeddings embeddings) {
+    public DocumentosDaAmostra(CarregadorDoKit carregador, ProvedorDeEmbeddings embeddings, PrazosDaAmostra prazos) {
         this.carregador = carregador;
         this.embeddings = embeddings;
+        this.prazos = prazos;
     }
 
     @Override
@@ -55,5 +57,7 @@ public class DocumentosDaAmostra implements ApplicationRunner {
             log.info("Documentos da amostra: {} documentos enviados ({}). Estado: {}", resultado.enviados().size(), embeddings.modelo(),
                     resultado.estados());
         }
+        int criados = prazos.criar(rbs.get());
+        log.info("Prazos da amostra: {} prazos do Manual de Operações 2027 v2 criados{}.", criados, criados == 0 ? " (já estavam no banco)" : "");
     }
 }

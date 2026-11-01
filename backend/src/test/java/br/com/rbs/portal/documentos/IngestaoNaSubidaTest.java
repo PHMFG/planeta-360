@@ -37,6 +37,9 @@ class IngestaoNaSubidaTest extends ApoioDeDocumentos {
     @Autowired
     ProvedorDeEmbeddings embeddings;
 
+    @Autowired
+    PrazosDaAmostra prazosDaAmostra;
+
     @Autowired(required = false)
     DocumentosDaAmostra amostraNoContextoDeTeste;
 
@@ -114,10 +117,13 @@ class IngestaoNaSubidaTest extends ApoioDeDocumentos {
         long antes = contar("SELECT count(*) FROM documento");
         ListAppender<ILoggingEvent> log = ouvir(DocumentosDaAmostra.class);
 
-        new DocumentosDaAmostra(carregador, new EmbeddingsDesligado()).run(null);
+        long prazosAntes = contar("SELECT count(*) FROM prazo");
+
+        new DocumentosDaAmostra(carregador, new EmbeddingsDesligado(), prazosDaAmostra).run(null);
         parar(DocumentosDaAmostra.class, log);
 
         assertThat(contar("SELECT count(*) FROM documento")).isEqualTo(antes);
+        assertThat(contar("SELECT count(*) FROM prazo")).as("sem o kit também não há prazos de documento").isEqualTo(prazosAntes);
         assertThat(log.list).anyMatch(e -> e.getLevel() == Level.WARN && e.getFormattedMessage().contains("embeddings estão desligados")
                 && e.getFormattedMessage().contains("a próxima subida cria e indexa o kit"));
     }
@@ -127,11 +133,13 @@ class IngestaoNaSubidaTest extends ApoioDeDocumentos {
         long antes = contar("SELECT count(*) FROM documento");
         ListAppender<ILoggingEvent> log = ouvir(DocumentosDaAmostra.class);
 
-        new DocumentosDaAmostra(carregador, embeddings).run(null);
+        new DocumentosDaAmostra(carregador, embeddings, prazosDaAmostra).run(null);
         parar(DocumentosDaAmostra.class, log);
 
         assertThat(contar("SELECT count(*) FROM documento")).isEqualTo(antes);
         assertThat(log.list).anyMatch(e -> e.getLevel() == Level.INFO && e.getFormattedMessage().contains("o kit já estava no banco"));
+        assertThat(log.list).anyMatch(e -> e.getLevel() == Level.INFO && e.getFormattedMessage().contains("8 prazos do Manual de Operações 2027 v2 criados"));
+        assertThat(contar("SELECT count(*) FROM prazo")).as("a amostra de dev cria os prazos do D02, uma vez só").isEqualTo(8L);
     }
 
     @Test
