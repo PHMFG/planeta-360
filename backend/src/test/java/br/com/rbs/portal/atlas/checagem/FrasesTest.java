@@ -41,6 +41,16 @@ class FrasesTest {
     }
 
     @Test
+    void numeroNoFimDeUmaFraseSemCitacaoNaoPrendeAFraseSeguinte() {
+        // a revisão achou que o Java juntava as duas: a citação é da segunda frase, e a primeira fica sem fonte
+        assertThat(Frases.dividir("O prazo é 04/12/2026 fim. Depois [T1].")).containsExactly("O prazo é 04/12/2026 fim.", "Depois [T1].");
+        assertThat(Frases.dividir("O prazo é 04/12/2026 fim. Depois disso [T1] não muda.")).containsExactly("O prazo é 04/12/2026 fim.",
+                "Depois disso [T1] não muda.");
+        assertThat(Frases.dividir("O prazo é 04/12/2026 fim.\nDepois [T1].")).containsExactly("O prazo é 04/12/2026 fim.", "Depois [T1].");
+        assertThat(Frases.dividir("O prazo é 04/12/2026. Depois [T1].")).containsExactly("O prazo é 04/12/2026.", "Depois [T1].");
+    }
+
+    @Test
     void colchetePosteriorQueNaoEUmaCitacaoComecaOutraFrase() {
         assertThat(Frases.dividir("Vale. [nota] Depois.")).containsExactly("Vale.", "[nota] Depois.");
     }

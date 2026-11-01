@@ -46,8 +46,8 @@ public final class FontesDoTurno {
     public record Fonte(String marcador, Tipo tipo, Long trechoId, Long documentoId, String titulo, Integer versao, Integer pagina,
                         String secao, String texto) {
 
-        /** Tudo o que a fonte diz, para conferir os números de uma frase que a cita. */
-        public String conteudoCitavel() {
+        /** O título, a versão, a página e a seção da fonte: valem como parte dela ("página 5"), mas não são o texto do documento. */
+        public String metadados() {
             StringBuilder todo = new StringBuilder();
             if (titulo != null) {
                 todo.append(titulo).append(' ');
@@ -61,7 +61,12 @@ public final class FontesDoTurno {
             if (secao != null) {
                 todo.append(secao).append(' ');
             }
-            return todo.append(texto == null ? "" : texto).toString();
+            return todo.toString();
+        }
+
+        /** Tudo o que a fonte diz, para conferir os números de uma frase que a cita: os metadados e o texto. */
+        public String conteudoCitavel() {
+            return metadados() + (texto == null ? "" : texto);
         }
     }
 

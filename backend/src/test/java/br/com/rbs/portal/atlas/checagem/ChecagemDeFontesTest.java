@@ -10,6 +10,7 @@ import br.com.rbs.portal.atlas.relatorio.ChecagemDeTexto.Veredito;
 import br.com.rbs.portal.atlas.relatorio.ModeloBase;
 import br.com.rbs.portal.atlas.relatorio.ResolvedorDeReferencias;
 import br.com.rbs.portal.atlas.relatorio.ResolvedorDeReferencias.Resolucao;
+import java.text.Normalizer;
 import java.time.LocalDate;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -130,6 +131,17 @@ class ChecagemDeFontesTest {
         recusa(turno, "A tarifa é de R$ 312.\nCom o prazo de 04/12/2026 [T1]");
         aprova(turno, "O prazo é 04/12/2026 [T1]. A tarifa é de R$ 312 [T1].");
         aprova(turno, "O prazo é 04/12/2026 [T1]\nA tarifa é de R$ 312 [T1]");
+    }
+
+    @Test
+    void numeroNaPrimeiraFraseECitacaoSoNaSegundaSaoDuasFrasesERecusa() {
+        // a revisão da terceira volta achou que o Java juntava as duas; são duas, e a data da primeira fica sem fonte
+        FontesDoTurno turno = turno("Qual o prazo?", PRAZO);
+
+        recusa(turno, "O prazo é 04/12/2026 fim. Depois [T1].");
+        recusa(turno, "O prazo é 04/12/2026 fim.\nDepois [T1].");
+        aprova(turno, "O prazo é 04/12/2026 fim [T1]. Depois.");
+        aprova(turno, "O prazo fim. Depois é 04/12/2026 [T1].");
     }
 
     @Test
@@ -335,12 +347,12 @@ class ChecagemDeFontesTest {
         aprova(turno, "Planeta Atlântida 2027 acontece em breve.");
         aprova(turno, "Desde 2026 o portal existe, e vale até 2027.");
         aprova(turno, "Edição: 2027.");
-        // só vale como ano se a palavra de antes for de ano: sem ela, é um valor
-        recusa(turno, "São 2027 geradores.");
-        recusa(turno, "São 2026 geradores.");
-        recusa(turno, "A tarifa é 2027.");
+        // a palavra de antes não conta mais: quatro dígitos de 1900 a 2099, sem R$ antes nem unidade depois, são um ano
+        aprova(turno, "São 2027 geradores.");   // artificial, e aceito de propósito
+        aprova(turno, "São 2026 geradores.");
+        aprova(turno, "A tarifa é 2027.");
+        aprova(turno, "Tarifa 2027 por kVA.");
         recusa(turno, "2027 credenciais.");
-        recusa(turno, "Tarifa 2027 por kVA.");
         recusa(turno, "A multa é de R$ 2.027,00.");
         recusa(turno, "A multa é de R$ 2027.");
         recusa(turno, "A multa é de R$ 2.026,00.");
@@ -647,7 +659,8 @@ class ChecagemDeFontesTest {
     }
 
     @ParameterizedTest(name = "U+{0} é invisível")
-    @ValueSource(strings = {"200B", "200C", "200D", "2060", "FEFF", "00AD", "202E", "202D", "202A", "2066", "200E", "200F", "180E", "E0041"})
+    @ValueSource(strings = {"200B", "200C", "200D", "2060", "FEFF", "00AD", "202E", "202D", "202A", "2066", "200E", "200F", "180E", "E0041", "034F",
+            "FE00", "FE01", "FE0E", "FE0F", "180B", "180C", "180D", "115F", "1160", "3164", "FFA0", "E0100"})
     void todoCaractereDeFormatoSaiDoTexto(String codigo) {
         String invisivel = new String(Character.toChars(Integer.parseInt(codigo, 16)));
         Veredito veredito = chat(turno("Quanto?", TARIFA), "A tarifa é de R$ 3" + invisivel + "12,00 por kVA [T1].");
@@ -684,6 +697,198 @@ class ChecagemDeFontesTest {
 
         aprova(turno, "O valor é " + escrito + " reais [T1].");
         recusa(turno("Quanto?"), "O valor é " + escrito + " reais.");
+    }
+
+    // ---------------------------------------------------------------------
+    // M4, terceira volta: respostas certas que a regra recusava
+    // ---------------------------------------------------------------------
+
+    private static final String MANUAL_DO_FESTIVAL = "O festival acontece na sexta-feira, 29, e no sábado, 30 de janeiro de 2027.";
+
+    @Test
+    void dataQueAFonteDizEmPedacosTemOrigem() {
+        FontesDoTurno turno = turno("Quando é o festival?", MANUAL_DO_FESTIVAL);
+
+        aprova(turno, "O festival é nos dias 29 e 30 de janeiro de 2027 [T1].");
+        aprova(turno, "29/01/2027 e 30/01/2027 [T1].");
+        aprova(turno, "O festival abre em 29 de janeiro [T1].");
+        aprova(turno, "O festival abre em 29/01 [T1].");
+        recusa(turno, "O festival é nos dias 28 e 30 de janeiro de 2027 [T1].");
+        recusa(turno, "O festival é nos dias 29 e 30 de fevereiro de 2027 [T1].");
+        recusa(turno, "O festival é nos dias 29 e 30 de janeiro de 2028 [T1].");
+        recusa(turno, "O festival é nos dias 29 e 30 de janeiro de 2027.");
+    }
+
+    @Test
+    void oDiaSozinhoCasaComODiaDeUmaDataDaFonteCitadaMasNaoDaMensagemDaPessoa() {
+        // o 4, o 5 e o 2 já estão nos metadados da fonte (seção 4, página 5, versão 2): a data é de outro dia
+        String entrega = "Entregue até 09/12/2026.";
+        aprova(turno("Qual dia?", entrega), "É no dia 9 [T1].");
+        aprova(turno("Qual dia?", entrega), "É no dia 09 [T1].");
+        recusa(turno("Qual dia?", entrega), "É no dia 7 [T1].");
+        recusa(turno("Qual dia?", entrega), "É no dia 12 [T1].");
+        // a pessoa escreveu a data inteira: o dia solto não é o que ela escreveu
+        recusa(turno("É em 09/12?"), "Seria no dia 9.");
+        // e a fonte que não está citada na frase não apoia o dia
+        recusa(turno("Qual dia?", entrega), "É no dia 9.");
+        recusa(turno("Qual dia?", entrega + " Outra frase com 77 itens."), "É no dia 9. A fonte é a outra [T1].");
+    }
+
+    @ParameterizedTest(name = "\"{0}\" na fonte e \"{1}\" na resposta")
+    @CsvSource(delimiter = '|', value = {"36 m²|36 m²", "36 m²|36 m2", "36 m2|36 m²", "metade de ½ kVA|½ kVA", "nota ¹ do contrato|nota ¹", "valor ٣١٢|312",
+            "valor 312|٣١٢", "valor ３１２|312"})
+    void aFonteEAMensagemDaPessoaPassamPelaMesmaDobraDeAlgarismosDaResposta(String fonte, String resposta) {
+        aprova(turno("Quanto?", fonte), "O valor é " + resposta + " [T1].");
+    }
+
+    @Test
+    void oNumeroEscritoComAlgarismoDeOutroAlfabetoNaPerguntaTemOrigem() {
+        aprova(turno("Quanto pago por ３４ kVA?"), "Por 34 kVA, vale o combinado.");
+        aprova(turno("Quanto pago por 34 kVA?"), "Por ３４ kVA, vale o combinado.");
+        recusa(turno("Quanto pago por ３４ kVA?"), "Por 35 kVA, vale o combinado.");
+    }
+
+    @Test
+    void aPessoaEscreveuADataInteiraComAnoElaValeExatamenteComoEstaMesmoContraAFonte() {
+        aprova(turno("É 04/12/2027?", PRAZO), "Não é 04/12/2027: é 04/12/2026 [T1].");
+        recusa(turno("É 04/12/2027?", PRAZO), "Não é 04/12/2028: é 04/12/2026 [T1].");
+        recusa(turno("É 04/12/2027?", PRAZO), "Não é 05/12/2027: é 04/12/2026 [T1].");
+        recusa(turno("É 04/12/2027?", PRAZO), "Sim, é 04/12/2027 e também 04/12/2099 [T1].");
+        // sem o ano na pergunta, a fonte citada que disse o ano continua mandando
+        recusa(turno("É em 04/12?", PRAZO), "O prazo é 04/12/2099 [T1].");
+        recusa(turno("É em 04/12?", PRAZO), "O prazo é 04/12/2027 [T1].");
+    }
+
+    @ParameterizedTest(name = "\"{0}\" é a hora da fonte")
+    @ValueSource(strings = {"18h", "18hs", "18 h", "18 hs", "18h00", "18h00min", "18:00", "18:00h", "18 horas", "18 hora"})
+    void horaCheiaEmQualquerFormatoTemOrigem(String hora) {
+        aprova(turno("Que horas?", PRAZO), "Vale até as " + hora + " de 04/12/2026 [T1].");
+        aprova(turno("Que horas?", "Vale até " + hora + " de 04/12/2026."), "Vale até as 18h de 04/12/2026 [T1].");
+    }
+
+    @Test
+    void horasEmFormatosDiferentesCasamNosDoisLados() {
+        FontesDoTurno cinco = turno("Que horas?", "A montagem vai das 05h às 08h.");
+        aprova(cinco, "A montagem vai das 5 às 8h [T1].");
+        aprova(cinco, "A montagem vai das 05:00h às 08:00h [T1].");
+        aprova(cinco, "A montagem vai das 5 às 8 horas [T1].");
+        recusa(cinco, "A montagem vai das 6 às 8h [T1].");
+        recusa(cinco, "A montagem vai das 5h30 às 8h [T1].");
+        aprova(turno("Quanto tempo?", "A mostra dura 48 horas."), "A mostra dura 48h [T1].");
+        aprova(turno("Quanto tempo?", "A mostra dura 48h."), "A mostra dura 48 horas [T1].");
+        recusa(turno("Quanto tempo?", "A mostra dura 48h."), "A mostra dura 49 horas [T1].");
+        aprova(turno("Que horas?", "Abre às 05:00h."), "Abre às 5h [T1].");
+    }
+
+    @Test
+    void formatosDeTabelaNaFonteBarraTracoEGrauOrdinal() {
+        FontesDoTurno tabela = turno("Quanto?", "Master 40/20 cortesias; gerador de 10/15 kVA; prazo 15-01-2027; abre em 1º de novembro.");
+
+        aprova(tabela, "A Master tem 40 cortesias [T1].");
+        aprova(tabela, "O gerador é de 15 kVA [T1].");
+        aprova(tabela, "O prazo é 15/01/2027 [T1].");
+        aprova(tabela, "O prazo é 15 de janeiro de 2027 [T1].");
+        aprova(tabela, "Abre em 1° de novembro [T1].");
+        aprova(tabela, "Abre em 01/11 [T1].");
+        recusa(tabela, "A Master tem 41 cortesias [T1].");
+        recusa(tabela, "O prazo é 15/01/2028 [T1].");
+        aprova(turno("Quando?", "O prazo é 15/01/2027."), "O prazo é 15-01-2027 [T1].");
+    }
+
+    @Test
+    void planetaTrezentosESessentaEmMaiusculasEONomeDoFestival() {
+        aprova(turno("Oi"), "O PLANETA 360 acontece em breve.");
+        aprova(turno("Qual festival?", "PLANETA 360 · OPERAÇÕES DO FESTIVAL"), "Falo do PLANETA 360 [T1].");
+        recusa(turno("Oi"), "O PLANETA 361 acontece em breve.");
+    }
+
+    @Test
+    void anoSemCitacaoEhAnoQualquerQueSejaAPalavraDeAntes() {
+        FontesDoTurno sem = turno("Quando?");
+
+        aprova(sem, "Para 2027, o prazo muda conforme o manual.");
+        aprova(sem, "Nas edições 2026 e 2027, vale o mesmo regulamento.");
+        aprova(sem, "O regulamento (2027) vale.");
+        aprova(sem, "Consulte o Manual de Operações 2027.");
+        aprova(sem, "São 2027 geradores.");   // artificial: aceito de propósito
+        recusa(sem, "Para 2028, o prazo muda.");
+        recusa(sem, "Consulte o Manual de Operações 2025.");
+        recusa(sem, "São 2027 credenciais.");
+        recusa(sem, "Custa R$ 2.027,00.");
+    }
+
+    // ---------------------------------------------------------------------
+    // M4, terceira volta: número ou endereço inventado que passava
+    // ---------------------------------------------------------------------
+
+    @Test
+    void oAnoDeUmaDataEOAnoDoTituloDaFonteNaoSaoValor() {
+        FontesDoTurno turno = turno("Quanto?", PRAZO);
+
+        aprova(turno, "O prazo é de 04/12/2026, na edição de 2026 [T1].");
+        recusa(turno, "Custa R$ 2.026,00 [T1].");
+        recusa(turno, "São 2026 credenciais [T1].");
+        recusa(turno, "Custa R$ 2.027,00 [T1].");   // o título "Manual de Operações 2027" também é só ano
+        recusa(turno, "São 2027 credenciais [T1].");
+        // fora da faixa ou com unidade, é número
+        aprova(turno("Quanto?", "Cabem 1250 pessoas."), "Cabem R$ 1.250,00 [T1].");
+        aprova(turno("Quanto?", "Cabem 1250 pessoas."), "Cabem 1250 pessoas [T1].");
+        aprova(turno("Quanto?", "Capacidade 1850."), "A capacidade é 1.850 [T1].");
+        aprova(turno("Quanto?", "A multa é de R$ 2.027,00."), "A multa é de R$ 2.027,00 [T1].");
+    }
+
+    @ParameterizedTest(name = "dois grupos separados por U+{0}")
+    @ValueSource(strings = {"2007", "2003", "2009", "00A0", "202F", "3000", "0009", "0020"})
+    void gruposSeparadosPorQualquerEspacoNaoViramOsDoisNumerosDaFonte(String codigo) {
+        FontesDoTurno turno = turno("Quanto?", "São 2 rodadas, 220 V.");
+        String espaco = new String(Character.toChars(Integer.parseInt(codigo, 16)));
+
+        recusa(turno, "O custo é R$ 2" + espaco + "220,00 [T1].");
+        recusa(turno, "O custo é R$ 2" + espaco + espaco + "220 [T1].");
+        aprova(turno, "São 2 rodadas e 220 V [T1].");
+    }
+
+    @Test
+    void doisEspacosETabulacaoEntreOsGruposTambemSaoRecusados() {
+        FontesDoTurno turno = turno("Quanto?", "São 2 rodadas, 220 V.");
+
+        recusa(turno, "O custo é R$ 2  220,00 [T1].");
+        recusa(turno, "O custo é R$ 2\t220,00 [T1].");
+        recusa(turno, "O custo é R$ 2 \t 220,00 [T1].");
+    }
+
+    @ParameterizedTest(name = "3 + U+{0} + 12 não é 3 nem 12")
+    @ValueSource(strings = {"034F", "FE0F", "FE00", "180B", "180D", "115F", "1160", "3164", "FFA0"})
+    void invisivelQueNaoEDeFormatoNoMeioDoNumeroEhTiradoAntesDaConferencia(String codigo) {
+        String invisivel = new String(Character.toChars(Integer.parseInt(codigo, 16)));
+        FontesDoTurno turno = turno("Quanto?", "São 3 rodadas e 12 cotas.");
+
+        recusa(turno, "São 3" + invisivel + "12 reais [T1].");
+        assertThat(chat(turno("Quanto?", "São 312 reais."), "São 3" + invisivel + "12 reais [T1].").texto()).isEqualTo("São 312 reais [T1].");
+    }
+
+    @Test
+    void textoEmNfdEConferidoComoNfc() {
+        String nfd = Normalizer.normalize("Valem três dias.", Normalizer.Form.NFD);
+        assertThat(nfd).isNotEqualTo("Valem três dias.");
+
+        recusa(turno("Quanto?"), nfd);
+        aprova(turno("Quanto?", Normalizer.normalize("São três dias de montagem.", Normalizer.Form.NFD)), "São 3 dias [T1].");
+        aprova(turno("Quanto?", "São 3 dias de montagem."), Normalizer.normalize("Também valem 3 dias [T1].", Normalizer.Form.NFD));
+        recusa(turno("Quando?", PRAZO), Normalizer.normalize("O prazo é quatro de março [T1].", Normalizer.Form.NFD));
+    }
+
+    @Test
+    void primeiroDeMesEUmaDataEBilhaoEBilhoesEntramNaEscala() {
+        recusa(turno("Quando?", PRAZO), "O prazo é primeiro de dezembro [T1].");
+        recusa(turno("Quando?"), "O prazo é primeiro de dezembro.");
+        aprova(turno("Quando?", "Abre em 01/12/2026."), "Abre no primeiro de dezembro [T1].");
+        aprova(turno("Quando?", "Abre em 1º de dezembro de 2026."), "Abre no primeiro de dezembro de 2026 [T1].");
+        recusa(turno("Quanto?"), "A receita é de um bilhão de reais.");
+        recusa(turno("Quanto?"), "A receita é de dois bilhões de reais.");
+        recusa(turno("Quanto?"), "A receita é de 2 bilhões de reais.");
+        aprova(turno("Quanto?", "A receita é de R$ 2.000.000.000,00."), "A receita é de 2 bilhões [T1].");
+        aprova(turno("Quanto?", "A receita é de 2 bilhões."), "A receita é de dois bilhões [T1].");
     }
 
     // ---------------------------------------------------------------------

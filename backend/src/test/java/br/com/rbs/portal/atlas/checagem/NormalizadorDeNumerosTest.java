@@ -136,11 +136,23 @@ class NormalizadorDeNumerosTest {
         assertThat(valores(antes + " 2027")).containsExactly("2027", "ano:2027");
     }
 
-    @ParameterizedTest(name = "\"{0}\" não é um ano: é um valor")
+    @ParameterizedTest(name = "\"{0}\" é um ano, qualquer que seja a palavra de antes")
     @ValueSource(strings = {"2027", "São 2027 geradores", "A tarifa é 2027", "valor 2027", "o 2027", "Planeta 2027", "para 2027", "até2027",
-            "mais de.2027", "Tarifa: 2027", "são 2027."})
-    void quatroDigitosSemPalavraDeAnoAntesSaoValor(String texto) {
-        assertThat(valores(texto)).containsExactly("2027");
+            "mais de.2027", "Tarifa: 2027", "são 2027.", "(2027)", "Para 2027, o prazo", "Consulte o Manual de Operações 2027."})
+    void quatroDigitosDe1900A2099SemRealNemUnidadeSaoAnoQualquerQueSejaAPalavraDeAntes(String texto) {
+        assertThat(valores(texto)).containsExactly("2027", "ano:2027");
+    }
+
+    @Test
+    void anosSeguidosNumaListaSaoCadaUmUmAno() {
+        assertThat(valores("Nas edições 2026 e 2027")).containsExactly("2026", "ano:2026", "2027", "ano:2027");
+    }
+
+    @ParameterizedTest(name = "\"{0}\" é o limite da faixa de anos: {1}")
+    @CsvSource(delimiter = '|', value = {"1900 | true", "1950 | true", "2099 | true", "1899 | false", "2100 | false", "1850 | false", "1250 | false",
+            "1250 pessoas | false", "0999 | false"})
+    void soDe1900A2099ESemUnidadeEAno(String texto, boolean ehAno) {
+        assertThat(valores(texto).stream().anyMatch(v -> v.startsWith("ano:"))).isEqualTo(ehAno);
     }
 
     @Test
@@ -348,8 +360,12 @@ class NormalizadorDeNumerosTest {
         assertThat(aceita(livre, "a edição 2027")).isTrue();
         assertThat(aceita(livre, "em 2026")).isTrue();
         assertThat(aceita(livre, "Planeta Atlântida 2027")).isTrue();
-        assertThat(aceita(livre, "São 2027 geradores")).as("a palavra antes não é de ano").isFalse();
-        assertThat(aceita(livre, "2026")).isFalse();
+        assertThat(aceita(livre, "São 2027 geradores")).as("a palavra de antes não conta mais: é um ano, e é artificial").isTrue();
+        assertThat(aceita(livre, "Para 2027, o prazo")).isTrue();
+        assertThat(aceita(livre, "(2027)")).isTrue();
+        assertThat(aceita(livre, "Para 2028, o prazo")).isFalse();
+        assertThat(aceita(livre, "2026")).as("sozinho, 2026 é um ano").isTrue();
+        assertThat(aceita(livre, "2025")).isFalse();
         assertThat(aceita(livre, "em 2028")).isFalse();
         assertThat(aceita(livre, "R$ 2.027,00")).isFalse();
         assertThat(aceita(livre, "R$ 2027")).isFalse();
@@ -405,6 +421,226 @@ class NormalizadorDeNumerosTest {
     }
 
     // ---------------------------------------------------------------------
+    // M4, terceira volta: o ano não é valor, a hora cheia é o número da hora, a data só vale com dia e mês possíveis
+    // ---------------------------------------------------------------------
+
+    @Test
+    void oAnoDeUmaDataEOAnoDeUmTituloSoValemComoAnoNuncaComoValor() {
+        Origens data = new Origens("prazo até 04/12/2026");
+        assertThat(aceita(data, "em 2026")).isTrue();
+        assertThat(aceita(data, "2026")).as("sozinho, 2026 é um ano").isTrue();
+        assertThat(aceita(data, "R$ 2.026,00")).isFalse();
+        assertThat(aceita(data, "2026 credenciais")).isFalse();
+
+        Origens titulo = new Origens("Manual de Operações 2027");
+        assertThat(aceita(titulo, "em 2027")).isTrue();
+        assertThat(aceita(titulo, "R$ 2.027,00")).as("quatro dígitos de 1900 a 2099 numa fonte são ano").isFalse();
+        assertThat(aceita(titulo, "2027 credenciais")).isFalse();
+        assertThat(aceita(new Origens("Cabem 1250 pessoas"), "R$ 1.250,00")).as("com unidade é número").isTrue();
+        assertThat(aceita(new Origens("Capacidade 1850"), "1.850")).as("fora da faixa é número").isTrue();
+        assertThat(aceita(new Origens("Edição de 2027: R$ 2.027,00"), "R$ 2.027,00")).as("com separador é número").isTrue();
+    }
+
+    @ParameterizedTest(name = "\"{0}\" é a hora cheia de {1}h")
+    @CsvSource(delimiter = '|', value = {"18h | 18", "18hs | 18", "18 h | 18", "18 hs | 18", "18h00 | 18", "18h00min | 18", "18:00 | 18", "18:00h | 18",
+            "18 horas | 18", "5h | 5", "05h | 5", "05:00h | 5", "5 hora | 5", "24h | 24"})
+    void horaSemMinutosEAHoraEOnumeroDaHora(String texto, int hora) {
+        assertThat(valores(texto)).containsExactly("hora:" + (hora < 10 ? "0" + hora : hora) + ":00", String.valueOf(hora));
+    }
+
+    @ParameterizedTest(name = "\"{0}\" é {1}")
+    @CsvSource(delimiter = '|', value = {"18h30 | hora:18:30", "18h30min | hora:18:30", "18hs30 | hora:18:30", "6:30h | hora:06:30", "6h30 | hora:06:30"})
+    void horaComMinutosEUmaHoraSo(String texto, String esperado) {
+        assertThat(valores(texto)).containsExactly(esperado);
+    }
+
+    @ParameterizedTest(name = "\"{0}\" é o número {1}, e não uma hora")
+    @CsvSource(delimiter = '|', value = {"48h | 48", "48 horas | 48", "48hs | 48", "100 horas | 100", "25h | 25"})
+    void maisDe24HorasNaoEHoraDoDiaESoUmNumero(String texto, String esperado) {
+        assertThat(valores(texto)).containsExactly(esperado);
+    }
+
+    @Test
+    void horasEmFormatosDiferentesSaoOMesmoLadoAladoNaFonteENaResposta() {
+        Origens fonte = new Origens("A montagem vai das 05h às 08h, e a mostra dura 48h.");
+        assertThat(aceita(fonte, "das 5 às 8h")).isTrue();
+        assertThat(aceita(fonte, "das 05:00h às 08:00h")).isTrue();
+        assertThat(aceita(fonte, "48 horas")).isTrue();
+        assertThat(aceita(fonte, "das 6 às 8h")).isFalse();
+        assertThat(aceita(new Origens("das 5 às 8 horas"), "das 05h às 08h")).isTrue();
+        assertThat(aceita(new Origens("às 18:00h"), "18hs")).isTrue();
+        assertThat(aceita(new Origens("às 18:00h"), "18h30")).isFalse();
+    }
+
+    @Test
+    void horaQueNaoEDoDiaOuComMinutoImpossivelSaoDoisNumeros() {
+        assertThat(valores("99:99")).containsExactly("99", "99");
+        assertThat(valores("25:00")).containsExactly("25", "0");
+        assertThat(valores("12:75")).containsExactly("12", "75");
+    }
+
+    @ParameterizedTest(name = "\"{0}\" não é uma data: são os números {1}")
+    @CsvSource(delimiter = '|', value = {"40/20 | 40,20", "10/15 kVA | 10,15", "32/01 | 32,1", "0/5 | 0,5", "99/99/26 | 99,99,26"})
+    void barraComDiaOuMesImpossivelNaoEDataEViraDoisNumeros(String texto, String esperados) {
+        assertThat(valores(texto)).containsExactly(esperados.split(","));
+    }
+
+    @Test
+    void dataComAnoComDiaOuMesImpossivelNaoEDataMasOAnoContinuaSendoAno() {
+        assertThat(valores("31/13/2026")).containsExactly("31", "13", "2026", "ano:2026");
+        assertThat(valores("2026-13-45")).containsExactly("2026", "ano:2026", "13", "45");
+        assertThat(valores("31/12/2026")).containsExactly("data:12-31", "ano:2026");
+    }
+
+    @Test
+    void numerosDeUmaTabelaComBarraCasamComOsNumerosDaResposta() {
+        Origens fonte = new Origens("Master 40/20 cortesias; gerador de 10/15 kVA");
+        assertThat(aceita(fonte, "40 cortesias")).isTrue();
+        assertThat(aceita(fonte, "15 kVA")).isTrue();
+        assertThat(aceita(fonte, "20 cortesias")).isTrue();
+        assertThat(aceita(fonte, "41 cortesias")).isFalse();
+    }
+
+    @ParameterizedTest(name = "\"{0}\" é 15 de janeiro de 2027")
+    @ValueSource(strings = {"15/01/2027", "15-01-2027", "2027-01-15", "15 de janeiro de 2027", "15/1/2027", "15-1-2027"})
+    void dataComTracoEIgualADataComBarra(String texto) {
+        assertThat(valores(texto)).containsExactly("data:01-15", "ano:2027");
+    }
+
+    @ParameterizedTest(name = "\"{0}\" é 1º de novembro")
+    @ValueSource(strings = {"1º de novembro", "1° de novembro", "01/11", "1 de novembro", "primeiro de novembro", "Primeiro de Novembro"})
+    void primeiroDeMesEOGrauOrdinalSaoADataDoDiaUm(String texto) {
+        assertThat(valores(texto)).containsExactly("data:11-01");
+    }
+
+    @Test
+    void primeiroSemMesNaoEUmNumero() {
+        assertThat(valores("o primeiro lote")).isEmpty();
+        assertThat(valores("primeiro de dezembro de 2026")).containsExactly("data:12-01", "ano:2026");
+        assertThat(valores("de 1° a 3° de dezembro")).containsExactly("data:12-01", "data:12-03");
+    }
+
+    @ParameterizedTest(name = "\"{0}\" vale {1}")
+    @CsvSource(delimiter = '|', value = {"2 bilhões | 2000000000", "1,5 bilhão | 1500000000", "dois bilhões | 2000000000", "um bilhão | 1000000000",
+            "3 bilhoes | 3000000000", "cem bilhões | 100000000000"})
+    void bilhaoEBilhoesEntramNaEscala(String texto, String esperado) {
+        assertThat(valores(texto)).contains(esperado);
+    }
+
+    @Test
+    void planetaTrezentosESessentaEmQualquerCaixaENomeDoFestival() {
+        assertThat(valores("Planeta 360")).isEmpty();
+        assertThat(valores("PLANETA 360")).isEmpty();
+        assertThat(valores("planeta 360 · operações do festival")).isEmpty();
+        assertThat(valores("PLANETA  360")).isEmpty();
+        assertThat(valores("PLANETA 3600")).as("só o nome inteiro").containsExactly("3600");
+    }
+
+    @ParameterizedTest(name = "U+{0} entre 2 e 220 é um espaço comum")
+    @ValueSource(strings = {"0020", "00A0", "2007", "2003", "2009", "202F", "2002", "3000", "205F", "1680", "2000", "200A"})
+    void todoEspacoDoUnicodeJuntaOsGruposDeMilhar(String codigo) {
+        String espaco = new String(Character.toChars(Integer.parseInt(codigo, 16)));
+        assertThat(valores("R$ 2" + espaco + "220,00")).containsExactly("2220");
+        assertThat(valores("R$ 2" + espaco + "220,00", true)).containsExactly("2220", "2", "220");
+    }
+
+    @Test
+    void espacosSeguidosETabulacaoViramUmEspacoSo() {
+        assertThat(valores("R$ 2  220,00")).containsExactly("2220");
+        assertThat(valores("R$ 2\t220,00")).containsExactly("2220");
+        assertThat(valores("R$ 2 \t   220,00")).containsExactly("2220");
+        assertThat(valores("2\n220")).as("a quebra de linha continua separando").containsExactly("2", "220");
+    }
+
+    @Test
+    void aFonteEAMensagemDaPessoaPassamPelaMesmaDobraDeAlgarismos() {
+        assertThat(valores("36 m²", true)).containsExactly("36", "2");
+        assertThat(valores("36 m²")).isEqualTo(valores("36 m2"));
+        assertThat(valores("½ kVA", true)).containsExactly("1", "2");
+        assertThat(valores("nota¹", true)).containsExactly("1");
+        assertThat(valores("٣١٢ reais", true)).containsExactly("312");
+        assertThat(valores("３１２ reais", true)).containsExactly("312");
+        assertThat(aceita(new Origens("O espaço tem 36 m²"), "36 m²")).isTrue();
+        assertThat(aceita(new Origens("O espaço tem 36 m²"), "36 m2")).isTrue();
+        assertThat(aceita(new Origens("O espaço tem 36 m²"), "37 m²")).isFalse();
+    }
+
+    @Test
+    void oTextoEmNfdTemOsMesmosNumeraisDoTextoEmNfc() {
+        String nfd = java.text.Normalizer.normalize("três dias", java.text.Normalizer.Form.NFD);
+        assertThat(nfd).isNotEqualTo("três dias");
+        assertThat(valores(nfd)).containsExactly("3");
+        assertThat(valores(java.text.Normalizer.normalize("4 de março", java.text.Normalizer.Form.NFD))).containsExactly("data:03-04");
+    }
+
+    @Test
+    void osInvisiveisQueNaoSaoDeFormatoTambemSaemAntesDeTudo() {
+        for (String invisivel : new String[] {"͏", "︀", "️", "᠋", "᠌", "᠍", "ᅟ", "ᅠ", "ㅤ", "ﾠ",
+                "​", "­"}) {
+            assertThat(valores("3" + invisivel + "12")).as("U+" + Integer.toHexString(invisivel.charAt(0))).containsExactly("312");
+        }
+        assertThat(NormalizadorDeNumeros.semInvisiveis("a͏b️cㅤd")).isEqualTo("abcd");
+    }
+
+    // --- a data da resposta que a fonte citada diz em pedaços -------------------------------------------------------
+
+    private static boolean aceitaDaFonte(String fonte, String resposta) {
+        return aceita(new Origens().adicionarFonteCitada(fonte), resposta);
+    }
+
+    private static final String MANUAL = "O festival acontece na sexta-feira, 29, e no sábado, 30 de janeiro de 2027.";
+
+    @ParameterizedTest(name = "\"{0}\" tem origem no manual")
+    @ValueSource(strings = {"29 e 30 de janeiro de 2027", "29/01/2027 e 30/01/2027", "29 de janeiro de 2027", "29 de janeiro", "29/01", "dia 29",
+            "29/1/2027", "2027-01-29"})
+    void dataDaRespostaValeSeAFonteTemODiaComoNumeroEUmaDataDoMesEDoAno(String resposta) {
+        assertThat(aceitaDaFonte(MANUAL, resposta)).isTrue();
+    }
+
+    @ParameterizedTest(name = "\"{0}\" não tem origem no manual")
+    @ValueSource(strings = {"28 de janeiro de 2027", "29 de fevereiro de 2027", "29 de janeiro de 2028", "29/01/2028", "28/01", "31 de janeiro",
+            "29 de dezembro"})
+    void dataDaRespostaComDiaMesOuAnoQueAFonteNaoTemEhRecusada(String resposta) {
+        assertThat(aceitaDaFonte(MANUAL, resposta)).isFalse();
+    }
+
+    @Test
+    void oFallbackDaDataSoValeParaFonteCitadaEOQueEstaEscritoContinuaValendoSempre() {
+        assertThat(aceita(new Origens(MANUAL), "29 de janeiro de 2027")).as("Origens simples: só o que está escrito").isFalse();
+        assertThat(aceita(new Origens(MANUAL), "dia 29")).as("29 está escrito como número").isTrue();
+        assertThat(aceita(new Origens("A entrega é em 04/12/2026."), "dia 4")).as("o dia solto só com fonte citada").isFalse();
+    }
+
+    @Test
+    void oDiaSozinhoCasaComODiaDeUmaDataDaFonteCitada() {
+        assertThat(aceitaDaFonte("Informe até 04/12/2026, às 18h.", "dia 4")).isTrue();
+        assertThat(aceitaDaFonte("Informe até 04/12/2026, às 18h.", "dia 04")).isTrue();
+        assertThat(aceitaDaFonte("Informe até 04/12/2026, às 18h.", "dia 5")).isFalse();
+        assertThat(aceitaDaFonte("Informe até 04/12/2026, às 18h.", "dia 12")).as("o mês não é o dia").isFalse();
+        assertThat(aceitaDaFonte("Informe até 4 de dezembro.", "o dia 4")).isTrue();
+        assertThat(aceitaDaFonte("Informe até 04/12/2026, às 18h.", "40 pessoas")).as("só dia de 1 a 31").isFalse();
+    }
+
+    @Test
+    void dataSemAnoNaFonteComDiaSoltoSoLiberaOsAnosAceitos() {
+        Origens fonte = new Origens().anosAceitos(Set.of("2026", "2027")).adicionarFonteCitada("Sexta, 29, e sábado, 30 de janeiro.");
+        assertThat(aceita(fonte, "29 de janeiro de 2027")).isTrue();
+        assertThat(aceita(fonte, "30 de janeiro de 2027")).isTrue();
+        assertThat(aceita(fonte, "29 de janeiro de 2031")).isFalse();
+        assertThat(aceita(fonte, "29 de janeiro")).isTrue();
+    }
+
+    @Test
+    void aDataDaPessoaComAnoValeComoEstaEscrita() {
+        Origens pessoa = new Origens("É 04/12/2027?");
+        assertThat(pessoa.temDataExata(NormalizadorDeNumeros.extrair("04/12/2027", false).get(0))).isTrue();
+        assertThat(pessoa.temDataExata(NormalizadorDeNumeros.extrair("04/12/2026", false).get(0))).isFalse();
+        assertThat(new Origens("É 04/12?").temDataExata(NormalizadorDeNumeros.extrair("04/12/2027", false).get(0))).as("sem ano na pergunta")
+                .isFalse();
+        assertThat(pessoa.temDataExata(NormalizadorDeNumeros.extrair("04/12", false).get(0))).as("a data sem ano da resposta não é exata").isFalse();
+    }
+
+    // ---------------------------------------------------------------------
     // Apoio do texto
     // ---------------------------------------------------------------------
 
@@ -414,7 +650,8 @@ class NormalizadorDeNumerosTest {
         assertThat(valores(NormalizadorDeNumeros.semNumeracaoDeLista("**1.** Primeiro item"))).isEmpty();
         assertThat(valores(NormalizadorDeNumeros.semNumeracaoDeLista("Item 1. Primeiro"))).as("só no começo da linha").containsExactly("1");
         assertThat(valores(NormalizadorDeNumeros.semNumeracaoDeLista("1. São 17 aplicações"))).containsExactly("17");
-        assertThat(valores(NormalizadorDeNumeros.semNumeracaoDeLista("2027. Um ano"))).as("quatro dígitos não é lista").containsExactly("2027");
+        assertThat(valores(NormalizadorDeNumeros.semNumeracaoDeLista("2027. Um ano"))).as("quatro dígitos não é lista: é um ano")
+                .containsExactly("2027", "ano:2027");
     }
 
     @ParameterizedTest(name = "\"{0}\" é numeração de lista")

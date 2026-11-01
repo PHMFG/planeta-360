@@ -16,27 +16,36 @@ import java.util.regex.Pattern;
 /**
  * Acha os números e as datas de um texto e os deixa numa forma comparável (plano do Atlas completo, M4). [ATLAS] [VALIDACAO] É a
  * regra de "número com origem" do chat: {@code "1.250.000,00"} e {@code "1250000"}, {@code "R$ 312"} e {@code "312"},
- * {@code "04/12/2026"}, {@code "4/12"}, {@code "4 de dezembro"} e {@code "2026-12-04"}, {@code "6h30"} e {@code "06:30"},
- * {@code "89,4%"} e {@code "89,4"} são iguais. É a mesma conta do avaliador de conversas
+ * {@code "04/12/2026"}, {@code "4/12"}, {@code "4 de dezembro"}, {@code "2026-12-04"} e {@code "04-12-2026"}, {@code "6h30"} e
+ * {@code "06:30"}, {@code "89,4%"} e {@code "89,4"} são iguais. É a mesma conta do avaliador de conversas
  * ({@code ferramentas/avaliacao-atlas/numeros.mjs}).
+ * <p>
+ * <b>O texto antes da conta</b> ({@link #paraConferir}): saem os invisíveis (os de formato do Unicode e os que escondem um número
+ * sem ser de formato: U+034F, os seletores de variação, o preenchimento do hangul), o texto vai a NFC, todo algarismo de outro
+ * alfabeto, de largura total, sobrescrito ou fração vira o comum, e todo espaço do Unicode e toda tabulação viram um espaço comum
+ * (uma corrida deles, um só). A resposta, a fonte e a mensagem da pessoa passam pela mesma dobra.
  * <p>
  * <b>Numeral por extenso.</b> Todo numeral conta como número, na resposta e na fonte, menos "um" e "uma", que são artigo e nunca
  * contam (nem como origem), e "dois" e "duas", que na resposta só contam com unidade ou escala ("os dois manuais" não é número; na
  * fonte, "duas rodadas" é a origem de "2 rodadas"). Numeral seguido de "de &lt;mês&gt;" é data ("dez de dezembro", "vinte e cinco
- * de dezembro"; "sete e oito de dezembro" são duas). "Por cento" depois de algarismo não é o numeral cento. Os numerais só somam em
- * ordem decrescente de grandeza (centena, dezena de 20 a 90, unidade de 1 a 19): "trezentos e doze" é 312, mas "três e quatro" são
- * o 3 e o 4, e "dez e trinta", o 10 e o 30. Cada número separado é conferido por si.
- * <p>
+ * de dezembro", "primeiro de dezembro"; "sete e oito de dezembro" são duas). "Por cento" depois de algarismo não é o numeral
+ * cento. Os numerais só somam em ordem decrescente de grandeza (centena, dezena de 20 a 90, unidade de 1 a 19): "trezentos e doze"
+ * é 312, mas "três e quatro" são o 3 e o 4, e "dez e trinta", o 10 e o 30. Cada número separado é conferido por si. A escala é mil,
+ * milhão e bilhão.
  * <p>
  * <b>Grupos e anos.</b> Grupos de três dígitos separados por espaço são um número só na resposta ({@code R$ 2 220,00} é 2220); numa
- * fonte valem o inteiro e as partes, porque tabela tem colunas. Quatro dígitos só são um <i>ano</i> se não têm separador, não vêm
- * depois de {@code R$}, não vêm antes de uma unidade e a palavra de antes é de ano (edição, edições, ano, em, de, desde, até,
- * Atlântida): {@code a edição 2027} e {@code em 2026} são anos; {@code R$ 2027}, {@code 2026 credenciais} e {@code São 2027 geradores}
- * são valores. O ano da edição e o de hoje só valem como ano ({@link Origens#adicionarAnoLivre}).
+ * fonte valem o inteiro e as partes, porque tabela tem colunas. Quatro dígitos são um <i>ano</i> se não têm separador, estão entre
+ * 1900 e 2099, não vêm depois de {@code R$} e não vêm antes de uma unidade da lista: {@code Para 2027}, {@code (2027)} e
+ * {@code Manual de Operações 2027} são anos; {@code R$ 2027}, {@code 2026 credenciais} e {@code 1250 pessoas} são valores. A
+ * palavra de antes não importa. Um ano vale só como ano ({@code ano:2027}), nunca como valor: nem o de uma data da fonte, nem o do
+ * título dela, nem o da edição ou o de hoje ({@link Origens#adicionarAnoLivre}).
  * <p>
- * Datas e horas são consumidas antes dos números, para {@code 04/12/2026} não virar três números. Cada dígito conta: o que vem
- * dentro de uma palavra ({@code planeta360}, {@code D09}) também. "Planeta 360", o nome do festival, não é número. Sem estado: tudo
- * estático.
+ * <b>Datas e horas</b> são consumidas antes dos números, para {@code 04/12/2026} não virar três números. Uma barra só é data se o
+ * dia está entre 1 e 31 e o mês entre 1 e 12 ({@code 40/20} e {@code 10/15 kVA} são dois números). A hora sem minutos
+ * ({@code 18h}, {@code 18hs}, {@code 18 h}, {@code 18h00min}, {@code 18:00}, {@code 18:00h}, {@code 18 horas}) vale como a hora e
+ * como o número da hora, na fonte e na resposta; com mais de 24 horas ({@code 48h}) é só o número. Cada dígito conta: o que vem
+ * dentro de uma palavra ({@code planeta360}, {@code D09}) também. "Planeta 360", o nome do festival, em qualquer caixa, não é
+ * número. Sem estado: tudo estático.
  */
 public final class NormalizadorDeNumeros {
 
@@ -60,7 +69,7 @@ public final class NormalizadorDeNumeros {
     }
 
     private static final String PALAVRA = String.join("|", EXTENSO.keySet());
-    private static final String ESCALA = "mil|milh(?:ão|ões|ao|oes)";
+    private static final String ESCALA = "mil|milh(?:ão|ões|ao|oes)|bilh(?:ão|ões|ao|oes)";
     private static final String UNIDADES = "reais|real|dias?|horas?|minutos?|kva|kw|por\\s+cento|porcento|%|credenciais|credencial|cortesias?"
             + "|inserç(?:ão|ões)|ingressos?|pulseiras?|metros?|semanas?|meses|aplicaç(?:ão|ões)|pessoas?|litros?|visitantes?|cadastros?"
             + "|rodadas?|peças?|vezes";
@@ -75,25 +84,36 @@ public final class NormalizadorDeNumeros {
             + NAO_ACABA_A_PALAVRA + "))((?:" + PALAVRA + "|" + ESCALA + ")(?:\\s+(?:e\\s+)?(?:" + PALAVRA + "|" + ESCALA + "))*)"
             + NAO_ACABA_A_PALAVRA + "(\\s+(?:de\\s+)?(?:" + UNIDADES + ")" + NAO_ACABA_A_PALAVRA + ")?",
             Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
-    /** "dez de dezembro", "vinte e cinco de dezembro de 2026", "sete e oito de dezembro": o numeral seguido de "de mês" é data. */
-    private static final Pattern DATA_COM_NUMERAL = Pattern.compile("(?<![\\p{L}\\p{N}])((?:" + PALAVRA + ")(?:\\s+(?:e\\s+)?(?:" + PALAVRA
+    /**
+     * "dez de dezembro", "vinte e cinco de dezembro de 2026", "sete e oito de dezembro", "primeiro de dezembro": o numeral seguido de
+     * "de mês" é data. "Primeiro" só é número assim, antes de "de mês": "a primeira vez" nunca é número.
+     */
+    private static final Pattern DATA_COM_NUMERAL = Pattern.compile("(?<![\\p{L}\\p{N}])(primeiro|(?:" + PALAVRA + ")(?:\\s+(?:e\\s+)?(?:" + PALAVRA
             + "))*)\\s+de\\s+(" + NOME_DO_MES + ")(?:\\s+de\\s+(\\d{4}))?" + NAO_ACABA_A_PALAVRA,
+            Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+    /** O nome do festival, em qualquer caixa: não é o número 360. */
+    private static final Pattern NOME_DO_FESTIVAL = Pattern.compile("(?<![\\p{L}\\p{N}])planeta\\s+360(?!\\p{N})",
             Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     private static final Pattern MILHAR_BR = Pattern.compile("^\\d{1,3}(\\.\\d{3})+(,\\d+)?$");
     private static final Pattern ISO = Pattern.compile("\\b(\\d{4})-(\\d{2})-(\\d{2})\\b");
+    /** "15-01-2027": a mesma data que "15/01/2027". */
+    private static final Pattern DATA_COM_TRACO = Pattern.compile("\\b(\\d{1,2})-(\\d{1,2})-(\\d{4})\\b");
     private static final Pattern DATA_COM_ANO = Pattern.compile("\\b(\\d{1,2})/(\\d{1,2})/(\\d{4})\\b");
     private static final Pattern DATA_COM_ANO_CURTO = Pattern.compile("\\b(\\d{1,2})/(\\d{1,2})/(\\d{2})\\b");
     private static final Pattern DATA_SEM_ANO = Pattern.compile("\\b(\\d{1,2})/(\\d{1,2})\\b");
     // "29 e 30 de janeiro", "de 25 a 28 de janeiro" e "4 de dezembro de 2026".
-    private static final Pattern DATA_POR_EXTENSO = Pattern.compile("\\b(\\d{1,2})º?((?:\\s*(?:,|\\be\\b|\\ba\\b|até(?![\\p{L}]))\\s*\\d{1,2}º?)*)\\s+de\\s+("
+    private static final Pattern DATA_POR_EXTENSO = Pattern.compile("\\b(\\d{1,2})[º°]?((?:\\s*(?:,|\\be\\b|\\ba\\b|até(?![\\p{L}]))\\s*\\d{1,2}[º°]?)*)\\s+de\\s+("
             + NOME_DO_MES + ")(?:\\s+de\\s+(\\d{4}))?", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
-    private static final Pattern HORA_DOIS_PONTOS = Pattern.compile("\\b(\\d{1,2}):(\\d{2})\\b");
-    private static final Pattern HORA_COM_H = Pattern.compile("\\b(\\d{1,2})h(\\d{2})?\\b", Pattern.CASE_INSENSITIVE);
-    private static final Pattern HORAS_POR_EXTENSO = Pattern.compile("\\b(\\d{1,3})\\s*horas?\\b", Pattern.CASE_INSENSITIVE);
+    // "18:00", "18:00h", "05:00hs": a hora com dois pontos, com o "h" (e o "s" ou "oras") que a segue, se houver.
+    private static final Pattern HORA_DOIS_PONTOS = Pattern.compile("\\b(\\d{1,2}):(\\d{2})(?: ?h(?:s|oras?)?)?" + NAO_ACABA_A_PALAVRA,
+            Pattern.CASE_INSENSITIVE);
+    // "18h", "18hs", "18 h", "18 horas", "6h30", "18h00min", "48h": o "h" vem logo depois (ou com um espaço); os minutos são opcionais.
+    private static final Pattern HORA_COM_H = Pattern.compile("\\b(\\d{1,3}) ?h(?:s|oras?)?(?:(\\d{2})(?: ?min(?:utos?)?)?)?" + NAO_ACABA_A_PALAVRA,
+            Pattern.CASE_INSENSITIVE);
     // "2 milhões", "1,5 milhão", "3 mil": o algarismo com a escala por extenso vale o número inteiro.
-    private static final Pattern ALGARISMO_COM_ESCALA = Pattern.compile("(?<![\\p{L}\\p{N}.,])(\\d+(?:,\\d+)?)\\s+(mil|milh(?:ão|ões|ao|oes))(?![\\p{L}\\p{N}])",
+    private static final Pattern ALGARISMO_COM_ESCALA = Pattern.compile("(?<![\\p{L}\\p{N}.,])(\\d+(?:,\\d+)?)\\s+(" + ESCALA + ")(?![\\p{L}\\p{N}])",
             Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
-    /** O espaço, o insecável e o fino que separam os grupos de milhar: "2 220,00". */
+    /** O espaço que separa os grupos de milhar: "2 220,00". Todo outro espaço do Unicode já virou este em {@link #paraConferir}. */
     private static final String ESPACO_DE_GRUPO = "[ \u00A0\u202F]";
     /**
      * Um número. Três dígitos depois de um espaço, com até três antes, são o mesmo número ({@code 2 220,00} é 2220): na resposta
@@ -101,11 +121,9 @@ public final class NormalizadorDeNumeros {
      */
     private static final Pattern NUMERO = Pattern.compile("\\d{1,3}(?:" + ESPACO_DE_GRUPO + "\\d{3})+(?!\\d)(?:[.,]\\d+)?|\\d+(?:[.,]\\d+)*");
     private static final Pattern ANO = Pattern.compile("^\\d{4}$");
+    private static final Pattern DIA_DO_MES = Pattern.compile("[1-9]|[12][0-9]|3[01]");
     private static final Pattern SEPARADOR_DE_GRUPO = Pattern.compile(ESPACO_DE_GRUPO);
     private static final Pattern REAL_ANTES = Pattern.compile("R\\$\\s*$");
-    /** A palavra que, logo antes de quatro dígitos, faz deles um ano: "edição 2027", "em 2026", "Planeta Atlântida 2027". */
-    private static final Pattern PALAVRA_DE_ANO_ANTES = Pattern.compile("(?<![\\p{L}\\p{N}])(?:edi[çc][ãa]o|edi[çc][õo]es|ano|em|de|desde|at[ée]"
-            + "|atl[âa]ntida)(?::\\s*|\\s+)$", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     private static final Pattern UNIDADE_DEPOIS = Pattern.compile("\\s*(?:de\\s+)?(?:" + UNIDADES + ")" + NAO_ACABA_A_PALAVRA,
             Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
 
@@ -113,7 +131,71 @@ public final class NormalizadorDeNumeros {
     private static final Pattern MARCADOR_DE_LISTA = Pattern.compile(
             "(?m)^([ \\t]*)(?:#{1,6}[ \\t]+)?(?:\\*\\*)?(\\d{1,3})(?:[.)]|[ \\t]+-)(?:\\*\\*)?[ \\t]");
 
+    /**
+     * O que não aparece na tela mas parte ou reordena um número: os caracteres de formato do Unicode (categoria Cf: espaço de largura
+     * zero, hífen opcional, os de junção, os de direção da escrita) e os que também são invisíveis sem ser de formato: U+034F (junção
+     * de grafema), os seletores de variação (U+FE00 a U+FE0F e U+E0100 a U+E01EF), U+180B a U+180D (seletores mongóis), U+115F e
+     * U+1160 (preenchimento do hangul), U+3164 e U+FFA0 (preenchimento do hangul, largura total e parcial).
+     */
+    private static final Pattern INVISIVEL = Pattern.compile("[\\p{Cf}\\u034F\\uFE00-\\uFE0F\\u180B-\\u180D\\u115F\\u1160\\u3164\\uFFA0\\x{E0100}-\\x{E01EF}]");
+    /** Todo espaço do Unicode (separadores de espaço, como U+00A0, U+2003, U+2007, U+2009, U+202F, U+3000) e a tabulação; uma corrida é um só. */
+    private static final Pattern ESPACOS = Pattern.compile("[\\p{Zs}\\t\\x0B\\f]+");
+
     private NormalizadorDeNumeros() {
+    }
+
+    // ---------------------------------------------------------------------
+    // O texto antes da conta
+    // ---------------------------------------------------------------------
+
+    /**
+     * O texto sem os caracteres invisíveis ({@link #INVISIVEL}). Não aparecem na tela, mas partem um número ({@code 3<ZWSP>12} lê-se
+     * 312) ou reordenam os algarismos ({@code R$ <RLO>213} aparece como 312). O texto que se confere e o que vai à tela e ao
+     * histórico é este. Nulo continua nulo.
+     */
+    public static String semInvisiveis(String texto) {
+        return texto == null ? null : INVISIVEL.matcher(texto).replaceAll("");
+    }
+
+    /**
+     * Todo algarismo vira o comum, 0 a 9: o de outro alfabeto (árabe-índico, devanágari), o de largura total e o sobrescrito ou
+     * fração ({@code ²}, {@code ½}). O resto do texto fica como está (a letra com acento, a vírgula, o "º").
+     */
+    public static String dobrarAlgarismos(String texto) {
+        StringBuilder dobrado = null;
+        for (int i = 0; i < texto.length(); ) {
+            int c = texto.codePointAt(i);
+            int tamanho = Character.charCount(c);
+            String troca = null;
+            int tipo = Character.getType(c);
+            if (tipo == Character.DECIMAL_DIGIT_NUMBER && c > 127) {
+                troca = String.valueOf(Character.digit(c, 10));
+            } else if (tipo == Character.OTHER_NUMBER || tipo == Character.LETTER_NUMBER) {
+                troca = Normalizer.normalize(new String(Character.toChars(c)), Normalizer.Form.NFKC);
+            }
+            if (troca != null && dobrado == null) {
+                dobrado = new StringBuilder(texto.length() + 8).append(texto, 0, i);
+            }
+            if (dobrado != null) {
+                dobrado.append(troca != null ? troca : texto.substring(i, i + tamanho));
+            }
+            i += tamanho;
+        }
+        return dobrado == null ? texto : dobrado.toString();
+    }
+
+    /**
+     * O texto como a conta o lê: sem os invisíveis, em NFC (a letra com acento solta, "e" + "^", é a mesma que a composta: o numeral
+     * "três" em NFD não escapa), com os algarismos dobrados para os comuns e com todo espaço do Unicode e toda tabulação trocados
+     * por um espaço comum (uma corrida deles, por um só; a quebra de linha fica). A resposta, a fonte e a mensagem da pessoa passam
+     * por aqui. Idempotente. Nulo vira o texto vazio.
+     */
+    public static String paraConferir(String texto) {
+        if (texto == null) {
+            return "";
+        }
+        String limpo = Normalizer.normalize(INVISIVEL.matcher(texto).replaceAll(""), Normalizer.Form.NFC);
+        return ESPACOS.matcher(dobrarAlgarismos(limpo)).replaceAll(" ");
     }
 
     /**
@@ -192,23 +274,56 @@ public final class NormalizadorDeNumeros {
         return MESES.indexOf(nome.toLowerCase(Locale.ROOT)) + 1;
     }
 
+    /** Dia de 1 a 31 e mês de 1 a 12: fora disso, a barra ou o traço separam dois números ("40/20", "10/15 kVA"). */
+    private static boolean diaEMesPossiveis(int dia, int mes) {
+        return dia >= 1 && dia <= 31 && mes >= 1 && mes <= 12;
+    }
+
+    /** A data de dia, mês e ano dados como texto, ou nulo (o trecho fica como está) se o dia ou o mês não são possíveis. */
+    private static List<Achado> dataValida(String trecho, String dia, String mes, String ano) {
+        int d = Integer.parseInt(dia);
+        int m = Integer.parseInt(mes);
+        return diaEMesPossiveis(d, m) ? List.of(data(trecho, d, m, ano)) : null;
+    }
+
     /**
-     * Os números e as datas do texto. Em uma {@code fonte}, todo numeral por extenso conta, menos "um" e "uma"; na resposta, "dois" e
-     * "duas" só contam com unidade ou escala.
+     * Uma hora escrita com "h" ou com dois pontos. Sem minutos (ou com minutos 00), é a hora cheia e também o número da hora
+     * ({@code 18h} vale {@code hora:18:00} e {@code 18}), na fonte e na resposta. Com minutos, é só a hora com eles. Acima de 24
+     * horas ou com minuto impossível ({@code 48h}, {@code 99:99}) não é hora do dia: são só os números.
+     */
+    private static List<Achado> horario(String trecho, int h, int minutos, boolean comMinutos) {
+        if (h > 24 || minutos > 59) {
+            List<Achado> numeros = new ArrayList<>(List.of(valor(trecho, String.valueOf(h))));
+            if (comMinutos) {
+                numeros.add(valor(trecho, String.valueOf(minutos)));
+            }
+            return numeros;
+        }
+        if (minutos == 0) {
+            return List.of(valor(trecho, "hora:" + duasCasas(h) + ":00", String.valueOf(h)));
+        }
+        return List.of(hora(trecho, h, minutos));
+    }
+
+    /** A escala por extenso: mil, milhão ou bilhão (com ou sem acento, no singular ou no plural). */
+    private static long escala(String palavra) {
+        String p = palavra.toLowerCase(Locale.ROOT);
+        return p.equals("mil") ? 1_000L : p.startsWith("milh") ? 1_000_000L : 1_000_000_000L;
+    }
+
+    /**
+     * Os números e as datas do texto. O texto passa antes por {@link #paraConferir}. Em uma {@code fonte}, todo numeral por extenso
+     * conta, menos "um" e "uma"; na resposta, "dois" e "duas" só contam com unidade ou escala.
      */
     public static List<Achado> extrair(String textoOriginal, boolean fonte) {
         List<Achado> achados = new ArrayList<>();
-        String texto = " " + (textoOriginal == null ? "" : textoOriginal) + " ";
-        texto = texto.replace("Planeta 360", "           ");
+        String texto = NOME_DO_FESTIVAL.matcher(" " + paraConferir(textoOriginal) + " ").replaceAll(nome -> " ".repeat(nome.group().length()));
 
-        texto = consumir(texto, ISO, achados, (m, todo) -> List.of(data(m.group(), Integer.parseInt(m.group(3)), Integer.parseInt(m.group(2)),
-                m.group(1))));
-        texto = consumir(texto, DATA_COM_ANO, achados, (m, todo) -> List.of(data(m.group(), Integer.parseInt(m.group(1)),
-                Integer.parseInt(m.group(2)), m.group(3))));
-        texto = consumir(texto, DATA_COM_ANO_CURTO, achados, (m, todo) -> List.of(data(m.group(), Integer.parseInt(m.group(1)),
-                Integer.parseInt(m.group(2)), "20" + m.group(3))));
-        texto = consumir(texto, DATA_SEM_ANO, achados, (m, todo) -> List.of(data(m.group(), Integer.parseInt(m.group(1)),
-                Integer.parseInt(m.group(2)), null)));
+        texto = consumir(texto, ISO, achados, (m, todo) -> dataValida(m.group(), m.group(3), m.group(2), m.group(1)));
+        texto = consumir(texto, DATA_COM_ANO, achados, (m, todo) -> dataValida(m.group(), m.group(1), m.group(2), m.group(3)));
+        texto = consumir(texto, DATA_COM_TRACO, achados, (m, todo) -> dataValida(m.group(), m.group(1), m.group(2), m.group(3)));
+        texto = consumir(texto, DATA_COM_ANO_CURTO, achados, (m, todo) -> dataValida(m.group(), m.group(1), m.group(2), "20" + m.group(3)));
+        texto = consumir(texto, DATA_SEM_ANO, achados, (m, todo) -> dataValida(m.group(), m.group(1), m.group(2), null));
         texto = consumir(texto, DATA_POR_EXTENSO, achados, (m, todo) -> {
             List<Achado> datas = new ArrayList<>();
             List<String> dias = new ArrayList<>(List.of(m.group(1)));
@@ -222,24 +337,22 @@ public final class NormalizadorDeNumeros {
             return datas;
         });
 
-        texto = consumir(texto, HORA_DOIS_PONTOS, achados, (m, todo) -> List.of(hora(m.group(), Integer.parseInt(m.group(1)),
-                Integer.parseInt(m.group(2)))));
-        texto = consumir(texto, HORA_COM_H, achados, (m, todo) -> List.of(hora(m.group(), Integer.parseInt(m.group(1)),
-                m.group(2) == null ? 0 : Integer.parseInt(m.group(2)))));
-        texto = consumir(texto, HORAS_POR_EXTENSO, achados, (m, todo) -> {
-            int horas = Integer.parseInt(m.group(1));
-            return List.of(horas <= 24 ? valor(m.group(), "hora:" + duasCasas(horas) + ":00", String.valueOf(horas))
-                    : valor(m.group(), String.valueOf(horas)));
-        });
+        texto = consumir(texto, HORA_DOIS_PONTOS, achados, (m, todo) -> horario(m.group(), Integer.parseInt(m.group(1)),
+                Integer.parseInt(m.group(2)), true));
+        texto = consumir(texto, HORA_COM_H, achados, (m, todo) -> horario(m.group(), Integer.parseInt(m.group(1)),
+                m.group(2) == null ? 0 : Integer.parseInt(m.group(2)), m.group(2) != null));
 
         texto = consumir(texto, ALGARISMO_COM_ESCALA, achados, (m, todo) -> {
-            BigDecimal escala = m.group(2).equalsIgnoreCase("mil") ? BigDecimal.valueOf(1000) : BigDecimal.valueOf(1_000_000);
-            BigDecimal valor = new BigDecimal(m.group(1).replace(',', '.')).multiply(escala);
+            BigDecimal valor = new BigDecimal(m.group(1).replace(',', '.')).multiply(BigDecimal.valueOf(escala(m.group(2))));
             return List.of(valor(m.group(), valor.stripTrailingZeros().toPlainString()));
         });
         // "dez de dezembro" é uma data; "sete e oito de dezembro", duas. Vem antes dos numerais soltos.
         texto = consumir(texto, DATA_COM_NUMERAL, achados, (m, todo) -> {
             List<Achado> datas = new ArrayList<>();
+            if (m.group(1).equalsIgnoreCase("primeiro")) {
+                datas.add(data(m.group(), 1, mes(m.group(2)), m.group(3)));
+                return datas;
+            }
             for (Grupo grupo : porExtenso(m.group(1))) {
                 datas.add(data(m.group(), (int) grupo.valor(), mes(m.group(2)), m.group(3)));
             }
@@ -276,22 +389,27 @@ public final class NormalizadorDeNumeros {
     }
 
     /**
-     * Quatro dígitos são um ano só se: não têm separador, não vêm depois de "R$", não vêm antes de uma unidade ("2026 credenciais") e
-     * a palavra de antes é de ano ({@link #PALAVRA_DE_ANO_ANTES}: edição, edições, ano, em, de, desde, até, Atlântida). "R$ 2027",
-     * "São 2027 geradores" e "2026 credenciais" são valores, e nunca um ano.
+     * Quatro dígitos são um ano se: não têm separador, estão entre 1900 e 2099, não vêm depois de "R$" e não vêm antes de uma
+     * unidade da lista ({@link #UNIDADES}). A palavra de antes não importa: "Para 2027", "(2027)", "Manual de Operações 2027" e "São
+     * 2027 geradores" são anos (este último é artificial, e passa de propósito); "R$ 2027", "2026 credenciais", "1250 pessoas" e
+     * "2.027" são valores.
      */
     private static boolean ehAno(Matcher numero, String todo) {
         if (!ANO.matcher(numero.group()).matches()) {
             return false;
         }
-        String antes = todo.substring(0, numero.start());
-        if (REAL_ANTES.matcher(antes).find() || !PALAVRA_DE_ANO_ANTES.matcher(antes).find()) {
+        int valor = Integer.parseInt(numero.group());
+        if (valor < 1900 || valor > 2099) {
+            return false;
+        }
+        String antes = todo.substring(Math.max(0, numero.start() - 8), numero.start());
+        if (REAL_ANTES.matcher(antes).find()) {
             return false;
         }
         return !UNIDADE_DEPOIS.matcher(todo).region(numero.end(), todo.length()).lookingAt();
     }
 
-    /** Um número escrito por extenso: o valor e se teve escala (mil, milhão). */
+    /** Um número escrito por extenso: o valor e se teve escala (mil, milhão, bilhão). */
     private record Grupo(long valor, boolean temEscala) {
     }
 
@@ -303,7 +421,7 @@ public final class NormalizadorDeNumeros {
     /**
      * Os números de uma corrida de numerais. Eles só somam em ordem decrescente de grandeza ("trezentos e doze", "vinte e cinco",
      * "dois mil e quinhentos"); quando a grandeza não cai, começa outro número: "três e quatro" são o 3 e o 4, "dez e trinta" o 10
-     * e o 30. A escala (mil, milhão) multiplica o que veio antes dela e recomeça a ordem.
+     * e o 30. A escala (mil, milhão, bilhão) multiplica o que veio antes dela e recomeça a ordem.
      */
     private static List<Grupo> porExtenso(String palavras) {
         List<Grupo> grupos = new ArrayList<>();
@@ -315,8 +433,8 @@ public final class NormalizadorDeNumeros {
             if (palavra.isEmpty() || palavra.equals("e")) {
                 continue;
             }
-            if (palavra.equals("mil") || palavra.startsWith("milh")) {
-                total += (parcial == 0 ? 1 : parcial) * (palavra.equals("mil") ? 1000L : 1_000_000L);
+            if (palavra.equals("mil") || palavra.startsWith("milh") || palavra.startsWith("bilh")) {
+                total += (parcial == 0 ? 1 : parcial) * escala(palavra);
                 parcial = 0;
                 temEscala = true;
                 ultima = 4;
@@ -351,6 +469,16 @@ public final class NormalizadorDeNumeros {
     /**
      * Tudo o que um conjunto de textos permite afirmar. Data com ano só vale no ano certo, se a fonte disser o ano. Se ela não disser
      * (data sem ano), vale com qualquer ano na resposta, a menos que {@link #anosAceitos} limite quais.
+     * <p>
+     * <b>O ano não é valor.</b> O ano de uma data da fonte e os quatro dígitos que são ano (título, "Para 2027") valem só como ano
+     * ({@code ano:2027}); "R$ 2.026,00" e "2026 credenciais" precisam do número escrito como número.
+     * <p>
+     * <b>A fonte citada diz mais</b> ({@link #adicionarFonteCitada}): o dia de uma de suas datas vale como o número solto ({@code
+     * dia 4} com a fonte em 04/12/2026), e uma data da resposta vale se o <i>texto</i> da fonte tem o dia como número e alguma data
+     * do mesmo mês (e do mesmo ano, se a resposta o disse): "29 e 30 de janeiro de 2027" com a fonte "sexta-feira, 29, e no sábado, 30
+     * de janeiro de 2027". O número da página, da seção e da versão da fonte ({@link #adicionar}) não é o dia: com a fonte na página
+     * 5, "05/12/2026" não vale só porque a fonte tem a data 04/12/2026. A mensagem da pessoa, a data de hoje e as contas também não
+     * dizem isso.
      */
     public static final class Origens {
 
@@ -363,18 +491,41 @@ public final class NormalizadorDeNumeros {
             }
         }
 
+        /** Um texto que vale como está escrito: a mensagem da pessoa, o resultado de uma conta. */
         public Origens adicionar(String texto) {
+            return somar(texto, false);
+        }
+
+        /** O texto de uma fonte citada na frase: vale como está escrito e também em pedaços (veja o resumo da classe). */
+        public Origens adicionarFonteCitada(String texto) {
+            return somar(texto, true);
+        }
+
+        private Origens somar(String texto, boolean citada) {
             for (Achado achado : extrair(texto == null ? "" : texto, true)) {
                 if (achado.ehData()) {
                     valores.add("data:" + achado.dia());
+                    String mes = achado.dia().substring(0, 2);
                     if (achado.ano() != null) {
                         valores.add("data:" + achado.ano() + "-" + achado.dia());
                         valores.add("dataComAno:" + achado.dia());
                         valores.add("ano:" + achado.ano());
-                        valores.add(achado.ano());
+                    }
+                    if (citada) {
+                        valores.add("dia:" + Integer.parseInt(achado.dia().substring(3)));
+                        valores.add("mes:" + mes);
+                        valores.add(achado.ano() != null ? "mesAno:" + achado.ano() + "-" + mes : "mesSemAno:" + mes);
                     }
                 } else {
-                    valores.addAll(achado.valores());
+                    boolean ehAno = achado.valores().stream().anyMatch(v -> v.startsWith("ano:"));
+                    for (String valor : achado.valores()) {
+                        if (!ehAno || valor.startsWith("ano:")) {   // o ano vale como ano, e não como o número
+                            valores.add(valor);
+                        }
+                        if (citada && ehDiaDoMes(valor)) {
+                            valores.add("numeroDoTexto:" + valor);
+                        }
+                    }
                 }
             }
             return this;
@@ -409,18 +560,54 @@ public final class NormalizadorDeNumeros {
             return valores.contains("dataComAno:" + dia);
         }
 
+        /** Esta origem trouxe exatamente esta data, com este ano ("04/12/2027" escrito por quem a trouxe)? */
+        public boolean temDataExata(Achado achado) {
+            return achado.ehData() && achado.ano() != null && valores.contains("data:" + achado.ano() + "-" + achado.dia());
+        }
+
         public boolean aceita(Achado achado) {
             if (!achado.ehData()) {
-                return achado.valores().stream().anyMatch(valores::contains);
+                for (String valor : achado.valores()) {
+                    if (valores.contains(valor) || (ehDiaDoMes(valor) && valores.contains("dia:" + valor))) {
+                        return true;
+                    }
+                }
+                return false;
             }
-            if (achado.ano() == null) {
-                return valores.contains("data:" + achado.dia());
+            if (achado.ano() == null ? valores.contains("data:" + achado.dia()) : aceitaDataComAno(achado)) {
+                return true;
             }
+            return aceitaPeloDiaESoltoEPeloMes(achado);
+        }
+
+        private boolean aceitaDataComAno(Achado achado) {
             if (valores.contains("data:" + achado.ano() + "-" + achado.dia())) {
                 return true;
             }
             return valores.contains("data:" + achado.dia()) && !trazDataComAno(achado.dia())
                     && (anosAceitos == null || anosAceitos.contains(achado.ano()));
+        }
+
+        /**
+         * A fonte citada tem o dia da data como número e alguma data do mesmo mês (e, se a resposta disse o ano, do mesmo ano, ou sem
+         * ano mas num ano que {@link #anosAceitos} libera).
+         */
+        private boolean aceitaPeloDiaESoltoEPeloMes(Achado achado) {
+            String mes = achado.dia().substring(0, 2);
+            String dia = String.valueOf(Integer.parseInt(achado.dia().substring(3)));
+            if (!valores.contains("numeroDoTexto:" + dia) || !valores.contains("mes:" + mes)) {
+                return false;
+            }
+            if (achado.ano() == null) {
+                return true;
+            }
+            return valores.contains("mesAno:" + achado.ano() + "-" + mes)
+                    || (valores.contains("mesSemAno:" + mes) && (anosAceitos == null || anosAceitos.contains(achado.ano())));
+        }
+
+        /** Um número inteiro de 1 a 31, escrito como {@link #normalizarNumero} o escreve (sem zero à esquerda). */
+        private static boolean ehDiaDoMes(String valor) {
+            return DIA_DO_MES.matcher(valor).matches();
         }
     }
 
@@ -465,7 +652,7 @@ public final class NormalizadorDeNumeros {
 
     /** O que sobra do texto sem os números: "Portão 5" vira "Portão". Serve para conferir as palavras em volta do número. */
     public static String palavrasFora(String texto) {
-        String resto = texto;
+        String resto = paraConferir(texto);
         for (Achado achado : extrair(texto, true)) {
             resto = resto.replace(achado.trecho(), " ");
         }
