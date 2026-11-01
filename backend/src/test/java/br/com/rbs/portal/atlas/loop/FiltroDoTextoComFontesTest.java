@@ -312,4 +312,58 @@ class FiltroDoTextoComFontesTest {
 
         assertThat(passagem.eventos()).containsExactly("texto_recusado");
     }
+
+    // ---------------------------------------------------------------------
+    // M5: a conta do calcular na tela ao vivo
+    // ---------------------------------------------------------------------
+
+    /** Uma resolução do Amarelo que já recebeu a conta {@code tarifa} do turno (R$ 10.608,00), como a que o loop abre a cada ida. */
+    Resolucao comATarifa() {
+        Resolucao resolucao = doAmarelo();
+        resolucao.registrarConta(new br.com.rbs.portal.atlas.relatorio.ContaDoChat("tarifa", new java.math.BigDecimal("10608.00"),
+                "10.608,00", "preco * area", null, "moeda", List.of()));
+        return resolucao;
+    }
+
+    FontesDoTurno turnoComATarifa() {
+        FontesDoTurno turno = turno();
+        turno.registrarCalculo("tarifa", "tarifa", "Conta tarifa: preco = 312; area = 34; resultado = 10.608,00.", java.util.Map.of());
+        return turno;
+    }
+
+    @Test
+    void oMarcadorDaContaDoChatSaiResolvidoNaTelaAoVivoENuncaComoIndisponivel() {
+        Anotador anotador = new Anotador();
+        FiltroDoTexto filtro = new FiltroDoTexto(comATarifa(), checagem, turnoComATarifa(), anotador);
+
+        filtro.receber("A tarifa é R$ {{calc:");
+        filtro.receber("tarifa}} [C");
+        filtro.receber("1]. Fora isso, nada muda.");
+        filtro.fechar();
+
+        assertThat(anotador.eventos).containsExactly("texto:A tarifa é R$ 10.608,00 [C1].", "texto: Fora isso, nada muda.");
+        assertThat(anotador.eventos).noneMatch(evento -> evento.contains("indisponível") || evento.contains("{{"));
+        assertThat(filtro.recusado()).isFalse();
+    }
+
+    @Test
+    void semAContaNaResolucaoOMarcadorEhRecusadoEUmaCitacaoDeContaQueNaoExisteTambem() {
+        Anotador sem = new Anotador();
+        FiltroDoTexto semConta = new FiltroDoTexto(doAmarelo(), checagem, turno(), sem);
+        semConta.receber("A tarifa é R$ {{calc:tarifa}}. Fim.");
+        semConta.fechar();
+
+        assertThat(semConta.recusado()).isTrue();
+        assertThat(sem.eventos).containsExactly("texto_recusado");
+        assertThat(semConta.motivoDaRecusa()).contains("calc:tarifa");
+
+        Anotador citacao = new Anotador();
+        FiltroDoTexto comC9 = new FiltroDoTexto(comATarifa(), checagem, turnoComATarifa(), citacao);
+        comC9.receber("A tarifa é R$ {{calc:tarifa}} [C9]. Fim.");
+        comC9.fechar();
+
+        assertThat(comC9.recusado()).isTrue();
+        assertThat(citacao.eventos).containsExactly("texto_recusado");
+        assertThat(comC9.motivoDaRecusa()).contains("C9");
+    }
 }
