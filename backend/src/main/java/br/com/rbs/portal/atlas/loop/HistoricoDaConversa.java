@@ -3,6 +3,8 @@ package br.com.rbs.portal.atlas.loop;
 import br.com.rbs.portal.atlas.AtlasJson;
 import br.com.rbs.portal.atlas.AtlasRepositorio;
 import br.com.rbs.portal.atlas.AtlasRepositorio.LinhaDeMensagem;
+import br.com.rbs.portal.atlas.ferramentas.GerarModelo;
+import br.com.rbs.portal.atlas.ferramentas.PedidoDeRelatorio;
 import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.ChamadaDeFerramenta;
 import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.MensagemDeChat;
 import java.util.ArrayList;
@@ -133,14 +135,88 @@ public class HistoricoDaConversa {
                 default -> {
                     semResposta.remove(linha.toolCallId());
                     String ferramenta = nomes.get(linha.toolCallId());
-                    String conteudo = linha.ordem() <= ordemDoTurno && FERRAMENTAS_COM_TEXTO_DE_DOCUMENTO.contains(ferramenta)
-                            ? semOTextoDosDocumentos(linha.conteudo()) : linha.conteudo();
+                    String conteudo = paraOModelo(ferramenta, linha.conteudo(), linha.ordem() <= ordemDoTurno);
                     remontado.add(MensagemDeChat.resultado(linha.toolCallId(), ferramenta, conteudo));
                 }
             }
         }
         completarSemResposta(remontado, nomes, semResposta);
         return remontado;
+    }
+
+    /** A frase que toma o lugar dos registros de {@code listar_entregas} e {@code consultar_cota} de um turno anterior. */
+    public static final String AVISO_DO_REGISTRO_ANTIGO = "resultado de um turno anterior; consulte de novo para citar";
+
+    /**
+     * O que a resposta direta ({@code pedido_de_relatorio}, {@code gerar_modelo}) diz ao modelo: o servidor já mostrou a resposta à
+     * pessoa, e ele não a repete nem a resume.
+     */
+    public static final String AVISO_DA_RESPOSTA_DIRETA = "O servidor já mostrou esta resposta à pessoa. Não a repita nem a resuma; "
+            + "responda só o que a pessoa perguntou além dela.";
+
+    /**
+     * As ferramentas cujo resultado traz registros do portal: de turno anterior, vão ao modelo sem eles. A aba pode ter fechado desde
+     * então (a RBS fecha e reabre abas), e o resultado antigo continuaria dizendo "aba MIDIA", "categoria MIDIA" e "tipo cortesia".
+     * {@code parceria_consultar} fica de fora: o catálogo dele é só o da aba de que o Atlas já depende.
+     */
+    private static final Set<String> FERRAMENTAS_COM_REGISTROS_DO_PORTAL = Set.of("listar_entregas", "consultar_cota");
+
+    /**
+     * O resultado de uma ferramenta como o modelo o recebe. De um turno anterior ({@code deTurnoAnterior}): a busca e os prazos vão sem
+     * o texto do documento, as entregas e a cota, sem os registros. Qualquer turno: a resposta direta leva o aviso de que o servidor já
+     * mostrou a resposta à pessoa, e o modelo em branco do {@code gerar_modelo} vai só com o título (repetir o modelo inteiro a cada
+     * ida gasta o contexto à toa, e o modelo não comenta nem reescreve o conteúdo). Erro de ferramenta e o que não é JSON seguem como
+     * estão.
+     */
+    static String paraOModelo(String ferramenta, String conteudoJson, boolean deTurnoAnterior) {
+        if (ferramenta == null) {
+            return conteudoJson;
+        }
+        if (deTurnoAnterior && FERRAMENTAS_COM_TEXTO_DE_DOCUMENTO.contains(ferramenta)) {
+            return semOTextoDosDocumentos(conteudoJson);
+        }
+        if (deTurnoAnterior && FERRAMENTAS_COM_REGISTROS_DO_PORTAL.contains(ferramenta)) {
+            return semOsRegistrosDoPortal(conteudoJson);
+        }
+        if (ferramenta.equals(GerarModelo.NOME) || ferramenta.equals(PedidoDeRelatorio.NOME)) {
+            return daRespostaDireta(conteudoJson, ferramenta.equals(GerarModelo.NOME));
+        }
+        return conteudoJson;
+    }
+
+    private static Map<String, Object> objetoOuNulo(String conteudoJson) {
+        try {
+            return AtlasJson.ler(conteudoJson, new TypeReference<Map<String, Object>>() {
+            });
+        } catch (RuntimeException naoEObjeto) {
+            return null;
+        }
+    }
+
+    /** Os registros de entregas ou da cota de um turno anterior viram só o aviso. Um erro de ferramenta segue como está. */
+    static String semOsRegistrosDoPortal(String conteudoJson) {
+        Map<String, Object> resultado = objetoOuNulo(conteudoJson);
+        if (resultado != null && resultado.containsKey("erro")) {
+            return conteudoJson;
+        }
+        Map<String, Object> novo = new LinkedHashMap<>();
+        novo.put("tipo", "resultado_de_turno_anterior");
+        novo.put("aviso", AVISO_DO_REGISTRO_ANTIGO);
+        return AtlasJson.escrever(novo);
+    }
+
+    /** A resposta direta com o aviso; o modelo em branco sem o conteúdo e sem o nome do arquivo (só o título). */
+    private static String daRespostaDireta(String conteudoJson, boolean semOConteudo) {
+        Map<String, Object> resultado = objetoOuNulo(conteudoJson);
+        if (resultado == null || resultado.containsKey("erro")) {
+            return conteudoJson;
+        }
+        if (semOConteudo) {
+            resultado.remove("conteudo");
+            resultado.remove("nomeArquivo");
+        }
+        resultado.put("aviso", AVISO_DA_RESPOSTA_DIRETA);
+        return AtlasJson.escrever(resultado);
     }
 
     /**

@@ -94,4 +94,105 @@ class HistoricoDaConversaSemOTextoTest {
         assertThat(resultado).containsEntry("tipo", "resultado_de_turno_anterior");
         assertThat(resultado.get("documentos")).isEqualTo(List.of());
     }
+
+    // ---------------------------------------------------------------------
+    // listar_entregas e consultar_cota de turno anterior: sem os registros (a aba pode ter fechado)
+    // ---------------------------------------------------------------------
+
+    private static Map<String, Object> paraOModelo(String ferramenta, String json, boolean deTurnoAnterior) {
+        return AtlasJson.ler(HistoricoDaConversa.paraOModelo(ferramenta, json, deTurnoAnterior), new TypeReference<Map<String, Object>>() {
+        });
+    }
+
+    @Test
+    void entregasECotaDeUmTurnoAnteriorVaoSemOsRegistros() {
+        String entregas = """
+                {"tipo":"registros_do_portal","aviso":"x","registros":[
+                  {"marcador":"R1","aba":"MIDIA","abaNome":"Mídia e conteúdo","titulo":"Peça de 30","status":"EM_ANALISE","situacao":"Em análise",
+                   "prazo":"04/12/2026","atualizadoEm":"28/10/2026"}]}
+                """;
+        String cota = """
+                {"tipo":"registros_do_portal","aviso":"x","registros":[
+                  {"marcador":"R3","tipo":"previsto","categoria":"MIDIA","veiculo":"RBS TV","quantidadePrevista":"300","unidade":"INSERCAO"},
+                  {"marcador":"R4","tipo":"cortesia","setor":"CAMAROTE","dia":"SEXTA","quantidade":40}]}
+                """;
+
+        for (String[] ferramenta : new String[][] {{"listar_entregas", entregas}, {"consultar_cota", cota}}) {
+            Map<String, Object> resultado = paraOModelo(ferramenta[0], ferramenta[1], true);
+            String enviado = HistoricoDaConversa.paraOModelo(ferramenta[0], ferramenta[1], true);
+
+            assertThat(resultado).as(ferramenta[0]).containsEntry("tipo", "resultado_de_turno_anterior")
+                    .containsEntry("aviso", "resultado de um turno anterior; consulte de novo para citar");
+            assertThat(enviado).as(ferramenta[0]).doesNotContain("MIDIA", "cortesia", "CAMAROTE", "R1", "R3", "marcador", "registros", "Peça de 30",
+                    "04/12/2026", "300");
+        }
+    }
+
+    @Test
+    void entregasECotaDoTurnoAtualSeguemComoSaem() {
+        String entregas = "{\"tipo\":\"registros_do_portal\",\"aviso\":\"x\",\"registros\":[{\"marcador\":\"R1\",\"aba\":\"MIDIA\"}]}";
+
+        assertThat(HistoricoDaConversa.paraOModelo("listar_entregas", entregas, false)).isEqualTo(entregas);
+        assertThat(HistoricoDaConversa.paraOModelo("consultar_cota", entregas, false)).isEqualTo(entregas);
+    }
+
+    @Test
+    void erroDeEntregasOuCotaDeTurnoAnteriorSegueComoEsta() {
+        String erro = "{\"erro\":\"Os argumentos da ferramenta estão errados.\",\"campos\":{\"status\":\"Status inválido.\"}}";
+
+        assertThat(HistoricoDaConversa.paraOModelo("listar_entregas", erro, true)).isEqualTo(erro);
+        assertThat(HistoricoDaConversa.paraOModelo("consultar_cota", erro, true)).isEqualTo(erro);
+    }
+
+    @Test
+    void parceriaConsultarEAsFerramentasDeContaNaoMudam() {
+        String json = "{\"tipo\":\"consulta\",\"itens\":[{\"ref\":\"cons:aplicacoes.previstas\",\"valor\":\"19\"}]}";
+
+        for (String ferramenta : new String[] {"parceria_consultar", "calcular", "contar_dias", "relatorio_iniciar", null}) {
+            assertThat(HistoricoDaConversa.paraOModelo(ferramenta, json, true)).as(String.valueOf(ferramenta)).isEqualTo(json);
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // Respostas diretas: o modelo sabe que o servidor já mostrou, e o modelo em branco não volta inteiro a cada ida
+    // ---------------------------------------------------------------------
+
+    @Test
+    void oModeloEmBrancoVaiSoComOTituloEoAvisoDeQueOServidorJaMostrou() {
+        String modelo = """
+                {"tipo":"modelo","modelo":"BRIEFING_CONTEUDO","titulo":"Briefing de conteúdo","conteudo":"# Briefing de conteúdo\\n## Objetivo\\n",
+                 "nomeArquivo":"briefing-de-conteudo.md"}
+                """;
+
+        for (boolean deTurnoAnterior : new boolean[] {false, true}) {
+            Map<String, Object> resultado = paraOModelo("gerar_modelo", modelo, deTurnoAnterior);
+
+            assertThat(resultado).containsEntry("tipo", "modelo").containsEntry("modelo", "BRIEFING_CONTEUDO")
+                    .containsEntry("titulo", "Briefing de conteúdo").doesNotContainKeys("conteudo", "nomeArquivo");
+            assertThat((String) resultado.get("aviso")).contains("servidor já mostrou", "Não a repita");
+            assertThat(HistoricoDaConversa.paraOModelo("gerar_modelo", modelo, deTurnoAnterior)).doesNotContain("Objetivo");
+        }
+    }
+
+    @Test
+    void oPedidoDeRelatorioFicaComOTextoEGanhaOAvisoDeQueOServidorJaMostrou() {
+        String pedido = "{\"tipo\":\"pedido_relatorio\",\"texto\":\"O relatório da parceria é elaborado pela RBS.\",\"relatorioOficial\":false,\"modelos\":[]}";
+
+        for (boolean deTurnoAnterior : new boolean[] {false, true}) {
+            Map<String, Object> resultado = paraOModelo("pedido_de_relatorio", pedido, deTurnoAnterior);
+
+            assertThat(resultado).containsEntry("tipo", "pedido_relatorio").containsEntry("relatorioOficial", false)
+                    .containsEntry("texto", "O relatório da parceria é elaborado pela RBS.");
+            assertThat((String) resultado.get("aviso")).contains("servidor já mostrou", "Não a repita");
+        }
+    }
+
+    @Test
+    void erroDeRespostaDiretaSegueComoEsteEQuemNaoEJsonNaoQuebra() {
+        String erro = "{\"erro\":\"Tipo desconhecido.\"}";
+
+        assertThat(HistoricoDaConversa.paraOModelo("gerar_modelo", erro, false)).isEqualTo(erro);
+        assertThat(HistoricoDaConversa.paraOModelo("pedido_de_relatorio", erro, true)).isEqualTo(erro);
+        assertThat(HistoricoDaConversa.paraOModelo("gerar_modelo", "isto não é json", true)).isEqualTo("isto não é json");
+    }
 }

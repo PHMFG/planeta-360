@@ -10,6 +10,7 @@ import br.com.rbs.portal.atlas.AtlasDtos.ConversaDto;
 import br.com.rbs.portal.atlas.AtlasDtos.FonteDoTexto;
 import br.com.rbs.portal.atlas.AtlasDtos.ItemTexto;
 import br.com.rbs.portal.atlas.AtlasDtos.MensagemRequisicao;
+import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.MensagemDeChat;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.AfterEach;
@@ -89,6 +90,37 @@ class ConsultarCotaNoChatTest {
         List<String> nomes = ProvedorRoteirizado.nomesDasFerramentas(modelo.ultimoPedido());
         assertThat(nomes).containsSubsequence("buscar_documentos", "listar_entregas", COTA, "contar_dias");
         assertThat(nomes.indexOf(COTA)).isEqualTo(nomes.indexOf("listar_entregas") + 1);
+    }
+
+    @Test
+    void oResultadoDaCotaEDasEntregasDeUmTurnoAnteriorVaiSemOsRegistrosMesmoSeAAbaFechou() {
+        long conversa = abrir();
+        modelo.chamada("listar_entregas", "{\"aba\":\"MIDIA\"}").chamada(COTA, "{}").texto("Vi as entregas e a cota.");
+        falar(conversa, "O que tenho em mídia?");
+        long parceria = SessaoDeApi.parceriaDe2027(jdbc, "Cliente Amarelo");
+        String fechar = "UPDATE parceria_aba SET liberada = :liberada WHERE parceria_id = :p AND aba_id = (SELECT id FROM aba WHERE codigo = 'MIDIA')";
+        jdbc.sql(fechar).param("liberada", false).param("p", parceria).update();
+        try {
+            modelo.limpar();
+            modelo.texto("Certo.");
+
+            falar(conversa, "Obrigado!");
+
+            List<MensagemDeChat> historico = modelo.pedidos().get(0).mensagens();
+            List<MensagemDeChat> antigos = historico.stream().filter(m -> m.papel().equals("tool")).toList();
+            assertThat(antigos).extracting(MensagemDeChat::ferramenta).containsExactly("listar_entregas", COTA);
+            for (MensagemDeChat antigo : antigos) {
+                assertThat(antigo.conteudo()).contains("resultado_de_turno_anterior", "consulte de novo para citar")
+                        .doesNotContain("MIDIA", "\"aba\"", "\"categoria\"", "\"tipo\":\"cortesia\"", "marcador", "registros");
+            }
+            ProvedorRoteirizado.exigirHistoricoValido(modelo.pedidos().get(0));
+            // a atlas_tool_call guarda o original
+            assertThat(jdbc.sql("SELECT count(*) FROM atlas_tool_call t JOIN atlas_mensagem m ON m.id = t.mensagem_id WHERE m.conversa_id = :c "
+                    + "AND t.ferramenta IN ('listar_entregas', 'consultar_cota') AND t.resultado::text LIKE '%MIDIA%'").param("c", conversa)
+                    .query(Long.class).single()).isEqualTo(2L);
+        } finally {
+            jdbc.sql(fechar).param("liberada", true).param("p", parceria).update();
+        }
     }
 
     @Test
