@@ -180,23 +180,135 @@ class EmbeddingsGeminiTest {
     }
 
     @Test
-    void seO429NaoPassaDepoisDe4TentativasOErroDizOLimiteDeUso() {
+    void seO429NaoPassaDepoisDe4TentativasNaIngestaoOErroDizOLimiteDeUso() {
         for (int i = 0; i < 6; i++) {
             servidor.responder(429, "{\"error\":{\"message\":\"Resource has been exhausted\"}}");
         }
 
-        assertThatThrownBy(() -> gemini.paraConsulta("pergunta")).isInstanceOf(EmbeddingsIndisponivelException.class)
+        assertThatThrownBy(() -> gemini.paraTrechos("Titulo", trechos(1))).isInstanceOf(EmbeddingsIndisponivelException.class)
                 .hasMessage("O Gemini recusou por limite de uso (429) mesmo depois de 4 tentativas.");
         assertThat(servidor.recebidas()).hasSize(4);
     }
 
     @Test
-    void erroDeServidorTentaUmaVezMais() {
+    void erroDeServidorNaIngestaoTentaUmaVezMais() {
         servidor.responder(503, "{\"error\":{\"message\":\"Indisponível\"}}");
+        servidor.responder(200, respostaDoLote(1));
+
+        assertThat(gemini.paraTrechos("Titulo", trechos(1))).hasSize(1);
+        assertThat(servidor.recebidas()).hasSize(2);
+    }
+
+    @Test
+    void naIngestaoORetryAfterDoGeminiAindaValeEOTempoDeEsperaAindaEFeito() {
+        servidor.responderComCabecalho(429, "{\"error\":{\"message\":\"Resource has been exhausted\"}}", "Retry-After", "1");
+        servidor.responder(200, respostaDoLote(1));
+
+        long inicio = System.nanoTime();
+        assertThat(gemini.paraTrechos("Titulo", trechos(1))).hasSize(1);
+        Duration gasto = Duration.ofNanos(System.nanoTime() - inicio);
+
+        assertThat(servidor.recebidas()).hasSize(2);
+        assertThat(gasto).as("a ingestão espera o Retry-After de 1 s").isGreaterThanOrEqualTo(Duration.ofMillis(900));
+    }
+
+    // ---------------------------------------------------------------------
+    // M4: o embedding da pergunta não herda a espera da ingestão (uma tentativa, limite total curto)
+    // ---------------------------------------------------------------------
+
+    private static final String LIMITE_DE_USO = "{\"error\":{\"message\":\"Resource has been exhausted\"}}";
+
+    /** Um cliente cujas esperas da ingestão são longas (2 s por tentativa): se a consulta esperasse, o teste notaria. */
+    private EmbeddingsGemini comEsperaLonga(Duration limiteDaConsulta) {
+        return new EmbeddingsGemini(servidor.urlBase(), CHAVE, "gemini-embedding-2", 768, Duration.ofSeconds(2), limiteDaConsulta);
+    }
+
+    @Test
+    void o429NaPerguntaFalhaNaHoraSemSegundaChamadaESemEspera() {
+        for (int i = 0; i < 4; i++) {
+            servidor.responder(429, LIMITE_DE_USO);
+        }
+        EmbeddingsGemini cliente = comEsperaLonga(Duration.ofSeconds(5));
+
+        long inicio = System.nanoTime();
+        assertThatThrownBy(() -> cliente.paraConsulta("pergunta")).isInstanceOf(EmbeddingsIndisponivelException.class)
+                .hasMessageContaining("429").hasMessageNotContaining(CHAVE);
+        Duration gasto = Duration.ofNanos(System.nanoTime() - inicio);
+
+        assertThat(servidor.recebidas()).as("uma chamada só").hasSize(1);
+        assertThat(gasto).as("nenhuma espera (a da ingestão seria de 2 s, 4 s e 6 s)").isLessThan(Duration.ofMillis(1500));
+    }
+
+    @Test
+    void o429NaPerguntaNaoEsperaNemORetryAfterDoGemini() {
+        servidor.responderComCabecalho(429, LIMITE_DE_USO, "Retry-After", "20");
+        servidor.responder(200, "{\"embedding\":{\"values\":" + valores(true, 768) + "}}");
+        EmbeddingsGemini cliente = comEsperaLonga(Duration.ofSeconds(5));
+
+        long inicio = System.nanoTime();
+        assertThatThrownBy(() -> cliente.paraConsulta("pergunta")).isInstanceOf(EmbeddingsIndisponivelException.class);
+        Duration gasto = Duration.ofNanos(System.nanoTime() - inicio);
+
+        assertThat(servidor.recebidas()).hasSize(1);
+        assertThat(gasto).isLessThan(Duration.ofMillis(1500));
+    }
+
+    @Test
+    void oErroDeServidorNaPerguntaFalhaNaHoraSemTentarDeNovo() {
+        for (int status : List.of(500, 502, 503, 504)) {
+            servidor.limpar();
+            servidor.responder(status, "{\"error\":{\"message\":\"Indisponível\"}}");
+            servidor.responder(200, "{\"embedding\":{\"values\":" + valores(true, 768) + "}}");
+            EmbeddingsGemini cliente = comEsperaLonga(Duration.ofSeconds(5));
+
+            long inicio = System.nanoTime();
+            assertThatThrownBy(() -> cliente.paraConsulta("pergunta")).as("status " + status)
+                    .isInstanceOf(EmbeddingsIndisponivelException.class).hasMessageContaining(String.valueOf(status));
+            Duration gasto = Duration.ofNanos(System.nanoTime() - inicio);
+
+            assertThat(servidor.recebidas()).as("status " + status + ": uma chamada só").hasSize(1);
+            assertThat(gasto).as("status " + status).isLessThan(Duration.ofMillis(1500));
+        }
+    }
+
+    @Test
+    void aPerguntaQueTemRespostaBoaDeUmaChamadaSoPassaNormalmente() {
         servidor.responder(200, "{\"embedding\":{\"values\":" + valores(true, 768) + "}}");
 
-        assertThat(gemini.paraConsulta("pergunta")).hasSize(768);
-        assertThat(servidor.recebidas()).hasSize(2);
+        assertThat(comEsperaLonga(Duration.ofSeconds(5)).paraConsulta("pergunta")).hasSize(768);
+        assertThat(servidor.recebidas()).hasSize(1);
+    }
+
+    @Test
+    void servidorLentoEstouraOLimiteDaPerguntaEAMensagemNaoTemAChaveNemOEndereco() {
+        servidor.responderDepoisDe(Duration.ofSeconds(3), 200, "{\"embedding\":{\"values\":" + valores(true, 768) + "}}");
+        EmbeddingsGemini cliente = comEsperaLonga(Duration.ofMillis(400));
+
+        long inicio = System.nanoTime();
+        assertThatThrownBy(() -> cliente.paraConsulta("pergunta")).isInstanceOf(EmbeddingsIndisponivelException.class)
+                .hasMessageContaining("não respondeu").hasMessageNotContaining(CHAVE).hasMessageNotContaining("127.0.0.1");
+        Duration gasto = Duration.ofNanos(System.nanoTime() - inicio);
+
+        assertThat(gasto).as("estourou perto do limite, não nos 3 s do servidor").isLessThan(Duration.ofMillis(2000));
+        assertThat(servidor.recebidas()).hasSize(1);
+    }
+
+    @Test
+    void oLimiteDaPerguntaNaoMordeAIngestao() {
+        // a ingestão tem o limite dela (60 s por tentativa): um lote que demora mais que o da pergunta passa
+        servidor.responderDepoisDe(Duration.ofMillis(700), 200, respostaDoLote(1));
+        EmbeddingsGemini cliente = comEsperaLonga(Duration.ofMillis(200));
+
+        assertThat(cliente.paraTrechos("Titulo", trechos(1))).hasSize(1);
+        assertThat(servidor.recebidas()).hasSize(1);
+    }
+
+    @Test
+    void aChaveNaoSaiNaMensagemDoLimiteDeUsoDaPergunta() {
+        servidor.responder(429, "{\"error\":{\"message\":\"Quota exceeded for key " + CHAVE + "\"}}");
+
+        assertThatThrownBy(() -> gemini.paraConsulta("pergunta")).isInstanceOf(EmbeddingsIndisponivelException.class)
+                .hasMessageNotContaining(CHAVE).hasMessageNotContaining("AIzaSy");
     }
 
     @Test

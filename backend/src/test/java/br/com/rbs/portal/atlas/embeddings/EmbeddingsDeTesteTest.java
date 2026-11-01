@@ -97,14 +97,28 @@ class EmbeddingsDeTesteTest {
         ConfiguracaoDeProvedores config = new ConfiguracaoDeProvedores("", "", "", "none", "chave-do-gemini", "http://localhost:1", "gemini-embedding-2");
         EmbeddingsConfig escolha = new EmbeddingsConfig();
 
-        assertThat(escolha.provedorDeEmbeddings(config, "gemini", Duration.ZERO)).isInstanceOf(EmbeddingsGemini.class);
-        assertThat(escolha.provedorDeEmbeddings(config, " TESTE ", Duration.ZERO)).isInstanceOf(EmbeddingsDeTeste.class);
-        assertThat(escolha.provedorDeEmbeddings(config, "none", Duration.ZERO)).isInstanceOf(EmbeddingsDesligado.class);
-        assertThat(escolha.provedorDeEmbeddings(config, "", Duration.ZERO)).isInstanceOf(EmbeddingsDesligado.class);
-        assertThat(escolha.provedorDeEmbeddings(config, "inventado", Duration.ZERO)).as("erro de digitação não derruba a API")
+        assertThat(escolha.provedorDeEmbeddings(config, "gemini", Duration.ZERO, Duration.ofSeconds(5))).isInstanceOf(EmbeddingsGemini.class);
+        assertThat(escolha.provedorDeEmbeddings(config, " TESTE ", Duration.ZERO, Duration.ofSeconds(5))).isInstanceOf(EmbeddingsDeTeste.class);
+        assertThat(escolha.provedorDeEmbeddings(config, "none", Duration.ZERO, Duration.ofSeconds(5))).isInstanceOf(EmbeddingsDesligado.class);
+        assertThat(escolha.provedorDeEmbeddings(config, "", Duration.ZERO, Duration.ofSeconds(5))).isInstanceOf(EmbeddingsDesligado.class);
+        assertThat(escolha.provedorDeEmbeddings(config, "inventado", Duration.ZERO, Duration.ofSeconds(5))).as("erro de digitação não derruba a API")
                 .isInstanceOf(EmbeddingsDesligado.class);
-        assertThat(escolha.provedorDeEmbeddings(config, "gemini", Duration.ZERO).ligado()).isTrue();
+        assertThat(escolha.provedorDeEmbeddings(config, "gemini", Duration.ZERO, Duration.ofSeconds(5)).ligado()).isTrue();
         ConfiguracaoDeProvedores semChave = new ConfiguracaoDeProvedores("", "", "", "none", "", "http://localhost:1", "gemini-embedding-2");
-        assertThat(escolha.provedorDeEmbeddings(semChave, "gemini", Duration.ZERO).ligado()).isFalse();
+        assertThat(escolha.provedorDeEmbeddings(semChave, "gemini", Duration.ZERO, Duration.ofSeconds(5)).ligado()).isFalse();
+    }
+
+    @Test
+    void oLimiteDaConsultaDaConfiguracaoChegaAoClienteDoGemini() {
+        try (var servidor = br.com.rbs.portal.atlas.diagnostico.ServidorHttpFalso.iniciar()) {
+            servidor.responderDepoisDe(Duration.ofSeconds(3), 200, "{}");
+            ConfiguracaoDeProvedores config = new ConfiguracaoDeProvedores("", "", "", "none", "chave-do-gemini", servidor.urlBase(), "gemini-embedding-2");
+            ProvedorDeEmbeddings gemini = new EmbeddingsConfig().provedorDeEmbeddings(config, "gemini", Duration.ZERO, Duration.ofMillis(300));
+
+            long inicio = System.nanoTime();
+            assertThatThrownBy(() -> gemini.paraConsulta("p")).isInstanceOf(EmbeddingsIndisponivelException.class).hasMessageContaining("não respondeu");
+
+            assertThat(Duration.ofNanos(System.nanoTime() - inicio)).isLessThan(Duration.ofSeconds(2));
+        }
     }
 }

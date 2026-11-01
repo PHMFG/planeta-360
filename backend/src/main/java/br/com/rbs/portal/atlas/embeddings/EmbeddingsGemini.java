@@ -2,17 +2,20 @@ package br.com.rbs.portal.atlas.embeddings;
 
 import java.net.URI;
 import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.MediaType;
-import org.springframework.http.client.JdkClientHttpRequestFactory;
-import org.springframework.web.client.RestClient;
-import org.springframework.web.client.RestClientException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -25,8 +28,12 @@ import tools.jackson.databind.json.JsonMapper;
  * <ul>
  *   <li>Lotes de até {@value #TAMANHO_DO_LOTE} itens (o limite de itens por lote não está publicado): num 400, o lote se divide ao
  *       meio, até achar o item que o Gemini não aceita;</li>
- *   <li>429 espera e tenta de novo (até {@value #TENTATIVAS_NO_429} vezes, respeitando o {@code Retry-After}); 500 a 504 tentam mais
- *       uma vez;</li>
+ *   <li>na <b>ingestão</b> ({@link #paraTrechos}), 429 espera e tenta de novo (até {@value #TENTATIVAS_NO_429} vezes, respeitando o
+ *       {@code Retry-After}) e 500 a 504 tentam mais uma vez; cada tentativa tem até 60 s;</li>
+ *   <li>na <b>pergunta</b> ({@link #paraConsulta}), que um turno do Atlas espera de pé, é uma tentativa só: sem espera no 429 nem nos
+ *       5xx, e com um limite total curto (5 s, {@code atlas.embeddings.limite-da-consulta}) que vai até o último byte da resposta.
+ *       Falhou ou estourou o limite, é {@link EmbeddingsIndisponivelException} e a busca segue só com a lista textual (modo
+ *       degradado). Em 195 buscas reais, 5% levaram uns 31 s só no embedding, por esperar o 429 como a ingestão espera;</li>
  *   <li>a norma é conferida: fora de 1 ± 0,01, o vetor é normalizado; número de dimensões diferente de 768, valor que não é um número
  *       finito ({@code null}, texto, {@code 1e40}) e vetor só de zeros são erro ({@link EmbeddingsIndisponivelException}), porque o
  *       cosseno do pgvector daria NaN;</li>
@@ -41,6 +48,9 @@ public class EmbeddingsGemini implements ProvedorDeEmbeddings {
     static final int TENTATIVAS_NO_429 = 4;
     private static final String VETOR_INVALIDO = "O Gemini devolveu um vetor inválido";
     private static final Duration LIMITE_DA_ESPERA = Duration.ofSeconds(30);
+    private static final Duration LIMITE_DA_INGESTAO = Duration.ofSeconds(60);
+    /** O limite total da pergunta quando ninguém configura outro. */
+    public static final Duration LIMITE_PADRAO_DA_CONSULTA = Duration.ofSeconds(5);
     private static final Logger log = LoggerFactory.getLogger(EmbeddingsGemini.class);
     private static final JsonMapper JSON = JsonMapper.builder().build();
 
@@ -53,7 +63,8 @@ public class EmbeddingsGemini implements ProvedorDeEmbeddings {
     private final String modelo;
     private final int dimensoes;
     private final Duration esperaNo429;
-    private final RestClient http;
+    private final Duration limiteDaConsulta;
+    private final HttpClient http;
 
     /**
      * @param baseUrl     o endereço do Gemini, sem barra no fim ({@code https://generativelanguage.googleapis.com})
@@ -61,18 +72,25 @@ public class EmbeddingsGemini implements ProvedorDeEmbeddings {
      * @param modelo      {@code gemini-embedding-2}
      * @param dimensoes   768
      * @param esperaNo429 quanto esperar antes de tentar de novo depois de um 429 sem {@code Retry-After}
-     *                    (cresce a cada tentativa; os testes passam {@link Duration#ZERO})
+     *                    (cresce a cada tentativa; os testes passam {@link Duration#ZERO}); só a ingestão espera
      */
     public EmbeddingsGemini(String baseUrl, String chave, String modelo, int dimensoes, Duration esperaNo429) {
+        this(baseUrl, chave, modelo, dimensoes, esperaNo429, LIMITE_PADRAO_DA_CONSULTA);
+    }
+
+    /**
+     * @param limiteDaConsulta o tempo total que a pergunta ({@link #paraConsulta}) tem para o Gemini responder, em uma tentativa só;
+     *                         nulo, zero ou negativo vale {@link #LIMITE_PADRAO_DA_CONSULTA}
+     */
+    public EmbeddingsGemini(String baseUrl, String chave, String modelo, int dimensoes, Duration esperaNo429, Duration limiteDaConsulta) {
         this.baseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
         this.chave = chave == null || chave.isBlank() ? null : chave.strip();
         this.modelo = modelo;
         this.dimensoes = dimensoes;
         this.esperaNo429 = esperaNo429;
-        HttpClient cliente = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).followRedirects(HttpClient.Redirect.NEVER).build();
-        JdkClientHttpRequestFactory fabrica = new JdkClientHttpRequestFactory(cliente);
-        fabrica.setReadTimeout(Duration.ofSeconds(60));
-        this.http = RestClient.builder().requestFactory(fabrica).build();
+        this.limiteDaConsulta = limiteDaConsulta == null || limiteDaConsulta.isZero() || limiteDaConsulta.isNegative()
+                ? LIMITE_PADRAO_DA_CONSULTA : limiteDaConsulta;
+        this.http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).followRedirects(HttpClient.Redirect.NEVER).build();
     }
 
     @Override
@@ -138,13 +156,21 @@ public class EmbeddingsGemini implements ProvedorDeEmbeddings {
     // A pergunta
     // ---------------------------------------------------------------------
 
+    /**
+     * Uma tentativa só, com o limite total da pergunta: um 429 ou um 5xx não esperam nem tentam de novo (a busca segue sem o vetor), e
+     * o servidor que não responde a tempo é erro, como qualquer falha do provedor.
+     */
     @Override
     public float[] paraConsulta(String consulta) {
         exigirChave();
         String corpo = JSON.writeValueAsString(Map.of(
                 "content", Map.of("parts", List.of(Map.of("text", ProvedorDeEmbeddings.textoDaConsulta(consulta)))),
                 "embedContentConfig", Map.of("outputDimensionality", dimensoes)));
-        return vetorDe(lerResposta(enviar(":embedContent", corpo)).path("embedding").path("values"));
+        Resposta resposta = umaChamada(":embedContent", corpo, limiteDaConsulta);
+        if (resposta.status() == 429) {
+            throw new EmbeddingsIndisponivelException("O Gemini recusou por limite de uso (429).");
+        }
+        return vetorDe(lerResposta(resposta).path("embedding").path("values"));
     }
 
     // ---------------------------------------------------------------------
@@ -157,21 +183,14 @@ public class EmbeddingsGemini implements ProvedorDeEmbeddings {
         }
     }
 
-    /** Faz a chamada, esperando e tentando de novo no 429 e uma vez nos 5xx. Devolve a resposta (com o status) para quem chamou decidir. */
+    /**
+     * A chamada da ingestão: espera e tenta de novo no 429 e uma vez nos 5xx. Devolve a resposta (com o status) para quem chamou decidir.
+     */
     private Resposta enviar(String acao, String corpo) {
-        URI uri = URI.create(baseUrl + "/v1beta/models/" + modelo + acao);
         int tentativa = 0;
         while (true) {
             tentativa++;
-            Resposta resposta;
-            try {
-                resposta = http.post().uri(uri).contentType(MediaType.APPLICATION_JSON).header("x-goog-api-key", chave).body(corpo)
-                        .exchange((pedido, retorno) -> new Resposta(retorno.getStatusCode().value(),
-                                new String(retorno.getBody().readAllBytes(), StandardCharsets.UTF_8), retorno.getHeaders().getFirst("Retry-After")));
-            } catch (RestClientException | IllegalStateException falha) {
-                // Só o nome da exceção: o texto dela pode trazer o endereço da chamada, e a chave nunca está nele, mas não custa.
-                throw new EmbeddingsIndisponivelException("Não consegui falar com o Gemini (" + falha.getClass().getSimpleName() + ").");
-            }
+            Resposta resposta = umaChamada(acao, corpo, LIMITE_DA_INGESTAO);
             boolean limite = resposta.status() == 429;
             boolean instavel = resposta.status() >= 500 && resposta.status() <= 504;
             if (limite && tentativa < TENTATIVAS_NO_429) {
@@ -187,6 +206,41 @@ public class EmbeddingsGemini implements ProvedorDeEmbeddings {
             }
             return resposta;
         }
+    }
+
+    /**
+     * Uma chamada, sem tentar de novo: o tempo {@code limite} vale para a resposta inteira (cabeçalhos e corpo), e quando estoura a
+     * chamada é cancelada. Falha de rede e tempo esgotado viram {@link EmbeddingsIndisponivelException} com o nome da causa, nunca o
+     * texto dela (que pode trazer o endereço) e nunca a chave.
+     */
+    private Resposta umaChamada(String acao, String corpo, Duration limite) {
+        HttpRequest pedido = HttpRequest.newBuilder(URI.create(baseUrl + "/v1beta/models/" + modelo + acao)).timeout(limite)
+                .header("Content-Type", "application/json").header("x-goog-api-key", chave)
+                .POST(HttpRequest.BodyPublishers.ofString(corpo)).build();
+        CompletableFuture<HttpResponse<byte[]>> envio = http.sendAsync(pedido, HttpResponse.BodyHandlers.ofByteArray());
+        try {
+            HttpResponse<byte[]> retorno = envio.get(Math.max(1, limite.toMillis()), TimeUnit.MILLISECONDS);
+            return new Resposta(retorno.statusCode(), new String(retorno.body(), StandardCharsets.UTF_8),
+                    retorno.headers().firstValue("Retry-After").orElse(null));
+        } catch (TimeoutException estourou) {
+            envio.cancel(true);
+            throw new EmbeddingsIndisponivelException(naoRespondeu(limite));
+        } catch (ExecutionException falha) {
+            Throwable causa = falha.getCause() == null ? falha : falha.getCause();
+            if (causa instanceof HttpTimeoutException) {
+                throw new EmbeddingsIndisponivelException(naoRespondeu(limite));
+            }
+            // Só o nome da exceção: o texto dela pode trazer o endereço da chamada, e a chave nunca está nele, mas não custa.
+            throw new EmbeddingsIndisponivelException("Não consegui falar com o Gemini (" + causa.getClass().getSimpleName() + ").");
+        } catch (InterruptedException interrompida) {
+            envio.cancel(true);
+            Thread.currentThread().interrupt();
+            throw new EmbeddingsIndisponivelException("A espera pelo Gemini foi interrompida.");
+        }
+    }
+
+    private static String naoRespondeu(Duration limite) {
+        return "O Gemini não respondeu em " + (limite.toMillis() % 1000 == 0 ? limite.toSeconds() + " s" : limite.toMillis() + " ms") + ".";
     }
 
     private void esperar(Resposta resposta, int tentativa) {

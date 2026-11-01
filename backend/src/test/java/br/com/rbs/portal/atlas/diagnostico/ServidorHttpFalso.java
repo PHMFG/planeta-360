@@ -7,6 +7,7 @@ import java.io.UncheckedIOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -32,7 +33,7 @@ public final class ServidorHttpFalso implements AutoCloseable {
         }
     }
 
-    private record Resposta(int status, String corpo) {
+    private record Resposta(int status, String corpo, Duration atraso, Map<String, String> cabecalhos) {
     }
 
     private final HttpServer servidor;
@@ -63,7 +64,17 @@ public final class ServidorHttpFalso implements AutoCloseable {
     }
 
     public synchronized void responder(int status, String json) {
-        respostas.add(new Resposta(status, json));
+        respostas.add(new Resposta(status, json, Duration.ZERO, Map.of()));
+    }
+
+    /** Como {@link #responder(int, String)}, mas só responde depois do {@code atraso} (para o teste do tempo limite). */
+    public synchronized void responderDepoisDe(Duration atraso, int status, String json) {
+        respostas.add(new Resposta(status, json, atraso, Map.of()));
+    }
+
+    /** Como {@link #responder(int, String)}, com mais um cabeçalho na resposta (um {@code Retry-After}, por exemplo). */
+    public synchronized void responderComCabecalho(int status, String json, String nome, String valor) {
+        respostas.add(new Resposta(status, json, Duration.ZERO, Map.of(nome, valor)));
     }
 
     public List<Recebida> recebidas() {
@@ -90,10 +101,20 @@ public final class ServidorHttpFalso implements AutoCloseable {
             resposta = respostas.poll();
         }
         if (resposta == null) {
-            resposta = new Resposta(500, "{\"error\":{\"message\":\"o teste não enfileirou resposta\"}}");
+            resposta = new Resposta(500, "{\"error\":{\"message\":\"o teste não enfileirou resposta\"}}", Duration.ZERO, Map.of());
+        }
+        if (!resposta.atraso().isZero()) {
+            try {
+                Thread.sleep(resposta.atraso());
+            } catch (InterruptedException interrompida) {
+                Thread.currentThread().interrupt();
+                troca.close();
+                return;
+            }
         }
         byte[] saida = resposta.corpo().getBytes(StandardCharsets.UTF_8);
         troca.getResponseHeaders().add("Content-Type", "application/json");
+        resposta.cabecalhos().forEach((nome, valor) -> troca.getResponseHeaders().add(nome, valor));
         troca.sendResponseHeaders(resposta.status(), saida.length);
         troca.getResponseBody().write(saida);
         troca.close();
