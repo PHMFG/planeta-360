@@ -2027,7 +2027,7 @@ Para montar o formulário: as edições vêm da rota 6, as parcerias (com a `cot
 **A leitura roda na hora**, antes de gravar: o texto é extraído (uma página por vez, no máximo 300 páginas) e o detector de dados pessoais roda. O documento nasce:
 
 - `AGUARDANDO_APROVACAO`, com `paginas` e `contemDadosPessoais`; ou
-- `ERRO`, **sem `aprovado_por`**, se não houver texto (`"Sem texto extraível; OCR fora do escopo."`, um PDF só de imagem), se o PDF tiver senha (`"O PDF está protegido por senha."`), estiver corrompido (`"O PDF está corrompido ou não pôde ser lido."`) ou passar de 300 páginas (`"O PDF tem N páginas e o limite é 300."`). Esse caso se corrige com um **novo envio**, e não reindexando.
+- `ERRO`, **sem `aprovado_por`**, se não houver texto (`"Sem texto extraível; OCR fora do escopo."`, um PDF só de imagem), se o PDF tiver senha (`"O PDF está protegido por senha."`), estiver corrompido (`"O PDF está corrompido ou não pôde ser lido."`, o que vale também para um PDF sem nenhuma página; `paginas` fica `null`) ou passar de 300 páginas (`"O PDF tem N páginas e o limite é 300."`). Esse caso se corrige com um **novo envio**, e não reindexando.
 
 **201**: o **Documento** criado (veja acima). O cabeçalho `Location` aponta para `/api/documentos/{id}`.
 

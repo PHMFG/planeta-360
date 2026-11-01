@@ -110,7 +110,7 @@ public class DocumentoService {
             paginas = extracao.totalDePaginas();
         } catch (ExtracaoFalhouException semTexto) {
             erro = semTexto.getMessage();
-            paginas = semTexto.paginas();
+            paginas = semTexto.paginas() != null && semTexto.paginas() >= 1 ? semTexto.paginas() : null;   // o CHECK do banco pede 1 ou mais
         }
         boolean dadosPessoais = extracao != null && detector.contemDadosPessoais(extracao.paginas());
         Integer extracaoMs = extracao == null ? null : (int) extracao.milissegundos();

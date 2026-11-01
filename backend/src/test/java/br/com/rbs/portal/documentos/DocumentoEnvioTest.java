@@ -204,6 +204,18 @@ class DocumentoEnvioTest extends ApoioDeDocumentos {
     }
 
     @Test
+    void pdfSemNenhumaPaginaNasceEmErroComAFraseDoCorrompidoESemViolarOCheckDeSuasPaginas() throws Exception {
+        MvcTestResult resposta = enviar(entrar(RBS), "vazio.pdf", ExtratorDeTextoTest.pdfSemPaginas(), global("Sem páginas", "teste-sem-paginas"));
+
+        assertThat(resposta).hasStatus(HttpStatus.CREATED);
+        assertThat(lerJson(resposta, "$.status")).isEqualTo("ERRO");
+        assertThat(lerJson(resposta, "$.erro")).isEqualTo("O PDF está corrompido ou não pôde ser lido.");
+        assertThat(lerJson(resposta, "$.paginas")).isNull();
+        assertThat(lerJson(resposta, "$.aprovadoPor")).isNull();
+        assertThat(lista(resposta, "$.acoes")).containsExactly("RECUSAR");
+    }
+
+    @Test
     void documentoComCpfEMarcadoENaoPodeSerAprovado() {
         MvcTestResult resposta = enviar(entrar(RBS), "lista.pdf", KitDeDocumentos.por("D11").conteudo(), daParceria("Cliente Verde", "teste-lista"));
 

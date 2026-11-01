@@ -49,6 +49,22 @@ class ExtratorDeTextoTest {
         }
     }
 
+    /** Um PDF válido, mas sem nenhuma página. */
+    static byte[] pdfSemPaginas() throws Exception {
+        try (PDDocument documento = new PDDocument(); ByteArrayOutputStream saida = new ByteArrayOutputStream()) {
+            documento.save(saida);
+            return saida.toByteArray();
+        }
+    }
+
+    @Test
+    void pdfSemNenhumaPaginaEUmPdfCorrompidoEDizPaginasNulasEnaoZero() throws Exception {
+        assertThatThrownBy(() -> extrator.extrairPdf(pdfSemPaginas())).isInstanceOfSatisfying(ExtracaoFalhouException.class, erro -> {
+            assertThat(erro.getMessage()).isEqualTo("O PDF está corrompido ou não pôde ser lido.");
+            assertThat(erro.paginas()).as("0 páginas violaria o CHECK paginas >= 1 do documento").isNull();
+        });
+    }
+
     @Test
     void extraiOTextoDeCadaPaginaNaOrdemEComONumeroDela() throws Exception {
         Extracao extracao = extrator.extrairPdf(pdf("Primeira pagina", "Segunda pagina", "Terceira pagina"));

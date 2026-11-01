@@ -33,6 +33,7 @@ public class ExtratorDeTexto {
     public static final int LIMITE_DE_PAGINAS = 300;
 
     public static final String SEM_TEXTO = "Sem texto extraível; OCR fora do escopo.";
+    public static final String PDF_CORROMPIDO = "O PDF está corrompido ou não pôde ser lido.";
 
     /** Quanto o primeiro pedaço de uma linha precisa estar à direita da margem (em pontos) para contar como recuo de tabela. */
     private static final double RECUO_DE_TABELA = 3.0;
@@ -96,6 +97,10 @@ public class ExtratorDeTexto {
         long inicio = System.nanoTime();
         try (PDDocument documento = Loader.loadPDF(conteudo)) {
             int total = documento.getNumberOfPages();
+            if (total == 0) {
+                // Um PDF sem nenhuma página é um arquivo quebrado, e "0 páginas" violaria o CHECK paginas >= 1 do documento.
+                throw new ExtracaoFalhouException(PDF_CORROMPIDO, null);
+            }
             if (total > LIMITE_DE_PAGINAS) {
                 throw new ExtracaoFalhouException("O PDF tem " + total + " páginas e o limite é " + LIMITE_DE_PAGINAS + ".", total);
             }
@@ -119,7 +124,7 @@ public class ExtratorDeTexto {
         } catch (ExtracaoFalhouException conhecida) {
             throw conhecida;
         } catch (IOException | RuntimeException ilegivel) {
-            throw new ExtracaoFalhouException("O PDF está corrompido ou não pôde ser lido.", null);
+            throw new ExtracaoFalhouException(PDF_CORROMPIDO, null);
         }
     }
 
