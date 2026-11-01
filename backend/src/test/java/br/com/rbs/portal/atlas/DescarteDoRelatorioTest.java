@@ -3,10 +3,21 @@ package br.com.rbs.portal.atlas;
 import static br.com.rbs.portal.ApoioDeTeste.corpo;
 import static br.com.rbs.portal.ApoioDeTeste.lerJson;
 import static br.com.rbs.portal.ApoioDeTeste.lerLista;
+import static br.com.rbs.portal.atlas.ApoioDoAtlas.requisicao;
+import static br.com.rbs.portal.atlas.ApoioDoAtlas.usuario;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import br.com.rbs.portal.TesteDeIntegracao;
 import br.com.rbs.portal.acesso.SessaoDeApi;
+import br.com.rbs.portal.atlas.checagem.FontesDoTurno;
+import br.com.rbs.portal.atlas.contexto.AtlasContexto;
+import br.com.rbs.portal.atlas.contexto.AtlasContextoFabrica;
+import br.com.rbs.portal.atlas.ferramentas.Execucao;
+import br.com.rbs.portal.atlas.ferramentas.RegistroDeFerramentas;
+import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.DefinicaoDeFerramenta;
+import br.com.rbs.portal.comum.ConflitoException;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -22,8 +33,8 @@ import org.springframework.transaction.annotation.Transactional;
  * com o relatório que o botão monta (o plano B, sem modelo). O relatório {@code MONTANDO} ou {@code AGUARDANDO_RESPOSTA} vira
  * {@code DESCARTADO} e a resposta é o corpo da rota 47; o cartão pendente vira {@code CANCELADA}, a chamada que ele deixou aberta
  * recebe {@code cancel} e o histórico ganha {@code ALTERACAO_STATUS} em nome de quem descartou; descartar de novo não muda nada;
- * pronto dá 409; e cada erro de acesso (401, 403 sem CSRF, 403 da RBS, 404 de outra marca e de relatório que não existe, 403 de aba
- * fechada) e o turno em andamento (409). Com o modelo de linguagem, a conversa que continua depois do descarte está em
+ * pronto dá 409; e cada erro de acesso (401, 403 sem CSRF, 403 da RBS, 404 de outra marca, de relatório que não existe e de outra
+ * pessoa da mesma parceria, que não é a dona do relatório, 403 de aba fechada) e o turno em andamento (409). Com o modelo de linguagem, a conversa que continua depois do descarte está em
  * {@link DescarteDoRelatorioComLlmTest}; com o relatório desligado, em {@link AtlasSoChatTest}. Cada teste é desfeito no fim
  * (@Transactional).
  */
@@ -48,6 +59,15 @@ class DescarteDoRelatorioTest {
 
     @Autowired
     JdbcClient jdbc;
+
+    @Autowired
+    AtlasContextoFabrica contextos;
+
+    @Autowired
+    RegistroDeFerramentas registro;
+
+    @Autowired
+    AtlasRepositorio repositorio;
 
     long amarelo() {
         return SessaoDeApi.parceriaDe2027(jdbc, "Cliente Amarelo");
@@ -103,6 +123,11 @@ class DescarteDoRelatorioTest {
                         SELECT usuario_id, parceria_id, valor_anterior, valor_novo, detalhe
                         FROM historico WHERE acao = 'ALTERACAO_STATUS' AND entidade = 'atlas_relatorio' AND entidade_id = :id ORDER BY id
                         """).param("id", relatorio).query().listOfRows();
+    }
+
+    /** Os nomes das ferramentas que o modelo receberia agora nesta conversa. */
+    List<String> ferramentasOferecidas(long conversa) {
+        return registro.oferecidas(repositorio.relatorioAtivoDaConversa(conversa), true).stream().map(DefinicaoDeFerramenta::nome).toList();
     }
 
     long idDoUsuario(String email) {
@@ -197,8 +222,8 @@ class DescarteDoRelatorioTest {
         assertThat(historicoDoDescarte(relatorio)).hasSize(1);
         assertThat(contar("SELECT count(*) FROM atlas_mensagem m JOIN atlas_relatorio r ON r.conversa_id = m.conversa_id WHERE r.id = ?",
                 relatorio)).isEqualTo(mensagens);
-        // e descartado de novo por outra pessoa da parceria também (a rota não confere quem descartou antes)
-        assertThat(descartar(entrar(AGENCIA), relatorio)).hasStatus(HttpStatus.OK);
+        // outra pessoa da parceria não é a dona: continua 404, também com o relatório já descartado
+        assertThat(descartar(entrar(AGENCIA), relatorio)).hasStatus(HttpStatus.NOT_FOUND);
         assertThat(historicoDoDescarte(relatorio)).hasSize(1);
     }
 
@@ -224,16 +249,72 @@ class DescarteDoRelatorioTest {
     }
 
     @Test
-    void quemEDaParceriaDescarta_eAConversaVoltaALivreParaOutroRelatorio() {
-        // o relatório é da parceria: outro Admin Patrocinador dela também o descarta
+    void soODonoDoRelatorioDescartaEOutroDaMesmaParceriaRecebe404ComAFraseDasRotas45E46() {
+        // o relatório é de quem o criou: a rota 65 seleciona por id e dono, como as rotas 45 e 46 (conversa e cartão)
+        SessaoDeApi dono = entrar(AMARELO);
+        MvcTestResult aberta = abrirPeloBotao(dono);
+        long conversa = numero(aberta, "$.conversaId");
+        long cartao = numero(aberta, "$.itens[2].solicitacaoId");
+        long relatorio = relatorioDaConversa(conversa);
+        SessaoDeApi agencia = entrar(AGENCIA);
+
+        MvcTestResult resposta = descartar(agencia, relatorio);
+
+        assertThat(resposta).hasStatus(HttpStatus.NOT_FOUND);
+        assertThat(lerJson(resposta, "$.detail")).isEqualTo(NAO_ENCONTRADO);
+        // as rotas 45 e 46 dão 404 a esta mesma pessoa, e a rota 47 mostra o relatório (ela é da parceria)
+        assertThat(agencia.get("/api/atlas/conversas/" + conversa)).hasStatus(HttpStatus.NOT_FOUND);
+        assertThat(agencia.post("/api/atlas/solicitacoes/" + cartao + "/respostas", "{\"acao\":\"cancel\"}"))
+                .hasStatus(HttpStatus.NOT_FOUND);
+        assertThat(agencia.get("/api/atlas/relatorios/" + relatorio)).hasStatus(HttpStatus.OK);
+        // nada mudou: o relatório, o cartão e o histórico, e a conversa não ficou presa
+        assertThat(statusDoRelatorio(relatorio)).isEqualTo("AGUARDANDO_RESPOSTA");
+        assertThat(contar("SELECT count(*) FROM atlas_solicitacao WHERE id = ? AND status = 'PENDENTE'", cartao)).isEqualTo(1);
+        assertThat(historicoDoDescarte(relatorio)).isEmpty();
+        assertThat(contar("SELECT count(*) FROM atlas_conversa WHERE id = ? AND turno_desde IS NULL", conversa)).isEqualTo(1);
+        // o dono não fica com o cartão travado: responde sem o 409 de "já respondido"
+        assertThat(dono.post("/api/atlas/solicitacoes/" + cartao + "/respostas", ACCEPT_COMPLETO)).hasStatus(HttpStatus.OK);
+        assertThat(statusDoRelatorio(relatorio)).isEqualTo("PRONTO");
+    }
+
+    @Test
+    void outroDaParceriaRecebe404MesmoComAAbaFechadaEODonoRecebe403() {
         SessaoDeApi dono = entrar(AMARELO);
         long relatorio = relatorioDaConversa(numero(abrirPeloBotao(dono), "$.conversaId"));
+        jdbc.sql("UPDATE parceria_aba SET liberada = FALSE WHERE parceria_id = :p AND aba_id = (SELECT id FROM aba WHERE codigo = 'APLICACOES')")
+                .param("p", amarelo()).update();
 
-        MvcTestResult resposta = descartar(entrar(AGENCIA), relatorio);
+        // a ordem é a das rotas 45 e 46: a parceria, o dono e só então a aba
+        assertThat(descartar(entrar(AGENCIA), relatorio)).hasStatus(HttpStatus.NOT_FOUND);
+        assertThat(descartar(dono, relatorio)).hasStatus(HttpStatus.FORBIDDEN);
+        assertThat(statusDoRelatorio(relatorio)).isEqualTo("AGUARDANDO_RESPOSTA");
+    }
 
-        assertThat(resposta).hasStatus(HttpStatus.OK);
-        assertThat(historicoDoDescarte(relatorio)).hasSize(1).first().satisfies(linha -> assertThat(linha)
-                .containsEntry("usuario_id", idDoUsuario(AGENCIA)));
+    @Test
+    void depoisDeDescartarAConversaFicaLivreEORelatorioIniciarFuncionaDeNovo() {
+        SessaoDeApi dono = entrar(AMARELO);
+        long conversa = numero(abrirPeloBotao(dono), "$.conversaId");
+        long primeiro = relatorioDaConversa(conversa);
+        var pessoa = usuario(jdbc, AMARELO);
+        AtlasContexto contexto = contextos.para(pessoa, amarelo(), conversa, requisicao());
+        FontesDoTurno turno = new FontesDoTurno("Oi", 2027, LocalDate.of(2026, 11, 1));
+        String iniciar = "{\"modelo\":\"ATIVACAO_EVENTO\",\"objetivo\":\"Relatório da ativação\"}";
+        // com o relatório em andamento o modelo nem recebe relatorio_iniciar, e chamá-lo à força dá o 409
+        assertThat(ferramentasOferecidas(conversa)).doesNotContain("relatorio_iniciar");
+        assertThatThrownBy(() -> registro.executar(contexto, turno, registro.preparar(contexto, turno, "relatorio_iniciar", iniciar), "call_x"))
+                .isInstanceOf(ConflitoException.class).hasMessageContaining("Já existe um relatório sendo montado");
+
+        assertThat(descartar(dono, primeiro)).hasStatus(HttpStatus.OK);
+
+        // a conversa não espera mais o cartão: relatorio_iniciar volta à oferta e abre outro relatório
+        assertThat(ferramentasOferecidas(conversa)).contains("relatorio_iniciar").doesNotContain("relatorio_editar", "relatorio_finalizar");
+        Execucao feita = registro.executar(contexto, turno, registro.preparar(contexto, turno, "relatorio_iniciar", iniciar), "call_y");
+        long segundo = ((Number) AtlasJson.ler(feita.resultadoJson(), Map.class).get("relatorioId")).longValue();
+        assertThat(segundo).isGreaterThan(primeiro);
+        assertThat(statusDoRelatorio(primeiro)).isEqualTo("DESCARTADO");
+        assertThat(statusDoRelatorio(segundo)).isEqualTo("MONTANDO");
+        assertThat(contar("SELECT count(*) FROM atlas_relatorio WHERE conversa_id = ?", conversa)).isEqualTo(2);
+        assertThat(ferramentasOferecidas(conversa)).doesNotContain("relatorio_iniciar").contains("relatorio_editar", "relatorio_finalizar");
     }
 
     @Test

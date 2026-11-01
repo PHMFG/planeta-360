@@ -349,13 +349,15 @@ public class AtlasService {
      * Rota 65. Descarta o relatório de trabalho que a pessoa não quer mais: {@code MONTANDO} ou {@code AGUARDANDO_RESPOSTA} vira
      * {@code DESCARTADO}, o cartão pendente vira {@code CANCELADA} e a chamada que ele deixou aberta é fechada com {@code cancel}
      * (a conversa deixa de esperar a resposta e pode começar outro relatório). Devolve o mesmo corpo da rota 47. Ordem das
-     * respostas: 403 (RBS), 404 (não existe ou é de outra parceria), 403 (aba do modelo fechada para a marca), 409 (já está pronto;
-     * turno em andamento na conversa). Já descartado: 200 sem mudar nada, sem nova linha no histórico. O relatório é da parceria:
-     * qualquer Admin Patrocinador dela descarta. O turno da conversa é pego durante o descarte, como nas outras rotas do turno.
+     * respostas: 403 (RBS), 404 (não existe, é de outra parceria ou de outra pessoa da mesma parceria), 403 (aba do modelo fechada
+     * para a marca), 409 (já está pronto; turno em andamento na conversa). Já descartado: 200 sem mudar nada, sem nova linha no
+     * histórico. A seleção é por id e dono, como nas rotas 45 e 46: só descarta quem criou o relatório (que é o dono da conversa),
+     * e o outro Admin Patrocinador da parceria, que vê o relatório pela rota 47, recebe 404. O turno da conversa é pego durante o
+     * descarte, como nas outras rotas do turno.
      */
     public RelatorioAtlasDto descartarRelatorio(UsuarioAutenticado usuario, long relatorioId, HttpServletRequest requisicao) {
         verificador.exigirPatrocinador(usuario, VerificadorDeAcesso.SO_PATROCINADOR_USA_O_ATLAS);
-        LinhaDeRelatorio relatorio = relatorios.exigirAcesso(usuario, relatorioId);
+        LinhaDeRelatorio relatorio = relatorios.exigirAcessoDoDono(usuario, relatorioId);
         if ("PRONTO".equals(relatorio.status())) {
             throw new ConflitoException(DescarteDeRelatorios.JA_ESTA_PRONTO);
         }

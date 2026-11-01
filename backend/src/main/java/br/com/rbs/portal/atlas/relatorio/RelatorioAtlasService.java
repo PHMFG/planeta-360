@@ -626,11 +626,26 @@ public class RelatorioAtlasService {
 
     /**
      * O relatório que o usuário pode alcançar: 404 se não existe ou é de outra parceria (a mesma frase), 403 se a aba do modelo está
-     * fechada para a marca. É a conferência das rotas 47 e 65, que partem da mesma regra de acesso (o relatório é da parceria).
+     * fechada para a marca. É a conferência da rota 47 (o relatório é da parceria); a rota 65 usa {@link #exigirAcessoDoDono}.
      */
     public LinhaDeRelatorio exigirAcesso(UsuarioAutenticado usuario, long relatorioId) {
         LinhaDeRelatorio relatorio = repositorio.relatorio(relatorioId).orElseThrow(() -> new NaoEncontradoException(NAO_ENCONTRADO));
         exigirParceriaDoRecurso(usuario, relatorio.parceriaId());
+        verificador.exigirAbaLiberada(usuario, relatorio.parceriaId(), ler(relatorio).aba());
+        return relatorio;
+    }
+
+    /**
+     * O relatório que o usuário criou: a seleção "por id e dono" da rota 65, na ordem das rotas 45 e 46 (conversa e cartão): 404 se
+     * não existe ou é de outra parceria, 404 se é de outra pessoa da mesma parceria (a mesma frase), e só então 403 se a aba do
+     * modelo está fechada para a marca. Quem vê o relatório (rota 47) não é por isso quem pode descartá-lo: a conversa é do dono.
+     */
+    public LinhaDeRelatorio exigirAcessoDoDono(UsuarioAutenticado usuario, long relatorioId) {
+        LinhaDeRelatorio relatorio = repositorio.relatorio(relatorioId).orElseThrow(() -> new NaoEncontradoException(NAO_ENCONTRADO));
+        exigirParceriaDoRecurso(usuario, relatorio.parceriaId());
+        if (!relatorio.criadoPor().equals(usuario.id())) {
+            throw new NaoEncontradoException(NAO_ENCONTRADO);
+        }
         verificador.exigirAbaLiberada(usuario, relatorio.parceriaId(), ler(relatorio).aba());
         return relatorio;
     }
