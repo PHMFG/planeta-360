@@ -245,7 +245,7 @@ class AtlasSoChatTest {
         assertThat(lerJson(resposta, "$.itens[1].porModelo")).isEqualTo(true);
         assertThat(modelo.pedidos()).hasSize(2);
         for (PedidoAoLlm pedido : modelo.pedidos()) {
-            assertThat(nomesDasFerramentas(pedido)).containsExactly(LoopDoAgenteTest.CONSULTAR, LoopDoAgenteTest.BUSCAR);
+            assertThat(nomesDasFerramentas(pedido)).containsExactlyElementsOf(LoopDoAgenteTest.DO_CHAT);
             String prompt = pedido.mensagens().get(0).conteudo();
             assertThat(prompt).contains("Cliente Amarelo", "parceria_consultar", "ainda não está disponível nesta versão")
                     .doesNotContain("relatorio_", "O fluxo do relatório", "@MARCA@", "@DATA@");
@@ -275,7 +275,7 @@ class AtlasSoChatTest {
 
         assertThat(resposta).hasStatus(HttpStatus.OK);
         assertThat(lerLista(resposta, "$.itens[*].tipo")).containsExactly("usuario", "texto");
-        assertThat(modelo.pedidos()).allSatisfy(p -> assertThat(nomesDasFerramentas(p)).containsExactly(LoopDoAgenteTest.CONSULTAR, LoopDoAgenteTest.BUSCAR));
+        assertThat(modelo.pedidos()).allSatisfy(p -> assertThat(nomesDasFerramentas(p)).containsExactlyElementsOf(LoopDoAgenteTest.DO_CHAT));
         assertThat(contar("atlas_relatorio")).isZero();
         assertThat(contar("atlas_solicitacao")).isZero();
         assertThat(contar("atlas_calculo")).isZero();
@@ -321,7 +321,7 @@ class AtlasSoChatTest {
 
         assertThat(turno).hasStatus(HttpStatus.OK);
         assertThat(lerLista(turno, "$.itens[*].tipo")).containsExactly("usuario", "texto");
-        assertThat(nomesDasFerramentas(modelo.ultimoPedido())).containsExactly(LoopDoAgenteTest.CONSULTAR, LoopDoAgenteTest.BUSCAR);
+        assertThat(nomesDasFerramentas(modelo.ultimoPedido())).containsExactlyElementsOf(LoopDoAgenteTest.DO_CHAT);
         ProvedorRoteirizado.exigirHistoricoValido(modelo.ultimoPedido());
         assertThat(modelo.ultimoPedido().mensagens().stream().filter(m -> "assistant".equals(m.papel()))
                 .flatMap(m -> m.chamadas().stream()).map(c -> c.nome()).toList()).contains("relatorio_iniciar", "relatorio_solicitar_campos");

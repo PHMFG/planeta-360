@@ -16,6 +16,7 @@ import br.com.rbs.portal.atlas.checagem.FontesDoTurno;
 import br.com.rbs.portal.atlas.checagem.FontesDoTurno.Fonte;
 import br.com.rbs.portal.atlas.checagem.Frases;
 import br.com.rbs.portal.atlas.ferramentas.BuscarDocumentos;
+import br.com.rbs.portal.atlas.ferramentas.ContarDias;
 import br.com.rbs.portal.atlas.ferramentas.Execucao;
 import br.com.rbs.portal.atlas.ferramentas.RegistroDeFerramentas;
 import br.com.rbs.portal.atlas.ferramentas.RegistroDeFerramentas.Preparo;
@@ -145,6 +146,7 @@ public class LoopDoAgente {
     public static final Map<String, String> ETAPAS = Map.ofEntries(
             Map.entry(RelatorioFerramentas.CONSULTAR, "Consultando os números da parceria…"),
             Map.entry(BuscarDocumentos.NOME, "Buscando nos documentos do portal…"),
+            Map.entry(ContarDias.NOME, "Contando os dias…"),
             Map.entry(RelatorioFerramentas.INICIAR, "Abrindo o relatório…"),
             Map.entry(RelatorioFerramentas.SOLICITAR_CAMPOS, "Preparando as perguntas…"),
             Map.entry(RelatorioFerramentas.EDITAR, "Redigindo o documento…"),
