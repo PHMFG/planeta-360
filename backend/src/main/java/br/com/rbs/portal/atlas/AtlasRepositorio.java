@@ -545,6 +545,21 @@ public class AtlasRepositorio {
                 .update();
     }
 
+    /**
+     * As contas do {@code calcular} que a conversa gravou para o relatório (M5), como o JSON de {@code ContaDoChat.comoDados()}. As
+     * linhas das fórmulas fixas guardam em {@code variaveis} uma lista; as do chat, um objeto: é assim que se distinguem.
+     */
+    public List<String> contasDoChatDoRelatorio(long relatorioId) {
+        return jdbc.sql("SELECT variaveis::text FROM atlas_calculo WHERE relatorio_id = :relatorio AND jsonb_typeof(variaveis) = 'object' ORDER BY id")
+                .param("relatorio", relatorioId).query(String.class).list();
+    }
+
+    /** O relatório já tem uma conta com este nome (do chat, ou uma fórmula fixa já gravada)? */
+    public boolean calculoExiste(long relatorioId, String nome) {
+        return jdbc.sql("SELECT EXISTS (SELECT 1 FROM atlas_calculo WHERE relatorio_id = :relatorio AND nome = :nome)")
+                .param("relatorio", relatorioId).param("nome", nome).query(Boolean.class).single();
+    }
+
     // ---------------------------------------------------------------------
     // Apoio
     // ---------------------------------------------------------------------

@@ -59,8 +59,9 @@ class LoopDoAgenteTest {
     static final String CONSULTAR = "parceria_consultar";
     static final String BUSCAR = "buscar_documentos";
     static final String CONTAR_DIAS = "contar_dias";
+    static final String CALCULAR = "calcular";
     /** As ferramentas que o modelo recebe no Atlas só chat, na ordem em que o registro as oferece. */
-    static final java.util.List<String> DO_CHAT = java.util.List.of(CONSULTAR, BUSCAR, CONTAR_DIAS);
+    static final java.util.List<String> DO_CHAT = java.util.List.of(CONSULTAR, BUSCAR, CONTAR_DIAS, CALCULAR);
 
     static final String ARGS_INICIAR = "{\"modelo\":\"ATIVACAO_EVENTO\",\"objetivo\":\"Relatório da ativação\"}";
     static final String ARGS_CARTAO = "{\"mensagem\":\"Preciso destes números.\",\"campos\":[\"ativacao.visitantes_total\","
@@ -221,8 +222,8 @@ class LoopDoAgenteTest {
         assertThat(cartao.mensagem()).isEqualTo("Preciso destes números.");
         assertThat(cartao.campos()).extracting("chave").containsExactly(VISITANTES, CADASTROS);
         assertThat(modelo.pedidos()).hasSize(2);
-        assertThat(nomesDasFerramentas(modelo.pedidos().get(0))).containsExactly(CONSULTAR, BUSCAR, CONTAR_DIAS, INICIAR);
-        assertThat(nomesDasFerramentas(modelo.pedidos().get(1))).containsExactly(CONSULTAR, BUSCAR, CONTAR_DIAS, SOLICITAR, EDITAR, FINALIZAR);
+        assertThat(nomesDasFerramentas(modelo.pedidos().get(0))).containsExactly(CONSULTAR, BUSCAR, CONTAR_DIAS, CALCULAR, INICIAR);
+        assertThat(nomesDasFerramentas(modelo.pedidos().get(1))).containsExactly(CONSULTAR, BUSCAR, CONTAR_DIAS, CALCULAR, SOLICITAR, EDITAR, FINALIZAR);
         assertThat(modelo.pedidos()).allSatisfy(ProvedorRoteirizado::exigirHistoricoValido);
 
         List<Mensagem> historico = mensagens(conversa);
@@ -256,7 +257,7 @@ class LoopDoAgenteTest {
         assertThat(json(respostaDoCartao.conteudo())).containsEntry("acao", "accept");
         assertThat(respostaDoCartao.conteudo()).contains("\"chave\":\"ativacao.visitantes_total\"", "\"ref\":\"dado:ativacao.visitantes_total\"",
                 "\"valor\":1200", "\"valor\":1072");
-        assertThat(nomesDasFerramentas(modelo.pedidos().get(2))).containsExactly(CONSULTAR, BUSCAR, CONTAR_DIAS, SOLICITAR, EDITAR, FINALIZAR);   // sem iniciar: já há relatório
+        assertThat(nomesDasFerramentas(modelo.pedidos().get(2))).containsExactly(CONSULTAR, BUSCAR, CONTAR_DIAS, CALCULAR, SOLICITAR, EDITAR, FINALIZAR);   // sem iniciar: já há relatório
         assertThat(modelo.pedidos()).allSatisfy(ProvedorRoteirizado::exigirHistoricoValido);
         assertThat(modelo.sobraDoRoteiro()).isZero();
 
@@ -305,7 +306,7 @@ class LoopDoAgenteTest {
         assertThat(tipos(turno)).containsExactly("usuario", "texto");
         assertThat(textoDoItem(turno, 1)).isEqualTo("Posso montar o relatório de ativação da sua marca. Quer que eu comece?");
         assertThat(((ItemTexto) turno.itens().get(1)).porModelo()).isTrue();
-        assertThat(nomesDasFerramentas(modelo.ultimoPedido())).containsExactly(CONSULTAR, BUSCAR, CONTAR_DIAS, INICIAR);
+        assertThat(nomesDasFerramentas(modelo.ultimoPedido())).containsExactly(CONSULTAR, BUSCAR, CONTAR_DIAS, CALCULAR, INICIAR);
         assertThat(papeis(conversa)).containsExactly("user", "assistant");
     }
 
@@ -330,7 +331,7 @@ class LoopDoAgenteTest {
 
         assertThat(tipos(turno)).containsExactly("usuario", "texto");
         assertThat(textoDoItem(turno, 1)).isEqualTo("Aplicações de marca previstas: 19; comprovadas no evento: 17.");
-        assertThat(nomesDasFerramentas(modelo.pedidos().get(0))).containsExactly(CONSULTAR, BUSCAR, CONTAR_DIAS, INICIAR);
+        assertThat(nomesDasFerramentas(modelo.pedidos().get(0))).containsExactly(CONSULTAR, BUSCAR, CONTAR_DIAS, CALCULAR, INICIAR);
         modelo.pedidos().forEach(ProvedorRoteirizado::exigirHistoricoValido);
         assertThat(modelo.sobraDoRoteiro()).isZero();
 
@@ -579,10 +580,10 @@ class LoopDoAgenteTest {
                 conversa)).isEqualTo(3);
         List<List<String>> ofertas = modelo.pedidos().stream().map(ProvedorRoteirizado::nomesDasFerramentas).toList();
         assertThat(ofertas).hasSize(5);
-        assertThat(ofertas.get(1)).containsExactly(CONSULTAR, BUSCAR, CONTAR_DIAS, SOLICITAR, EDITAR, FINALIZAR);
-        assertThat(ofertas.get(2)).containsExactly(CONSULTAR, BUSCAR, CONTAR_DIAS, SOLICITAR, EDITAR, FINALIZAR);
-        assertThat(ofertas.get(3)).containsExactly(CONSULTAR, BUSCAR, CONTAR_DIAS, SOLICITAR, EDITAR, FINALIZAR);
-        assertThat(ofertas.get(4)).containsExactly(CONSULTAR, BUSCAR, CONTAR_DIAS, EDITAR, FINALIZAR);   // o terceiro cartão já foi: o limite do plano
+        assertThat(ofertas.get(1)).containsExactly(CONSULTAR, BUSCAR, CONTAR_DIAS, CALCULAR, SOLICITAR, EDITAR, FINALIZAR);
+        assertThat(ofertas.get(2)).containsExactly(CONSULTAR, BUSCAR, CONTAR_DIAS, CALCULAR, SOLICITAR, EDITAR, FINALIZAR);
+        assertThat(ofertas.get(3)).containsExactly(CONSULTAR, BUSCAR, CONTAR_DIAS, CALCULAR, SOLICITAR, EDITAR, FINALIZAR);
+        assertThat(ofertas.get(4)).containsExactly(CONSULTAR, BUSCAR, CONTAR_DIAS, CALCULAR, EDITAR, FINALIZAR);   // o terceiro cartão já foi: o limite do plano
     }
 
     @Test
@@ -664,7 +665,7 @@ class LoopDoAgenteTest {
         assertThat(contar("SELECT count(*) FROM atlas_tool_call t JOIN atlas_mensagem m ON m.id = t.mensagem_id WHERE m.conversa_id = ? "
                 + "AND t.resultado IS NULL AND t.erro IS NULL", conversa)).isZero();
         // o relatório que estava montando continua o mesmo, e o modelo pode pedir de novo (nenhuma ferramenta perdida)
-        assertThat(nomesDasFerramentas(modelo.ultimoPedido())).containsExactly(CONSULTAR, BUSCAR, CONTAR_DIAS, SOLICITAR, EDITAR, FINALIZAR);
+        assertThat(nomesDasFerramentas(modelo.ultimoPedido())).containsExactly(CONSULTAR, BUSCAR, CONTAR_DIAS, CALCULAR, SOLICITAR, EDITAR, FINALIZAR);
     }
 
     @Test

@@ -30,6 +30,8 @@
         <spring-ai.version>2.0.2</spring-ai.version>
         <!-- [ATLAS] PDFBox extrai o texto dos documentos do Atlas, dentro da JVM (sem OCR). -->
         <pdfbox.version>3.0.8</pdfbox.version>
+        <!-- [ATLAS] JEXL do `calcular` (M5): fixado na 3.7.1, que traz pragmaTest e namespaceInstantiation. -->
+        <jexl.version>3.7.1</jexl.version>
         <!--
           [ATLAS] Os grupos de teste que o ./mvnw test NÃO roda. Os testes que precisam das chaves dos provedores levam
           @Tag("avaliacao") e rodam com: ./mvnw test -Dgroups=avaliacao -Dtestes.excluidos=
@@ -110,6 +112,13 @@
             <groupId>org.apache.pdfbox</groupId>
             <artifactId>pdfbox</artifactId>
             <version>${pdfbox.version}</version>
+        </dependency>
+
+        <!-- [ATLAS] O motor das contas do `calcular` (M5), com as travas da seção 6.4 do plano do MVP: veja atlas/ferramentas/MotorDeContas. -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-jexl3</artifactId>
+            <version>${jexl.version}</version>
         </dependency>
 
         <!-- Testes: MockMvc/MockMvcTester e utilidades de sessão e CSRF -->

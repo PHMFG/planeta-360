@@ -16,6 +16,7 @@ import br.com.rbs.portal.atlas.checagem.FontesDoTurno;
 import br.com.rbs.portal.atlas.checagem.FontesDoTurno.Fonte;
 import br.com.rbs.portal.atlas.checagem.Frases;
 import br.com.rbs.portal.atlas.ferramentas.BuscarDocumentos;
+import br.com.rbs.portal.atlas.ferramentas.Calcular;
 import br.com.rbs.portal.atlas.ferramentas.ContarDias;
 import br.com.rbs.portal.atlas.ferramentas.Execucao;
 import br.com.rbs.portal.atlas.ferramentas.RegistroDeFerramentas;
@@ -32,6 +33,7 @@ import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.OuvinteDoFluxo;
 import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.PedidoAoLlm;
 import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.RespostaDoLlm;
 import br.com.rbs.portal.atlas.relatorio.ChecagemDeTexto.Veredito;
+import br.com.rbs.portal.atlas.relatorio.ContaDoChat;
 import br.com.rbs.portal.atlas.relatorio.ModeloBase;
 import br.com.rbs.portal.atlas.relatorio.Referencias;
 import br.com.rbs.portal.atlas.relatorio.RelatorioAtlasService;
@@ -147,6 +149,7 @@ public class LoopDoAgente {
             Map.entry(RelatorioFerramentas.CONSULTAR, "Consultando os números da parceria…"),
             Map.entry(BuscarDocumentos.NOME, "Buscando nos documentos do portal…"),
             Map.entry(ContarDias.NOME, "Contando os dias…"),
+            Map.entry(Calcular.NOME, "Fazendo a conta…"),
             Map.entry(RelatorioFerramentas.INICIAR, "Abrindo o relatório…"),
             Map.entry(RelatorioFerramentas.SOLICITAR_CAMPOS, "Preparando as perguntas…"),
             Map.entry(RelatorioFerramentas.EDITAR, "Redigindo o documento…"),
@@ -339,7 +342,7 @@ public class LoopDoAgente {
                 return;
             }
             PedidoAoLlm pedido = pedido(contexto, turno, ativo, transitorias);
-            FiltroDoTexto filtro = ouvinte.emFluxo() ? new FiltroDoTexto(resolucao(contexto), checagem, turno.fontes, ouvinte) : null;
+            FiltroDoTexto filtro = ouvinte.emFluxo() ? new FiltroDoTexto(resolucao(contexto, turno), checagem, turno.fontes, ouvinte) : null;
             RespostaDoLlm resposta;
             AtomicBoolean pensou = new AtomicBoolean();   // o aviso "pensando" sai uma vez por ida
             // O traço da ida: só o que não é sensível (quantas mensagens e quais ferramentas, nunca o conteúdo nem o prompt).
@@ -714,7 +717,7 @@ public class LoopDoAgente {
     /** A checagem do texto do chat, com a etapa CHECAGEM no traço: se aprovou, e por que não (a frase de recusa, que é nossa). */
     private Veredito checarDoChat(AtlasContexto contexto, Turno turno, String texto, String origem) {
         Etapa etapa = turno.traco.abrir(EtapaDoTraco.CHECAGEM).dado("origem", origem).dado("caracteres", texto.length());
-        Veredito veredito = checagem.chat(resolucao(contexto), turno.fontes, texto);
+        Veredito veredito = checagem.chat(resolucao(contexto, turno), turno.fontes, texto);
         etapa.dado("aprovado", veredito.aprovado()).dado("motivo", veredito.motivo())
                 .fim(veredito.aprovado() ? ResultadoDaEtapa.OK : ResultadoDaEtapa.RECUSADO);
         return veredito;
@@ -733,9 +736,17 @@ public class LoopDoAgente {
                 .dado("aprovado", false).dado("motivo", filtro.motivoDaRecusa()).fim(ResultadoDaEtapa.RECUSADO);
     }
 
-    /** Uma resolução nova dos marcadores do chat, contra a parceria da conversa e com o perfil de quem pede. */
-    private Resolucao resolucao(AtlasContexto contexto) {
-        return resolvedor.abrir(contexto.usuario(), contexto.parceriaId(), modelos.obter(ModeloBase.ATIVACAO_EVENTO).orElseThrow());
+    /**
+     * Uma resolução nova dos marcadores do chat, contra a parceria da conversa e com o perfil de quem pede, com as contas do
+     * {@code calcular} que o turno já fez: a checagem, o filtro da tela ao vivo e a releitura da conversa resolvem
+     * {@code {{calc:nome}}} pelo mesmo valor, e a conta certa nunca vira "indisponível".
+     */
+    private Resolucao resolucao(AtlasContexto contexto, Turno turno) {
+        Resolucao resolucao = resolvedor.abrir(contexto.usuario(), contexto.parceriaId(), modelos.obter(ModeloBase.ATIVACAO_EVENTO).orElseThrow());
+        for (Fonte conta : turno.fontes.contas()) {
+            ContaDoChat.deDados(conta.dados()).ifPresent(resolucao::registrarConta);
+        }
+        return resolucao;
     }
 
     /** Grava o texto do assistente como a resposta do turno e devolve o id da mensagem. */
