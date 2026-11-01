@@ -4,6 +4,7 @@ import br.com.rbs.portal.atlas.checagem.NormalizadorDeNumeros;
 import br.com.rbs.portal.atlas.relatorio.ResolvedorDeReferencias.ReferenciaDesconhecidaException;
 import br.com.rbs.portal.atlas.relatorio.ResolvedorDeReferencias.Resolucao;
 import br.com.rbs.portal.atlas.relatorio.ResolvedorDeReferencias.Valor;
+import java.text.Normalizer;
 import java.util.List;
 import java.util.Optional;
 import java.util.regex.Matcher;
@@ -178,8 +179,27 @@ public class ChecagemDeTexto {
      * nome de ferramenta, sem as palavras do funcionamento interno. {@code texto} é o texto com os espaços normalizados e
      * {@code semMarcadores} o mesmo sem os marcadores {@code {{ref}}} (e, no chat de fontes, sem as citações). Devolve o motivo da
      * recusa, escrito para o modelo ler. É a regra do relatório e a do chat de fontes: um lugar só.
+     * <p>
+     * Olha o texto como está e, se o NFKC o muda, também o normalizado: o ponto de preenchimento U+2024, o ponto pequeno U+FE52, os
+     * dois-pontos largos U+FF1A e as letras e os sinais de largura total ({@code ｊａｖａｓｃｒｉｐｔ：}, {@code ＜b＞}) viram o caractere comum
+     * e não escondem mais o endereço, o esquema ou o HTML. A normalização serve só para conferir: o texto que sai para a pessoa não
+     * muda. O texto comum que o NFKC muda ({@code m²}, {@code ½}, {@code º}, {@code …}) não tem forma de endereço e passa. A regra dos
+     * números não olha o NFKC (é outra conferência, em outro lugar).
      */
     public static Optional<String> motivoDeForma(String texto, String semMarcadores) {
+        Optional<String> doTexto = motivoDeFormaDoTexto(texto, semMarcadores);
+        if (doTexto.isPresent()) {
+            return doTexto;
+        }
+        String textoNfkc = Normalizer.normalize(texto, Normalizer.Form.NFKC);
+        String semMarcadoresNfkc = Normalizer.normalize(semMarcadores, Normalizer.Form.NFKC);
+        if (textoNfkc.equals(texto) && semMarcadoresNfkc.equals(semMarcadores)) {
+            return Optional.empty();   // o NFKC não mudou nada: não há o que conferir de novo
+        }
+        return motivoDeFormaDoTexto(textoNfkc, semMarcadoresNfkc);
+    }
+
+    private static Optional<String> motivoDeFormaDoTexto(String texto, String semMarcadores) {
         if (texto.indexOf('<') >= 0 || texto.indexOf('>') >= 0) {
             return Optional.of("Sem HTML: não use os sinais < e >. Escreva só texto simples.");
         }

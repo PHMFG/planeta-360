@@ -227,6 +227,62 @@ class ChecagemDeTextoTest {
         assertThat(ChecagemDeTexto.motivoDeForma(texto, texto)).as(texto).isEmpty();
     }
 
+    /**
+     * A conferência de forma olha também o texto em NFKC: o ponto U+2024 (ponto de preenchimento) e U+FE52 (ponto pequeno) e os dois-pontos
+     * largos U+FF1A viram o caractere comum, e o endereço ou o esquema que escondiam aparece. O ponto U+FF0E, o U+3002 e o U+FF61 já
+     * eram recusados pela regra própria deles.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "Veja coleta-atlas\u2024click hoje.", "Veja coleta-atlas\uFE52click hoje.", "Veja x\u2024com hoje.", "Veja x\uFE52com hoje.",
+            "Veja www\u2024exemplo\u2024com hoje.", "Veja www\uFE52exemplo\uFE52com hoje.", "Escreva para alguem@coleta-atlas\u2024invalid hoje.",
+            "Abra javascript\uFF1Aalert agora.", "Abra mailto\uFF1Aalguem agora.", "Abra data\uFF1Atext/html agora.", "Abra ｊａｖａｓｃｒｉｐｔ：alert agora.",
+            "Abra https\uFF1A\u2024\u2024coleta agora.", "Abra ｆｉｌｅ：arquivo agora."})
+    void recusaAVarianteUnicodeDoPontoEDosDoisPontosQueEscondeEnderecoOuEsquema(String texto) {
+        assertThat(ChecagemDeTexto.motivoDeForma(texto, texto)).as(texto).isPresent();
+        assertThat(paragrafo(texto).aprovado()).as("parágrafo: " + texto).isFalse();
+        assertThat(chat(texto).aprovado()).as("chat: " + texto).isFalse();
+        assertThat(paragrafo(texto).motivo()).as(texto).contains("endereço");
+    }
+
+    /** Consequência de olhar o texto em NFKC: os sinais de HTML e de link de largura total viram os comuns e são recusados como eles. */
+    @ParameterizedTest
+    @ValueSource(strings = {"Veja ＜b＞isto＜/b＞ hoje.", "Veja ［aqui］（destino） hoje."})
+    void recusaOHtmlEOLinkDeLarguraTotal(String texto) {
+        assertThat(ChecagemDeTexto.motivoDeForma(texto, texto)).as(texto).isPresent();
+    }
+
+    /** O pedido normal ao lado do aperto: o que o NFKC muda no texto (², ½, º, …, ligadura) não pode virar endereço nem esquema. */
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "A área da ativação tem 36 m² no total.", "A área da ativação tem 36 m².", "Foram 4½ horas de montagem.", "Foram 4½.",
+            "O valor é R$ 10.608,00 por mês.", "O valor é R$ 10.608,00.", "O prazo vai até 30/11/2026.", "O prazo vai até 30/11/2026. Depois, não.",
+            "Aguarde… a produção responde logo.", "Aguarde…", "Aguarde…Depois a produção responde.", "Falta pouco… muito pouco… quase lá.",
+            "A marca ficou em 1º lugar no ranking.", "A marca ficou em 1º.", "O espaço tem 2 km² de área.", "O espaço tem 2 km².",
+            "O portão abre cedo — e fecha tarde.", "O portão abre cedo — fecha tarde — e reabre.", "Veja a seção 3.2 — é curta.",
+            "O ﬁnal do evento é cedo.", "Reunião nº 5, às 18h, no 2º andar.", "A temperatura passa de 30 ℃ à tarde.", "O espaço tem 80 ㎡.",
+            "Responda com sim ou não: «sim» ou «não».", "A marca™ e a empresa® assinam.", "Veja a p. 4 do manual – é rápido."})
+    void naoRecusaTextoNormalComCaractereQueONfkcMuda(String texto) {
+        assertThat(ChecagemDeTexto.motivoDeForma(texto, texto)).as(texto).isEmpty();
+    }
+
+    /** A normalização serve só para conferir: o texto que sai para a pessoa é o que o modelo escreveu, com os caracteres originais. */
+    @Test
+    void oTextoAprovadoSaiComOsCaracteresOriginais() {
+        String texto = "Aguarde… o ﬁnal do evento — a produção avisa ½ dia antes.";
+
+        assertThat(paragrafo(texto).aprovado()).isFalse();   // o ½ é número: a regra dos números segue como estava
+        String semNumero = "Aguarde… o ﬁnal do evento — a produção avisa logo.";
+        Veredito paragrafo = paragrafo(semNumero);
+        Veredito chat = chat(semNumero);
+
+        assertThat(paragrafo.aprovado()).isTrue();
+        assertThat(paragrafo.texto()).isEqualTo(semNumero);
+        assertThat(chat.aprovado()).isTrue();
+        assertThat(chat.texto()).isEqualTo(semNumero);
+        assertThat(checagem.mensagemDoCartao(semNumero).texto()).isEqualTo(semNumero);
+    }
+
     @Test
     void depoisDoPontoSemEspacoPareceEnderecoEERecusadoEIssoFoiDecidido() {
         // "Prazo.Depois" tem a forma de rótulo.rótulo: a regra não distingue de um domínio, e o modelo reescreve com o espaço
