@@ -698,6 +698,15 @@ class CalcularTest {
     // ---------------------------------------------------------------------
 
     @Test
+    void aDefinicaoDizAoModeloAsRegrasDaOrigemDoScriptEDaCadeia() {
+        String descricao = calcular.definicao().descricao();
+
+        assertThat(descricao).contains("nesta conversa", "no máximo 2 vezes", "pct(parte, todo)", "a * 100 / b é recusado", "mesma origem", "o ano não é valor",
+                "pela cadeia");
+        assertThat(calcular.definicao().esquema()).contains("^[a-z][a-z0-9_]{0,59}$");
+    }
+
+    @Test
     void ferramentaSemParceriaOferecidaEmTodoEstadoMenosOCartaoAberto() {
         assertThat(calcular.nome()).isEqualTo("calcular");
         assertThat(calcular.definicao().esquema()).contains("\"additionalProperties\":false").doesNotContain("parceria");
