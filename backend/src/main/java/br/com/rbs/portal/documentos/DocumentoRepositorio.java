@@ -366,10 +366,16 @@ public class DocumentoRepositorio {
         jdbc.sql("SELECT fn_publicar_documento(:id)").param("id", id).query().singleRow();
     }
 
-    /** ERRO com o motivo, só se ainda estiver PROCESSANDO. Devolve quantas linhas mudaram. */
-    public int marcarErro(long id, String motivo) {
-        return jdbc.sql("UPDATE documento SET status = 'ERRO', erro = :motivo WHERE id = :id AND status = 'PROCESSANDO'")
-                .param("id", id).param("motivo", motivo).update();
+    /**
+     * ERRO com o motivo, só se ainda estiver PROCESSANDO. Devolve o documento (para o histórico), ou vazio se ele não estava mais
+     * PROCESSANDO. Não precisa de uma leitura antes: a falha pode ter sido justamente a leitura do documento.
+     */
+    public Optional<Orfao> marcarErro(long id, String motivo) {
+        return jdbc.sql("""
+                        UPDATE documento SET status = 'ERRO', erro = :motivo WHERE id = :id AND status = 'PROCESSANDO'
+                        RETURNING id, parceria_id, aprovado_por
+                        """)
+                .param("id", id).param("motivo", motivo).query(Orfao.class).optional();
     }
 
     /** Na subida da API: PROCESSANDO que sobrou de uma queda vira ERRO (a fila fica na memória e se perdeu). */

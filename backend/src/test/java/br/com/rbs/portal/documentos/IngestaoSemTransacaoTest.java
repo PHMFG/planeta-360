@@ -11,6 +11,7 @@ import br.com.rbs.portal.atlas.embeddings.ProvedorDeEmbeddings;
 import br.com.rbs.portal.documentos.DocumentoRepositorio.TrechoParaGravar;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -26,6 +27,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.http.HttpStatus;
+import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
@@ -52,6 +54,7 @@ class IngestaoSemTransacaoTest extends ApoioDeDocumentos {
         volatile boolean falhar;
         volatile boolean vetorCurto;
         volatile boolean estourarAPilha;
+        volatile String fraseDoProvedor;
 
         void limpar() {
             transacaoAtiva.clear();
@@ -59,6 +62,7 @@ class IngestaoSemTransacaoTest extends ApoioDeDocumentos {
             falhar = false;
             vetorCurto = false;
             estourarAPilha = false;
+            fraseDoProvedor = null;
         }
 
         @Override
@@ -86,6 +90,9 @@ class IngestaoSemTransacaoTest extends ApoioDeDocumentos {
             if (estourarAPilha) {
                 throw new StackOverflowError();   // um Error, e não uma Exception: o catch (Exception) da ingestão não o pega
             }
+            if (fraseDoProvedor != null) {
+                throw new EmbeddingsIndisponivelException(fraseDoProvedor);
+            }
             List<float[]> vetores = verdadeiro.paraTrechos(tituloDoDocumento, trechos);
             if (vetorCurto) {
                 List<float[]> curtos = new ArrayList<>();
@@ -101,6 +108,33 @@ class IngestaoSemTransacaoTest extends ApoioDeDocumentos {
         }
     }
 
+    /** O repositório de verdade, com um gancho: falhar ao ler o documento da ingestão. */
+    static class RepositorioComGanchos extends DocumentoRepositorio {
+
+        volatile boolean falharAoLer;
+
+        RepositorioComGanchos(JdbcClient jdbc) {
+            super(jdbc);
+        }
+
+        // O repositório é um @Repository: o Spring o entrega por um proxy, então o teste mexe nele por métodos, e não pelos campos.
+        public void limpar() {
+            falharAoLer = false;
+        }
+
+        public void falharAoLer(boolean falhar) {
+            falharAoLer = falhar;
+        }
+
+        @Override
+        public Optional<ParaIngestao> paraIngestao(long id) {
+            if (falharAoLer) {
+                throw new IllegalStateException("a conexão caiu na leitura do documento");
+            }
+            return super.paraIngestao(id);
+        }
+    }
+
     @TestConfiguration
     static class ProvedorQueGrava {
 
@@ -109,13 +143,19 @@ class IngestaoSemTransacaoTest extends ApoioDeDocumentos {
         GravadorDeEmbeddings gravadorDeEmbeddings() {
             return new GravadorDeEmbeddings();
         }
+
+        @Bean
+        @Primary
+        RepositorioComGanchos repositorioComGanchos(JdbcClient jdbc) {
+            return new RepositorioComGanchos(jdbc);
+        }
     }
 
     @Autowired
     GravadorDeEmbeddings embeddings;
 
     @Autowired
-    DocumentoRepositorio repositorio;
+    RepositorioComGanchos repositorio;
 
     @Autowired
     IngestaoService ingestao;
@@ -128,6 +168,7 @@ class IngestaoSemTransacaoTest extends ApoioDeDocumentos {
     @BeforeEach
     void limparOGravador() {
         embeddings.limpar();
+        repositorio.limpar();
     }
 
     @AfterEach
@@ -347,5 +388,53 @@ class IngestaoSemTransacaoTest extends ApoioDeDocumentos {
         assertThat(segundo).as("já está indexado").hasStatus(HttpStatus.CONFLICT);
         assertThat(embeddings.threads).hasSize(1);
         assertThat(contar("SELECT count(*) FROM documento_trecho WHERE documento_id = ? AND ordem = 1", id)).isEqualTo(1);
+    }
+
+    // ---------------------------------------------------------------------
+    // M3, segunda rodada de correção: documento preso e histórico falso (J e K)
+    // ---------------------------------------------------------------------
+
+    @Test
+    void seALeituraDoDocumentoFalhaNaIngestaoOdocumentoVaiParaErroEPodeSerReindexadoOuRecusado() {
+        SessaoDeApi rbs = entrar(RBS);
+        long id = enviarEAprovar(rbs, "teste-leitura-falha");
+        repositorio.falharAoLer(true);
+
+        acao(rbs, id, "APROVAR");
+
+        assertThat(statusDe(id)).as("a falha ao ler o documento não pode deixá-lo preso em PROCESSANDO").isEqualTo("ERRO");
+        assertThat(jdbc.sql("SELECT erro FROM documento WHERE id = :id").param("id", id).query(String.class).single())
+                .isEqualTo("Falha inesperada na indexação (IllegalStateException). Veja o log da API.");
+        assertThat(contar("SELECT count(*) FROM historico WHERE entidade = 'documento' AND entidade_id = ? AND valor_novo = 'ERRO'", id)).isEqualTo(1);
+
+        repositorio.falharAoLer(false);
+        assertThat(acao(rbs, id, "REINDEXAR")).hasStatus(HttpStatus.OK);
+        assertThat(statusDe(id)).isEqualTo("INDEXADO");
+    }
+
+    @Test
+    void seALeituraDoDocumentoFalhaNaIngestaoAindaDaParaRecusar() {
+        SessaoDeApi rbs = entrar(RBS);
+        long id = enviarEAprovar(rbs, "teste-leitura-falha-recusa");
+        repositorio.falharAoLer(true);
+        acao(rbs, id, "APROVAR");
+
+        assertThat(acao(rbs, id, "RECUSAR")).hasStatus(HttpStatus.OK);
+        assertThat(statusDe(id)).isEqualTo("RECUSADO");
+    }
+
+    @Test
+    void fraseDoProvedorComCaractereNuloEMuitoLongaVaiParaErroSemNulEComNoMaximo500Caracteres() {
+        SessaoDeApi rbs = entrar(RBS);
+        long id = enviarEAprovar(rbs, "teste-frase-com-nul");
+        embeddings.fraseDoProvedor = "O Gemini respondeu 400: chave inválida\u0000 " + "e a frase continua ".repeat(60);
+
+        acao(rbs, id, "APROVAR");
+
+        assertThat(statusDe(id)).as("o NUL não pode impedir o ERRO: o PostgreSQL não guarda U+0000").isEqualTo("ERRO");
+        String erro = jdbc.sql("SELECT erro FROM documento WHERE id = :id").param("id", id).query(String.class).single();
+        assertThat(erro).startsWith("O Gemini respondeu 400: chave inválida e a frase continua").hasSize(500);
+        assertThat(contar("SELECT count(*) FROM historico WHERE entidade = 'documento' AND entidade_id = ? AND valor_novo = 'ERRO'", id)).isEqualTo(1);
+        assertThat(acao(rbs, id, "RECUSAR")).as("e a RBS ainda recusa").hasStatus(HttpStatus.OK);
     }
 }

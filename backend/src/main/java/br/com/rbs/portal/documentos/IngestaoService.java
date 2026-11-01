@@ -23,6 +23,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -180,16 +181,17 @@ public class IngestaoService implements SmartInitializingSingleton {
     // ---------------------------------------------------------------------
 
     /**
-     * Indexa o documento em PROCESSANDO. Nunca lança: qualquer falha vira ERRO com o motivo. Documento que não está em PROCESSANDO
-     * (já indexado, revogado, ou outra tarefa chegou antes) é deixado como está. Pode ser chamado direto (os testes que rodam dentro de
-     * uma transação de teste fazem isso: os passos entram nela).
+     * Indexa o documento em PROCESSANDO. Nunca lança: qualquer falha vira ERRO com o motivo, também a da leitura do documento (se ela
+     * ficasse de fora, o documento ficava preso em PROCESSANDO e REINDEXAR, RECUSAR e REVOGAR davam 409). Documento que não está em
+     * PROCESSANDO (já indexado, revogado, ou outra tarefa chegou antes) é deixado como está. Pode ser chamado direto (os testes que
+     * rodam dentro de uma transação de teste fazem isso: os passos entram nela).
      */
     public void processar(long documentoId) {
-        ParaIngestao documento = repositorio.paraIngestao(documentoId).orElse(null);
-        if (documento == null || !"PROCESSANDO".equals(documento.status())) {
-            return;
-        }
         try {
+            ParaIngestao documento = repositorio.paraIngestao(documentoId).orElse(null);
+            if (documento == null || !"PROCESSANDO".equals(documento.status())) {
+                return;
+            }
             // 1. Extrair (sem transação).
             Path caminho = armazenamento.localizar(documento.arquivoCaminho())
                     .orElseThrow(() -> new FalhaDaIngestao("O arquivo do documento não está mais no armazenamento. Envie o documento de novo."));
@@ -233,7 +235,7 @@ public class IngestaoService implements SmartInitializingSingleton {
             // 5. Publicar: a versão anterior sai e esta entra, na mesma transação.
             transacao.executeWithoutResult(estado -> publicar(documento, trechos.size(), embeddingsMs));
         } catch (Throwable erro) {
-            marcarErro(documento, motivoDe(erro), erro);
+            marcarErro(documentoId, motivoDe(erro), erro);
         }
     }
 
@@ -254,31 +256,34 @@ public class IngestaoService implements SmartInitializingSingleton {
         }
     }
 
-    private void marcarErro(ParaIngestao documento, String motivo, Throwable erro) {
-        log.warn("Atlas: a indexação do documento {} falhou: {}", documento.id(), motivo);
+    private void marcarErro(long documentoId, String motivo, Throwable erro) {
+        log.warn("Atlas: a indexação do documento {} falhou: {}", documentoId, motivo);
         if (!(erro instanceof FalhaDaIngestao) && !(erro instanceof ExtracaoFalhouException) && !(erro instanceof EmbeddingsIndisponivelException)) {
-            log.error("Atlas: falha inesperada na indexação do documento {}", documento.id(), erro);
+            log.error("Atlas: falha inesperada na indexação do documento {}", documentoId, erro);
         }
         try {
             transacao.executeWithoutResult(estado -> {
-                int mudou = repositorio.marcarErro(documento.id(), motivo);
-                repositorio.removerTrechosInativos(documento.id());
-                if (mudou > 0) {
-                    historico.registrar(AcaoHistorico.ALTERACAO_STATUS, quem(documento.aprovadoPor()), documento.parceriaId(), "documento",
-                            documento.id(), "PROCESSANDO", "ERRO", motivo, null);
-                }
+                Optional<Orfao> mudou = repositorio.marcarErro(documentoId, motivo);
+                repositorio.removerTrechosInativos(documentoId);
+                mudou.ifPresent(documento -> historico.registrar(AcaoHistorico.ALTERACAO_STATUS, quem(documento.aprovadoPor()),
+                        documento.parceriaId(), "documento", documentoId, "PROCESSANDO", "ERRO", motivo, null));
             });
         } catch (Throwable naoGravou) {
-            log.error("Atlas: não consegui gravar o erro do documento {}", documento.id(), naoGravou);
+            log.error("Atlas: não consegui gravar o erro do documento {}", documentoId, naoGravou);
         }
     }
 
-    /** A frase do motivo: as que o Atlas já escreve valem como estão; o resto vira uma frase genérica (o detalhe fica no log). */
+    /**
+     * A frase do motivo: as que o Atlas já escreve valem como estão; o resto vira uma frase genérica (o detalhe fica no log). Sem o
+     * caractere nulo (o PostgreSQL não guarda U+0000, e a frase do provedor pode trazê-lo: o ERRO não seria gravado e o documento ficava
+     * preso em PROCESSANDO) e com no máximo {@value #LIMITE_DO_MOTIVO} caracteres.
+     */
     private static String motivoDe(Throwable erro) {
-        String motivo;
+        String motivo = null;
         if (erro instanceof FalhaDaIngestao || erro instanceof ExtracaoFalhouException || erro instanceof EmbeddingsIndisponivelException) {
-            motivo = erro.getMessage();
-        } else {
+            motivo = erro.getMessage() == null ? null : erro.getMessage().replace("\u0000", "");
+        }
+        if (motivo == null || motivo.isBlank()) {
             motivo = "Falha inesperada na indexação (" + erro.getClass().getSimpleName() + "). Veja o log da API.";
         }
         return motivo.length() > LIMITE_DO_MOTIVO ? motivo.substring(0, LIMITE_DO_MOTIVO) : motivo;
