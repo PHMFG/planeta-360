@@ -1,6 +1,7 @@
 // Acha números e datas num texto e os deixa numa forma comparável. É a mesma regra da checagem do servidor (M4):
 // "1.250.000,00" e "1250000", "R$ 312" e "312", "04/12/2026", "4/12", "4 de dezembro" e "2026-12-04", "6h30" e "06:30",
-// "89,4%" e "89,4" são iguais. Número por extenso seguido de unidade conta como número; "os dois manuais" não.
+// "89,4%" e "89,4" são iguais. Numeral por extenso conta como número, menos "um" e "uma", que são artigo, e "dois" sem unidade
+// ("os dois manuais").
 
 const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
 const NOME_DO_MES = MESES.join('|')
@@ -13,9 +14,11 @@ const EXTENSO = {
   seiscentos: 600, seiscentas: 600, setecentos: 700, setecentas: 700, oitocentos: 800, oitocentas: 800, novecentos: 900, novecentas: 900,
 }
 const PALAVRA = Object.keys(EXTENSO).join('|')
-const ESCALA = 'mil|milh(?:ão|ões)'
-const UNIDADES = 'reais|real|dias?|horas?|minutos?|kva|kw|por cento|credenciais|credencial|cortesias?|inserç(?:ão|ões)|ingressos?|pulseiras?|metros?|semanas?|meses|aplicaç(?:ão|ões)|pessoas?|litros?|visitantes?|cadastros?|rodadas?|peças?|vezes'
-const CORRIDA_POR_EXTENSO = new RegExp(`(?<![\\p{L}\\p{N}])((?:${PALAVRA}|${ESCALA})(?:\\s+(?:e\\s+)?(?:${PALAVRA}|${ESCALA}))*)(?![\\p{L}\\p{N}])(\\s+(?:de\\s+)?(?:${UNIDADES})(?![\\p{L}\\p{N}]))?`, 'giu')
+const ESCALA = 'mil|milh(?:ão|ões|ao|oes)'
+const UNIDADES = 'reais|real|dias?|horas?|minutos?|kva|kw|por cento|porcento|%|credenciais|credencial|cortesias?|inserç(?:ão|ões)|ingressos?|pulseiras?|metros?|semanas?|meses|aplicaç(?:ão|ões)|pessoas?|litros?|visitantes?|cadastros?|rodadas?|peças?|vezes'
+const DEPOIS_UNIDADE = new RegExp(`^\\s*(?:de\\s+)?(?:${UNIDADES})(?![\\p{L}\\p{N}])`, 'iu')
+const DATA_COM_NUMERAL = new RegExp(`(?<![\\p{L}\\p{N}])((?:${PALAVRA})(?:\\s+(?:e\\s+)?(?:${PALAVRA}))*)\\s+de\\s+(${NOME_DO_MES})(?:\\s+de\\s+(\\d{4}))?(?![\\p{L}\\p{N}])`, 'giu')
+const CORRIDA_POR_EXTENSO = new RegExp(`(?<![\\p{L}\\p{N}])(?<!por\\s)((?:${PALAVRA}|${ESCALA})(?:\\s+(?:e\\s+)?(?:${PALAVRA}|${ESCALA}))*)(?![\\p{L}\\p{N}])(\\s+(?:de\\s+)?(?:${UNIDADES})(?![\\p{L}\\p{N}]))?`, 'giu')
 
 /** "1.250,50" vira "1250.5"; "312" fica "312". Ponto só é milhar quando separa grupos de 3. */
 export function normalizarNumero(bruto) {
@@ -31,22 +34,43 @@ const umaData = (trecho, dia, mes, ano) => ({ trecho, data: { dia: `${duasCasas(
 const umValor = (trecho, ...valores) => ({ trecho, valores })
 const umaHora = (trecho, h, m = 0) => umValor(trecho, `hora:${duasCasas(h)}:${duasCasas(m)}`)
 
+/** Centena, dezena e unidade: numerais só somam em ordem decrescente ("trezentos e doze"); "três e quatro" são dois números. */
+const grandeza = (valor) => (valor >= 100 ? 3 : valor >= 20 ? 2 : 1)
+
 function porExtenso(palavras) {
+  const grupos = []
   let total = 0
   let parcial = 0
   let temEscala = false
+  let ultima = 4
   for (const palavra of palavras.toLowerCase().split(/\s+/).filter((p) => p !== 'e')) {
-    if (palavra === 'mil') { total += (parcial || 1) * 1000; parcial = 0; temEscala = true }
-    else if (palavra.startsWith('milh')) { total += (parcial || 1) * 1_000_000; parcial = 0; temEscala = true }
-    else parcial += EXTENSO[palavra]
+    if (palavra === 'mil' || palavra.startsWith('milh')) {
+      total += (parcial || 1) * (palavra === 'mil' ? 1000 : 1_000_000)
+      parcial = 0
+      temEscala = true
+      ultima = 4
+      continue
+    }
+    const valor = EXTENSO[palavra]
+    if (grandeza(valor) >= ultima) {
+      grupos.push({ valor: total + parcial, temEscala })
+      total = 0
+      parcial = 0
+      temEscala = false
+    }
+    parcial += valor
+    ultima = grandeza(valor)
   }
-  return { valor: total + parcial, temEscala }
+  grupos.push({ valor: total + parcial, temEscala })
+  return grupos
 }
+
+/** "um" e "uma" são artigo e nunca contam, nem na fonte. "dois" e "duas" só com unidade, na resposta. O resto conta sempre. */
+const contaComoNumero = ({ valor, temEscala }, unidade, fonte) => temEscala || (valor !== 1 && (fonte || valor !== 2 || Boolean(unidade)))
 
 /**
  * Devolve os números e datas do texto. Datas e horas são consumidas antes dos números, para "04/12/2026" não virar 3 números.
- * Numa fonte (`fonte: true`), todo numeral por extenso conta, porque "duas rodadas" é a origem de "2 rodadas".
- * Na resposta, só com unidade, e "um dia" não é número: é artigo.
+ * Numa fonte (`fonte: true`), "duas rodadas" é a origem de "2 rodadas". Na resposta, "os dois manuais" e "um dia" não são números.
  */
 export function extrair(textoOriginal, { fonte = false } = {}) {
   const achados = []
@@ -74,21 +98,30 @@ export function extrair(textoOriginal, { fonte = false } = {}) {
   consumir(/\b(\d{1,2})h(\d{2})?\b/gi, (t, h, m) => umaHora(t, +h, m ? +m : 0))
   consumir(/\b(\d{1,3})\s*horas?\b/gi, (t, h) => (+h <= 24 ? umValor(t, `hora:${duasCasas(+h)}:00`, String(+h)) : umValor(t, String(+h))))
 
+  // "dez de dezembro" é uma data; "sete e oito de dezembro", duas.
+  consumir(DATA_COM_NUMERAL, (t, palavras, m, a) => porExtenso(palavras).map(({ valor }) => umaData(t, valor, nomeDoMes(m), a)))
   consumir(CORRIDA_POR_EXTENSO, (t, palavras, unidade) => {
-    const { valor, temEscala } = porExtenso(palavras)
-    if (fonte || temEscala) return umValor(t, String(valor))
-    return unidade && valor !== 1 ? umValor(t, String(valor)) : null
+    const contam = porExtenso(palavras).filter((grupo) => contaComoNumero(grupo, unidade, fonte))
+    return contam.length ? contam.map(({ valor }) => umValor(t, String(valor))) : null
   })
 
   // O resto: números com milhar e decimal. A vírgula de uma lista ("19, 17") não é decimal, porque vem seguida de espaço.
-  consumir(/\d+(?:[.,]\d+)*/g, (t) => (/^\d{4}$/.test(t) ? umValor(t, normalizarNumero(t), `ano:${t}`) : umValor(t, normalizarNumero(t))))
+  // Quatro dígitos podem ser um ano, menos "R$ 2027" e "2026 credenciais".
+  consumir(/\d+(?:[.,]\d+)*/g, (t, posicao, todo) => {
+    const ehAno = /^\d{4}$/.test(t) && !/R\$\s*$/.test(todo.slice(0, posicao)) && !DEPOIS_UNIDADE.test(todo.slice(posicao + t.length))
+    return ehAno ? umValor(t, normalizarNumero(t), `ano:${t}`) : umValor(t, normalizarNumero(t))
+  })
   return achados
 }
 
-/** Tudo o que um conjunto de textos permite afirmar. Data com ano só vale no ano certo, se a fonte disser o ano. */
+/**
+ * Tudo o que um conjunto de textos permite afirmar. Data com ano só vale no ano certo, se a fonte disser o ano. Se ela não disser, com
+ * {@code anosAceitos} a resposta só pode pôr um desses anos; sem ele, qualquer um.
+ */
 export class Origens {
   constructor(...textos) {
     this.valores = new Set()
+    this.anosAceitos = null
     for (const texto of textos) this.adicionar(texto)
   }
 
@@ -110,11 +143,26 @@ export class Origens {
     return this
   }
 
+  /** O ano da edição ou de hoje: vale como ano ("em 2027"), nunca como valor ("R$ 2.027,00", "2026 credenciais"). */
+  adicionarAnoLivre(ano) {
+    this.valores.add(`ano:${ano}`)
+    return this
+  }
+
+  /** A data de hoje, em qualquer formato, sem liberar o ano como valor. */
+  adicionarData(dia, mes, ano) {
+    this.valores.add(`data:${duasCasas(mes)}-${duasCasas(dia)}`)
+    this.valores.add(`data:${ano}-${duasCasas(mes)}-${duasCasas(dia)}`)
+    this.valores.add(`dataComAno:${duasCasas(mes)}-${duasCasas(dia)}`)
+    return this
+  }
+
   aceita(achado) {
     if (!achado.data) return achado.valores.some((v) => this.valores.has(v))
     const { dia, ano } = achado.data
     if (!ano) return this.valores.has(`data:${dia}`)
-    return this.valores.has(`data:${ano}-${dia}`) || (this.valores.has(`data:${dia}`) && !this.valores.has(`dataComAno:${dia}`))
+    if (this.valores.has(`data:${ano}-${dia}`)) return true
+    return this.valores.has(`data:${dia}`) && !this.valores.has(`dataComAno:${dia}`) && (!this.anosAceitos || this.anosAceitos.has(ano))
   }
 }
 
@@ -125,12 +173,22 @@ export function palavrasFora(texto) {
   return resto
 }
 
-/** Numeração de lista no começo da linha ("1. ", "2) ", "**1.** ") não conta como número da resposta. */
+/**
+ * Numeração de lista no começo da linha ("1. ", "2) ", "**1.** ", "### 1. ", "1 - ") não conta como número da resposta, se seguir a
+ * sequência: começa em 1 e cresce de um em um. "312. É o valor" é um número.
+ */
 export function semNumeracaoDeLista(texto) {
-  return texto.replace(/^(\s*)(\*\*)?\d{1,3}[.)](\*\*)?\s/gm, '$1')
+  let esperado = 1
+  return texto.replace(/^([ \t]*)(?:#{1,6}[ \t]+)?(?:\*\*)?(\d{1,3})(?:[.)]|[ \t]+-)(?:\*\*)?[ \t]/gm, (tudo, recuo, numero) => {
+    const n = Number(numero)
+    if (n === 1) esperado = 1
+    if (n !== esperado) return tudo
+    esperado++
+    return recuo
+  })
 }
 
-const CITACAO = /\[[TRC]\d+(?:\s*,\s*[TRC]\d+)*\]/g
+const CITACAO = /\[\s*[TRC]\d{1,3}(?:\s*,\s*[TRC]\d{1,3})*\s*\]/g
 
 /** As citações [T1], [R2], [C3] e [T1, T2] não são números da resposta. */
 export function semCitacoes(texto) {
@@ -148,7 +206,7 @@ export function citacoes(texto) {
  */
 export function frases(texto) {
   return texto
-    .split(/(?<=[.!?…](?:\s*\[[TRC]\d+(?:\s*,\s*[TRC]\d+)*\])*)\s+(?!\[[TRC]\d+)|\n+/)
+    .split(/(?<=[.!?…](?:\*{1,2}|_)?(?:\s*\[\s*[TRC]\d{1,3}(?:\s*,\s*[TRC]\d{1,3})*\s*\])*)\s+(?!\[\s*[TRC]\d)|\n+/)
     .map((f) => f.trim())
     .filter(Boolean)
 }

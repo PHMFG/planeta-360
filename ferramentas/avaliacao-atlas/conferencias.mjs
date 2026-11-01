@@ -127,13 +127,19 @@ const SEM_CITACAO = new Set(['parceria_consultar', 'calcular', 'contar_dias'])
  */
 export function numerosSemOrigem(turnos, hoje = new Date()) {
   const problemas = []
+  const [dia, mes, anoDeHoje] = hoje.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }).split('/').map(Number)
+  const anosAceitos = new Set(['2026', '2027', String(anoDeHoje)])
+  // O dado da parceria sai por marcador, que o servidor resolve em qualquer turno da conversa, e algarismo solto ele recusa.
+  const daParceria = new Origens()
   for (const turno of turnos) {
-    const geral = new Origens('2026', '2027', hoje.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' }))
+    const geral = new Origens().adicionarAnoLivre('2026').adicionarAnoLivre('2027').adicionarData(dia, mes, anoDeHoje)
+    geral.anosAceitos = anosAceitos
     const fontes = new Map()
     for (const item of turno.itens) {
       if (item.tipo === 'usuario') geral.adicionar(item.texto)
       if (item.tipo !== 'ferramenta' || item.erro) continue
       if (SEM_CITACAO.has(item.nome)) geral.adicionar(paraOrigem(item.resultado))
+      if (item.nome === 'parceria_consultar') daParceria.adicionar(paraOrigem(item.resultado))
       const json = jsonDe(item.resultado)
       for (const fonte of [...(json?.trechos ?? []), ...(json?.registros ?? [])]) {
         if (fonte.marcador) fontes.set(fonte.marcador, valoresDe(fonte))
@@ -145,8 +151,12 @@ export function numerosSemOrigem(turnos, hoje = new Date()) {
         const citadas = citacoes(frase)
         for (const marcador of citadas.filter((m) => !fontes.has(m))) problemas.push(`${marcador} não veio de ferramenta neste turno: ${frase.slice(0, 140)}`)
         const origens = new Origens(...citadas.map((m) => fontes.get(m)))
+        origens.anosAceitos = anosAceitos
         for (const achado of extrair(semCitacoes(frase))) {
-          if (!geral.aceita(achado) && !origens.aceita(achado)) problemas.push(`"${achado.trecho}" em: ${frase.slice(0, 140)}`)
+          // A fonte citada disse o ano desta data: vale o que ela disse, mesmo que a pessoa tenha escrito a data sem ano.
+          const fonteDisseOAno = achado.data?.ano && origens.valores.has(`dataComAno:${achado.data.dia}`)
+          const temOrigem = fonteDisseOAno ? origens.aceita(achado) : geral.aceita(achado) || daParceria.aceita(achado) || origens.aceita(achado)
+          if (!temOrigem) problemas.push(`"${achado.trecho}" em: ${frase.slice(0, 140)}`)
         }
       }
     }

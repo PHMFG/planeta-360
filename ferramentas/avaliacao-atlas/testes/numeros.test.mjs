@@ -80,6 +80,63 @@ test('o numeral por extenso é a palavra: o 17 do marcador não conta como ele',
   assert.equal(casa('foram dezessete aplicações', 'dezessete'), true)
 })
 
+const comTrecho = (texto, trecho, usuario = 'Quanto?') => [turno([
+  { tipo: 'usuario', texto: usuario },
+  { tipo: 'ferramenta', nome: 'buscar_documentos', resultado: JSON.stringify({ trechos: [{ marcador: 'T1', documento: 'Manual', versao: 2, pagina: 5, secao: 'S', texto: trecho }] }) },
+  { tipo: 'texto', texto, porModelo: true },
+])]
+
+test('numeral por extenso sem origem, com ou sem unidade', () => {
+  for (const texto of ['O prazo é vinte e cinco de dezembro.', 'A tarifa é de trezentos e doze por kVA.', 'São doze convites.', 'O limite é vinte %.', 'A multa é de dois milhoes de reais.']) {
+    assert.equal(numerosSemOrigem(turnosCom(texto)).length, 1, texto)
+  }
+  assert.equal(numerosSemOrigem(comTrecho('O prazo é dez de dezembro [T1].', 'até 04/12/2026')).length, 1)
+  assert.deepEqual(numerosSemOrigem(comTrecho('O prazo é quatro de dezembro [T1].', 'até 04/12/2026')), [])
+})
+
+test('"um", "uma" e "os dois manuais" não são números; "por cento" depois de algarismo não vira 100', () => {
+  assert.deepEqual(numerosSemOrigem(turnosCom('Os dois manuais tratam de uma regra.')), [])
+  assert.deepEqual(numerosSemOrigem(turnosCom('São 89,4 por cento.', ['{"valor":"89,4"}'])), [])
+})
+
+test('"uma" não é a origem de 1, e numerais só somam em ordem decrescente', () => {
+  assert.equal(numerosSemOrigem(turnosCom('A multa é de R$ 1,00.', [], 'Qual é a multa por uma credencial?')).length, 1)
+  assert.equal(numerosSemOrigem(comTrecho('São 7 lotes [T1].', 'Os lotes três e quatro abrem antes')).length, 1)
+  assert.deepEqual(numerosSemOrigem(comTrecho('O lote 3 [T1].', 'Os lotes três e quatro abrem antes')), [])
+  assert.deepEqual(numerosSemOrigem(comTrecho('São 312 [T1].', 'São trezentos e doze')), [])
+})
+
+test('a lista só é lista em sequência', () => {
+  for (const texto of ['312. É o valor da tarifa em reais.', '99) kVA é o limite.', '**500.** reais é a multa.', '2. Sem o primeiro item.']) {
+    assert.equal(numerosSemOrigem(turnosCom(texto)).length, 1, texto)
+  }
+  assert.deepEqual(numerosSemOrigem(turnosCom('1. Primeiro.\n2. Segundo.\n1. Outra lista.\n### 2. Com título\n3 - Com hífen')), [])
+})
+
+test('o ano livre é só ano: nunca valor', () => {
+  assert.deepEqual(numerosSemOrigem(turnosCom('A edição 2027 é a próxima.')), [])
+  for (const texto of ['A multa é de R$ 2.027,00.', 'A multa é de R$ 2027.', 'São 2026 credenciais.']) {
+    assert.equal(numerosSemOrigem(turnosCom(texto)).length, 1, texto)
+  }
+})
+
+test('data sem ano na mensagem não libera outro ano contra a fonte citada', () => {
+  assert.equal(numerosSemOrigem(comTrecho('O prazo é 04/12/2099 [T1].', 'até 04/12/2026', 'É em 04/12?')).length, 1)
+  assert.deepEqual(numerosSemOrigem(comTrecho('O prazo é 04/12/2026 [T1].', 'até 04/12/2026', 'É em 04/12?')), [])
+  assert.equal(numerosSemOrigem(turnosCom('É em 04/12/2099.', [], 'É em 04/12?')).length, 1)
+})
+
+test('o negrito fecha a frase: a citação da outra frase não apoia o número', () => {
+  assert.equal(numerosSemOrigem(comTrecho('**A multa é 09/09/2026.** A tarifa é R$ 312,00 [T1].', 'R$ 312,00 e 09/09/2026')).length, 1)
+})
+
+test('dado da parceria num turno seguinte: o servidor já resolveu o marcador', () => {
+  const consulta = { tipo: 'ferramenta', nome: 'parceria_consultar', resultado: '{"dados":[{"valor":"19"}]}' }
+  const turnos = [turno([{ tipo: 'usuario', texto: 'Quantas?' }, consulta, { tipo: 'texto', texto: 'Previstas: 19.', porModelo: true }]),
+    turno([{ tipo: 'usuario', texto: 'E faltam?' }, { tipo: 'texto', texto: 'Previstas: 19.', porModelo: true }])]
+  assert.deepEqual(numerosSemOrigem(turnos), [])
+})
+
 test('número da pergunta da pessoa tem origem', () => {
   assert.deepEqual(numerosSemOrigem(turnosCom('Para 34 kVA, preciso da tarifa.', [], 'E por 34 kVA?')), [])
 })
