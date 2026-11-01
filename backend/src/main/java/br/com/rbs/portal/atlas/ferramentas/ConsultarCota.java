@@ -34,8 +34,9 @@ import org.springframework.stereotype.Component;
  *   <li>o previsto do plano comercial, linha a linha, <b>só das categorias de aba aberta</b>: {@code APLICACAO_MARCA} se a aba
  *       Aplicações está aberta, {@code MIDIA} se a Mídia está. Cada linha leva a unidade ({@code INSERCAO}, {@code CPM} ou
  *       {@code APLICACAO}) em {@code dados}, que o {@code calcular} lê. Havendo um plano comercial indexado e visível para a parceria,
- *       a linha leva a origem (documento e versão) e, em {@code dados}, o {@code documentoId}, a {@code versao} e a {@code pagina} (a
- *       1: o previsto vem do CSV do plano, que não guarda a página no PDF do documento);</li>
+ *       a linha leva a origem (documento e versão) e, em {@code dados}, o {@code documentoId}, a {@code versao} e, quando o cadastro
+ *       a tem, a {@code pagina}: a {@code fonte_pagina} da linha do previsto, se ela é no máximo o número de páginas do documento. Sem
+ *       página no cadastro, ou com uma além do fim do documento, a página fica de fora (a tela abre na primeira, sem afirmar nada);</li>
  *   <li>as cortesias e as credenciais, só se a aba estiver aberta e houver linha.</li>
  * </ul>
  * <b>O valor do investimento e a base dele nunca entram</b> (o mínimo de dado): a consulta seleciona coluna por coluna, sem
@@ -208,7 +209,11 @@ public class ConsultarCota implements Ferramenta {
         if (plano != null) {
             dados.put("documentoId", plano.documentoId());
             dados.put("versao", plano.versao());
-            dados.put("pagina", 1);
+            Integer pagina = p.fontePagina();
+            // a página do cadastro, se ela existe no documento; senão nenhuma (a tela abre na primeira sem afirmar nada)
+            if (pagina != null && pagina >= 1 && plano.paginas() != null && pagina <= plano.paginas()) {
+                dados.put("pagina", pagina);
+            }
         }
         boolean midia = "MIDIA".equals(p.categoria());
         Fonte fonte = turno.registrarRegistro("aproveitamento_previsto", p.id(), p.veiculo() + " · " + p.formato(),

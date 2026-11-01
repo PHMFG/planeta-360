@@ -168,7 +168,8 @@ class ConsultarCotaNoChatTest {
         assertThat(fonte.titulo()).isEqualTo("RBS TV · Chamadas assinadas");
         assertThat(fonte.documentoId()).isEqualTo(plano);
         assertThat(fonte.versao()).isEqualTo(1);
-        assertThat(fonte.pagina()).isEqualTo(1);
+        // a linha vem do cadastro com fonte_pagina 6, e o plano da Master tem 5 páginas: sem página, em vez de dizer 1
+        assertThat(fonte.pagina()).isNull();
         assertThat(fonte.substituido()).isFalse();
         assertThat(fonte.revogado()).isFalse();
         Map<String, Object> dados = jdbc.sql("""
@@ -176,7 +177,7 @@ class ConsultarCotaNoChatTest {
                        f.documento_id, f.pagina AS coluna_pagina
                 FROM atlas_fonte f JOIN atlas_mensagem m ON m.id = f.mensagem_id WHERE m.conversa_id = :c
                 """).param("c", conversa).query().singleRow();
-        assertThat(dados).containsEntry("unidade", "INSERCAO").containsEntry("documento", String.valueOf(plano)).containsEntry("pagina", "1")
+        assertThat(dados).containsEntry("unidade", "INSERCAO").containsEntry("documento", String.valueOf(plano)).containsEntry("pagina", null)
                 .containsEntry("documento_id", null).containsEntry("coluna_pagina", null);
         assertThat(textoFinal(atlas.verConversa(usuario(jdbc, AMARELO), conversa)).fontes()).isEqualTo(texto.fontes());
     }

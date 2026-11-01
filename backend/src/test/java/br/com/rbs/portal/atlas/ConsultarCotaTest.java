@@ -265,11 +265,47 @@ class ConsultarCotaTest extends ApoioDasConsultas {
             Map<String, Object> origem = (Map<String, Object>) p.get("origem");
             assertThat(origem).containsEntry("documento", PLANO_DA_MASTER).containsEntry("versao", 1);
             Fonte fonte = turno.fonte((String) p.get("marcador")).orElseThrow();
-            assertThat(fonte.dados()).containsEntry("documentoId", plano).containsEntry("versao", 1).containsEntry("pagina", 1);
+            assertThat(fonte.dados()).containsEntry("documentoId", plano).containsEntry("versao", 1);
+            // a página é a do cadastro (fonte_pagina) quando ela existe no documento; senão, nenhuma
+            assertThat(fonte.dados().get("pagina")).isEqualTo(paginaEsperada(fonte.registroId(), plano));
         });
         // a cota, as abas, as cortesias e as credenciais são da parceria, não do documento
         assertThat(registrosDoTipo(resultado, "cota").get(0)).doesNotContainKey("origem");
         assertThat(registrosDoTipo(resultado, "cortesia").get(0)).doesNotContainKey("origem");
+    }
+
+    /** A página de {@code fonte_pagina} se ela cabe no documento; senão nulo (e a página fica de fora). */
+    private Object paginaEsperada(long previstoId, long documentoId) {
+        Integer pagina = jdbc.sql("SELECT fonte_pagina FROM aproveitamento_previsto WHERE id = :i").param("i", previstoId).query(Integer.class).optional()
+                .orElse(null);
+        Integer paginas = jdbc.sql("SELECT paginas FROM documento WHERE id = :d").param("d", documentoId).query(Integer.class).single();
+        return pagina != null && paginas != null && pagina >= 1 && pagina <= paginas ? pagina : null;
+    }
+
+    @Test
+    void aPaginaDoPrevistoEAfontePaginaDoCadastroOuNenhumaNuncaUmaPaginaInventada() {
+        long amarelo = parceria("Cliente Amarelo");
+        long plano = documento(PLANO_DA_MASTER, 1);
+        int paginas = jdbc.sql("SELECT paginas FROM documento WHERE id = :d").param("d", plano).query(Integer.class).single();
+        jdbc.sql("""
+                INSERT INTO aproveitamento_previsto (parceria_id, categoria, veiculo, formato, tipo_midia, quantidade_prevista, unidade, fonte_pagina)
+                VALUES (:p, 'MIDIA', 'Veículo de teste', 'Com página no plano', 'PROPRIA', 1, 'INSERCAO', :dentro),
+                       (:p, 'MIDIA', 'Veículo de teste', 'Com página no último', 'PROPRIA', 1, 'INSERCAO', :ultima),
+                       (:p, 'MIDIA', 'Veículo de teste', 'Com página depois do fim', 'PROPRIA', 1, 'INSERCAO', :alem),
+                       (:p, 'MIDIA', 'Veículo de teste', 'Sem página no cadastro', 'PROPRIA', 1, 'INSERCAO', NULL)
+                """).param("p", amarelo).param("dentro", 2).param("ultima", paginas).param("alem", paginas + 1).update();
+        FontesDoTurno turno = turno();
+
+        List<Map<String, Object>> previstos = registrosDoTipo(resultado(contexto(AMARELO, "Cliente Amarelo"), turno, COTA, "{}"), "previsto");
+
+        java.util.function.Function<String, Map<String, Object>> dados = formato -> turno.fonte((String) previstos.stream()
+                .filter(p -> formato.equals(p.get("formato"))).findFirst().orElseThrow().get("marcador")).orElseThrow().dados();
+        assertThat(dados.apply("Com página no plano")).containsEntry("pagina", 2).containsEntry("documentoId", plano);
+        assertThat(dados.apply("Com página no último")).containsEntry("pagina", paginas);
+        assertThat(dados.apply("Com página depois do fim")).as("o documento só tem " + paginas + " páginas").doesNotContainKey("pagina")
+                .containsEntry("documentoId", plano);
+        assertThat(dados.apply("Sem página no cadastro")).as("sem fonte_pagina, nada de página 1").doesNotContainKey("pagina")
+                .containsEntry("documentoId", plano);
     }
 
     @Test

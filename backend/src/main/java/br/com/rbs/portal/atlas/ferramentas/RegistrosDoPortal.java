@@ -45,9 +45,9 @@ public class RegistrosDoPortal {
     public record AbaDaCota(String codigo, String nome, boolean aberta, boolean naCota) {
     }
 
-    /** Uma linha do plano comercial previsto. */
+    /** Uma linha do plano comercial previsto; {@code fontePagina} é a página do plano de onde o cadastro a tirou (nula se não guardou). */
     public record Previsto(Long id, String categoria, String bloco, String veiculo, String formato, String espacoPrograma, String janela,
-                           String tipoMidia, BigDecimal quantidadePrevista, String unidade) {
+                           String tipoMidia, BigDecimal quantidadePrevista, String unidade, Integer fontePagina) {
     }
 
     public record Cortesia(Long id, String setor, String dia, Integer quantidade, boolean comShuttle, String acesso) {
@@ -56,8 +56,8 @@ public class RegistrosDoPortal {
     public record Credencial(Long id, String setor, String beneficiario, Integer quantidadePorDia) {
     }
 
-    /** O documento do plano comercial que serve de origem ao previsto. */
-    public record PlanoComercial(Long documentoId, String titulo, Integer versao) {
+    /** O documento do plano comercial que serve de origem ao previsto, com quantas páginas tem (nulo se o documento não diz). */
+    public record PlanoComercial(Long documentoId, String titulo, Integer versao, Integer paginas) {
     }
 
     /**
@@ -167,7 +167,8 @@ public class RegistrosDoPortal {
     /** O previsto das categorias dadas (as de aba aberta), na ordem em que o plano foi carregado. */
     public List<Previsto> previsto(long parceriaId, List<String> categorias, int limite) {
         return jdbc.sql("""
-                        SELECT id, categoria, bloco, veiculo, formato, espaco_programa, janela, tipo_midia, quantidade_prevista, unidade
+                        SELECT id, categoria, bloco, veiculo, formato, espaco_programa, janela, tipo_midia, quantidade_prevista, unidade,
+                               fonte_pagina
                         FROM aproveitamento_previsto WHERE parceria_id = :parceria AND categoria IN (:categorias)
                         ORDER BY id LIMIT :limite
                         """)
@@ -190,7 +191,7 @@ public class RegistrosDoPortal {
      */
     public Optional<PlanoComercial> planoComercial(long parceriaId) {
         return jdbc.sql("""
-                        SELECT d.id AS documento_id, d.titulo, d.versao
+                        SELECT d.id AS documento_id, d.titulo, d.versao, d.paginas
                         FROM parceria p JOIN documento d ON d.tipo = 'PLANO_COMERCIAL' AND %s
                         WHERE p.id = :parceria
                         ORDER BY CASE d.escopo WHEN 'PARCERIA' THEN 0 WHEN 'COTA' THEN 1 ELSE 2 END, d.versao DESC, d.id DESC
