@@ -16,6 +16,7 @@ import br.com.rbs.portal.atlas.checagem.FontesDoTurno;
 import br.com.rbs.portal.atlas.checagem.FontesDoTurno.Fonte;
 import br.com.rbs.portal.atlas.contexto.AtlasContexto;
 import br.com.rbs.portal.atlas.contexto.AtlasContextoFabrica;
+import br.com.rbs.portal.atlas.relatorio.ContaDoChat;
 import br.com.rbs.portal.comum.DadosInvalidosException;
 import br.com.rbs.portal.dados.DadoInformadoService;
 import br.com.rbs.portal.dados.OrigemDoDado;
@@ -416,8 +417,9 @@ class CalcularTest {
         assertThat(erro(contexto, turno, "{\"nome\":\"x\",\"script\":\"a + b\",\"variaveis\":{\"a\":" + insercao + ",\"b\":" + aplicacao + "}}"))
                 .contains("INSERCAO", "APLICACAO");
         // a mesma unidade, ou uma só variável com unidade ao lado de outras sem, passa
-        assertThat(rodar(contexto, turno, "{\"nome\":\"y\",\"script\":\"a + b\",\"variaveis\":{\"a\":" + insercao + ",\"b\":" + insercao + "}}"))
-                .containsEntry("valorFormatado", "10");
+        String outraInsercao = "{\"fonte\":\"usuario\",\"valor\":\"8\",\"unidade\":\"INSERCAO\"}";
+        assertThat(rodar(contexto, turno, "{\"nome\":\"y\",\"script\":\"a + b\",\"variaveis\":{\"a\":" + insercao + ",\"b\":" + outraInsercao + "}}"))
+                .containsEntry("valorFormatado", "13");
         assertThat(rodar(contexto, turno, "{\"nome\":\"z\",\"script\":\"a + b\",\"variaveis\":{\"a\":" + insercao
                 + ",\"b\":{\"fonte\":\"usuario\",\"valor\":\"2\"}}}")).containsEntry("valorFormatado", "7");
     }
@@ -534,6 +536,94 @@ class CalcularTest {
                 + "\"valor\":\"34\"}}}")).contains("pct");
         assertThat(erro(contexto(), turno(), "{\"nome\":\"x\",\"script\":\"new * 2\",\"variaveis\":{\"new\":{\"fonte\":\"usuario\","
                 + "\"valor\":\"34\"}}}")).contains("new");
+    }
+
+    // ---------------------------------------------------------------------
+    // Fabricar número: redundância, cadeia de constantes e arredondamento em cadeia
+    // ---------------------------------------------------------------------
+
+    @Test
+    void duasVariaveisComAMesmaOrigemEOMesmoValorSaoRedundantes() {
+        FontesDoTurno turno = new FontesDoTurno("São 34 kVA e 34 geradores e 17.", 2027, LocalDate.of(2026, 11, 1));
+        turno.registrarRegistro("entrega", 1, "Geradores", null, "Há 34 geradores.", Map.of());
+        AtlasContexto contexto = contexto();
+
+        assertThat(erro(contexto, turno, "{\"nome\":\"x\",\"script\":\"a + b\",\"variaveis\":{\"a\":{\"fonte\":\"usuario\",\"valor\":\"34\"},"
+                + "\"b\":{\"fonte\":\"usuario\",\"valor\":\"34\"}}}")).contains("a", "b", "mesma origem");
+        assertThat(erro(contexto, turno, "{\"nome\":\"x\",\"script\":\"a + b\",\"variaveis\":{\"a\":{\"ref\":\"cons:aplicacoes.previstas\"},"
+                + "\"b\":{\"ref\":\"cons:aplicacoes.previstas\"}}}")).contains("mesma origem");
+        assertThat(turno.contas()).isEmpty();
+        // o mesmo valor de origens diferentes, e valores diferentes da mesma origem, passam
+        assertThat(rodar(contexto, turno, "{\"nome\":\"x\",\"script\":\"a + b\",\"variaveis\":{\"a\":{\"fonte\":\"usuario\",\"valor\":\"34\"},"
+                + "\"b\":{\"fonte\":\"R1\",\"valor\":\"34\"}}}")).containsEntry("valorFormatado", "68");
+        assertThat(rodar(contexto, turno, "{\"nome\":\"y\",\"script\":\"a + b\",\"variaveis\":{\"a\":{\"fonte\":\"usuario\",\"valor\":\"34\"},"
+                + "\"b\":{\"fonte\":\"usuario\",\"valor\":\"17\"}}}")).containsEntry("valorFormatado", "51");
+    }
+
+    @Test
+    void oLimiteDeDuasConstantesEDaCadeiaInteiraENaoDeCadaConta() {
+        FontesDoTurno turno = turno();
+        AtlasContexto contexto = contexto();
+        informar(VISITANTES, 1200L, CADASTROS, 1072L);
+
+        // c1 tem 1 constante; c2 usa c1 e soma 1; c3 usaria c2 e mais uma: 3 pela cadeia
+        rodar(contexto, turno, "{\"nome\":\"ca\",\"script\":\"preco * 2\",\"variaveis\":{\"preco\":{\"fonte\":\"usuario\",\"valor\":\"312\"}}}");
+        rodar(contexto, turno, "{\"nome\":\"cb\",\"script\":\"t + 1\",\"variaveis\":{\"t\":{\"ref\":\"calc:ca\"}}}");
+        assertThat(ContaDoChat.deDados(turno.fonte("C1").orElseThrow().dados()).orElseThrow().constantes()).isEqualTo(1);
+        assertThat(ContaDoChat.deDados(turno.fonte("C2").orElseThrow().dados()).orElseThrow().constantes()).isEqualTo(2);
+        String erro = erro(contexto, turno, "{\"nome\":\"cc\",\"script\":\"t * 2\",\"variaveis\":{\"t\":{\"ref\":\"calc:cb\"}}}");
+        assertThat(erro).contains("3 constantes", "cadeia", "máximo é 2");
+        assertThat(turno.conta("cc")).as("a conta recusada não gasta o nome nem vira fonte").isEmpty();
+        // sem constante nova, a cadeia continua em 2; a conta c4 não soma nada
+        assertThat(rodar(contexto, turno, "{\"nome\":\"cd\",\"script\":\"t + area\",\"variaveis\":{\"t\":{\"ref\":\"calc:cb\"},"
+                + "\"area\":{\"fonte\":\"usuario\",\"valor\":\"34\"}}}")).containsEntry("marcador", "C3");
+        assertThat(ContaDoChat.deDados(turno.fonte("C3").orElseThrow().dados()).orElseThrow().constantes()).isEqualTo(2);
+        // a fórmula fixa do modelo conta zero: duas constantes no script e a fórmula fixa passam
+        assertThat(rodar(contexto, turno, "{\"nome\":\"ce\",\"script\":\"taxa * 2 + 1\",\"variaveis\":{\"taxa\":{\"ref\":\"calc:taxa_cadastro\"}}}"))
+                .containsEntry("valorFormatado", "179,6");
+    }
+
+    @Test
+    void oAtaqueDeEncadearContasParaChegarEm312NaoFecha() {
+        // x + 100 + 100 numa conta e y + 100 + 2, y + 2 + 2... depois: com a cadeia, a terceira conta já não passa
+        FontesDoTurno turno = new FontesDoTurno("Quero 7 e 5 unidades.", 2027, LocalDate.of(2026, 11, 1));
+        AtlasContexto contexto = contexto();
+
+        rodar(contexto, turno, "{\"nome\":\"ca\",\"script\":\"a + 100\",\"variaveis\":{\"a\":{\"fonte\":\"usuario\",\"valor\":\"7\"}}}");
+        rodar(contexto, turno, "{\"nome\":\"cb\",\"script\":\"t + 100\",\"variaveis\":{\"t\":{\"ref\":\"calc:ca\"}}}");
+
+        assertThat(erro(contexto, turno, "{\"nome\":\"cc\",\"script\":\"t + 2\",\"variaveis\":{\"t\":{\"ref\":\"calc:cb\"}}}"))
+                .contains("constantes", "cadeia");
+        assertThat(erro(contexto, turno, "{\"nome\":\"cd\",\"script\":\"t + 1\",\"variaveis\":{\"t\":{\"ref\":\"calc:cb\"}}}"))
+                .contains("constantes", "cadeia");
+        assertThat(turno.contas()).hasSize(2);
+    }
+
+    @Test
+    void aContaSeguinteUsaOValorSemArredondarSoOQueSaiParaATelaEArredondado() {
+        FontesDoTurno turno = new FontesDoTurno("Divida 100 por 3 e depois multiplique por 3.", 2027, LocalDate.of(2026, 11, 1));
+        AtlasContexto contexto = contexto();
+
+        Map<String, Object> terco = rodar(contexto, turno, "{\"nome\":\"terco\",\"script\":\"a / b\",\"variaveis\":{"
+                + "\"a\":{\"fonte\":\"usuario\",\"valor\":\"100\"},\"b\":{\"fonte\":\"usuario\",\"valor\":\"3\"}}}");
+        Map<String, Object> de_volta = rodar(contexto, turno, "{\"nome\":\"de_volta\",\"script\":\"t * n\",\"variaveis\":{"
+                + "\"t\":{\"ref\":\"calc:terco\"},\"n\":{\"fonte\":\"usuario\",\"valor\":\"3\"}}}");
+
+        assertThat(terco).containsEntry("valorFormatado", "33,33");
+        assertThat(de_volta).as("100/3 vezes 3 é 100, e não 99,99").containsEntry("valorFormatado", "100");
+        // a tela mostra a variável arredondada, e a conta guarda o número exato
+        assertThat(de_volta.get("variaveis")).isEqualTo(List.of(Map.of("nome", "t", "origem", "calc:terco", "valor", "33,33"),
+                Map.of("nome", "n", "origem", "usuario", "valor", "3")));
+        ContaDoChat guardada = ContaDoChat.deDados(turno.fonte("C1").orElseThrow().dados()).orElseThrow();
+        assertThat(guardada.valor()).isEqualByComparingTo("33.33");
+        assertThat(guardada.valorExato().scale()).as("DECIMAL128: 34 dígitos").isGreaterThan(20);
+        assertThat(guardada.comoValor().numero()).isEqualByComparingTo(guardada.valorExato());
+        assertThat(guardada.comoValor().texto()).isEqualTo("33,33");
+        // o que se grava e se lê de volta (a releitura da conversa e o relatório) mantém o exato
+        ContaDoChat relida = ContaDoChat.deDados(AtlasJson.ler(AtlasJson.escrever(guardada.comoDados()), new TypeReference<Map<String, Object>>() {
+        })).orElseThrow();
+        assertThat(relida.valorExato()).isEqualByComparingTo(guardada.valorExato());
+        assertThat(relida.constantes()).isZero();
     }
 
     // ---------------------------------------------------------------------

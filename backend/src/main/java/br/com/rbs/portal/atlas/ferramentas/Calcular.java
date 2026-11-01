@@ -102,8 +102,16 @@ public class Calcular implements Ferramenta {
               "formato":{"type":"string","enum":["numero","moeda"],"description":"numero (padrão) ou moeda (duas casas)."}},
              "required":["nome","script","variaveis"],"additionalProperties":false}""");
 
-    /** Uma variável já resolvida: o número, de onde veio e a unidade, se tem. */
-    private record Entrada(String nome, String origem, BigDecimal numero, String unidade) {
+    /**
+     * Uma variável já resolvida: o número (exato, é o que entra na conta), de onde veio, a unidade, se tem, o número como a conta
+     * o mostra (o de uma conta anterior sai arredondado em duas casas; os outros, como estão) e as constantes que ela carrega pela
+     * cadeia (as de uma conta {@code calc:} do turno; a fórmula fixa do modelo e os outros valores, zero).
+     */
+    private record Entrada(String nome, String origem, BigDecimal numero, String unidade, BigDecimal paraExibir, int constantes) {
+
+        Entrada(String nome, String origem, BigDecimal numero, String unidade) {
+            this(nome, origem, numero, unidade, numero, 0);
+        }
     }
 
     private final ResolvedorDeReferencias resolvedor;
@@ -155,7 +163,7 @@ public class Calcular implements Ferramenta {
         exigirSemErros(erros);
 
         // 2. O script: a lista de tokens, antes de qualquer outra coisa
-        ScriptDeConta.conferir(script, declaradas.keySet());
+        int constantesDoScript = ScriptDeConta.conferir(script, declaradas.keySet());
 
         // 3. A origem de cada variável
         Resolucao resolucao = resolucaoDoTurno(contexto, turno);
@@ -171,6 +179,9 @@ public class Calcular implements Ferramenta {
         if (!indisponiveis.isEmpty()) {
             return indisponivel(indisponiveis.get(0));
         }
+        semVariavelRedundante(entradas, erros);
+        int constantes = constantesPelaCadeia(constantesDoScript, entradas, erros);
+        exigirSemErros(erros);
         String unidade = unidadeDaConta(entradas);
 
         // 4. A conta
@@ -180,7 +191,8 @@ public class Calcular implements Ferramenta {
         if (!resultado.disponivel()) {
             return indisponivel("Não dá para calcular: " + resultado.motivo().toLowerCase(java.util.Locale.ROOT));
         }
-        BigDecimal valor = resultado.valor().setScale(2, RoundingMode.HALF_UP);
+        BigDecimal valorExato = resultado.valor();
+        BigDecimal valor = valorExato.setScale(2, RoundingMode.HALF_UP);
         if (valor.abs().compareTo(TETO_DO_RESULTADO) >= 0) {
             erros.put("script", "O resultado é grande demais para guardar. Confira os valores das variáveis.");
             exigirSemErros(erros);
@@ -189,18 +201,18 @@ public class Calcular implements Ferramenta {
         // 5. A saída, formatada no padrão do portal
         List<ContaDoChat.Variavel> daConta = new ArrayList<>();
         List<BigDecimal> paraFormatar = new ArrayList<>();
-        entradas.forEach(entrada -> paraFormatar.add(entrada.numero()));
+        entradas.forEach(entrada -> paraFormatar.add(entrada.paraExibir()));
         paraFormatar.add(valor);
         BigDecimal parteInteira = valor.abs().setScale(0, RoundingMode.DOWN);
         paraFormatar.add(parteInteira);
         List<String> formatados = repositorio.formatarNumeros(paraFormatar);
         for (int i = 0; i < entradas.size(); i++) {
             Entrada entrada = entradas.get(i);
-            daConta.add(new Variavel(entrada.nome(), entrada.origem(), formatados.get(i), entrada.numero(), entrada.unidade()));
+            daConta.add(new Variavel(entrada.nome(), entrada.origem(), formatados.get(i), entrada.paraExibir(), entrada.unidade()));
         }
         String valorFormatado = "moeda".equals(formato) ? comoMoeda(valor, parteInteira, formatados.get(entradas.size() + 1))
                 : formatados.get(entradas.size());
-        ContaDoChat conta = new ContaDoChat(nome, valor, valorFormatado, script, unidade, formato, daConta);
+        ContaDoChat conta = new ContaDoChat(nome, valor, valorFormatado, script, unidade, formato, daConta, valorExato, constantes);
 
         // 6. Tudo conferido: agora a conta vira fonte do turno (e, com relatório em montagem, linha do relatório)
         relatorio.ifPresent(montando -> repositorio.inserirCalculo(montando.id(), nome, script, AtlasJson.escrever(conta.comoDados()), valor,
@@ -346,13 +358,13 @@ public class Calcular implements Ferramenta {
             return null;
         }
         if (variavel.get("ref") instanceof String ref) {
-            return daReferencia(nome, ref, declarada, resolucao, erros, indisponiveis);
+            return daReferencia(nome, ref, declarada, resolucao, turno, erros, indisponiveis);
         }
         return daFonte(nome, (String) variavel.get("fonte"), (String) variavel.get("valor"), declarada, turno, erros);
     }
 
-    private static Entrada daReferencia(String nome, String ref, String declarada, Resolucao resolucao, Map<String, String> erros,
-                                        List<String> indisponiveis) {
+    private static Entrada daReferencia(String nome, String ref, String declarada, Resolucao resolucao, FontesDoTurno turno,
+                                        Map<String, String> erros, List<String> indisponiveis) {
         String campo = "variaveis." + nome;
         if (!Referencias.valida(ref)) {
             erros.put(campo, "Referência desconhecida: " + ref + ". Use só as referências que as ferramentas devolveram.");
@@ -377,7 +389,48 @@ public class Calcular implements Ferramenta {
             erros.put(campo, "A referência " + ref + " não é um número (" + valor.texto() + "): não serve numa conta.");
             return null;
         }
-        return comUnidades(nome, ref, valor.numero(), declarada, unidadeDaReferencia(ref, valor), erros);
+        Entrada entrada = comUnidades(nome, ref, valor.numero(), declarada, unidadeDaReferencia(ref, valor), erros);
+        if (entrada == null || !ref.startsWith("calc:")) {
+            return entrada;
+        }
+        // uma conta do turno entra com o número exato e carrega as constantes dela; a fórmula fixa do modelo não carrega nenhuma
+        int constantes = turno.conta(Referencias.nome(ref)).flatMap(fonte -> ContaDoChat.deDados(fonte.dados())).map(ContaDoChat::constantes)
+                .orElse(0);
+        BigDecimal paraExibir = valor.numero().scale() > 2 ? valor.numero().setScale(2, RoundingMode.HALF_UP) : valor.numero();
+        return new Entrada(entrada.nome(), entrada.origem(), entrada.numero(), entrada.unidade(), paraExibir, constantes);
+    }
+
+    /**
+     * [VALIDACAO] Duas variáveis com a mesma origem e o mesmo valor são redundantes, e a redundância só serve para fabricar número
+     * (a / b dá 1, e 1 + 1 + 1... chega a qualquer valor): a recusa diz para usar uma só, que o script pode repetir até duas vezes.
+     */
+    private static void semVariavelRedundante(List<Entrada> entradas, Map<String, String> erros) {
+        for (int i = 0; i < entradas.size(); i++) {
+            for (int j = i + 1; j < entradas.size(); j++) {
+                Entrada a = entradas.get(i);
+                Entrada b = entradas.get(j);
+                if (a.origem().equals(b.origem()) && a.numero().compareTo(b.numero()) == 0) {
+                    erros.put("variaveis." + b.nome(), "As variáveis " + a.nome() + " e " + b.nome() + " têm a mesma origem (" + a.origem()
+                            + ") e o mesmo valor: uma delas é redundante. Use uma só variável; o script pode usá-la até duas vezes.");
+                    return;
+                }
+            }
+        }
+    }
+
+    /**
+     * [VALIDACAO] O limite de duas constantes vale pela cadeia: as do script mais as das contas {@code calc:} do turno que ele usa. Sem
+     * isso, {@code x + 100 + 100} numa conta e {@code y + 100 + 2} na seguinte montariam qualquer número em poucas chamadas.
+     */
+    private static int constantesPelaCadeia(int doScript, List<Entrada> entradas, Map<String, String> erros) {
+        int herdadas = entradas.stream().mapToInt(Entrada::constantes).sum();
+        int total = doScript + herdadas;
+        if (total > ScriptDeConta.MAXIMO_DE_CONSTANTES) {
+            erros.put("script", "A conta soma " + total + " constantes pela cadeia (" + doScript + " no script e " + herdadas
+                    + " nas contas calc: que ele usa); o máximo é " + ScriptDeConta.MAXIMO_DE_CONSTANTES + " no total. Os valores entram "
+                    + "como variáveis, com a fonte de cada um.");
+        }
+        return total;
     }
 
     /** A unidade de uma referência: APLICACAO nas aplicações previstas e comprovadas, ou a que o valor traz (de uma conta anterior). */

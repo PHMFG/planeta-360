@@ -22,9 +22,15 @@ import java.util.Map;
  * @param unidade        a unidade das variáveis (INSERCAO, CPM ou APLICACAO), se elas tinham uma
  * @param formato        {@code numero} ou {@code moeda}
  * @param variaveis      as variáveis, na ordem em que o modelo as declarou
+ * @param valorExato     o resultado sem arredondar (DECIMAL128): a conta seguinte que usa esta parte dele, e não do {@code valor} de duas
+ *                       casas (100/3 &times; 3 é 100, e não 99,99); só o que sai para a tela é arredondado. Nulo nas contas gravadas antes
+ *                       deste campo, que usam o {@code valor}
+ * @param constantes     quantas constantes do script esta conta soma <b>pela cadeia</b>: as do script dela e as das contas
+ *                       {@code calc:} que ela usa (a fórmula fixa do modelo conta zero). O limite de duas constantes vale para o total, e não
+ *                       conta a conta
  */
 public record ContaDoChat(String nome, BigDecimal valor, String valorFormatado, String script, String unidade, String formato,
-                          List<Variavel> variaveis) {
+                          List<Variavel> variaveis, BigDecimal valorExato, int constantes) {
 
     /** De onde vem o valor de uma variável: a referência, o marcador da fonte ou {@code usuario}. */
     public record Variavel(String nome, String origem, String valor, BigDecimal numero, String unidade) {
@@ -37,6 +43,12 @@ public record ContaDoChat(String nome, BigDecimal valor, String valorFormatado, 
         variaveis = variaveis == null ? List.of() : List.copyOf(variaveis);
     }
 
+    /** Uma conta sem o resultado exato nem constantes (as gravadas antes desses campos, e a conta montada à mão): usa o {@code valor}. */
+    public ContaDoChat(String nome, BigDecimal valor, String valorFormatado, String script, String unidade, String formato,
+                       List<Variavel> variaveis) {
+        this(nome, valor, valorFormatado, script, unidade, formato, variaveis, null, 0);
+    }
+
     public String ref() {
         return "calc:" + nome;
     }
@@ -45,7 +57,7 @@ public record ContaDoChat(String nome, BigDecimal valor, String valorFormatado, 
     public Valor comoValor() {
         List<String> entradas = new ArrayList<>();
         variaveis.forEach(variavel -> entradas.add(variavel.nome() + " = " + variavel.valor()));
-        return new Valor(ref(), nome, valorFormatado, valor, unidade,
+        return new Valor(ref(), nome, valorFormatado, valorExato != null ? valorExato : valor, unidade,
                 ORIGEM + ": " + script + (entradas.isEmpty() ? "" : " com " + ResolvedorDeReferencias.juntar(entradas)), null);
     }
 
@@ -67,6 +79,10 @@ public record ContaDoChat(String nome, BigDecimal valor, String valorFormatado, 
         dados.put("nome", nome);
         dados.put("ref", ref());
         dados.put("valor", valor);
+        if (valorExato != null) {
+            dados.put("valorExato", valorExato.toPlainString());   // texto: o número do JSON perderia as casas além do double
+        }
+        dados.put("constantes", constantes);
         dados.put("valorFormatado", valorFormatado);
         dados.put("formato", formato);
         dados.put("unidade", unidade);
@@ -102,7 +118,8 @@ public record ContaDoChat(String nome, BigDecimal valor, String valorFormatado, 
             }
         }
         return java.util.Optional.of(new ContaDoChat(nome, numero(dados.get("valor")), valorFormatado, script, (String) dados.get("unidade"),
-                (String) dados.get("formato"), variaveis));
+                (String) dados.get("formato"), variaveis, dados.get("valorExato") == null ? null : numero(dados.get("valorExato")),
+                dados.get("constantes") instanceof Number constantes ? constantes.intValue() : 0));
     }
 
     private static BigDecimal numero(Object valor) {
