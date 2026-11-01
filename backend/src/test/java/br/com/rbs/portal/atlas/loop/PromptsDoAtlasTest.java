@@ -123,6 +123,24 @@ class PromptsDoAtlasTest {
     }
 
     @Test
+    void noPassoDoCartaoOPromptMandaResponderAOutraPartePorEscritoComACitacaoAntesDePedirOsNumeros() {
+        String prompt = PromptsDoAtlas.compor(true);
+        String fluxo = prompt.lines().filter(l -> l.contains("(2) Se houver lacunas obrigatórias")).findFirst().orElseThrow();
+
+        // o passo (2) do fluxo: a pergunta que vem junto do pedido do relatório é respondida por escrito, com a citação, antes do cartão
+        assertThat(fluxo).contains("Se a mensagem também perguntar outra coisa, responda a essa parte por escrito antes de pedir os números, "
+                + "com a citação");
+        assertThat(fluxo.indexOf("Se a mensagem também perguntar outra coisa")).isGreaterThan(fluxo.indexOf("(2) Se houver lacunas"))
+                .isLessThan(fluxo.indexOf("(3) Quando o cartão voltar"));
+        // a busca vem antes, sem o cartão na mesma rodada: o texto precisa do resultado dela para citar, e a pausa do cartão não o espera
+        assertThat(fluxo).contains("busque antes").contains("sem pedir o cartão na mesma rodada");
+        // a mensagem do cartão segue a regra do texto do relatório: sem número, link nem chave
+        assertThat(fluxo).contains("mensagem curta, sem número, link nem chave");
+        // só o relatório ligado tem o fluxo
+        assertThat(PromptsDoAtlas.compor(false)).doesNotContain("Se a mensagem também perguntar outra coisa");
+    }
+
+    @Test
     void osMarcadoresDoTurnoSaemEMarcadorNenhumSobraNosDoisModos() {
         for (boolean ligado : List.of(false, true)) {
             String prompt = PromptsDoAtlas.compor(ligado);
