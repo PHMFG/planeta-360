@@ -20,7 +20,7 @@ export type CampoCatalogo = {
 
 export type ValorVigente = {
   valor: number
-  /** Só num campo do tipo ARQUIVO: o valor fica nulo, e a planilha sai pela rota de download. */
+  /** Só num campo do tipo ARQUIVO: o valor é o id do arquivo, e a planilha sai pela rota de download. */
   arquivo?: { id: number; nomeOriginal: string } | null
   origem: 'PORTAL' | 'ATLAS'
   informadoPor: UsuarioResumo | null

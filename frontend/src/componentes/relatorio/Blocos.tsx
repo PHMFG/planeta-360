@@ -35,9 +35,43 @@ function Kpi({ item, referencias }: { item: ItemKpi; referencias: Referencias })
 
 type FotoDoRelatorio = Extract<Bloco, { tipo: 'galeria_comprovacoes' }>['itens'][number]
 
+const FOTOS_AO_MESMO_TEMPO = 4
+const fotosGuardadas = new Map<number, Promise<Blob>>()
+const naFila: (() => void)[] = []
+let baixando = 0
+
+function proximaDaFila() {
+  baixando -= 1
+  naFila.shift()?.()
+}
+
 /**
- * Uma foto da galeria. A rota de download só responde como anexo, então a imagem vem por fetch e vira um endereço blob: (cada
- * visualização grava um DOWNLOAD no histórico). {@code data-foto-carregando} segura a impressão até a imagem chegar.
+ * Os bytes de uma foto: até 4 de cada vez, e uma vez só por tela aberta. A rota grava um DOWNLOAD por pedido, e reabrir o documento
+ * não deve encher o histórico nem baixar de novo uma foto de até 20 MB. A falha não fica guardada: a próxima abertura tenta de novo.
+ */
+function bytesDaFoto(arquivoId: number) {
+  let guardada = fotosGuardadas.get(arquivoId)
+  if (!guardada) {
+    guardada = new Promise<void>((liberar) => {
+      if (baixando < FOTOS_AO_MESMO_TEMPO) liberar()
+      else naFila.push(liberar)
+    })
+      .then(() => {
+        baixando += 1
+        return pedirArquivo(`/arquivos/${arquivoId}`).finally(proximaDaFila)
+      })
+      .catch((erro: unknown) => {
+        fotosGuardadas.delete(arquivoId)
+        throw erro
+      })
+    fotosGuardadas.set(arquivoId, guardada)
+  }
+  return guardada
+}
+
+/**
+ * Uma foto da galeria. A rota de download só responde como anexo, então a imagem vem por fetch e vira um endereço blob:.
+ * {@code data-foto-carregando} segura a impressão até a imagem chegar.
  */
 function FotoDaGaleria({ item }: { item: FotoDoRelatorio }) {
   const [endereco, setEndereco] = useState<string | null>(null)
@@ -45,11 +79,11 @@ function FotoDaGaleria({ item }: { item: FotoDoRelatorio }) {
   const legenda = item.descricao || item.nomeOriginal
 
   useEffect(() => {
-    const pedido = new AbortController()
+    let saiu = false
     let criado: string | null = null
-    pedirArquivo(`/arquivos/${item.arquivoId}`, pedido.signal)
+    bytesDaFoto(item.arquivoId)
       .then((arquivo) => {
-        if (pedido.signal.aborted) return
+        if (saiu) return
         if (!arquivo.type.startsWith('image/')) {
           setSituacao('indisponivel')
           return
@@ -58,10 +92,10 @@ function FotoDaGaleria({ item }: { item: FotoDoRelatorio }) {
         setEndereco(criado)
       })
       .catch(() => {
-        if (!pedido.signal.aborted) setSituacao('indisponivel')
+        if (!saiu) setSituacao('indisponivel')
       })
     return () => {
-      pedido.abort()
+      saiu = true
       if (criado) URL.revokeObjectURL(criado)
     }
   }, [item.arquivoId])

@@ -77,6 +77,9 @@ export function preparar(texto) {
     .replace(/[\p{Zs}\t\v\f]+/gu, ' ')
 }
 
+// O dia solto de um trecho: o número logo depois de um dia da semana ou da palavra "dia". "Portão 5" não é o dia 5.
+const DIA_SOLTO = /(?<![\p{L}\p{N}-])(?:(?:domingo|segunda|ter[çc]a|quarta|quinta|sexta|s[áa]bado)(?:[- ]feira)?|(?:dom|seg|ter|qua|qui|sex|s[áa]b)\.|dias?)\s*[,:]?\s*(\d{1,2})(?![\p{L}\p{N}]|[/:.,]\d)/giu
+
 const dataValida = (d, m) => +d >= 1 && +d <= 31 && +m >= 1 && +m <= 12
 
 /**
@@ -182,9 +185,10 @@ export class Origens {
         this.valores.add(`dia:${Number(dia)}`)
         this.valores.add(`mes:${mes}`)
         this.valores.add(achado.data.ano ? `mesAno:${achado.data.ano}-${mes}` : `mesSemAno:${mes}`)
-      } else {
-        for (const valor of achado.valores) if (/^([1-9]|[12]\d|3[01])$/.test(valor)) this.valores.add(`numeroDoTexto:${valor}`)
       }
+    }
+    for (const [, dia] of preparar(String(texto ?? '')).matchAll(DIA_SOLTO)) {
+      if (Number(dia) >= 1 && Number(dia) <= 31) this.valores.add(`numeroDoTexto:${Number(dia)}`)
     }
     return this
   }

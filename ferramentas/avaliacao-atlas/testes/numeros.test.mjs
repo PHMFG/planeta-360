@@ -92,6 +92,13 @@ test('data em pedaços só vale para trecho de documento', () => {
   assert.deepEqual(numerosSemOrigem(comFerramenta('buscar_documentos', trecho, 'Vale em 29/01/2027 [T1].')), [])
 })
 
+test('o número solto do trecho só é dia depois de dia da semana ou de "dia"', () => {
+  const trecho = (texto) => ({ trechos: [{ marcador: 'T1', documento: 'Manual', texto }] })
+  assert.equal(numerosSemOrigem(comFerramenta('buscar_documentos', trecho('Até 04/12/2026 no Portão 5.'), 'Até 05/12/2026 [T1].')).length, 1)
+  assert.equal(numerosSemOrigem(comFerramenta('buscar_documentos', trecho('Sexta, 4, e sábado, 5 de dezembro. Portão 6.'), 'Em 06/12 [T1].')).length, 1)
+  assert.deepEqual(numerosSemOrigem(comFerramenta('buscar_documentos', trecho('Sexta, 4, e sábado, 5 de dezembro. Portão 6.'), 'Em 04/12 [T1].')), [])
+})
+
 test('o dia de uma data inteira vale para registro e conta', () => {
   const registro = { tipo: 'registros_do_portal', registros: [{ marcador: 'R1', titulo: 'Entrega', texto: 'Prazo: 04/12/2026.' }] }
   assert.deepEqual(numerosSemOrigem(comFerramenta('listar_entregas', registro, 'O prazo é o dia 4 [R1].')), [])

@@ -5,14 +5,14 @@ import { capturar, entrar, parceriaDa, sessaoDaApi } from './apoio.ts'
 
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64')
 
-function relatorioComGaleria(parceriaId: number, status = 'PRONTO') {
+function relatorioComGaleria(parceriaId: number, status = 'PRONTO', criadoPorId = 1) {
   return {
     id: 555,
     parceriaId,
     patrocinador: 'Cliente Amarelo',
     titulo: 'Relatório da ativação',
     status,
-    criadoPor: { id: 1, nome: 'Marketing' },
+    criadoPor: { id: criadoPorId, nome: 'Marketing' },
     criadoEm: '2026-11-01T12:00:00-03:00',
     atualizadoEm: '2026-11-01T12:00:00-03:00',
     finalizadoEm: status === 'PRONTO' ? '2026-11-01T12:10:00-03:00' : null,
@@ -123,14 +123,22 @@ test('a marca descarta o relatório em montagem e pode pedir outro; a RBS não t
 test('o relatório em montagem se descarta também na página inteira, e o aviso muda', async ({ page }) => {
   await entrar(page, 'amarelo')
   const parceria = await parceriaDa('amarelo')
+  const { contexto, usuario } = await sessaoDaApi('amarelo')
+  await contexto.dispose()
   let status = 'MONTANDO'
-  await page.route(/\/api\/atlas\/relatorios\/555$/, (rota) => rota.fulfill({ json: relatorioComGaleria(parceria, status) }))
+  let dono = 999
+  await page.route(/\/api\/atlas\/relatorios\/555$/, (rota) => rota.fulfill({ json: relatorioComGaleria(parceria, status, dono) }))
   await page.route(/\/api\/atlas\/relatorios\/555\/descartar$/, (rota) => {
     status = 'DESCARTADO'
-    return rota.fulfill({ json: relatorioComGaleria(parceria, status) })
+    return rota.fulfill({ json: relatorioComGaleria(parceria, status, dono) })
   })
   await arquivosDaGaleria(page)
   await page.goto(`/parceria/${parceria}/relatorios-atlas/555`)
+  await expect(page.getByText('Relatório da ativação').first()).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Descartar relatório' }), 'outra pessoa da parceria não descarta').toHaveCount(0)
+
+  dono = usuario.id
+  await page.reload()
 
   await page.getByRole('button', { name: 'Descartar relatório' }).click()
   await page.getByRole('dialog').getByRole('button', { name: 'Descartar relatório' }).click()
