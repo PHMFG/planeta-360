@@ -303,8 +303,9 @@ public class AtlasService {
     /**
      * Rota 46. {@code accept}, {@code decline} ou {@code cancel}. Sem modelo de linguagem, em accept e decline o plano B preenche
      * as frases-modelo e finaliza o relatório no mesmo pedido. Com modelo, depois de gravar os valores a resposta da ferramenta
-     * pendente vai ao histórico, com o mesmo {@code tool_call_id}, e o loop retoma (com o teto diário da parceria atingido, o
-     * cartão segue o plano B em vez de dar 429). Ordem das respostas: 403 (RBS), 404 (cartão que
+     * pendente vai ao histórico, com o mesmo {@code tool_call_id}, e o loop retoma (com o teto diário da parceria atingido, ou sem
+     * ficha do limite de mensagens por hora, o cartão segue o plano B em vez de dar 429). A retomada pelo modelo gasta uma ficha; o
+     * plano B, nenhuma. Ordem das respostas: 403 (RBS), 404 (cartão que
      * não é seu), 403 (aba), 422 (ação), 409 (cartão já respondido; turno em andamento), 422 (valores).
      */
     public ConversaDto responderCartao(UsuarioAutenticado usuario, long solicitacaoId, RespostaDoCartaoRequisicao corpo,
@@ -314,8 +315,8 @@ public class AtlasService {
 
     /**
      * Rota 46 em fluxo ({@code Accept: text/event-stream}). Os mesmos erros da rota 46 antes de o fluxo abrir, inclusive o 422
-     * dos valores (gravados antes do fluxo); depois, o loop retoma em outra thread até o evento {@code fim}. Sem modelo ou com o
-     * teto atingido, o plano B roda inteiro antes e o fluxo só traz o {@code fim}.
+     * dos valores (gravados antes do fluxo); depois, o loop retoma em outra thread até o evento {@code fim}. Sem modelo, com o
+     * teto atingido ou sem ficha do limite por hora, o plano B roda inteiro antes e o fluxo só traz o {@code fim}.
      */
     public SseEmitter responderCartaoEmFluxo(UsuarioAutenticado usuario, long solicitacaoId, RespostaDoCartaoRequisicao corpo,
                                              HttpServletRequest requisicao) {
@@ -341,10 +342,14 @@ public class AtlasService {
             throw new ConflitoException(RelatorioAtlasService.CARTAO_JA_RESPONDIDO);
         }
         AtlasContexto contexto = contextos.para(usuario, conversa.parceriaId(), conversa.id(), requisicao);
-        // Acima do teto diário da parceria ou do limite de mensagens do usuário, o cartão respondido segue o plano B (sem 429). A
-        // retomada não gasta ficha: o limite por hora é das mensagens de texto da rota 44.
-        Reserva reserva = llm.disponivel() && limitesPorUsuario.mensagemDisponivel(usuario.id())
-                ? teto.tentarReservar(conversa.parceriaId()).orElse(null) : null;
+        // A retomada que vai ao modelo gasta uma ficha do limite de mensagens por hora, na mesma decisão (atômica: duas respostas ao
+        // mesmo tempo, com uma ficha só, não vão as duas ao modelo). Acima do teto diário da parceria ou sem ficha, o cartão respondido
+        // segue o plano B (sem 429, e o plano B não gasta ficha). A vaga do teto é marcada antes e solta se não houver ficha.
+        Reserva reserva = llm.disponivel() ? teto.tentarReservar(conversa.parceriaId()).orElse(null) : null;
+        if (reserva != null && !limitesPorUsuario.tentarConsumirMensagem(usuario.id())) {
+            reserva.soltar();
+            reserva = null;
+        }
         if (reserva != null) {
             Traco traco = registro.abrir(conversa.parceriaId(), conversa.id());
             Etapa limites = traco.abrir(EtapaDoTraco.G1_LIMITES).dado("tetoPorParceria", teto.teto()).dado("usadasHoje", reserva.usadas())
@@ -356,6 +361,7 @@ public class AtlasService {
                         ouvinte -> loop.conduzirRetomada(doTurno, ouvinte));
             } catch (RuntimeException | Error semTurno) {
                 reserva.soltar();
+                limitesPorUsuario.devolverMensagem(usuario.id());   // o modelo não foi chamado (409, 422): a ficha volta
                 throw semTurno;
             }
         }

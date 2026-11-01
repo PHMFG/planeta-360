@@ -22,8 +22,9 @@ import org.springframework.stereotype.Component;
  * <ul>
  *   <li><b>Mensagens de texto por hora</b> ({@code atlas.limites.mensagens-por-hora}, padrão {@value #MENSAGENS_POR_HORA}): a rota
  *       44 com {@code texto}, na conversa da marca e na da RBS (o balde é da pessoa). A ficha volta aos poucos (uma a cada 3 minutos, com o padrão), então a espera nunca é a hora inteira.
- *       O botão "Montar relatório" (plano B) não conta, e a resposta do cartão (rota 46) não consome, mas acima do limite segue o
- *       plano B, sem 429, para a marca não ficar presa a um cartão aberto.</li>
+ *       O botão "Montar relatório" (plano B) não conta. A resposta do cartão (rota 46) que vai ao modelo gasta uma ficha, na mesma
+ *       decisão de ir ao modelo ({@link #tentarConsumirMensagem}); sem ficha segue o plano B, sem 429, para a marca não ficar presa a
+ *       um cartão aberto, e a que não chega ao modelo (409, 422) devolve a ficha ({@link #devolverMensagem}).</li>
  *   <li><b>Relatórios por dia pelo modelo</b> ({@code atlas.limites.relatorios-por-dia}, padrão {@value #RELATORIOS_POR_DIA}): o
  *       {@code relatorio_iniciar} que o modelo chama. Acima do limite a ferramenta devolve um erro ao modelo, que sugere o botão.</li>
  *   <li><b>Aberturas de documento por hora</b> ({@code atlas.limites.documentos-por-hora}, padrão {@value #DOCUMENTOS_POR_HORA}): a
@@ -131,9 +132,23 @@ public class LimitesPorUsuario {
         return espera(mensagens, usuarioId, mensagensPorHora);
     }
 
-    /** O usuário pode mandar uma mensagem de texto agora? (A rota 46 usa para escolher entre o modelo e o plano B.) */
+    /** O usuário pode mandar uma mensagem de texto agora? Só olha, não gasta ficha. */
     public boolean mensagemDisponivel(long usuarioId) {
         return esperaPelaMensagem(usuarioId).isEmpty();
+    }
+
+    /**
+     * Gasta a ficha da mensagem se houver, num passo só: falso, sem lançar nada, se o balde está vazio. A rota 46 usa para escolher
+     * entre o modelo e o plano B: conferir e gastar separados deixariam duas respostas ao mesmo tempo, com uma ficha só, irem as duas
+     * ao modelo.
+     */
+    public boolean tentarConsumirMensagem(long usuarioId) {
+        return balde(mensagens, usuarioId, mensagensPorHora, Duration.ofHours(1)).tryConsume(1);
+    }
+
+    /** Devolve a ficha de uma mensagem que não chegou ao modelo (a resposta do cartão recusada depois de gastá-la). */
+    public void devolverMensagem(long usuarioId) {
+        balde(mensagens, usuarioId, mensagensPorHora, Duration.ofHours(1)).addTokens(1);
     }
 
     /** O 429 da mensagem de texto, com quanto falta para liberar. */

@@ -16,7 +16,9 @@ import org.springframework.stereotype.Service;
  * da edição (marco M8). [ATLAS] Aqui moram as rotas 67 (abrir) e 68 (listar); a mensagem, a leitura e o diagnóstico da conversa
  * passam pelas rotas 44, 45 e 49, no {@link AtlasService}. [PERMISSAO] Só o Admin RBS (o {@code PermissaoAntesDoCorpo} responde 403 à
  * marca antes do corpo), e só com {@code atlas.rbs.ligado}: desligado, a RBS recebe 404 (a rota não existe para ela). A conversa é de
- * quem a abriu e de um evento: [ISOLAMENTO] a RBS não vê a conversa de outra pessoa, e a marca não vê nenhuma.
+ * quem a abriu e de um evento: [ISOLAMENTO] nas rotas 44, 45, 49 e 68 a RBS não vê a conversa de outra pessoa da RBS, e a marca não vê
+ * nenhuma. O diagnóstico geral (rotas 50 e 51) é a exceção prevista: mostra a qualquer Admin RBS os turnos de todas as conversas,
+ * também os da conversa de outra pessoa da RBS (o traço não leva o raciocínio cru, chave nem prompt).
  */
 @Service
 public class AtlasDaRbsService {

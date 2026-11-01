@@ -23,7 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
  * [ATLAS] Os limites por usuário (M8, problema 15 do quadro): 20 mensagens de texto por hora (rota 44) e 3 relatórios por dia que o
  * modelo monta ({@code relatorio_iniciar}), com os valores padrão num contexto próprio (o contexto normal da suíte os deixa altos) e um
  * {@code Clock} que o teste adianta. Confere o que o contrato da {@code api.md} diz: o 429 com quanto falta, só na mensagem de texto;
- * o botão e a resposta do cartão (rota 46) acima do limite; o erro de ferramenta no 4º relatório; a ordem das conferências (403, 404,
+ * o botão; a resposta do cartão (rota 46), que gasta uma ficha quando vai ao modelo e sem ficha segue o plano B; o erro de ferramenta no 4º relatório; a ordem das conferências (403, 404,
  * 422 e o teto diário antes; o 409 depois, e a tentativa recusada não gasta ficha).
  */
 @TesteComLlmRoteirizado
@@ -37,6 +37,7 @@ class LimitesPorUsuarioTest {
     private static final String TEXTO = "{\"texto\":\"Oi, Atlas.\"}";
     private static final String RESPOSTA = "Posso ajudar.";
     private static final String INICIAR = "{\"modelo\":\"ATIVACAO_EVENTO\"}";
+    private static final String RECUSAR = "{\"acao\":\"decline\"}";
     private static final String ACEITAR = "{\"acao\":\"accept\",\"valores\":[{\"chave\":\"ativacao.visitantes_total\",\"valor\":1200},"
             + "{\"chave\":\"ativacao.cadastros_consentidos\",\"valor\":1072}]}";
 
@@ -78,6 +79,14 @@ class LimitesPorUsuarioTest {
 
     String mensagens(long conversa) {
         return "/api/atlas/conversas/" + conversa + "/mensagens";
+    }
+
+    /** Abre uma conversa pelo botão (plano B: sem modelo e sem ficha) e devolve o id do cartão que ela deixa aberto. */
+    long cartaoAbertoPeloBotao(SessaoDeApi pessoa) {
+        MvcTestResult aberta = pessoa.post("/api/parcerias/" + parceria("Cliente Amarelo") + "/atlas/conversas",
+                "{\"atalho\":\"MONTAR_RELATORIO\",\"modelo\":\"ATIVACAO_EVENTO\"}");
+        assertThat(aberta).hasStatus(HttpStatus.CREATED);
+        return ((Number) lerLista(aberta, "$.itens[?(@.tipo=='cartao')].solicitacaoId").get(0)).longValue();
     }
 
     /** {@code quantas} mensagens de texto que o modelo responde, cada uma com 200. */
@@ -192,7 +201,7 @@ class LimitesPorUsuarioTest {
     }
 
     @Test
-    void aRespostaDoCartaoAbaixoDoLimiteUsaOModeloENaoGastaFicha() {
+    void aRespostaDoCartaoQueVaiAoModeloGastaUmaFicha() {
         SessaoDeApi pessoa = entrar(AMARELO);
         long conversa = conversaDe(pessoa, "Cliente Amarelo");
         long outra = conversaDe(pessoa, "Cliente Amarelo");
@@ -201,13 +210,66 @@ class LimitesPorUsuarioTest {
         long cartao = ((Number) lerJson(aberta, "$.itens[1].solicitacaoId")).longValue();
         modelo.texto("Recebi os números.");
 
-        MvcTestResult resposta = pessoa.post("/api/atlas/solicitacoes/" + cartao + "/respostas", ACEITAR);
+        MvcTestResult resposta = pessoa.post("/api/atlas/solicitacoes/" + cartao + "/respostas", ACEITAR);   // gasta a ficha 2
 
         assertThat(resposta).hasStatus(HttpStatus.OK);
         assertThat(lerLista(resposta, "$.itens[*].texto")).contains("Recebi os números.");   // quem respondeu foi o modelo
-        // a retomada não gastou ficha: ainda cabem as 19 mensagens que sobravam, e só a 21ª no total é barrada
-        mandar(pessoa, outra, 19);
+        // a retomada gastou uma ficha: das 20 sobram 18, e só a 19ª mensagem de texto a mais é barrada
+        mandar(pessoa, outra, 18);
         assertThat(pessoa.post(mensagens(outra), TEXTO)).hasStatus(HttpStatus.TOO_MANY_REQUESTS);
+    }
+
+    @Test
+    void comUmaFichaSoAPrimeiraRespostaDeCartaoVaiAoModeloEASegundaSegueOPlanoB() {
+        SessaoDeApi pessoa = entrar(AMARELO);
+        long gasta = conversaDe(pessoa, "Cliente Amarelo");
+        mandar(pessoa, gasta, 19);   // sobra uma ficha
+        // dois cartões abertos pelo botão (plano B, sem modelo e sem ficha), cada um numa conversa
+        long primeiro = cartaoAbertoPeloBotao(pessoa);
+        long segundo = cartaoAbertoPeloBotao(pessoa);
+        int idasAntes = modelo.pedidos().size();
+        modelo.texto("Certo, sigo sem esses números.");
+
+        MvcTestResult primeira = pessoa.post("/api/atlas/solicitacoes/" + primeiro + "/respostas", RECUSAR);
+
+        assertThat(primeira).hasStatus(HttpStatus.OK);
+        assertThat(lerLista(primeira, "$.itens[*].texto")).as("a primeira resposta foi retomada pelo modelo")
+                .contains("Certo, sigo sem esses números.");
+        assertThat(modelo.pedidos()).hasSize(idasAntes + 1);
+
+        MvcTestResult segunda = pessoa.post("/api/atlas/solicitacoes/" + segundo + "/respostas", RECUSAR);
+
+        assertThat(segunda).hasStatus(HttpStatus.OK);   // sem ficha: plano B, e não 429
+        assertThat(lerLista(segunda, "$.itens[*].tipo")).as("a segunda saiu pelo plano B").containsExactly("texto", "relatorio_pronto");
+        assertThat(modelo.pedidos()).as("a segunda resposta não chamou o modelo").hasSize(idasAntes + 1);
+        assertThat(pessoa.post(mensagens(gasta), TEXTO)).as("a ficha que sobrava foi da primeira resposta")
+                .hasStatus(HttpStatus.TOO_MANY_REQUESTS);
+    }
+
+    @Test
+    void aRespostaDoCartaoQueNaoChegaAoModeloDevolveAFicha() {
+        SessaoDeApi pessoa = entrar(AMARELO);
+        long gasta = conversaDe(pessoa, "Cliente Amarelo");
+        mandar(pessoa, gasta, 19);   // sobra uma ficha
+        long cartao = cartaoAbertoPeloBotao(pessoa);
+        long conversaDoCartao = jdbc.sql("SELECT r.conversa_id FROM atlas_solicitacao s JOIN atlas_relatorio r ON r.id = s.relatorio_id WHERE s.id = :s").param("s", cartao)
+                .query(Long.class).single();
+
+        // conversa ocupada (409) e valores inválidos (422): nenhuma chega ao modelo, e a ficha única fica onde estava
+        jdbc.sql("UPDATE atlas_conversa SET turno_desde = now() WHERE id = :c").param("c", conversaDoCartao).update();
+        for (int i = 0; i < 4; i++) {
+            assertThat(pessoa.post("/api/atlas/solicitacoes/" + cartao + "/respostas", RECUSAR)).as("tentativa %d", i + 1)
+                    .hasStatus(HttpStatus.CONFLICT);
+        }
+        jdbc.sql("UPDATE atlas_conversa SET turno_desde = NULL WHERE id = :c").param("c", conversaDoCartao).update();
+        for (int i = 0; i < 4; i++) {
+            assertThat(pessoa.post("/api/atlas/solicitacoes/" + cartao + "/respostas",
+                    "{\"acao\":\"accept\",\"valores\":[{\"chave\":\"ativacao.visitantes_total\",\"valor\":-5}]}"))
+                    .as("valor inválido %d", i + 1).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
+        }
+
+        mandar(pessoa, gasta, 1);   // a ficha que sobrava ainda está lá
+        assertThat(pessoa.post(mensagens(gasta), TEXTO)).hasStatus(HttpStatus.TOO_MANY_REQUESTS);
     }
 
     @Test
