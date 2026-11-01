@@ -7,6 +7,7 @@ import br.com.rbs.portal.atlas.AtlasJson;
 import br.com.rbs.portal.atlas.checagem.FontesDoTurno;
 import br.com.rbs.portal.atlas.checagem.FontesDoTurno.Fonte;
 import br.com.rbs.portal.atlas.checagem.NormalizadorDeNumeros;
+import br.com.rbs.portal.atlas.checagem.NormalizadorDeNumeros.Achado;
 import br.com.rbs.portal.atlas.checagem.NormalizadorDeNumeros.Origens;
 import br.com.rbs.portal.atlas.contexto.AtlasContexto;
 import br.com.rbs.portal.atlas.ferramentas.Feriados.Feriado;
@@ -39,12 +40,14 @@ import org.springframework.stereotype.Component;
  *       citar (as datas de entrada, a quantidade, o resultado e os feriados) e o resultado como número livre do turno.</li>
  *   <li>Nenhum argumento é parceria. Argumento desconhecido, data inválida ({@code AAAA-MM-DD}), {@code fim} antes de
  *       {@code inicio}, intervalo de mais de {@value #INTERVALO_MAXIMO} dias e ano fora de 2000 a 2100 voltam ao modelo como erro.</li>
- *   <li><b>Os números e as datas têm origem</b> (a contagem não pode fabricar número: com {@code dias} 312 o resultado "312" valeria
- *       em qualquer frase). {@code dias} precisa estar numa fonte deste turno ({@code T#}, {@code R#}, {@code C#}) ou numa mensagem da
- *       pessoa na conversa, comparado por valor como o literal do {@code calcular}. {@code inicio} e {@code fim} precisam ser uma
- *       data de uma fonte deste turno ou do que a pessoa escreveu (data sem ano vale, como em {@link Origens}), ou de hoje até
- *       {@value #DIAS_DE_FOLGA_DE_HOJE} dias depois (para "amanhã" e "segunda que vem"). O resultado de outra contagem do turno é
- *       uma fonte, então serve de {@code inicio}.</li>
+ *   <li><b>Os números e as datas têm origem, mas o pedido comum passa</b> (a contagem não pode fabricar número: com {@code dias} 312
+ *       o resultado "312" valeria em qualquer frase). {@code dias} de 1 a {@value #DIAS_LIVRES} vale sem fonte ("duas semanas depois
+ *       de 03/11"); acima disso precisa estar no que a pessoa escreveu na conversa ou num trecho de documento ou registro deste turno
+ *       ({@code T#}, {@code R#}; o texto de uma conta do {@code calcular} não vale), comparado por valor como o literal do
+ *       {@code calcular}. {@code inicio} e {@code fim} valem sem fonte de {@value #DIAS_LIVRES_ANTES_DE_HOJE} dias antes de hoje a
+ *       {@value #DIAS_LIVRES_DEPOIS_DE_HOJE} depois ("ontem", "dia 20", "fim do mês", "segunda passada"); fora disso precisam ser uma
+ *       data do que a pessoa escreveu ou de uma fonte deste turno (data sem ano vale, como em {@link Origens}). O resultado de
+ *       outra contagem do turno é uma fonte, então serve de {@code inicio}.</li>
  * </ul>
  */
 @Component
@@ -58,8 +61,11 @@ public class ContarDias implements Ferramenta {
     static final int INTERVALO_MAXIMO = 800;
     /** Quantos feriados a resposta lista, no máximo. */
     static final int FERIADOS_MAXIMOS = 40;
-    /** Hoje e os sete dias seguintes valem como data de partida ou de chegada sem fonte. */
-    static final int DIAS_DE_FOLGA_DE_HOJE = 7;
+    /** Uma quantidade de 1 a 31 dias vale sem fonte: "duas semanas depois de 03/11" são 14, e a pessoa não escreveu o 14. */
+    static final int DIAS_LIVRES = 31;
+    /** De 31 dias antes de hoje a 90 depois valem como data de partida ou de chegada sem fonte ("ontem", "dia 20", "fim do mês"). */
+    static final int DIAS_LIVRES_ANTES_DE_HOJE = 31;
+    static final int DIAS_LIVRES_DEPOIS_DE_HOJE = 90;
     static final String TITULO_DA_FONTE = "Contagem de dias";
     private static final Set<String> ARGUMENTOS = Set.of("inicio", "fim", "dias", "uteis", "sentido");
     private static final Pattern DATA = Pattern.compile("\\d{4}-\\d{2}-\\d{2}");
@@ -73,9 +79,11 @@ public class ContarDias implements Ferramenta {
                     + "resposta depender de contar dias ou achar uma data; nunca conte você mesmo. A contagem não tem marcador "
                     + "{{calc:...}} (isso é só do calcular): escreva o resultado, a data ou a quantidade, copiado como está, com a "
                     + "citação [C#] na mesma frase. Os números e as datas têm de ter "
-                    + "origem: dias vem do que a pessoa escreveu na conversa ou de uma fonte deste turno (T#, R#, C#); inicio e fim "
-                    + "são datas que a pessoa escreveu ou que uma fonte deste turno trouxe (inclusive o resultado de outra contagem), "
-                    + "ou de hoje até 7 dias depois. Com fim, o intervalo vai até 800 dias.",
+                    + "origem: dias de 1 a 31 vale sem fonte (uma semana são 7, duas semanas são 14); acima de 31 vem do que a pessoa "
+                    + "escreveu na conversa ou de um trecho de documento ou registro deste turno (T#, R#). inicio e fim valem sem fonte "
+                    + "de 31 dias antes até 90 dias depois de hoje (ontem, dia 20, fim do mês, segunda passada viram AAAA-MM-DD a partir "
+                    + "de hoje); fora disso são datas que a pessoa escreveu ou que uma fonte deste turno trouxe (inclusive o resultado "
+                    + "de outra contagem). Com fim, o intervalo vai até 800 dias.",
             """
             {"type":"object","properties":{
               "inicio":{"type":"string","pattern":"^[0-9]{4}-[0-9]{2}-[0-9]{2}$","description":"Data de partida, AAAA-MM-DD. O dia dela não conta."},
@@ -179,40 +187,63 @@ public class ContarDias implements Ferramenta {
     // ---------------------------------------------------------------------
 
     /**
-     * [VALIDACAO] A contagem não fabrica número: {@code dias} vem do que a pessoa escreveu na conversa ou de uma fonte deste turno
-     * (por valor, como o literal do {@code calcular}), e as datas, do que a pessoa escreveu, de uma fonte deste turno, ou de hoje até
-     * {@value #DIAS_DE_FOLGA_DE_HOJE} dias depois. O trecho de documento ainda diz as datas em pedaços; registro e conta, por inteiro.
+     * [VALIDACAO] A contagem não fabrica número, mas o pedido comum passa. {@code dias} de 1 a {@value #DIAS_LIVRES} vale sem fonte
+     * ("duas semanas depois de 03/11"); acima disso vem do que a pessoa escreveu na conversa ou de um trecho de documento ou registro
+     * deste turno (por valor, como o literal do {@code calcular}): o texto de uma conta do {@code calcular} ({@code C#}) não vale,
+     * porque o modelo escolhe os valores que entram nela. {@code inicio} e {@code fim} valem sem fonte de {@value #DIAS_LIVRES_ANTES_DE_HOJE}
+     * dias antes de hoje a {@value #DIAS_LIVRES_DEPOIS_DE_HOJE} depois ("ontem", "dia 20", "fim do mês"); fora disso vêm do que a pessoa
+     * escreveu ou de uma fonte deste turno, inclusive o resultado de outra contagem de dias. O trecho de documento ainda diz as datas em
+     * pedaços; registro e contagem, por inteiro.
      */
     private static void conferirAOrigem(FontesDoTurno turno, LocalDate inicio, LocalDate fim, Integer dias, Map<String, String> erros) {
+        if (dias != null && dias > DIAS_LIVRES) {
+            Origens daQuantidade = turno.origensDaPessoa();
+            for (Fonte fonte : turno.fontes()) {
+                if (fonte.tipo() != FontesDoTurno.Tipo.CALCULO) {
+                    daQuantidade.adicionar(fonte.texto());
+                }
+            }
+            if (!daQuantidade.aceitaComoValor(NormalizadorDeNumeros.extrair(String.valueOf(dias), false).get(0))) {
+                erros.put("dias", "O número de dias " + dias + " não está no que a pessoa escreveu nesta conversa nem em nenhum trecho de "
+                        + "documento ou registro deste turno (T#, R#). Até " + DIAS_LIVRES + " dias vale sem fonte; acima disso use a "
+                        + "quantidade que a pessoa disse ou que uma fonte trouxe, copiada como está. A ferramenta não inventa quantidade.");
+            }
+        }
+        List<Origens> dasDatas = null;
+        for (String campo : List.of("inicio", "fim")) {
+            LocalDate data = "inicio".equals(campo) ? inicio : fim;
+            if (data == null || naJanelaLivre(data, turno.hoje())) {
+                continue;
+            }
+            dasDatas = dasDatas == null ? origensDasDatas(turno) : dasDatas;
+            Achado procurada = NormalizadorDeNumeros.extrair(DIA.format(data), false).get(0);
+            if (dasDatas.stream().noneMatch(origem -> origem.aceita(procurada))) {
+                erros.put(campo, "A data de " + campo + " (" + DIA.format(data) + ") não está no que a pessoa escreveu nesta conversa nem em "
+                        + "nenhuma fonte deste turno (T#, R#, C# de contagem de dias), e não está entre " + DIAS_LIVRES_ANTES_DE_HOJE
+                        + " dias antes e " + DIAS_LIVRES_DEPOIS_DE_HOJE + " dias depois de hoje (" + DIA.format(turno.hoje()) + "). Use uma "
+                        + "data que a pessoa escreveu ou que uma fonte trouxe, copiada como está.");
+            }
+        }
+    }
+
+    private static boolean naJanelaLivre(LocalDate data, LocalDate hoje) {
+        return !data.isBefore(hoje.minusDays(DIAS_LIVRES_ANTES_DE_HOJE)) && !data.isAfter(hoje.plusDays(DIAS_LIVRES_DEPOIS_DE_HOJE));
+    }
+
+    /**
+     * De onde uma data fora da janela livre pode vir: o que a pessoa escreveu e as fontes do turno. O trecho de documento diz os
+     * pedaços; o registro e a contagem de dias, a data por inteiro. O texto de uma conta do {@code calcular} fica de fora.
+     */
+    private static List<Origens> origensDasDatas(FontesDoTurno turno) {
         Origens origens = turno.origensDaPessoa();
         for (Fonte fonte : turno.fontes()) {
             if (fonte.tipo() == FontesDoTurno.Tipo.TRECHO) {
                 origens.adicionarFonteCitada(fonte.texto());
-            } else {
+            } else if (fonte.tipo() == FontesDoTurno.Tipo.REGISTRO || NOME.equals(fonte.dados().get("ferramenta"))) {
                 origens.adicionar(fonte.texto());
             }
         }
-        if (dias != null && !origens.aceitaComoValor(NormalizadorDeNumeros.extrair(String.valueOf(dias), false).get(0))) {
-            erros.put("dias", "O número de dias " + dias + " não está no que a pessoa escreveu nesta conversa nem em nenhuma fonte deste turno "
-                    + "(T#, R#, C#). Use a quantidade que a pessoa disse ou que uma fonte trouxe, copiada como está; a ferramenta não inventa "
-                    + "quantidade.");
-        }
-        dataComOrigem("inicio", inicio, turno, origens, erros);
-        dataComOrigem("fim", fim, turno, origens, erros);
-    }
-
-    private static void dataComOrigem(String campo, LocalDate data, FontesDoTurno turno, Origens origens, Map<String, String> erros) {
-        if (data == null) {
-            return;
-        }
-        LocalDate hoje = turno.hoje();
-        boolean deHoje = !data.isBefore(hoje) && !data.isAfter(hoje.plusDays(DIAS_DE_FOLGA_DE_HOJE));
-        if (deHoje || origens.aceita(NormalizadorDeNumeros.extrair(DIA.format(data), false).get(0))) {
-            return;
-        }
-        erros.put(campo, "A data de " + campo + " (" + DIA.format(data) + ") não está no que a pessoa escreveu nesta conversa nem em nenhuma "
-                + "fonte deste turno (T#, R#, C#), e não é de hoje (" + DIA.format(hoje) + ") até " + DIAS_DE_FOLGA_DE_HOJE
-                + " dias depois. Use uma data que a pessoa escreveu ou que uma fonte trouxe, copiada como está.");
+        return List.of(origens);
     }
 
     // ---------------------------------------------------------------------

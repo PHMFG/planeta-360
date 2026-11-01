@@ -264,26 +264,63 @@ class ContarDiasTest {
         FontesDoTurno soNoTitulo = new FontesDoTurno("Quanto?", 2027, HOJE);
         soNoTitulo.registrarTrecho(1, 1, "Manual 312", 312, 312, "Seção 312", "Um texto sem número.");
         assertThat(camposSemOrigem(soNoTitulo, argumentos)).containsOnlyKeys("dias");
-        // o ano não é valor: o 2027 de "Para 2027" não autoriza dias 27
-        FontesDoTurno soAno = new FontesDoTurno("Para 2027, quantos?", 2027, HOJE);
-        assertThat(camposSemOrigem(soAno, "{\"inicio\":\"2026-11-01\",\"dias\":27}")).containsOnlyKeys("dias");
+        // acima de 31 dias o número precisa de origem: 32 e 45 não vêm de graça
+        assertThat(camposSemOrigem(new FontesDoTurno("Quanto?", 2027, HOJE), "{\"inicio\":\"2026-11-01\",\"dias\":32}")).containsOnlyKeys("dias");
+        assertThat(camposSemOrigem(new FontesDoTurno("Quanto?", 2027, HOJE), "{\"inicio\":\"2026-11-01\",\"dias\":45}")).containsOnlyKeys("dias");
     }
 
     @Test
-    void inicioEFimQueNaoSaoDeHojeAteSeteDiasDepoisNemDeFonteNemDaPessoaSaoErro() {
+    void ateTrintaEUmDiasValeSemOrigemEOPedidoComumDePrazoPassa() {
+        FontesDoTurno turno = new FontesDoTurno("Quando fica pronto?", 2027, HOJE);   // a pessoa não escreveu nenhum número
+
+        // "duas semanas depois de 03/11", "uma semana depois de 20/11", "um dia útil depois de 03/11"
+        assertThat(contarComOQueTem(ferramenta, turno, "{\"inicio\":\"2026-11-03\",\"dias\":14}")).containsEntry("resultado", "17/11/2026");
+        assertThat(contarComOQueTem(ferramenta, turno, "{\"inicio\":\"2026-11-20\",\"dias\":7}")).containsEntry("resultado", "27/11/2026");
+        assertThat(contarComOQueTem(ferramenta, turno, "{\"inicio\":\"2026-11-03\",\"dias\":1,\"uteis\":true}")).containsEntry("resultado", "04/11/2026");
+        assertThat(contarComOQueTem(ferramenta, turno, "{\"inicio\":\"2026-11-03\",\"dias\":31}")).containsEntry("resultado", "04/12/2026");
+        // "dia 20", "fim do mês", "ontem" e "segunda passada" viram data de hoje menos 31 a hoje mais 90 dias
+        assertThat(contarComOQueTem(ferramenta, turno, "{\"inicio\":\"2026-11-01\",\"fim\":\"2026-11-20\"}")).containsEntry("resultado", "19");
+        assertThat(contarComOQueTem(ferramenta, turno, "{\"inicio\":\"2026-11-01\",\"fim\":\"2026-11-30\"}")).containsEntry("resultado", "29");
+        assertThat(contarComOQueTem(ferramenta, turno, "{\"inicio\":\"2026-10-31\",\"fim\":\"2026-11-03\"}")).containsEntry("resultado", "3");
+        assertThat(contarComOQueTem(ferramenta, turno, "{\"inicio\":\"2026-10-26\",\"fim\":\"2026-11-01\"}")).containsEntry("resultado", "6");
+    }
+
+    @Test
+    void oTextoDeUmaContaDoCalcularNaoValeComoOrigemDeDiasNemDeData() {
+        FontesDoTurno turno = new FontesDoTurno("Quanto?", 2027, HOJE);
+        // uma conta do calcular com 212 e 10/05/2027 no texto dela
+        turno.registrarCalculo("energia", "energia", "Valores usados: 212; 10/05/2027. Resultado: 212.", Map.of("ferramenta", "calcular", "nome", "energia"));
+        assertThat(camposSemOrigem(turno, "{\"inicio\":\"2026-11-01\",\"dias\":212}")).containsOnlyKeys("dias");
+        assertThat(camposSemOrigem(turno, "{\"inicio\":\"2027-05-10\",\"dias\":1}")).containsOnlyKeys("inicio");
+        // o trecho de documento e o registro do portal valem, e o resultado de outra contagem serve de data
+        FontesDoTurno comRegistro = new FontesDoTurno("Quanto?", 2027, HOJE);
+        comRegistro.registrarRegistro("prazo", 1, "Prazo", "Prazos", "Prazo: 10/05/2027. Faltam 212 dias.", Map.of());
+        assertThat(contarComOQueTem(ferramenta, comRegistro, "{\"inicio\":\"2027-05-10\",\"dias\":212}")).containsKey("resultado");
+        FontesDoTurno comTrecho = new FontesDoTurno("Quanto?", 2027, HOJE);
+        comTrecho.registrarTrecho(1, 1, "Manual", 1, 1, "Prazos", "O reenvio leva 212 dias.");
+        assertThat(contarComOQueTem(ferramenta, comTrecho, "{\"inicio\":\"2026-11-01\",\"dias\":212}")).containsEntry("resultado", "01/06/2027");
+        // e o C# de uma contagem de dias deste turno serve de início fora da janela
+        FontesDoTurno contagem = new FontesDoTurno("Quanto?", 2027, HOJE);
+        contagem.registrarCalculo(null, "Contagem de dias", "Contei 100 dias depois de 01/11/2026. Resultado: 09/02/2027.",
+                Map.of("ferramenta", "contar_dias", "resultado", "09/02/2027"));
+        assertThat(contarComOQueTem(ferramenta, contagem, "{\"inicio\":\"2027-02-09\",\"dias\":7}")).containsEntry("resultado", "16/02/2027");
+    }
+
+    @Test
+    void inicioEFimQueNaoSaoDeHojeMenos31AHojeMais90NemDeFonteNemDaPessoaSaoErro() {
         FontesDoTurno turno = new FontesDoTurno("Quantos dias?", 2027, HOJE);
 
         // o ataque: 01/01 a 09/11 são 312 dias, que passariam a valer em qualquer frase
         Map<String, String> campos = camposSemOrigem(turno, "{\"inicio\":\"2026-01-01\",\"fim\":\"2026-11-09\"}");
 
-        assertThat(campos).containsOnlyKeys("inicio", "fim");
-        assertThat(campos.get("inicio")).contains("01/01/2026", "01/11/2026");
+        assertThat(campos).containsOnlyKeys("inicio");
+        assertThat(campos.get("inicio")).contains("01/01/2026", "01/11/2026", "31 dias", "90 dias");
         assertThat(turno.fontes()).isEmpty();
         assertThat(turno.numerosLivres()).isEmpty();
-        // hoje e os sete dias seguintes valem; o oitavo não
-        assertThat(contarComOQueTem(ferramenta, turno, "{\"inicio\":\"2026-11-01\",\"fim\":\"2026-11-08\"}")).containsEntry("resultado", "7");
-        assertThat(camposSemOrigem(turno, "{\"inicio\":\"2026-11-01\",\"fim\":\"2026-11-09\"}")).containsOnlyKeys("fim");
-        assertThat(camposSemOrigem(turno, "{\"inicio\":\"2026-10-31\",\"fim\":\"2026-11-03\"}")).as("ontem não é de hoje").containsOnlyKeys("inicio");
+        // de 31 dias atrás a 90 depois valem; um dia a mais ou a menos não
+        assertThat(contarComOQueTem(ferramenta, turno, "{\"inicio\":\"2026-10-01\",\"fim\":\"2027-01-30\"}")).containsEntry("resultado", "121");
+        assertThat(camposSemOrigem(turno, "{\"inicio\":\"2026-09-30\",\"fim\":\"2026-11-03\"}")).as("32 dias atrás").containsOnlyKeys("inicio");
+        assertThat(camposSemOrigem(turno, "{\"inicio\":\"2026-11-01\",\"fim\":\"2027-01-31\"}")).as("91 dias depois").containsOnlyKeys("fim");
     }
 
     @Test
@@ -301,23 +338,29 @@ class ContarDiasTest {
     @Test
     void registroEContaValemPeloQueDizemPorInteiroEOTrechoDizOsPedacos() {
         FontesDoTurno registro = new FontesDoTurno("Quantos dias?", 2027, HOJE);
-        registro.registrarRegistro("entrega", 1, "Reenvio do VT", "Mídia", "Reenvio do VT em até 30 segundos. Atualizada em 27/10/2026.", Map.of());
-        // a data montada com o 30 e o mês 10 não existe na fonte
-        assertThat(camposSemOrigem(registro, "{\"inicio\":\"2026-10-30\",\"fim\":\"2026-11-01\"}")).containsOnlyKeys("inicio");
+        registro.registrarRegistro("entrega", 1, "Reenvio do VT", "Mídia", "Reenvio do VT em até 15 segundos. Atualizada em 27/05/2027.", Map.of());
+        // a data montada com o 15 e o mês 05 não existe no registro (fora da janela livre de hoje)
+        assertThat(camposSemOrigem(registro, "{\"inicio\":\"2027-05-15\",\"fim\":\"2027-05-27\"}")).containsOnlyKeys("inicio");
+        assertThat(contarComOQueTem(ferramenta, registro, "{\"inicio\":\"2027-05-27\",\"dias\":3}")).containsEntry("resultado", "30/05/2027");
         FontesDoTurno trecho = new FontesDoTurno("Quantos dias?", 2027, HOJE);
         trecho.registrarTrecho(1, 1, "Manual de Operações 2027", 2, 2, "Datas", "O festival acontece na sexta-feira, 29, e no sábado, 30 de janeiro de 2027.");
         assertThat(contarComOQueTem(ferramenta, trecho, "{\"inicio\":\"2026-11-01\",\"fim\":\"2027-01-29\"}")).containsEntry("resultado", "89");
+        FontesDoTurno trechoComPedacos = new FontesDoTurno("Quantos dias?", 2027, HOJE);
+        trechoComPedacos.registrarTrecho(1, 1, "Manual", 2, 2, "Datas", "Reenvio do VT em até 15 segundos. Atualizada em 27/05/2027.");
+        assertThat(contarComOQueTem(ferramenta, trechoComPedacos, "{\"inicio\":\"2027-05-15\",\"fim\":\"2027-05-27\"}")).containsEntry("resultado", "12");
     }
 
     @Test
     void oResultadoDeOutraContagemDoTurnoServeDeInicio() {
-        FontesDoTurno turno = new FontesDoTurno("Quando vencem 18 dias úteis depois de 03/11/2026?", 2027, HOJE);
+        FontesDoTurno turno = new FontesDoTurno("Quando vencem 80 dias úteis depois de 03/11/2026?", 2027, HOJE);
 
-        assertThat(contarComOQueTem(ferramenta, turno, "{\"inicio\":\"2026-11-03\",\"dias\":18,\"uteis\":true}")).containsEntry("resultado", "30/11/2026");
-        // o 30/11/2026 está no texto de C1; e os 18 dias, na mensagem da pessoa
-        assertThat(contarComOQueTem(ferramenta, turno, "{\"inicio\":\"2026-11-30\",\"dias\":18}")).containsEntry("resultado", "18/12/2026");
-        // mas um resultado que nenhuma contagem deu não serve
-        assertThat(camposSemOrigem(turno, "{\"inicio\":\"2026-12-01\",\"dias\":18}")).containsOnlyKeys("inicio");
+        Map<String, Object> primeira = contarComOQueTem(ferramenta, turno, "{\"inicio\":\"2026-11-03\",\"dias\":80,\"uteis\":true}");
+        LocalDate resultado = LocalDate.parse((String) primeira.get("resultado"), DIA);
+        assertThat(resultado).as("fora da janela livre de hoje").isAfter(HOJE.plusDays(90));
+        // o resultado está no texto de C1 e serve de início
+        assertThat(contarComOQueTem(ferramenta, turno, "{\"inicio\":\"" + resultado + "\",\"dias\":18}")).containsKey("resultado");
+        // mas uma data que nenhuma contagem deu não serve, fora da janela livre
+        assertThat(camposSemOrigem(turno, "{\"inicio\":\"" + resultado.plusDays(1) + "\",\"dias\":18}")).containsOnlyKeys("inicio");
     }
 
     @Test
@@ -413,7 +456,8 @@ class ContarDiasTest {
         String descricao = ferramenta.definicao().descricao();
 
         assertThat(descricao).contains("{{calc:", "[C#]").contains("copi");
-        assertThat(descricao).as("e a origem dos números e das datas").contains("origem", "hoje até 7 dias depois", "800");
+        assertThat(descricao).as("e a origem dos números e das datas").contains("origem", "de 1 a 31 vale sem fonte", "31 dias antes até 90 dias depois de hoje", "800");
+        assertThat(descricao).as("e como virar semana e data relativa em dias e datas").contains("uma semana são 7", "ontem", "fim do mês");
     }
 
     @Test
