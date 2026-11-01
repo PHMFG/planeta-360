@@ -1,6 +1,7 @@
 package br.com.rbs.portal.atlas.checagem;
 
 import br.com.rbs.portal.atlas.checagem.FontesDoTurno.Fonte;
+import br.com.rbs.portal.atlas.checagem.FontesDoTurno.Tipo;
 import br.com.rbs.portal.atlas.checagem.NormalizadorDeNumeros.Achado;
 import br.com.rbs.portal.atlas.checagem.NormalizadorDeNumeros.Origens;
 import br.com.rbs.portal.atlas.relatorio.ChecagemDeTexto;
@@ -201,8 +202,18 @@ public class ChecagemDeFontes {
             Set<String> citadas = new LinkedHashSet<>(Frases.citacoes(frase));
             Origens daFrase = new Origens().anosAceitos(anosAceitos);
             for (String marcador : citadas) {
-                // os metadados valem como estão escritos (página 5); só o texto do documento diz o dia solto e a data em pedaços
-                fontes.fonte(marcador).ifPresent(fonte -> daFrase.adicionar(fonte.metadados()).adicionarFonteCitada(fonte.texto()));
+                // os metadados valem como estão escritos (página 5); só o texto de um trecho de documento diz o dia solto e a data em
+                // pedaços (a tabela e a prosa dizem "sexta, 29, e sábado, 30 de janeiro"). Registro do portal e conta valem pelo que
+                // dizem por inteiro: "até 30 segundos" e "atualizada em 27/10/2026" não fazem 30/10/2026, e "contei 10 dias" ao lado
+                // de 03/11/2026 não faz 10/11/2026
+                fontes.fonte(marcador).ifPresent(fonte -> {
+                    daFrase.adicionar(fonte.metadados());
+                    if (fonte.tipo() == Tipo.TRECHO) {
+                        daFrase.adicionarFonteCitada(fonte.texto());
+                    } else {
+                        daFrase.adicionar(fonte.texto());
+                    }
+                });
             }
             List<Achado> numeros = NormalizadorDeNumeros.extrair(Referencias.semMarcadores(Frases.semCitacoes(frase)), false);
             for (Achado numero : numeros) {

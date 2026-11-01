@@ -776,6 +776,28 @@ class ChecagemDeFontesTest {
         recusa(turno("Qual dia?", entrega + " Outra frase com 77 itens."), "É no dia 9. A fonte é a outra [T1].");
     }
 
+    @Test
+    void dataEmPedacosSoVaiParaTrechoDeDocumentoERegistroEContaValemPeloQueDizemPorInteiro() {
+        String reenvio = "Reenvio do VT em até 30 segundos. Atualizada em 27/10/2026.";
+        String contagem = "Contei 10 dias depois de 03/11/2026, sem contar o dia de início. Resultado: 13/11/2026.";
+
+        // como trecho de documento, as datas em pedaços valem: o 30 e o mês 10 da fonte dão 30/10
+        aprova(turno("Quando?", reenvio), "Reenvie o VT até 30/10/2026 [T1].");
+        // como registro do portal ou como conta, a fonte vale pelo que diz por inteiro: nada de montar a data 30/10/2026
+        FontesDoTurno comRegistro = turno("Quando?");
+        comRegistro.registrarRegistro("entrega", 1, "Reenvio do VT", "Mídia", reenvio, java.util.Map.of());
+        recusa(comRegistro, "Reenvie o VT até 30/10/2026 [R1].");
+        aprova(comRegistro, "Foi atualizada em 27/10/2026 [R1].");
+        recusa(comRegistro, "Foi atualizada no dia 27 [R1].");
+        aprova(turno("Quando?", reenvio), "Foi atualizada no dia 27 [T1].");
+        FontesDoTurno comConta = turno("Quando?");
+        comConta.registrarCalculo(null, "Contagem de dias", contagem, java.util.Map.of());
+        recusa(comConta, "Fica pronto em 10/11/2026 [C1].");
+        recusa(comConta, "Fica pronto no dia 10 de novembro [C1].");
+        aprova(comConta, "Contei 10 dias a partir de 03/11/2026 [C1].");
+        aprova(comConta, "Fica pronto em 13/11/2026 [C1].");
+    }
+
     @ParameterizedTest(name = "\"{0}\" na fonte e \"{1}\" na resposta")
     @CsvSource(delimiter = '|', value = {"36 m²|36 m²", "36 m²|36 m2", "36 m2|36 m²", "metade de ½ kVA|½ kVA", "nota ¹ do contrato|nota ¹", "valor ٣١٢|312",
             "valor 312|٣١٢", "valor ３１２|312"})
