@@ -12,6 +12,7 @@ import java.util.regex.Pattern;
  * citada na MESMA frase" depende de uma só definição de frase, e o filtro do fluxo e a checagem do texto inteiro usam esta:
  * <ul>
  *   <li>a frase termina em {@code . ! ? …} seguido de espaço ({@code FIM_DE_FRASE} da {@code ChecagemDeTexto}), ou numa quebra de linha;
+ *       aspas, parêntese e o {@code *} ou {@code _} do Markdown podem fechar entre o ponto e o espaço ({@code **fim.** });
  *       {@code 1.250,00}, {@code 3.2} e {@code 04/12/2026.} (sem espaço depois do ponto) não cortam;</li>
  *   <li>as citações que vêm logo depois do ponto ({@code ...2026. [T1]}) ficam presas à frase anterior, que é a que elas apoiam;</li>
  *   <li>o ponto de {@code p.}, {@code art.}, {@code Sr.} e dos outros apelidos de abreviatura não termina a frase;</li>
@@ -27,10 +28,10 @@ public final class Frases {
     /** {@code [T1]}, {@code [R2]}, {@code [C3]} e {@code [T1, T2]}: a citação de uma fonte do turno. */
     public static final Pattern CITACAO = Pattern.compile("\\[\\s*[TRC]\\d{1,3}(?:\\s*,\\s*[TRC]\\d{1,3})*\\s*]");
 
-    private static final Pattern COMECO_DE_CITACAO_ABERTA = Pattern.compile("\\[\\s*[TRC]?\\d{0,3}(?:\\s*,?\\s*[TRC]?\\d{0,3})*\\s*");
     private static final Set<String> ABREVIATURAS = Set.of("p", "pp", "pág", "págs", "pag", "pags", "art", "arts", "sr", "sra", "dr", "dra",
-            "prof", "av", "tel", "cel", "ex", "obs", "cf", "vol", "fl", "fls", "cap", "inc", "sec", "seç", "ver", "nº", "n");
-    private static final String FECHAMENTOS = "\"')»”’";
+            "prof", "av", "tel", "cel", "ex", "obs", "cf", "vol", "fl", "fls", "cap", "inc", "sec", "seç", "nº", "n");
+    /** O que pode fechar a frase depois do ponto, antes do espaço: aspas, parêntese e o negrito ou itálico ({@code **fim.** }). */
+    private static final String FECHAMENTOS = "\"')»”’*_";
 
     private Frases() {
     }
@@ -135,12 +136,63 @@ public final class Frases {
                 j = fim;
                 continue;
             }
-            String resto = texto.substring(j);
-            if (resto.indexOf(']') < 0 && resto.length() < 24 && COMECO_DE_CITACAO_ABERTA.matcher(resto).matches()) {
-                return -1;   // "[T" ou "[T1, " ainda pode virar citação
+            if (aindaPodeSerCitacao(texto, j)) {
+                return -1;   // "[T" ou "[ T1 , " ainda pode virar citação
             }
             return fim;   // "[nota]" e afins: começa outra frase
         }
+    }
+
+    /**
+     * O colchete que abre em {@code abre} e não fechou ainda pode virar uma citação ({@code [T1]}, {@code [ T1 , T2 ]})? Sim se, até
+     * onde o texto chegou, ele só tem espaços, letras T, R ou C com 1 a 3 algarismos, e vírgulas entre elas ({@code "["}, {@code "[T"},
+     * {@code "[T1,"}, {@code "[ T1 , T"}); não se já saiu do formato ({@code "[T1 T2"}, {@code "[T1234"}, {@code "[1"}). Sem limite de
+     * tamanho: a citação com muitas fontes e espaços chega aos poucos, e cortar a frase no meio dela tiraria a citação da frase.
+     * Uma passada só, sem expressão regular, para o custo não passar do tamanho do texto.
+     */
+    private static boolean aindaPodeSerCitacao(String texto, int abre) {
+        int tamanho = texto.length();
+        int i = abre + 1;
+        while (true) {
+            i = depoisDosEspacos(texto, i);
+            if (i >= tamanho) {
+                return true;
+            }
+            if ("TRC".indexOf(texto.charAt(i)) < 0) {
+                return false;
+            }
+            i++;
+            int algarismos = 0;
+            while (i < tamanho && texto.charAt(i) >= '0' && texto.charAt(i) <= '9') {
+                algarismos++;
+                i++;
+                if (algarismos > 3) {
+                    return false;
+                }
+            }
+            if (i >= tamanho) {
+                return true;
+            }
+            if (algarismos == 0) {
+                return false;
+            }
+            i = depoisDosEspacos(texto, i);
+            if (i >= tamanho) {
+                return true;
+            }
+            if (texto.charAt(i) != ',') {
+                return false;   // o "]" que fecharia uma citação inteira já foi visto antes; qualquer outra coisa não é citação
+            }
+            i++;
+        }
+    }
+
+    private static int depoisDosEspacos(String texto, int desde) {
+        int i = desde;
+        while (i < texto.length() && Character.isWhitespace(texto.charAt(i))) {
+            i++;
+        }
+        return i;
     }
 
     private static boolean ehAbreviaturaOuLista(String texto, int inicioDaFrase, int posicaoDoPonto) {

@@ -72,6 +72,27 @@ class FrasesTest {
     }
 
     @Test
+    void verNaoEAbreviaturaEOPontoDeVerTerminaAFrase() {
+        assertThat(Frases.dividir("A multa não é essa, como dá para ver. A tarifa vale outro valor.")).containsExactly(
+                "A multa não é essa, como dá para ver.", "A tarifa vale outro valor.");
+        assertThat(Frases.dividir("Você pode ver. Depois decida.")).hasSize(2);
+        assertThat(Frases.dividir("Veja a p. 6 do manual.")).as("p. continua abreviatura").hasSize(1);
+    }
+
+    @Test
+    void asteriscoEUnderlineFechamAFraseDepoisDoPonto() {
+        assertThat(Frases.dividir("**A multa é 09/09/2026.** A tarifa é R$ 312,00 [T1].")).containsExactly("**A multa é 09/09/2026.**",
+                "A tarifa é R$ 312,00 [T1].");
+        assertThat(Frases.dividir("*A multa é 09/09/2026.* A tarifa vale.")).containsExactly("*A multa é 09/09/2026.*", "A tarifa vale.");
+        assertThat(Frases.dividir("_A multa é 09/09/2026._ A tarifa vale.")).containsExactly("_A multa é 09/09/2026._", "A tarifa vale.");
+        assertThat(Frases.dividir("**500.** reais é a multa.")).containsExactly("**500.**", "reais é a multa.");
+        assertThat(Frases.dividir("**Atenção!** O prazo acabou.")).containsExactly("**Atenção!**", "O prazo acabou.");
+        assertThat(Frases.dividir("**A multa é 09/09/2026.** [T1] A tarifa vale.")).as("a citação depois do negrito fica com a frase")
+                .containsExactly("**A multa é 09/09/2026.** [T1]", "A tarifa vale.");
+        assertThat(Frases.dividir("Vale R$ 1.250,00 e a seção 3.2*")).as("3.2* não termina a frase").hasSize(1);
+    }
+
+    @Test
     void textoSemPontuacaoEUmaFraseSo() {
         assertThat(Frases.dividir("sem pontuação nenhuma")).containsExactly("sem pontuação nenhuma");
         assertThat(Frases.dividir("")).isEmpty();
@@ -97,6 +118,36 @@ class FrasesTest {
             "Texto. [T1] [T2"})
     void citacaoQueAindaEstaChegandoSegura(String parcial) {
         assertThat(Frases.fimDaPrimeiraFraseCompleta(parcial, 0)).as(parcial).isEqualTo(-1);
+    }
+
+    @Test
+    void citacaoLongaQueChegaLetraALetraSeguraAteFechar() {
+        String texto = "O prazo é 04/12/2026. [ T1 , T2 , T3 , T4 , T5 , T6 ] Outra frase.";
+        int depoisDoPonto = texto.indexOf('.') + 1;
+        int fimDaCitacao = texto.indexOf(']') + 1;
+        for (int tamanho = depoisDoPonto + 1; tamanho < fimDaCitacao; tamanho++) {
+            assertThat(Frases.fimDaPrimeiraFraseCompleta(texto.substring(0, tamanho), 0)).as(texto.substring(0, tamanho)).isEqualTo(-1);
+        }
+        assertThat(Frases.fimDaPrimeiraFraseCompleta(texto.substring(0, fimDaCitacao), 0)).as("fechou, mas pode vir outra citação").isEqualTo(-1);
+        assertThat(Frases.fimDaPrimeiraFraseCompleta(texto, 0)).isEqualTo(fimDaCitacao);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"Texto. [T1 T2", "Texto. [T1, X", "Texto. [ T1 , T2 , T3 , T4 , T5 , T6 , nota", "Texto. [T1234", "Texto. [TT", "Texto. [T1;", "Texto. [1",
+            "Texto. [t1"})
+    void colcheteQueJaNaoPodeVirarCitacaoNaoSegura(String parcial) {
+        assertThat(Frases.fimDaPrimeiraFraseCompleta(parcial, 0)).as(parcial).isEqualTo("Texto.".length());
+    }
+
+    @Test
+    void colcheteLongoESemFimNaoTravaOTeste() {
+        String virgulas = "Texto. [" + " ,".repeat(5000);
+        String texto = "Texto. [ T1" + " , T2".repeat(2000);
+        long inicio = System.nanoTime();
+        assertThat(Frases.fimDaPrimeiraFraseCompleta(virgulas, 0)).isEqualTo("Texto.".length());
+        assertThat(Frases.fimDaPrimeiraFraseCompleta(texto, 0)).isEqualTo(-1);
+        assertThat(Frases.fimDaPrimeiraFraseCompleta(texto + " X", 0)).isEqualTo("Texto.".length());
+        assertThat((System.nanoTime() - inicio) / 1_000_000).as("em milissegundos: tem de ser linear").isLessThan(2000);
     }
 
     @Test

@@ -213,6 +213,42 @@ class FiltroDoTextoComFontesTest {
     }
 
     @Test
+    void citacaoLongaComEspacosQueChegaLetraALetraNaoDisparaTextoRecusado() {
+        // seis trechos: [ T1 , T2 , ... T6 ] passa de 24 caracteres, e antes o filtro cortava a frase no meio dela
+        FontesDoTurno turno = turno(PRAZO, "Segundo trecho.", "Terceiro trecho.", "Quarto trecho.", "Quinto trecho.", "Sexto trecho.");
+        String texto = "O prazo é 04/12/2026. [ T1 , T2 , T3 , T4 , T5 , T6 ]";
+        Anotador anotador = new Anotador();
+        FiltroDoTexto filtro = new FiltroDoTexto(doAmarelo(), checagem, turno, anotador);
+
+        for (char c : texto.toCharArray()) {
+            filtro.receber(String.valueOf(c));
+        }
+        filtro.fechar();
+
+        assertThat(anotador.eventos).doesNotContain("texto_recusado");
+        assertThat(filtro.recusado()).isFalse();
+        assertThat(String.join("", anotador.eventos.stream().map(e -> e.substring("texto:".length())).toList())).isEqualTo(texto);
+        // e o texto inteiro, de uma vez, aprova: o fluxo e a checagem final concordam
+        assertThat(checagem.chat(doAmarelo(), turno, texto).aprovado()).isTrue();
+    }
+
+    @Test
+    void negritoFechaAFraseNoFluxoEACitacaoDaOutraNaoApoiaONumero() {
+        FontesDoTurno turno = turno("A multa era 09/09/2026.", "A tarifa é R$ 312,00.");
+        String texto = "**A multa é 09/09/2026.** A tarifa é R$ 312,00 [T2].";
+        Anotador anotador = new Anotador();
+        FiltroDoTexto filtro = new FiltroDoTexto(doAmarelo(), checagem, turno, anotador);
+
+        for (char c : texto.toCharArray()) {
+            filtro.receber(String.valueOf(c));
+        }
+        filtro.fechar();
+
+        assertThat(anotador.eventos).containsExactly("texto_recusado");
+        assertThat(filtro.motivoDaRecusa()).contains("09/09/2026");
+    }
+
+    @Test
     void textoBomPedacoAPedacoSaiInteiroEEmFrasesCompletas() {
         FontesDoTurno turno = turno(PRAZO);
         String texto = "O prazo é 04/12/2026 [T1]. Vale até as 18h [T1]. Na dúvida, fale com a produção.";

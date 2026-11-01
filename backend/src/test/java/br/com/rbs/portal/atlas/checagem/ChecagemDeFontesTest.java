@@ -132,6 +132,24 @@ class ChecagemDeFontesTest {
     }
 
     @Test
+    void pontoDeVerEOFimDaFraseENegritoFechaAFraseDepoisDoPonto() {
+        // a mesma fonte traz tudo; o que decide é qual frase a cita
+        FontesDoTurno turno = turno("Quanto?", "R$ 312,00, R$ 999,00 e 09/09/2026");
+
+        // "ver." não é abreviatura: o 999 fica numa frase sem citação, e a citação da seguinte não o apoia
+        recusa(turno, "A multa é R$ 999,00 como dá para ver. A tarifa é R$ 312,00 [T1].");
+        aprova(turno, "A multa é R$ 999,00 [T1] como dá para ver. A tarifa é R$ 312,00 [T1].");
+        aprova(turno, "A multa é como dá para ver. A tarifa é R$ 312,00 [T1].");
+        // o negrito, o itálico e o sublinhado fecham a frase depois do ponto
+        recusa(turno, "**A multa é 09/09/2026.** A tarifa é R$ 312,00 [T1].");
+        recusa(turno, "_A multa é 09/09/2026._ A tarifa é R$ 312,00 [T1].");
+        recusa(turno, "*A multa é R$ 999,00.* A tarifa é R$ 312,00 [T1].");
+        aprova(turno, "**A multa é 09/09/2026.** [T1] A tarifa é R$ 312,00 [T1].");
+        aprova(turno, "**A multa é 09/09/2026 [T1].** A tarifa é R$ 312,00 [T1].");
+        aprova(turno, "**Atenção!** A tarifa é R$ 312,00 [T1].");
+    }
+
+    @Test
     void aCitacaoDepoisDoPontoFicaComAFraseDeAntes() {
         FontesDoTurno turno = turno("Qual o prazo?", PRAZO);
 
@@ -139,6 +157,7 @@ class ChecagemDeFontesTest {
         aprova(turno, "O prazo é 04/12/2026. [T1] [T1]");
         aprova(turno, "O prazo é 04/12/2026.[T1]");
         recusa(turno, "O prazo é 04/12/2026. Depois disso, o limite é 05/12/2026. [T1]");
+        aprova(turno, "O prazo é 04/12/2026. [ T1 , T1 , T1 , T1 , T1 , T1 ]");
     }
 
     @Test
