@@ -45,7 +45,7 @@ class ConsultarCotaTest extends ApoioDasConsultas {
         Map<String, Object> cota = registrosDoTipo(resultado, "cota").get(0);
         assertThat(cota.get("marcador")).isEqualTo("R1");
         assertThat(cota).containsEntry("produto", "Cota Patrocínio Master");
-        assertThat((Map<String, Object>) cota.get("cota")).containsEntry("codigo", "MASTER").containsEntry("nome", "Master");
+        assertThat((Map<String, Object>) cota.get("cota")).containsEntry("nome", "Master").doesNotContainKey("codigo");
         assertThat((Map<String, Object>) cota.get("edicao")).containsEntry("nome", "Planeta Atlântida").containsEntry("ano", 2027);
         Fonte fonte = turno.fonte("R1").orElseThrow();
         assertThat(fonte.registroEntidade()).isEqualTo("parceria");
@@ -66,15 +66,16 @@ class ConsultarCotaTest extends ApoioDasConsultas {
 
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> doAmarelo = (List<Map<String, Object>>) abasDoAmarelo.get("abas");
-        assertThat(doAmarelo).extracting(a -> a.get("codigo")).containsExactly("PERFIL", "APLICACOES", "MIDIA", "CORTESIAS", "CREDENCIAMENTO",
-                "PESQUISA", "CONTRATO");
-        assertThat(doAmarelo).filteredOn(a -> "MIDIA".equals(a.get("codigo"))).singleElement()
-                .satisfies(a -> assertThat(a).containsEntry("nome", "Mídia e conteúdo").containsEntry("situacao", "fechada"));
-        assertThat(doAmarelo).filteredOn(a -> "PERFIL".equals(a.get("codigo"))).singleElement()
-                .satisfies(a -> assertThat(a).containsEntry("nome", "Perfil do cliente").containsEntry("situacao", "liberada"));
+        assertThat(doAmarelo).extracting(a -> a.get("nome")).containsExactly("Perfil do cliente", "Aplicações de marca no evento",
+                "Mídia e conteúdo", "Cortesias", "Credenciamento", "Pesquisa da ativação", "Contrato");
+        assertThat(doAmarelo).allSatisfy(a -> assertThat(a).doesNotContainKey("codigo"));
+        assertThat(doAmarelo).filteredOn(a -> "Mídia e conteúdo".equals(a.get("nome"))).singleElement()
+                .satisfies(a -> assertThat(a).containsEntry("situacao", "fechada"));
+        assertThat(doAmarelo).filteredOn(a -> "Perfil do cliente".equals(a.get("nome"))).singleElement()
+                .satisfies(a -> assertThat(a).containsEntry("situacao", "liberada"));
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> doRoxoAbas = (List<Map<String, Object>>) abasDoRoxo.get("abas");
-        assertThat(doRoxoAbas).filteredOn(a -> "PESQUISA".equals(a.get("codigo"))).singleElement()
+        assertThat(doRoxoAbas).filteredOn(a -> "Pesquisa da ativação".equals(a.get("nome"))).singleElement()
                 .satisfies(a -> assertThat(a.get("situacao")).as("a Subcota G não tem a aba Pesquisa na cota").isEqualTo("fora da cota"));
         assertThat(roxo).isNotEqualTo(amarelo);
     }
@@ -91,14 +92,14 @@ class ConsultarCotaTest extends ApoioDasConsultas {
         List<Map<String, Object>> previstos = registrosDoTipo(resultado, "previsto");
         assertThat(previstos).hasSize((int) linhasNoBanco);
         Map<String, Object> telao = previstos.stream().filter(p -> "Elementos dentro do Camarote".equals(p.get("formato"))).findFirst().orElseThrow();
-        assertThat(telao).containsEntry("categoria", "APLICACAO_MARCA").containsEntry("veiculo", "No evento")
-                .containsEntry("quantidadePrevista", "3").containsEntry("unidade", "APLICACAO");
+        assertThat(telao).containsEntry("categoria", "Aplicações de marca").containsEntry("veiculo", "No evento")
+                .containsEntry("quantidadePrevista", "3").containsEntry("unidade", "Aplicações");
         Fonte fonteDaAplicacao = turno.fonte((String) telao.get("marcador")).orElseThrow();
         assertThat(fonteDaAplicacao.dados()).containsEntry("unidade", "APLICACAO");
         assertThat(fonteDaAplicacao.texto()).contains("Elementos dentro do Camarote", "3");
         Map<String, Object> rede = previstos.stream()
                 .filter(p -> "Chamadas assinadas 5\"".equals(p.get("formato")) && "Rede Atlântida RS".equals(p.get("veiculo"))).findFirst().orElseThrow();
-        assertThat(rede).containsEntry("categoria", "MIDIA").containsEntry("quantidadePrevista", "300").containsEntry("unidade", "INSERCAO");
+        assertThat(rede).containsEntry("categoria", "Mídia e conteúdo").containsEntry("quantidadePrevista", "300").containsEntry("unidade", "Inserções");
         assertThat(turno.fonte((String) rede.get("marcador")).orElseThrow().dados()).containsEntry("unidade", "INSERCAO");
     }
 
@@ -128,12 +129,12 @@ class ConsultarCotaTest extends ApoioDasConsultas {
 
         List<Map<String, Object>> cortesias = registrosDoTipo(resultado, "cortesia");
         assertThat(cortesias).hasSize(6);
-        Map<String, Object> camarote = cortesias.stream().filter(c -> "CAMAROTE".equals(c.get("setor")) && "SEXTA".equals(c.get("dia"))).findFirst().orElseThrow();
+        Map<String, Object> camarote = cortesias.stream().filter(c -> "Camarote".equals(c.get("setor")) && "sexta-feira".equals(c.get("dia"))).findFirst().orElseThrow();
         assertThat(camarote).containsEntry("quantidade", 40).containsEntry("comShuttle", true);
         assertThat(turno.fonte((String) camarote.get("marcador")).orElseThrow().texto()).contains("40", "Camarote", "sexta");
         List<Map<String, Object>> credenciais = registrosDoTipo(resultado, "credencial");
         assertThat(credenciais).hasSize(6);
-        Map<String, Object> agencia = credenciais.stream().filter(c -> "ARENA".equals(c.get("setor")) && "Agência".equals(c.get("beneficiario"))).findFirst().orElseThrow();
+        Map<String, Object> agencia = credenciais.stream().filter(c -> "Arena".equals(c.get("setor")) && "Agência".equals(c.get("beneficiario"))).findFirst().orElseThrow();
         assertThat(agencia).containsEntry("quantidadePorDia", 60);
         assertThat(turno.fonte((String) agencia.get("marcador")).orElseThrow().texto()).contains("60", "Arena", "agência");
     }
@@ -149,20 +150,75 @@ class ConsultarCotaTest extends ApoioDasConsultas {
         Map<String, Object> resultado = resultado(contexto, turno, COTA, "{}");
 
         List<Map<String, Object>> cortesias = registrosDoTipo(resultado, "cortesia");
-        Map<String, Object> arena = cortesias.stream().filter(c -> "ARENA".equals(c.get("setor")) && "SEXTA".equals(c.get("dia"))).findFirst().orElseThrow();
-        Map<String, Object> camarote = cortesias.stream().filter(c -> "CAMAROTE".equals(c.get("setor")) && "SEXTA".equals(c.get("dia"))).findFirst().orElseThrow();
+        Map<String, Object> arena = cortesias.stream().filter(c -> "Arena".equals(c.get("setor")) && "sexta-feira".equals(c.get("dia"))).findFirst().orElseThrow();
+        Map<String, Object> camarote = cortesias.stream().filter(c -> "Camarote".equals(c.get("setor")) && "sexta-feira".equals(c.get("dia"))).findFirst().orElseThrow();
         assertThat(arena).containsEntry("acesso", "Portão 6");
         assertThat(camarote).containsEntry("acesso", "Portão 6 ou Portão 4; shuttle via Portão 4");
         assertThat(turno.fonte((String) camarote.get("marcador")).orElseThrow().texto()).contains("Acesso: Portão 6 ou Portão 4; shuttle via Portão 4")
                 .doesNotContain("P6", "P4");
         // a Roxo tem credencial GERAL na Arena: não há palavra certa na tela, e o campo sai
-        Map<String, Object> geral = registrosDoTipo(resultado, "credencial").stream().filter(c -> "ARENA".equals(c.get("setor"))).findFirst().orElseThrow();
+        Map<String, Object> geral = registrosDoTipo(resultado, "credencial").stream().filter(c -> "Arena".equals(c.get("setor"))).findFirst().orElseThrow();
         assertThat(geral).containsEntry("quantidadePorDia", 8).doesNotContainKey("beneficiario");   // o plano da Subcota G: 8 por dia na Arena
         String texto = turno.fonte((String) geral.get("marcador")).orElseThrow().texto();
         assertThat(texto).contains("8", "Arena").doesNotContain("GERAL", "geral");
         // o JSON todo não leva o código cru
         String json = AtlasJson.escrever(resultado);
         assertThat(json).doesNotContain("\"P6\"", "\"P4\"", "\"GERAL\"", "\"AGENCIA\"", "\"MARCA\"", "EQUIPE_CONTEUDO");
+    }
+
+    /**
+     * O texto livre do plano comercial, que é dado do documento e não código do banco: a sigla de um programa ({@code PTV1}, {@code BPRA},
+     * {@code GESP}) é o nome que o plano dá a ele, e o modelo a repete como está.
+     */
+    private static final java.util.Set<String> TEXTO_LIVRE_DO_PLANO = java.util.Set.of("veiculo", "formato", "espacoPrograma", "janela", "bloco");
+
+    /** Os valores de texto do JSON, de qualquer profundidade, menos o do campo {@code marcador} (R1, R10...) e o texto livre do plano. */
+    private static void valoresDeTexto(Object no, List<String> saida) {
+        if (no instanceof Map<?, ?> mapa) {
+            mapa.forEach((chave, valor) -> {
+                if (!"marcador".equals(chave) && !TEXTO_LIVRE_DO_PLANO.contains(chave)) {
+                    valoresDeTexto(valor, saida);
+                }
+            });
+        } else if (no instanceof List<?> lista) {
+            lista.forEach(item -> valoresDeTexto(item, saida));
+        } else if (no instanceof String texto) {
+            saida.add(texto);
+        }
+    }
+
+    @Test
+    void nenhumValorDeTextoDoJsonEUmCodigoCruDoBanco() {
+        // SALA_IMPRENSA, APLICACAO_MARCA, SEXTA, INSERCAO, ASSINADA, MASTER, MIDIA...: o modelo lê a palavra que a tela usa
+        for (String[] marca : new String[][] {{AMARELO, "Cliente Amarelo"}, {ROXO, "Cliente Roxo"}, {VERDE, "Cliente Verde"}}) {
+            Map<String, Object> resultado = resultado(contexto(marca[0], marca[1]), turno(), COTA, "{}");
+            List<String> textos = new java.util.ArrayList<>();
+            valoresDeTexto(resultado, textos);
+
+            // "CPM" é a palavra que a tela usa para essa unidade (Midia.tsx), e não um código do banco
+            assertThat(textos).as(marca[1]).isNotEmpty().noneMatch(texto -> texto.matches("^[A-Z][A-Z0-9_]{2,}$") && !texto.equals("CPM"));
+        }
+    }
+
+    @Test
+    void osCamposDeTipoDeMidiaDeUnidadeDeSetorEDeDiaVemComAsPalavrasDaTela() {
+        long amarelo = parceria("Cliente Amarelo");
+        jdbc.sql("""
+                INSERT INTO aproveitamento_previsto (parceria_id, categoria, veiculo, formato, tipo_midia, quantidade_prevista, unidade)
+                VALUES (:p, 'MIDIA', 'atl.la', 'Peça própria de teste', 'PROPRIA', 2, 'INSERCAO'),
+                       (:p, 'MIDIA', 'atl.la', 'Peça de marca de teste', 'CONTEUDO_DE_MARCA', 1, 'CPM')
+                """).param("p", amarelo).update();
+
+        Map<String, Object> resultado = resultado(contexto(AMARELO, "Cliente Amarelo"), turno(), COTA, "{}");
+
+        List<Map<String, Object>> previstos = registrosDoTipo(resultado, "previsto");
+        assertThat(previstos).filteredOn(p -> "Peça própria de teste".equals(p.get("formato"))).singleElement()
+                .satisfies(p -> assertThat(p).containsEntry("tipoMidia", "própria").containsEntry("unidade", "Inserções"));
+        assertThat(previstos).filteredOn(p -> "Peça de marca de teste".equals(p.get("formato"))).singleElement()
+                .satisfies(p -> assertThat(p).containsEntry("tipoMidia", "conteúdo de marca").containsEntry("unidade", "CPM"));
+        assertThat(registrosDoTipo(resultado, "cortesia")).extracting(c -> c.get("dia")).isSubsetOf("sexta-feira", "sábado", "passaporte (os dois dias)");
+        assertThat(registrosDoTipo(resultado, "cortesia")).extracting(c -> c.get("setor")).isNotEmpty()
+                .isSubsetOf("Arena", "Camarote", "Lounge", "Premium", "Baixo camarote", "Sala de imprensa", "Sala de conteúdo");
     }
 
     @Test
@@ -188,7 +244,7 @@ class ConsultarCotaTest extends ApoioDasConsultas {
         long amarelo = parceria("Cliente Amarelo");
         AtlasContexto contexto = contexto(AMARELO, "Cliente Amarelo");
         String antes = chamar(contexto, turno(), COTA, "{}").resultadoJson();
-        assertThat(antes).contains("Rádio 92", "Elementos dentro do Camarote", "CAMAROTE", "SALA_IMPRENSA");
+        assertThat(antes).contains("Rádio 92", "Elementos dentro do Camarote", "Camarote", "Sala de imprensa").doesNotContain("SALA_IMPRENSA", "\"CAMAROTE\"");
 
         fecharAba(amarelo, "MIDIA");
         fecharAba(amarelo, "APLICACOES");
@@ -212,13 +268,13 @@ class ConsultarCotaTest extends ApoioDasConsultas {
 
         fecharAba(amarelo, "MIDIA");
         List<Map<String, Object>> soAplicacoes = registrosDoTipo(resultado(contexto, turno(), COTA, "{}"), "previsto");
-        assertThat(soAplicacoes).extracting(p -> p.get("categoria")).containsOnly("APLICACAO_MARCA").isNotEmpty();
+        assertThat(soAplicacoes).extracting(p -> p.get("categoria")).containsOnly("Aplicações de marca").isNotEmpty();
 
         jdbc.sql("UPDATE parceria_aba SET liberada = TRUE WHERE parceria_id = :p AND aba_id = (SELECT id FROM aba WHERE codigo = 'MIDIA')")
                 .param("p", amarelo).update();
         fecharAba(amarelo, "APLICACOES");
         List<Map<String, Object>> soMidia = registrosDoTipo(resultado(contexto, turno(), COTA, "{}"), "previsto");
-        assertThat(soMidia).extracting(p -> p.get("categoria")).containsOnly("MIDIA").isNotEmpty();
+        assertThat(soMidia).extracting(p -> p.get("categoria")).containsOnly("Mídia e conteúdo").isNotEmpty();
     }
 
     @Test
@@ -232,7 +288,7 @@ class ConsultarCotaTest extends ApoioDasConsultas {
 
         assertThat(registrosDoTipo(resultado, "cortesia")).isEmpty();
         assertThat(registrosDoTipo(resultado, "credencial")).isEmpty();
-        assertThat(registrosDoTipo(resultado, "previsto")).extracting(p -> p.get("categoria")).containsOnly("MIDIA");
+        assertThat(registrosDoTipo(resultado, "previsto")).extracting(p -> p.get("categoria")).containsOnly("Mídia e conteúdo");
         assertThat(registrosDoTipo(resultado, "previsto").stream().map(r -> String.valueOf(r.get("quantidadePrevista"))))
                 .doesNotContain("0", "0,0", "null");
     }

@@ -41,6 +41,10 @@ import org.springframework.stereotype.Component;
  * </ul>
  * <b>O valor do investimento e a base dele nunca entram</b> (o mínimo de dado): a consulta seleciona coluna por coluna, sem
  * reaproveitar nenhum DTO da parceria. Valor sem linha não vira zero: simplesmente não há registro dele.
+ * <p>
+ * <b>Nenhum código cru do banco vai ao modelo</b>: a cota e as abas vêm só com o nome, e a categoria, a unidade, o tipo de mídia, o setor
+ * e o dia saem na palavra que a tela usa ("Mídia e conteúdo", "Inserções", "assinada", "Sala de imprensa", "sexta-feira"). O código
+ * fica só em {@code dados} da fonte, que o {@code calcular} lê.
  */
 @Component
 public class ConsultarCota implements Ferramenta {
@@ -74,6 +78,10 @@ public class ConsultarCota implements Ferramenta {
     private static final java.util.regex.Pattern PORTAO_ABREVIADO = java.util.regex.Pattern.compile("\\bP(\\d{1,2})\\b");
     private static final Map<String, String> TIPOS_DE_MIDIA = Map.of("ASSINADA", "assinada", "PROPRIA", "própria", "MERCHANDISING",
             "merchandising", "BRANDED", "branded", "CONTEUDO_DE_MARCA", "conteúdo de marca");
+    /** A categoria do previsto com o nome da aba que a tela mostra ("Mídia e conteúdo"; "Aplicações de marca" no relatório e no plano). */
+    private static final Map<String, String> CATEGORIAS = Map.of("MIDIA", "Mídia e conteúdo", "APLICACAO_MARCA", "Aplicações de marca");
+    /** A unidade do previsto como a tela a escreve ({@code Midia.tsx}: "Inserções", "CPM", "Aplicações"). O código fica só em {@code dados}. */
+    private static final Map<String, String> UNIDADES_NA_TELA = Map.of("INSERCAO", "Inserções", "CPM", "CPM", "APLICACAO", "Aplicações");
 
     private final RegistrosDoPortal registros;
     private final VerificadorDeAcesso verificador;
@@ -161,7 +169,7 @@ public class ConsultarCota implements Ferramenta {
         Map<String, Object> registro = new LinkedHashMap<>();
         registro.put("marcador", fonte.marcador());
         registro.put("tipo", "cota");
-        registro.put("cota", Map.of("codigo", c.cotaCodigo(), "nome", c.cotaNome()));
+        registro.put("cota", Map.of("nome", c.cotaNome()));   // sem o código (MASTER...): o modelo lê o nome que a tela mostra
         registro.put("produto", c.produto());
         Map<String, Object> edicao = new LinkedHashMap<>();
         edicao.put("nome", c.eventoNome());
@@ -176,7 +184,6 @@ public class ConsultarCota implements Ferramenta {
         for (AbaDaCota a : abas) {
             String situacao = a.aberta() ? "liberada" : a.naCota() ? "fechada" : "fora da cota";
             Map<String, Object> item = new LinkedHashMap<>();
-            item.put("codigo", a.codigo());
             item.put("nome", a.nome());
             item.put("situacao", situacao);
             itens.add(item);
@@ -221,15 +228,15 @@ public class ConsultarCota implements Ferramenta {
         Map<String, Object> registro = new LinkedHashMap<>();
         registro.put("marcador", fonte.marcador());
         registro.put("tipo", "previsto");
-        registro.put("categoria", p.categoria());
+        registro.put("categoria", CATEGORIAS.getOrDefault(p.categoria(), p.categoria()));
         poeSeHouver(registro, "bloco", p.bloco());
         registro.put("veiculo", p.veiculo());
         registro.put("formato", p.formato());
         poeSeHouver(registro, "espacoPrograma", p.espacoPrograma());
         poeSeHouver(registro, "janela", p.janela());
-        poeSeHouver(registro, "tipoMidia", p.tipoMidia());
+        poeSeHouver(registro, "tipoMidia", p.tipoMidia() == null ? null : TIPOS_DE_MIDIA.getOrDefault(p.tipoMidia(), p.tipoMidia()));
         registro.put("quantidadePrevista", quantidade);
-        registro.put("unidade", p.unidade());
+        registro.put("unidade", UNIDADES_NA_TELA.getOrDefault(p.unidade(), p.unidade()));
         if (plano != null) {
             Map<String, Object> origem = new LinkedHashMap<>();
             origem.put("documento", plano.titulo());
@@ -250,8 +257,8 @@ public class ConsultarCota implements Ferramenta {
         Map<String, Object> registro = new LinkedHashMap<>();
         registro.put("marcador", fonte.marcador());
         registro.put("tipo", "cortesia");
-        registro.put("setor", c.setor());
-        registro.put("dia", c.dia());
+        registro.put("setor", setor);
+        registro.put("dia", dia);
         registro.put("quantidade", c.quantidade());
         registro.put("comShuttle", c.comShuttle());
         poeSeHouver(registro, "acesso", acesso);
@@ -268,7 +275,7 @@ public class ConsultarCota implements Ferramenta {
         Map<String, Object> registro = new LinkedHashMap<>();
         registro.put("marcador", fonte.marcador());
         registro.put("tipo", "credencial");
-        registro.put("setor", c.setor());
+        registro.put("setor", setor);
         if (beneficiario != null) {
             registro.put("beneficiario", BENEFICIARIOS_NA_TELA.get(c.beneficiario()));
         }

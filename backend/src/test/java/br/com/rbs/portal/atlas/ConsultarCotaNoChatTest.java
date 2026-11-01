@@ -114,10 +114,10 @@ class ConsultarCotaNoChatTest {
                         .doesNotContain("MIDIA", "\"aba\"", "\"categoria\"", "\"tipo\":\"cortesia\"", "marcador", "registros");
             }
             ProvedorRoteirizado.exigirHistoricoValido(modelo.pedidos().get(0));
-            // a atlas_tool_call guarda o original
+            // a atlas_tool_call guarda o original: o código MIDIA nas entregas e o nome "Mídia e conteúdo" na cota (que já não leva códigos)
             assertThat(jdbc.sql("SELECT count(*) FROM atlas_tool_call t JOIN atlas_mensagem m ON m.id = t.mensagem_id WHERE m.conversa_id = :c "
-                    + "AND t.ferramenta IN ('listar_entregas', 'consultar_cota') AND t.resultado::text LIKE '%MIDIA%'").param("c", conversa)
-                    .query(Long.class).single()).isEqualTo(2L);
+                    + "AND t.ferramenta IN ('listar_entregas', 'consultar_cota') AND (t.resultado::text LIKE '%MIDIA%' "
+                    + "OR t.resultado::text LIKE '%Mídia e conteúdo%')").param("c", conversa).query(Long.class).single()).isEqualTo(2L);
         } finally {
             jdbc.sql(fechar).param("liberada", true).param("p", parceria).update();
         }
