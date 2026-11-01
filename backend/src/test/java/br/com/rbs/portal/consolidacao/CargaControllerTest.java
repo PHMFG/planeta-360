@@ -678,7 +678,7 @@ class CargaControllerTest extends ApoioDeCargas {
         assertThat(lerLista(pagina, "$.itens")).hasSize(1);
         MvcTestResult tipoInvalido = rbs.get("/api/cargas?tipo=MIDIA");
         assertThat(tipoInvalido).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
-        assertThat(lerJson(tipoInvalido, "$.campos.tipo")).isEqualTo("Tipo inválido. Use VEICULACAO ou PESQUISA.");
+        assertThat(lerJson(tipoInvalido, "$.campos.tipo")).isEqualTo("Tipo inválido. Use VEICULACAO, PESQUISA ou PLANO.");
         assertThat(rbs.get("/api/cargas?tamanho=0")).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(rbs.get("/api/cargas?tamanho=201")).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(rbs.get("/api/cargas?pagina=-1")).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);

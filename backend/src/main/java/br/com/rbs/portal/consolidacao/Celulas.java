@@ -66,8 +66,16 @@ final class Celulas {
         return valor < minimo || valor > maximo ? null : valor;
     }
 
-    /** A unidade da pesquisa em maiúsculas ("percentual" vale como PERCENTUAL); a função do banco confere se é uma das três. */
-    static String unidade(String texto) {
+    /**
+     * Um código de lista fechada em maiúsculas: a unidade da pesquisa ("percentual" vale como PERCENTUAL) e a categoria, o tipo
+     * de mídia e a unidade do plano comercial ("midia" vale como MIDIA). A função do banco confere se é um dos aceitos.
+     */
+    static String codigo(String texto) {
         return texto == null ? null : texto.toUpperCase(Locale.ROOT);
+    }
+
+    /** A unidade da pesquisa em maiúsculas; o mesmo que {@link #codigo}. */
+    static String unidade(String texto) {
+        return codigo(texto);
     }
 }

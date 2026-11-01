@@ -76,6 +76,35 @@ public class Armazenamento {
     }
 
     /**
+     * Grava um arquivo avulso de uma parceria (sem entrega) que pertence a uma aba, por exemplo a foto de comprovação de uma
+     * aplicação, na aba APLICACOES. [PERMISSAO] A aba importa: o download (rota 18) só confere se a aba está aberta para a
+     * marca quando o arquivo tem aba; sem ela, a marca baixaria o arquivo com a aba fechada. O {@code abaCodigo} é um dos 7
+     * códigos de aba; um código que não existe, ou uma aba sem parceria, é erro de quem chama (IllegalArgumentException).
+     * Os demais erros são os de {@link #gravar(byte[], String, String, long, Long)}.
+     */
+    public Arquivo gravar(byte[] conteudo, String nomeOriginal, String categoria, long enviadoPor, Long parceriaId,
+                          String abaCodigo) {
+        if (parceriaId == null) {
+            throw new IllegalArgumentException("Arquivo geral da RBS (sem parceria) não pertence a uma aba.");
+        }
+        Preparado pronto = preparar(conteudo, nomeOriginal);
+        Integer abaId = jdbc.sql("SELECT id FROM aba WHERE codigo = :codigo").param("codigo", abaCodigo)
+                .query(Integer.class).optional()
+                .orElseThrow(() -> new IllegalArgumentException("A aba " + abaCodigo + " não existe."));
+        String caminho = "parcerias/" + parceriaId + "/" + pronto.nomeNoDisco();
+        escrever(caminho, conteudo);
+        return inserir("""
+                        INSERT INTO arquivo (parceria_id, aba_id, categoria, nome_original, mime_type, tamanho_bytes, caminho,
+                                             hash_sha256, enviado_por)
+                        VALUES (:parceriaId, :abaId, :categoria, :nome, :mime, :tamanho, :caminho, :hash, :enviadoPor)
+                        RETURNING\s""" + COLUNAS,
+                Map.of("abaId", abaId, "categoria", categoria, "nome", pronto.nomeOriginal(), "mime", pronto.tipo().mime(),
+                        "tamanho", (long) conteudo.length, "caminho", caminho, "hash", pronto.hash(),
+                        "enviadoPor", enviadoPor),
+                parceriaId, caminho);
+    }
+
+    /**
      * Grava uma nova versão de uma entrega: a parceria e a aba vêm da entrega, e a versão é a maior que ela já tem mais 1.
      * [ISOLAMENTO] Quem chama já conferiu que o usuário pode mexer nesta entrega e a travou (FOR UPDATE), para dois envios
      * ao mesmo tempo não pegarem a mesma versão.

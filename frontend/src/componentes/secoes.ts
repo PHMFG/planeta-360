@@ -20,7 +20,7 @@ export type Secao = {
   /** Aba da modelagem que libera a seção; Minha parceria não depende de aba. */
   aba: CodigoAba | null
   subtitulo: string
-  /** As quatro abas fora da prioridade da Entrega 2 mostram só as entregas da aba. */
+  /** As abas fora da prioridade (Cortesias, Credenciamento, Contrato) mostram só as entregas da aba. */
   desejavel: boolean
 }
 
@@ -50,7 +50,7 @@ export const SECOES: Secao[] = [
     icone: 'ri-palette-line',
     aba: 'APLICACOES',
     subtitulo: 'Logo, manual de identidade visual e evidências pós-evento.',
-    desejavel: true,
+    desejavel: false,
   },
   {
     chave: 'midia',

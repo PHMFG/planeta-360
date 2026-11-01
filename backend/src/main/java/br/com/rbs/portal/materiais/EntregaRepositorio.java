@@ -1,6 +1,7 @@
 package br.com.rbs.portal.materiais;
 
 import br.com.rbs.portal.comum.Datas;
+import br.com.rbs.portal.comum.EntregasDaMarca;
 import br.com.rbs.portal.materiais.MateriaisDtos.ArquivoDto;
 import br.com.rbs.portal.materiais.MateriaisDtos.ItemDaFilaDto;
 import br.com.rbs.portal.materiais.MateriaisDtos.ObservacaoDto;
@@ -115,8 +116,7 @@ public class EntregaRepositorio {
             parametros.put("status", status);
         }
         if (soAbasLiberadas) {
-            sql.append(" AND EXISTS (SELECT 1 FROM parceria_aba pab WHERE pab.parceria_id = e.parceria_id"
-                    + " AND pab.aba_id = e.aba_id AND pab.liberada AND pab.visivel)");
+            sql.append(" AND ").append(EntregasDaMarca.ABA_ABERTA);
         }
         sql.append(" ORDER BY ab.ordem, e.criado_em, e.id");
         return jdbc.sql(sql.toString()).params(parametros).query(EntregaBase.class).list();

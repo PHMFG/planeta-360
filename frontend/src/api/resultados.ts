@@ -53,7 +53,7 @@ export const decidirPergunta = (perguntaId: number, decisao: 'APROVAR' | 'PEDIR_
 // ---------- Cargas ----------
 export type Carga = {
   id: number
-  tipo: 'VEICULACAO' | 'PESQUISA'
+  tipo: 'VEICULACAO' | 'PESQUISA' | 'PLANO'
   eventoId: number
   arquivoId: number | null
   executadaPor: UsuarioResumo | null

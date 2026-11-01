@@ -18,10 +18,10 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
 /**
- * SQL das cargas de planilha (rotas 26 a 28): cria a carga, grava as linhas na área de passagem (stg_veiculacao e
- * stg_pesquisa), chama as funções do banco que validam e inserem sem duplicar, e lê as cargas e as rejeições.
+ * SQL das cargas de planilha (rotas 26 a 28): cria a carga, grava as linhas na área de passagem (stg_veiculacao,
+ * stg_pesquisa e stg_plano), chama as funções do banco que validam e inserem sem duplicar, e lê as cargas e as rejeições.
  * Atende o item 5 da Entrega 2. [CARGA] [DUPLICIDADE] Quem rejeita e deduplica é a função do banco; aqui não há essa regra.
- * No banco a veiculação tem tipo MIDIA; para o contrato da API ela é VEICULACAO.
+ * No banco a veiculação tem tipo MIDIA e o plano comercial PLANO_COMERCIAL; para o contrato da API são VEICULACAO e PLANO.
  */
 @Repository
 public class CargaRepositorio {
@@ -41,16 +41,26 @@ public class CargaRepositorio {
                            String valorTexto, String baseRespondentesTexto) {
     }
 
+    /**
+     * Uma linha do plano comercial já convertida; a quantidade que não converteu está nula (a função do banco rejeita) e o
+     * texto original dela vai em {@code quantidadeTexto}. {@code fontePagina} fora de 1 a 32767 está nula (a página é opcional).
+     */
+    record LinhaDePlano(int linha, String patrocinador, String categoria, String bloco, String veiculo, String formato,
+                        String espacoPrograma, String janela, String tipoMidia, BigDecimal quantidadePrevista,
+                        String quantidadeTexto, String unidade, Short fontePagina) {
+    }
+
     private static final String COLUNAS_DA_CARGA = """
-            SELECT c.id, CASE c.tipo WHEN 'MIDIA' THEN 'VEICULACAO' ELSE c.tipo END AS tipo, c.evento_id, c.arquivo_id,
+            SELECT c.id,
+                   CASE c.tipo WHEN 'MIDIA' THEN 'VEICULACAO' WHEN 'PLANO_COMERCIAL' THEN 'PLANO' ELSE c.tipo END AS tipo, c.evento_id, c.arquivo_id,
                    u.id AS usuario_id, u.nome AS usuario_nome, u.perfil AS usuario_perfil, c.executada_em, c.processada_em,
                    c.linhas_lidas, c.linhas_inseridas, c.linhas_duplicadas, c.linhas_rejeitadas
             FROM carga c JOIN usuario u ON u.id = c.executada_por
             """;
 
-    // Só as cargas de planilha que a API expõe: veiculação (MIDIA) e pesquisa.
+    // Só as cargas de planilha que a API expõe: veiculação (MIDIA), pesquisa e plano comercial. O tipo COMPROVACAO do banco não tem carga.
     private static final String FILTRO = """
-            WHERE c.tipo IN ('MIDIA', 'PESQUISA')
+            WHERE c.tipo IN ('MIDIA', 'PESQUISA', 'PLANO_COMERCIAL')
               AND (CAST(:tipo AS text) IS NULL OR c.tipo = :tipo)
               AND (CAST(:eventoId AS bigint) IS NULL OR c.evento_id = :eventoId)
             """;
@@ -78,7 +88,7 @@ public class CargaRepositorio {
                 .param("evento", eventoId).param("escopo", escopo).query(Long.class).optional();
     }
 
-    /** Cria a carga ainda sem totais; {@code tipo} é o do banco (MIDIA ou PESQUISA). A função preenche o resto. */
+    /** Cria a carga ainda sem totais; {@code tipo} é o do banco (MIDIA, PESQUISA ou PLANO_COMERCIAL). A função preenche o resto. */
     public long criar(String tipo, long arquivoId, long eventoId, long usuarioId) {
         return jdbc.sql("""
                         INSERT INTO carga (tipo, arquivo_id, evento_id, executada_por)
@@ -151,9 +161,51 @@ public class CargaRepositorio {
         });
     }
 
+    /** Grava um lote de linhas em stg_plano, com o número da linha no arquivo. */
+    public void gravarPlano(long cargaId, List<LinhaDePlano> linhas) {
+        lote.batchUpdate("""
+                INSERT INTO stg_plano (carga_id, linha, patrocinador, categoria, bloco, veiculo, formato, espaco_programa, janela,
+                                       tipo_midia, quantidade_prevista, quantidade_texto, unidade, fonte_pagina)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", new BatchPreparedStatementSetter() {
+            @Override
+            public void setValues(PreparedStatement ps, int i) throws SQLException {
+                LinhaDePlano l = linhas.get(i);
+                ps.setLong(1, cargaId);
+                ps.setInt(2, l.linha());
+                texto(ps, 3, l.patrocinador());
+                texto(ps, 4, l.categoria());
+                texto(ps, 5, l.bloco());
+                texto(ps, 6, l.veiculo());
+                texto(ps, 7, l.formato());
+                texto(ps, 8, l.espacoPrograma());
+                texto(ps, 9, l.janela());
+                texto(ps, 10, l.tipoMidia());
+                decimal(ps, 11, l.quantidadePrevista());
+                texto(ps, 12, l.quantidadeTexto());
+                texto(ps, 13, l.unidade());
+                if (l.fontePagina() == null) {
+                    ps.setNull(14, Types.SMALLINT);
+                } else {
+                    ps.setShort(14, l.fontePagina());
+                }
+            }
+
+            @Override
+            public int getBatchSize() {
+                return linhas.size();
+            }
+        });
+    }
+
     /** fn_carregar_veiculacoes: rejeita, vincula, insere sem duplicar e grava os totais em carga. */
     public void processarVeiculacoes(long cargaId, long eventoId) {
         jdbc.sql("SELECT * FROM fn_carregar_veiculacoes(:carga, :evento)")
+                .param("carga", cargaId).param("evento", eventoId).query().listOfRows();
+    }
+
+    /** fn_carregar_plano: o mesmo, para as linhas do plano comercial de uma edição (previsto de mídia e de aplicações). */
+    public void processarPlano(long cargaId, long eventoId) {
+        jdbc.sql("SELECT * FROM fn_carregar_plano(:carga, :evento)")
                 .param("carga", cargaId).param("evento", eventoId).query().listOfRows();
     }
 
@@ -171,7 +223,7 @@ public class CargaRepositorio {
         return jdbc.sql(COLUNAS_DA_CARGA + " WHERE c.id = :id").param("id", id).query(CargaRepositorio::carga).optional();
     }
 
-    /** {@code tipo} do banco (MIDIA ou PESQUISA) ou nulo; {@code eventoId} nulo = todas as edições. */
+    /** {@code tipo} do banco (MIDIA, PESQUISA ou PLANO_COMERCIAL) ou nulo; {@code eventoId} nulo = todas as edições. */
     public long contar(String tipo, Long eventoId) {
         return jdbc.sql("SELECT count(*) FROM carga c " + FILTRO).param("tipo", tipo).param("eventoId", eventoId)
                 .query(Long.class).single();
@@ -186,7 +238,7 @@ public class CargaRepositorio {
     }
 
     public boolean existe(long cargaId) {
-        return jdbc.sql("SELECT EXISTS (SELECT 1 FROM carga WHERE id = :id AND tipo IN ('MIDIA', 'PESQUISA'))")
+        return jdbc.sql("SELECT EXISTS (SELECT 1 FROM carga WHERE id = :id AND tipo IN ('MIDIA', 'PESQUISA', 'PLANO_COMERCIAL'))")
                 .param("id", cargaId).query(Boolean.class).single();
     }
 

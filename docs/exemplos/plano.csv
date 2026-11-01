@@ -1,0 +1,12 @@
+patrocinador,categoria,bloco,veiculo,formato,espaco_programa,janela,tipo_midia,quantidade_prevista,unidade,fonte_pagina
+Cliente Teste,APLICACAO_MARCA,Aplicações de marca,No evento,Elemento na Arena,,,,1,APLICACAO,12
+Cliente Teste,APLICACAO_MARCA,Aplicações de marca,No evento,Elemento na principal via de entrada da Arena,,,,6,APLICACAO,12
+Cliente Teste,APLICACAO_MARCA,Aplicações de marca,No evento,Elemento na entrada do Camarote,,,,1,APLICACAO,12
+Cliente Teste,APLICACAO_MARCA,Aplicações de marca,No evento,Elementos dentro do Camarote,,,,3,APLICACAO,12
+Cliente Teste,APLICACAO_MARCA,Aplicações de marca,No evento,Elemento no acesso ao Shuttle no centro de Atlântida,,,,4,APLICACAO,12
+Cliente Teste,APLICACAO_MARCA,Aplicações de marca,No evento,Elemento dentro do Planeta Lounge,,,,1,APLICACAO,12
+Cliente Teste,MIDIA,Transmissão oficial,Rede Atlântida RS,"Chamadas assinadas 5""",Indeterminado,Out a Nov/2027,ASSINADA,120,INSERCAO,3
+Cliente Teste,MIDIA,Transmissão oficial,RBS TV,"Comercial 30""",PTV2,Nov/2027,PROPRIA,40,INSERCAO,3
+Cliente Teste,APLICACAO_MARCA,Aplicações de marca,No evento,Elemento na Arena,,,,2,APLICACAO,12
+Cliente Teste,MIDIA,Transmissão oficial,Rádio 92,Menções ao vivo,,Nov/2027,,60,INSERCAO,3
+Cliente Azul,APLICACAO_MARCA,Aplicações de marca,No evento,Elemento na Arena,,,,1,APLICACAO,12

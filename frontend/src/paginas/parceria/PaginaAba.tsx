@@ -1,4 +1,4 @@
-// As quatro abas fora da prioridade da Entrega 2 (Aplicações de marca, Cortesias, Credenciamento, Contrato). [ITEM-7]
+// As três abas fora da prioridade (Cortesias, Credenciamento, Contrato); Aplicações de marca tem tela própria. [ITEM-7]
 // [PENDENTE] As telas próprias de cada aba (Figma) ficam para depois; nesta versão a aba mostra as suas entregas.
 import { useSessao } from '../../sessao/Sessao'
 import { AvisoAbaFechada, estadoAbaNaParceria } from '../../componentes/AbaFechada'

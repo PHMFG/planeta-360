@@ -21,8 +21,8 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
- * Rotas 26, 27 e 28 do contrato (docs/api.md): enviar uma planilha CSV de veiculação ou de pesquisa, listar as cargas e ver
- * as linhas rejeitadas. Atende o item 5 da Entrega 2. [PERMISSAO] As três são só da RBS (403 para o patrocinador). As regras
+ * Rotas 26, 27 e 28 do contrato (docs/api.md): enviar uma planilha CSV de veiculação, de pesquisa ou do plano comercial,
+ * listar as cargas e ver as linhas rejeitadas. Atende o item 5 da Entrega 2. [PERMISSAO] As três são só da RBS (403 para o patrocinador). As regras
  * estão no CargaService; aqui só entram as partes do formulário. As partes são conferidas no service (e não por required=true)
  * para a falta delas virar 422 com "campos", como o contrato diz, e não 400.
  */
@@ -36,7 +36,7 @@ public class CargaController {
         this.servico = servico;
     }
 
-    /** 26. multipart/form-data: arquivo, tipo, eventoId e (só na pesquisa) escopo. Responde 201 com a carga. */
+    /** 26. multipart/form-data: arquivo, tipo (VEICULACAO, PESQUISA ou PLANO), eventoId e (só na pesquisa) escopo. Responde 201 com a carga. */
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<CargaDto> enviar(@AuthenticationPrincipal UsuarioAutenticado usuario,
                                            @RequestPart(name = "arquivo", required = false) MultipartFile arquivo,

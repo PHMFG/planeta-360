@@ -2,7 +2,7 @@
 
 Este documento explica o banco da Entrega 2. É para quem vai ler, testar ou mexer nele.
 O banco é o PostgreSQL (rodamos na versão 18; a mínima é a 15). As tabelas são criadas pelo Flyway.
-Os números: **33 tabelas, 7 visões, 5 funções e 15 gatilhos de regra**. As funções são as 3 de carga e de relatório mais as 2 que formatam números (`fn_numero_br` e `fn_pct_truncado`, da V4; a `fn_pct_arredondado` da V4 saiu na V6).
+Os números: **43 tabelas de negócio (mais a `flyway_schema_history`, do Flyway), 8 visões, 6 funções e 17 gatilhos de regra**. As funções são as 4 de carga e de relatório (`fn_carregar_veiculacoes`, `fn_carregar_pesquisa`, `fn_carregar_plano`, da V7, e `fn_gerar_relatorio`) mais as 2 que formatam números (`fn_numero_br` e `fn_pct_truncado`, da V4; a `fn_pct_arredondado` da V4 saiu na V6). Não contam aqui as funções `tg_*`, uma por gatilho.
 
 ## Onde está cada coisa
 
@@ -14,14 +14,17 @@ Os números: **33 tabelas, 7 visões, 5 funções e 15 gatilhos de regra**. As f
 | `backend/src/main/resources/db/migration/V4__observacao_numeros_e_motivos_de_carga.sql` | A observação de cada versão de arquivo, os números do relatório em português e os motivos específicos das cargas (veja "O que a V4 mudou") | Todos os ambientes |
 | `backend/src/main/resources/db/migration/V5__relatorio_completo.sql` | O relatório sempre completo: 6 seções e 17 indicadores, o que não tem dado sai indisponível (veja "O que a V5 e a V6 mudaram") | Todos os ambientes |
 | `backend/src/main/resources/db/migration/V6__percentuais_truncados.sql` | Um critério só para os percentuais: cortar na primeira casa (veja "O que a V5 e a V6 mudaram") | Todos os ambientes |
+| `backend/src/main/resources/db/migration/V7__plano_comprovacoes_dados_informados.sql` | A carga do plano comercial por CSV (`stg_plano` e `fn_carregar_plano`), o catálogo de campos e os dados informados pela marca, com a visão do valor vigente e o gatilho que os torna imutáveis (veja "O que a V7 mudou") | Todos os ambientes |
+| `backend/src/main/resources/db/migration/V8__atlas.sql` | As 7 tabelas do Atlas (conversa, mensagem, relatório, cartão de perguntas, cálculo, trilha das ferramentas e decisão do JEV) e o gatilho que congela o relatório pronto (veja "O que a V8 mudou") | Todos os ambientes |
+| `backend/src/main/resources/db/migration/V9__resumo_do_raciocinio.sql` | A coluna `atlas_mensagem.resumo_do_raciocinio`: o resumo do raciocínio do modelo, gerado no servidor, que é o que a conversa mostra no lugar do raciocínio cru (veja "O que a V9 mudou") | Todos os ambientes |
 | `backend/src/main/resources/db/dev/R__amostra.sql` | A amostra: Amarelo, Roxo e Verde, usuários, planos, entregas com arquivos, cargas, relatórios | Só dev e test |
 | `backend/src/main/resources/dev/exemplos/` | Arquivos de exemplo (png, jpg, mp4, mp3, docx, xlsx, pptx, zip) que a API copia para o armazenamento no perfil dev | Só dev |
 | `backend/src/test/resources/db/verificacao.sql` | As conferências (contagens, órfãos, uma tentativa de violar cada regra) | Quando se quiser conferir |
-| `docs/exemplos/veiculacao.csv` e `pesquisa.csv` | Exemplos de planilha para as duas cargas | Teste manual |
+| `docs/exemplos/veiculacao.csv`, `pesquisa.csv` e `plano.csv` | Exemplos de planilha para as três cargas | Teste manual |
 
 Duas regras de convivência:
 
-- Migração já aplicada não se edita. Mudança vira uma migração nova (V7, V8...).
+- Migração já aplicada não se edita. Mudança vira uma migração nova (V10, V11...).
 - A amostra é repetível (`R__`) e tem uma trava: se os dados de exemplo já estão no banco, ela não faz nada. Para recarregar, recrie o banco de dev. Quem criou o banco com uma versão antiga da amostra precisa recriá-lo para ver a nova (veja "Recomeçar do zero" no README).
 - Os horários da amostra não são datas fixas: são contados para trás a partir do dia em que o banco foi criado (veja "A amostra e as datas").
 
@@ -89,9 +92,51 @@ A segunda rodada de testes pediu duas correções no relatório e na consolidaç
 
 A leitura do relatório (API) parte do catálogo `indicador`, e não das linhas gravadas: a versão gerada antes da V5, que não tem as linhas dos indicadores sem dado, também sai com as 6 seções e os 17 indicadores (o que faltava aparece como `sem registro na base`). A fotografia gravada não é alterada, porque depois de validada ela fica congelada. Os relatórios gerados antes da V6 mantêm os percentuais que tinham.
 
+## O que a V7 mudou
+
+A V7 abre a primeira parte do MVP do Atlas: o plano comercial passa a entrar por planilha (até aqui só a amostra o enchia), e a marca passa a informar os números que só ela sabe. Não mexe em nenhuma tabela, visão ou função que já existia, e não altera a amostra.
+
+| Assunto | O que a V7 faz |
+| --- | --- |
+| Carga do plano comercial | `stg_plano` (área de passagem, como `stg_veiculacao`) e `fn_carregar_plano(carga, evento)`, que enche `aproveitamento_previsto` a partir do `plano.csv`. A função trava a carga (`FOR UPDATE`), confere que ela é do tipo `PLANO_COMERCIAL`, devolve os totais gravados se já foi processada, rejeita com um motivo por linha (o primeiro problema) tudo o que a V1 recusaria, liga o patrocinador (nome ou grafia alternativa) à parceria da edição e insere sem duplicar. Os motivos e o formato do arquivo estão em "Formatos dos CSV" e na rota 28 de [`api.md`](api.md) |
+| Chave do plano | A chave natural `uq_aprov_chave_natural` (parceria, veículo, formato e espaço) é um **índice sobre expressões**, não uma constraint. Por isso a função usa `ON CONFLICT DO NOTHING` sem alvo (o `ON CONFLICT ON CONSTRAINT` da veiculação não funciona aqui) e grava os textos já sem espaço nas pontas: o índice compara com `lower()` e sem `btrim()`, e "Testeira " e "Testeira" virariam duas linhas. Espaço de programa vazio já vale `''` no índice |
+| Catálogo de campos | `campo_catalogo`: o que a marca pode informar, campo a campo (rótulo, tipo, unidade, mínimo, máximo, texto de ajuda). `limite_campo` aponta para outro campo cujo valor vigente o campo não pode passar. A API confere tipo, limites e `limite_campo`; o banco guarda e impede o campo que limita a si mesmo. Quatro campos entram em todos os ambientes, todos na aba Aplicações, inteiros a partir de 0 e sem máximo: `ativacao.visitantes_total`, `ativacao.cadastros_consentidos` (limite: visitantes), `ativacao.brindes_disponiveis` e `ativacao.brindes_distribuidos` (limite: disponíveis). O campo de arquivo (planilha da agência) fica para a etapa seguinte; o tipo `ARQUIVO` e a coluna `arquivo_id` já estão prontos |
+| Dados informados | `dado_informado`: um valor por linha, com autor, data e origem (`PORTAL` = formulário da aba; `ATLAS` = cartão do chat). Exatamente um entre `valor_numero`, `valor_data` e `arquivo_id` (`ck_dado_informado_um_valor`). O arquivo, quando houver, é da mesma parceria (chave composta). **Corrigir é gravar uma linha nova**: a visão `vw_dado_vigente` devolve a mais recente de cada (parceria, campo) e as anteriores ficam como trilha |
+| Imutabilidade | O gatilho `rn_dado_informado_imutavel` recusa `UPDATE` e `DELETE` de `dado_informado`, como `rn_historico_imutavel`. Apagar um dado informado fica fora desta etapa |
+| Fotos de comprovação | Nada muda na tabela nem nos gatilhos (`rn_comprovacao_*`). Muda como a API grava o arquivo: com a parceria **e a aba Aplicações**, para o download (rota 18) conferir se a aba está aberta. O `ck_arquivo_entrega_completo` só exige parceria e aba quando há entrega, então o arquivo de parceria sem entrega é aceito |
+
+## O que a V8 mudou
+
+A V8 abre a segunda parte do MVP do Atlas: o relatório de ativação que a marca monta pelo botão "Montar relatório" (o caminho sem modelo de linguagem, chamado de plano B) e, depois, pelo chat com o LLM. Só acrescenta: nenhuma tabela, visão ou função que já existia muda, e a amostra fica como está (sem conversa nenhuma do Atlas).
+
+| Assunto | O que a V8 faz |
+| --- | --- |
+| Conversa | `atlas_conversa`: a conversa de uma pessoa da marca numa parceria. `turno_desde` marca o turno em andamento (nulo = livre): a API só aceita uma mensagem por vez em cada conversa e libera uma trava de 5 minutos parada |
+| Mensagens no formato de chat | `atlas_mensagem`: uma linha por mensagem, na ordem em que aconteceu (`ordem`, única na conversa), com `papel` `user`, `assistant` ou `tool`. O pedido de ferramenta do assistente fica em `tool_calls` (JSON no formato de chat completions) e a resposta, numa mensagem `tool` com o mesmo `tool_call_id`. O botão grava a conversa **do mesmo jeito que o LLM vai gravar**, como se o modelo tivesse chamado as ferramentas: assim o modelo continua uma conversa começada pelo botão sem quebrar a regra "toda chamada de ferramenta tem resposta". Os itens que a API mostra (rotas 42 a 46) são derivados desse histórico |
+| Relatório | `atlas_relatorio`: o relatório de trabalho da **parceria** (todos os usuários dela o veem). `status` `MONTANDO`, `AGUARDANDO_RESPOSTA`, `PRONTO` ou `DESCARTADO`. `especificacao` é o modelo-base com o texto de cada bloco redigível; `snapshot` guarda os valores resolvidos e é gravado na mesma operação que muda o status para `PRONTO`. `versao_especificacao` é a trava otimista de quem edita a especificação. Um índice parcial (`uq_atlas_relatorio_ativo`) garante **um relatório em montagem por conversa**: o botão continua o mesmo relatório em vez de abrir outro |
+| Cartão de perguntas | `atlas_solicitacao`: as chaves do catálogo (`campos`) que o Atlas pediu à pessoa, o `tool_call_id` do pedido que abriu o cartão e o estado (`PENDENTE`, `RESPONDIDA`, `RECUSADA`, `CANCELADA`). Um índice parcial (`uq_atlas_solicitacao_pendente`) deixa **um cartão aberto por relatório** |
+| Cálculos | `atlas_calculo`: as fórmulas fixas do modelo (`pct`) com as variáveis e os valores que entraram; `resultado` nulo significa indisponível. Um nome por relatório (`uq_atlas_calculo_nome`) |
+| Trilha e JEV | `atlas_tool_call` guarda cada ferramenta que rodou (argumentos, resultado ou erro, duração). `atlas_decisao` é a tabela do JEV em sombra (P1); entra agora e nada a escreve ainda |
+| Isolamento | Chaves compostas com a parceria: o relatório só se liga a uma conversa da própria parceria (`fk_atlas_relatorio_conversa`) e o cartão só a um relatório da própria parceria (`fk_atlas_solicitacao_relatorio`) |
+| Relatório pronto não muda | O gatilho `rn_atlas_relatorio_congelado` (função `tg_atlas_relatorio_congelado`) recusa `UPDATE` de `especificacao`, `snapshot` e `status` quando o relatório está `PRONTO` ou `DESCARTADO` (os dois são finais) e o `DELETE` de um relatório `PRONTO`. O que está montando muda à vontade e sai por `PRONTO` (com o snapshot, na mesma operação) ou `DESCARTADO` |
+| Histórico | Não muda: `CRIACAO` e `EDICAO` já existem e `historico.entidade` não tem `CHECK`, então o relatório do Atlas grava essas ações com a entidade `atlas_relatorio` |
+| Relatório desligado | Com `atlas.relatorio.ligado=false` (o padrão deste MVP; veja `docs/api.md`, "Modo só chat"), `atlas_relatorio`, `atlas_solicitacao`, `atlas_calculo` e `atlas_decisao` **ficam sem uso**: nada as escreve nem as lê, e nenhuma migração muda (o relatório volta com a propriedade ligada). `atlas_conversa`, `atlas_mensagem` e `atlas_tool_call` seguem em uso pelo chat e pelo debug das ferramentas |
+
+O que a V8 acrescentou além do desenho do plano: os nomes explícitos das chaves compostas e dos limites (para a conferência e a API se referirem a eles), os dois índices parciais acima e os índices de apoio das consultas por parceria, conversa e relatório.
+
+## O que a V9 mudou
+
+A V9 muda o que a conversa do Atlas mostra do raciocínio do modelo: o `reasoning_content` cru nunca sai do servidor, e a tela recebe só um resumo curto dele, gerado no servidor. Só acrescenta uma coluna opcional: nenhuma tabela, visão, função ou gatilho que já existia muda, e a amostra fica como está.
+
+| Assunto | O que a V9 faz |
+| --- | --- |
+| Resumo | `atlas_mensagem.resumo_do_raciocinio` (texto, opcional): o resumo do `reasoning_content` daquela mensagem do assistente. É gravado por um `UPDATE` curto, fora de transação do turno, quando o servidor termina a chamada à parte que o gera e a checagem do texto o aprova. Nulo quando a mensagem não teve raciocínio, quando o resumo foi recusado, quando o provedor falhou ou demorou, e nas mensagens de antes da V9 (não se gera resumo retroativo; elas ficam sem item na conversa) |
+| Regra | `ck_atlas_mensagem_resumo`: só a mensagem do assistente tem resumo, e o texto, quando existe, não é vazio |
+| O raciocínio cru | Não muda: `reasoning_content` continua gravado como estava e volta ao modelo nas idas seguintes (o DeepSeek o exige com ferramentas). O resumo é só para a tela: **nunca vai ao modelo** (`paraOProvedor` não o lê), não é uma mensagem do histórico e não conta no teto diário, que continua contando as mensagens do assistente |
+
 ## Tabelas por área
 
-Colunas em **negrito** são novas desde a Sprint 1. `id` é sempre a chave primária. Colunas com sufixo `_id` apontam para outra tabela.
+Negrito marca a coluna acrescentada depois da Sprint 1 numa tabela que já existia nela; as tabelas novas (`cota_tipo_aba`, `codigo_ativacao`, `stg_pesquisa`, `stg_plano`, `campo_catalogo`, `dado_informado` e as do Atlas) não usam negrito. `id` é sempre a chave primária. Colunas com sufixo `_id` apontam para outra tabela.
 
 ### 1. Núcleo da parceria
 
@@ -139,7 +184,8 @@ O banco não limita as transições de status da entrega. Essa regra fica na API
 | `carga` | Cada planilha processada (mídia, pesquisa, comprovação, plano) e seus totais | id, tipo, arquivo_id, **evento_id**, executada_por, executada_em, **processada_em**, linhas_lidas, linhas_inseridas, linhas_duplicadas, linhas_rejeitadas |
 | `carga_rejeicao` | Linhas que não entraram, com o motivo | id, carga_id, linha, campo, motivo, conteudo |
 | `stg_veiculacao` | Área de carga: as linhas da planilha de veiculação como chegam | carga_id, linha, patrocinador, veiculo, formato, espaco_programa, exibido_em, quantidade, link, **exibido_em_texto**, **quantidade_texto** |
-| `stg_pesquisa` | Área de carga: as linhas do CSV de resultados da pesquisa | carga_id, linha, patrocinador, pergunta, indicador, alternativa, valor, unidade, base_respondentes, **pergunta_texto**, **valor_texto**, **base_respondentes_texto** |
+| `stg_pesquisa` | Área de carga: as linhas do CSV de resultados da pesquisa | carga_id, linha, patrocinador, pergunta, indicador, alternativa, valor, unidade, base_respondentes, pergunta_texto, valor_texto, base_respondentes_texto |
+| `stg_plano` | Área de carga: as linhas do `plano.csv` (plano comercial) | carga_id, linha, patrocinador, categoria, bloco, veiculo, formato, espaco_programa, janela, tipo_midia, quantidade_prevista, quantidade_texto, unidade, fonte_pagina |
 
 Unidades de mídia: `INSERCAO`, `CPM` e `APLICACAO`. Elas nunca são somadas entre si.
 
@@ -170,13 +216,32 @@ Na pesquisa geral o resultado não tem parceria nem pergunta. Na pesquisa da ati
 | `relatorio` | Uma versão do relatório de uma parceria. Status `RASCUNHO`, `VALIDADO`, `DISPONIBILIZADO` | id, parceria_id, versao, status, gerado_por, gerado_em, validado_por, validado_em, **disponibilizado_por**, **disponibilizado_em**, arquivo_id |
 | `relatorio_indicador` | A fotografia dos números daquela versão. Desde a V5 cada versão tem os 17 indicadores do catálogo; número indisponível fica nulo, nunca estimado | relatorio_id, indicador_codigo, recorte, valor, base_calculo, disponivel |
 
-As **7 visões** somam os números sem misturar unidades: `vw_midia_veiculo`, `vw_midia_unidade`, `vw_entregas_resumo`,
-`vw_aplicacoes`, `vw_cortesias`, `vw_indicadores_parceria` (todos os números do relatório) e `vw_faltantes` (o que impede ou enfraquece o relatório).
+### 8. Dados informados (V7)
+
+| Tabela | Para que serve | Colunas |
+| --- | --- | --- |
+| `campo_catalogo` | O catálogo fixo do que a marca pode informar. `limite_campo` é o campo cujo valor vigente este não pode passar | chave, aba_id, ordem, rotulo, tipo (`INTEIRO`, `DECIMAL`, `DATA`, `ARQUIVO`), unidade, minimo, maximo, ajuda, limite_campo |
+| `dado_informado` | Cada valor informado, com autor, data e origem. **Só aceita INSERT**; corrigir é gravar de novo | id, parceria_id, campo_chave, valor_numero, valor_data, arquivo_id, origem (`PORTAL` ou `ATLAS`), informado_por, informado_em |
+
+### 9. Atlas (V8 e V9)
+
+| Tabela | Para que serve | Colunas |
+| --- | --- | --- |
+| `atlas_conversa` | A conversa de uma pessoa da marca numa parceria. `turno_desde` marca o turno em andamento | id, parceria_id, usuario_id, criada_em, turno_desde |
+| `atlas_mensagem` | O histórico no formato de chat completions (`user`, `assistant`, `tool`) | id, conversa_id, ordem, papel, conteudo, tool_calls (JSON), tool_call_id, reasoning_content, **resumo_do_raciocinio** (V9), criada_em |
+| `atlas_relatorio` | O relatório de trabalho da parceria. Pronto ou descartado não muda mais | id, parceria_id, conversa_id, modelo, status (`MONTANDO`, `AGUARDANDO_RESPOSTA`, `PRONTO`, `DESCARTADO`), especificacao (JSON), versao_especificacao, snapshot (JSON), criado_por, criado_em, finalizado_em |
+| `atlas_solicitacao` | O cartão de perguntas: as chaves do catálogo pedidas e o que a pessoa fez com ele | id, relatorio_id, parceria_id, tool_call_id, mensagem, campos (JSON), status (`PENDENTE`, `RESPONDIDA`, `RECUSADA`, `CANCELADA`), criada_em, respondida_em |
+| `atlas_calculo` | As fórmulas fixas do modelo, com as variáveis e os valores que entraram | id, relatorio_id, nome, script, variaveis (JSON), resultado, unidade, criado_em |
+| `atlas_tool_call` | Cada ferramenta que rodou, para auditoria | id, mensagem_id, ferramenta, argumentos (JSON), resultado (JSON), erro, duracao_ms |
+| `atlas_decisao` | O que o JEV decidiria, em sombra (P1). Ninguém a escreve ainda | id, mensagem_id, pergunta, escolha, confianca, probabilidades, modelo, decisao_llm, latencia_ms, erro |
+
+As **7 visões de número** somam sem misturar unidades: `vw_midia_veiculo`, `vw_midia_unidade`, `vw_entregas_resumo`,
+`vw_aplicacoes`, `vw_cortesias`, `vw_indicadores_parceria` (todos os números do relatório) e `vw_faltantes` (o que impede ou enfraquece o relatório), e a 8ª, `vw_dado_vigente`, devolve o valor mais recente de cada campo informado de cada parceria.
 
 ## Regras do banco
 
 Toda regra de negócio recusada sai com um erro da **classe 23** do PostgreSQL (`check_violation` ou `foreign_key_violation`) e uma mensagem em português.
-O nome da regra vem junto (por exemplo `rn_cortesia_limite`). A API traduz a classe 23 em erro 409 ou 422.
+O nome da regra vem junto (por exemplo `rn_cortesia_limite`). A API traduz a classe 23 em erro 409, com a frase da regra (ou uma frase genérica, em restrição sem frase própria). O 422 é a validação de campos feita pela própria API. A lista abaixo traz as regras principais; não é exaustiva.
 
 ### Como as cargas funcionam
 
@@ -187,7 +252,7 @@ O nome da regra vem junto (por exemplo `rn_cortesia_limite`). A API traduz a cla
 3. Insere sem duplicar. A chave é a **linha do plano + data e hora**.
 4. Grava os totais em `carga`: lidas, inseridas, duplicadas e rejeitadas.
 
-Reenviar o mesmo arquivo não insere nada: tudo conta como duplicada. Processar a mesma carga de novo devolve os totais já gravados.
+Reenviar o mesmo arquivo não insere as linhas que já estão na base: elas contam como duplicadas. Uma linha rejeitada antes entra se agora for válida; as que continuam inválidas seguem rejeitadas. Processar a mesma carga de novo devolve os totais já gravados.
 Se o reenvio traz uma quantidade corrigida, ela também conta como duplicada: a primeira versão prevalece.
 
 **Pesquisa** (`fn_carregar_pesquisa`). Funciona do mesmo jeito, com `stg_pesquisa`, e ligada a uma pesquisa. Na pesquisa da ativação:
@@ -197,6 +262,15 @@ Se o reenvio traz uma quantidade corrigida, ela também conta como duplicada: a 
 - Reenviar o mesmo arquivo não duplica. Um valor corrigido num reenvio também é ignorado como duplicado; corrigir é trabalho à parte da RBS.
 
 Na pesquisa geral do festival, a linha traz só o indicador (sem patrocinador e sem pergunta).
+
+**Plano comercial** (`fn_carregar_plano`, V7). Funciona do mesmo jeito, com `stg_plano`, e preenche `aproveitamento_previsto` da parceria da edição: a mesma carga serve ao previsto de **mídia** e ao de **aplicações de marca**. Faz quatro coisas:
+
+1. Rejeita, antes do `INSERT`, tudo o que a V1 recusaria (uma linha que ferisse um `CHECK` derrubaria a carga inteira). Cada linha tem um só motivo, o primeiro desta lista: campo obrigatório vazio (`patrocinador`, `categoria`, `veiculo`, `formato`, `quantidade_prevista`, `unidade`); quantidade ilegível; quantidade zero ou negativa; categoria fora de `MIDIA` e `APLICACAO_MARCA`; unidade fora de `INSERCAO`, `CPM` e `APLICACAO`; aplicação de marca com unidade que não seja `APLICACAO`; mídia sem tipo, ou tipo preenchido fora da lista (em qualquer categoria).
+2. Liga o patrocinador (nome canônico ou grafia alternativa, sem diferenciar caixa nem espaço nas pontas) à parceria da edição. O que não liga é rejeitado com "Patrocinador sem parceria nesta edição".
+3. Insere sem duplicar. A chave é **parceria + veículo + formato + espaço do programa**; categoria, unidade e janela ficam fora. Linha repetida no próprio arquivo, ou que já existe no plano, conta como duplicada, e a primeira versão prevalece: reenviar uma linha com a quantidade corrigida **não** corrige o plano (editar uma linha do plano fica fora desta etapa). O texto é gravado sem espaço nas pontas.
+4. Grava os totais em `carga`. Reenviar o mesmo arquivo não insere nada: as linhas válidas viram duplicadas, e as ruins seguem rejeitadas.
+
+Aplicação de marca não leva tipo de mídia (a coluna é só da mídia): se o arquivo trouxer um tipo válido numa aplicação, ele é ignorado. `fonte_arquivo_id` fica nulo, porque o CSV é arquivo geral da RBS.
 
 ### As 8 correções
 
@@ -218,13 +292,18 @@ Os itens 1, 2 e 4 não são "recusas": a conferência mostra o comportamento esp
 | Regra | Nome | Em linguagem simples |
 | --- | --- | --- |
 | Histórico imutável | `rn_historico_imutavel` | Não se altera nem se apaga uma linha do histórico. Parceria com histórico não se apaga |
+| Dado informado imutável | `rn_dado_informado_imutavel` | Não se altera nem se apaga um dado informado. Para corrigir, grava-se um valor novo (a visão `vw_dado_vigente` mostra o mais recente) |
 | Isolamento | chaves compostas e `rn_*` | Tudo o que uma marca vê é da parceria dela |
 | Vínculo exige autorização | `rn_vinculo_exige_autorizacao` | Ninguém é vinculado sem e-mail autorizado e não revogado |
+| Autorização não muda de dono | `rn_email_autorizado_imutavel` | Não se troca a parceria nem o e-mail de uma autorização |
+| Revogação | `rn_email_revogado` | Revogar remove o vínculo dessa parceria e invalida os códigos pendentes |
+| Comprovante de veiculação | `rn_veiculacao_comprovante` | O comprovante é um arquivo da mesma parceria da linha do plano |
 | Abas padrão | `rn_parceria_abas_padrao` | A parceria nasce com as 7 abas, abertas conforme `cota_tipo_aba` |
 | Comprovação | `rn_comprovacao_*` | Foto só vale para aplicação de marca, e o arquivo precisa ser da categoria `COMPROVACAO` |
 | Fonte da pesquisa | `rn_pesquisa_fonte_geral` | O arquivo-fonte da pesquisa é geral da RBS, nunca de uma marca |
 | Pesquisa e edição | `rn_pergunta_*`, `rn_resultado_*` | Pergunta, pesquisa e resultado são da mesma edição |
 | Relatório não se apaga | `rn_relatorio_nao_apaga` | Só o rascunho pode ser apagado |
+| Relatório do Atlas pronto não muda | `rn_atlas_relatorio_congelado` | Relatório pronto ou descartado não muda a especificação, o snapshot nem o status, e o pronto não se apaga. O que está montando sai por `PRONTO` (com o snapshot) ou `DESCARTADO` |
 
 ## Diagrama das tabelas
 
@@ -259,6 +338,7 @@ erDiagram
     carga ||--o{ carga_rejeicao : "rejeita"
     carga ||--o{ stg_veiculacao : "recebe"
     carga ||--o{ stg_pesquisa : "recebe"
+    carga ||--o{ stg_plano : "recebe"
     carga |o--o{ veiculacao : "origem"
     carga |o--o{ pesquisa_resultado : "origem"
     parceria ||--o{ cortesia_cota : "ganha"
@@ -273,13 +353,29 @@ erDiagram
     parceria ||--o{ relatorio : "tem_versoes"
     relatorio ||--o{ relatorio_indicador : "fotografa"
     indicador ||--o{ relatorio_indicador : "define"
+    aba ||--o{ campo_catalogo : "agrupa"
+    campo_catalogo |o--o{ campo_catalogo : "limita"
+    campo_catalogo ||--o{ dado_informado : "descreve"
+    parceria ||--o{ dado_informado : "informa"
+    usuario ||--o{ dado_informado : "autor"
+    arquivo |o--o{ dado_informado : "anexo"
+    parceria ||--o{ atlas_conversa : "conversa"
+    usuario ||--o{ atlas_conversa : "dona"
+    atlas_conversa ||--o{ atlas_mensagem : "historico"
+    atlas_conversa ||--o{ atlas_relatorio : "monta"
+    parceria ||--o{ atlas_relatorio : "dona_de"
+    usuario ||--o{ atlas_relatorio : "criou"
+    atlas_relatorio ||--o{ atlas_solicitacao : "pede"
+    atlas_relatorio ||--o{ atlas_calculo : "calcula"
+    atlas_mensagem ||--o{ atlas_tool_call : "chama"
+    atlas_mensagem ||--o{ atlas_decisao : "decide"
 ```
 
 ## Formatos dos CSV
 
-Os dois exemplos estão em `docs/exemplos/`. Valem para os dois arquivos:
+Os três exemplos estão em `docs/exemplos/`. Valem para os três arquivos:
 
-- Texto em UTF-8, sem BOM, uma linha de cabeçalho com os nomes abaixo.
+- Texto em UTF-8 (o BOM que o Excel grava no começo é aceito), uma linha de cabeçalho com os nomes abaixo, em qualquer ordem. Coluna a mais é ignorada.
 - Separador vírgula. Texto com vírgula ou aspas vai entre aspas, e a aspa dentro do texto é dobrada (`"Chamadas assinadas 5"""`).
 - Número com ponto decimal (`8.4`). Data e hora no padrão ISO 8601 com o fuso (`2026-11-20T10:15:30-03:00`).
 - Campo vazio vale como nulo.
@@ -314,6 +410,24 @@ As colunas são as mesmas de `stg_veiculacao`, como prevê o plano.
 O exemplo tem 11 linhas: 9 entram, 1 é repetida com o apelido "Amarelo" (duplicada) e 1 tem percentual de 140 (rejeitada).
 Reenviar o mesmo arquivo não insere nada.
 
+**`plano.csv`** (vai para `stg_plano`). É o plano comercial: uma linha por item que a cota comprou, de mídia ou de aplicação de marca. O limite de texto de cada coluna é o da coluna de `aproveitamento_previsto`; acima dele a API recusa o arquivo inteiro (422).
+
+| Coluna | Obrigatória | O que é |
+| --- | --- | --- |
+| `patrocinador` | Sim | Nome canônico ou grafia alternativa da marca (até 120 caracteres) |
+| `categoria` | Sim | `MIDIA` ou `APLICACAO_MARCA` (até 20) |
+| `bloco` | Não | Agrupamento do plano, por exemplo "Aplicações de marca" (até 80) |
+| `veiculo` | Sim | Por exemplo "Rede Atlântida RS". Nas aplicações de marca, "No evento", como na amostra: a coluna é obrigatória em todas as categorias (até 80) |
+| `formato` | Sim | O formato da mídia ou a descrição da aplicação, por exemplo "Elemento na Arena" (até 160) |
+| `espaco_programa` | Não | Coluna "Determinação" do plano (até 160). Vazio é um espaço como outro: a mesma linha com e sem espaço são duas linhas do plano |
+| `janela` | Não | Período de veiculação, em texto (até 80). Não entra na chave |
+| `tipo_midia` | Em mídia | `ASSINADA`, `PROPRIA`, `MERCHANDISING`, `BRANDED` ou `CONTEUDO_DE_MARCA` (até 20). Vazio nas aplicações; se vier, é ignorado |
+| `quantidade_prevista` | Sim | Maior que zero, com ponto decimal |
+| `unidade` | Sim | `INSERCAO`, `CPM` ou `APLICACAO` em mídia; sempre `APLICACAO` nas aplicações de marca (até 15) |
+| `fonte_pagina` | Não | Página do PDF do plano comercial, inteiro de 1 a 32767. Fora disso, ou se não for número, fica sem página (não rejeita a linha) |
+
+`categoria`, `tipo_midia` e `unidade` valem em maiúsculas ou minúsculas. A chave de uma linha é **patrocinador + veículo + formato + espaço do programa**; a mesma linha repetida conta como duplicada e a primeira prevalece. O exemplo foi feito para a parceria **"Cliente Teste"** da edição 2027, a que se cria pela tela na demonstração (nasce sem plano comercial). Ele tem 11 linhas: 8 entram (6 aplicações de marca "No evento" e 2 de mídia, com tipo), 1 é repetida (o "Elemento na Arena" de novo, com quantidade 2: a primeira, de 1, prevalece), e 2 são rejeitadas (a mídia "Menções ao vivo", sem tipo, e o "Cliente Azul", que não tem parceria). Reenviar o mesmo arquivo não insere nada: as 9 linhas válidas viram duplicadas. Enviado a uma edição em que a "Cliente Teste" não tem parceria, o exemplo inteiro é rejeitado.
+
 ## Como conferir
 
 Use um banco vazio e novo (o banco `portal` do dia a dia não precisa ser tocado). Na raiz do repositório:
@@ -327,6 +441,9 @@ for f in backend/src/main/resources/db/migration/V1__estrutura.sql \
          backend/src/main/resources/db/migration/V4__observacao_numeros_e_motivos_de_carga.sql \
          backend/src/main/resources/db/migration/V5__relatorio_completo.sql \
          backend/src/main/resources/db/migration/V6__percentuais_truncados.sql \
+         backend/src/main/resources/db/migration/V7__plano_comprovacoes_dados_informados.sql \
+         backend/src/main/resources/db/migration/V8__atlas.sql \
+         backend/src/main/resources/db/migration/V9__resumo_do_raciocinio.sql \
          backend/src/main/resources/db/dev/R__amostra.sql; do
   psql -X -h localhost -U portal -d portal_verificacao -v ON_ERROR_STOP=1 -1 -f "$f"
 done
@@ -334,7 +451,7 @@ psql -X -P pager=off -h localhost -U portal -d portal_verificacao -v ON_ERROR_ST
 psql -X -h localhost -U portal -d postgres -c "DROP DATABASE portal_verificacao"
 ```
 
-O `verificacao.sql` imprime uma tabela com cada conferência e termina com erro se alguma falhar. Hoje são **164 conferências, todas ok** (as 4 últimas a entrar olham a amostra: nenhum horário no futuro, nenhuma entrega Enviado, Em análise ou Aprovado sem arquivo, nenhum pedido de ajuste sem recado da RBS e o ajuste aberto com o envio da marca e o pedido da RBS no histórico).
+O `verificacao.sql` imprime uma tabela com cada conferência e termina com erro se alguma falhar. Hoje são **243 conferências, todas ok**. As 164 de antes seguem iguais (as contagens de estrutura passaram a 43 tabelas, 8 visões, 4 funções de carga e relatório e 17 gatilhos). As 44 seguintes são da V7: o catálogo, a carga do plano (15 linhas numa parceria criada só para a conferência, com cada motivo de rejeição, o reenvio e o `btrim`), o `CHECK` de um valor só, a chave composta do anexo, a imutabilidade, o valor vigente depois de uma correção e 5 verificações de órfãos. As 32 da V8: as 7 tabelas do Atlas, as chaves compostas por parceria, a conversa no formato de chat (papel, ordem, um relatório em montagem e um cartão aberto por vez, nome de cálculo único), o relatório que congela (cada coluna protegida, o descartado, o apagar, e o que ainda pode mudar) e 6 verificações de órfãos. As 3 da V9: o resumo do raciocínio numa mensagem que não é do assistente, o resumo em branco e o resumo numa mensagem do assistente.
 Nada fica gravado: as tentativas de violar regras são desfeitas.
 Rodar o `R__amostra.sql` uma segunda vez não muda nada: a trava avisa "Amostra já carregada".
 
@@ -346,9 +463,10 @@ Os números que a conferência exige:
 | Carga 2 (o mesmo arquivo reenviado) | 1.489 lidas, 0 inseridas, 1.485 duplicadas, 4 rejeitadas |
 | Rejeições da carga 1 | 2 reels do Roxo (fora do plano), 1 linha da Verde sem data, 1 do "Cliente Azul" (sem parceria) |
 | Carga de pesquisa | 11 lidas, 9 inseridas, 1 duplicada, 1 rejeitada. O reenvio insere 0 |
+| Carga do plano (parceria criada na própria conferência) | 15 lidas, 3 inseridas, 2 duplicadas, 10 rejeitadas, uma por motivo. O reenvio do mesmo arquivo: 15 lidas, 0 inseridas, 5 duplicadas, 10 rejeitadas |
 | Relatórios | 3, um por parceria de 2027, em rascunho |
 | Números dos relatórios | 83 no total, 14 indisponíveis |
-| Órfãos | 0 em todas as 18 verificações |
+| Órfãos | 0 em todas as 29 verificações (18 de antes, 5 das tabelas da V7 e 6 das da V8) |
 
 Sobre os relatórios: na Sprint 1 eram 72 números e 6 indisponíveis. Agora são 83: a pesquisa do Amarelo ganhou 3 faixas de nota (75) e a V5 passou a registrar os indicadores sem dado (mais 8), porque todo relatório traz os 17 indicadores do catálogo (3 relatórios, 51 indicadores).
 Os 14 indisponíveis são: "O festival em números" e a pesquisa geral das 3 marcas (6; esses números existem só para 2026, os de 2027 ainda não foram carregados); a pesquisa da ativação do Roxo e da Verde, que ficam fora da cota (4); e as aplicações de marca do Roxo, que não tem aplicação no plano comercial (4).
@@ -360,7 +478,7 @@ Os 14 indisponíveis são: "O festival em números" e a pesquisa geral das 3 mar
 | 240 a 147 | Usuários, patrocinadores, parcerias, plano comercial e e-mails autorizados |
 | 130 a 35 | As entregas da pré-produção: cada arquivo que a marca enviou, com autor, data e (às vezes) uma observação, e a decisão da RBS. O ciclo do logo do Amarelo (envio, análise, ajuste pedido com recado, nova versão, aprovado) acontece entre 94 e 91 |
 | 60 a 40 | As exibições de mídia da planilha de veiculação |
-| 46 a 24 | Perguntas da pesquisa, fotos de comprovação e o contrato assinado do Amarelo |
+| 46 a 24 | Perguntas da pesquisa, fotos de comprovação e o contrato assinado do Amarelo (há um contrato por parceria; os de Roxo e Verde ainda sem assinatura nem arquivo) |
 | 12 e 11 | As duas cargas de veiculação (a segunda é o reenvio) e a carga de pesquisa |
 | 10 | Os três relatórios, versão 1, em rascunho |
 | 6 a 2 | Três entregas em aberto: o VT do Roxo em **Ajuste solicitado** (com o envio da marca e o recado da RBS no histórico), a peça de 30" do Amarelo **Em análise** e a destinação das cortesias da Verde **Enviada** |
@@ -382,6 +500,7 @@ O banco já funciona com uma resposta provisória para cada ponto. Se a RBS resp
 | Abas por cota | Todas as abas para todas as cotas, **exceto Pesquisa, só para a Master**. As três fontes do grupo discordavam | Alterar as linhas de `cota_tipo_aba` na V3 e, se preciso, a coluna `cotas` dos indicadores de pesquisa e a visão `vw_faltantes` |
 | Limite de usuários por parceria | Não existe limite | Um gatilho novo em `parceria_usuario` |
 | Quem envia as fotos de comprovação | A RBS (na amostra, as fotos são da RBS) | Regra da API; o banco aceita qualquer usuário |
+| Aprovação dos dados informados pela marca | Entram sem aprovação da RBS, com autor, data e origem à vista | Regra da API; o banco guarda sem aprovação (uma coluna de status entraria numa migração nova) |
 | Formato dos resultados da pesquisa | CSV de resultado já agregado, no formato de `pesquisa.csv` | Ajustar `stg_pesquisa` e a função `fn_carregar_pesquisa` |
 | Quem aprova as perguntas | A RBS aprova por uma rota da API, e só pergunta aprovada recebe resultado. **A confirmar: qualquer Admin RBS ou só o time de pesquisa** | Regra da API; o banco só exige o status `APROVADA` |
 | Quem carrega os resultados | A equipe de pesquisa da RBS (um Admin RBS) | Regra da API |

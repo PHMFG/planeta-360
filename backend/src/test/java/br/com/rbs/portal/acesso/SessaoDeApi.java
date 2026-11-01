@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import br.com.rbs.portal.ApoioDeTeste;
 import br.com.rbs.portal.ApoioDeTeste.Csrf;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -72,6 +73,19 @@ public final class SessaoDeApi {
 
     public MvcTestResult delete(String uri) {
         return enviar(HttpMethod.DELETE, uri, null, true);
+    }
+
+    /**
+     * Um POST com este cabeçalho {@code Accept} (a resposta em fluxo das rotas 44 e 46 usa {@code text/event-stream}). Se a
+     * resposta for assíncrona, espera ela terminar: o corpo traz todos os eventos.
+     */
+    public MvcTestResult postAceitando(String uri, String json, String aceita) {
+        var pedido = mvc.post().uri(uri).session(sessao).cookie(csrf.cookie()).header("X-XSRF-TOKEN", csrf.token())
+                .header(HttpHeaders.ACCEPT, aceita).contentType(MediaType.APPLICATION_JSON).content(json);
+        if (agente != null) {
+            pedido = pedido.header("User-Agent", agente);
+        }
+        return pedido.exchange();
     }
 
     /** O mesmo envio, mas sem o cabeçalho X-XSRF-TOKEN (a API tem de recusar com 403). */

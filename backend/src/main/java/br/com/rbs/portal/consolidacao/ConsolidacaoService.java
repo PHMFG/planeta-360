@@ -68,7 +68,8 @@ public class ConsolidacaoService {
      * serem do mesmo instante, mesmo que uma carga termine no meio. Seção sem dado vem com lista vazia e totais nulos:
      * nunca zero inventado. [PERMISSAO] A parte de cada aba só sai para o patrocinador se a aba estiver aberta para a
      * parceria dele: mídia (aba MIDIA) vem com as três listas vazias, aplicações (APLICACOES) e cortesias (CORTESIAS) com
-     * os totais nulos, exatamente como quando não há dado. A RBS vê tudo.
+     * os totais nulos, exatamente como quando não há dado. As entregas não têm aba própria: o resumo do patrocinador conta só as
+     * entregas de aba aberta (as mesmas que a lista de entregas devolve) e, sem nenhuma, vem com os totais nulos. A RBS vê tudo.
      */
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public ConsolidacaoDto consolidar(UsuarioAutenticado usuario, long parceriaId) {
@@ -88,7 +89,7 @@ public class ConsolidacaoService {
                 : repositorio.aplicacoes(parceriaId)
                 .map(l -> new AplicacoesDto(l.previstas(), l.comprovadas(), l.fotos(), l.percentual()))
                 .orElse(new AplicacoesDto(null, null, null, null));
-        EntregasDto entregas = repositorio.entregas(parceriaId)
+        EntregasDto entregas = repositorio.entregas(parceriaId, !usuario.ehRbs())
                 .map(l -> new EntregasDto(l.total(), l.aprovadas(), l.pendentes(), l.naoAplicaveis(), l.percentualConcluido()))
                 .orElse(new EntregasDto(null, null, null, null, null));
         CortesiasDto cortesias = !verificador.podeVerAba(usuario, parceriaId, "CORTESIAS") ? new CortesiasDto(null, null, null)

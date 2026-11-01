@@ -15,6 +15,13 @@
   --color-texto-2: #424242;
   --color-tinta: #0c0b0b;
   --color-atlas: #2b2d33;
+  /* Atlas (Figma AT00 a AT06): grafite da conversa, painel lateral, destaque lilás e o azul do texto dos botões brancos. */
+  --color-atlas-painel: #26282d;
+  --color-atlas-lilas: #c9a4e7;
+  --color-atlas-azul: #0a2a6e;
+  --color-atlas-roxo: #572781;
+  /* O documento gerado pelo Atlas é sóbrio, sem elementos da marca (nota 188:1419 do Figma). */
+  --font-documento: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
 
   --color-parceria: #073c89;
   --color-perfil: #0a7d91;
@@ -35,6 +42,9 @@
   --shadow-menu: 0 4px 16px rgba(13, 18, 51, 0.06);
   --shadow-modal: 0 24px 60px rgba(13, 10, 10, 0.35);
   --shadow-atlas: 0 6px 16px rgba(26, 26, 38, 0.18);
+  --shadow-atlas-brilho: 0 8px 22px rgba(87, 39, 129, 0.45);
+  --shadow-compositor: 0 16px 20px rgba(5, 8, 38, 0.35);
+  --shadow-documento: 0 18px 48px -8px rgba(0, 0, 0, 0.35);
 }
 
 /* As utilidades bg-secao, text-secao-texto e bg-secao-tinta seguem o data-secao mais próximo. */
@@ -137,6 +147,18 @@
   line-height: 1.2;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+}
+
+/* Fundo fluido do Atlas (Figma 195:1384): base em degradê azul-noite e cinco manchas desfocadas, na ordem das cores das seções.
+   Só na tela inicial; depois do primeiro pedido a conversa fica no grafite. */
+@utility fundo-fluido {
+  background:
+    radial-gradient(55% 50% at 10% 6%, rgba(7, 60, 137, 0.9), transparent 70%),
+    radial-gradient(50% 50% at 94% 10%, rgba(87, 39, 129, 0.85), transparent 70%),
+    radial-gradient(50% 55% at 90% 95%, rgba(225, 4, 125, 0.42), transparent 70%),
+    radial-gradient(40% 40% at 8% 96%, rgba(12, 178, 205, 0.22), transparent 70%),
+    radial-gradient(55% 45% at 50% 55%, rgba(46, 65, 139, 0.5), transparent 70%),
+    linear-gradient(160deg, #0b1640, #1e1450);
 }
 
 /* Faixas diagonais brancas a 7% dos cabeçalhos e do cartão do login */

@@ -6,6 +6,10 @@
 #   perfil test -> banco "portal_teste", igual ao dev, e os testes o apagam e recriam a cada execução.
 #
 # Usuário, senha e endereço do banco vêm de variáveis de ambiente; o padrão serve para a máquina de desenvolvimento.
+#
+# [ATLAS] O modelo de linguagem do Atlas vem DESLIGADO (spring.ai.model.chat=none): o portal e a suíte sobem para todo mundo,
+# sem chave, e a mensagem de texto do Atlas responde 503 (com atlas.relatorio.ligado, o botão "Montar relatório" é o plano B). Para ligar: ATLAS_LLM=openai e OPENCODE_API_KEY, e, se
+# quiser, ATLAS_LLM_BASE_URL e ATLAS_LLM_MODELO. Chave só em variável de ambiente, nunca neste arquivo.
 
 spring:
   application:
@@ -28,6 +32,54 @@ spring:
     mapper:
       # Mantém a ordem dos campos como escrita nos records (id, nome, email...), sem ordenar por letra.
       sort-properties-alphabetically: false
+  ai:
+    model:
+      # [ATLAS] none: não cria nenhum modelo, e o Atlas só oferece o botão (plano B). openai: liga o OpenCode Go (compatível com OpenAI).
+      chat: ${ATLAS_LLM:none}
+      # O portal só conversa; os outros modelos do starter da OpenAI nunca são criados, com ou sem chave.
+      embedding: none
+      image: none
+      moderation: none
+      audio:
+        speech: none
+        transcription: none
+    openai:
+      api-key: ${OPENCODE_API_KEY:}
+      base-url: ${ATLAS_LLM_BASE_URL:https://opencode.ai/inference/go/openai/v1}
+      # O Go pede um user agent próprio (PlanetaAtlas/0.1): quem o troca é o LlmConfig, porque custom-headers só acrescentaria um
+      # segundo valor ao User-Agent que o Spring AI já manda. O cabeçalho x-opencode-session vai a cada chamada, com a conversa.
+      # Poucas tentativas: o Go limita o uso a cada 5 horas e não vale gastar o limite repetindo.
+      max-retries: 1
+      timeout: 60s
+      chat:
+        model: ${ATLAS_LLM_MODELO:deepseek-v4.1-flash}
+        temperature: 0.2
+        # O thinking (raciocínio) não fica aqui: é o atlas.raciocinio, abaixo, que o provedor põe no topo do corpo a cada chamada.
+
+# [ATLAS] Teto diário de mensagens do assistente por parceria (do dia de Brasília, só as do modelo de linguagem; o botão não conta).
+# Com o teto atingido, a rota 44 com texto responde 429. Serve para uma rodada de testes não gastar o limite do provedor.
+atlas:
+  teto-diario-por-parceria: ${ATLAS_TETO_DIARIO:200}
+  # [ATLAS] O raciocínio do modelo (o "thinking" do DeepSeek, {"type":"enabled"} ou "disabled"). Ligado, o reasoning_content de cada
+  # resposta é gravado e volta ao modelo em todas as idas seguintes (com ferramentas, o DeepSeek responde 400 sem ele), mas NUNCA
+  # sai do servidor: a conversa recebe só um resumo curto dele, gerado numa chamada à parte (o item "raciocinio" com "resumo", e os
+  # eventos "pensando" e "resumo" do fluxo). Desligado, não há raciocínio, nem "pensando", nem resumo. Vale para o modelo das
+  # variáveis de ambiente e para o da chave do debug.
+  raciocinio: ${ATLAS_RACIOCINIO:true}
+  # [ATLAS] Quanto o turno espera, antes do "fim" (ou da resposta JSON), pelos resumos do raciocínio ainda pendentes. O que não
+  # ficou pronto sai sem resumo; se ficar pronto depois, ainda é gravado e aparece na próxima leitura da conversa.
+  prazo-do-resumo: ${ATLAS_PRAZO_DO_RESUMO:PT15S}
+  debug:
+    # [ATLAS] TEMPORÁRIO: as rotas /api/debug/llm (pôr a chave do modelo pela tela, só na memória da API). Desligado por padrão;
+    # ligado só no perfil dev, abaixo. Sem esta propriedade, as rotas não existem (404).
+    chaves: false
+    # [ATLAS] TEMPORÁRIO: a conversa mostra cada ferramenta que o agente chamou (nome, argumentos e resultado crus; item "ferramenta" e
+    # evento "ferramenta" do fluxo). Desligado por padrão; ligado no perfil dev, abaixo. O raciocínio cru nunca sai, nem por aqui.
+    ferramentas: ${ATLAS_DEBUG_FERRAMENTAS:false}
+  # [ATLAS] O relatório de trabalho (cartão de perguntas, relatório pronto, rotas 46 a 48, ferramentas relatorio_*). Desligado por
+  # padrão, no dev também: o Atlas é só o chat, com parceria_consultar. O código e as tabelas ficam, para o relatório voltar.
+  relatorio:
+    ligado: ${ATLAS_RELATORIO:false}
 
 server:
   port: 8080
@@ -57,6 +109,12 @@ spring:
     # [ITEM-1] A amostra (Amarelo, Roxo e Verde) mora em db/dev e só carrega neste perfil e no de teste.
     locations: classpath:db/migration,classpath:db/dev
 
+# [ATLAS] As rotas de debug da chave do modelo de linguagem (temporárias) só existem no desenvolvimento.
+atlas:
+  debug:
+    chaves: true
+    ferramentas: ${ATLAS_DEBUG_FERRAMENTAS:true}
+
 ---
 spring:
   config:
@@ -66,10 +124,29 @@ spring:
     # Banco separado do de desenvolvimento, porque os testes o apagam por inteiro.
     # Variável própria (PORTAL_BD_TESTE_URL) para ninguém apagar o banco "portal" por engano.
     url: ${PORTAL_BD_TESTE_URL:jdbc:postgresql://localhost:5432/portal_teste}
+    hikari:
+      # Cada contexto de teste (um por conjunto de propriedades) fica em cache com o seu pool: sem isto, cada um segura 10 conexões
+      # abertas e a suíte esgota o PostgreSQL. Uma conexão de reserva basta; as que sobram fecham depois de 10 s parados.
+      minimum-idle: 1
+      idle-timeout: 10000
   flyway:
     locations: classpath:db/migration,classpath:db/dev
     # O clean só roda pela estratégia de migração que existe nos testes (src/test/java), nunca no código de produção.
     clean-disabled: false
+  ai:
+    model:
+      # [ATLAS] A suíte sobe sem chave e nunca chama o provedor: o loop usa o roteiro de teste.
+      chat: none
+
+# [ATLAS] As rotas de debug ficam desligadas no contexto de teste normal; a classe de teste delas as liga.
+# [ATLAS] No teste o relatório fica ligado (os testes dele continuam valendo) e o debug das ferramentas, desligado; as classes de
+# teste do modo só chat e do debug mudam isso com @TestPropertySource.
+atlas:
+  debug:
+    chaves: false
+    ferramentas: false
+  relatorio:
+    ligado: true
 
 # [UPLOAD] Nos testes, os arquivos vão para dentro de target/ (apagado pelo "mvn clean"), nunca para a pasta de desenvolvimento.
 portal:

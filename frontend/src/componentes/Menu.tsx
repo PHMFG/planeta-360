@@ -1,7 +1,7 @@
 // Menu lateral flutuante do Figma (P360/Navegação): marca, conta, as oito seções e o rodapé. [ITEM-7]
 // A RBS vê também os atalhos de gestão e escolhe a parceria que está consultando.
 import { useEffect, useEffectEvent, useState } from 'react'
-import { NavLink, useNavigate } from 'react-router'
+import { Link, NavLink, useMatch, useNavigate } from 'react-router'
 import type { ParceriaResumo, UsuarioLogado } from '../api/tipos'
 import { useSessao } from '../sessao/Sessao'
 import { estadoAbaNaParceria } from './AbaFechada'
@@ -103,27 +103,35 @@ function ChipConta({ usuario, parceria }: { usuario: UsuarioLogado; parceria: Pa
   )
 }
 
-function BotaoAtlas() {
-  // [ATLAS-DEPOIS] O Atlas fica no menu, como no Figma, mas só entra na Entrega 3.
+const CLASSE_BOTAO_ATLAS =
+  'relative flex h-[60px] w-full items-center justify-center gap-2 overflow-hidden rounded-2xl border border-white/22 bg-atlas text-white shadow-atlas-brilho transition-[filter]'
+
+function BotaoAtlas({ destino }: { destino?: string }) {
+  // [ATLAS] Só a marca conversa com o Atlas, dentro de uma parceria: o botão abre a janela dele (Figma P360/Botão Atlas,
+  // 167:18). Para a RBS fica desabilitado, e os relatórios do Atlas aparecem na tela Relatório da parceria.
+  const ativo = Boolean(useMatch(`${destino ?? '/sem-atlas'}/*`))
+  const conteudo = (
+    <>
+      <span className="absolute -top-6 -left-4 size-20 rounded-full bg-[#0a2a6e] opacity-70 blur-2xl" aria-hidden="true" />
+      <span className="absolute -bottom-8 left-16 size-20 rounded-full bg-[#572781] opacity-70 blur-2xl" aria-hidden="true" />
+      <span className="absolute -right-6 -bottom-6 size-20 rounded-full bg-[#e1047d] opacity-60 blur-2xl" aria-hidden="true" />
+      <i className="ri-globe-fill relative text-2xl" aria-hidden="true" />
+      <span className="relative text-xl font-semibold tracking-[-0.01em]">atlas</span>
+    </>
+  )
   return (
     <div>
-      <button
-        type="button"
-        disabled
-        aria-describedby="atlas-legenda"
-        className="relative flex h-[60px] w-full cursor-not-allowed items-center justify-center gap-2 overflow-hidden rounded-2xl border border-white/20 bg-atlas text-white shadow-atlas"
-      >
-        <span className="absolute -top-6 -left-4 size-20 rounded-full bg-[#0a2a6e] opacity-70 blur-2xl" aria-hidden="true" />
-        <span className="absolute -bottom-8 left-16 size-20 rounded-full bg-[#572781] opacity-70 blur-2xl" aria-hidden="true" />
-        <span className="absolute -right-6 -bottom-6 size-20 rounded-full bg-[#e1047d] opacity-60 blur-2xl" aria-hidden="true" />
-        <i className="ri-globe-fill relative text-2xl" aria-hidden="true" />
-        <span className="relative text-xl font-semibold tracking-[-0.01em]">atlas</span>
-        <span className="absolute top-1.5 right-2 rounded-full bg-white/15 px-2 py-0.5 text-[9px] font-bold tracking-wider uppercase">
-          Em breve
-        </span>
-      </button>
-      <p id="atlas-legenda" className="mt-1.5 text-center text-[11px] font-medium text-texto-2">
-        Assistente IA · ajuda com sua parceria
+      {destino ? (
+        <Link to={destino} aria-describedby="atlas-legenda" aria-current={ativo ? 'page' : undefined} className={`${CLASSE_BOTAO_ATLAS} hover:brightness-125`}>
+          {conteudo}
+        </Link>
+      ) : (
+        <button type="button" disabled aria-describedby="atlas-legenda" className={`${CLASSE_BOTAO_ATLAS} cursor-not-allowed`}>
+          {conteudo}
+        </button>
+      )}
+      <p id="atlas-legenda" className={`mt-1.5 text-center text-[11px] font-medium ${ativo ? 'text-atlas-roxo' : 'text-texto-2'}`}>
+        {ativo ? 'Conversa aberta · assistente IA' : destino ? 'Assistente IA · números da parceria' : 'Assistente da marca'}
       </p>
     </div>
   )
@@ -134,9 +142,11 @@ type PropsMenu = {
   /** Abaixo de 1024 px o menu é uma gaveta: fechada até a pessoa tocar em "Menu". */
   aberto: boolean
   aoFechar: () => void
+  /** O endereço da janela do Atlas; sem ele (RBS ou fora de uma parceria), o botão fica desabilitado. */
+  atlas?: string
 }
 
-export function Menu({ parceria, aberto, aoFechar }: PropsMenu) {
+export function Menu({ parceria, aberto, aoFechar, atlas }: PropsMenu) {
   const { usuario, sair } = useSessao()
   const navegar = useNavigate()
   const [ajudaAberta, setAjudaAberta] = useState(false)
@@ -216,7 +226,7 @@ export function Menu({ parceria, aberto, aoFechar }: PropsMenu) {
         </nav>
 
         <div className="mt-4 flex flex-col gap-4">
-          <BotaoAtlas />
+          <BotaoAtlas destino={atlas} />
           <div className="relative flex items-center justify-between border-t border-borda pt-4 text-[13px] font-semibold">
             <button
               type="button"

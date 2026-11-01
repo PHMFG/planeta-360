@@ -1,5 +1,6 @@
--- Confere o banco depois de V1, V2, V3 e da amostra R__amostra.sql: contagens, cargas, relatórios, órfãos e uma tentativa de violar cada regra.
--- Atende o item 1 da Entrega 2 (amostra e verificações) e prova as 8 correções do item 8. Nenhuma linha fica gravada: as tentativas são desfeitas (só as sequências avançam).
+-- Confere o banco depois de V1 a V9 e da amostra R__amostra.sql: contagens, cargas, relatórios, órfãos e uma tentativa de violar cada regra.
+-- Atende o item 1 da Entrega 2 (amostra e verificações), prova as 8 correções do item 8 e, na seção 8, o plano comercial, o
+-- catálogo e os dados informados da V7 e, na seção 9, as tabelas do Atlas da V8 e o resumo do raciocínio da V9. Nenhuma linha fica gravada: as tentativas são desfeitas (só as sequências avançam).
 
 -- Como rodar (banco de dev ou de teste com a amostra carregada; sem meta-comandos, serve também para JDBC com o texto inteiro):
 --   PGPASSWORD=portal psql -X -P pager=off -v ON_ERROR_STOP=1 -h localhost -U portal -d <banco> -f verificacao.sql
@@ -63,20 +64,20 @@ BEGIN
 END $f$;
 
 -- ---------------------------------------------------------------------
--- 1. Estrutura e dados base (V1, V2, V3)
+-- 1. Estrutura e dados base (V1 a V8)
 -- ---------------------------------------------------------------------
 DO $$
 BEGIN
     -- A tabela de controle do Flyway (flyway_schema_history) não é do portal: fica de fora quando o banco foi criado pelo Flyway.
-    PERFORM pg_temp.confere('ESTRUTURA', 'tabelas (29 da modelagem + 4 novas)', 33,
+    PERFORM pg_temp.confere('ESTRUTURA', 'tabelas (29 da modelagem + 4 novas na V1 + 3 na V7 + 7 na V8)', 43,
        (SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
            AND table_name <> 'flyway_schema_history'));
-    PERFORM pg_temp.confere('ESTRUTURA', 'visões de consolidação', 7,
+    PERFORM pg_temp.confere('ESTRUTURA', 'visões (7 de consolidação + vw_dado_vigente)', 8,
        (SELECT count(*) FROM information_schema.views WHERE table_schema = 'public'));
-    PERFORM pg_temp.confere('ESTRUTURA', 'funções fn_carregar_veiculacoes, fn_carregar_pesquisa, fn_gerar_relatorio', 3,
+    PERFORM pg_temp.confere('ESTRUTURA', 'funções fn_carregar_veiculacoes, fn_carregar_pesquisa, fn_carregar_plano, fn_gerar_relatorio', 4,
        (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-         WHERE n.nspname = 'public' AND p.proname IN ('fn_carregar_veiculacoes', 'fn_carregar_pesquisa', 'fn_gerar_relatorio')));
-    PERFORM pg_temp.confere('ESTRUTURA', 'gatilhos de regra (rn_*)', 15,
+         WHERE n.nspname = 'public' AND p.proname IN ('fn_carregar_veiculacoes', 'fn_carregar_pesquisa', 'fn_carregar_plano', 'fn_gerar_relatorio')));
+    PERFORM pg_temp.confere('ESTRUTURA', 'gatilhos de regra (rn_*)', 17,
        (SELECT count(*) FROM pg_trigger WHERE NOT tgisinternal AND tgname LIKE 'rn\_%'));
     PERFORM pg_temp.confere('BASE', 'tipos de cota', 3, (SELECT count(*) FROM cota_tipo));
     PERFORM pg_temp.confere('BASE', 'abas do menu', 7, (SELECT count(*) FROM aba));
@@ -673,7 +674,467 @@ BEGIN
 END $$;
 
 -- ---------------------------------------------------------------------
--- 8. Resultado: a lista de conferências e, se alguma falhou, o erro final (saída diferente de zero com ON_ERROR_STOP)
+-- 8. V7: plano comercial por CSV, catálogo de campos e dados informados
+-- ---------------------------------------------------------------------
+-- O catálogo que a V7 carrega em todos os ambientes: os quatro inteiros da aba Aplicações e os dois limites entre campos
+DO $$
+BEGIN
+    PERFORM pg_temp.confere('V7 CATÁLOGO', 'campos da aba Aplicações (inteiros a partir de 0, sem máximo)', 4,
+        (SELECT count(*) FROM campo_catalogo c JOIN aba a ON a.id = c.aba_id
+          WHERE a.codigo = 'APLICACOES' AND c.tipo = 'INTEIRO' AND c.minimo = 0 AND c.maximo IS NULL));
+    PERFORM pg_temp.afirma('V7 CATÁLOGO', 'cadastros não passam de visitantes e brindes distribuídos não passam dos disponíveis (limite_campo)',
+        (SELECT limite_campo FROM campo_catalogo WHERE chave = 'ativacao.cadastros_consentidos') = 'ativacao.visitantes_total'
+        AND (SELECT limite_campo FROM campo_catalogo WHERE chave = 'ativacao.brindes_distribuidos') = 'ativacao.brindes_disponiveis'
+        AND (SELECT count(*) FROM campo_catalogo WHERE limite_campo IS NOT NULL) = 2);
+    PERFORM pg_temp.afirma('V7 CATÁLOGO', 'o campo de arquivo da agência ainda não existe (entra na etapa seguinte)',
+        NOT EXISTS (SELECT 1 FROM campo_catalogo WHERE tipo = 'ARQUIVO'));
+    PERFORM pg_temp.recusa('V7 CATÁLOGO', 'campo que limita a si mesmo', 'ck_campo_limite_proprio', $q$
+        UPDATE campo_catalogo SET limite_campo = chave WHERE chave = 'ativacao.brindes_disponiveis' $q$);
+END $$;
+
+-- [CARGA] [VALIDACAO] [DUPLICIDADE] A carga do plano: uma parceria nova, 15 linhas (3 entram, 2 são duplicadas, 10 são rejeitadas, cada
+-- uma por um motivo), o reenvio do mesmo arquivo e o texto gravado sem espaços nas pontas. Tudo dentro do sub-bloco desfeito no fim.
+DO $$
+DECLARE
+    v_ev BIGINT; v_b2b BIGINT; v_pat BIGINT; v_pa BIGINT; v_c1 BIGINT; v_c2 BIGINT;
+    r1 RECORD; r1b RECORD; r2 RECORD;
+    n_plano INT; n_depois_do_reenvio INT; n_sem_btrim INT; n_aplicacao_com_tipo INT; v_qtd NUMERIC; v_marcada BOOLEAN;
+    v_motivos TEXT[]; v_conteudo TEXT;
+BEGIN
+    SELECT id INTO v_ev FROM evento WHERE nome = 'Planeta Atlântida' AND edicao = 2027;
+    SELECT id INTO v_b2b FROM _ver_usr WHERE email = 'b2b@rbs.example';
+    BEGIN
+        INSERT INTO patrocinador (nome_canonico) VALUES ('Cliente Teste V7') RETURNING id INTO v_pat;
+        INSERT INTO patrocinador_alias (patrocinador_id, alias) VALUES (v_pat, 'Teste V7');
+        INSERT INTO parceria (evento_id, patrocinador_id, cota_tipo_id) VALUES (v_ev, v_pat, 3) RETURNING id INTO v_pa;
+        INSERT INTO carga (tipo, executada_por) VALUES ('PLANO_COMERCIAL', v_b2b) RETURNING id INTO v_c1;
+        INSERT INTO stg_plano (carga_id, linha, patrocinador, categoria, bloco, veiculo, formato, espaco_programa, janela, tipo_midia,
+                               quantidade_prevista, quantidade_texto, unidade) VALUES
+         -- entram: uma mídia, uma aplicação pelo apelido da marca e uma aplicação sem espaço (textos com espaço nas pontas)
+         (v_c1, 1,  'Cliente Teste V7',   'MIDIA',           'Transmissão',         'Rede Atlantida RS', 'Chamadas assinadas 5"',   'Programa da Manha', 'Out/2027', 'ASSINADA', 10, NULL, 'INSERCAO'),
+         (v_c1, 2,  'Teste V7',           'APLICACAO_MARCA', 'Aplicações de marca', 'No evento',         'Testeira no palco',        NULL, NULL, NULL, 2, NULL, 'APLICACAO'),
+         (v_c1, 4,  'Cliente Teste V7',   'APLICACAO_MARCA', NULL,                  ' No evento ',       '  Elemento no Camarote ',  NULL, NULL, NULL, 1, NULL, 'APLICACAO'),
+         -- duplicadas: a linha 1 com outra caixa e espaços, e a linha 4 com outra caixa e outra quantidade
+         (v_c1, 3,  '  cliente teste v7 ', 'MIDIA',          NULL,                  ' REDE ATLANTIDA RS ', ' chamadas assinadas 5" ', ' programa da manha ', NULL, 'ASSINADA', 99, NULL, 'INSERCAO'),
+         (v_c1, 5,  'Cliente Teste V7',   'APLICACAO_MARCA', NULL,                  'No evento',         'ELEMENTO NO CAMAROTE',     NULL, NULL, NULL, 5, NULL, 'APLICACAO'),
+         -- rejeitadas, uma por motivo (linhas 6 a 15)
+         (v_c1, 6,  'Cliente Teste V7',   'APLICACAO_MARCA', NULL,                  NULL,                'Elemento sem veículo',     NULL, NULL, NULL, 1, NULL, 'APLICACAO'),
+         (v_c1, 7,  'Cliente Teste V7',   'MIDIA',           NULL,                  'Rádio 92',          'Chamadas',                 NULL, NULL, 'PROPRIA', NULL, '1,5', 'INSERCAO'),
+         (v_c1, 8,  'Cliente Teste V7',   'MIDIA',           NULL,                  'Rádio 92',          'Vinhetas',                 NULL, NULL, 'PROPRIA', 0, NULL, 'INSERCAO'),
+         (v_c1, 9,  'Cliente Teste V7',   'OUTRA',           NULL,                  'Rádio 92',          'Menções',                  NULL, NULL, 'PROPRIA', 1, NULL, 'INSERCAO'),
+         (v_c1, 10, 'Cliente Teste V7',   'MIDIA',           NULL,                  'Rádio 92',          'Boletins',                 NULL, NULL, 'PROPRIA', 1, NULL, 'PACOTE'),
+         (v_c1, 11, 'Cliente Teste V7',   'APLICACAO_MARCA', NULL,                  'No evento',         'Elemento na Arena',        NULL, NULL, NULL, 1, NULL, 'INSERCAO'),
+         (v_c1, 12, 'Cliente Teste V7',   'MIDIA',           NULL,                  'Rádio 92',          'Programete',               NULL, NULL, NULL, 1, NULL, 'INSERCAO'),
+         (v_c1, 13, 'Cliente Teste V7',   'APLICACAO_MARCA', NULL,                  'No evento',         'Elemento no Lounge',       NULL, NULL, 'FOO', 1, NULL, 'APLICACAO'),
+         (v_c1, 14, 'Cliente Azul',       'MIDIA',           NULL,                  'Rádio 92',          'Chamadas',                 NULL, NULL, 'PROPRIA', 1, NULL, 'INSERCAO'),
+         (v_c1, 15, 'Cliente Teste V7',   'MIDIA',           NULL,                  'Rádio 92',          'Selos',                    NULL, NULL, 'PROPRIA', NULL, NULL, 'INSERCAO');
+
+        SELECT * INTO r1 FROM fn_carregar_plano(v_c1, v_ev);
+        SELECT * INTO r1b FROM fn_carregar_plano(v_c1, v_ev);
+        SELECT count(*) INTO n_plano FROM aproveitamento_previsto WHERE parceria_id = v_pa;
+        SELECT quantidade_prevista INTO v_qtd FROM aproveitamento_previsto WHERE parceria_id = v_pa AND lower(veiculo) = 'rede atlantida rs';
+        SELECT count(*) INTO n_sem_btrim FROM aproveitamento_previsto
+         WHERE parceria_id = v_pa AND (veiculo <> btrim(veiculo) OR formato <> btrim(formato) OR espaco_programa <> btrim(espaco_programa));
+        SELECT count(*) INTO n_aplicacao_com_tipo FROM aproveitamento_previsto
+         WHERE parceria_id = v_pa AND categoria = 'APLICACAO_MARCA' AND tipo_midia IS NOT NULL;
+        SELECT processada_em IS NOT NULL AND evento_id = v_ev AND linhas_lidas = 15 INTO v_marcada FROM carga WHERE id = v_c1;
+        SELECT array_agg(campo || ': ' || motivo ORDER BY linha, id) INTO v_motivos FROM carga_rejeicao WHERE carga_id = v_c1;
+        SELECT conteudo INTO v_conteudo FROM carga_rejeicao WHERE carga_id = v_c1 AND linha = 7;
+
+        -- o mesmo arquivo reenviado, numa carga nova: nada entra de novo, as 5 válidas viram duplicadas e as 10 ruins seguem rejeitadas
+        INSERT INTO carga (tipo, executada_por) VALUES ('PLANO_COMERCIAL', v_b2b) RETURNING id INTO v_c2;
+        INSERT INTO stg_plano (carga_id, linha, patrocinador, categoria, bloco, veiculo, formato, espaco_programa, janela, tipo_midia,
+                               quantidade_prevista, quantidade_texto, unidade, fonte_pagina)
+        SELECT v_c2, linha, patrocinador, categoria, bloco, veiculo, formato, espaco_programa, janela, tipo_midia,
+               quantidade_prevista, quantidade_texto, unidade, fonte_pagina FROM stg_plano WHERE carga_id = v_c1;
+        SELECT * INTO r2 FROM fn_carregar_plano(v_c2, v_ev);
+        SELECT count(*) INTO n_depois_do_reenvio FROM aproveitamento_previsto WHERE parceria_id = v_pa;
+        RAISE EXCEPTION 'desfazer' USING ERRCODE = 'ZZ001';
+    EXCEPTION WHEN SQLSTATE 'ZZ001' THEN NULL;
+    END;
+    PERFORM pg_temp.afirma('V7 PLANO', 'carga do plano: 15 lidas, 3 inseridas, 2 duplicadas, 10 rejeitadas',
+        r1.lidas = 15 AND r1.inseridas = 3 AND r1.duplicadas = 2 AND r1.rejeitadas = 10);
+    PERFORM pg_temp.afirma('V7 PLANO', 'lidas = inseridas + duplicadas + rejeitadas', r1.lidas = r1.inseridas + r1.duplicadas + r1.rejeitadas);
+    PERFORM pg_temp.afirma('V7 PLANO', 'processar a mesma carga de novo devolve os totais gravados, sem refazer',
+        r1b.lidas = r1.lidas AND r1b.inseridas = r1.inseridas AND r1b.duplicadas = r1.duplicadas AND r1b.rejeitadas = r1.rejeitadas);
+    PERFORM pg_temp.afirma('V7 PLANO', 'a carga fica marcada como processada, com a edição e as 15 linhas lidas', v_marcada);
+    PERFORM pg_temp.confere('V7 PLANO', 'linhas do plano gravadas para a parceria nova', 3, n_plano);
+    PERFORM pg_temp.confere('V7 PLANO', 'a primeira versão prevalece: a linha repetida com outra quantidade não troca a quantidade', 10, v_qtd);
+    PERFORM pg_temp.confere('V7 PLANO', 'texto gravado com btrim (linhas com espaço sobrando nas pontas)', 0, n_sem_btrim);
+    PERFORM pg_temp.confere('V7 PLANO', 'aplicação de marca não leva tipo de mídia', 0, n_aplicacao_com_tipo);
+    PERFORM pg_temp.afirma('V7 PLANO', 'rejeição linha 6: aplicação sem veículo (obrigatório vazio)', v_motivos[1] = 'veiculo: Campo obrigatório vazio ou inválido');
+    PERFORM pg_temp.afirma('V7 PLANO', 'rejeição linha 7: quantidade ilegível diz o formato',
+        v_motivos[2] = 'quantidade_prevista: Quantidade inválida. Use só números, como 1 ou 250 (ponto nos decimais).');
+    PERFORM pg_temp.afirma('V7 PLANO', 'rejeição linha 7: o conteúdo mostra o texto como foi escrito', v_conteudo LIKE '%1,5%');
+    PERFORM pg_temp.afirma('V7 PLANO', 'rejeição linha 8: quantidade zero', v_motivos[3] = 'quantidade_prevista: A quantidade deve ser maior que zero.');
+    PERFORM pg_temp.afirma('V7 PLANO', 'rejeição linha 9: categoria fora da lista', v_motivos[4] = 'categoria: Categoria inválida. Use MIDIA ou APLICACAO_MARCA.');
+    PERFORM pg_temp.afirma('V7 PLANO', 'rejeição linha 10: unidade fora da lista', v_motivos[5] = 'unidade: Unidade inválida. Use INSERCAO, CPM ou APLICACAO.');
+    PERFORM pg_temp.afirma('V7 PLANO', 'rejeição linha 11: aplicação de marca só aceita a unidade APLICACAO',
+        v_motivos[6] = 'unidade: Aplicação de marca usa a unidade APLICACAO.');
+    PERFORM pg_temp.afirma('V7 PLANO', 'rejeição linha 12: mídia sem tipo',
+        v_motivos[7] = 'tipo_midia: Tipo de mídia inválido. Use ASSINADA, PROPRIA, MERCHANDISING, BRANDED ou CONTEUDO_DE_MARCA.');
+    PERFORM pg_temp.afirma('V7 PLANO', 'rejeição linha 13: tipo preenchido e inválido numa aplicação',
+        v_motivos[8] = 'tipo_midia: Tipo de mídia inválido. Use ASSINADA, PROPRIA, MERCHANDISING, BRANDED ou CONTEUDO_DE_MARCA.');
+    PERFORM pg_temp.afirma('V7 PLANO', 'rejeição linha 14: patrocinador sem parceria na edição', v_motivos[9] = 'patrocinador: Patrocinador sem parceria nesta edição');
+    PERFORM pg_temp.afirma('V7 PLANO', 'rejeição linha 15: quantidade vazia', v_motivos[10] = 'quantidade_prevista: Campo obrigatório vazio ou inválido');
+    PERFORM pg_temp.afirma('V7 PLANO', 'reenvio do mesmo arquivo: 15 lidas, 0 inseridas, 5 duplicadas, 10 rejeitadas',
+        r2.lidas = 15 AND r2.inseridas = 0 AND r2.duplicadas = 5 AND r2.rejeitadas = 10);
+    PERFORM pg_temp.confere('V7 PLANO', 'linhas do plano depois do reenvio (não duplica)', 3, n_depois_do_reenvio);
+    PERFORM pg_temp.recusa('V7 PLANO', 'carga de outro tipo (mídia) não passa pela função do plano', 'rn_carga_tipo', $q$
+        SELECT * FROM fn_carregar_plano((SELECT min(id) FROM carga WHERE tipo = 'MIDIA'), (SELECT id FROM evento WHERE edicao = 2027)) $q$);
+END $$;
+
+-- [HISTORICO] [ISOLAMENTO] Dados informados: um valor por linha (CHECK), anexo só da própria parceria (chave composta), nunca
+-- alterado nem apagado (gatilho), e correção como linha nova: a vigente é a mais recente.
+DO $$
+BEGIN
+    PERFORM pg_temp.recusa('V7 DADOS', 'dado informado sem nenhum valor', 'ck_dado_informado_um_valor', $q$
+        INSERT INTO dado_informado (parceria_id, campo_chave, origem, informado_por)
+        SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), 'ativacao.visitantes_total', 'PORTAL',
+               (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example') $q$);
+    PERFORM pg_temp.recusa('V7 DADOS', 'dado informado com dois valores ao mesmo tempo', 'ck_dado_informado_um_valor', $q$
+        INSERT INTO dado_informado (parceria_id, campo_chave, valor_numero, valor_data, origem, informado_por)
+        SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), 'ativacao.visitantes_total', 10, DATE '2026-12-01',
+               'PORTAL', (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example') $q$);
+    PERFORM pg_temp.recusa('V7 DADOS', 'origem que não é PORTAL nem ATLAS', 'dado_informado_origem_check', $q$
+        INSERT INTO dado_informado (parceria_id, campo_chave, valor_numero, origem, informado_por)
+        SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), 'ativacao.visitantes_total', 10, 'OUTRA',
+               (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example') $q$);
+    PERFORM pg_temp.recusa('V7 DADOS', 'campo que não está no catálogo', 'dado_informado_campo_chave_fkey', $q$
+        INSERT INTO dado_informado (parceria_id, campo_chave, valor_numero, origem, informado_por)
+        SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), 'ativacao.nao_existe', 10, 'PORTAL',
+               (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example') $q$);
+    PERFORM pg_temp.recusa('V7 DADOS', 'anexo do Amarelo com arquivo da Verde', 'fk_dado_informado_arquivo_parceria', $q$
+        INSERT INTO dado_informado (parceria_id, campo_chave, arquivo_id, origem, informado_por)
+        SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), 'ativacao.visitantes_total',
+               (SELECT a.id FROM arquivo a WHERE a.categoria = 'COMPROVACAO' AND a.parceria_id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Verde' AND edicao = 2027) LIMIT 1),
+               'PORTAL', (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example') $q$);
+    PERFORM pg_temp.aceita('V7 DADOS', 'anexo do Amarelo com arquivo do próprio Amarelo', $q$
+        INSERT INTO dado_informado (parceria_id, campo_chave, arquivo_id, origem, informado_por)
+        SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), 'ativacao.visitantes_total',
+               (SELECT a.id FROM arquivo a WHERE a.categoria = 'COMPROVACAO' AND a.parceria_id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027) LIMIT 1),
+               'PORTAL', (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example') $q$);
+    PERFORM pg_temp.recusa('V7 DADOS', 'alterar um dado informado', 'rn_dado_informado_imutavel', $q$
+        DO $d$ BEGIN
+            INSERT INTO dado_informado (parceria_id, campo_chave, valor_numero, origem, informado_por)
+            SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), 'ativacao.visitantes_total', 1000, 'PORTAL',
+                   (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example');
+            UPDATE dado_informado SET valor_numero = 9 WHERE campo_chave = 'ativacao.visitantes_total';
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V7 DADOS', 'apagar um dado informado', 'rn_dado_informado_imutavel', $q$
+        DO $d$ BEGIN
+            INSERT INTO dado_informado (parceria_id, campo_chave, valor_numero, origem, informado_por)
+            SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), 'ativacao.visitantes_total', 1000, 'PORTAL',
+                   (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example');
+            DELETE FROM dado_informado WHERE campo_chave = 'ativacao.visitantes_total';
+        END $d$ $q$);
+END $$;
+
+DO $$
+DECLARE
+    v_amarelo BIGINT; v_roxo BIGINT; v_usuario BIGINT;
+    v_vigente NUMERIC; v_origem TEXT; v_linhas INT; v_vigente_do_roxo INT; v_vigentes_do_amarelo INT;
+BEGIN
+    SELECT id INTO v_amarelo FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027;
+    SELECT id INTO v_roxo FROM _ver_parc WHERE cliente = 'Cliente Roxo' AND edicao = 2027;
+    SELECT id INTO v_usuario FROM _ver_usr WHERE email = 'marketing@amarelo.example';
+    BEGIN
+        -- a correção é uma linha nova na mesma transação (mesmo now()): o desempate é pelo id
+        INSERT INTO dado_informado (parceria_id, campo_chave, valor_numero, origem, informado_por) VALUES
+         (v_amarelo, 'ativacao.visitantes_total', 1000, 'PORTAL', v_usuario),
+         (v_amarelo, 'ativacao.visitantes_total', 1200, 'ATLAS', v_usuario),
+         (v_amarelo, 'ativacao.brindes_disponiveis', 300, 'PORTAL', v_usuario);
+        SELECT valor_numero, origem INTO v_vigente, v_origem FROM vw_dado_vigente
+         WHERE parceria_id = v_amarelo AND campo_chave = 'ativacao.visitantes_total';
+        SELECT count(*) INTO v_linhas FROM dado_informado WHERE parceria_id = v_amarelo AND campo_chave = 'ativacao.visitantes_total';
+        SELECT count(*) INTO v_vigentes_do_amarelo FROM vw_dado_vigente WHERE parceria_id = v_amarelo;
+        SELECT count(*) INTO v_vigente_do_roxo FROM vw_dado_vigente WHERE parceria_id = v_roxo;
+        RAISE EXCEPTION 'desfazer' USING ERRCODE = 'ZZ001';
+    EXCEPTION WHEN SQLSTATE 'ZZ001' THEN NULL;
+    END;
+    PERFORM pg_temp.confere('V7 DADOS', 'o valor vigente é o da correção mais recente', 1200, v_vigente);
+    PERFORM pg_temp.afirma('V7 DADOS', 'a origem do valor vigente é a da última linha (ATLAS)', v_origem = 'ATLAS');
+    PERFORM pg_temp.confere('V7 DADOS', 'a correção é linha nova: o valor antigo continua como trilha', 2, v_linhas);
+    PERFORM pg_temp.confere('V7 DADOS', 'um vigente por campo informado (2 campos do Amarelo)', 2, v_vigentes_do_amarelo);
+    PERFORM pg_temp.confere('V7 DADOS', 'o dado de uma parceria não aparece como vigente de outra', 0, v_vigente_do_roxo);
+END $$;
+
+-- Órfãos das tabelas novas: esperado 0 em cada linha
+DO $$
+BEGIN
+    PERFORM pg_temp.confere('ÓRFÃOS', 'dados informados sem parceria, campo ou autor', 0,
+        (SELECT count(*) FROM dado_informado d
+           LEFT JOIN parceria pa ON pa.id = d.parceria_id LEFT JOIN campo_catalogo c ON c.chave = d.campo_chave
+           LEFT JOIN usuario u ON u.id = d.informado_por
+          WHERE pa.id IS NULL OR c.chave IS NULL OR u.id IS NULL));
+    PERFORM pg_temp.confere('ÓRFÃOS', 'dados informados sem valor ou com mais de um', 0,
+        (SELECT count(*) FROM dado_informado WHERE num_nonnulls(valor_numero, valor_data, arquivo_id) <> 1));
+    PERFORM pg_temp.confere('ÓRFÃOS', 'dados informados com arquivo de outra parceria', 0,
+        (SELECT count(*) FROM dado_informado d JOIN arquivo a ON a.id = d.arquivo_id WHERE a.parceria_id IS DISTINCT FROM d.parceria_id));
+    PERFORM pg_temp.confere('ÓRFÃOS', 'campos do catálogo cujo limite não existe ou é de outra aba', 0,
+        (SELECT count(*) FROM campo_catalogo c LEFT JOIN campo_catalogo l ON l.chave = c.limite_campo
+          WHERE c.limite_campo IS NOT NULL AND (l.chave IS NULL OR l.aba_id <> c.aba_id)));
+    PERFORM pg_temp.confere('ÓRFÃOS', 'linhas de stg_plano sem a carga do plano que as recebeu', 0,
+        (SELECT count(*) FROM stg_plano s LEFT JOIN carga c ON c.id = s.carga_id WHERE c.id IS NULL OR c.tipo <> 'PLANO_COMERCIAL'));
+END $$;
+
+-- ---------------------------------------------------------------------
+-- 9. V8: as tabelas do Atlas (conversa, relatório, cartão, cálculo) e o relatório que fica congelado
+-- ---------------------------------------------------------------------
+DO $$
+BEGIN
+    PERFORM pg_temp.confere('V8 ESTRUTURA', 'tabelas do Atlas (conversa, mensagem, relatório, solicitação, cálculo, tool_call e decisão)', 7,
+        (SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE' AND table_name LIKE 'atlas\_%'));
+    PERFORM pg_temp.afirma('V8 ESTRUTURA', 'o gatilho rn_atlas_relatorio_congelado existe, com a função tg_atlas_relatorio_congelado',
+        EXISTS (SELECT 1 FROM pg_trigger t JOIN pg_proc p ON p.oid = t.tgfoid
+                 WHERE t.tgname = 'rn_atlas_relatorio_congelado' AND p.proname = 'tg_atlas_relatorio_congelado'));
+    PERFORM pg_temp.confere('V8 ESTRUTURA', 'a amostra não traz conversa, relatório nem cartão do Atlas', 0,
+        (SELECT (SELECT count(*) FROM atlas_conversa) + (SELECT count(*) FROM atlas_mensagem) + (SELECT count(*) FROM atlas_relatorio)
+              + (SELECT count(*) FROM atlas_solicitacao) + (SELECT count(*) FROM atlas_calculo)));
+END $$;
+
+-- [ISOLAMENTO] As chaves compostas: um relatório só nasce numa conversa da própria parceria, e um cartão só se liga a um
+-- relatório da própria parceria. Cada tentativa monta o que precisa e termina recusada (nada fica gravado).
+DO $$
+BEGIN
+    PERFORM pg_temp.recusa('V8 ISOLAMENTO', 'relatório do Roxo numa conversa do Amarelo', 'fk_atlas_relatorio_conversa', $q$
+        DO $d$
+        DECLARE v_conversa BIGINT;
+        BEGIN
+            INSERT INTO atlas_conversa (parceria_id, usuario_id)
+            SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example')
+            RETURNING id INTO v_conversa;
+            INSERT INTO atlas_relatorio (parceria_id, conversa_id, modelo, status, especificacao, criado_por)
+            SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Roxo' AND edicao = 2027), v_conversa, 'ATIVACAO_EVENTO', 'MONTANDO', '{}',
+                   (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example');
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V8 ISOLAMENTO', 'cartão do Roxo num relatório do Amarelo', 'fk_atlas_solicitacao_relatorio', $q$
+        DO $d$
+        DECLARE v_conversa BIGINT; v_relatorio BIGINT;
+        BEGIN
+            INSERT INTO atlas_conversa (parceria_id, usuario_id)
+            SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example')
+            RETURNING id INTO v_conversa;
+            INSERT INTO atlas_relatorio (parceria_id, conversa_id, modelo, status, especificacao, criado_por)
+            SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), v_conversa, 'ATIVACAO_EVENTO', 'MONTANDO', '{}',
+                   (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example')
+            RETURNING id INTO v_relatorio;
+            INSERT INTO atlas_solicitacao (relatorio_id, parceria_id, tool_call_id, mensagem, campos, status)
+            SELECT v_relatorio, (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Roxo' AND edicao = 2027), 'botao_x', 'Preciso destes números.',
+                   '["ativacao.visitantes_total"]', 'PENDENTE';
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V8 ISOLAMENTO', 'status de relatório fora da lista', 'atlas_relatorio_status_check', $q$
+        DO $d$
+        DECLARE v_conversa BIGINT;
+        BEGIN
+            INSERT INTO atlas_conversa (parceria_id, usuario_id)
+            SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example')
+            RETURNING id INTO v_conversa;
+            INSERT INTO atlas_relatorio (parceria_id, conversa_id, modelo, status, especificacao, criado_por)
+            SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), v_conversa, 'ATIVACAO_EVENTO', 'PUBLICADO', '{}',
+                   (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example');
+        END $d$ $q$);
+END $$;
+
+-- A conversa gravada no formato de chat: papel só user, assistant ou tool; uma ordem por mensagem; um relatório em montagem e um
+-- cartão aberto por vez; um nome de cálculo por relatório.
+DO $$
+BEGIN
+    PERFORM pg_temp.recusa('V8 CONVERSA', 'mensagem com papel fora de user, assistant e tool', 'atlas_mensagem_papel_check', $q$
+        DO $d$
+        DECLARE v_conversa BIGINT;
+        BEGIN
+            INSERT INTO atlas_conversa (parceria_id, usuario_id)
+            SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example')
+            RETURNING id INTO v_conversa;
+            INSERT INTO atlas_mensagem (conversa_id, ordem, papel, conteudo) VALUES (v_conversa, 1, 'system', 'regras');
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V8 CONVERSA', 'duas mensagens com a mesma ordem na conversa', 'uq_atlas_mensagem_ordem', $q$
+        DO $d$
+        DECLARE v_conversa BIGINT;
+        BEGIN
+            INSERT INTO atlas_conversa (parceria_id, usuario_id)
+            SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example')
+            RETURNING id INTO v_conversa;
+            INSERT INTO atlas_mensagem (conversa_id, ordem, papel, conteudo) VALUES (v_conversa, 1, 'user', 'a'), (v_conversa, 1, 'assistant', 'b');
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V8 CONVERSA', 'dois relatórios em montagem na mesma conversa', 'uq_atlas_relatorio_ativo', $q$
+        DO $d$
+        DECLARE v_conversa BIGINT;
+        BEGIN
+            INSERT INTO atlas_conversa (parceria_id, usuario_id)
+            SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example')
+            RETURNING id INTO v_conversa;
+            INSERT INTO atlas_relatorio (parceria_id, conversa_id, modelo, status, especificacao, criado_por)
+            SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), v_conversa, 'ATIVACAO_EVENTO', s, '{}',
+                   (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example')
+            FROM unnest(ARRAY['MONTANDO', 'AGUARDANDO_RESPOSTA']) AS s;
+        END $d$ $q$);
+    PERFORM pg_temp.aceita('V8 CONVERSA', 'um relatório pronto e outro em montagem na mesma conversa', $q$
+        DO $d$
+        DECLARE v_conversa BIGINT;
+        BEGIN
+            INSERT INTO atlas_conversa (parceria_id, usuario_id)
+            SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example')
+            RETURNING id INTO v_conversa;
+            INSERT INTO atlas_relatorio (parceria_id, conversa_id, modelo, status, especificacao, snapshot, criado_por)
+            SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), v_conversa, 'ATIVACAO_EVENTO', s, '{}',
+                   CASE WHEN s = 'PRONTO' THEN '{}'::jsonb END, (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example')
+            FROM unnest(ARRAY['PRONTO', 'MONTANDO']) AS s;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V8 CONVERSA', 'dois cartões abertos no mesmo relatório', 'uq_atlas_solicitacao_pendente', $q$
+        DO $d$
+        DECLARE v_conversa BIGINT; v_relatorio BIGINT;
+        BEGIN
+            INSERT INTO atlas_conversa (parceria_id, usuario_id)
+            SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example')
+            RETURNING id INTO v_conversa;
+            INSERT INTO atlas_relatorio (parceria_id, conversa_id, modelo, status, especificacao, criado_por)
+            SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), v_conversa, 'ATIVACAO_EVENTO', 'AGUARDANDO_RESPOSTA', '{}',
+                   (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example')
+            RETURNING id INTO v_relatorio;
+            INSERT INTO atlas_solicitacao (relatorio_id, parceria_id, tool_call_id, mensagem, campos, status)
+            SELECT v_relatorio, (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), t, 'Preciso destes números.',
+                   '["ativacao.visitantes_total"]', 'PENDENTE'
+            FROM unnest(ARRAY['botao_a', 'botao_b']) AS t;
+        END $d$ $q$);
+    PERFORM pg_temp.aceita('V8 CONVERSA', 'cartões respondidos, recusados e cancelados convivem com um aberto', $q$
+        DO $d$
+        DECLARE v_conversa BIGINT; v_relatorio BIGINT;
+        BEGIN
+            INSERT INTO atlas_conversa (parceria_id, usuario_id)
+            SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example')
+            RETURNING id INTO v_conversa;
+            INSERT INTO atlas_relatorio (parceria_id, conversa_id, modelo, status, especificacao, criado_por)
+            SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), v_conversa, 'ATIVACAO_EVENTO', 'AGUARDANDO_RESPOSTA', '{}',
+                   (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example')
+            RETURNING id INTO v_relatorio;
+            INSERT INTO atlas_solicitacao (relatorio_id, parceria_id, tool_call_id, mensagem, campos, status)
+            SELECT v_relatorio, (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), t.id, 'Preciso destes números.',
+                   '["ativacao.visitantes_total"]', t.status
+            FROM (VALUES ('botao_a', 'CANCELADA'), ('botao_b', 'RESPONDIDA'), ('botao_c', 'RECUSADA'), ('botao_d', 'PENDENTE')) AS t(id, status);
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V8 CONVERSA', 'dois cálculos com o mesmo nome no relatório', 'uq_atlas_calculo_nome', $q$
+        DO $d$
+        DECLARE v_conversa BIGINT; v_relatorio BIGINT;
+        BEGIN
+            INSERT INTO atlas_conversa (parceria_id, usuario_id)
+            SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example')
+            RETURNING id INTO v_conversa;
+            INSERT INTO atlas_relatorio (parceria_id, conversa_id, modelo, status, especificacao, criado_por)
+            SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), v_conversa, 'ATIVACAO_EVENTO', 'MONTANDO', '{}',
+                   (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example')
+            RETURNING id INTO v_relatorio;
+            INSERT INTO atlas_calculo (relatorio_id, nome, script, variaveis, resultado, unidade)
+            VALUES (v_relatorio, 'taxa_cadastro', 'pct(cadastros, visitantes)', '[]', 89.3, '%'),
+                   (v_relatorio, 'taxa_cadastro', 'pct(cadastros, visitantes)', '[]', 89.3, '%');
+        END $d$ $q$);
+    PERFORM pg_temp.aceita('V8 CONVERSA', 'o mesmo nome de cálculo em dois relatórios diferentes', $q$
+        DO $d$
+        DECLARE v_conversa BIGINT;
+        BEGIN
+            INSERT INTO atlas_conversa (parceria_id, usuario_id)
+            SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example')
+            RETURNING id INTO v_conversa;
+            INSERT INTO atlas_relatorio (parceria_id, conversa_id, modelo, status, especificacao, snapshot, criado_por)
+            SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), v_conversa, 'ATIVACAO_EVENTO', s, '{}',
+                   CASE WHEN s = 'PRONTO' THEN '{}'::jsonb END, (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example')
+            FROM unnest(ARRAY['PRONTO', 'MONTANDO']) AS s;
+            INSERT INTO atlas_calculo (relatorio_id, nome, script, variaveis, resultado, unidade)
+            SELECT r.id, 'taxa_cadastro', 'pct(cadastros, visitantes)', '[]', 89.3, '%' FROM atlas_relatorio r WHERE r.conversa_id = v_conversa;
+        END $d$ $q$);
+END $$;
+
+-- [HISTORICO] O relatório pronto ou descartado não muda mais (especificação, snapshot e status), e o pronto não se apaga. O que
+-- está montando muda à vontade e sai por PRONTO (com o snapshot, na mesma operação) ou DESCARTADO.
+DO $$
+DECLARE
+    -- O molde de cada tentativa: uma conversa do Amarelo e, nela, um relatório no status dado (%1$s; o snapshot só existe no pronto),
+    -- seguido do comando que a tentativa roda sobre ele (%2$s, com v_relatorio).
+    c_novo CONSTANT TEXT := $c$
+        DO $d$
+        DECLARE v_conversa BIGINT; v_relatorio BIGINT;
+        BEGIN
+            INSERT INTO atlas_conversa (parceria_id, usuario_id)
+            SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example')
+            RETURNING id INTO v_conversa;
+            INSERT INTO atlas_relatorio (parceria_id, conversa_id, modelo, status, especificacao, snapshot, criado_por)
+            SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), v_conversa, 'ATIVACAO_EVENTO', '%1$s', '{"modelo":"ATIVACAO_EVENTO"}',
+                   CASE WHEN '%1$s' = 'PRONTO' THEN '{"secoes":[]}'::jsonb END, (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example')
+            RETURNING id INTO v_relatorio;
+            %2$s
+        END $d$ $c$;
+BEGIN
+    PERFORM pg_temp.recusa('V8 CONGELADO', 'mudar a especificação de um relatório pronto', 'rn_atlas_relatorio_congelado',
+        format(c_novo, 'PRONTO', $q$ UPDATE atlas_relatorio SET especificacao = '{"modelo":"OUTRO"}' WHERE id = v_relatorio; $q$));
+    PERFORM pg_temp.recusa('V8 CONGELADO', 'mudar o snapshot de um relatório pronto', 'rn_atlas_relatorio_congelado',
+        format(c_novo, 'PRONTO', $q$ UPDATE atlas_relatorio SET snapshot = '{"secoes":[{"id":"x"}]}' WHERE id = v_relatorio; $q$));
+    PERFORM pg_temp.recusa('V8 CONGELADO', 'reabrir um relatório pronto (status de volta a MONTANDO)', 'rn_atlas_relatorio_congelado',
+        format(c_novo, 'PRONTO', $q$ UPDATE atlas_relatorio SET status = 'MONTANDO' WHERE id = v_relatorio; $q$));
+    PERFORM pg_temp.recusa('V8 CONGELADO', 'descartar um relatório pronto', 'rn_atlas_relatorio_congelado',
+        format(c_novo, 'PRONTO', $q$ UPDATE atlas_relatorio SET status = 'DESCARTADO' WHERE id = v_relatorio; $q$));
+    PERFORM pg_temp.recusa('V8 CONGELADO', 'apagar um relatório pronto', 'rn_atlas_relatorio_congelado',
+        format(c_novo, 'PRONTO', $q$ DELETE FROM atlas_relatorio WHERE id = v_relatorio; $q$));
+    PERFORM pg_temp.recusa('V8 CONGELADO', 'reabrir um relatório descartado', 'rn_atlas_relatorio_congelado',
+        format(c_novo, 'DESCARTADO', $q$ UPDATE atlas_relatorio SET status = 'MONTANDO' WHERE id = v_relatorio; $q$));
+    PERFORM pg_temp.recusa('V8 CONGELADO', 'mudar a especificação de um relatório descartado', 'rn_atlas_relatorio_congelado',
+        format(c_novo, 'DESCARTADO', $q$ UPDATE atlas_relatorio SET especificacao = '{"modelo":"OUTRO"}' WHERE id = v_relatorio; $q$));
+    PERFORM pg_temp.aceita('V8 CONGELADO', 'o que está montando vira PRONTO com o snapshot, na mesma operação',
+        format(c_novo, 'MONTANDO', $q$ UPDATE atlas_relatorio SET status = 'PRONTO', snapshot = '{"secoes":[]}', finalizado_em = now() WHERE id = v_relatorio; $q$));
+    PERFORM pg_temp.aceita('V8 CONGELADO', 'o que está montando muda a especificação e a versão',
+        format(c_novo, 'MONTANDO', $q$ UPDATE atlas_relatorio SET especificacao = '{"modelo":"ATIVACAO_EVENTO","texto":"novo"}', versao_especificacao = versao_especificacao + 1 WHERE id = v_relatorio; $q$));
+    PERFORM pg_temp.aceita('V8 CONGELADO', 'o que está aguardando resposta pode ser descartado',
+        format(c_novo, 'AGUARDANDO_RESPOSTA', $q$ UPDATE atlas_relatorio SET status = 'DESCARTADO' WHERE id = v_relatorio; $q$));
+    PERFORM pg_temp.aceita('V8 CONGELADO', 'o que está montando pode ser apagado',
+        format(c_novo, 'MONTANDO', $q$ DELETE FROM atlas_relatorio WHERE id = v_relatorio; $q$));
+    PERFORM pg_temp.aceita('V8 CONGELADO', 'o relatório pronto aceita mexer no que não é congelado (finalizado_em)',
+        format(c_novo, 'PRONTO', $q$ UPDATE atlas_relatorio SET finalizado_em = now() WHERE id = v_relatorio; $q$));
+END $$;
+
+-- O resumo do raciocínio (V9): só a mensagem do assistente tem, e o texto não é vazio.
+DO $$
+DECLARE
+    -- O molde de cada tentativa: uma conversa do Amarelo e, nela, uma mensagem com o papel dado (%1$s) e o resumo dado (%2$s, já entre aspas).
+    c_novo CONSTANT TEXT := $c$
+        DO $d$
+        DECLARE v_conversa BIGINT;
+        BEGIN
+            INSERT INTO atlas_conversa (parceria_id, usuario_id)
+            SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example')
+            RETURNING id INTO v_conversa;
+            INSERT INTO atlas_mensagem (conversa_id, ordem, papel, conteudo, reasoning_content, resumo_do_raciocinio)
+            VALUES (v_conversa, 1, '%1$s', 'a', 'Raciocínio.', %2$s);
+        END $d$ $c$;
+BEGIN
+    PERFORM pg_temp.recusa('V9 RESUMO', 'resumo do raciocínio numa mensagem que não é do assistente', 'ck_atlas_mensagem_resumo',
+        format(c_novo, 'user', quote_literal('Conferi os números.')));
+    PERFORM pg_temp.recusa('V9 RESUMO', 'resumo do raciocínio em branco', 'ck_atlas_mensagem_resumo',
+        format(c_novo, 'assistant', quote_literal('   ')));
+    PERFORM pg_temp.aceita('V9 RESUMO', 'resumo do raciocínio numa mensagem do assistente',
+        format(c_novo, 'assistant', quote_literal('Conferi os números.')));
+END $$;
+
+-- Órfãos das tabelas novas: esperado 0 em cada linha
+DO $$
+BEGIN
+    PERFORM pg_temp.confere('ÓRFÃOS', 'relatórios do Atlas sem a conversa da mesma parceria', 0,
+        (SELECT count(*) FROM atlas_relatorio r LEFT JOIN atlas_conversa c ON c.id = r.conversa_id AND c.parceria_id = r.parceria_id WHERE c.id IS NULL));
+    PERFORM pg_temp.confere('ÓRFÃOS', 'cartões do Atlas sem o relatório da mesma parceria', 0,
+        (SELECT count(*) FROM atlas_solicitacao s LEFT JOIN atlas_relatorio r ON r.id = s.relatorio_id AND r.parceria_id = s.parceria_id WHERE r.id IS NULL));
+    PERFORM pg_temp.confere('ÓRFÃOS', 'mensagens do Atlas sem conversa', 0,
+        (SELECT count(*) FROM atlas_mensagem m LEFT JOIN atlas_conversa c ON c.id = m.conversa_id WHERE c.id IS NULL));
+    PERFORM pg_temp.confere('ÓRFÃOS', 'mensagens de ferramenta sem o pedido que respondem', 0,
+        (SELECT count(*) FROM atlas_mensagem m WHERE m.papel = 'tool' AND (m.tool_call_id IS NULL OR NOT EXISTS (
+            SELECT 1 FROM atlas_mensagem a WHERE a.conversa_id = m.conversa_id AND a.papel = 'assistant' AND a.ordem < m.ordem
+               AND a.tool_calls @> jsonb_build_array(jsonb_build_object('id', m.tool_call_id))))));
+    PERFORM pg_temp.confere('ÓRFÃOS', 'cálculos do Atlas sem relatório', 0,
+        (SELECT count(*) FROM atlas_calculo k LEFT JOIN atlas_relatorio r ON r.id = k.relatorio_id WHERE r.id IS NULL));
+    PERFORM pg_temp.confere('ÓRFÃOS', 'relatórios do Atlas prontos sem snapshot, ou com snapshot sem estarem prontos', 0,
+        (SELECT count(*) FROM atlas_relatorio WHERE (status = 'PRONTO') <> (snapshot IS NOT NULL)));
+END $$;
+
+-- ---------------------------------------------------------------------
+-- 10. Resultado: a lista de conferências e, se alguma falhou, o erro final (saída diferente de zero com ON_ERROR_STOP)
 -- ---------------------------------------------------------------------
 SELECT grupo, conferencia, esperado, obtido, CASE WHEN ok THEN 'ok' ELSE 'FALHOU' END AS resultado FROM _ver ORDER BY ordem;
 SELECT count(*) AS conferencias, count(*) FILTER (WHERE ok) AS ok, count(*) FILTER (WHERE NOT ok) AS falhas FROM _ver;

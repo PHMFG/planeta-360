@@ -99,6 +99,18 @@ public class TratadorDeErros extends ResponseEntityExceptionHandler {
         return resposta(Problemas.de(HttpStatus.CONFLICT, ex.getMessage()), request);
     }
 
+    /** Uma parte de que a operação depende está fora do ar (o modelo de linguagem do Atlas): 503 com a frase do que fazer no lugar. */
+    @ExceptionHandler(ServicoIndisponivelException.class)
+    ResponseEntity<Object> servicoIndisponivel(ServicoIndisponivelException ex, WebRequest request) {
+        return resposta(Problemas.de(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage()), request);
+    }
+
+    /** Um limite de uso foi atingido (o teto diário do Atlas por parceria): 429 com a frase do que fazer no lugar. */
+    @ExceptionHandler(LimiteDeUsoException.class)
+    ResponseEntity<Object> limiteDeUso(LimiteDeUsoException ex, WebRequest request) {
+        return resposta(Problemas.de(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage()), request);
+    }
+
     /** [UPLOAD] Arquivo recusado pelo Armazenamento: 413 (acima do limite) ou 415 (extensão ou conteúdo fora da lista). */
     @ExceptionHandler(ArquivoRecusadoException.class)
     ResponseEntity<Object> arquivoRecusado(ArquivoRecusadoException ex, WebRequest request) {
@@ -172,6 +184,9 @@ public class TratadorDeErros extends ResponseEntityExceptionHandler {
                         case "perguntas" -> "Não encontramos esta pergunta.";
                         case "relatorios" -> "Não encontramos este relatório.";
                         case "cargas" -> "Não encontramos esta carga.";
+                        case "aplicacoes" -> "Não encontramos esta aplicação.";
+                        case "conversas" -> "Não encontramos esta conversa.";
+                        case "solicitacoes" -> "Não encontramos esta solicitação.";
                         default -> Problemas.detalhePadrao(HttpStatus.NOT_FOUND);
                     };
                 }

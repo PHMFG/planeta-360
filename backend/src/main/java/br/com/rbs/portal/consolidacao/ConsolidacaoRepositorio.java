@@ -1,5 +1,6 @@
 package br.com.rbs.portal.consolidacao;
 
+import br.com.rbs.portal.comum.EntregasDaMarca;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -12,8 +13,9 @@ import org.springframework.stereotype.Repository;
  * Consultas da consolidação (previsto x exibido, aplicações, entregas, cortesias, faltantes) e do painel da RBS.
  * Atende os itens 5 e 7 da Entrega 2. [RELATORIO] Os números vêm das visões do banco (vw_midia_unidade, vw_midia_veiculo,
  * vw_aplicacoes, vw_entregas_resumo, vw_cortesias, vw_faltantes), as mesmas que a geração do relatório copia; assim a
- * tela e o relatório nunca discordam. [ISOLAMENTO] Toda consulta de parceria recebe o id dela; quem decide se o usuário
- * pode ver aquela parceria é o ConsolidacaoService.
+ * tela e o relatório nunca discordam (exceção: o resumo de entregas do patrocinador, que só conta aba aberta).
+ * [ISOLAMENTO] Toda consulta de parceria recebe o id dela; quem decide se o usuário pode ver aquela parceria é o
+ * ConsolidacaoService.
  */
 @Repository
 public class ConsolidacaoRepositorio {
@@ -136,11 +138,14 @@ public class ConsolidacaoRepositorio {
                 .optional();
     }
 
-    public Optional<LinhaDeEntregas> entregas(long parceriaId) {
-        return jdbc.sql("""
-                        SELECT total, aprovadas, pendentes, nao_aplicaveis, pct_concluidas AS percentual_concluido
-                        FROM vw_entregas_resumo WHERE parceria_id = :parceriaId
-                        """)
+    /**
+     * O resumo de entregas. [PERMISSAO] Com {@code soAbasAbertas} (patrocinador) conta só as entregas de aba aberta, com as
+     * mesmas contas da visão; sem ele (RBS) lê vw_entregas_resumo, com todas as abas. Sem entrega contada, vem vazio.
+     */
+    public Optional<LinhaDeEntregas> entregas(long parceriaId, boolean soAbasAbertas) {
+        String origem = soAbasAbertas ? "(" + EntregasDaMarca.RESUMO + ")" : "vw_entregas_resumo";
+        return jdbc.sql("SELECT er.total, er.aprovadas, er.pendentes, er.nao_aplicaveis, er.pct_concluidas AS percentual_concluido"
+                        + " FROM " + origem + " er WHERE er.parceria_id = :parceriaId")
                 .param("parceriaId", parceriaId)
                 .query(LinhaDeEntregas.class)
                 .optional();
@@ -266,10 +271,15 @@ public class ConsolidacaoRepositorio {
                 .single();
     }
 
+    /**
+     * A carga mais nova da edição, só de mídia ou de pesquisa: a carga do plano comercial (que enche o previsto) não ocupa o
+     * card "última carga" do painel, que fala de exibição e de resultado.
+     */
     public Optional<LinhaDeCarga> ultimaCarga(long eventoId) {
         return jdbc.sql("""
                         SELECT id, tipo, executada_em, linhas_inseridas, linhas_rejeitadas
-                        FROM carga WHERE evento_id = :eventoId ORDER BY executada_em DESC, id DESC LIMIT 1
+                        FROM carga WHERE evento_id = :eventoId AND tipo IN ('MIDIA', 'PESQUISA')
+                        ORDER BY executada_em DESC, id DESC LIMIT 1
                         """)
                 .param("eventoId", eventoId)
                 .query(LinhaDeCarga.class)

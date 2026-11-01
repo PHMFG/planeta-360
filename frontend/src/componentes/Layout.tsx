@@ -3,10 +3,15 @@
 import { useState } from 'react'
 import { Outlet } from 'react-router'
 import type { ParceriaResumo } from '../api/tipos'
+import { useSessao } from '../sessao/Sessao'
+import { BotaoDebug } from './BotaoDebug'
 import { Menu } from './Menu'
 
 export function Layout({ parceria, contexto }: { parceria: ParceriaResumo | null; contexto?: unknown }) {
   const [menuAberto, setMenuAberto] = useState(false)
+  const { usuario } = useSessao()
+  // [ATLAS] Só a marca conversa com o Atlas, e sempre dentro de uma parceria: o botão do menu abre a janela dele.
+  const atlas = parceria !== null && usuario?.perfil === 'ADMIN_PATROCINADOR' ? `/parceria/${parceria.id}/atlas` : undefined
 
   return (
     <div className="min-h-screen">
@@ -23,7 +28,14 @@ export function Layout({ parceria, contexto }: { parceria: ParceriaResumo | null
           Menu
         </button>
       </header>
-      <Menu parceria={parceria} aberto={menuAberto} aoFechar={() => setMenuAberto(false)} />
+      <Menu
+        parceria={parceria}
+        aberto={menuAberto}
+        aoFechar={() => setMenuAberto(false)}
+        atlas={atlas}
+      />
+      {/* [TEMPORARIO] Só aparece com as rotas de debug da API (perfil dev). */}
+      <BotaoDebug />
       <main className="p-4 lg:pl-[296px] print:p-0">
         <div className="flex max-w-[1200px] min-w-0 flex-col gap-4">
           <Outlet context={contexto} />

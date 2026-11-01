@@ -17,14 +17,16 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
  * Atende o item 3 da Entrega 2. O contrato diz que a permissão vem antes da validação: o patrocinador que chama uma rota da
  * RBS recebe 403 qualquer que seja o corpo (vazio, JSON quebrado ou com campo errado), e não 400 ou 422, que ainda
  * contariam a ele como é o formato da rota. Sem este interceptador, o @Valid do controller rodaria primeiro.
- * Duas regras, cada uma com as mesmas frases dos Services (que continuam conferindo: aqui é só a primeira linha de defesa):
+ * Três regras, cada uma com as mesmas frases dos Services (que continuam conferindo: aqui é só a primeira linha de defesa):
  * <ul>
  *   <li>{@link #ROTAS_SO_DA_RBS}: perfil que não é Admin RBS recebe 403 ("Esta operação é restrita à equipe da RBS.").</li>
+ *   <li>{@link #ROTAS_SO_DO_PATROCINADOR}: a conversa com o Atlas (rotas 42 a 46); a RBS recebe 403 ("Só o Admin Patrocinador da
+ *       parceria conversa com o Atlas.") antes de o corpo ser lido. Parceria, dono da conversa e aba o service confere depois.</li>
  *   <li>O envio das perguntas da pesquisa (PUT): a RBS recebe 403; o patrocinador precisa ser da parceria (404 se não for)
  *       e ter a aba PESQUISA liberada (403), e só depois o corpo é lido e validado.</li>
  * </ul>
  * A lista usa o método e o padrão exatamente como estão nos controllers. O PermissaoAntesDoCorpoTest confere que toda rota
- * da API está em uma das duas listas (esta ou a de rotas do patrocinador, no teste), então rota nova não passa sem decisão.
+ * da API está em uma das listas (estas duas ou a de rotas de ambos os perfis, no teste), então rota nova não passa sem decisão.
  */
 @Component
 public class PermissaoAntesDoCorpo implements HandlerInterceptor, WebMvcConfigurer {
@@ -49,7 +51,20 @@ public class PermissaoAntesDoCorpo implements HandlerInterceptor, WebMvcConfigur
             "GET /api/relatorios",
             "GET /api/relatorios.csv",
             "POST /api/parcerias/{id}/relatorios",
-            "PATCH /api/relatorios/{id}/status");
+            "PATCH /api/relatorios/{id}/status",
+            "POST /api/parcerias/{id}/aplicacoes/{aproveitamentoId}/comprovacoes");
+
+    /**
+     * As rotas que só o Admin Patrocinador usa e que a RBS não usa por ele: a conversa com o Atlas e o cartão de perguntas (rotas 42
+     * a 46 do docs/api.md). A RBS só lê o relatório que o Atlas montou (rotas 47 e 48, que não estão aqui). Rota nova só da marca:
+     * acrescente aqui.
+     */
+    public static final Set<String> ROTAS_SO_DO_PATROCINADOR = Set.of(
+            "POST /api/parcerias/{id}/atlas/conversas",
+            "GET /api/parcerias/{id}/atlas/conversas",
+            "POST /api/atlas/conversas/{id}/mensagens",
+            "GET /api/atlas/conversas/{id}",
+            "POST /api/atlas/solicitacoes/{id}/respostas");
 
     /** PUT /api/parcerias/{id}/pesquisa/perguntas: do Admin Patrocinador da parceria, com a aba liberada. */
     static final String ENVIO_DAS_PERGUNTAS = "PUT /api/parcerias/{id}/pesquisa/perguntas";
@@ -82,6 +97,8 @@ public class PermissaoAntesDoCorpo implements HandlerInterceptor, WebMvcConfigur
 
         if (ROTAS_SO_DA_RBS.contains(rota)) {
             verificador.exigirRbs(usuario);
+        } else if (ROTAS_SO_DO_PATROCINADOR.contains(rota)) {
+            verificador.exigirPatrocinador(usuario, VerificadorDeAcesso.SO_PATROCINADOR_USA_O_ATLAS);
         } else if (ENVIO_DAS_PERGUNTAS.equals(rota)) {
             verificador.exigirPatrocinador(usuario, SO_PATROCINADOR_ENVIA_PERGUNTAS);
             Long parceriaId = idDaParceria(requisicao);

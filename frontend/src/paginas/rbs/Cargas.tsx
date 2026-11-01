@@ -1,4 +1,5 @@
-// Cargas da RBS: envio das planilhas de veiculação e de pesquisa, resultado e linhas rejeitadas com o motivo. [ITEM-5] [CARGA]
+// Cargas da RBS: envio das planilhas de veiculação, de pesquisa e do plano comercial, resultado e linhas rejeitadas com o motivo.
+// [ITEM-5] [CARGA]
 // [DUPLICIDADE] Reenviar a mesma planilha não muda a contagem: as linhas repetidas entram como duplicadas.
 import { useState, type FormEvent } from 'react'
 import { ErroApi } from '../../api/cliente'
@@ -18,9 +19,15 @@ import { dataHora, numero, tamanho } from '../../util/formatar'
 const COLUNAS: Record<Carga['tipo'], string> = {
   VEICULACAO: 'patrocinador, veiculo, formato, espaco_programa, exibido_em, quantidade, link',
   PESQUISA: 'patrocinador, pergunta, indicador, alternativa, valor, unidade, base_respondentes',
+  PLANO:
+    'patrocinador, categoria, bloco, veiculo, formato, espaco_programa, janela, tipo_midia, quantidade_prevista, unidade, fonte_pagina',
 }
 
-const NOME_TIPO: Record<Carga['tipo'], string> = { VEICULACAO: 'Veiculação de mídia', PESQUISA: 'Resultados de pesquisa' }
+const NOME_TIPO: Record<Carga['tipo'], string> = {
+  VEICULACAO: 'Veiculação de mídia',
+  PESQUISA: 'Resultados de pesquisa',
+  PLANO: 'Plano comercial',
+}
 
 function Resultado({ carga }: { carga: Carga }) {
   return (
@@ -67,6 +74,8 @@ export function Cargas() {
   const [eventoId, setEventoId] = useState('')
   const [escopo, setEscopo] = useState<'ATIVACAO' | 'GERAL'>('ATIVACAO')
   const [arquivo, setArquivo] = useState<File | null>(null)
+  // O campo é recriado depois de cada envio: sem isso, escolher de novo o mesmo arquivo não dispara o onChange.
+  const [campoDoArquivo, setCampoDoArquivo] = useState(0)
   const [falha, setFalha] = useState<string | null>(null)
   const [enviando, setEnviando] = useState(false)
   const [ultima, setUltima] = useState<Carga | null>(null)
@@ -84,6 +93,7 @@ export function Cargas() {
       setUltima(carga)
       setSelecionada(carga)
       setArquivo(null)
+      setCampoDoArquivo((atual) => atual + 1)
       cargas.recarregar()
     } catch (erro) {
       if (erro instanceof ErroApi) {
@@ -100,7 +110,7 @@ export function Cargas() {
       <CabecalhoSecao
         trilha="Planeta Atlântida / RBS · Gestão"
         titulo="Cargas"
-        subtitulo="Envie as planilhas de veiculação e de pesquisa e veja o resultado de cada carga."
+        subtitulo="Envie as planilhas de veiculação, de pesquisa e do plano comercial e veja o resultado de cada carga."
       />
 
       <Cartao titulo="Enviar planilha">
@@ -109,6 +119,7 @@ export function Cargas() {
             <Seletor rotulo="Tipo" value={tipo} onChange={(campo) => setTipo(campo.target.value as Carga['tipo'])}>
               <option value="VEICULACAO">Veiculação de mídia</option>
               <option value="PESQUISA">Resultados de pesquisa</option>
+              <option value="PLANO">Plano comercial (previsto de mídia e aplicações)</option>
             </Seletor>
             <Seletor rotulo="Edição" value={evento} onChange={(campo) => setEventoId(campo.target.value)}>
               {(eventos.dado ?? []).map((item) => (
@@ -127,7 +138,7 @@ export function Cargas() {
           <label className="flex cursor-pointer items-center gap-3 rounded-xl border-[1.5px] border-dashed border-tinta bg-cinza-100 px-4 py-4 text-sm">
             <i className="ri-file-excel-2-line text-2xl" aria-hidden="true" />
             <span className="flex-1 font-semibold">{arquivo ? `${arquivo.name} · ${tamanho(arquivo.size)}` : 'Escolher a planilha CSV (UTF-8, vírgula como separador)'}</span>
-            <input type="file" accept=".csv,text/csv" className="sr-only" onChange={(campo) => setArquivo(campo.target.files?.[0] ?? null)} />
+            <input key={campoDoArquivo} type="file" accept=".csv,text/csv" className="sr-only" onChange={(campo) => setArquivo(campo.target.files?.[0] ?? null)} />
           </label>
           <p className="text-xs text-texto-2">
             Colunas esperadas: <code>{COLUNAS[tipo]}</code>. Há exemplos em docs/exemplos no repositório.

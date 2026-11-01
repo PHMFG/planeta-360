@@ -31,6 +31,8 @@ abstract class ApoioDeCargas {
     static final String AGENTE = "TesteDeCargas/1.0";
     static final String CABECALHO_VEICULACAO = "patrocinador,veiculo,formato,espaco_programa,exibido_em,quantidade,link";
     static final String CABECALHO_PESQUISA = "patrocinador,pergunta,indicador,alternativa,valor,unidade,base_respondentes";
+    static final String CABECALHO_PLANO = "patrocinador,categoria,bloco,veiculo,formato,espaco_programa,janela,tipo_midia,"
+            + "quantidade_prevista,unidade,fonte_pagina";
 
     @Autowired
     MockMvcTester mvc;

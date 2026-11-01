@@ -72,4 +72,20 @@ class CelulasTest {
         assertThat(Celulas.unidade("percentual")).isEqualTo("PERCENTUAL");
         assertThat(Celulas.unidade(null)).isNull();
     }
+
+    @Test
+    void codigoDeListaFechadaSobeParaMaiusculas() {
+        assertThat(Celulas.codigo("aplicacao_marca")).isEqualTo("APLICACAO_MARCA");
+        assertThat(Celulas.codigo("Conteudo_de_Marca")).isEqualTo("CONTEUDO_DE_MARCA");
+        assertThat(Celulas.codigo(null)).isNull();
+    }
+
+    @Test
+    void paginaDoPlanoForaDeUmASmallintViraNula() {
+        assertThat(Celulas.inteiro("12", 1, Short.MAX_VALUE)).isEqualTo(12);
+        assertThat(Celulas.inteiro("32767", 1, Short.MAX_VALUE)).isEqualTo(32767);
+        assertThat(Celulas.inteiro("32768", 1, Short.MAX_VALUE)).isNull();
+        assertThat(Celulas.inteiro("0", 1, Short.MAX_VALUE)).isNull();
+        assertThat(Celulas.inteiro("página 3", 1, Short.MAX_VALUE)).isNull();
+    }
 }

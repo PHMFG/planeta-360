@@ -13,6 +13,7 @@ import { Status } from '../../componentes/Status'
 import { useSessao } from '../../sessao/Sessao'
 import { dataHora, numero } from '../../util/formatar'
 import { useParceria } from './ContextoParceria'
+import { RelatoriosDoAtlas } from './RelatorioAtlas'
 
 // Partes do recorte que chegam como código do banco e o nome que a marca lê.
 const CODIGOS: Record<string, string> = {
@@ -223,6 +224,8 @@ export function RelatorioParceria() {
           )
         }
       </Carregando>
+
+      <RelatoriosDoAtlas />
     </div>
   )
 }
