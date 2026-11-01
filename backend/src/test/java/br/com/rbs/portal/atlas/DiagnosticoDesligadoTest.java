@@ -118,4 +118,22 @@ class DiagnosticoDesligadoTest {
         assertThat(rbs.get("/api/atlas/conversas/" + conversa + "/diagnostico")).hasStatus(HttpStatus.FORBIDDEN);
         assertThat(SessaoDeApi.anonima(mvc).get("/api/atlas/provedores")).hasStatus(HttpStatus.UNAUTHORIZED);
     }
+
+    @Test
+    void aPaginacaoInvalidaDaRbsDa422MesmoComODiagnosticoDesligadoEOsOutrosFiltrosDao404() {
+        SessaoDeApi rbs = SessaoDeApi.entrar(mvc, RBS);
+
+        // pagina e tamanho são conferidos antes de a rota chegar ao service, que é quem sabe que o diagnóstico está desligado
+        for (String uri : java.util.List.of("/api/atlas/diagnostico/turnos?tamanho=999", "/api/atlas/diagnostico/turnos?tamanho=0",
+                "/api/atlas/diagnostico/turnos?pagina=-1")) {
+            assertThat(rbs.get(uri)).as(uri).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
+        }
+        // os filtros de data e de resultado são conferidos no service, depois do 404
+        for (String uri : java.util.List.of("/api/atlas/diagnostico/turnos?de=ontem", "/api/atlas/diagnostico/turnos?resultado=TALVEZ",
+                "/api/atlas/diagnostico/turnos?de=%2B300000-01-01", "/api/atlas/diagnostico/turnos")) {
+            MvcTestResult resposta = rbs.get(uri);
+            assertThat(resposta).as(uri).hasStatus(HttpStatus.NOT_FOUND);
+            assertThat(lerJson(resposta, "$.detail")).isEqualTo(NAO_ENCONTRADO);
+        }
+    }
 }

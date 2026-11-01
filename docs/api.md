@@ -16,7 +16,7 @@ Este documento é o **contrato entre o back-end e o front-end**. Quem faz a tela
 | Campos vazios | Um campo sem valor vem como `null`. As listas vêm sempre como `[]`, nunca `null`. |
 | Códigos | Cotas: `MASTER`, `SUBCOTA_G`, `SUBCOTA`. Abas: `PERFIL`, `APLICACOES`, `MIDIA`, `CORTESIAS`, `CREDENCIAMENTO`, `PESQUISA`, `CONTRATO`. Perfis: `ADMIN_RBS`, `ADMIN_PATROCINADOR`. |
 | Listas longas | Histórico, fila de entregas, cargas e rejeições são paginadas: `?pagina=0&tamanho=50` (pagina começa em 0; tamanho padrão 50, máximo 200; `pagina` negativa ou `tamanho` fora de 1 a 200 devolve 422). A resposta é `{"itens": [...], "pagina": 0, "tamanho": 50, "total": 137}`. As outras listas vêm inteiras, em array. |
-| Filtros de data | `de=2026-10-01&ate=2026-10-31` (datas, inclusive, no horário de Brasília). |
+| Filtros de data | `de=2026-10-01&ate=2026-10-31` (datas, inclusive, no horário de Brasília). Vale o que o formato `AAAA-MM-DD` escreve: do ano 0001 ao 9999. Data que não existe (`2026-02-30`), em outro formato ou com ano fora disso (`+300000-01-01`) dá 422 em `campos.de` ou `campos.ate` (`"Data inválida. Use o formato AAAA-MM-DD, por exemplo 2026-10-23."`). |
 
 **Quem pode chamar.** Cada rota abaixo diz um destes:
 
@@ -1835,14 +1835,14 @@ O custo de uma ida (e de um resumo) é o `usage.opencode.list_cost` que o OpenCo
 
 ## 50. `GET /api/atlas/diagnostico/turnos`  · Atlas M2
 
-**Quem chama:** Admin RBS, com `atlas.diagnostico.ligado`. O patrocinador recebe **403** (`"Esta operação é restrita à equipe da RBS."`) com qualquer filtro; o diagnóstico desligado dá 404 (`"Não encontramos o que você pediu."`).
+**Quem chama:** Admin RBS, com `atlas.diagnostico.ligado`. O patrocinador recebe **403** (`"Esta operação é restrita à equipe da RBS."`) com qualquer filtro; o diagnóstico desligado dá 404 (`"Não encontramos o que você pediu."`), **exceto** para `pagina` e `tamanho` inválidos, que a API confere antes de chegar à regra do diagnóstico: com o diagnóstico desligado, a RBS com `?tamanho=999` recebe 422, e não 404. Os filtros `de`, `ate` e `resultado` são conferidos depois, e aí o 404 vem primeiro.
 
 **Filtros (todos opcionais)**
 
 | Parâmetro | O que faz |
 | --- | --- |
 | `parceriaId` | Só os turnos desta parceria. Número; outro valor dá 400. |
-| `de`, `ate` | O dia (inclusive, no horário de Brasília) em que o turno **começou**: `2026-10-31`. Formato errado dá 422 em `campos.de` ou `campos.ate`; `ate` antes de `de` dá 422 em `campos.ate`. |
+| `de`, `ate` | O dia (inclusive, no horário de Brasília) em que o turno **começou**: `2026-10-31`. Formato errado, data que não existe ou ano fora de 0001 a 9999 (`+300000-01-01`) dá 422 em `campos.de` ou `campos.ate`; `ate` antes de `de` dá 422 em `campos.ate`. |
 | `resultado` | `OK`, `RECUSADO`, `ERRO`, `SOMBRA` ou `PULADO` (em maiúsculas ou minúsculas): o resultado do **turno** (o da etapa `SAIDA`). Outro valor dá 422 em `campos.resultado`. |
 | `pagina`, `tamanho` | Paginação do projeto: `pagina` de 0 em diante, `tamanho` de 1 a 200 (padrão 50); fora disso, 422. |
 

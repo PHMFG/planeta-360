@@ -21,7 +21,6 @@ import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
-import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -167,8 +166,8 @@ public class DiagnosticoService {
     /** [VALIDACAO] Data fora do formato AAAA-MM-DD, período invertido e resultado que não existe viram 422 com o campo. */
     private static FiltroDeTurnos filtro(Long parceriaId, String de, String ate, String resultado) {
         Map<String, String> campos = new LinkedHashMap<>();
-        LocalDate dia1 = data("de", de, campos);
-        LocalDate dia2 = data("ate", ate, campos);
+        LocalDate dia1 = Datas.diaDoFiltro("de", de, campos);
+        LocalDate dia2 = Datas.diaDoFiltro("ate", ate, campos);
         if (dia1 != null && dia2 != null && dia2.isBefore(dia1)) {
             campos.putIfAbsent("ate", "A data final não pode ser anterior à inicial.");
         }
@@ -183,17 +182,5 @@ public class DiagnosticoService {
         OffsetDateTime inicio = dia1 == null ? null : dia1.atStartOfDay(Datas.BRASILIA).toOffsetDateTime();
         OffsetDateTime fim = dia2 == null ? null : dia2.plusDays(1).atStartOfDay(Datas.BRASILIA).toOffsetDateTime();
         return new FiltroDeTurnos(parceriaId, inicio, fim, resultadoLimpo);
-    }
-
-    private static LocalDate data(String campo, String valor, Map<String, String> campos) {
-        if (valor == null || valor.isBlank()) {
-            return null;
-        }
-        try {
-            return LocalDate.parse(valor.trim());
-        } catch (DateTimeParseException invalida) {
-            campos.put(campo, "Data inválida. Use o formato AAAA-MM-DD, por exemplo 2026-10-23.");
-            return null;
-        }
     }
 }

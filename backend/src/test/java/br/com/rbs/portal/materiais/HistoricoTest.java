@@ -335,6 +335,30 @@ class HistoricoTest extends ApoioDeMateriais {
     }
 
     @Test
+    void dataMuitoDistanteDa422NosTresHistoricosEOsLimitesDoCalendarioPassam() {
+        SessaoDeApi amarelo = entrar(AMARELO);
+        SessaoDeApi rbs = entrar(RBS);
+        String daParceria = historicoDe(amarelo());
+
+        // antes, +300000-01-01 passava pelo LocalDate e estourava no banco (timestamptz acaba no ano 294276): 500
+        for (String campo : List.of("de", "ate")) {
+            for (String distante : List.of("+300000-01-01", "+294277-01-01", "+999999999-12-31", "10000-01-01", "-0001-01-01",
+                    "0000-12-31")) {
+                for (MvcTestResult resposta : List.of(amarelo.get(daParceria + "?" + campo + "={d}", distante),
+                        rbs.get("/api/historico?" + campo + "={d}", distante), rbs.get("/api/historico.csv?" + campo + "={d}", distante))) {
+                    assertThat(resposta).as(campo + "=" + distante).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
+                    assertThat(lerJson(resposta, "$.campos." + campo))
+                            .isEqualTo("Data inválida. Use o formato AAAA-MM-DD, por exemplo 2026-10-23.");
+                }
+            }
+        }
+        // o primeiro e o último dia que o formato AAAA-MM-DD escreve continuam valendo
+        assertThat(amarelo.get(daParceria + "?de=0001-01-01&ate=9999-12-31")).hasStatus(HttpStatus.OK);
+        assertThat(rbs.get("/api/historico?de=0001-01-01&ate=9999-12-31")).hasStatus(HttpStatus.OK);
+        assertThat(rbs.get("/api/historico.csv?de=0001-01-01&ate=9999-12-31")).hasStatus(HttpStatus.OK);
+    }
+
+    @Test
     void historicoGeralRecusaFiltroInvalidoCom422() {
         SessaoDeApi rbs = entrar(RBS);
 
