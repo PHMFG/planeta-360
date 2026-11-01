@@ -18,6 +18,7 @@ import br.com.rbs.portal.atlas.checagem.Frases;
 import br.com.rbs.portal.atlas.ferramentas.BuscarDocumentos;
 import br.com.rbs.portal.atlas.ferramentas.Calcular;
 import br.com.rbs.portal.atlas.ferramentas.ConsultarCota;
+import br.com.rbs.portal.atlas.ferramentas.ConsultarPrazos;
 import br.com.rbs.portal.atlas.ferramentas.ContarDias;
 import br.com.rbs.portal.atlas.ferramentas.Execucao;
 import br.com.rbs.portal.atlas.ferramentas.GerarModelo;
@@ -159,6 +160,7 @@ public class LoopDoAgente {
             Map.entry(BuscarDocumentos.NOME, "Buscando nos documentos do portal…"),
             Map.entry(ListarEntregas.NOME, "Consultando as entregas…"),
             Map.entry(ConsultarCota.NOME, "Consultando a cota…"),
+            Map.entry(ConsultarPrazos.NOME, "Consultando os prazos…"),
             Map.entry(ContarDias.NOME, "Contando os dias…"),
             Map.entry(Calcular.NOME, "Fazendo a conta…"),
             Map.entry(PedidoDeRelatorio.NOME, "Preparando a resposta…"),

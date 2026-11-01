@@ -3,6 +3,7 @@ package br.com.rbs.portal.atlas.ferramentas;
 import br.com.rbs.portal.comum.EntregasDaMarca;
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -57,6 +58,15 @@ public class RegistrosDoPortal {
 
     /** O documento do plano comercial que serve de origem ao previsto. */
     public record PlanoComercial(Long documentoId, String titulo, Integer versao) {
+    }
+
+    /**
+     * Um prazo que a ferramenta devolve: ou da tabela {@code prazo} (com o documento e a página de origem, se tiver) ou do prazo de
+     * uma entrega (com o nome da aba). {@code diasRestantes} é a diferença de datas calculada no banco, e {@code total} é quantas
+     * linhas a consulta teria sem o limite.
+     */
+    public record Prazo(String tipo, Long id, String titulo, LocalDate data, LocalTime hora, String descricao, Long documentoId,
+                        String documentoTitulo, Integer documentoVersao, Integer pagina, String abaNome, Integer diasRestantes, Long total) {
     }
 
     private final JdbcClient jdbc;
@@ -185,5 +195,46 @@ public class RegistrosDoPortal {
                         LIMIT 1
                         """.formatted(DOCUMENTO_VISIVEL))
                 .param("parceria", parceriaId).query(PlanoComercial.class).optional();
+    }
+
+    // ---------------------------------------------------------------------
+    // consultar_prazos
+    // ---------------------------------------------------------------------
+
+    /**
+     * Os prazos da parceria na janela, por data, hora e título: os da tabela {@code prazo} (da edição, da cota e da própria parceria,
+     * ativos, e com o documento de origem indexado e visível para ela, se tiverem) e o prazo das entregas de aba aberta que não estão
+     * aprovadas nem marcadas como não aplicáveis. {@code hoje} é o dia de Brasília do turno; {@code diasRestantes} é a data menos ele,
+     * em SQL. Vencido (antes de hoje) só com {@code incluirVencidos}. A revogação de um documento vale na hora: a leitura olha o
+     * status dele a cada chamada, sem cache.
+     */
+    public List<Prazo> prazos(long parceriaId, LocalDate hoje, int proximosDias, boolean incluirVencidos, int limite) {
+        return jdbc.sql("""
+                        WITH todos AS (
+                            SELECT 'prazo' AS tipo, pz.id, pz.titulo, pz.data, pz.hora, pz.descricao, d.id AS documento_id,
+                                   d.titulo AS documento_titulo, d.versao AS documento_versao, pz.pagina, NULL::text AS aba_nome
+                            FROM parceria p
+                            JOIN prazo pz ON pz.evento_id = p.evento_id AND pz.ativo
+                                 AND (pz.escopo = 'GLOBAL'
+                                      OR (pz.escopo = 'COTA' AND pz.cota_tipo_id = p.cota_tipo_id)
+                                      OR (pz.escopo = 'PARCERIA' AND pz.parceria_id = p.id))
+                            LEFT JOIN documento d ON d.id = pz.documento_id
+                            WHERE p.id = :parceria AND (pz.documento_id IS NULL OR (%s))
+                          UNION ALL
+                            SELECT 'entrega', e.id, e.titulo, e.prazo, NULL::time, left(e.descricao, 300), NULL::bigint, NULL::text,
+                                   NULL::int, NULL::int, a.nome
+                            FROM entrega e JOIN aba a ON a.id = e.aba_id
+                            WHERE e.parceria_id = :parceria AND e.prazo IS NOT NULL AND e.status NOT IN ('APROVADO', 'NAO_APLICAVEL')
+                              AND %s
+                        )
+                        SELECT tipo, id, titulo, data, hora, descricao, documento_id, documento_titulo, documento_versao, pagina, aba_nome,
+                               data - CAST(:hoje AS date) AS dias_restantes, count(*) OVER () AS total
+                        FROM todos
+                        WHERE data - CAST(:hoje AS date) <= :janela AND (CAST(:vencidos AS boolean) OR data >= CAST(:hoje AS date))
+                        ORDER BY data, hora NULLS LAST, titulo, tipo, id
+                        LIMIT :limite
+                        """.formatted(DOCUMENTO_VISIVEL, EntregasDaMarca.ABA_ABERTA))
+                .param("parceria", parceriaId).param("hoje", hoje).param("janela", proximosDias).param("vencidos", incluirVencidos)
+                .param("limite", limite).query(Prazo.class).list();
     }
 }
