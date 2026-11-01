@@ -6,7 +6,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import br.com.rbs.portal.atlas.loop.TetoDiario;
-import br.com.rbs.portal.atlas.loop.TetoDiario.Reserva;
+import br.com.rbs.portal.atlas.loop.VagasDoTeto.Reserva;
 import br.com.rbs.portal.comum.LimiteDeUsoException;
 import java.util.ArrayList;
 import java.util.List;
