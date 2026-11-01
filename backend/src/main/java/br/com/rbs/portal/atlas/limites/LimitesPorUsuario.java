@@ -21,7 +21,7 @@ import org.springframework.stereotype.Component;
  * já está no banco):
  * <ul>
  *   <li><b>Mensagens de texto por hora</b> ({@code atlas.limites.mensagens-por-hora}, padrão {@value #MENSAGENS_POR_HORA}): a rota
- *       44 com {@code texto}. A ficha volta aos poucos (uma a cada 3 minutos, com o padrão), então a espera nunca é a hora inteira.
+ *       44 com {@code texto}, na conversa da marca e na da RBS (o balde é da pessoa). A ficha volta aos poucos (uma a cada 3 minutos, com o padrão), então a espera nunca é a hora inteira.
  *       O botão "Montar relatório" (plano B) não conta, e a resposta do cartão (rota 46) não consome, mas acima do limite segue o
  *       plano B, sem 429, para a marca não ficar presa a um cartão aberto.</li>
  *   <li><b>Relatórios por dia pelo modelo</b> ({@code atlas.limites.relatorios-por-dia}, padrão {@value #RELATORIOS_POR_DIA}): o

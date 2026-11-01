@@ -660,8 +660,9 @@ public class AtlasService {
     /**
      * O turno da mensagem de texto na conversa da RBS (Atlas da RBS, M8). Ordem das respostas: 403 e 404 (a conversa, antes daqui),
      * 422 (atalho ou modelo, que a RBS não tem; texto vazio, com o caractere nulo ou acima de 1.000 caracteres), 503 (sem modelo de
-     * linguagem), 429 (o teto diário da pessoa, {@code atlas.rbs.teto-diario}) e 409 (turno em andamento). O contexto não tem parceria,
-     * nem cota, nem aba, nem JEV; o teto por parceria não se aplica.
+     * linguagem), 429 (o teto diário da pessoa, {@code atlas.rbs.teto-diario}, e depois o limite de mensagens por hora, o mesmo da marca)
+     * e 409 (turno em andamento; a ficha do limite por hora só é gasta depois dele). O contexto não tem parceria, nem cota, nem aba, nem
+     * JEV; o teto por parceria não se aplica.
      */
     private TurnoAberto abrirTurnoDaRbs(UsuarioAutenticado usuario, LinhaDeConversa conversa, MensagemRequisicao corpo,
                                         HttpServletRequest requisicao) {
@@ -696,10 +697,18 @@ public class AtlasService {
             traco.encerrar(ResultadoDaEtapa.RECUSADO, "RECUSADO_ANTES_DO_TURNO", "TETO_DIARIO");
             throw atingido;
         }
+        // 429: o limite de mensagens por hora da pessoa, o mesmo da marca. Só olha; a ficha é gasta depois do 409, ao começar o turno.
+        Optional<Duration> espera = limitesPorUsuario.esperaPelaMensagem(usuario.id());
+        if (espera.isPresent()) {
+            limites.dado("motivo", "LIMITE_POR_HORA").dado("esperaSegundos", (espera.get().toMillis() + 999) / 1000)
+                    .fim(ResultadoDaEtapa.RECUSADO);
+            traco.encerrar(ResultadoDaEtapa.RECUSADO, "RECUSADO_ANTES_DO_TURNO", "LIMITE_POR_HORA");
+            throw limitesPorUsuario.recusaDaMensagem(espera.get());
+        }
         String texto = corpo.texto().strip();
         AtlasContexto contexto = contextos.paraARbs(usuario, conversa.eventoId(), conversa.id(), requisicao).comTraco(traco);
-        return comecarTurno(usuario, conversa, traco, limites, null, null, () -> loop.prepararConversa(contexto, texto),
-                ouvinte -> loop.conduzir(contexto, ouvinte));
+        return comecarTurno(usuario, conversa, traco, limites, null, () -> limitesPorUsuario.consumirMensagem(usuario.id()),
+                () -> loop.prepararConversa(contexto, texto), ouvinte -> loop.conduzir(contexto, ouvinte));
     }
 
     /** Com o relatório desligado, o atalho e o modelo não existem: 422 em {@code campos.atalho}. */
