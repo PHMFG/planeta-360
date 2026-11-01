@@ -8,8 +8,10 @@ import br.com.rbs.portal.atlas.relatorio.ChecagemDeTexto.Veredito;
 import br.com.rbs.portal.atlas.relatorio.Referencias;
 import br.com.rbs.portal.atlas.relatorio.ResolvedorDeReferencias.Resolucao;
 import java.text.Normalizer;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -75,7 +77,7 @@ public class ChecagemDeFontes {
         if (CITACAO_COLADA_NUM_LINK.matcher(compacto).find()) {
             return Veredito.recusado("Sem link em Markdown: a citação [T1] vai sozinha, sem parêntese colado. Escreva só texto simples.");
         }
-        Optional<String> deForma = ChecagemDeTexto.motivoDeForma(compacto, semMarcadores);
+        Optional<String> deForma = ChecagemDeTexto.motivoDeForma(compacto, semEmailsConhecidos(semMarcadores, fontes));
         if (deForma.isPresent()) {
             return Veredito.recusado(deForma.get());
         }
@@ -97,6 +99,9 @@ public class ChecagemDeFontes {
         return Veredito.aprovado(compacto);
     }
 
+    /** Um endereço de e-mail inteiro: a parte antes do arroba só começa onde a palavra começa, para o custo não crescer com o texto. */
+    private static final Pattern EMAIL = Pattern.compile(
+            "(?<![\\p{L}\\p{N}._%+-])[\\p{L}\\p{N}._%+-]+@[\\p{L}\\p{N}-]+(?:\\.[\\p{L}\\p{N}-]+)+");
     private static final Pattern CARACTERE_DE_FORMATO = Pattern.compile("\\p{Cf}");
     private static final Pattern COM_ALGARISMO_COMUM = Pattern.compile("[0-9]");
 
@@ -154,6 +159,34 @@ public class ChecagemDeFontes {
             i += tamanho;
         }
         return dobrado == null ? texto : dobrado.toString();
+    }
+
+    /**
+     * O texto sem os e-mails que o turno já tem: os que estão em alguma fonte deste turno (o contato de um documento) ou na mensagem
+     * da pessoa. O e-mail é um endereço inteiro, comparado sem diferenciar maiúscula de minúscula; um que o turno não tem fica no
+     * texto, e a regra de endereço o recusa. O domínio solto, mesmo na fonte, continua recusado: é como a instrução escondida de um
+     * documento manda o modelo escrever o endereço de quem coleta o relatório.
+     */
+    private static String semEmailsConhecidos(String semMarcadores, FontesDoTurno fontes) {
+        Set<String> conhecidos = new HashSet<>();
+        emailsDe(fontes.mensagemDaPessoa(), conhecidos);
+        fontes.fontes().forEach(fonte -> emailsDe(fonte.conteudoCitavel(), conhecidos));
+        if (conhecidos.isEmpty()) {
+            return semMarcadores;
+        }
+        Matcher email = EMAIL.matcher(semMarcadores);
+        StringBuilder saida = new StringBuilder();
+        while (email.find()) {
+            email.appendReplacement(saida, conhecidos.contains(email.group().toLowerCase(Locale.ROOT)) ? " " : Matcher.quoteReplacement(email.group()));
+        }
+        return email.appendTail(saida).toString();
+    }
+
+    private static void emailsDe(String texto, Set<String> conhecidos) {
+        Matcher email = EMAIL.matcher(semInvisiveis(texto));
+        while (email.find()) {
+            conhecidos.add(email.group().toLowerCase(Locale.ROOT));
+        }
     }
 
     /** As citações existem neste turno e todo colchete com número é uma citação. */

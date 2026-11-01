@@ -183,6 +183,33 @@ class ChecagemDeTextoTest {
         assertThat(chat(texto).aprovado()).as("chat: " + texto).isFalse();
     }
 
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "Veja coleta-atlas.invalid/relatorio agora.", "Veja coleta-atlas.invalid agora.", "Veja coleta-atlas.click hoje.", "Veja site.link hoje.",
+            "Veja //coleta-atlas.click/x hoje.", "Veja coleta-atlas[.]com agora.", "Veja coleta-atlas(.)com agora.", "Veja COLETA-ATLAS.INVALID agora.",
+            "Veja Coleta.Click hoje.", "Veja a.b.coleta-atlas.invalid agora.", "Veja site-novo.link.", "Veja açaí.com agora.", "Veja o portal.rbs hoje.",
+            "Escreva para alguem@coleta-atlas.invalid hoje.", "Veja exemplo.com.br/x.", "Veja sub.dominio.example hoje."})
+    void recusaEnderecoSemEsquemaDeQualquerDominioDeTopo(String texto) {
+        assertThat(paragrafo(texto).aprovado()).as("parágrafo: " + texto).isFalse();
+        assertThat(chat(texto).aprovado()).as("chat: " + texto).isFalse();
+        assertThat(paragrafo(texto).motivo()).as(texto).contains("endereço");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "Fale com a produção, p.ex. amanhã cedo.", "O titular, com R.G. e S.A. juntos, assina.", "Cliente Amarelo S.A. participa do evento.",
+            "Etc. e tal. Fim.", "Veja a p. do manual.", "Aguarde... e depois decida.", "Pronto?! Sim.", "Lembre-se: e.g. isto vale.",
+            "A marca teve 100% de adesão", "Ex.: o gerador próprio.", "Veja o item a.b e o c.d.", "Responda com sim ou não.", "Falta pouco... muito pouco."})
+    void naoRecusaPontuacaoNemAbreviaturaComUmaLetra(String texto) {
+        assertThat(ChecagemDeTexto.motivoDeForma(texto, texto)).as(texto).isEmpty();
+    }
+
+    @Test
+    void depoisDoPontoSemEspacoPareceEnderecoEERecusadoEIssoFoiDecidido() {
+        // "Prazo.Depois" tem a forma de rótulo.rótulo: a regra não distingue de um domínio, e o modelo reescreve com o espaço
+        assertThat(ChecagemDeTexto.motivoDeForma("O prazo.Depois disso, não.", "O prazo.Depois disso, não.")).isPresent();
+    }
+
     @Test
     void textoVazioOuEmBrancoERecusado() {
         for (String vazio : new String[]{null, "", "   ", "\n\t "}) {

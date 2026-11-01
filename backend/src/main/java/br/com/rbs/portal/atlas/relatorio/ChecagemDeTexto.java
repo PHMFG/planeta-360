@@ -37,8 +37,17 @@ public class ChecagemDeTexto {
     private static final Pattern ALGARISMO = Pattern.compile("\\p{N}");
     private static final Pattern LINK_OU_IMAGEM_DO_MARKDOWN = Pattern.compile("!\\[|\\]\\s*\\(|^\\s*\\[[^\\]]*]:\\s*\\S", Pattern.MULTILINE);
     private static final Pattern URL = Pattern.compile("(?i)(?:\\b(?:https?|ftp|file|javascript|mailto)\\s*:|://|\\bdata:[a-z]+/|\\bwww\\.)");
+    /** O endereço sem esquema ({@code //coleta.click/x}) e o que esconde o ponto ({@code coleta-atlas[.]com}, {@code coleta-atlas(.)com}). */
+    private static final Pattern ENDERECO_ESCONDIDO = Pattern.compile("//[\\p{L}\\p{N}-]|\\[\\.\\]|\\(\\.\\)");
+    /**
+     * Qualquer {@code rótulo.rótulo}: dois rótulos de 2 ou mais caracteres, o último só de letras ({@code coleta-atlas.invalid},
+     * {@code site.link}, {@code exemplo.com.br}). Não há lista de domínios de topo, porque nenhuma cobre os que um documento pode
+     * mandar escrever. Não pega {@code 3.2}, {@code 1.250,00}, {@code 04/12/2026}, {@code v2.0}, {@code p.ex.}, {@code R.G.} nem
+     * {@code S.A.} (rótulo de uma letra, ou último rótulo com algarismo). Pega também {@code prazo.Depois}, a frase sem o espaço depois
+     * do ponto: a regra não distingue de um domínio, e o modelo reescreve com o espaço.
+     */
     private static final Pattern ENDERECO_SEM_ESQUEMA = Pattern.compile(
-            "(?i)\\b[a-z0-9][a-z0-9-]*(?:\\.[a-z0-9-]+)*\\.(?:com|org|net|edu|gov|io|dev|app|br|co|me|info|biz|xyz|ly|ai)\\b");
+            "(?<![\\p{L}\\p{N}_-])[\\p{L}\\p{N}][\\p{L}\\p{N}-]+\\.\\p{L}{2,}(?![\\p{L}\\p{N}_-])");
     /** Chave de referência escrita fora de marcador ({@code dado:ativacao.visitantes_total}) ou nome de ferramenta. */
     private static final Pattern CHAVE_INTERNA = Pattern.compile(
             "(?iU)\\b(?:parc|evento|cons|lista|dado|calc):[a-z_]+(?:\\.[a-z0-9_]+)*"
@@ -46,6 +55,7 @@ public class ChecagemDeTexto {
     /** Palavras do funcionamento interno que a marca não deve ler. */
     private static final Pattern TERMO_INTERNO = Pattern.compile(
             "(?iU)\\bmarcador(?:es)?\\b|\\btool(?:s|_calls?)?\\b|\\bcart[ãa]o de solicita[çc][ãa]o\\b");
+    private static final String SEM_ENDERECO = "Sem endereço de internet nem URL no texto.";
     private static final Pattern FIM_DE_FRASE = Pattern.compile("(?<=[.!?…])\\s+(?=\\S)");
 
     /** O resultado: aprovado, com o texto limpo (espaços normalizados), ou recusado, com o motivo. */
@@ -121,8 +131,8 @@ public class ChecagemDeTexto {
         if (LINK_OU_IMAGEM_DO_MARKDOWN.matcher(semMarcadores).find()) {
             return Optional.of("Sem link nem imagem em Markdown. Escreva só texto simples.");
         }
-        if (URL.matcher(semMarcadores).find() || ENDERECO_SEM_ESQUEMA.matcher(semMarcadores).find()) {
-            return Optional.of("Sem endereço de internet nem URL no texto.");
+        if (URL.matcher(semMarcadores).find() || ENDERECO_ESCONDIDO.matcher(semMarcadores).find()) {
+            return Optional.of(SEM_ENDERECO);
         }
         Matcher chave = CHAVE_INTERNA.matcher(semMarcadores);
         if (chave.find()) {
@@ -133,6 +143,10 @@ public class ChecagemDeTexto {
         if (termo.find()) {
             return Optional.of("O texto usa o termo interno \"" + termo.group() + "\". Não fale com a marca de marcador, "
                     + "referência, ferramenta nem cartão de solicitação: diga o que ela precisa saber com palavras simples.");
+        }
+        // por último: "cons:aplicacoes.comprovadas" também tem a forma rótulo.rótulo, e a recusa certa para ele é a de chave crua
+        if (ENDERECO_SEM_ESQUEMA.matcher(semMarcadores).find()) {
+            return Optional.of(SEM_ENDERECO);
         }
         return Optional.empty();
     }
