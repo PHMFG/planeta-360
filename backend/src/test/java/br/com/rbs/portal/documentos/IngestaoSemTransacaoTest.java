@@ -43,12 +43,14 @@ class IngestaoSemTransacaoTest extends ApoioDeDocumentos {
         final List<String> threads = new CopyOnWriteArrayList<>();
         volatile boolean falhar;
         volatile boolean vetorCurto;
+        volatile boolean estourarAPilha;
 
         void limpar() {
             transacaoAtiva.clear();
             threads.clear();
             falhar = false;
             vetorCurto = false;
+            estourarAPilha = false;
         }
 
         @Override
@@ -72,6 +74,9 @@ class IngestaoSemTransacaoTest extends ApoioDeDocumentos {
             threads.add(Thread.currentThread().getName());
             if (falhar) {
                 throw new EmbeddingsIndisponivelException("O Gemini respondeu 503: indisponível.");
+            }
+            if (estourarAPilha) {
+                throw new StackOverflowError();   // um Error, e não uma Exception: o catch (Exception) da ingestão não o pega
             }
             List<float[]> vetores = verdadeiro.paraTrechos(tituloDoDocumento, trechos);
             if (vetorCurto) {
@@ -216,6 +221,38 @@ class IngestaoSemTransacaoTest extends ApoioDeDocumentos {
         assertThat(statusDe(v2)).isEqualTo("INDEXADO");
         assertThat(statusDe(v1)).isEqualTo("SUBSTITUIDO");
         assertThat(contar("SELECT count(*) FROM documento_trecho WHERE documento_id = ? AND ativo", v1)).isZero();
+    }
+
+    @Test
+    void erroDoProvedorQueNaoEExcecaoTambemDeixaODocumentoEmErroEPodeSerReindexado() {
+        SessaoDeApi rbs = entrar(RBS);
+        long id = enviarEAprovar(rbs, "teste-erro-fatal");
+        embeddings.estourarAPilha = true;
+
+        acao(rbs, id, "APROVAR");
+
+        assertThat(statusDe(id)).as("um StackOverflowError não pode deixar o documento preso em PROCESSANDO").isEqualTo("ERRO");
+        assertThat(jdbc.sql("SELECT erro FROM documento WHERE id = :id").param("id", id).query(String.class).single())
+                .isEqualTo("Falha inesperada na indexação (StackOverflowError). Veja o log da API.");
+        assertThat(contar("SELECT count(*) FROM documento_trecho WHERE documento_id = ?", id)).isZero();
+        assertThat(contar("SELECT count(*) FROM historico WHERE entidade = 'documento' AND entidade_id = ? AND valor_novo = 'ERRO'", id)).isEqualTo(1);
+
+        // e a RBS reindexa, em vez de receber 409 até a API reiniciar
+        embeddings.estourarAPilha = false;
+        assertThat(acao(rbs, id, "REINDEXAR")).hasStatus(HttpStatus.OK);
+        assertThat(statusDe(id)).isEqualTo("INDEXADO");
+        assertThat(acao(rbs, id, "REVOGAR")).hasStatus(HttpStatus.OK);
+    }
+
+    @Test
+    void erroDoProvedorQueNaoEExcecaoNaoImpedeRecusarODocumento() {
+        SessaoDeApi rbs = entrar(RBS);
+        long id = enviarEAprovar(rbs, "teste-erro-fatal-recusa");
+        embeddings.estourarAPilha = true;
+        acao(rbs, id, "APROVAR");
+
+        assertThat(acao(rbs, id, "RECUSAR")).hasStatus(HttpStatus.OK);
+        assertThat(statusDe(id)).isEqualTo("RECUSADO");
     }
 
     @Test

@@ -1966,7 +1966,7 @@ envio de PDF sem texto, com senha ou corrompido -> nasce ERRO (sem aprovado_por)
 | `RECUSADO` | A RBS recusou. Final. |
 | `PROCESSANDO` | Aprovado; a indexação (extrair, dividir, embeddings, gravar os trechos) roda em segundo plano. Leva de poucos segundos a um minuto; a tela busca de novo ao voltar à aba do navegador. Se a API cair no meio, ele vira `ERRO` ("Processamento interrompido") na subida seguinte. |
 | `INDEXADO` | Os trechos estão no ar: a busca os enxerga. |
-| `ERRO` | A indexação falhou (ou o texto não pôde ser lido); `erro` diz o motivo. Se o documento já tinha sido aprovado, dá para `REINDEXAR`. |
+| `ERRO` | A indexação falhou (ou o texto não pôde ser lido); `erro` diz o motivo. Qualquer falha vira `ERRO`, também a inesperada, até um erro do próprio JVM (`"Falha inesperada na indexação (StackOverflowError). Veja o log da API."`): o documento nunca fica preso em `PROCESSANDO`. Se o documento já tinha sido aprovado, dá para `REINDEXAR`. |
 | `SUBSTITUIDO` | Uma versão mais nova do mesmo grupo foi indexada. Os trechos ficam, inativos. |
 | `REVOGADO` | A RBS tirou do ar. Vale na hora: os trechos se desligam na mesma transação, também para o que uma conversa já buscou. |
 

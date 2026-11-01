@@ -53,7 +53,9 @@ import org.springframework.transaction.support.TransactionTemplate;
  *   <li>inserir os trechos, inativos, e o resultado da ingestão (modelo, dimensões, tempos);</li>
  *   <li>{@code fn_publicar_documento}: a versão anterior vira SUBSTITUIDO e a nova INDEXADO, na mesma transação.</li>
  * </ol>
- * Erro em qualquer passo deixa o documento em ERRO com o motivo, sem trecho nenhum gravado (os inativos saem junto).
+ * Erro em qualquer passo deixa o documento em ERRO com o motivo, sem trecho nenhum gravado (os inativos saem junto). Isso vale para
+ * qualquer {@link Throwable}, também um {@code StackOverflowError} ou um {@code OutOfMemoryError} do provedor: sem isso o documento
+ * ficava preso em PROCESSANDO até a API reiniciar, e recusar, reindexar e revogar davam 409.
  *
  * <p>Com {@code atlas.ingestao.sincrona=true} (os testes e o kit), o callback do commit manda a tarefa ao <b>mesmo executor</b> e espera o
  * resultado. A ingestão nunca roda na thread do callback: ali a transação ainda consta como ativa, cada passo {@code REQUIRED} entraria
@@ -230,7 +232,7 @@ public class IngestaoService {
 
             // 5. Publicar: a versão anterior sai e esta entra, na mesma transação.
             transacao.executeWithoutResult(estado -> publicar(documento, trechos.size(), embeddingsMs));
-        } catch (Exception erro) {
+        } catch (Throwable erro) {
             marcarErro(documento, motivoDe(erro), erro);
         }
     }
@@ -248,7 +250,7 @@ public class IngestaoService {
         }
     }
 
-    private void marcarErro(ParaIngestao documento, String motivo, Exception erro) {
+    private void marcarErro(ParaIngestao documento, String motivo, Throwable erro) {
         log.warn("Atlas: a indexação do documento {} falhou: {}", documento.id(), motivo);
         if (!(erro instanceof FalhaDaIngestao) && !(erro instanceof ExtracaoFalhouException) && !(erro instanceof EmbeddingsIndisponivelException)) {
             log.error("Atlas: falha inesperada na indexação do documento {}", documento.id(), erro);
@@ -262,13 +264,13 @@ public class IngestaoService {
                             documento.id(), "PROCESSANDO", "ERRO", motivo, null);
                 }
             });
-        } catch (RuntimeException naoGravou) {
+        } catch (Throwable naoGravou) {
             log.error("Atlas: não consegui gravar o erro do documento {}", documento.id(), naoGravou);
         }
     }
 
     /** A frase do motivo: as que o Atlas já escreve valem como estão; o resto vira uma frase genérica (o detalhe fica no log). */
-    private static String motivoDe(Exception erro) {
+    private static String motivoDe(Throwable erro) {
         String motivo;
         if (erro instanceof FalhaDaIngestao || erro instanceof ExtracaoFalhouException || erro instanceof EmbeddingsIndisponivelException) {
             motivo = erro.getMessage();
