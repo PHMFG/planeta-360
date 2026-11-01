@@ -602,13 +602,17 @@ public class LoopDoAgente {
 
     /**
      * O pedido de uma nova redação do chat (o texto foi recusado). Não é fixo: diz o motivo e o que a regra do chat pede, que é o
-     * oposto de "sem nenhum algarismo": os números de documento vão copiados da fonte, com a citação na mesma frase.
+     * oposto de "sem nenhum algarismo": os números de documento vão copiados da fonte, com a citação na mesma frase. E pede para
+     * corrigir só o que foi apontado, mantendo o que tem fonte: numa rodada real, a conta do modelo foi recusada e ele trocou a
+     * resposta toda por "não encontrei", sumindo com o valor que estava no trecho. A frase de "não encontrei" fica só para quando
+     * nenhum trecho responde.
      */
     private static String pedidoDeNovaRedacao(String motivo) {
-        return "Sua resposta foi recusada pelo servidor: " + motivo + " Escreva a resposta de novo. Número e data de documento vão "
-                + "copiados exatamente como estão no trecho, com a citação [T#] na mesma frase; dado da parceria só com marcador "
-                + "{{ref}}; nada de termo interno, link ou endereço. Se os trechos não trazem a resposta, escreva exatamente \""
-                + FRASE_NAO_ENCONTREI + "\".";
+        return "Sua resposta foi recusada pelo servidor: " + motivo + " Escreva a resposta de novo. Corrija só o que foi apontado e "
+                + "mantenha o que tem fonte: o resto da resposta fica como estava, com a citação [T#] de cada fato. Número e data de "
+                + "documento vão copiados exatamente como estão no trecho, com a citação [T#] na mesma frase; dado da parceria só com "
+                + "marcador {{ref}}; nada de termo interno, link ou endereço. Escreva exatamente \"" + FRASE_NAO_ENCONTREI + "\" só se "
+                + "nenhum trecho responde à pergunta; se os trechos trazem a resposta, não troque a resposta por essa frase.";
     }
 
     /** O texto é, só, a frase de "não encontrei" (sem importar a caixa, os espaços nem o ponto final). */

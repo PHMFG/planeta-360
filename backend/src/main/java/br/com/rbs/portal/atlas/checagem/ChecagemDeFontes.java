@@ -238,7 +238,7 @@ public class ChecagemDeFontes {
                             : "A fonte que a frase cita (" + String.join(", ", citadas) + ") não traz esse valor.";
                     return Optional.of("O número ou a data \"" + numero.trecho().strip() + "\" na frase \"" + trecho + "\" não tem origem. "
                             + quemCita + " Copie números e datas exatamente como estão no trecho do documento e ponha a citação, "
-                            + "como [T1], na mesma frase; dado da parceria vai só com o marcador {{ref}}. Se os trechos não trazem a "
+                            + "como [T1], na mesma frase; dado da parceria vai só com o marcador {{ref}}. Só se nenhum trecho traz a "
                             + "resposta, escreva exatamente \"Não encontrei isso nos documentos do portal.\"");
                 }
             }

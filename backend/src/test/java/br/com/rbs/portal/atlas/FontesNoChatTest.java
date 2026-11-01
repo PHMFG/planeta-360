@@ -252,12 +252,37 @@ class FontesNoChatTest {
         assertThat(pedidoDeRedacao.papel()).isEqualTo("user");
         assertThat(pedidoDeRedacao.conteudo()).contains("recusada").contains(PRAZO).contains("[T#]").contains("Não encontrei isso nos documentos do portal.")
                 .doesNotContain("sem nenhum algarismo");
+        // e diz o que fazer: corrigir só o apontado, e a frase de "não encontrei" é só para quando nenhum trecho responde
+        assertThat(pedidoDeRedacao.conteudo()).contains("Corrija só o que foi apontado").contains("mantenha o que tem fonte")
+                .contains("só se nenhum trecho responde").contains("não troque a resposta por essa frase");
         List<Linha> checagens = todas(ultimoTurno(conversa), "CHECAGEM");
         assertThat(checagens).extracting(Linha::resultado).containsExactly("RECUSADO", "OK");
         assertThat((String) checagens.get(0).dados().get("motivo")).contains(PRAZO).contains("não cita nenhuma fonte");
         // o texto recusado não fica na conversa
         assertThat(jdbc.sql("SELECT count(*) FROM atlas_mensagem WHERE conversa_id = :c AND papel = 'assistant' AND conteudo = :t")
                 .param("c", conversa).param("t", frasePrazo(null)).query(Long.class).single()).isZero();
+    }
+
+    @Test
+    void contaRecusadaPedeParaCorrigirSoOApontadoESemTrocarARespostaPorNaoEncontrei() {
+        long conversa = abrir();
+        modelo.chamada(BUSCAR, busca("tarifa de energia por kVA"));
+        // a conta do modelo (3 x 312) é número sem origem; o trecho traz o valor unitário
+        escrever(pedido -> "Para 3 geradores, o total é R$ 936,00 [" + marcador(pedido, "R$ 312,00", true) + "].");
+        escrever(pedido -> "A tarifa é de R$ 312,00 [" + marcador(pedido, "R$ 312,00", true) + "]. O Atlas ainda não faz essa conta.");
+
+        ItemTexto texto = textoFinal(falar(conversa, "Vou levar 3 geradores, quanto pago?"));
+
+        PedidoAoLlm segundaRedacao = modelo.ultimoPedido();
+        MensagemDeChat pedidoDeRedacao = segundaRedacao.mensagens().get(segundaRedacao.mensagens().size() - 1);
+        assertThat(pedidoDeRedacao.papel()).isEqualTo("user");
+        assertThat(pedidoDeRedacao.conteudo()).contains("936").contains("Corrija só o que foi apontado")
+                .contains("mantenha o que tem fonte").contains("não troque a resposta por essa frase");
+        // a frase de "não encontrei" é só a saída para quando nenhum trecho responde, tanto no motivo quanto no pedido
+        assertThat(pedidoDeRedacao.conteudo()).contains("Só se nenhum trecho traz a resposta").contains("só se nenhum trecho responde");
+        assertThat(texto.texto()).startsWith("A tarifa é de R$ 312,00 [T").contains("ainda não faz essa conta");
+        assertThat(texto.fontes()).hasSize(1);
+        assertThat(texto.texto()).doesNotContain("Não encontrei");
     }
 
     @Test
