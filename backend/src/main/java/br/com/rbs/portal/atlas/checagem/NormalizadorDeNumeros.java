@@ -643,6 +643,15 @@ public final class NormalizadorDeNumeros {
         }
 
         /**
+         * A data da resposta montada em pedaços <b>só por esta origem</b>: o dia solto de um trecho mais o mês (e o ano) de uma data do
+         * mesmo trecho ({@link #adicionarFonteCitada}). É o que a checagem do chat usa, com uma origem por trecho citado na frase: os
+         * pedaços de trechos diferentes não se juntam. Os outros jeitos de uma data ter origem ({@link #aceita}) não mudam.
+         */
+        public boolean aceitaEmPedacos(Achado achado) {
+            return achado.ehData() && aceitaPeloDiaESoltoEPeloMes(achado);
+        }
+
+        /**
          * O número como <b>valor</b>: só vale se a origem o trouxe como número, e um número escrito solto no texto vale mesmo entre
          * 1900 e 2099 ({@code 10% de 2000}, {@code Diária | 1950}). Nunca pela regra do ano ({@code ano:2027} não faz {@code 2027}
          * valer como valor, nem o ano que está dentro de uma data, nem o da edição ou o de hoje), pelo dia solto depois de "dia" nem

@@ -759,6 +759,31 @@ class ChecagemDeFontesTest {
     }
 
     @Test
+    void osPedacosDeUmaDataTemDeVirDeUmaFonteSoMesmoCitandoDuas() {
+        // o dia solto (29 e 30) está só no T1; o mês (janeiro de 2027) está só no T2, numa data inteira que não é a do festival
+        String dias = "O festival acontece na sexta-feira, 29, e no sábado, 30.";
+        String laudo = "O laudo vai até 30/12/2026 e a vistoria é em 10/01/2027.";
+        FontesDoTurno separadas = turno("Quando é o festival?", dias, laudo);
+
+        recusa(separadas, "O laudo vai até 30/12/2026, e o festival é em 29 e 30 de janeiro [T1, T2].");
+        recusa(separadas, "O festival é em 29 e 30 de janeiro [T1, T2].");
+        recusa(separadas, "O festival é em 29 de janeiro de 2027 [T1, T2].");
+        recusa(separadas, "O festival é em 29/01 [T1, T2].");
+        recusa(separadas, "O festival é em 29 e 30 de janeiro [T2].");
+        // o que vale inteiro continua valendo pela união das fontes citadas
+        aprova(separadas, "O laudo vai até 30/12/2026 [T1, T2] e a vistoria é em 10/01/2027 [T2].");
+        aprova(separadas, "O festival é na sexta, 29 [T1], e a vistoria é em 10/01/2027 [T2].");
+        aprova(separadas, "O laudo vai até 30/12/2026 e a vistoria é em 10/01/2027 [T1, T2].");
+        aprova(separadas, "A vistoria é em 10 de janeiro de 2027, depois da sexta, 29 [T1, T2].");
+        // com os dois pedaços no mesmo trecho, a data é montada como antes, esteja o outro trecho citado ou não
+        FontesDoTurno juntas = turno("Quando é o festival?", laudo, MANUAL_DO_FESTIVAL);
+        aprova(juntas, "O festival é nos dias 29 e 30 de janeiro de 2027 [T2].");
+        aprova(juntas, "O festival é nos dias 29 e 30 de janeiro de 2027 [T1, T2].");
+        aprova(juntas, "O laudo vai até 30/12/2026, e o festival é em 29/01/2027 e 30/01/2027 [T1, T2].");
+        recusa(juntas, "O festival é nos dias 29 e 30 de janeiro de 2027 [T1].");
+    }
+
+    @Test
     void oDiaSozinhoCasaComODiaDeUmaDataDaFonteCitadaMasNaoDaMensagemDaPessoa() {
         // o 4, o 5 e o 2 já estão nos metadados da fonte (seção 4, página 5, versão 2): a data é de outro dia
         String entrega = "Entregue até 09/12/2026.";

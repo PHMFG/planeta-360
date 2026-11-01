@@ -9,6 +9,7 @@ import br.com.rbs.portal.atlas.relatorio.ChecagemDeTexto.Veredito;
 import br.com.rbs.portal.atlas.relatorio.Referencias;
 import br.com.rbs.portal.atlas.relatorio.ResolvedorDeReferencias.Resolucao;
 import java.text.Normalizer;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -188,7 +189,9 @@ public class ChecagemDeFontes {
      * Todo número ou data de cada frase tem origem: fonte citada na frase, conta do turno, mensagem da pessoa, edição ou hoje. Uma
      * data sem ano só libera, na resposta, o ano da edição, o anterior a ela ou o de hoje; e se a fonte citada na frase diz esse dia
      * COM ano, vale o ano dela, mesmo que a pessoa tenha escrito a data sem ano. O ano da edição e o de hoje valem como ano, e nunca
-     * como valor ({@code R$ 2.027,00}, {@code 2026 credenciais}).
+     * como valor ({@code R$ 2.027,00}, {@code 2026 credenciais}). O valor inteiro, a data inteira e os metadados valem pela união das
+     * fontes citadas na frase; a data montada em <b>pedaços</b> (o dia solto de um trecho mais o mês de uma data) tem de vir de um
+     * trecho só: o dia de "sábado, 30" no T1 não faz "30 de janeiro" com o mês de uma data do T2.
      */
     private static Optional<String> motivoDeNumero(FontesDoTurno fontes, String texto) {
         int edicao = fontes.anoDaEdicao();
@@ -201,17 +204,18 @@ public class ChecagemDeFontes {
         for (String frase : Frases.dividir(NormalizadorDeNumeros.semNumeracaoDeLista(texto))) {
             Set<String> citadas = new LinkedHashSet<>(Frases.citacoes(frase));
             Origens daFrase = new Origens().anosAceitos(anosAceitos);
+            List<Origens> emPedacos = new ArrayList<>();
             for (String marcador : citadas) {
-                // os metadados valem como estão escritos (página 5); só o texto de um trecho de documento diz o dia solto e a data em
-                // pedaços (a tabela e a prosa dizem "sexta, 29, e sábado, 30 de janeiro"). Registro do portal e conta valem pelo que
-                // dizem por inteiro: "até 30 segundos" e "atualizada em 27/10/2026" não fazem 30/10/2026, e "contei 10 dias" ao lado
-                // de 03/11/2026 não faz 10/11/2026. O dia de uma data que o registro ou a conta traz inteira vale como "dia 4"
+                // os metadados e o texto de cada fonte valem pelo que dizem por inteiro, somados entre as fontes citadas: "até 30
+                // segundos" e "atualizada em 27/10/2026" não fazem 30/10/2026, e "contei 10 dias" ao lado de 03/11/2026 não faz
+                // 10/11/2026. O dia de uma data que a fonte traz inteira vale como "dia 4". O dia solto e a data em pedaços (a tabela e
+                // a prosa dizem "sexta, 29, e sábado, 30 de janeiro") só existem em trecho de documento, e cada trecho vale por si:
+                // o dia de um e o mês de outro não se juntam
                 fontes.fonte(marcador).ifPresent(fonte -> {
                     daFrase.adicionar(fonte.metadados());
+                    daFrase.adicionarRegistro(fonte.texto());
                     if (fonte.tipo() == Tipo.TRECHO) {
-                        daFrase.adicionarFonteCitada(fonte.texto());
-                    } else {
-                        daFrase.adicionarRegistro(fonte.texto());
+                        emPedacos.add(new Origens().adicionarFonteCitada(fonte.texto()).anosAceitos(anosAceitos));
                     }
                 });
             }
@@ -221,7 +225,8 @@ public class ChecagemDeFontes {
                 // A fonte citada disse o ano desta data: vale o que ela disse, mesmo que a pessoa tenha escrito a data sem ano.
                 boolean fonteDisseOAno = numero.ano() != null && daFrase.trazDataComAno(numero.dia());
                 boolean temOrigem = daPessoa.temDataExata(numero)
-                        || (fonteDisseOAno ? daFrase.aceita(numero) : geral.aceita(numero) || daFrase.aceita(numero));
+                        || (fonteDisseOAno ? daFrase.aceita(numero) : geral.aceita(numero) || daFrase.aceita(numero))
+                        || emPedacos.stream().anyMatch(origem -> origem.aceitaEmPedacos(numero));
                 if (!temOrigem) {
                     String trecho = frase.length() > TAMANHO_DO_TRECHO_NA_RECUSA ? frase.substring(0, TAMANHO_DO_TRECHO_NA_RECUSA) + "…"
                             : frase;
