@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import br.com.rbs.portal.atlas.checagem.FontesDoTurno;
 import br.com.rbs.portal.atlas.checagem.FontesDoTurno.Fonte;
 import br.com.rbs.portal.atlas.contexto.AtlasContexto;
+import br.com.rbs.portal.atlas.ferramentas.ConsultarCota;
 import br.com.rbs.portal.comum.DadosInvalidosException;
 import java.util.List;
 import java.util.Map;
@@ -132,9 +133,54 @@ class ConsultarCotaTest extends ApoioDasConsultas {
         assertThat(turno.fonte((String) camarote.get("marcador")).orElseThrow().texto()).contains("40", "Camarote", "sexta");
         List<Map<String, Object>> credenciais = registrosDoTipo(resultado, "credencial");
         assertThat(credenciais).hasSize(6);
-        Map<String, Object> agencia = credenciais.stream().filter(c -> "ARENA".equals(c.get("setor")) && "AGENCIA".equals(c.get("beneficiario"))).findFirst().orElseThrow();
+        Map<String, Object> agencia = credenciais.stream().filter(c -> "ARENA".equals(c.get("setor")) && "Agência".equals(c.get("beneficiario"))).findFirst().orElseThrow();
         assertThat(agencia).containsEntry("quantidadePorDia", 60);
         assertThat(turno.fonte((String) agencia.get("marcador")).orElseThrow().texto()).contains("60", "Arena", "agência");
+    }
+
+    @Test
+    void acessoEBeneficiarioSaemEmPalavrasEOGeralSaiSemOCampo() {
+        long roxo = parceria("Cliente Roxo");
+        AtlasContexto contexto = contexto(ROXO, "Cliente Roxo");
+        jdbc.sql("UPDATE cortesia_cota SET acesso = 'P6 ou P4; shuttle via P4' WHERE parceria_id = :p AND setor = 'CAMAROTE' AND dia = 'SEXTA'")
+                .param("p", roxo).update();
+        FontesDoTurno turno = turno();
+
+        Map<String, Object> resultado = resultado(contexto, turno, COTA, "{}");
+
+        List<Map<String, Object>> cortesias = registrosDoTipo(resultado, "cortesia");
+        Map<String, Object> arena = cortesias.stream().filter(c -> "ARENA".equals(c.get("setor")) && "SEXTA".equals(c.get("dia"))).findFirst().orElseThrow();
+        Map<String, Object> camarote = cortesias.stream().filter(c -> "CAMAROTE".equals(c.get("setor")) && "SEXTA".equals(c.get("dia"))).findFirst().orElseThrow();
+        assertThat(arena).containsEntry("acesso", "Portão 6");
+        assertThat(camarote).containsEntry("acesso", "Portão 6 ou Portão 4; shuttle via Portão 4");
+        assertThat(turno.fonte((String) camarote.get("marcador")).orElseThrow().texto()).contains("Acesso: Portão 6 ou Portão 4; shuttle via Portão 4")
+                .doesNotContain("P6", "P4");
+        // a Roxo tem credencial GERAL na Arena: não há palavra certa na tela, e o campo sai
+        Map<String, Object> geral = registrosDoTipo(resultado, "credencial").stream().filter(c -> "ARENA".equals(c.get("setor"))).findFirst().orElseThrow();
+        assertThat(geral).containsEntry("quantidadePorDia", 5).doesNotContainKey("beneficiario");
+        String texto = turno.fonte((String) geral.get("marcador")).orElseThrow().texto();
+        assertThat(texto).contains("5", "Arena").doesNotContain("GERAL", "geral");
+        // o JSON todo não leva o código cru
+        String json = AtlasJson.escrever(resultado);
+        assertThat(json).doesNotContain("\"P6\"", "\"P4\"", "\"GERAL\"", "\"AGENCIA\"", "\"MARCA\"", "EQUIPE_CONTEUDO");
+    }
+
+    @Test
+    void osBeneficiariosDoAmareloVemComoATelaOsEscreve() {
+        List<Map<String, Object>> credenciais = registrosDoTipo(resultado(contexto(AMARELO, "Cliente Amarelo"), turno(), COTA, "{}"), "credencial");
+
+        assertThat(credenciais).extracting(c -> c.get("beneficiario")).containsOnly("Marca", "Agência", "Equipe de conteúdo");
+    }
+
+    @Test
+    void oAcessoAbreviadoViraPortaoSemInventarOutroPortao() {
+        assertThat(ConsultarCota.acessoEmPalavras("P6")).isEqualTo("Portão 6");
+        assertThat(ConsultarCota.acessoEmPalavras("P4")).isEqualTo("Portão 4");
+        assertThat(ConsultarCota.acessoEmPalavras("P6 ou P4; shuttle via P4")).isEqualTo("Portão 6 ou Portão 4; shuttle via Portão 4");
+        assertThat(ConsultarCota.acessoEmPalavras("Portão 6 ou 4; shuttle via portão 4")).isEqualTo("Portão 6 ou 4; shuttle via portão 4");
+        assertThat(ConsultarCota.acessoEmPalavras("Entrada lateral")).isEqualTo("Entrada lateral");
+        assertThat(ConsultarCota.acessoEmPalavras("P2P e AP6")).as("só P e algarismo, como palavra").isEqualTo("P2P e AP6");
+        assertThat(ConsultarCota.acessoEmPalavras(null)).isNull();
     }
 
     @Test

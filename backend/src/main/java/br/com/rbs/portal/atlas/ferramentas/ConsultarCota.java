@@ -61,8 +61,16 @@ public class ConsultarCota implements Ferramenta {
     private static final Map<String, String> SETORES = Map.of("ARENA", "Arena", "CAMAROTE", "Camarote", "LOUNGE", "Lounge",
             "PREMIUM", "Premium", "BAIXO_CAMAROTE", "Baixo camarote", "SALA_IMPRENSA", "Sala de imprensa", "SALA_CONTEUDO", "Sala de conteúdo");
     private static final Map<String, String> DIAS = Map.of("SEXTA", "sexta-feira", "SABADO", "sábado", "PASSAPORTE", "passaporte (os dois dias)");
+    /**
+     * O beneficiário da credencial como o texto o diz ("para a marca") e como a tela o escreve ({@code RelatorioParceria.tsx}:
+     * "Marca", "Agência", "Equipe de conteúdo"). {@code GERAL} não tem palavra na tela e não entra: o campo sai, em vez de levar o código.
+     */
     private static final Map<String, String> BENEFICIARIOS = Map.of("MARCA", "marca", "AGENCIA", "agência",
-            "EQUIPE_CONTEUDO", "equipe de conteúdo", "GERAL", "geral");
+            "EQUIPE_CONTEUDO", "equipe de conteúdo");
+    private static final Map<String, String> BENEFICIARIOS_NA_TELA = Map.of("MARCA", "Marca", "AGENCIA", "Agência",
+            "EQUIPE_CONTEUDO", "Equipe de conteúdo");
+    /** "P6" e "P4" são o Portão 6 e o Portão 4 escritos em abreviatura; só a abreviatura vira palavra, sem inventar portão. */
+    private static final java.util.regex.Pattern PORTAO_ABREVIADO = java.util.regex.Pattern.compile("\\bP(\\d{1,2})\\b");
     private static final Map<String, String> TIPOS_DE_MIDIA = Map.of("ASSINADA", "assinada", "PROPRIA", "própria", "MERCHANDISING",
             "merchandising", "BRANDED", "branded", "CONTEUDO_DE_MARCA", "conteúdo de marca");
 
@@ -231,7 +239,8 @@ public class ConsultarCota implements Ferramenta {
         String dia = DIAS.getOrDefault(c.dia(), c.dia());
         StringBuilder texto = new StringBuilder("Cota de cortesias: ").append(c.quantidade()).append(" no setor ").append(setor).append(", ")
                 .append(dia).append(c.comShuttle() ? ", com shuttle" : ", sem shuttle").append('.');
-        acrescentar(texto, "Acesso", c.acesso());
+        String acesso = acessoEmPalavras(c.acesso());
+        acrescentar(texto, "Acesso", acesso);
         Fonte fonte = turno.registrarRegistro("cortesia_cota", c.id(), "Cortesias · " + setor + " · " + dia, "Cortesias", texto.toString(), Map.of());
         Map<String, Object> registro = new LinkedHashMap<>();
         registro.put("marcador", fonte.marcador());
@@ -240,23 +249,31 @@ public class ConsultarCota implements Ferramenta {
         registro.put("dia", c.dia());
         registro.put("quantidade", c.quantidade());
         registro.put("comShuttle", c.comShuttle());
-        poeSeHouver(registro, "acesso", c.acesso());
+        poeSeHouver(registro, "acesso", acesso);
         return registro;
     }
 
     private static Map<String, Object> daCredencial(FontesDoTurno turno, Credencial c) {
         String setor = SETORES.getOrDefault(c.setor(), c.setor());
-        String beneficiario = BENEFICIARIOS.getOrDefault(c.beneficiario(), c.beneficiario());
-        String texto = "Credenciais por dia: " + c.quantidadePorDia() + " para a " + beneficiario + " no setor " + setor + ".";
-        Fonte fonte = turno.registrarRegistro("credencial_cota", c.id(), "Credenciais · " + setor + " · " + beneficiario, "Credenciamento", texto,
-                Map.of());
+        String beneficiario = BENEFICIARIOS.get(c.beneficiario());   // nulo no GERAL: não há palavra certa, e o campo sai
+        String texto = "Credenciais por dia: " + c.quantidadePorDia() + (beneficiario == null ? "" : " para a " + beneficiario) + " no setor "
+                + setor + ".";
+        Fonte fonte = turno.registrarRegistro("credencial_cota", c.id(), "Credenciais · " + setor + (beneficiario == null ? "" : " · " + beneficiario),
+                "Credenciamento", texto, Map.of());
         Map<String, Object> registro = new LinkedHashMap<>();
         registro.put("marcador", fonte.marcador());
         registro.put("tipo", "credencial");
         registro.put("setor", c.setor());
-        registro.put("beneficiario", c.beneficiario());
+        if (beneficiario != null) {
+            registro.put("beneficiario", BENEFICIARIOS_NA_TELA.get(c.beneficiario()));
+        }
         registro.put("quantidadePorDia", c.quantidadePorDia());
         return registro;
+    }
+
+    /** O acesso como o modelo o lê: a abreviatura {@code P6} vira "Portão 6"; o resto do texto fica como o cadastro o escreveu. */
+    public static String acessoEmPalavras(String acesso) {
+        return acesso == null ? null : PORTAO_ABREVIADO.matcher(acesso).replaceAll("Portão $1");
     }
 
     private static void acrescentar(StringBuilder texto, String rotulo, String valor) {

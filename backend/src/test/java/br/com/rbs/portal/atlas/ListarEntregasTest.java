@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import br.com.rbs.portal.atlas.checagem.FontesDoTurno;
 import br.com.rbs.portal.atlas.contexto.AtlasContexto;
+import br.com.rbs.portal.atlas.ferramentas.ListarEntregas;
 import br.com.rbs.portal.comum.DadosInvalidosException;
 import java.time.LocalDate;
 import java.util.List;
@@ -83,12 +84,50 @@ class ListarEntregasTest extends ApoioDasConsultas {
     }
 
     @Test
+    void pendenteEOAtalhoDeTudoQueNaoEstaAprovadoNemENaoAplicavel() {
+        long amarelo = parceria("Cliente Amarelo");
+        jdbc.sql("DELETE FROM entrega WHERE parceria_id = :p").param("p", amarelo).update();
+        entrega(amarelo, "MIDIA", "A aguardando", "AGUARDANDO_ENVIO", LocalDate.of(2026, 11, 10));
+        entrega(amarelo, "MIDIA", "B enviada", "ENVIADO", LocalDate.of(2026, 11, 11));
+        entrega(amarelo, "MIDIA", "C em análise", "EM_ANALISE", null);
+        entrega(amarelo, "MIDIA", "D aprovada", "APROVADO", null);
+        entrega(amarelo, "MIDIA", "E não aplicável", "NAO_APLICAVEL", null);
+        entrega(amarelo, "APLICACOES", "F ajuste", "AJUSTE_SOLICITADO", LocalDate.of(2026, 11, 12));
+        entrega(amarelo, "APLICACOES", "G não iniciada", "NAO_INICIADO", null);
+        entrega(amarelo, "APLICACOES", "H aprovada", "APROVADO", null);
+        AtlasContexto contexto = contexto(AMARELO, "Cliente Amarelo");
+        FontesDoTurno turno = turno();
+
+        Map<String, Object> pendentes = resultado(contexto, turno, LISTAR, "{\"status\":\"PENDENTE\"}");
+
+        assertThat(registros(pendentes)).extracting(r -> r.get("titulo")).containsExactly("A aguardando", "B enviada", "F ajuste", "G não iniciada",
+                "C em análise");
+        assertThat(registros(pendentes)).extracting(r -> r.get("status")).doesNotContain("APROVADO", "NAO_APLICAVEL");
+        assertThat(turno.numerosLivres()).as("a contagem vale como número").contains("5");
+        // com a aba, só as pendentes dela; o status exato continua como antes
+        assertThat(registros(resultado(contexto, turno(), LISTAR, "{\"status\":\"PENDENTE\",\"aba\":\"APLICACOES\"}")))
+                .extracting(r -> r.get("titulo")).containsExactly("F ajuste", "G não iniciada");
+        assertThat(registros(resultado(contexto, turno(), LISTAR, "{\"status\":\"APROVADO\"}"))).extracting(r -> r.get("titulo"))
+                .containsExactly("H aprovada", "D aprovada");
+        // a aba fechada continua sem entrega, também com o atalho
+        fecharAba(amarelo, "APLICACOES");
+        assertThat(registros(resultado(contexto, turno(), LISTAR, "{\"status\":\"PENDENTE\"}"))).extracting(r -> r.get("titulo"))
+                .containsExactly("A aguardando", "B enviada", "C em análise");
+        // a definição da ferramenta diz o que PENDENTE quer dizer
+        assertThat(ferramentaDefinicao()).contains("PENDENTE").contains("nem aprovad");
+    }
+
+    private String ferramentaDefinicao() {
+        return new ListarEntregas(null, null).definicao().esquema() + " " + new ListarEntregas(null, null).definicao().descricao();
+    }
+
+    @Test
     void statusEAbaInvalidosViramErroQueListaOsValidos() {
         AtlasContexto contexto = contexto(AMARELO, "Cliente Amarelo");
 
-        assertThatThrownBy(() -> chamar(contexto, turno(), LISTAR, "{\"status\":\"PENDENTE\"}")).isInstanceOf(DadosInvalidosException.class)
+        assertThatThrownBy(() -> chamar(contexto, turno(), LISTAR, "{\"status\":\"ATRASADO\"}")).isInstanceOf(DadosInvalidosException.class)
                 .satisfies(erro -> assertThat(((DadosInvalidosException) erro).campos().get("status")).contains("NAO_INICIADO",
-                        "AGUARDANDO_ENVIO", "ENVIADO", "EM_ANALISE", "AJUSTE_SOLICITADO", "APROVADO", "NAO_APLICAVEL"));
+                        "AGUARDANDO_ENVIO", "ENVIADO", "EM_ANALISE", "AJUSTE_SOLICITADO", "APROVADO", "NAO_APLICAVEL", "PENDENTE"));
         assertThatThrownBy(() -> chamar(contexto, turno(), LISTAR, "{\"aba\":\"FINANCEIRO\"}")).isInstanceOf(DadosInvalidosException.class)
                 .satisfies(erro -> assertThat(((DadosInvalidosException) erro).campos().get("aba")).contains("PERFIL", "APLICACOES", "MIDIA",
                         "CORTESIAS", "CREDENCIAMENTO", "PESQUISA", "CONTRATO"));

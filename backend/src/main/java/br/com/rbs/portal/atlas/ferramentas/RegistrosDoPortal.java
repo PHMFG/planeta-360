@@ -101,14 +101,16 @@ public class RegistrosDoPortal {
     private static final String ENTREGAS_DA_MARCA = """
             FROM entrega e JOIN aba a ON a.id = e.aba_id
             WHERE e.parceria_id = :parceria AND %s
-              AND (CAST(:status AS text) IS NULL OR e.status = :status)
+              AND (CAST(:status AS text) IS NULL OR e.status = CAST(:status AS text)
+                   OR (CAST(:status AS text) = 'PENDENTE' AND e.status NOT IN ('APROVADO', 'NAO_APLICAVEL')))
               AND (CAST(:aba AS text) IS NULL OR a.codigo = :aba)
             """.formatted(EntregasDaMarca.ABA_ABERTA);
 
     /**
      * As entregas da parceria em aba aberta, as pendentes (nem aprovadas nem não aplicáveis) primeiro e pelo prazo mais próximo (sem
      * prazo por último), depois a ordem das abas. {@code status} e {@code aba} são filtros opcionais. O recado da RBS é o da última
-     * mudança de status feita por ela que tinha texto (o mesmo que a tela da entrega mostra).
+     * mudança de status feita por ela que tinha texto (o mesmo que a tela da entrega mostra). {@code status} é um dos sete do portal
+     * ou {@code PENDENTE}, o atalho de tudo o que não está aprovado nem é não aplicável.
      */
     public List<Entrega> entregas(long parceriaId, String status, String aba, int limite) {
         return jdbc.sql("""
