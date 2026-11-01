@@ -91,8 +91,11 @@ public class HistoricoDaConversa {
     /** A frase que toma o lugar do texto de um resultado de busca de um turno anterior. */
     public static final String AVISO_DO_RESULTADO_ANTIGO = "resultado de um turno anterior; busque de novo para citar";
 
-    /** As ferramentas cujo resultado traz texto de documento: de turno anterior, vão ao modelo sem o texto. */
-    private static final Set<String> FERRAMENTAS_COM_TEXTO_DE_DOCUMENTO = Set.of("buscar_documentos");
+    /**
+     * As ferramentas cujo resultado traz texto de documento: de turno anterior, vão ao modelo sem o texto. A busca traz os trechos; os
+     * prazos (M5) trazem o título e a descrição que a RBS escreveu a partir de um documento, e a data dele.
+     */
+    private static final Set<String> FERRAMENTAS_COM_TEXTO_DE_DOCUMENTO = Set.of("buscar_documentos", "consultar_prazos");
 
     /**
      * O histórico para mandar ao modelo, na ordem em que aconteceu: a mensagem da pessoa, a do assistente (com os pedidos de
@@ -101,8 +104,8 @@ public class HistoricoDaConversa {
      * (um turno que caiu no meio), esta remontagem completa a conta com um erro, só na memória; o cartão que espera a resposta
      * não passa por aqui, porque o loop não chama o modelo enquanto há cartão aberto.
      * <p>
-     * [ISOLAMENTO] <b>O resultado de uma busca nos documentos de um turno anterior vai sem o texto</b> ({@code ordem} até
-     * {@code ordemDoTurno}): só o documento e a versão, e a frase "resultado de um turno anterior; busque de novo para citar". Sem
+     * [ISOLAMENTO] <b>O resultado de uma busca nos documentos, ou de uma consulta de prazos, de um turno anterior vai sem o texto</b>
+     * ({@code ordem} até {@code ordemDoTurno}): só o documento e a versão, e a frase "resultado de um turno anterior; busque de novo para citar". Sem
      * isso, um documento revogado ou uma versão substituída continuariam disponíveis ao modelo ("o que dizia aquela circular?"
      * teria resposta sem nova busca, e uma frase sem número e sem citação passaria pela checagem). O que foi gravado em
      * {@code atlas_tool_call} e {@code atlas_fonte} fica como estava: aqui só muda o que vai ao modelo. O que o assistente já escreveu
@@ -141,8 +144,9 @@ public class HistoricoDaConversa {
     }
 
     /**
-     * O resultado de uma busca sem o texto dos trechos: só os documentos (título e versão, sem repetir) e o aviso. Um erro de
-     * ferramenta ({@code {"erro": ...}}) não tem texto de documento e segue como está.
+     * O resultado de uma busca ({@code trechos}) ou de uma consulta de prazos ({@code registros}) sem o texto: só os documentos (título
+     * e versão, sem repetir) e o aviso. Num registro, o documento está em {@code origem}; o prazo de uma entrega ou sem origem não tem
+     * documento a dizer. Um erro de ferramenta ({@code {"erro": ...}}) não tem texto de documento e segue como está.
      */
     static String semOTextoDosDocumentos(String conteudoJson) {
         Map<String, Object> resultado;
@@ -160,6 +164,13 @@ public class HistoricoDaConversa {
             for (Object trecho : trechos) {
                 if (trecho instanceof Map<?, ?> mapa) {
                     vistos.add(java.util.Arrays.asList(mapa.get("documento"), mapa.get("versao")));
+                }
+            }
+        }
+        if (resultado != null && resultado.get("registros") instanceof List<?> registros) {
+            for (Object registro : registros) {
+                if (registro instanceof Map<?, ?> mapa && mapa.get("origem") instanceof Map<?, ?> origem && origem.get("documento") != null) {
+                    vistos.add(java.util.Arrays.asList(origem.get("documento"), origem.get("versao")));
                 }
             }
         }
