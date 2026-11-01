@@ -15,7 +15,7 @@ import java.util.Map;
  * conversa) e, com um relatório em montagem, a linha de {@code atlas_calculo}. Aqui está o formato dela em {@code dados} (JSON) e o
  * que ela é para a resolução: o valor de {@code {{calc:nome}}} e de {@code calc:nome} como variável de outra conta.
  *
- * @param nome           o nome da conta ({@code [a-z_]{1,60}}); a referência é {@code calc:<nome>}
+ * @param nome           o nome da conta ({@code [a-z][a-z0-9_]{0,59}}); a referência é {@code calc:<nome>}
  * @param valor          o resultado, arredondado em duas casas
  * @param valorFormatado o resultado como a tela mostra (padrão do portal; com o formato moeda, sempre duas casas e sem o símbolo)
  * @param script         a conta como o modelo a escreveu

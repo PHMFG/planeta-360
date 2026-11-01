@@ -461,13 +461,28 @@ class CalcularTest {
         AtlasContexto contexto = contexto();
         FontesDoTurno turno = turno();
 
-        for (String nome : List.of("Tarifa", "tarifa-2", "tarifa2", "", " ", "a".repeat(61), "preço", "taxa_cadastro", "brindes_pct")) {
+        for (String nome : List.of("Tarifa", "tarifa-2", "20kva", "_tarifa", "", " ", "a".repeat(61), "preço", "taxa_cadastro", "brindes_pct")) {
             assertThat(erro(contexto, turno, tarifa(nome, null))).as(nome).isNotBlank();
         }
         rodar(contexto, turno, tarifa("tarifa", null));
         assertThat(erro(contexto, turno, tarifa("tarifa", null))).contains("tarifa");
         assertThat(turno.contas()).hasSize(1);
         assertThat(rodar(contexto, turno, tarifa("outra", null))).containsEntry("marcador", "C2");
+    }
+
+    @Test
+    void nomeDeContaPodeTerAlgarismoDepoisDaPrimeiraLetra() {
+        AtlasContexto contexto = contexto();
+        FontesDoTurno turno = turno();
+
+        assertThat(rodar(contexto, turno, tarifa("energia_20kva", null))).containsEntry("marcador", "C1").containsEntry("ref", "calc:energia_20kva");
+        assertThat(rodar(contexto, turno, tarifa("tarifa2", null))).containsEntry("marcador", "C2").containsEntry("ref", "calc:tarifa2");
+        // e o nome com algarismo não faz o algarismo valer como número da resposta
+        assertThat(turno.fonte("C1").orElseThrow().conteudoCitavel()).doesNotContain("20");
+        assertThat(turno.fonte("C2").orElseThrow().conteudoCitavel()).doesNotContain("tarifa2");
+        // uma conta de nome com algarismo entra em outra
+        assertThat(rodar(contexto, turno, "{\"nome\":\"dobro2\",\"script\":\"t * 2\",\"variaveis\":{\"t\":{\"ref\":\"calc:energia_20kva\"}}}"))
+                .containsEntry("marcador", "C3");
     }
 
     @Test

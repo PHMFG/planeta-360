@@ -70,7 +70,9 @@ public class ContarDias implements Ferramenta {
                     + "entre duas datas. O dia de início não conta e o dia final conta. Com uteis verdadeiro, sábados, domingos e "
                     + "feriados nacionais e do RS ficam de fora. Informe inicio e exatamente um de fim ou dias. Devolve o resultado, a "
                     + "regra em uma frase, os feriados que ficaram de fora e o marcador [C#] para citar a conta. Use sempre que a "
-                    + "resposta depender de contar dias ou achar uma data; nunca conte você mesmo. Os números e as datas têm de ter "
+                    + "resposta depender de contar dias ou achar uma data; nunca conte você mesmo. A contagem não tem marcador "
+                    + "{{calc:...}} (isso é só do calcular): escreva o resultado, a data ou a quantidade, copiado como está, com a "
+                    + "citação [C#] na mesma frase. Os números e as datas têm de ter "
                     + "origem: dias vem do que a pessoa escreveu na conversa ou de uma fonte deste turno (T#, R#, C#); inicio e fim "
                     + "são datas que a pessoa escreveu ou que uma fonte deste turno trouxe (inclusive o resultado de outra contagem), "
                     + "ou de hoje até 7 dias depois. Com fim, o intervalo vai até 800 dias.",

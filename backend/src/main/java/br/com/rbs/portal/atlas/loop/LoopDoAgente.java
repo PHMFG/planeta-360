@@ -96,7 +96,8 @@ import tools.jackson.core.JacksonException;
  *       número ou data que nenhuma fonte citada na mesma frase traz, citação que não existe neste turno, chave crua
  *       ({@code dado:...}), nome de ferramenta, marcador que não resolve ou sem valor, o servidor pede uma nova redação uma
  *       vez; se falhar de novo, troca pelo texto fixo: {@link #TEXTO_NAO_ENCONTREI} num turno que buscou nos documentos,
- *       {@link #FRASE_FIXA} num que não buscou. O histórico guarda o texto com os marcadores e as citações; quem exibe os resolve.
+ *       {@link #FRASE_FIXA} num que não buscou ou que tem uma conta ou contagem de dias na tela (dizer "não encontrei" ao lado da
+ *       conta pronta seria o contrário do que ela mostra). O histórico guarda o texto com os marcadores e as citações; quem exibe os resolve.
  *       A frase {@code "Não encontrei isso nos documentos do portal."} escrita pelo modelo ganha a indicação do atendimento, e a
  *       resposta de um turno que buscou, nada achou e não cita nada vira o mesmo texto fixo. Se <b>toda</b> busca do turno deu erro,
  *       "não encontrei" seria falso: a resposta sem citação nem marcador (e a recusada duas vezes) vira {@link #FRASE_SEM_CONSULTA}.</li>
@@ -461,6 +462,10 @@ public class LoopDoAgente {
                     // frase de sempre.
                     if (turno.fontes.todasAsBuscasFalharam()) {
                         gravarFrase(contexto, turno, FRASE_SEM_CONSULTA, null, ouvinte, "TEXTO_RECUSADO", ResultadoDaEtapa.RECUSADO);
+                    } else if (turno.fontes.temCalculo()) {
+                        // a conta ou a contagem de dias está na tela: "não encontrei" diria o contrário do que ela mostra
+                        gravarFrase(contexto, turno, frase(FRASE_FIXA, FRASE_FIXA_NO_CHAT), null, ouvinte, "TEXTO_RECUSADO",
+                                ResultadoDaEtapa.RECUSADO);
                     } else if (turno.fontes.buscas() > 0) {
                         gravarFrase(contexto, turno, TEXTO_NAO_ENCONTREI, null, ouvinte, "TEXTO_RECUSADO", ResultadoDaEtapa.RECUSADO);
                     } else {
@@ -695,10 +700,13 @@ public class LoopDoAgente {
 
     /**
      * O turno buscou, nenhuma busca trouxe trecho (voltaram vazias ou deram erro), e a resposta não cita fonte nem usa marcador de
-     * dado da parceria: ela não tem de onde ter saído. (Com marcador {{ref}}, é uma resposta certa com dado da parceria, e não pode virar "não encontrei".)
+     * dado da parceria: ela não tem de onde ter saído. (Com marcador {{ref}}, é uma resposta certa com dado da parceria, e não pode virar "não encontrei";
+     * o mesmo vale se o turno fez uma conta ou uma contagem de dias.)
      */
     private static boolean semApoioNosDocumentos(Turno turno, String texto) {
-        return turno.fontes.nenhumaBuscaTrouxeTrecho() && Frases.citacoes(texto).isEmpty() && Referencias.marcadores(texto).isEmpty();
+        // uma conta ou contagem de dias feita no turno também é de onde a resposta pode ter saído (o resultado vale na frase toda)
+        return turno.fontes.nenhumaBuscaTrouxeTrecho() && !turno.fontes.temCalculo() && Frases.citacoes(texto).isEmpty()
+                && Referencias.marcadores(texto).isEmpty();
     }
 
     /**

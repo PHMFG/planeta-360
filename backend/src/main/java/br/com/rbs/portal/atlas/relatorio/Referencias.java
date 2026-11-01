@@ -15,7 +15,8 @@ import java.util.regex.Pattern;
  *   <li>{@code cons:aplicacoes.previstas|comprovadas|fotos|percentual}: a consolidação (rota 29);</li>
  *   <li>{@code lista:aplicacoes} (tabela) e {@code lista:comprovacoes} (galeria): o plano de aplicações (rota 37);</li>
  *   <li>{@code dado:<chave>}: um dado informado vigente, com a chave do catálogo de campos;</li>
- *   <li>{@code calc:<nome>}: uma fórmula fixa do modelo-base.</li>
+ *   <li>{@code calc:<nome>}: uma fórmula fixa do modelo-base ou uma conta do {@code calcular} no chat; o nome é
+ *       {@code [a-z][a-z0-9_]{0,59}} (começa por letra e aceita algarismo: {@code energia_20kva}).</li>
  * </ul>
  * Que a chave de um {@code dado:} exista no catálogo e que o nome de um {@code calc:} exista no modelo quem confere é a resolução;
  * aqui só se confere a forma.
@@ -27,7 +28,7 @@ public final class Referencias {
     private static final String CONS = "cons:aplicacoes\\.(?:previstas|comprovadas|fotos|percentual)";
     private static final String LISTA = "lista:(?:aplicacoes|comprovacoes)";
     private static final String DADO = "dado:[a-z][a-z0-9_]*\\.[a-z][a-z0-9_]*";
-    private static final String CALC = "calc:[a-z_]{1,60}";
+    private static final String CALC = "calc:[a-z][a-z0-9_]{0,59}";
 
     /** A referência inteira. */
     public static final Pattern GRAMATICA =

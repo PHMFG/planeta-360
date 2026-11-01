@@ -69,7 +69,7 @@ public class Calcular implements Ferramenta {
     private static final Set<String> ARGUMENTOS = Set.of("nome", "script", "variaveis", "formato");
     private static final Set<String> ARGUMENTOS_DA_VARIAVEL = Set.of("ref", "fonte", "valor", "unidade");
     private static final Set<String> REFERENCIAS_QUE_VALEM = Set.of("cons", "dado", "calc");
-    private static final Pattern NOME_DA_CONTA = Pattern.compile("[a-z_]{1,60}");
+    private static final Pattern NOME_DA_CONTA = Pattern.compile("[a-z][a-z0-9_]{0,59}");
     private static final Pattern MARCADOR = Pattern.compile("[TRC][1-9][0-9]{0,2}");
     /** O valor literal: algarismos, com a vírgula do portal ({@code 312,00}), o ponto de milhar ({@code 1.250,00}) ou o ponto decimal. */
     private static final Pattern NUMERO = Pattern.compile("\\d{1,3}(?:\\.\\d{3})+(?:,\\d+)?|\\d+(?:[.,]\\d+)?");
@@ -78,7 +78,7 @@ public class Calcular implements Ferramenta {
     private static final DefinicaoDeFerramenta DEFINICAO = new DefinicaoDeFerramenta(NOME,
             "Faz uma conta no servidor, com a origem de cada número conferida. Use sempre que a resposta precisar de soma, subtração, "
                     + "multiplicação, divisão ou percentual; nunca faça a conta de cabeça nem escreva um resultado que esta ferramenta "
-                    + "não devolveu. nome é o nome da conta (letras minúsculas e sublinhado, sem repetir neste turno). script é só a "
+                    + "não devolveu. nome é o nome da conta (começa por letra minúscula e aceita algarismo e sublinhado, como energia_20kva; sem repetir neste turno). script é só a "
                     + "forma da conta: os nomes das variáveis, + - * / ( ), as funções pct(parte, todo), min(a, b) e max(a, b) e, no "
                     + "máximo, duas constantes entre 0, 1, 2, 100 e 1000. Qualquer outro número entra como variável. Cada variável é "
                     + "{\"ref\": ...} com uma referência que as ferramentas devolveram (cons:, dado: ou calc:, inclusive de uma conta "
@@ -90,7 +90,7 @@ public class Calcular implements Ferramenta {
                     + "R$ antes, se for moeda), nunca com o número. Se vier indisponivel, diga com palavras que não dá para calcular.",
             """
             {"type":"object","properties":{
-              "nome":{"type":"string","pattern":"^[a-z_]{1,60}$","description":"Nome da conta, para citar como {{calc:nome}}."},
+              "nome":{"type":"string","pattern":"^[a-z][a-z0-9_]{0,59}$","description":"Nome da conta, para citar como {{calc:nome}}: começa por letra minúscula e aceita algarismo e sublinhado."},
               "script":{"type":"string","maxLength":2000,"description":"A conta, só com variáveis, + - * / ( ), pct, min e max."},
               "variaveis":{"type":"object","description":"Cada variável do script: { ref } ou { fonte, valor }.",
                 "additionalProperties":{"type":"object","properties":{
@@ -256,7 +256,7 @@ public class Calcular implements Ferramenta {
             return null;
         }
         if (!NOME_DA_CONTA.matcher(nome).matches()) {
-            erros.put("nome", "O nome da conta usa só letras minúsculas sem acento e sublinhado, de 1 a 60 caracteres.");
+            erros.put("nome", "O nome da conta começa por letra minúscula sem acento e usa só letras, algarismos e sublinhado, de 1 a 60 caracteres.");
         } else if (modelos.obter(ModeloBase.ATIVACAO_EVENTO).orElseThrow().calculos().containsKey(nome)) {
             erros.put("nome", "O nome " + nome + " é de uma fórmula fixa do modelo. Escolha outro; para usar a fórmula, ponha calc:" + nome
                     + " numa variável.");

@@ -305,6 +305,42 @@ class FontesNoChatTest {
     }
 
     @Test
+    void duasRecusasComUmaContaProntaNaTelaViramAFraseGenericaENaoOnaoEncontrei() {
+        long conversa = abrir();
+        modelo.chamada(BUSCAR, busca(CONSULTA)).chamada("contar_dias", "{\"inicio\":\"2026-11-03\",\"dias\":18,\"uteis\":true}")
+                .texto("Fica pronto em 01/12/2026 [C1].").texto("Fica pronto em 02/12/2026 [C1].");
+
+        ConversaDto turno = falar(conversa, "Se o briefing sair em 03/11/2026, quando vencem 18 dias úteis?");
+
+        // a contagem de verdade está na tela (item "calculo"); dizer "não encontrei" sobre ela seria o contrário do que ela mostra
+        assertThat(textoFinal(turno).texto()).isEqualTo(LoopDoAgente.FRASE_FIXA_NO_CHAT);
+        assertThat(turno.itens().stream().anyMatch(AtlasDtos.ItemCalculo.class::isInstance)).isTrue();
+        Linha saida = primeira(ultimoTurno(conversa), "SAIDA");
+        assertThat(saida.dados()).containsEntry("tipo", "FRASE_FIXA").containsEntry("motivo", "TEXTO_RECUSADO");
+    }
+
+    @Test
+    void semContaNaTelaAsDuasRecusasDepoisDeBuscarContinuamNaoEncontrei() {
+        long conversa = abrir();
+        modelo.chamada(BUSCAR, busca(CONSULTA)).texto("O prazo é 05/12/2026.").texto("O prazo é 06/12/2026.");
+
+        assertThat(textoFinal(falar(conversa, "Até quando informo os geradores?")).texto()).isEqualTo(LoopDoAgente.TEXTO_NAO_ENCONTREI);
+    }
+
+    @Test
+    void buscaSemTrechoComUmaContaProntaNaoTrocaARespostaDaContaPeloNaoEncontrei() {
+        long conversa = abrir();
+        // só palavras vazias: a busca volta sem trecho; a contagem dá 30/11/2026 e a resposta o diz, sem citar a fonte
+        modelo.chamada(BUSCAR, busca("de a o que para")).chamada("contar_dias", "{\"inicio\":\"2026-11-03\",\"dias\":18,\"uteis\":true}")
+                .texto("O conteúdo fica pronto em 30/11/2026.");
+
+        ItemTexto texto = textoFinal(falar(conversa, "Se o briefing sair em 03/11/2026, quando vencem 18 dias úteis?"));
+
+        assertThat(texto.texto()).isEqualTo("O conteúdo fica pronto em 30/11/2026.");
+        assertThat(texto.porModelo()).isTrue();
+    }
+
+    @Test
     void citacaoDeUmTrechoQueNaoTemONumeroNaoApoiaAFrase() {
         long conversa = abrir();
         modelo.chamada(BUSCAR, busca(CONSULTA));

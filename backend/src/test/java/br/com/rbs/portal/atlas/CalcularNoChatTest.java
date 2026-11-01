@@ -304,6 +304,24 @@ class CalcularNoChatTest {
         assertThat(pedidoDeNovaRedacao.conteudo()).contains("312", "não tem origem");
     }
 
+    @Test
+    void contaComAlgarismoNoNomeApareceNaTelaESeuAlgarismoNaoValeComoNumero() {
+        SessaoDeApi pessoa = SessaoDeApi.entrar(mvc, AMARELO);
+        long conversa = conversa(pessoa, jdbc);
+        modelo.chamada(CALCULAR, tarifa("energia_20kva", "312", "34")).texto("A energia é R$ {{calc:energia_20kva}} [C1].");
+
+        MvcTestResult resposta = falar(pessoa, conversa, MENSAGEM);
+
+        assertThat(textos(resposta)).containsExactly("A energia é R$ 10.608,00 [C1].");
+        assertThat(textos(pessoa.get("/api/atlas/conversas/" + conversa))).containsExactly("A energia é R$ 10.608,00 [C1].");
+        // o 20 do nome não é número da resposta
+        modelo.limpar();
+        long outra = conversa(pessoa, jdbc);
+        modelo.chamada(CALCULAR, tarifa("energia_20kva", "312", "34")).texto("Para 20 kVA, a energia é R$ {{calc:energia_20kva}} [C1].")
+                .texto("A energia é R$ {{calc:energia_20kva}} [C1].");
+        assertThat(textos(falar(pessoa, outra, MENSAGEM))).containsExactly("A energia é R$ 10.608,00 [C1].");
+    }
+
     // ---------------------------------------------------------------------
     // Indisponível: nunca zero
     // ---------------------------------------------------------------------

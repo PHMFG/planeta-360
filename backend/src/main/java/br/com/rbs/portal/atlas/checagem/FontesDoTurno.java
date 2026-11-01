@@ -237,6 +237,11 @@ public final class FontesDoTurno {
         return fonte;
     }
 
+    /** O turno fez alguma conta ou contagem de dias ({@code [C#]})? */
+    public boolean temCalculo() {
+        return fontes.values().stream().anyMatch(fonte -> fonte.tipo() == Tipo.CALCULO);
+    }
+
     /** A conta do {@code calcular} com este nome, se o turno já a fez. */
     public Optional<Fonte> conta(String nome) {
         return Optional.ofNullable(marcadorDaConta.get(nome)).map(fontes::get);

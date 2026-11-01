@@ -409,6 +409,14 @@ class ContarDiasTest {
     }
 
     @Test
+    void aDefinicaoDizQueAContagemNaoTemMarcadorCalcEQueOResultadoSeCopiaComACitacao() {
+        String descricao = ferramenta.definicao().descricao();
+
+        assertThat(descricao).contains("{{calc:", "[C#]").contains("copi");
+        assertThat(descricao).as("e a origem dos números e das datas").contains("origem", "hoje até 7 dias depois", "800");
+    }
+
+    @Test
     void naoPrecisaDeParceriaNemDeTransacao() {
         // a ferramenta é oferecida em todo estado menos o do cartão aberto, e a definição proíbe argumento fora do esquema
         assertThat(ferramenta.nome()).isEqualTo("contar_dias");

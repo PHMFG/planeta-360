@@ -16,7 +16,7 @@ class ReferenciasTest {
         for (String ref : List.of("parc:patrocinador", "parc:cota", "evento:edicao", "cons:aplicacoes.previstas",
                 "cons:aplicacoes.comprovadas", "cons:aplicacoes.fotos", "cons:aplicacoes.percentual", "lista:aplicacoes",
                 "lista:comprovacoes", "dado:ativacao.visitantes_total", "dado:ativacao.brindes_distribuidos", "calc:taxa_cadastro",
-                "calc:brindes_pct")) {
+                "calc:brindes_pct", "calc:energia_20kva", "calc:a1", "calc:t" + "0".repeat(59))) {
             assertThat(Referencias.valida(ref)).as(ref).isTrue();
         }
     }
@@ -25,7 +25,7 @@ class ReferenciasTest {
     void recusaOQueNaoEstaNaGramatica() {
         for (String ref : List.of("", " ", "parc:cnpj", "parc:", "evento:nome", "cons:aplicacoes", "cons:aplicacoes.tudo",
                 "cons:midia.previstas", "lista:entregas", "dado:visitantes", "dado:Ativacao.visitantes", "dado:ativacao.visitantes total",
-                "dado:ativacao.", "calc:", "calc:Taxa", "calc:taxa-cadastro", "calc:" + "a".repeat(61), "outro:valor",
+                "dado:ativacao.", "calc:", "calc:Taxa", "calc:taxa-cadastro", "calc:" + "a".repeat(61), "calc:20kva", "calc:_taxa", "calc:t" + "0".repeat(60), "outro:valor",
                 "parc:patrocinador ", " parc:patrocinador", "parc:patrocinador\nx", "javascript:alert(1)", "http://exemplo.com",
                 "1200", "<b>x</b>")) {
             assertThat(Referencias.valida(ref)).as("[" + ref + "]").isFalse();
