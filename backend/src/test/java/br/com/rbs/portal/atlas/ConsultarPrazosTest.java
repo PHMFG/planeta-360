@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import br.com.rbs.portal.atlas.checagem.FontesDoTurno;
 import br.com.rbs.portal.atlas.checagem.FontesDoTurno.Fonte;
 import br.com.rbs.portal.atlas.contexto.AtlasContexto;
+import br.com.rbs.portal.atlas.ferramentas.ConsultarPrazos;
 import br.com.rbs.portal.comum.DadosInvalidosException;
 import br.com.rbs.portal.comum.Datas;
 import br.com.rbs.portal.prazos.ApoioDePrazos;
@@ -90,10 +91,19 @@ class ConsultarPrazosTest extends ApoioDasConsultas {
         assertThat(titulos(resultado)).containsExactly("A 33 dias", "A 40 dias", "A 50 dias");
         assertThat(registros(resultado)).extracting(r -> r.get("dias_restantes")).containsExactly(33, 40, 50);
         assertThat(registros(resultado)).allSatisfy(r -> assertThat(r).containsEntry("foraDaJanela", true).containsKey("marcador"));
-        assertThat(resultado.get("observacao")).isEqualTo("Nenhum prazo nos próximos 30 dias. Estes são os próximos depois disso.");
-        // cada um é uma fonte [R#] que diz quanto falta, e o 30 padrão da janela é número da resposta
+        assertThat(resultado.get("observacao")).isEqualTo("Nenhum prazo na janela consultada. Estes são os próximos depois dela.");
+        // cada um é uma fonte [R#] que diz quanto falta; a observação não diz número nenhum, e o 30 da janela não vale na resposta
         assertThat(turno.fonte("R1").orElseThrow().texto()).contains("A 33 dias", "Faltam 33 dias");
-        assertThat(turno.numerosLivres()).contains("30");
+        assertThat(turno.numerosLivres()).doesNotContain("30");
+        assertThat((String) resultado.get("observacao")).doesNotContainPattern("\\d");
+    }
+
+    @Test
+    void aDefinicaoMandaDizerADataDoProximoEDeixaDeMandarDizerQueNaoHaPrazoNaJanela() {
+        String descricao = new ConsultarPrazos(null, null).definicao().descricao();
+
+        assertThat(descricao).contains("foraDaJanela").contains("diga a data").contains("nunca diga que não há prazo");
+        assertThat(descricao).doesNotContain("diga que não há prazo na janela");
     }
 
     @Test
@@ -112,7 +122,7 @@ class ConsultarPrazosTest extends ApoioDasConsultas {
         Map<String, Object> fora = prazos(contexto, "{\"proximos_dias\":29}");
         assertThat(titulos(fora)).containsExactly("No trigésimo dia", "No trigésimo primeiro");
         assertThat(registros(fora)).allSatisfy(r -> assertThat(r).containsEntry("foraDaJanela", true));
-        assertThat(fora.get("observacao")).isEqualTo("Nenhum prazo nos próximos 29 dias. Estes são os próximos depois disso.");
+        assertThat(fora.get("observacao")).isEqualTo("Nenhum prazo na janela consultada. Estes são os próximos depois dela.");
 
         // a janela de 1 dia, com o prazo de amanhã dentro e o outro fora
         ApoioDePrazos.global(jdbc, "Amanhã", HOJE.plusDays(1), null, null);

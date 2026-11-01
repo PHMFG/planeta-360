@@ -29,10 +29,11 @@ import org.springframework.stereotype.Component;
  *   <li><b>O documento de origem manda:</b> o prazo cujo documento não está {@code INDEXADO}, ou que a parceria não vê, não sai.
  *       Revogar ou substituir um documento vale na chamada seguinte, sem cache.</li>
  *   <li><b>Janela vazia</b> (e sem {@code incluir_vencidos}): o resultado traz os {@value #PROXIMOS_DEPOIS_DA_JANELA} próximos
- *       prazos <b>depois</b> da janela, cada um com {@code foraDaJanela: true}, e a {@code observacao} "Nenhum prazo nos próximos N
- *       dias. Estes são os próximos depois disso."; sem nenhum prazo adiante, "Não há nenhum prazo futuro registrado para esta
- *       parceria.". Sem isso o modelo dizia "não há prazo registrado" sendo que o primeiro estava a 33 dias. Valem o documento de
- *       origem indexado e visível e a aba aberta, como na janela.</li>
+ *       prazos <b>depois</b> da janela, cada um com {@code foraDaJanela: true}, e a {@code observacao} "Nenhum prazo na janela
+ *       consultada. Estes são os próximos depois dela." (sem número nenhum: o modelo repete a observação, e um "30 dias" dela seria
+ *       número sem origem); sem nenhum prazo adiante, "Não há nenhum prazo futuro registrado para esta parceria.". Sem isso o modelo
+ *       dizia "não há prazo registrado" sendo que o primeiro estava a 33 dias, e a definição manda dizer a data do primeiro, nunca que
+ *       não há prazo. Valem o documento de origem indexado e visível e a aba aberta, como na janela.</li>
  *   <li><b>Até {@value #LIMITE} linhas</b>, por data; passando disso o resultado leva {@code total} e {@code truncado}. Cada linha vira
  *       uma fonte {@code [R#]} (entidade {@code prazo}, ou {@code entrega_prazo} para o prazo de uma entrega) com a data, a hora, os
  *       dias que faltam e a origem; as que vêm de um documento levam o {@code documentoId}, a {@code versao} e a {@code pagina} em
@@ -59,7 +60,7 @@ public class ConsultarPrazos implements Ferramenta {
                     + "(quando tem), os dias que faltam e a origem (o documento e a página, ou a entrega): cite o marcador entre "
                     + "colchetes, como [R1], logo depois da afirmação, e copie datas exatamente como estão. Prazo de documento que "
                     + "saiu do ar não aparece. Se a janela não tem prazo, vêm os 3 próximos depois dela, com foraDaJanela verdadeiro: "
-                    + "diga que não há prazo na janela e cite esses. Não conte dias de cabeça: para somar dias ou achar uma data, use "
+                    + "diga a data do primeiro, copiada como está, e cite o marcador dele; nunca diga que não há prazo. Não conte dias de cabeça: para somar dias ou achar uma data, use "
                     + "contar_dias.",
             """
             {"type":"object","properties":{
@@ -127,14 +128,9 @@ public class ConsultarPrazos implements Ferramenta {
                 linha.put("foraDaJanela", true);
                 linhas.add(linha);
             }
-            if (adiante.isEmpty()) {
-                observacao = "Não há nenhum prazo futuro registrado para esta parceria.";
-            } else {
-                observacao = "Nenhum prazo nos próximos " + proximosDias + " dias. Estes são os próximos depois disso.";
-                if (argumentos.get("proximos_dias") == null) {
-                    turno.adicionarNumeroLivre(String.valueOf(PADRAO_DE_DIAS));   // o 30 é o padrão do servidor, não escolha do modelo
-                }
-            }
+            // a observação não leva número nenhum: o modelo a repetia ("nos próximos 30 dias") e a resposta era recusada por número sem origem
+            observacao = adiante.isEmpty() ? "Não há nenhum prazo futuro registrado para esta parceria."
+                    : "Nenhum prazo na janela consultada. Estes são os próximos depois dela.";
         } else if (linhas.isEmpty()) {
             observacao = "Nenhum prazo desta parceria cai nessa janela" + (incluirVencidos ? "." : " (os vencidos ficaram de fora).");
         }
