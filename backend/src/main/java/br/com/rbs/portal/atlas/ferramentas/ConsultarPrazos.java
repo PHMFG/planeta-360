@@ -28,6 +28,11 @@ import org.springframework.stereotype.Component;
  *       de Brasília do turno ({@link FontesDoTurno#hoje()}, o mesmo do prompt) e {@code dias_restantes} é calculado no banco.</li>
  *   <li><b>O documento de origem manda:</b> o prazo cujo documento não está {@code INDEXADO}, ou que a parceria não vê, não sai.
  *       Revogar ou substituir um documento vale na chamada seguinte, sem cache.</li>
+ *   <li><b>Janela vazia</b> (e sem {@code incluir_vencidos}): o resultado traz os {@value #PROXIMOS_DEPOIS_DA_JANELA} próximos
+ *       prazos <b>depois</b> da janela, cada um com {@code foraDaJanela: true}, e a {@code observacao} "Nenhum prazo nos próximos N
+ *       dias. Estes são os próximos depois disso."; sem nenhum prazo adiante, "Não há nenhum prazo futuro registrado para esta
+ *       parceria.". Sem isso o modelo dizia "não há prazo registrado" sendo que o primeiro estava a 33 dias. Valem o documento de
+ *       origem indexado e visível e a aba aberta, como na janela.</li>
  *   <li><b>Até {@value #LIMITE} linhas</b>, por data; passando disso o resultado leva {@code total} e {@code truncado}. Cada linha vira
  *       uma fonte {@code [R#]} (entidade {@code prazo}, ou {@code entrega_prazo} para o prazo de uma entrega) com a data, a hora, os
  *       dias que faltam e a origem; as que vêm de um documento levam o {@code documentoId}, a {@code versao} e a {@code pagina} em
@@ -43,6 +48,8 @@ public class ConsultarPrazos implements Ferramenta {
     public static final int LIMITE = 40;
     static final int PADRAO_DE_DIAS = 30;
     static final int MAXIMO_DE_DIAS = 180;
+    /** Quantos prazos de depois da janela vêm quando a janela está vazia. */
+    static final int PROXIMOS_DEPOIS_DA_JANELA = 3;
     private static final Set<String> ARGUMENTOS = Set.of("proximos_dias", "incluir_vencidos");
 
     private static final DefinicaoDeFerramenta DEFINICAO = new DefinicaoDeFerramenta(NOME,
@@ -51,7 +58,9 @@ public class ConsultarPrazos implements Ferramenta {
                     + "também os que já passaram (dias_restantes negativo). Cada prazo vem com o marcador (R1, R2...), a data, a hora "
                     + "(quando tem), os dias que faltam e a origem (o documento e a página, ou a entrega): cite o marcador entre "
                     + "colchetes, como [R1], logo depois da afirmação, e copie datas exatamente como estão. Prazo de documento que "
-                    + "saiu do ar não aparece. Não conte dias de cabeça: para somar dias ou achar uma data, use contar_dias.",
+                    + "saiu do ar não aparece. Se a janela não tem prazo, vêm os 3 próximos depois dela, com foraDaJanela verdadeiro: "
+                    + "diga que não há prazo na janela e cite esses. Não conte dias de cabeça: para somar dias ou achar uma data, use "
+                    + "contar_dias.",
             """
             {"type":"object","properties":{
               "proximos_dias":{"type":"integer","minimum":1,"maximum":180,"description":"Janela a partir de hoje, em dias. Padrão 30."},
@@ -110,6 +119,22 @@ public class ConsultarPrazos implements Ferramenta {
             extras.put("total", total);
             extras.put("truncado", true);
             observacao = "Estes são os " + LIMITE + " primeiros de " + total + " prazos, por data. Peça uma janela menor para ver os outros.";
+        } else if (linhas.isEmpty() && !incluirVencidos) {
+            // a janela está vazia, mas pode haver prazo logo depois dela: o modelo não pode dizer que não há nenhum
+            List<Prazo> adiante = registros.prazosDepoisDaJanela(contexto.parceriaId(), turno.hoje(), proximosDias, PROXIMOS_DEPOIS_DA_JANELA);
+            for (Prazo prazo : adiante) {
+                Map<String, Object> linha = registro(turno, prazo);
+                linha.put("foraDaJanela", true);
+                linhas.add(linha);
+            }
+            if (adiante.isEmpty()) {
+                observacao = "Não há nenhum prazo futuro registrado para esta parceria.";
+            } else {
+                observacao = "Nenhum prazo nos próximos " + proximosDias + " dias. Estes são os próximos depois disso.";
+                if (argumentos.get("proximos_dias") == null) {
+                    turno.adicionarNumeroLivre(String.valueOf(PADRAO_DE_DIAS));   // o 30 é o padrão do servidor, não escolha do modelo
+                }
+            }
         } else if (linhas.isEmpty()) {
             observacao = "Nenhum prazo desta parceria cai nessa janela" + (incluirVencidos ? "." : " (os vencidos ficaram de fora).");
         }

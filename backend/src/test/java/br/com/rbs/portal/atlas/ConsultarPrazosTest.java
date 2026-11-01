@@ -73,6 +73,98 @@ class ConsultarPrazosTest extends ApoioDasConsultas {
         assertThat(titulos(prazos(contexto, "{\"proximos_dias\":180}"))).containsExactly("Em 1 dia", "Em 2 dias", "Em 180 dias");
     }
 
+    // ---------------------------------------------------------------------
+    // Janela vazia: os próximos depois dela (o modelo dizia "não há prazo" sendo que o primeiro estava a 33 dias)
+    // ---------------------------------------------------------------------
+
+    @Test
+    void comAJanelaVaziaTraz3OsProximosDepoisDelaMarcadosForaDaJanela() {
+        ApoioDePrazos.global(jdbc, "A 33 dias", HOJE.plusDays(33), null, null);
+        ApoioDePrazos.global(jdbc, "A 40 dias", HOJE.plusDays(40), null, null);
+        ApoioDePrazos.global(jdbc, "A 50 dias", HOJE.plusDays(50), null, null);
+        ApoioDePrazos.global(jdbc, "A 60 dias", HOJE.plusDays(60), null, null);
+        FontesDoTurno turno = turno();
+
+        Map<String, Object> resultado = resultado(contexto(AMARELO, "Cliente Amarelo"), turno, PRAZOS, "{}");
+
+        assertThat(titulos(resultado)).containsExactly("A 33 dias", "A 40 dias", "A 50 dias");
+        assertThat(registros(resultado)).extracting(r -> r.get("dias_restantes")).containsExactly(33, 40, 50);
+        assertThat(registros(resultado)).allSatisfy(r -> assertThat(r).containsEntry("foraDaJanela", true).containsKey("marcador"));
+        assertThat(resultado.get("observacao")).isEqualTo("Nenhum prazo nos próximos 30 dias. Estes são os próximos depois disso.");
+        // cada um é uma fonte [R#] que diz quanto falta, e o 30 padrão da janela é número da resposta
+        assertThat(turno.fonte("R1").orElseThrow().texto()).contains("A 33 dias", "Faltam 33 dias");
+        assertThat(turno.numerosLivres()).contains("30");
+    }
+
+    @Test
+    void aBordaDaJanelaOQueEstaDentroNaoVemComoForaEOPrimeiroDeForaVem() {
+        AtlasContexto contexto = contexto(AMARELO, "Cliente Amarelo");
+        ApoioDePrazos.global(jdbc, "No trigésimo dia", HOJE.plusDays(30), null, null);
+        ApoioDePrazos.global(jdbc, "No trigésimo primeiro", HOJE.plusDays(31), null, null);
+
+        // o dia 30 está dentro: sai normal, e o de fora não vem junto
+        Map<String, Object> dentro = prazos(contexto, "{}");
+        assertThat(titulos(dentro)).containsExactly("No trigésimo dia");
+        assertThat(registros(dentro).get(0)).doesNotContainKey("foraDaJanela");
+        assertThat(dentro).doesNotContainKey("observacao");
+
+        // com a janela de 29 dias, o dia 30 é o primeiro de fora
+        Map<String, Object> fora = prazos(contexto, "{\"proximos_dias\":29}");
+        assertThat(titulos(fora)).containsExactly("No trigésimo dia", "No trigésimo primeiro");
+        assertThat(registros(fora)).allSatisfy(r -> assertThat(r).containsEntry("foraDaJanela", true));
+        assertThat(fora.get("observacao")).isEqualTo("Nenhum prazo nos próximos 29 dias. Estes são os próximos depois disso.");
+
+        // a janela de 1 dia, com o prazo de amanhã dentro e o outro fora
+        ApoioDePrazos.global(jdbc, "Amanhã", HOJE.plusDays(1), null, null);
+        assertThat(titulos(prazos(contexto, "{\"proximos_dias\":1}"))).containsExactly("Amanhã");
+    }
+
+    @Test
+    void semNenhumPrazoAdianteDizQueNaoHaNenhumFuturoRegistrado() {
+        AtlasContexto contexto = contexto(AMARELO, "Cliente Amarelo");
+        entrega(parceria("Cliente Amarelo"), "MIDIA", "Peça atrasada", "AJUSTE_SOLICITADO", HOJE.minusDays(5));
+        ApoioDePrazos.global(jdbc, "Venceu há um mês", HOJE.minusDays(30), null, null);
+
+        Map<String, Object> resultado = prazos(contexto, "{}");
+
+        assertThat(registros(resultado)).isEmpty();
+        assertThat(resultado.get("observacao")).isEqualTo("Não há nenhum prazo futuro registrado para esta parceria.");
+    }
+
+    @Test
+    void comIncluirVencidosNaoHaPrazosDepoisDaJanela() {
+        ApoioDePrazos.global(jdbc, "A 40 dias", HOJE.plusDays(40), null, null);
+
+        Map<String, Object> resultado = prazos(contexto(AMARELO, "Cliente Amarelo"), "{\"incluir_vencidos\":true}");
+
+        assertThat(registros(resultado)).isEmpty();
+        assertThat((String) resultado.get("observacao")).startsWith("Nenhum prazo desta parceria cai nessa janela");
+    }
+
+    @Test
+    void osPrazosDepoisDaJanelaTambemValemAVisibilidadeDoDocumentoEAAbaAberta() {
+        long amarelo = parceria("Cliente Amarelo");
+        AtlasContexto contexto = contexto(AMARELO, "Cliente Amarelo");
+        ApoioDePrazos.global(jdbc, "Do manual", HOJE.plusDays(40), d02(), 3);
+        ApoioDePrazos.daCota(jdbc, "SUBCOTA", "Da Subcota", HOJE.plusDays(41), null, null);
+        ApoioDePrazos.daParceria(jdbc, "Cliente Verde", "Da Verde", HOJE.plusDays(42), null, null);
+        ApoioDePrazos.global(jdbc, "Da circular revogada", HOJE.plusDays(43), documento("Circular 07/2026 · Pulseiras prata", 1), 1);
+        entrega(amarelo, "MIDIA", "ENTREGA-DA-MIDIA", "AGUARDANDO_ENVIO", HOJE.plusDays(44));
+        entrega(amarelo, "PERFIL", "Entrega do perfil", "AGUARDANDO_ENVIO", HOJE.plusDays(45));
+
+        assertThat(titulos(prazos(contexto, "{}"))).containsExactly("Do manual", "ENTREGA-DA-MIDIA", "Entrega do perfil");
+
+        // a revogação do documento e o fechamento da aba valem na chamada seguinte
+        mudarStatusDoDocumento(d02(), "REVOGADO");
+        fecharAba(amarelo, "MIDIA");
+        Map<String, Object> depois = prazos(contexto, "{}");
+        assertThat(titulos(depois)).containsExactly("Entrega do perfil");
+        assertThat(chamar(contexto, turno(), PRAZOS, "{}").resultadoJson()).doesNotContain("ENTREGA-DA-MIDIA", "Do manual", "Da Verde", "Da Subcota",
+                "Da circular revogada");
+        // a Verde (Subcota) vê o da cota dela e o dela, e nada do Amarelo: isolamento
+        assertThat(titulos(prazos(contexto(VERDE, "Cliente Verde"), "{}"))).containsExactly("Da Subcota", "Da Verde");
+    }
+
     @Test
     void proximosDiasForaDe1A180OuQueNaoEInteiroVoltaComoErro() {
         AtlasContexto contexto = contexto(AMARELO, "Cliente Amarelo");

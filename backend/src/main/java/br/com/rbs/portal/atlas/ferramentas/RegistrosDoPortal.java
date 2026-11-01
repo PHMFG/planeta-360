@@ -209,32 +209,54 @@ public class RegistrosDoPortal {
      * status dele a cada chamada, sem cache.
      */
     public List<Prazo> prazos(long parceriaId, LocalDate hoje, int proximosDias, boolean incluirVencidos, int limite) {
-        return jdbc.sql("""
-                        WITH todos AS (
-                            SELECT 'prazo' AS tipo, pz.id, pz.titulo, pz.data, pz.hora, pz.descricao, d.id AS documento_id,
-                                   d.titulo AS documento_titulo, d.versao AS documento_versao, pz.pagina, NULL::text AS aba_nome
-                            FROM parceria p
-                            JOIN prazo pz ON pz.evento_id = p.evento_id AND pz.ativo
-                                 AND (pz.escopo = 'GLOBAL'
-                                      OR (pz.escopo = 'COTA' AND pz.cota_tipo_id = p.cota_tipo_id)
-                                      OR (pz.escopo = 'PARCERIA' AND pz.parceria_id = p.id))
-                            LEFT JOIN documento d ON d.id = pz.documento_id
-                            WHERE p.id = :parceria AND (pz.documento_id IS NULL OR (%s))
-                          UNION ALL
-                            SELECT 'entrega', e.id, e.titulo, e.prazo, NULL::time, left(e.descricao, 300), NULL::bigint, NULL::text,
-                                   NULL::int, NULL::int, a.nome
-                            FROM entrega e JOIN aba a ON a.id = e.aba_id
-                            WHERE e.parceria_id = :parceria AND e.prazo IS NOT NULL AND e.status NOT IN ('APROVADO', 'NAO_APLICAVEL')
-                              AND %s
-                        )
+        return jdbc.sql(PRAZOS_DA_MARCA + """
                         SELECT tipo, id, titulo, data, hora, descricao, documento_id, documento_titulo, documento_versao, pagina, aba_nome,
                                data - CAST(:hoje AS date) AS dias_restantes, count(*) OVER () AS total
                         FROM todos
                         WHERE data - CAST(:hoje AS date) <= :janela AND (CAST(:vencidos AS boolean) OR data >= CAST(:hoje AS date))
                         ORDER BY data, hora NULLS LAST, titulo, tipo, id
                         LIMIT :limite
-                        """.formatted(DOCUMENTO_VISIVEL, EntregasDaMarca.ABA_ABERTA))
+                        """)
                 .param("parceria", parceriaId).param("hoje", hoje).param("janela", proximosDias).param("vencidos", incluirVencidos)
                 .param("limite", limite).query(Prazo.class).list();
     }
+
+    /**
+     * Os próximos prazos <b>depois</b> da janela de {@code proximosDias} (o primeiro dia de fora é {@code proximosDias + 1}), por
+     * data, até {@code limite}, com as mesmas regras de {@link #prazos}: o documento de origem indexado e visível, e a aba aberta. Serve
+     * à janela vazia, para o modelo não dizer "não há prazo" sendo que o primeiro está logo depois dela.
+     */
+    public List<Prazo> prazosDepoisDaJanela(long parceriaId, LocalDate hoje, int proximosDias, int limite) {
+        return jdbc.sql(PRAZOS_DA_MARCA + """
+                        SELECT tipo, id, titulo, data, hora, descricao, documento_id, documento_titulo, documento_versao, pagina, aba_nome,
+                               data - CAST(:hoje AS date) AS dias_restantes, count(*) OVER () AS total
+                        FROM todos
+                        WHERE data - CAST(:hoje AS date) > :janela
+                        ORDER BY data, hora NULLS LAST, titulo, tipo, id
+                        LIMIT :limite
+                        """)
+                .param("parceria", parceriaId).param("hoje", hoje).param("janela", proximosDias).param("limite", limite)
+                .query(Prazo.class).list();
+    }
+
+    /** Os prazos da parceria (cadastro da RBS e entregas), antes do filtro de janela: a CTE {@code todos}. */
+    private static final String PRAZOS_DA_MARCA = """
+            WITH todos AS (
+                SELECT 'prazo' AS tipo, pz.id, pz.titulo, pz.data, pz.hora, pz.descricao, d.id AS documento_id,
+                       d.titulo AS documento_titulo, d.versao AS documento_versao, pz.pagina, NULL::text AS aba_nome
+                FROM parceria p
+                JOIN prazo pz ON pz.evento_id = p.evento_id AND pz.ativo
+                     AND (pz.escopo = 'GLOBAL'
+                          OR (pz.escopo = 'COTA' AND pz.cota_tipo_id = p.cota_tipo_id)
+                          OR (pz.escopo = 'PARCERIA' AND pz.parceria_id = p.id))
+                LEFT JOIN documento d ON d.id = pz.documento_id
+                WHERE p.id = :parceria AND (pz.documento_id IS NULL OR (%s))
+              UNION ALL
+                SELECT 'entrega', e.id, e.titulo, e.prazo, NULL::time, left(e.descricao, 300), NULL::bigint, NULL::text,
+                       NULL::int, NULL::int, a.nome
+                FROM entrega e JOIN aba a ON a.id = e.aba_id
+                WHERE e.parceria_id = :parceria AND e.prazo IS NOT NULL AND e.status NOT IN ('APROVADO', 'NAO_APLICAVEL')
+                  AND %s
+            )
+            """.formatted(DOCUMENTO_VISIVEL, EntregasDaMarca.ABA_ABERTA);
 }
