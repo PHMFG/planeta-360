@@ -22,12 +22,12 @@ class CriacaoDoBancoTest {
     }
 
     @Test
-    void flywayAplicouAsOnzeMigracoesEAAmostra() {
-        // V1 a V11 versionadas; R__amostra repetível. Todas com sucesso.
+    void flywayAplicouAsDozeMigracoesEAAmostra() {
+        // V1 a V12 versionadas; R__amostra repetível. Todas com sucesso.
         long sucesso = contar("SELECT count(*) FROM flyway_schema_history WHERE success");
         long total = contar("SELECT count(*) FROM flyway_schema_history");
-        assertThat(total).isEqualTo(12);
-        assertThat(sucesso).isEqualTo(12);
+        assertThat(total).isEqualTo(13);
+        assertThat(sucesso).isEqualTo(13);
         assertThat(contar("SELECT count(*) FROM flyway_schema_history WHERE version IS NULL AND script LIKE '%R__amostra%'"))
                 .as("a amostra de dev/test foi aplicada").isEqualTo(1);
     }
@@ -35,14 +35,14 @@ class CriacaoDoBancoTest {
     @Test
     void estruturaDoBancoEstaCompleta() {
         assertThat(contar("SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE' "
-                + "AND table_name <> 'flyway_schema_history'")).as("tabelas").isEqualTo(46);
+                + "AND table_name <> 'flyway_schema_history'")).as("tabelas").isEqualTo(47);
         assertThat(contar("SELECT count(*) FROM information_schema.views WHERE table_schema = 'public'")).as("visões").isEqualTo(8);
-        assertThat(contar("SELECT count(*) FROM pg_trigger WHERE NOT tgisinternal AND tgname LIKE 'rn\\_%'")).as("gatilhos de regra").isEqualTo(24);
+        assertThat(contar("SELECT count(*) FROM pg_trigger WHERE NOT tgisinternal AND tgname LIKE 'rn\\_%'")).as("gatilhos de regra").isEqualTo(26);
     }
 
     @Test
     void asFuncoesDoPortalEstaoCriadas() {
-        // 4 de carga e relatório, 2 de formatação (V4 e V6) e 3 dos documentos do Atlas (V11); os gatilhos têm a função tg_* à parte.
+        // 4 de carga e relatório, 2 de formatação (V4 e V6) e 3 dos documentos do Atlas (V11); a V12 só troca o corpo da fn_texto_de_busca. Os gatilhos têm a função tg_* à parte.
         assertThat(contar("SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'public' "
                 + "AND p.prokind = 'f' AND p.proname LIKE 'fn\\_%'")).as("funções fn_*").isEqualTo(9);
         assertThat(contar("SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace WHERE n.nspname = 'public' "

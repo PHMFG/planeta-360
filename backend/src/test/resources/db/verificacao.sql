@@ -1,6 +1,6 @@
--- Confere o banco depois de V1 a V11 e da amostra R__amostra.sql: contagens, cargas, relatórios, órfãos e uma tentativa de violar cada regra.
+-- Confere o banco depois de V1 a V12 e da amostra R__amostra.sql: contagens, cargas, relatórios, órfãos e uma tentativa de violar cada regra.
 -- Atende o item 1 da Entrega 2 (amostra e verificações), prova as 8 correções do item 8 e, na seção 8, o plano comercial, o
--- catálogo e os dados informados da V7 e, na seção 9, as tabelas do Atlas da V8, o resumo do raciocínio da V9 e o traço do diagnóstico da V10 e, na seção 10, os documentos, os trechos, a busca sem acento e a RLS da V11. Nenhuma linha fica gravada: as tentativas são desfeitas (só as sequências avançam).
+-- catálogo e os dados informados da V7 e, na seção 9, as tabelas do Atlas da V8, o resumo do raciocínio da V9 e o traço do diagnóstico da V10 e, na seção 10, os documentos, os trechos, a busca sem acento e a RLS da V11 e, na seção 11, as fontes citadas, o documento congelado e o plural da busca da V12. Nenhuma linha fica gravada: as tentativas são desfeitas (só as sequências avançam).
 
 -- Como rodar (banco de dev ou de teste com a amostra carregada; sem meta-comandos, serve também para JDBC com o texto inteiro):
 --   PGPASSWORD=portal psql -X -P pager=off -v ON_ERROR_STOP=1 -h localhost -U portal -d <banco> -f verificacao.sql
@@ -69,7 +69,7 @@ END $f$;
 DO $$
 BEGIN
     -- A tabela de controle do Flyway (flyway_schema_history) não é do portal: fica de fora quando o banco foi criado pelo Flyway.
-    PERFORM pg_temp.confere('ESTRUTURA', 'tabelas (29 da modelagem + 4 novas na V1 + 3 na V7 + 7 na V8 + 1 na V10 + 2 na V11)', 46,
+    PERFORM pg_temp.confere('ESTRUTURA', 'tabelas (29 da modelagem + 4 novas na V1 + 3 na V7 + 7 na V8 + 1 na V10 + 2 na V11 + 1 na V12)', 47,
        (SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
            AND table_name <> 'flyway_schema_history'));
     PERFORM pg_temp.confere('ESTRUTURA', 'visões (7 de consolidação + vw_dado_vigente)', 8,
@@ -77,7 +77,7 @@ BEGIN
     PERFORM pg_temp.confere('ESTRUTURA', 'funções fn_carregar_veiculacoes, fn_carregar_pesquisa, fn_carregar_plano, fn_gerar_relatorio', 4,
        (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
          WHERE n.nspname = 'public' AND p.proname IN ('fn_carregar_veiculacoes', 'fn_carregar_pesquisa', 'fn_carregar_plano', 'fn_gerar_relatorio')));
-    PERFORM pg_temp.confere('ESTRUTURA', 'gatilhos de regra (rn_*)', 24,
+    PERFORM pg_temp.confere('ESTRUTURA', 'gatilhos de regra (rn_*)', 26,
        (SELECT count(*) FROM pg_trigger WHERE NOT tgisinternal AND tgname LIKE 'rn\_%'));
     PERFORM pg_temp.confere('BASE', 'tipos de cota', 3, (SELECT count(*) FROM cota_tipo));
     PERFORM pg_temp.confere('BASE', 'abas do menu', 7, (SELECT count(*) FROM aba));
@@ -885,7 +885,7 @@ END $$;
 -- ---------------------------------------------------------------------
 DO $$
 BEGIN
-    PERFORM pg_temp.confere('V8 ESTRUTURA', 'tabelas do Atlas (conversa, mensagem, relatório, solicitação, cálculo, tool_call, decisão e, desde a V10, traço)', 8,
+    PERFORM pg_temp.confere('V8 ESTRUTURA', 'tabelas do Atlas (conversa, mensagem, relatório, solicitação, cálculo, tool_call, decisão e, desde a V10, traço e, desde a V12, fonte)', 9,
         (SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE' AND table_name LIKE 'atlas\_%'));
     PERFORM pg_temp.afirma('V8 ESTRUTURA', 'o gatilho rn_atlas_relatorio_congelado existe, com a função tg_atlas_relatorio_congelado',
         EXISTS (SELECT 1 FROM pg_trigger t JOIN pg_proc p ON p.oid = t.tgfoid
@@ -1237,7 +1237,8 @@ $f$;
 -- Monta um documento de teste e o arquivo dele; devolve o id do documento. p_estado: AGUARDANDO (só enviado), PROCESSANDO (aprovado,
 -- com um trecho inativo, sem publicar) ou INDEXADO (aprovado, com um trecho e publicado por fn_publicar_documento). A versão é a maior
 -- do grupo mais 1. O trecho se chama "Trecho de <título>".
-CREATE OR REPLACE FUNCTION pg_temp.doc(p_titulo TEXT, p_chave TEXT, p_escopo TEXT, p_ano INT, p_cota TEXT, p_cliente TEXT, p_estado TEXT)
+CREATE OR REPLACE FUNCTION pg_temp.doc(p_titulo TEXT, p_chave TEXT, p_escopo TEXT, p_ano INT, p_cota TEXT, p_cliente TEXT, p_estado TEXT,
+                                       p_dados BOOLEAN DEFAULT FALSE)
 RETURNS BIGINT LANGUAGE plpgsql AS $f$
 DECLARE
     v_evento BIGINT := pg_temp.ev(p_ano);
@@ -1245,11 +1246,12 @@ DECLARE
     v_parceria BIGINT := (SELECT id FROM _ver_parc WHERE cliente = p_cliente AND edicao = p_ano);
     v_doc BIGINT;
 BEGIN
-    INSERT INTO documento (titulo, chave, versao, tipo, escopo, evento_id, cota_tipo_id, parceria_id, arquivo_id, enviado_por)
+    INSERT INTO documento (titulo, chave, versao, tipo, escopo, evento_id, cota_tipo_id, parceria_id, arquivo_id, enviado_por,
+                           contem_dados_pessoais)
     VALUES (p_titulo, p_chave,
             (SELECT coalesce(max(versao), 0) + 1 FROM documento WHERE evento_id = v_evento AND escopo = p_escopo
               AND cota_tipo_id IS NOT DISTINCT FROM v_cota AND parceria_id IS NOT DISTINCT FROM v_parceria AND chave = p_chave),
-            'OUTRO', p_escopo, v_evento, v_cota, v_parceria, pg_temp.arq(p_cliente), pg_temp.rbs())
+            'OUTRO', p_escopo, v_evento, v_cota, v_parceria, pg_temp.arq(p_cliente), pg_temp.rbs(), p_dados)
     RETURNING id INTO v_doc;
     IF p_estado <> 'AGUARDANDO' THEN
         UPDATE documento SET status = 'PROCESSANDO', aprovado_por = pg_temp.rbs(), aprovado_por_perfil = 'ADMIN_RBS', aprovado_em = now()
@@ -1282,7 +1284,7 @@ BEGIN
           WHERE n.nspname = 'public' AND p.proname IN ('fn_texto_de_busca', 'fn_trava_grupo_documento', 'fn_publicar_documento')));
     PERFORM pg_temp.afirma('V11 ESTRUTURA', 'fn_texto_de_busca é IMMUTABLE (entra na coluna gerada)',
         (SELECT provolatile = 'i' FROM pg_proc WHERE proname = 'fn_texto_de_busca' AND pronamespace = 'public'::regnamespace));
-    PERFORM pg_temp.confere('V11 ESTRUTURA', 'gatilhos rn_documento* (7)', 7,
+    PERFORM pg_temp.confere('V11 ESTRUTURA', 'gatilhos rn_documento* (7 da V11 e o rn_documento_congelado da V12)', 8,
         (SELECT count(*) FROM pg_trigger WHERE NOT tgisinternal AND tgname LIKE 'rn\_documento%'));
     PERFORM pg_temp.afirma('V11 ESTRUTURA', 'tsv é coluna gerada STORED (no PostgreSQL 18 a gerada é virtual por padrão)',
         (SELECT attgenerated = 's' FROM pg_attribute WHERE attrelid = 'documento_trecho'::regclass AND attname = 'tsv'));
@@ -1478,17 +1480,19 @@ BEGIN
         END $d$ $q$);
     PERFORM pg_temp.recusa('V11 DADOS PESSOAIS', 'aprovar documento com suspeita de dado pessoal (o D11)', 'rn_documento_dados_pessoais', $q$
         DO $d$
-        DECLARE v_id BIGINT := pg_temp.doc('v11-t5', 'v11-t5', 'PARCERIA', 2027, NULL, 'Cliente Verde', 'AGUARDANDO');
+        DECLARE v_id BIGINT := pg_temp.doc('v11-t5', 'v11-t5', 'PARCERIA', 2027, NULL, 'Cliente Verde', 'AGUARDANDO', TRUE);
         BEGIN
-            UPDATE documento SET contem_dados_pessoais = TRUE WHERE id = v_id;
             UPDATE documento SET status = 'PROCESSANDO', aprovado_por = pg_temp.rbs(), aprovado_por_perfil = 'ADMIN_RBS', aprovado_em = now() WHERE id = v_id;
         END $d$ $q$);
-    PERFORM pg_temp.recusa('V11 DADOS PESSOAIS', 'reindexar documento que ganhou suspeita de dado pessoal', 'rn_documento_dados_pessoais', $q$
+    PERFORM pg_temp.recusa('V11 DADOS PESSOAIS', 'aprovar um documento que nasceu em ERRO e tem suspeita de dado pessoal', 'rn_documento_dados_pessoais', $q$
         DO $d$
-        DECLARE v_id BIGINT := pg_temp.doc('v11-t6', 'v11-t6', 'GLOBAL', 2027, NULL, NULL, 'PROCESSANDO');
+        DECLARE v_id BIGINT;
         BEGIN
-            UPDATE documento SET status = 'ERRO', erro = 'Falha de teste.', contem_dados_pessoais = TRUE WHERE id = v_id;
-            UPDATE documento SET status = 'PROCESSANDO', erro = NULL WHERE id = v_id;
+            INSERT INTO documento (titulo, chave, versao, tipo, escopo, evento_id, arquivo_id, status, erro, contem_dados_pessoais, enviado_por)
+            VALUES ('v11-t6', 'v11-t6', 1, 'OUTRO', 'GLOBAL', pg_temp.ev(2027), pg_temp.arq(), 'ERRO', 'Falha de teste.', TRUE, pg_temp.rbs())
+            RETURNING id INTO v_id;
+            UPDATE documento SET status = 'PROCESSANDO', erro = NULL, aprovado_por = pg_temp.rbs(), aprovado_por_perfil = 'ADMIN_RBS',
+                                 aprovado_em = now() WHERE id = v_id;
         END $d$ $q$);
     PERFORM pg_temp.recusa('V11 STATUS', 'reindexar documento que nasceu em ERRO (nunca foi aprovado)', 'rn_documento_aprovacao', $q$
         DO $d$
@@ -1756,7 +1760,242 @@ BEGIN
 END $$;
 
 -- ---------------------------------------------------------------------
--- 11. Resultado: a lista de conferências e, se alguma falhou, o erro final (saída diferente de zero com ON_ERROR_STOP)
+-- 11. V12: as fontes que a resposta cita, o documento congelado e o plural da busca
+-- ---------------------------------------------------------------------
+-- Uma mensagem do assistente numa conversa do Amarelo (ou, com p_papel, de outro papel) e o trecho de um documento indexado.
+CREATE OR REPLACE FUNCTION pg_temp.msg(p_papel TEXT DEFAULT 'assistant') RETURNS BIGINT LANGUAGE plpgsql AS $f$
+DECLARE v_conversa BIGINT; v_msg BIGINT;
+BEGIN
+    INSERT INTO atlas_conversa (parceria_id, usuario_id)
+    SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example')
+    RETURNING id INTO v_conversa;
+    INSERT INTO atlas_mensagem (conversa_id, ordem, papel, conteudo) VALUES (v_conversa, 1, p_papel, 'texto') RETURNING id INTO v_msg;
+    RETURN v_msg;
+END $f$;
+CREATE OR REPLACE FUNCTION pg_temp.trecho_de(p_documento BIGINT) RETURNS BIGINT LANGUAGE sql AS $f$
+    SELECT id FROM documento_trecho WHERE documento_id = p_documento ORDER BY ordem LIMIT 1
+$f$;
+
+-- Estrutura
+DO $$
+BEGIN
+    PERFORM pg_temp.afirma('V12 ESTRUTURA', 'a tabela atlas_fonte existe e a amostra não traz fonte nenhuma',
+        (SELECT count(*) = 0 FROM atlas_fonte));
+    PERFORM pg_temp.afirma('V12 ESTRUTURA', 'os gatilhos rn_atlas_fonte_mensagem e rn_documento_congelado existem',
+        (SELECT count(*) = 2 FROM pg_trigger WHERE NOT tgisinternal AND tgname IN ('rn_atlas_fonte_mensagem', 'rn_documento_congelado')));
+    PERFORM pg_temp.afirma('V12 ESTRUTURA', 'a coluna tsv continua STORED e com o índice GIN, refeitos com a função nova',
+        (SELECT attgenerated = 's' FROM pg_attribute WHERE attrelid = 'documento_trecho'::regclass AND attname = 'tsv')
+        AND EXISTS (SELECT 1 FROM pg_indexes WHERE tablename = 'documento_trecho' AND indexdef LIKE '%USING gin (tsv)%'));
+    PERFORM pg_temp.afirma('V12 ESTRUTURA', 'o kit indexado continua achável pela coluna tsv refeita (o tsv não ficou vazio)',
+        (SELECT count(*) FILTER (WHERE tsv = ''::tsvector) = 0 FROM documento_trecho));
+    PERFORM pg_temp.afirma('V12 ESTRUTURA', 'o atlas_ro não lê atlas_fonte (ela é do portal)',
+        NOT has_table_privilege('atlas_ro', 'atlas_fonte', 'SELECT'));
+END $$;
+
+-- atlas_fonte: o que a resposta cita
+DO $$
+BEGIN
+    PERFORM pg_temp.aceita('V12 FONTE', 'uma fonte de trecho com título e seção em dados', $q$
+        DO $d$
+        DECLARE v_doc BIGINT := pg_temp.doc('v12-ok', 'v12-ok', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+        BEGIN
+            INSERT INTO atlas_fonte (mensagem_id, marcador, tipo, trecho_id, documento_id, versao, pagina, dados)
+            VALUES (pg_temp.msg(), 'T1', 'TRECHO', pg_temp.trecho_de(v_doc), v_doc, 1, 1, '{"titulo": "v12-ok", "secao": "1 Teste"}');
+        END $d$ $q$);
+    PERFORM pg_temp.aceita('V12 FONTE', 'uma fonte de registro (entidade e id) e uma de conta (dados)', $q$
+        DO $d$
+        DECLARE v_msg BIGINT := pg_temp.msg();
+        BEGIN
+            INSERT INTO atlas_fonte (mensagem_id, marcador, tipo, registro_entidade, registro_id) VALUES (v_msg, 'R1', 'REGISTRO', 'entrega', 1);
+            INSERT INTO atlas_fonte (mensagem_id, marcador, tipo, dados) VALUES (v_msg, 'C1', 'CALCULO', '{"script": "34 * 312", "resultado": "10608"}');
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V12 FONTE', 'fonte numa mensagem da pessoa (só o assistente cita)', 'rn_atlas_fonte_mensagem', $q$
+        INSERT INTO atlas_fonte (mensagem_id, marcador, tipo, dados) VALUES (pg_temp.msg('user'), 'C1', 'CALCULO', '{}') $q$);
+    PERFORM pg_temp.recusa('V12 FONTE', 'fonte numa mensagem de ferramenta', 'rn_atlas_fonte_mensagem', $q$
+        INSERT INTO atlas_fonte (mensagem_id, marcador, tipo, dados) VALUES (pg_temp.msg('tool'), 'C1', 'CALCULO', '{}') $q$);
+    PERFORM pg_temp.recusa('V12 FONTE', 'o mesmo marcador duas vezes na mesma mensagem', 'uq_atlas_fonte_marcador', $q$
+        DO $d$
+        DECLARE v_msg BIGINT := pg_temp.msg();
+        BEGIN
+            INSERT INTO atlas_fonte (mensagem_id, marcador, tipo, dados) VALUES (v_msg, 'C1', 'CALCULO', '{}');
+            INSERT INTO atlas_fonte (mensagem_id, marcador, tipo, dados) VALUES (v_msg, 'C1', 'CALCULO', '{}');
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V12 FONTE', 'marcador que não é T, R ou C seguido de número (X1)', 'atlas_fonte_marcador_check', $q$
+        INSERT INTO atlas_fonte (mensagem_id, marcador, tipo, dados) VALUES (pg_temp.msg(), 'X1', 'CALCULO', '{}') $q$);
+    PERFORM pg_temp.recusa('V12 FONTE', 'marcador com zero (T0) ou minúsculo (t1)', 'atlas_fonte_marcador_check', $q$
+        INSERT INTO atlas_fonte (mensagem_id, marcador, tipo, dados) VALUES (pg_temp.msg(), 't1', 'CALCULO', '{}') $q$);
+    PERFORM pg_temp.recusa('V12 FONTE', 'tipo fora de TRECHO, REGISTRO e CALCULO', 'atlas_fonte_tipo_check', $q$
+        INSERT INTO atlas_fonte (mensagem_id, marcador, tipo, dados) VALUES (pg_temp.msg(), 'C1', 'OUTRO', '{}') $q$);
+    PERFORM pg_temp.recusa('V12 FONTE', 'a letra do marcador não é a do tipo (R1 num TRECHO)', 'ck_atlas_fonte_tipo', $q$
+        DO $d$
+        DECLARE v_doc BIGINT := pg_temp.doc('v12-t3', 'v12-t3', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+        BEGIN
+            INSERT INTO atlas_fonte (mensagem_id, marcador, tipo, trecho_id, documento_id, versao, pagina)
+            VALUES (pg_temp.msg(), 'R1', 'TRECHO', pg_temp.trecho_de(v_doc), v_doc, 1, 1);
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V12 FONTE', 'fonte de trecho sem o trecho', 'rn_atlas_fonte_mensagem', $q$
+        INSERT INTO atlas_fonte (mensagem_id, marcador, tipo, documento_id, versao, pagina) VALUES (pg_temp.msg(), 'T1', 'TRECHO', 1, 1, 1) $q$);
+    PERFORM pg_temp.recusa('V12 FONTE', 'conta com trecho colado', 'ck_atlas_fonte_tipo', $q$
+        DO $d$
+        DECLARE v_doc BIGINT := pg_temp.doc('v12-t4', 'v12-t4', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+        BEGIN
+            INSERT INTO atlas_fonte (mensagem_id, marcador, tipo, trecho_id) VALUES (pg_temp.msg(), 'C1', 'CALCULO', pg_temp.trecho_de(v_doc));
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V12 FONTE', 'registro sem a entidade ou sem o id', 'ck_atlas_fonte_tipo', $q$
+        INSERT INTO atlas_fonte (mensagem_id, marcador, tipo, registro_entidade) VALUES (pg_temp.msg(), 'R1', 'REGISTRO', 'entrega') $q$);
+    PERFORM pg_temp.recusa('V12 FONTE', 'dados que não é um objeto', 'atlas_fonte_dados_check', $q$
+        INSERT INTO atlas_fonte (mensagem_id, marcador, tipo, dados) VALUES (pg_temp.msg(), 'C1', 'CALCULO', '[1, 2]') $q$);
+    PERFORM pg_temp.recusa('V12 FONTE', 'trecho que não é do documento citado', 'rn_atlas_fonte_mensagem', $q$
+        DO $d$
+        DECLARE v_um BIGINT := pg_temp.doc('v12-t6a', 'v12-t6a', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+                v_outro BIGINT := pg_temp.doc('v12-t6b', 'v12-t6b', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+        BEGIN
+            INSERT INTO atlas_fonte (mensagem_id, marcador, tipo, trecho_id, documento_id, versao, pagina)
+            VALUES (pg_temp.msg(), 'T1', 'TRECHO', pg_temp.trecho_de(v_um), v_outro, 1, 1);
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V12 FONTE', 'página que o trecho não tem (a 7 num trecho da página 1)', 'rn_atlas_fonte_mensagem', $q$
+        DO $d$
+        DECLARE v_doc BIGINT := pg_temp.doc('v12-t7', 'v12-t7', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+        BEGIN
+            INSERT INTO atlas_fonte (mensagem_id, marcador, tipo, trecho_id, documento_id, versao, pagina)
+            VALUES (pg_temp.msg(), 'T1', 'TRECHO', pg_temp.trecho_de(v_doc), v_doc, 1, 7);
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V12 FONTE', 'versão do trecho trocada na citação', 'rn_atlas_fonte_mensagem', $q$
+        DO $d$
+        DECLARE v_doc BIGINT := pg_temp.doc('v12-t8', 'v12-t8', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+        BEGIN
+            INSERT INTO atlas_fonte (mensagem_id, marcador, tipo, trecho_id, documento_id, versao, pagina)
+            VALUES (pg_temp.msg(), 'T1', 'TRECHO', pg_temp.trecho_de(v_doc), v_doc, 2, 1);
+        END $d$ $q$);
+END $$;
+
+-- documento congelado
+DO $$
+BEGIN
+    PERFORM pg_temp.recusa('V12 CONGELADO', 'trocar o escopo de um documento ativo', 'rn_documento_congelado', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v12-c1', 'v12-c1', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+        BEGIN
+            UPDATE documento SET escopo = 'COTA' WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V12 CONGELADO', 'tornar global o anexo de uma parceria', 'rn_documento_congelado', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v12-c2', 'v12-c2', 'PARCERIA', 2027, NULL, 'Cliente Amarelo', 'INDEXADO');
+        BEGIN
+            UPDATE documento SET escopo = 'GLOBAL', parceria_id = NULL, arquivo_id = pg_temp.arq() WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V12 CONGELADO', 'trocar a chave', 'rn_documento_congelado', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v12-c3', 'v12-c3', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+        BEGIN
+            UPDATE documento SET chave = 'manual-operacoes' WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V12 CONGELADO', 'trocar a versão', 'rn_documento_congelado', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v12-c4', 'v12-c4', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+        BEGIN
+            UPDATE documento SET versao = 9 WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V12 CONGELADO', 'trocar a edição', 'rn_documento_congelado', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v12-c5', 'v12-c5', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+        BEGIN
+            UPDATE documento SET evento_id = pg_temp.ev(2026) WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V12 CONGELADO', 'pôr uma cota num documento global', 'rn_documento_congelado', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v12-c6', 'v12-c6', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+        BEGIN
+            UPDATE documento SET cota_tipo_id = (SELECT id FROM cota_tipo WHERE codigo = 'MASTER') WHERE id = v_id;
+        END $d$ $q$);
+    -- A parceria já é guardada pelo rn_documento_coerente (o arquivo é da parceria); aqui o gatilho de coerência é desligado, dentro da
+    -- tentativa que é desfeita, para provar que o congelado a guarda sozinho.
+    PERFORM pg_temp.recusa('V12 CONGELADO', 'trocar a parceria do anexo (com a coerência desligada)', 'rn_documento_congelado', $q$
+        DO $d$
+        DECLARE v_doc BIGINT := pg_temp.doc('v12-c7', 'v12-c7', 'PARCERIA', 2027, NULL, 'Cliente Amarelo', 'INDEXADO');
+        BEGIN
+            ALTER TABLE documento DISABLE TRIGGER rn_documento_coerente;
+            UPDATE documento SET parceria_id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Roxo' AND edicao = 2027) WHERE id = v_doc;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V12 CONGELADO', 'tirar a suspeita de dado pessoal', 'rn_documento_congelado', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v12-c8', 'v12-c8', 'GLOBAL', 2027, NULL, NULL, 'AGUARDANDO', TRUE);
+        BEGIN
+            UPDATE documento SET contem_dados_pessoais = FALSE WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V12 CONGELADO', 'o contorno de antes: aprovar tirando a suspeita no mesmo UPDATE', 'rn_documento_congelado', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v12-c9', 'v12-c9', 'PARCERIA', 2027, NULL, 'Cliente Verde', 'AGUARDANDO', TRUE);
+        BEGIN
+            UPDATE documento SET status = 'PROCESSANDO', contem_dados_pessoais = FALSE, aprovado_por = pg_temp.rbs(), aprovado_por_perfil = 'ADMIN_RBS',
+                             aprovado_em = now() WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V12 CONGELADO', 'o contorno de antes: trocar o escopo e aprovar no mesmo UPDATE', 'rn_documento_congelado', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v12-c10', 'v12-c10', 'PARCERIA', 2027, NULL, 'Cliente Verde', 'AGUARDANDO', TRUE);
+        BEGIN
+            UPDATE documento SET status = 'PROCESSANDO', escopo = 'GLOBAL', parceria_id = NULL, arquivo_id = pg_temp.arq(),
+                             aprovado_por = pg_temp.rbs(), aprovado_por_perfil = 'ADMIN_RBS', aprovado_em = now() WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.aceita('V12 CONGELADO', 'o que continua mudando: título, tipo, erro, modelo e as colunas da ingestão', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v12-c11', 'v12-c11', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+        BEGIN
+            UPDATE documento SET titulo = 'v12-novo', tipo = 'FAQ', paginas = 3, modelo_embedding = 'outro', dimensoes = 768, extracao_ms = 5 WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.aceita('V12 CONGELADO', 'a revogação e a publicação seguem como antes (status e trechos)', $q$
+        DO $d$
+        DECLARE v_um BIGINT := pg_temp.doc('v12-c12', 'v12-c12', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+                v_dois BIGINT := pg_temp.doc('v12-c12', 'v12-c12', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+        BEGIN
+            UPDATE documento SET status = 'REVOGADO', revogado_por = pg_temp.rbs(), revogado_em = now() WHERE id = v_dois;
+            IF (SELECT status FROM documento WHERE id = v_um) <> 'SUBSTITUIDO' THEN
+                RAISE EXCEPTION 'a v2 devia ter substituído a v1';
+            END IF;
+        END $d$ $q$);
+END $$;
+
+-- O plural da busca: singular e plural casam nos dois sentidos, e as palavras que não são plural não mudam
+DO $$
+DECLARE
+    v_par TEXT[];
+    v_doc BIGINT;
+    v_visto BOOLEAN;
+BEGIN
+    FOREACH v_par SLICE 1 IN ARRAY ARRAY[
+        ['animal', 'animais'], ['nacional', 'nacionais'], ['final', 'finais'], ['social', 'sociais'], ['geral', 'gerais'],
+        ['principal', 'principais'], ['pessoal', 'pessoais'], ['profissional', 'profissionais'], ['canal', 'canais'],
+        ['real', 'reais'], ['moral', 'morais'], ['corporal', 'corporais'], ['papel', 'papéis'],
+        ['hotel', 'hotéis'], ['inflamável', 'inflamáveis'], ['reciclável', 'recicláveis'], ['possível', 'possíveis'],
+        ['útil', 'úteis'], ['cão', 'cães'], ['pão', 'pães'], ['credencial', 'credenciais'], ['material', 'materiais'],
+        ['informação', 'informações'], ['inserção', 'inserções']] LOOP
+        PERFORM pg_temp.afirma('V12 BUSCA', v_par[1] || ' e ' || v_par[2] || ' casam, no singular e no plural', pg_temp.casa(v_par[1], v_par[2]));
+    END LOOP;
+    PERFORM pg_temp.afirma('V12 BUSCA', 'mais, demais, jamais, pais, cais e vais não mudam (nem viram mal, dem, jam ou pai)',
+        (SELECT bool_and(fn_texto_de_busca(p) = p) FROM unnest(ARRAY['mais', 'demais', 'jamais', 'pais', 'cais', 'vais']) AS p));
+    PERFORM pg_temp.afirma('V12 BUSCA', 'reis, leis, bois e dois (plural de -ei, -oi) também não mudam',
+        (SELECT bool_and(fn_texto_de_busca(p) = p) FROM unnest(ARRAY['reis', 'leis', 'bois', 'dois', 'gás', 'país']) AS p));
+    PERFORM pg_temp.afirma('V12 BUSCA', 'só o plural muda: aqui, mesmo e ainda ficam, jornais vira jornal',
+        fn_texto_de_busca('aqui mesmo ainda jornais') = 'aqui mesmo ainda jornal');
+    PERFORM pg_temp.afirma('V12 BUSCA', 'sais passa a ser o plural de sal', fn_texto_de_busca('sais') = 'sal');
+    PERFORM pg_temp.afirma('V12 BUSCA', 'mais, demais, jamais, pais e cais não viram mal, jamal, pal nem cal (o -ais não vira -al neles)',
+        NOT pg_temp.casa('mal', 'mais') AND NOT pg_temp.casa('mal', 'demais') AND NOT pg_temp.casa('jamal', 'jamais')
+        AND NOT pg_temp.casa('pal', 'pais') AND NOT pg_temp.casa('cal', 'cais'));
+    PERFORM pg_temp.afirma('V12 BUSCA', 'a função continua IMMUTABLE e PARALLEL SAFE (a coluna gerada a usa)',
+        (SELECT provolatile = 'i' AND proparallel = 's' FROM pg_proc WHERE proname = 'fn_texto_de_busca' AND pronamespace = 'public'::regnamespace));
+    -- A coluna tsv gravada usa a regra nova: um trecho com "animais" é achado pela consulta "animal"
+    v_visto := NULL;
+    BEGIN
+        v_doc := pg_temp.doc('animais de estimação e papéis', 'v12-busca', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+        v_visto := (SELECT tsv @@ plainto_tsquery('pt_sem_acento', fn_texto_de_busca('animal papel')) FROM documento_trecho WHERE documento_id = v_doc);
+        RAISE EXCEPTION 'desfazer' USING ERRCODE = 'ZZ001';
+    EXCEPTION WHEN SQLSTATE 'ZZ001' THEN NULL;
+    END;
+    PERFORM pg_temp.afirma('V12 BUSCA', 'o tsv gravado do trecho "animais ... papéis" casa com a consulta "animal papel"', coalesce(v_visto, FALSE));
+END $$;
+
+-- ---------------------------------------------------------------------
+-- 12. Resultado: a lista de conferências e, se alguma falhou, o erro final (saída diferente de zero com ON_ERROR_STOP)
 -- ---------------------------------------------------------------------
 SELECT grupo, conferencia, esperado, obtido, CASE WHEN ok THEN 'ok' ELSE 'FALHOU' END AS resultado FROM _ver ORDER BY ordem;
 SELECT count(*) AS conferencias, count(*) FILTER (WHERE ok) AS ok, count(*) FILTER (WHERE NOT ok) AS falhas FROM _ver;

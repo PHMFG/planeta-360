@@ -2,7 +2,7 @@
 
 Este documento explica o banco da Entrega 2. É para quem vai ler, testar ou mexer nele.
 O banco é o PostgreSQL (rodamos na versão 18; a mínima é a 15). As tabelas são criadas pelo Flyway.
-Os números: **46 tabelas de negócio (mais a `flyway_schema_history`, do Flyway), 8 visões, 9 funções e 24 gatilhos de regra**. As funções são as 4 de carga e de relatório (`fn_carregar_veiculacoes`, `fn_carregar_pesquisa`, `fn_carregar_plano`, da V7, e `fn_gerar_relatorio`), as 2 que formatam números (`fn_numero_br` e `fn_pct_truncado`, da V4; a `fn_pct_arredondado` da V4 saiu na V6) e as 3 dos documentos do Atlas (`fn_texto_de_busca`, `fn_trava_grupo_documento` e `fn_publicar_documento`, da V11). Não contam aqui as funções `tg_*`, uma por gatilho.
+Os números: **47 tabelas de negócio (mais a `flyway_schema_history`, do Flyway), 8 visões, 9 funções e 26 gatilhos de regra**. As funções são as 4 de carga e de relatório (`fn_carregar_veiculacoes`, `fn_carregar_pesquisa`, `fn_carregar_plano`, da V7, e `fn_gerar_relatorio`), as 2 que formatam números (`fn_numero_br` e `fn_pct_truncado`, da V4; a `fn_pct_arredondado` da V4 saiu na V6) e as 3 dos documentos do Atlas (`fn_texto_de_busca`, `fn_trava_grupo_documento` e `fn_publicar_documento`, da V11; a V12 troca o corpo da primeira). Não contam aqui as funções `tg_*`, uma por gatilho.
 
 **A V11 pede o pgvector.** O banco precisa da extensão `vector` e do papel `atlas_ro` antes de subir a API: rode `scripts/preparar-banco-atlas.sh` (um superusuário instala; a migração só confere e, sem eles, recusa subir com a frase "Rode scripts/preparar-banco-atlas.sh").
 
@@ -21,6 +21,7 @@ Os números: **46 tabelas de negócio (mais a `flyway_schema_history`, do Flyway
 | `backend/src/main/resources/db/migration/V9__resumo_do_raciocinio.sql` | A coluna `atlas_mensagem.resumo_do_raciocinio`: o resumo do raciocínio do modelo, gerado no servidor, que é o que a conversa mostra no lugar do raciocínio cru (veja "O que a V9 mudou") | Todos os ambientes |
 | `backend/src/main/resources/db/migration/V10__atlas_traco.sql` | A tabela `atlas_traco`: o traço de cada turno do Atlas (uma linha por etapa, com tempo, resultado e detalhe já sanitizado), que alimenta o diagnóstico (veja "O que a V10 mudou") | Todos os ambientes |
 | `backend/src/main/resources/db/migration/V11__documentos_e_trechos.sql` | Os documentos do Atlas: a categoria `DOCUMENTO` em `arquivo`, a busca textual sem acento (`unaccent`, `pt_sem_acento`, `fn_texto_de_busca`), as tabelas `documento` e `documento_trecho` (vetor de 768 dimensões, `tsvector`, índices HNSW e GIN), a RLS do papel `atlas_ro`, 7 gatilhos e `fn_publicar_documento` (veja "O que a V11 mudou") | Todos os ambientes |
+| `backend/src/main/resources/db/migration/V12__atlas_fonte_e_documento_congelado.sql` | A tabela `atlas_fonte` (as fontes que a resposta do Atlas citou), o documento que não muda de edição, escopo, cota, parceria, chave, versão nem suspeita de dado pessoal depois de criado, e o plural da busca textual (veja "O que a V12 mudou") | Todos os ambientes |
 | `backend/src/main/resources/db/dev/R__amostra.sql` | A amostra: Amarelo, Roxo e Verde, usuários, planos, entregas com arquivos, cargas, relatórios | Só dev e test |
 | `backend/src/main/resources/dev/documentos/` | O kit de 13 documentos fictícios do Atlas (12 PDFs e 1 TXT) e o `gabarito.json`, que diz o que cada página contém | Só dev e test (o `DocumentosDaAmostra` e o fixture dos testes os sobem) |
 | `backend/src/main/resources/dev/exemplos/` | Arquivos de exemplo (png, jpg, mp4, mp3, docx, xlsx, pptx, zip) que a API copia para o armazenamento no perfil dev | Só dev |
@@ -29,7 +30,7 @@ Os números: **46 tabelas de negócio (mais a `flyway_schema_history`, do Flyway
 
 Duas regras de convivência:
 
-- Migração já aplicada não se edita. Mudança vira uma migração nova (V12, V13...).
+- Migração já aplicada não se edita. Mudança vira uma migração nova (V13, V14...).
 - A amostra é repetível (`R__`) e tem uma trava: se os dados de exemplo já estão no banco, ela não faz nada. Para recarregar, recrie o banco de dev. Quem criou o banco com uma versão antiga da amostra precisa recriá-lo para ver a nova (veja "Recomeçar do zero" no README).
 - Os horários da amostra não são datas fixas: são contados para trás a partir do dia em que o banco foi criado (veja "A amostra e as datas").
 
@@ -176,6 +177,19 @@ A V11 entrega os documentos do Atlas (marco M3 do plano): a RBS sobe um PDF ou T
 | Histórico | Sem ação nova: `CRIACAO` no envio e `ALTERACAO_STATUS` nas mudanças de status, na entidade `documento`; `DOWNLOAD` na visualização (M4). A marca **não** vê essas linhas na rota 20 |
 | Limpeza nos testes | `documento` e `documento_trecho` não têm chave estrangeira para as tabelas que os mapas de `LoopSemTransacaoTest` e `ApoioDoFluxo` limpam, então ficam fora deles: o kit confirmado no banco não atrapalha os testes do Atlas |
 
+## O que a V12 mudou
+
+A V12 fecha o M4 do plano do Atlas completo: de onde veio cada afirmação do chat, o documento que não muda de lugar e o plural da busca. Acrescenta 1 tabela, 2 gatilhos e 2 funções de gatilho; da V11 troca só o corpo da `fn_texto_de_busca` (e refaz a coluna `tsv` com ela).
+
+| Assunto | O que a V12 faz |
+| --- | --- |
+| `atlas_fonte` | Uma linha por fonte que a resposta aceita do assistente citou: `mensagem_id`, `marcador` (`T1`, `R2`, `C1`: a letra diz o tipo), `tipo` (`TRECHO`, `REGISTRO` ou `CALCULO`), `trecho_id`, `documento_id`, `versao` e `pagina` (o que a resposta citou; o documento pode ser substituído depois), `registro_entidade` e `registro_id`, `dados` (JSON: o título e a seção do trecho como estavam, ou a conta inteira) e `criada_em`. `uq_atlas_fonte_marcador`: um marcador por mensagem. `ck_atlas_fonte_tipo`: a letra do marcador é a do tipo, e cada tipo traz o que lhe cabe e nada do que não lhe cabe. É gravada quando o texto é aceito; dela a conversa tira o campo `fontes` do item `texto` |
+| `rn_atlas_fonte_mensagem` | Só a mensagem do assistente cita fonte, e o trecho citado é do documento, da versão e da página dados |
+| Documento congelado | `rn_documento_congelado`: depois de criado, o documento não muda de edição, escopo, cota, parceria, chave, versão nem a suspeita de dado pessoal (`contem_dados_pessoais`). Antes, um `UPDATE` direto trocava o escopo de um documento ativo (o anexo de uma parceria passava a ser de todas) e passava `contem_dados_pessoais` para falso junto com `PROCESSANDO`. Nenhuma rota faz isso; agora o banco recusa (409, a frase do gatilho). Mudar de escopo, ou tirar a suspeita, é um novo envio |
+| Plural da busca | `fn_texto_de_busca` passa a levar para o singular o plural em `-ais` (animais, nacionais, profissionais), `-éis` (papéis, hotéis), `-áveis`/`-íveis` (inflamáveis, possíveis), `-úteis` e `-ães`, além do `-ões` e do `-iais` que a V11 já tratava. **Não mudam** `mais`, `demais`, `jamais`, `pais`, `cais` e `vais`, nem `reis`, `leis`, `bois` e `dois`; `sais` passa a ser `sal`. Medido em 01/11/2026 com 18 pares singular/plural que o kit tem: a V11 achava 7, a V12 acha 17. O recall do gabarito não mudou (0,954 só com a lista textual, nos dois casos). A coluna gerada depende da função, então a V12 tira a coluna `tsv` (o índice GIN vai junto), troca a função e refaz a coluna e o índice |
+| Sem acesso do `atlas_ro` | O `atlas_ro` não lê `atlas_fonte`: ela é do portal |
+| Limpeza nos testes | `atlas_fonte` tem chave estrangeira para `atlas_mensagem`, então entra nos mapas de `LoopSemTransacaoTest` e `ApoioDoFluxo`, antes da mensagem |
+
 ## Tabelas por área
 
 Negrito marca a coluna acrescentada depois da Sprint 1 numa tabela que já existia nela; as tabelas novas (`cota_tipo_aba`, `codigo_ativacao`, `stg_pesquisa`, `stg_plano`, `campo_catalogo`, `dado_informado` e as do Atlas) não usam negrito. `id` é sempre a chave primária. Colunas com sufixo `_id` apontam para outra tabela.
@@ -265,7 +279,7 @@ Na pesquisa geral o resultado não tem parceria nem pergunta. Na pesquisa da ati
 | `campo_catalogo` | O catálogo fixo do que a marca pode informar. `limite_campo` é o campo cujo valor vigente este não pode passar | chave, aba_id, ordem, rotulo, tipo (`INTEIRO`, `DECIMAL`, `DATA`, `ARQUIVO`), unidade, minimo, maximo, ajuda, limite_campo |
 | `dado_informado` | Cada valor informado, com autor, data e origem. **Só aceita INSERT**; corrigir é gravar de novo | id, parceria_id, campo_chave, valor_numero, valor_data, arquivo_id, origem (`PORTAL` ou `ATLAS`), informado_por, informado_em |
 
-### 9. Atlas (V8 a V10)
+### 9. Atlas (V8 a V10 e V12)
 
 | Tabela | Para que serve | Colunas |
 | --- | --- | --- |
@@ -277,6 +291,7 @@ Na pesquisa geral o resultado não tem parceria nem pergunta. Na pesquisa da ati
 | `atlas_tool_call` | Cada ferramenta que rodou, para auditoria | id, mensagem_id, ferramenta, argumentos (JSON), resultado (JSON), erro, duracao_ms |
 | `atlas_decisao` | O que o JEV decidiria, em sombra (P1). Ninguém a escreve ainda | id, mensagem_id, pergunta, escolha, confianca, probabilidades, modelo, decisao_llm, latencia_ms, erro |
 | `atlas_traco` | O traço do diagnóstico: uma linha por etapa de cada turno (V10) | id, parceria_id, conversa_id, turno (UUID), mensagem_id, ordem, etapa, resultado, iniciada_em, duracao_ms, dados (JSON) |
+| `atlas_fonte` | As fontes que a resposta do assistente citou (V12): `[T1]` trecho de documento, `[R1]` registro do portal, `[C1]` conta | id, mensagem_id, marcador, tipo (`TRECHO`, `REGISTRO`, `CALCULO`), trecho_id, documento_id, versao, pagina, registro_entidade, registro_id, dados (JSON), criada_em |
 
 ### 10. Documentos do Atlas (V11)
 
@@ -426,6 +441,9 @@ erDiagram
     atlas_mensagem ||--o{ atlas_decisao : "decide"
     atlas_conversa ||--o{ atlas_traco : "diagnostico"
     atlas_mensagem ||--o{ atlas_traco : "etapa"
+    atlas_mensagem ||--o{ atlas_fonte : "cita"
+    documento_trecho |o--o{ atlas_fonte : "e_citado"
+    documento |o--o{ atlas_fonte : "e_citado"
     evento ||--o{ documento : "edicao"
     cota_tipo |o--o{ documento : "da_cota"
     parceria |o--o{ documento : "do_anexo"
@@ -509,6 +527,7 @@ for f in backend/src/main/resources/db/migration/V1__estrutura.sql \
          backend/src/main/resources/db/migration/V9__resumo_do_raciocinio.sql \
          backend/src/main/resources/db/migration/V10__atlas_traco.sql \
          backend/src/main/resources/db/migration/V11__documentos_e_trechos.sql \
+         backend/src/main/resources/db/migration/V12__atlas_fonte_e_documento_congelado.sql \
          backend/src/main/resources/db/dev/R__amostra.sql; do
   psql -X -h localhost -U portal -d portal_verificacao -v ON_ERROR_STOP=1 -1 -f "$f"
 done
@@ -516,7 +535,7 @@ psql -X -P pager=off -h localhost -U portal -d portal_verificacao -v ON_ERROR_ST
 psql -X -h localhost -U portal -d postgres -c "DROP DATABASE portal_verificacao"
 ```
 
-O `verificacao.sql` imprime uma tabela com cada conferência e termina com erro se alguma falhar. Hoje são **340 conferências, todas ok**. As 164 de antes seguem iguais (as contagens de estrutura passaram a 46 tabelas, 8 visões, 4 funções de carga e relatório e 24 gatilhos). As 44 seguintes são da V7: o catálogo, a carga do plano (15 linhas numa parceria criada só para a conferência, com cada motivo de rejeição, o reenvio e o `btrim`), o `CHECK` de um valor só, a chave composta do anexo, a imutabilidade, o valor vigente depois de uma correção e 5 verificações de órfãos. As 32 da V8: as 7 tabelas do Atlas, as chaves compostas por parceria, a conversa no formato de chat (papel, ordem, um relatório em montagem e um cartão aberto por vez, nome de cálculo único), o relatório que congela (cada coluna protegida, o descartado, o apagar, e o que ainda pode mudar) e 6 verificações de órfãos. As 3 da V9: o resumo do raciocínio numa mensagem que não é do assistente, o resumo em branco e o resumo numa mensagem do assistente. As 10 da V10: a lista das 15 etapas no `CHECK`, a amostra sem traço, um traço aceito, etapa e resultado fora da lista, duração negativa, o traço de uma parceria numa conversa de outra, duas etapas com a mesma ordem no turno, dados que não são um objeto e 1 verificação de órfãos (traço ligado a uma mensagem de outra conversa). As 87 da V11: a estrutura (a extensão e a configuração de busca, as 3 funções, o `IMMUTABLE` da `fn_texto_de_busca`, os 7 gatilhos, a coluna `tsv` `STORED`, o vetor de 768 dimensões, os índices HNSW e GIN, o `NULLS NOT DISTINCT`, a categoria `DOCUMENTO`, a RLS ligada e sem `FORCE`, as duas políticas e o que o `atlas_ro` pode ler); a busca textual (11 pares de singular e plural, com e sem acento, e o `tsv` gerado); as regras do documento (escopo, arquivo, edição, chave, dois GLOBAL iguais, anexos de duas parcerias, a mesma chave em outra edição, o mesmo plano em três cotas); o ciclo de status (cada transição proibida, a aprovação sem quem aprovou, com um Admin Patrocinador e com dado pessoal, a reindexação, indexar sem trecho, revogar sem autor); o trecho (a cópia do documento, o que não muda, só ativo em documento indexado) e `fn_publicar_documento` (a v2 desativa a v1 na mesma transação, o anexo de outra parceria e a edição de 2026 ficam como estão, a revogação desliga os trechos); e a RLS como `atlas_ro` (sem contexto não vê nada, com o contexto vazio também, o contexto do Amarelo em 2027, o do Roxo, o de 2026, e o `42501` ao ler `parceria`, `arquivo`, `usuario` e `dado_informado` ou ao gravar). O banco de teste traz o kit de documentos confirmado, e as conferências só olham para os documentos que elas mesmas montam.
+O `verificacao.sql` imprime uma tabela com cada conferência e termina com erro se alguma falhar. Hoje são **404 conferências, todas ok**. As 164 de antes seguem iguais (as contagens de estrutura passaram a 47 tabelas, 8 visões, 4 funções de carga e relatório e 26 gatilhos). As 44 seguintes são da V7: o catálogo, a carga do plano (15 linhas numa parceria criada só para a conferência, com cada motivo de rejeição, o reenvio e o `btrim`), o `CHECK` de um valor só, a chave composta do anexo, a imutabilidade, o valor vigente depois de uma correção e 5 verificações de órfãos. As 32 da V8 (a contagem das tabelas do Atlas passou a 9 com a V12): as 7 tabelas do Atlas, as chaves compostas por parceria, a conversa no formato de chat (papel, ordem, um relatório em montagem e um cartão aberto por vez, nome de cálculo único), o relatório que congela (cada coluna protegida, o descartado, o apagar, e o que ainda pode mudar) e 6 verificações de órfãos. As 3 da V9: o resumo do raciocínio numa mensagem que não é do assistente, o resumo em branco e o resumo numa mensagem do assistente. As 10 da V10: a lista das 15 etapas no `CHECK`, a amostra sem traço, um traço aceito, etapa e resultado fora da lista, duração negativa, o traço de uma parceria numa conversa de outra, duas etapas com a mesma ordem no turno, dados que não são um objeto e 1 verificação de órfãos (traço ligado a uma mensagem de outra conversa). As 87 da V11: a estrutura (a extensão e a configuração de busca, as 3 funções, o `IMMUTABLE` da `fn_texto_de_busca`, os 7 gatilhos, a coluna `tsv` `STORED`, o vetor de 768 dimensões, os índices HNSW e GIN, o `NULLS NOT DISTINCT`, a categoria `DOCUMENTO`, a RLS ligada e sem `FORCE`, as duas políticas e o que o `atlas_ro` pode ler); a busca textual (11 pares de singular e plural, com e sem acento, e o `tsv` gerado); as regras do documento (escopo, arquivo, edição, chave, dois GLOBAL iguais, anexos de duas parcerias, a mesma chave em outra edição, o mesmo plano em três cotas); o ciclo de status (cada transição proibida, a aprovação sem quem aprovou, com um Admin Patrocinador e com dado pessoal, a reindexação, indexar sem trecho, revogar sem autor); o trecho (a cópia do documento, o que não muda, só ativo em documento indexado) e `fn_publicar_documento` (a v2 desativa a v1 na mesma transação, o anexo de outra parceria e a edição de 2026 ficam como estão, a revogação desliga os trechos); e a RLS como `atlas_ro` (sem contexto não vê nada, com o contexto vazio também, o contexto do Amarelo em 2027, o do Roxo, o de 2026, e o `42501` ao ler `parceria`, `arquivo`, `usuario` e `dado_informado` ou ao gravar). As 64 da V12: a estrutura (a tabela, os 2 gatilhos, a coluna `tsv` refeita, o kit ainda achável, o `atlas_ro` sem acesso a `atlas_fonte`); as regras da fonte (3 aceitas, e a recusa de fonte em mensagem da pessoa ou de ferramenta, marcador repetido, marcador fora do formato, tipo fora da lista, letra do marcador que não é a do tipo, trecho sem o trecho, conta com trecho colado, registro sem id, `dados` que não é um objeto, trecho que não é do documento, página e versão que o trecho não tem); o documento congelado (as 7 colunas, os dois contornos de antes e o que continua mudando); e a busca (24 pares de singular e plural, as palavras que não mudam e o `tsv` gravado). O banco de teste traz o kit de documentos confirmado, e as conferências só olham para os documentos que elas mesmas montam.
 Nada fica gravado: as tentativas de violar regras são desfeitas.
 Rodar o `R__amostra.sql` uma segunda vez não muda nada: a trava avisa "Amostra já carregada".
 

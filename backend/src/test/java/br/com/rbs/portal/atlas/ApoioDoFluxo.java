@@ -140,6 +140,7 @@ final class ApoioDoFluxo {
 
         static {
             TABELAS_E_GATILHOS.put("atlas_traco", null);
+        TABELAS_E_GATILHOS.put("atlas_fonte", null);
             TABELAS_E_GATILHOS.put("atlas_decisao", null);
             TABELAS_E_GATILHOS.put("atlas_tool_call", null);
             TABELAS_E_GATILHOS.put("atlas_calculo", null);
