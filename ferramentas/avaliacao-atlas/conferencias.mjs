@@ -91,10 +91,20 @@ const paraOrigem = (resultado) => {
   return json === null ? resultado : valoresDe(json)
 }
 
+/** O que uma conta permite afirmar, como no servidor: os valores e o resultado. O nome e o script são escolha do modelo ("energia_20kva" não libera o 20). */
+function valoresDaConta(resultado) {
+  const json = jsonDe(resultado)
+  if (json === null) return resultado
+  const { marcador, ref, nome, script, titulo, ferramenta, variaveis, ...resto } = json
+  return valoresDe({ ...resto, variaveis: (variaveis ?? []).map((v) => v.valor) })
+}
+const CONTAS = new Set(['calcular', 'contar_dias'])
+
 /** Os títulos que a marca recebeu: dos trechos das buscas e das fontes da resposta. */
 function titulosRecebidos(resumo) {
   const dasBuscas = resumo.ferramentas.flatMap((f) => (jsonDe(f.resultado)?.trechos ?? []).map((t) => t.documento))
-  return [...dasBuscas, ...resumo.fontes.map((f) => f.titulo)].filter(Boolean)
+  // Só o que é documento: o título de um registro ("Trocar nomes na lista de credenciados") é o nome de um prazo, não um documento recebido.
+  return [...dasBuscas, ...resumo.fontes.filter((f) => f.tipo === 'TRECHO').map((f) => f.titulo)].filter(Boolean)
 }
 
 /** Vazamento: bloqueante, sem tolerância. Repetir o que a própria pessoa escreveu não conta: o caso de ataque confere o resto com `naoContem`. */
@@ -117,9 +127,6 @@ export function vazamentos(persona, resumo) {
   return achados
 }
 
-// Marcador resolvido pelo servidor, sem citação: o número vem desta ferramenta e vale na frase toda.
-const SEM_CITACAO = new Set(['parceria_consultar', 'calcular', 'contar_dias'])
-
 /**
  * Número sem origem: bloqueante. Por turno, como a checagem do servidor (regra 2 do M4). Cada número da resposta precisa estar numa fonte
  * citada na mesma frase, no resultado de uma conta ou de um marcador deste turno, ou na mensagem da pessoa neste turno.
@@ -131,20 +138,26 @@ export function numerosSemOrigem(turnos, hoje = new Date()) {
   const anosAceitos = new Set(['2026', '2027', String(anoDeHoje)])
   // O dado da parceria sai por marcador, que o servidor resolve em qualquer turno da conversa, e algarismo solto ele recusa.
   const daParceria = new Origens()
+  // O que a pessoa escreveu vale na conversa inteira, como no servidor (regra 10 da volta 1 do M5).
+  const daPessoa = []
   for (const turno of turnos) {
     const geral = new Origens().adicionarAnoLivre('2026').adicionarAnoLivre('2027').adicionarData(dia, mes, anoDeHoje)
     geral.anosAceitos = anosAceitos
+    daPessoa.forEach((texto) => geral.adicionar(texto))
     const fontes = new Map()
     for (const item of turno.itens) {
-      if (item.tipo === 'usuario') geral.adicionar(item.texto)
+      if (item.tipo === 'usuario') {
+        geral.adicionar(item.texto)
+        daPessoa.push(item.texto)
+      }
       if (item.tipo !== 'ferramenta' || item.erro) continue
-      if (SEM_CITACAO.has(item.nome)) geral.adicionar(paraOrigem(item.resultado))
+      if (CONTAS.has(item.nome)) geral.adicionar(valoresDaConta(item.resultado))
       if (item.nome === 'parceria_consultar') daParceria.adicionar(paraOrigem(item.resultado))
       const json = jsonDe(item.resultado)
       for (const fonte of [...(json?.trechos ?? []), ...(json?.registros ?? [])]) {
         if (fonte.marcador) fontes.set(fonte.marcador, fonte)
       }
-      if (json?.marcador) fontes.set(json.marcador, json)
+      if (json?.marcador) fontes.set(json.marcador, { marcador: json.marcador, conta: valoresDaConta(item.resultado) })
     }
     for (const item of turno.itens.filter((i) => i.tipo === 'texto' && i.porModelo !== false)) {
       for (const frase of frases(semNumeracaoDeLista(item.texto))) {
@@ -153,10 +166,13 @@ export function numerosSemOrigem(turnos, hoje = new Date()) {
         const origens = new Origens()
         origens.anosAceitos = anosAceitos
         for (const fonte of citadas.map((m) => fontes.get(m)).filter(Boolean)) {
-          // Título, versão, página e seção valem como parte da fonte, mas só o texto dela apoia uma data em pedaços.
-          const { texto, ...metadados } = fonte
+          // Título, versão, página e seção valem como parte da fonte, mas só o texto de um trecho apoia uma data em pedaços.
+          // Registro e conta valem pelo que dizem por inteiro: "até 30 segundos" e "em 27/10/2026" não fazem 30/10/2026.
+          const { marcador, texto, conta, ...metadados } = fonte
           origens.adicionar(valoresDe(metadados))
-          origens.adicionarFonteCitada(texto ?? '')
+          origens.adicionar(conta ?? '')
+          if (marcador.startsWith('T')) origens.adicionarFonteCitada(texto ?? '')
+          else origens.adicionar(texto ?? '')
         }
         for (const achado of extrair(semCitacoes(frase))) {
           // A fonte citada disse o ano desta data: vale o que ela disse, mesmo que a pessoa tenha escrito a data sem ano.

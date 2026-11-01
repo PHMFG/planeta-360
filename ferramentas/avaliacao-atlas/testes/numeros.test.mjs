@@ -75,6 +75,31 @@ test('data logo depois de uma quebra de linha no trecho tem origem', () => {
   assert.equal(numerosSemOrigem(semCitar).length, 1)
 })
 
+const comFerramenta = (nome, resultado, texto) => [turno([{ tipo: 'usuario', texto: 'Quanto?' }, { tipo: 'ferramenta', nome, resultado: JSON.stringify(resultado) }, { tipo: 'texto', texto, porModelo: true }])]
+
+test('o nome e o script de uma conta não são origem de número', () => {
+  const conta = { marcador: 'C1', ref: 'calc:energia_20kva', valor: 90, valorFormatado: '90', script: 'a * b * 7', variaveis: [{ nome: 'a', origem: 'T1', valor: '45' }, { nome: 'b', origem: 'usuario', valor: '2' }] }
+  assert.deepEqual(numerosSemOrigem(comFerramenta('calcular', conta, 'Dá R$ 90 [C1], com 45 e 2.')), [])
+  assert.equal(numerosSemOrigem(comFerramenta('calcular', conta, 'São 20 kVA [C1].')).length, 1)
+  assert.equal(numerosSemOrigem(comFerramenta('calcular', conta, 'Multiplique por 7 [C1].')).length, 1)
+})
+
+test('data em pedaços só vale para trecho de documento', () => {
+  const registro = { tipo: 'registros_do_portal', registros: [{ marcador: 'R1', titulo: 'Entrega', texto: 'Até 30 segundos. Atualizada em 27/10/2026.' }] }
+  assert.equal(numerosSemOrigem(comFerramenta('listar_entregas', registro, 'Vale até 30/10/2026 [R1].')).length, 1)
+  assert.deepEqual(numerosSemOrigem(comFerramenta('listar_entregas', registro, 'Atualizada em 27/10/2026 [R1].')), [])
+  const trecho = { trechos: [{ marcador: 'T1', documento: 'Manual', texto: 'Na sexta, 29, e no sábado, 30 de janeiro de 2027.' }] }
+  assert.deepEqual(numerosSemOrigem(comFerramenta('buscar_documentos', trecho, 'Vale em 29/01/2027 [T1].')), [])
+})
+
+test('o que a pessoa escreveu vale nos turnos seguintes da conversa', () => {
+  const turnos = [
+    turno([{ tipo: 'usuario', texto: 'Tenho 34 kVA.' }, { tipo: 'texto', texto: 'Certo.', porModelo: true }]),
+    turno([{ tipo: 'usuario', texto: 'E então?' }, { tipo: 'texto', texto: 'Para 34 kVA, veja o manual.', porModelo: true }]),
+  ]
+  assert.deepEqual(numerosSemOrigem(turnos), [])
+})
+
 test('o numeral por extenso é a palavra: o 17 do marcador não conta como ele', () => {
   assert.equal(casa('aplicações comprovadas: 17.', 'dezessete'), false)
   assert.equal(casa('foram dezessete aplicações', 'dezessete'), true)
