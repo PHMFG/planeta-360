@@ -10,6 +10,11 @@ import static br.com.rbs.portal.atlas.ApoioDoAtlas.ROXO;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import br.com.rbs.portal.acesso.SessaoDeApi;
+import br.com.rbs.portal.atlas.diagnostico.EtapaDoTraco;
+import br.com.rbs.portal.atlas.diagnostico.RegistroDoTraco;
+import br.com.rbs.portal.atlas.diagnostico.ResultadoDaEtapa;
+import br.com.rbs.portal.atlas.diagnostico.Traco;
+import br.com.rbs.portal.atlas.provedor.ProvedorIndisponivelException;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
@@ -19,6 +24,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.TestPropertySource;
@@ -50,6 +56,9 @@ class DiagnosticoRotasTest {
     @Autowired
     ProvedorRoteirizado modelo;
 
+    @Autowired
+    RegistroDoTraco registro;
+
     private ApoioDoFluxo.Limpeza limpeza;
 
     @BeforeEach
@@ -70,6 +79,11 @@ class DiagnosticoRotasTest {
 
     long amarelo() {
         return SessaoDeApi.parceriaDe2027(jdbc, "Cliente Amarelo");
+    }
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> lerMapa(MvcTestResult resposta, String caminho) {
+        return (Map<String, Object>) lerJson(resposta, caminho);
     }
 
     long numero(MvcTestResult resposta, String caminho) {
@@ -252,6 +266,77 @@ class DiagnosticoRotasTest {
         assertThat(daRbs).hasStatus(HttpStatus.FORBIDDEN);
         assertThat(lerJson(daRbs, "$.detail")).isEqualTo("Só o Admin Patrocinador da parceria conversa com o Atlas.");
         assertThat(SessaoDeApi.anonima(mvc).get(uri)).hasStatus(HttpStatus.UNAUTHORIZED);
+    }
+
+    // ---------------------------------------------------------------------
+    // Bloqueante: a marca não lê SQL nem o corpo do erro do provedor no diagnóstico (a RBS lê)
+    // ---------------------------------------------------------------------
+
+    private static final String CORPO_DO_ERRO_DO_PROVEDOR = "401: Upstream request failed: Invalid credential";
+    private static final String SQL_DO_BANCO = "PreparedStatementCallback; SQL [INSERT INTO atlas_mensagem (conversa_id, ordem, papel, "
+            + "conteudo) VALUES (?, ?, ?, ?)]; ERROR: invalid byte sequence for encoding \"UTF8\": 0x00";
+
+    @Test
+    void falhaDoProvedorDeixaOCorpoDoErroSoParaARbs() {
+        SessaoDeApi marca = entrar(AMARELO);
+        long conversa = abrirConversa(marca);
+        // o raciocínio é resumido em paralelo, e o resumo também falha com uma mensagem que é SQL
+        modelo.chamadaComRaciocinio("Preciso consultar.", LoopDoAgenteTest.CONSULTAR, "{}").passo(pedido -> {
+            throw new ProvedorIndisponivelException("O modelo de linguagem não respondeu (UnauthorizedException: "
+                    + CORPO_DO_ERRO_DO_PROVEDOR + ").");
+        });
+        modelo.resumindoCom(pedido -> {
+            throw new IllegalStateException(SQL_DO_BANCO);
+        });
+        falar(marca, conversa, "Oi");
+
+        MvcTestResult daMarca = marca.get("/api/atlas/conversas/" + conversa + "/diagnostico");
+
+        assertThat(daMarca).hasStatus(HttpStatus.OK);
+        String turno = (String) lerJson(daMarca, "$.turnos[0].turno");
+        assertThat(lerLista(daMarca, "$.turnos[0].etapas[*].etapa")).contains("LLM_IDA", "RESUMO", "SAIDA");
+        // a marca vê que a ida falhou e de que tipo, mas não o que o provedor disse
+        assertThat(lerLista(daMarca, "$.turnos[0].etapas[?(@.etapa=='LLM_IDA' && @.resultado=='ERRO')].dados.erro"))
+                .containsExactly("ProvedorIndisponivelException");
+        assertThat(lerLista(daMarca, "$.turnos[0].etapas[?(@.etapa=='LLM_IDA' && @.resultado=='ERRO')].dados.detalhe")).isEmpty();
+        assertThat(corpo(daMarca)).doesNotContain("Invalid credential").doesNotContain("Upstream request failed").doesNotContain("UnauthorizedException")
+                .doesNotContain("detalhe").doesNotContain("SQL").doesNotContain("INSERT INTO").doesNotContain("atlas_mensagem");
+
+        // a RBS continua lendo o detalhe, no turno (rota 51) e só ali
+        MvcTestResult daRbs = entrar(RBS).get("/api/atlas/diagnostico/turnos/" + turno);
+        assertThat(daRbs).hasStatus(HttpStatus.OK);
+        assertThat(lerLista(daRbs, "$.etapas[?(@.etapa=='LLM_IDA' && @.resultado=='ERRO')].dados.detalhe")).singleElement().asString()
+                .contains("Invalid credential").contains("Upstream request failed");
+    }
+
+    @Test
+    void erroInesperadoDeixaParaAMarcaSoONomeDaExcecaoEARbsLeAMensagem() {
+        SessaoDeApi marca = entrar(AMARELO);
+        long conversa = abrirConversa(marca);
+        // o traço de um turno que caiu num erro do banco, como o loop e o AtlasService o gravam
+        Traco traco = registro.abrir(amarelo(), conversa);
+        traco.abrir(EtapaDoTraco.G1_LIMITES).dado("tetoPorParceria", 200).fim(ResultadoDaEtapa.OK);
+        traco.erro(new DataIntegrityViolationException(SQL_DO_BANCO));
+        traco.encerrar();
+
+        MvcTestResult daMarca = marca.get("/api/atlas/conversas/" + conversa + "/diagnostico");
+
+        assertThat(daMarca).hasStatus(HttpStatus.OK);
+        assertThat(lerLista(daMarca, "$.turnos[0].etapas[*].etapa")).containsExactly("G1_LIMITES", "ERRO", "SAIDA");
+        assertThat(lerMapa(daMarca, "$.turnos[0].etapas[1].dados")).containsOnlyKeys("excecao")
+                .containsEntry("excecao", "DataIntegrityViolationException");
+        assertThat(corpo(daMarca)).doesNotContain("SQL").doesNotContain("INSERT INTO").doesNotContain("atlas_mensagem")
+                .doesNotContain("invalid byte sequence").doesNotContain("\"mensagem\"");
+        // as outras etapas chegam inteiras
+        assertThat(lerJson(daMarca, "$.turnos[0].etapas[0].dados.tetoPorParceria")).isEqualTo(200);
+        assertThat(lerJson(daMarca, "$.turnos[0].etapas[2].dados.tipo")).isEqualTo("INTERROMPIDO");
+
+        // a RBS lê a mensagem, na rota 51 e na própria conversa não (a 49 é da marca)
+        String turno = (String) lerJson(daMarca, "$.turnos[0].turno");
+        MvcTestResult daRbs = entrar(RBS).get("/api/atlas/diagnostico/turnos/" + turno);
+        assertThat((String) lerJson(daRbs, "$.etapas[1].dados.mensagem")).contains("INSERT INTO atlas_mensagem")
+                .contains("invalid byte sequence");
+        assertThat(lerJson(daRbs, "$.etapas[1].dados.excecao")).isEqualTo("DataIntegrityViolationException");
     }
 
     // ---------------------------------------------------------------------

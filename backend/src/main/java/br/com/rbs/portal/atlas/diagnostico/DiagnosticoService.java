@@ -65,7 +65,9 @@ public class DiagnosticoService {
 
     /**
      * Rota 49. Os turnos da conversa, do mais antigo para o mais novo, com as etapas e os totais de tokens e custo. Só o dono da
-     * conversa (a RBS já recebeu 403 antes); conversa de outro dá 404. Sem o diagnóstico ligado para a marca, 404.
+     * conversa (a RBS já recebeu 403 antes); conversa de outro dá 404. Sem o diagnóstico ligado para a marca, 404. [PERMISSAO] O
+     * {@code dados} das etapas sai sem o texto cru de erro (a mensagem da exceção e o corpo do erro do provedor): ver o SQL ou o que
+     * um provedor respondeu não é da marca; a RBS os lê nas rotas 50 e 51.
      */
     public DiagnosticoDaConversaDto daConversa(UsuarioAutenticado usuario, long conversaId) {
         if (!modo.diagnosticoNaMarca()) {
@@ -73,7 +75,7 @@ public class DiagnosticoService {
         }
         atlas.conversaDoDono(usuario, conversaId);
         List<TurnoLido> lidos = repositorio.turnosDaConversa(conversaId);
-        Map<UUID, List<EtapaDto>> etapas = etapasPorTurno(lidos);
+        Map<UUID, List<EtapaDto>> etapas = etapasPorTurno(lidos, true);
         List<TurnoDto> turnos = lidos.stream().map(l -> paraTurno(l, etapas.get(l.turno()))).toList();
         long entrada = turnos.stream().mapToLong(TurnoDto::tokensEntrada).sum();
         long saida = turnos.stream().mapToLong(TurnoDto::tokensSaida).sum();
@@ -110,7 +112,7 @@ public class DiagnosticoService {
             throw new NaoEncontradoException(TURNO_NAO_ENCONTRADO);
         }
         TurnoLido lido = repositorio.turno(turno).orElseThrow(() -> new NaoEncontradoException(TURNO_NAO_ENCONTRADO));
-        TurnoDto base = paraTurno(lido, etapasPorTurno(List.of(lido)).get(turno));
+        TurnoDto base = paraTurno(lido, etapasPorTurno(List.of(lido), false).get(turno));
         return new TurnoDetalhadoDto(base.turno(), lido.conversaId(), lido.parceriaId(), lido.parceria(), dono(lido), base.mensagemId(),
                 base.iniciadoEm(), base.duracaoMs(), base.resultado(), base.tokensEntrada(), base.tokensSaida(), base.custoUsd(),
                 base.etapas());
@@ -126,9 +128,10 @@ public class DiagnosticoService {
         }
     }
 
-    private Map<UUID, List<EtapaDto>> etapasPorTurno(List<TurnoLido> turnos) {
+    /** As etapas de cada turno. {@code paraAMarca}: sem o texto cru de erro no {@code dados} (veja {@link TracoRepositorio}). */
+    private Map<UUID, List<EtapaDto>> etapasPorTurno(List<TurnoLido> turnos, boolean paraAMarca) {
         Map<UUID, List<EtapaDto>> porTurno = new LinkedHashMap<>();
-        for (EtapaLida etapa : repositorio.etapasDosTurnos(turnos.stream().map(TurnoLido::turno).toList())) {
+        for (EtapaLida etapa : repositorio.etapasDosTurnos(turnos.stream().map(TurnoLido::turno).toList(), paraAMarca)) {
             porTurno.computeIfAbsent(etapa.turno(), turno -> new ArrayList<>()).add(new EtapaDto(etapa.ordem(), etapa.etapa(),
                     etapa.resultado(), Datas.emBrasilia(etapa.iniciadaEm()), etapa.duracaoMs(), etapa.mensagemId(), etapa.dados()));
         }

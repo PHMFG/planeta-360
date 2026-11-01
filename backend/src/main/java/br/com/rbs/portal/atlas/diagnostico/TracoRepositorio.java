@@ -184,16 +184,37 @@ public class TracoRepositorio {
         return fora.toString();
     }
 
-    /** As etapas destes turnos, na ordem de cada um. */
-    public List<EtapaLida> etapasDosTurnos(Collection<UUID> turnos) {
+    /**
+     * O {@code dados} como a RBS o lê: inteiro (já sanitizado na gravação). O texto cru de um erro (a mensagem da exceção, o corpo
+     * da resposta do provedor) é diagnóstico de quem opera a API.
+     */
+    private static final String DADOS_DA_RBS = "CAST(t.dados AS text)";
+
+    /**
+     * O {@code dados} como a marca o lê (rota 49): sem o texto cru de erro. A mensagem de uma exceção pode ser SQL ou outro detalhe
+     * interno, e o corpo do erro de um provedor pode trazer o que ele quiser dizer; a marca fica com o nome da exceção e o resto da
+     * etapa. {@code ERRO} guarda só {@code excecao} (lista fechada, para um campo novo nunca vazar sem querer); nas outras etapas
+     * saem {@code detalhe} (o erro do provedor em {@code LLM_IDA}) e {@code mensagem}. Feito no SQL para os números do JSON
+     * ficarem como foram gravados.
+     */
+    private static final String DADOS_DA_MARCA = """
+            CAST(CASE WHEN t.etapa = 'ERRO'
+                      THEN jsonb_strip_nulls(jsonb_build_object('excecao', t.dados -> 'excecao'))
+                      ELSE t.dados - ARRAY['detalhe', 'mensagem'] END AS text)""";
+
+    /**
+     * As etapas destes turnos, na ordem de cada um. {@code paraAMarca}: o {@code dados} sem o texto cru de erro (rota 49); falso, a
+     * RBS (rotas 50 e 51).
+     */
+    public List<EtapaLida> etapasDosTurnos(Collection<UUID> turnos, boolean paraAMarca) {
         if (turnos.isEmpty()) {
             return List.of();
         }
         return jdbc.sql("""
                         SELECT t.turno, t.id, t.ordem, t.etapa, t.resultado, t.iniciada_em, t.duracao_ms, t.mensagem_id,
-                               CAST(t.dados AS text) AS dados
+                               %s AS dados
                         FROM atlas_traco t WHERE t.turno IN (:turnos) ORDER BY t.turno, t.ordem
-                        """)
+                        """.formatted(paraAMarca ? DADOS_DA_MARCA : DADOS_DA_RBS))
                 .param("turnos", turnos)
                 .query(EtapaLida.class).list();
     }
