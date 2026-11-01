@@ -157,9 +157,9 @@ class ConsultarCotaTest extends ApoioDasConsultas {
                 .doesNotContain("P6", "P4");
         // a Roxo tem credencial GERAL na Arena: não há palavra certa na tela, e o campo sai
         Map<String, Object> geral = registrosDoTipo(resultado, "credencial").stream().filter(c -> "ARENA".equals(c.get("setor"))).findFirst().orElseThrow();
-        assertThat(geral).containsEntry("quantidadePorDia", 5).doesNotContainKey("beneficiario");
+        assertThat(geral).containsEntry("quantidadePorDia", 8).doesNotContainKey("beneficiario");   // o plano da Subcota G: 8 por dia na Arena
         String texto = turno.fonte((String) geral.get("marcador")).orElseThrow().texto();
-        assertThat(texto).contains("5", "Arena").doesNotContain("GERAL", "geral");
+        assertThat(texto).contains("8", "Arena").doesNotContain("GERAL", "geral");
         // o JSON todo não leva o código cru
         String json = AtlasJson.escrever(resultado);
         assertThat(json).doesNotContain("\"P6\"", "\"P4\"", "\"GERAL\"", "\"AGENCIA\"", "\"MARCA\"", "EQUIPE_CONTEUDO");

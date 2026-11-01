@@ -447,16 +447,19 @@ DO $$
 BEGIN
     IF (SELECT pular FROM _amostra_ctl) THEN RETURN; END IF;
 
+    -- Os números e o portão de cada cota são os do plano comercial dela (o Manual diz que o plano prevalece), os mesmos do kit de
+    -- documentos do Atlas: Master (D03) 25 na Arena, 40 no Camarote e 10 no Lounge; Subcota G (D04, o Roxo) 6 e 3; Subcota (D05, o
+    -- Verde) 3 e 1, tudo por dia. A Arena entra pelo Portão 6; o Camarote e o Lounge, pelo Portão 4, onde também sai o shuttle (D02).
     INSERT INTO cortesia_cota (parceria_id, setor, dia, quantidade, com_shuttle, acesso)
     SELECT pp.id, v.setor, d.dia, v.qtd, v.shuttle, v.acesso
     FROM _amostra_parc pp
     JOIN (VALUES ('Cliente Amarelo', 'ARENA',    25, FALSE, 'Portão 6'),
-                 ('Cliente Amarelo', 'CAMAROTE', 40, TRUE,  'Portão 6 ou 4; shuttle via portão 4'),
-                 ('Cliente Amarelo', 'LOUNGE',   10, TRUE,  'Portão 6 ou 4; shuttle via portão 4'),
-                 ('Cliente Roxo',    'ARENA',     4, FALSE, 'P6'),
-                 ('Cliente Roxo',    'CAMAROTE',  2, TRUE,  'P6 ou P4; shuttle via P4'),
-                 ('Cliente Verde',   'ARENA',     4, FALSE, 'P6'),
-                 ('Cliente Verde',   'CAMAROTE',  2, TRUE,  'P6 ou P4; shuttle via P4')) AS v(cli, setor, qtd, shuttle, acesso)
+                 ('Cliente Amarelo', 'CAMAROTE', 40, TRUE,  'Portão 4; shuttle via portão 4'),
+                 ('Cliente Amarelo', 'LOUNGE',   10, TRUE,  'Portão 4; shuttle via portão 4'),
+                 ('Cliente Roxo',    'ARENA',     6, FALSE, 'P6'),
+                 ('Cliente Roxo',    'CAMAROTE',  3, TRUE,  'P4; shuttle via P4'),
+                 ('Cliente Verde',   'ARENA',     3, FALSE, 'P6'),
+                 ('Cliente Verde',   'CAMAROTE',  1, TRUE,  'P4; shuttle via P4')) AS v(cli, setor, qtd, shuttle, acesso)
       ON v.cli = pp.cliente
     CROSS JOIN (VALUES ('SEXTA'), ('SABADO')) AS d(dia);
 
@@ -466,11 +469,11 @@ BEGIN
      ('Cliente Amarelo', 'ARENA',         'MARCA',           20), ('Cliente Amarelo', 'ARENA',    'AGENCIA', 60),
      ('Cliente Amarelo', 'CAMAROTE',      'MARCA',           10), ('Cliente Amarelo', 'CAMAROTE', 'AGENCIA', 20),
      ('Cliente Amarelo', 'SALA_IMPRENSA', 'MARCA',            2), ('Cliente Amarelo', 'SALA_CONTEUDO', 'EQUIPE_CONTEUDO', 3),
-     ('Cliente Roxo',    'ARENA',         'GERAL',            5),
-     ('Cliente Verde',   'ARENA',         'GERAL',           10)) AS v(cli, setor, benef, qtd) ON v.cli = pp.cliente;
+     ('Cliente Roxo',    'ARENA',         'GERAL',            8),
+     ('Cliente Verde',   'ARENA',         'GERAL',           12)) AS v(cli, setor, benef, qtd) ON v.cli = pp.cliente;
 
     -- [ITEM-6] As destinações respeitam a cota de cada setor e dia (o gatilho rn_cortesia_limite confere): a Amarelo usa 25 de 25
-    -- na Arena de sexta, e a Verde só 2 de 4 na Arena de sábado.
+    -- na Arena de sexta, a Verde usa 3 de 3 na de sexta e só 2 de 3 na de sábado, e o Roxo usa 4 de 6 na Arena e 2 de 3 no Camarote.
     INSERT INTO cortesia_destinacao (cortesia_cota_id, destinatario_nome, quantidade, registrado_por, registrado_em)
     SELECT cc.id, 'Convidados da marca (lote)', v.qtd,
            (SELECT u.id FROM parceria_usuario pu JOIN usuario u ON u.id = pu.usuario_id
@@ -483,7 +486,7 @@ BEGIN
                  ('Cliente Amarelo', 'LOUNGE',   'SEXTA',  10), ('Cliente Amarelo', 'LOUNGE',   'SABADO',  8),
                  ('Cliente Roxo',    'ARENA',    'SEXTA',   4), ('Cliente Roxo',    'ARENA',    'SABADO',  4),
                  ('Cliente Roxo',    'CAMAROTE', 'SEXTA',   2), ('Cliente Roxo',    'CAMAROTE', 'SABADO',  2),
-                 ('Cliente Verde',   'ARENA',    'SEXTA',   4), ('Cliente Verde',   'CAMAROTE', 'SEXTA',   2),
+                 ('Cliente Verde',   'ARENA',    'SEXTA',   3), ('Cliente Verde',   'CAMAROTE', 'SEXTA',   1),
                  ('Cliente Verde',   'ARENA',    'SABADO',  2)) AS v(cli, setor, dia, qtd)
       ON v.cli = pp.cliente AND v.setor = cc.setor AND v.dia = cc.dia;
 
