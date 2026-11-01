@@ -173,7 +173,7 @@ class DiagnosticoDoTurnoTest {
         // o roteiro dos testes não mede tokens: só o que o loop sabe (o nome do modelo é o do provedor, que o roteiro não tem)
         assertThat(ida.dados()).containsEntry("ida", 1).containsEntry("emFluxo", false).containsEntry("mensagens", 2)
                 .containsEntry("chamadas", 0).containsEntry("comTexto", true).containsEntry("comRaciocinio", false)
-                .containsEntry("ferramentas", List.of("parceria_consultar", "buscar_documentos", "contar_dias", "calcular", "relatorio_iniciar")).doesNotContainKey("tokensEntrada")
+                .containsEntry("ferramentas", List.of("parceria_consultar", "buscar_documentos", "contar_dias", "calcular", "gerar_modelo", "relatorio_iniciar")).doesNotContainKey("tokensEntrada")
                 .doesNotContainKey("novaRedacao");
         assertThat(primeira(traco, "CHECAGEM").dados()).containsEntry("origem", "RESPOSTA").containsEntry("aprovado", true)
                 .containsEntry("caracteres", "Posso ajudar com os dados da sua parceria.".length());
@@ -203,7 +203,7 @@ class DiagnosticoDoTurnoTest {
         assertThat(primeiraIda.mensagemId()).isEqualTo(mensagens.get(0));
         assertThat(primeiraIda.dados()).containsEntry("chamadas", 1).containsEntry("comTexto", false).containsEntry("mensagens", 2);
         assertThat(todas(traco, "LLM_IDA").get(1).dados()).containsEntry("ida", 2).containsEntry("mensagens", 4)
-                .containsEntry("ferramentas", List.of("parceria_consultar", "buscar_documentos", "contar_dias", "calcular", "relatorio_iniciar"));
+                .containsEntry("ferramentas", List.of("parceria_consultar", "buscar_documentos", "contar_dias", "calcular", "gerar_modelo", "relatorio_iniciar"));
         Linha ferramenta = primeira(traco, "FERRAMENTA");
         assertThat(ferramenta.mensagemId()).isEqualTo(mensagens.get(0));
         assertThat(ferramenta.dados()).containsEntry("ferramenta", "parceria_consultar").containsEntry("argumentos", "{}")
@@ -211,6 +211,28 @@ class DiagnosticoDoTurnoTest {
         assertThat((String) ferramenta.dados().get("resultado")).contains("\"dados\"");
         assertThat(todas(traco, "LLM_IDA").get(1).mensagemId()).isEqualTo(mensagens.get(1));
         assertThat(primeira(traco, "SAIDA").dados()).containsEntry("idasAoModelo", 2).containsEntry("chamadasDeFerramenta", 1);
+    }
+
+    @Test
+    void respostaDiretaDeixaIdaFerramentaESaidaComTipoRespostaDireta() {
+        long conversa = abrir();
+        modelo.chamada("gerar_modelo", "{\"tipo\":\"BRIEFING_CONTEUDO\"}");
+
+        falar(conversa, "Me dá um modelo de briefing.");
+
+        List<Linha> traco = tracoDoTurno(jdbc, conversa);
+        assertThat(etapas(traco)).containsExactly("G1_LIMITES", "LLM_IDA", "FERRAMENTA", "SAIDA");
+        assertThat(resultados(traco)).containsOnly("OK");
+        exigirCoerencia(traco);
+        long mensagem = mensagensDoAssistente(conversa).get(0);
+        Linha ferramenta = primeira(traco, "FERRAMENTA");
+        assertThat(ferramenta.mensagemId()).isEqualTo(mensagem);
+        assertThat(ferramenta.dados()).containsEntry("ferramenta", "gerar_modelo").containsEntry("direta", true)
+                .doesNotContainKey("pausa").doesNotContainKey("pronto");
+        Linha saida = primeira(traco, "SAIDA");
+        assertThat(saida.mensagemId()).isEqualTo(mensagem);
+        assertThat(saida.dados()).containsEntry("tipo", "RESPOSTA_DIRETA").containsEntry("idasAoModelo", 1)
+                .containsEntry("chamadasDeFerramenta", 1).doesNotContainKey("caracteres");
     }
 
     @Test

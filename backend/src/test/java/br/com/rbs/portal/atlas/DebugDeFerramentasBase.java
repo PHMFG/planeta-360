@@ -140,6 +140,22 @@ abstract class DebugDeFerramentasBase {
     }
 
     @Test
+    void aRespostaDiretaTambemApareceNoDebugComoFerramenta() {
+        SessaoDeApi pessoa = entrar(AMARELO);
+        long conversa = abrirConversa(pessoa);
+        modelo.chamada("gerar_modelo", "{\"tipo\":\"BRIEFING_CONTEUDO\"}");
+
+        MvcTestResult resposta = falar(pessoa, conversa, "Me dá um modelo de briefing.");
+
+        assertThat(modelo.pedidos()).hasSize(1);   // o turno acabou na resposta direta
+        List<Map<String, Object>> ferramentas = lerLista(resposta, "$.itens[?(@.tipo=='ferramenta')]");
+        assertThat(ferramentas).hasSize(1);
+        assertThat(ferramentas.get(0)).containsEntry("nome", "gerar_modelo").containsEntry("argumentos", "{\"tipo\":\"BRIEFING_CONTEUDO\"}")
+                .containsEntry("erro", false).containsEntry("resultado", respostasGravadas(conversa).get(0));
+        assertThat((String) ferramentas.get(0).get("resultado")).contains("\"nomeArquivo\":\"briefing-de-conteudo.md\"");
+    }
+
+    @Test
     void argumentosEResultadoSaemCortadosEm20000Caracteres() {
         SessaoDeApi pessoa = entrar(AMARELO);
         long conversa = abrirConversa(pessoa);

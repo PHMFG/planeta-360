@@ -1,0 +1,49 @@
+# Perguntas da pesquisa
+
+Use este modelo para escrever as perguntas personalizadas que a marca quer incluir na pesquisa com o público do festival. Pense em perguntas curtas, fáceis de responder no celular e que tragam uma informação que a marca realmente vai usar.
+
+## Como escrever boas perguntas
+
+- Uma ideia por pergunta.
+- Linguagem simples, sem termos técnicos nem siglas.
+- Evite perguntas que induzem a resposta (por exemplo, "Você não achou ótimo...?").
+- Ofereça opções que cubram todas as respostas possíveis e inclua "Outro" ou "Prefiro não responder" quando fizer sentido.
+- Não peça dados pessoais de que a marca não precise.
+
+## Objetivo da pesquisa
+
+- O que a marca quer descobrir sobre o público ou sobre a ativação:
+- Que decisão ou ação vai depender das respostas:
+
+Preencha um bloco para cada pergunta e use só os blocos de que precisar.
+
+## Pergunta A
+
+- Texto da pergunta:
+- Tipo de resposta (escolha única, múltipla escolha, escala de concordância, texto livre):
+- Opções de resposta (uma por linha):
+- O que a marca espera aprender com esta pergunta:
+- Como a resposta será usada depois do festival:
+
+## Pergunta B
+
+- Texto da pergunta:
+- Tipo de resposta (escolha única, múltipla escolha, escala de concordância, texto livre):
+- Opções de resposta (uma por linha):
+- O que a marca espera aprender com esta pergunta:
+- Como a resposta será usada depois do festival:
+
+## Pergunta C
+
+- Texto da pergunta:
+- Tipo de resposta (escolha única, múltipla escolha, escala de concordância, texto livre):
+- Opções de resposta (uma por linha):
+- O que a marca espera aprender com esta pergunta:
+- Como a resposta será usada depois do festival:
+
+## Revisão final
+
+- As perguntas fazem sentido para quem nunca ouviu falar da marca?
+- Alguma pergunta pode ser mal interpretada?
+- Cada pergunta traz uma informação que será de fato usada?
+- Quem validou o texto final:
