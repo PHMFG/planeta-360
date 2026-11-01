@@ -535,6 +535,17 @@ public class AtlasRepositorio {
                 .query(EscopoDaParceria.class).single();
     }
 
+    /** O mesmo escopo, ou vazio se a parceria não existe (a busca de teste da RBS recebe o id de quem digitou). */
+    public Optional<EscopoDaParceria> escopoDaParceriaSeExistir(long parceriaId) {
+        return jdbc.sql("""
+                        SELECT pa.evento_id, pa.cota_tipo_id, ct.codigo AS cota_codigo, ev.edicao
+                        FROM parceria pa JOIN cota_tipo ct ON ct.id = pa.cota_tipo_id JOIN evento ev ON ev.id = pa.evento_id
+                        WHERE pa.id = :id
+                        """)
+                .param("id", parceriaId)
+                .query(EscopoDaParceria.class).optional();
+    }
+
     /** O código da cota da parceria (MASTER, SUBCOTA_G ou SUBCOTA). */
     public String codigoDaCota(long parceriaId) {
         return jdbc.sql("SELECT ct.codigo FROM parceria pa JOIN cota_tipo ct ON ct.id = pa.cota_tipo_id WHERE pa.id = :id")

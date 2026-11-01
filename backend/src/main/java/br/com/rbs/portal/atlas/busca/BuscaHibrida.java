@@ -115,13 +115,42 @@ public class BuscaHibrida {
         return transacao.execute(status -> buscarNaTransacao(status.isNewTransaction(), pedido));
     }
 
-    /** O corpo da busca, só dentro de uma transação nova. Sem ela, ou com outro papel, falha fechada. */
-    ResultadoDaBusca buscarNaTransacao(boolean transacaoNova, Pedido pedido) {
+    /**
+     * Os documentos que o escopo enxerga, como o {@code atlas_ro} os vê (a RLS e o filtro do servidor): título, versão, tipo, escopo e
+     * quantos trechos ativos cada um tem. É o "o que a parceria enxerga" da busca de teste da RBS (rota 61). Mesma regra da busca:
+     * transação nova, só de leitura, papel conferido.
+     */
+    public List<DocumentoVisivel> documentosVisiveis(Escopo escopo) {
+        return transacao.execute(status -> {
+            exigirTransacaoNova(status.isNewTransaction());
+            ContextoDeRls.aplicar(jdbc, papel, escopo, LIMITE_DE_TEMPO_EM_MS);
+            return jdbc.sql("""
+                            SELECT d.id, d.titulo, d.versao, d.tipo, d.escopo, count(*) AS trechos
+                            FROM documento_trecho t JOIN documento d ON d.id = t.documento_id
+                            WHERE %s
+                            GROUP BY d.id, d.titulo, d.versao, d.tipo, d.escopo
+                            ORDER BY d.escopo, d.titulo, d.versao, d.id
+                            """.formatted(BASE_DO_FILTRO))
+                    .param("evento", escopo.eventoId()).param("cota", escopo.cotaTipoId()).param("parceria", escopo.parceriaId())
+                    .query(DocumentoVisivel.class).list();
+        });
+    }
+
+    /** Um documento que o escopo enxerga: o que a RBS confere na busca de teste. */
+    public record DocumentoVisivel(long id, String titulo, int versao, String tipo, String escopo, long trechos) {
+    }
+
+    private static void exigirTransacaoNova(boolean transacaoNova) {
         if (!transacaoNova || !TransactionSynchronizationManager.isActualTransactionActive()
                 || !TransactionSynchronizationManager.isCurrentTransactionReadOnly()) {
             throw new IllegalStateException("A busca nos documentos só roda numa transação nova e só de leitura: fora dela o papel "
                     + ContextoDeRls.PAPEL + " não vale e a RLS não se aplica. Nenhuma busca foi feita.");
         }
+    }
+
+    /** O corpo da busca, só dentro de uma transação nova. Sem ela, ou com outro papel, falha fechada. */
+    ResultadoDaBusca buscarNaTransacao(boolean transacaoNova, Pedido pedido) {
+        exigirTransacaoNova(transacaoNova);
         long inicio = System.nanoTime();
         // O PostgreSQL não guarda o caractere nulo: uma consulta com ele falharia no bind. Ele não diz nada sobre o assunto.
         pedido = new Pedido(pedido.escopo(), pedido.consulta().replace("\u0000", ""), pedido.tipo(), pedido.k(), pedido.vetor(),

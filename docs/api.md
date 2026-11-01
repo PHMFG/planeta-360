@@ -2,7 +2,7 @@
 
 Este documento é o **contrato entre o back-end e o front-end**. Quem faz a tela lê aqui o que cada rota pede, o que devolve e quais erros esperar, sem precisar abrir o código.
 
-- Todas as 60 rotas estão implementadas e cobertas por testes de integração (`cd backend && ./mvnw test`), inclusive o isolamento entre parcerias. A coluna "Etapa" diz em que etapa do plano cada rota entrou (as do Atlas, 37 em diante, entram como `Atlas 1`, `Atlas 2`, `Atlas M2`, `Atlas M3` e `Atlas M4`). Mudança de formato daqui em diante entra neste arquivo no mesmo commit do código.
+- Todas as 61 rotas estão implementadas e cobertas por testes de integração (`cd backend && ./mvnw test`), inclusive o isolamento entre parcerias. A coluna "Etapa" diz em que etapa do plano cada rota entrou (as do Atlas, 37 em diante, entram como `Atlas 1`, `Atlas 2`, `Atlas M2`, `Atlas M3` e `Atlas M4`). Mudança de formato daqui em diante entra neste arquivo no mesmo commit do código.
 - O banco está descrito em [`docs/banco.md`](banco.md). Os nomes de status, cotas e abas são os mesmos do banco.
 
 ## Como falar com a API
@@ -166,10 +166,11 @@ Todas prontas e testadas. A coluna "Etapa" mostra em que etapa do plano a rota e
 | 58 | `GET /api/documentos/{id}/trechos` | Admin RBS | Os trechos em que o documento foi cortado, com página, seção, tokens e o começo do texto | Atlas M3 |
 | 59 | `GET /api/documentos/{id}/conteudo` | Admin RBS, ou a marca pelo escopo | O arquivo do documento, para o visualizador abrir na página (inline) | Atlas M4 |
 | 60 | `GET /api/documentos/{id}/trechos/{trechoId}` | Admin RBS, ou a marca pelo escopo | Um trecho inteiro, com a página e o texto, para o destaque no visualizador | Atlas M4 |
+| 61 | `POST /api/atlas/busca-teste` | Admin RBS | A busca nos documentos como o modelo a faria para uma parceria, com as duas listas, o RRF e o que a parceria enxerga | Atlas M4 |
 
-São 60 operações (método + caminho). A rota 5 (`ativar`) faz parte do contrato de autenticação, mas só é implementada na etapa 4. As rotas 37 em diante vieram com o Atlas: a coluna "Etapa" diz `Atlas 1` (plano de aplicações e dados informados), `Atlas 2` (conversa, cartão de perguntas e relatório), `Atlas M2` (o diagnóstico: rotas 49 a 53, veja "Diagnóstico do Atlas") `Atlas M3` (os documentos: rotas 54 a 58, veja "Os documentos do Atlas") ou `Atlas M4` (o visualizador, rotas 59 e 60, veja "Os documentos do Atlas"). As rotas 54, 55, 57 e 58 são só do Admin RBS (o outro perfil recebe **403** antes de o corpo ser lido); a 56, a 59 e a 60 são das duas pontas, e a marca só vê o que o escopo dela permite. A 49 é só do Admin Patrocinador, dono da conversa; as 50 a 53 são só do Admin RBS (o outro perfil recebe **403** antes de tudo). **As rotas 49 a 53 estão sempre mapeadas e respondem 404 com o diagnóstico desligado** (`atlas.diagnostico.ligado=false`, o padrão). Nas rotas 42 a 46 só o Admin Patrocinador chama (a RBS recebe **403** antes de o corpo ser lido); nas 47 e 48 chamam a marca da parceria e a RBS. **Neste MVP o relatório do Atlas está desligado** (`atlas.relatorio.ligado=false`, o padrão): as rotas **46, 47 e 48 não existem (404)**, e as rotas 42 e 44 só aceitam conversa por texto (`atalho` e `modelo` dão 422). Veja "Modo só chat". O contrato do relatório, nas rotas 42 a 48, vale com `atlas.relatorio.ligado=true`.
+São 61 operações (método + caminho). A rota 5 (`ativar`) faz parte do contrato de autenticação, mas só é implementada na etapa 4. As rotas 37 em diante vieram com o Atlas: a coluna "Etapa" diz `Atlas 1` (plano de aplicações e dados informados), `Atlas 2` (conversa, cartão de perguntas e relatório), `Atlas M2` (o diagnóstico: rotas 49 a 53, veja "Diagnóstico do Atlas") `Atlas M3` (os documentos: rotas 54 a 58, veja "Os documentos do Atlas") ou `Atlas M4` (o visualizador, rotas 59 e 60, e a busca de teste, rota 61, veja "Busca nos documentos"). As rotas 54, 55, 57, 58 e 61 são só do Admin RBS (o outro perfil recebe **403** antes de o corpo ser lido); a 56, a 59 e a 60 são das duas pontas, e a marca só vê o que o escopo dela permite. A 49 é só do Admin Patrocinador, dono da conversa; as 50 a 53 são só do Admin RBS (o outro perfil recebe **403** antes de tudo). **As rotas 49 a 53 estão sempre mapeadas e respondem 404 com o diagnóstico desligado** (`atlas.diagnostico.ligado=false`, o padrão). Nas rotas 42 a 46 só o Admin Patrocinador chama (a RBS recebe **403** antes de o corpo ser lido); nas 47 e 48 chamam a marca da parceria e a RBS. **Neste MVP o relatório do Atlas está desligado** (`atlas.relatorio.ligado=false`, o padrão): as rotas **46, 47 e 48 não existem (404)**, e as rotas 42 e 44 só aceitam conversa por texto (`atalho` e `modelo` dão 422). Veja "Modo só chat". O contrato do relatório, nas rotas 42 a 48, vale com `atlas.relatorio.ligado=true`.
 
-As rotas de debug do modelo de linguagem (`/api/debug/llm`) são temporárias, só existem no perfil `dev`, são só da RBS e ficam fora desta tabela e da conta das 60: veja "Rotas de debug (temporárias)", no fim.
+As rotas de debug do modelo de linguagem (`/api/debug/llm`) são temporárias, só existem no perfil `dev`, são só da RBS e ficam fora desta tabela e da conta das 61: veja "Rotas de debug (temporárias)", no fim.
 
 ## Objetos que se repetem
 
@@ -1992,9 +1993,9 @@ O custo de uma ida (e de um resumo) é o `usage.opencode.list_cost` que o OpenCo
 
 ---
 
-# Os documentos do Atlas (rotas 54 a 60)
+# Os documentos do Atlas (rotas 54 a 61)
 
-A RBS sobe os documentos de que o Atlas se alimenta: manuais de operação, planos comerciais de cada cota, anexos de parceria, FAQ e comunicados. O documento vira **trechos com embeddings** (vetores de 768 dimensões), com versão, escopo e uma regra do banco (RLS) que só deixa a busca ver o que a marca pode ver. **Só a RBS envia, aprova, recusa, revoga e reindexa**; o documento nasce `AGUARDANDO_APROVACAO` e só a RBS o aprova. A busca nos documentos está em "Busca nos documentos"; o visualizador, nas rotas 59 e 60.
+A RBS sobe os documentos de que o Atlas se alimenta: manuais de operação, planos comerciais de cada cota, anexos de parceria, FAQ e comunicados. O documento vira **trechos com embeddings** (vetores de 768 dimensões), com versão, escopo e uma regra do banco (RLS) que só deixa a busca ver o que a marca pode ver. **Só a RBS envia, aprova, recusa, revoga e reindexa**; o documento nasce `AGUARDANDO_APROVACAO` e só a RBS o aprova. A busca nos documentos, o visualizador e a busca de teste da RBS (rotas 59 a 61) estão em "Busca nos documentos".
 
 ## O ciclo de um documento
 
@@ -2190,11 +2191,45 @@ O trecho inteiro de um documento, para o visualizador abrir na página certa e d
 
 **Erros:** 401; 404 (`"Não encontramos este documento."` para todos os casos, para o erro não dizer qual dos dois ids falhou: documento ou trecho que não existe, documento que a marca não pode ver, trecho de outro documento, id que não é número).
 
+## 61. `POST /api/atlas/busca-teste`  · Atlas M4
+
+A busca de teste da RBS: ela escolhe uma parceria e uma consulta e vê o que a busca nos documentos faria por essa parceria, **sem o modelo**. É a aba "Busca de teste" de `/rbs/atlas`. **Quem chama:** Admin RBS (exige o token CSRF); o patrocinador recebe **403** (`"Esta operação é restrita à equipe da RBS."`) com qualquer corpo. [ISOLAMENTO] Passa pelo mesmo caminho do modelo (o embedding fora da transação e a busca como o papel `atlas_ro`, com a RLS e o filtro de escopo): o que aparece é o que a marca veria. Não grava nada (nem histórico), não chama o modelo de linguagem e gasta, no máximo, um embedding.
+
+**Corpo (JSON):** `{ "parceriaId": 3, "consulta": "prazo para informar os geradores", "tipo": "MANUAL_OPERACOES" }`. `tipo` é opcional (os seis tipos da rota 54; em branco, sem filtro).
+
+**200**:
+
+```json
+{ "parceria": { "id": 3, "patrocinador": "Cliente Amarelo", "edicao": 2027, "cota": "MASTER" },
+  "consulta": "prazo para informar os geradores", "tipo": null, "k": 6,
+  "degradado": false, "motivoDoDegradado": null, "erroDoEmbedding": null, "semTermoUtil": false,
+  "embeddingMs": 214, "sqlMs": 18, "trechosDeOutroModelo": 0,
+  "vetorial": [ { "trechoId": 17, "documentoId": 14, "documento": "Manual de Operações 2027", "versao": 2, "tipo": "MANUAL_OPERACOES",
+                  "pagina": 5, "secao": "4 Energia › 4.3 Geradores próprios", "posicaoVetorial": 1, "distancia": 0.312,
+                  "posicaoTextual": 2, "nota": 0.41, "rrf": 0.0325, "inicioDoTexto": "4.1 Pontos de energia\nCada ativação..." } ],
+  "textual": [ ],
+  "escolhidos": [ ],
+  "visiveis": [ { "documentoId": 14, "titulo": "Manual de Operações 2027", "versao": 2, "tipo": "MANUAL_OPERACOES", "escopo": "GLOBAL", "trechos": 24 } ] }
+```
+
+- `vetorial` e `textual` são as duas listas de até 30 trechos, cada uma na ordem dela (a posição começa em 1); `escolhidos` são os `k` = 6 do RRF (`1 / (60 + posição)` em cada lista), do maior `rrf` para o menor, os mesmos que o modelo receberia. Todo item leva as mesmas colunas: `posicaoVetorial` e `distancia` ficam `null` no trecho que não entrou na lista vetorial, e `posicaoTextual` e `nota`, no que não entrou na textual. `inicioDoTexto` são os primeiros 240 caracteres; o texto inteiro é a rota 60.
+- `visiveis` são os documentos que a parceria enxerga (o que o `atlas_ro` lê com a RLS: a edição, os `GLOBAL`, os `COTA` da cota dela e os `PARCERIA` dela, sempre indexados) e quantos trechos ativos cada um tem. Não depende do `tipo` pedido.
+- `degradado` é `true` quando a busca seguiu só com a lista textual, e `motivoDoDegradado` diz por quê: `EMBEDDINGS_DESLIGADOS`, ou `EMBEDDING_FALHOU` (com `erroDoEmbedding`, o nome da exceção, nunca a frase do provedor). Nesse caso `vetorial` vem vazia. `semTermoUtil` é `true` quando a consulta só tinha palavras vazias ("de a o que"): as três listas vêm vazias, mas `visiveis` vem. `trechosDeOutroModelo` conta os trechos visíveis que ficaram fora da lista vetorial por terem sido indexados com outro modelo de embeddings.
+
+**Erros**
+
+| Status | Quando |
+| --- | --- |
+| 400 | Corpo ausente, que não é JSON, ou `parceriaId` que não é número. |
+| 401 | Sem sessão. |
+| 403 | Não é Admin RBS (antes de o corpo ser lido), ou falta o token CSRF. |
+| 422 | `campos.parceriaId`: ausente (`"Informe a parceria (parceriaId)."`) ou que não existe (`"Esta parceria não existe."`). `campos.consulta`: ausente ou em branco (`"Escreva a consulta."`), com mais de 300 caracteres (`"A consulta tem no máximo 300 caracteres."`) ou com o caractere nulo (`"A consulta tem caracteres inválidos."`). `campos.tipo`: fora da lista. Todos os campos errados voltam juntos. |
+
 ---
 
 # Rotas de debug (temporárias)
 
-Um recurso **temporário**, para a equipe ligar o modelo de linguagem do Atlas pela tela (o botão "Debug"), sem reiniciar a API e sem variável de ambiente. Não faz parte das 60 rotas do contrato e sai antes da entrega final.
+Um recurso **temporário**, para a equipe ligar o modelo de linguagem do Atlas pela tela (o botão "Debug"), sem reiniciar a API e sem variável de ambiente. Não faz parte das 61 rotas do contrato e sai antes da entrega final.
 
 - **Só existem com `atlas.debug.chaves=true`.** A propriedade vem `false` por padrão, `true` no perfil `dev` e `false` no `test`. Sem ela, as quatro rotas respondem **404**, como uma rota que não existe.
 - **A chave fica só na memória da API.** Nunca vai ao banco, a arquivo ou ao log, e **some quando a API reinicia**. Nenhuma resposta devolve a chave inteira: só os 4 últimos caracteres (`finalDaChave`).

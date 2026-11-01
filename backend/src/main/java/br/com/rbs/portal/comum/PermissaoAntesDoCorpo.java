@@ -67,6 +67,9 @@ public class PermissaoAntesDoCorpo implements HandlerInterceptor, WebMvcConfigur
             "GET /api/documentos",
             "PATCH /api/documentos/{id}/status",
             "GET /api/documentos/{id}/trechos",
+            // A busca de teste do Atlas (rota 61): a RBS escolhe uma parceria e uma consulta e vê o que a busca faria por ela. As
+            // rotas 59 e 60 (o visualizador: o arquivo e um trecho do documento) são das duas pontas, como a 56.
+            "POST /api/atlas/busca-teste",
             // As rotas de debug da chave do modelo (temporárias, só no perfil dev): só a RBS as usa. Só existem com
             // atlas.debug.chaves=true; o teste de classificação liga a propriedade, porque no perfil test elas não existem.
             "GET /api/debug/llm",
