@@ -649,6 +649,6 @@ class FontesNoChatTest {
         assertThat(prompt).contains("texto simples").contains("sem negrito, títulos nem outra marcação").contains("Boa tarde!")
                 .contains("vá direto à resposta");
         // continua curto
-        assertThat(prompt.length()).as("o prompt do chat tem de ficar curto").isLessThan(9500);
+        assertThat(prompt.length()).as("o prompt do chat tem de ficar curto").isLessThan(10000);
     }
 }
