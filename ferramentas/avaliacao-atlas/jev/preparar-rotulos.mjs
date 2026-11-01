@@ -79,16 +79,19 @@ function prepararResposta() {
   }
   const vistas = new Set()
   const unicas = certas.filter((c) => !vistas.has(c.frase) && vistas.add(c.frase)).slice(0, 60)
-  const linhas = unicas.map((c, i) => ({ ...c, rotulo: 'apoia', origem: 'rodada', split: split(i) }))
+  // Separa por caso: duas frases da mesma conversa, quase iguais, não caem uma em cada lado.
+  const casosVistos = [...new Set(unicas.map((c) => c.caso))].sort()
+  const splitDo = (c) => split(casosVistos.indexOf(c.caso))
+  const linhas = unicas.map((c) => ({ ...c, rotulo: 'apoia', origem: 'rodada', split: splitDo(c) }))
   const erradas = []
   unicas.slice(0, 24).forEach((c, i) => {
-    if (i % 2 === 0) erradas.push({ frase: comNumeroTrocado(c.frase), trechos: c.trechos, caso: c.caso, rotulo: 'errada', origem: 'numero_trocado', split: split(i) })
-    else erradas.push({ frase: c.frase, trechos: unicas[(i + 7) % unicas.length].trechos, caso: c.caso, rotulo: 'errada', origem: 'citacao_de_outro', split: split(i) })
+    if (i % 2 === 0) erradas.push({ frase: comNumeroTrocado(c.frase), trechos: c.trechos, caso: c.caso, rotulo: 'errada', origem: 'numero_trocado', split: splitDo(c) })
+    else erradas.push({ frase: c.frase, trechos: unicas[(i + 7) % unicas.length].trechos, caso: c.caso, rotulo: 'errada', origem: 'citacao_de_outro', split: splitDo(c) })
   })
   // Afirmação que o trecho não faz, com número: uma frase certa com um acréscimo que nenhum documento diz.
-  unicas.slice(24, 34).forEach((c, i) => {
+  unicas.slice(24, 34).forEach((c) => {
     const sem = semCitacoes(c.frase).trim().replace(/[.!]$/, '')
-    erradas.push({ frase: `${sem}, com desconto de 10% para quem pagar até 10/12/2026 [T1].`, trechos: c.trechos, caso: c.caso, rotulo: 'errada', origem: 'afirmacao_sem_apoio', split: split(i + 24) })
+    erradas.push({ frase: `${sem}, com desconto de 10% para quem pagar até 10/12/2026 [T1].`, trechos: c.trechos, caso: c.caso, rotulo: 'errada', origem: 'afirmacao_sem_apoio', split: splitDo(c) })
   })
   gravar('resposta.jsonl', [...linhas, ...erradas])
   console.log(`resposta: ${linhas.length} certas (conferir à mão) e ${erradas.length} erradas`)

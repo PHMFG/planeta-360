@@ -183,10 +183,10 @@ atlas:
   jev:
     intencao:
       modo: ${ATLAS_JEV_INTENCAO:ativo}
-      limiar: 0.80
+      limiar: 0.92
     cartao:
       modo: ${ATLAS_JEV_CARTAO:ativo}
-      limiar: 0.87
+      limiar: 0.98
     fontes:
       modo: ${ATLAS_JEV_FONTES:sombra}
       limiar: 0.97
@@ -195,10 +195,10 @@ atlas:
       limiar: 0.5
     coerencia:
       modo: ${ATLAS_JEV_COERENCIA:sombra}
-      limiar: 0.5
+      limiar: 0.92
     lacunas:
       modo: ${ATLAS_JEV_LACUNAS:sombra}
-      limiar: 0.81
+      limiar: 0.80
 
 ---
 spring:

@@ -40,7 +40,8 @@ const MONTAGEM = {
   intencao: (item) => ({ mensagem: item.mensagem }),
   cartao: (item) => ({ campos: CAMPOS_DO_CARTAO, mensagem: item.mensagem }),
   fontes: (item) => ({ pergunta: item.pergunta, trecho: item.trecho }),
-  resposta: (item) => ({ resposta: item.frase, trechos: item.trechos.join('\n\n'), frase: item.frase }),
+  // Como o servidor: cada trecho com o marcador. A frase vem de uma rodada, e os metadados do documento não ficam nos rótulos.
+  resposta: (item) => ({ resposta: item.frase, trechos: item.trechos.map((t, i) => `[T${i + 1}]\n${t}`).join('\n\n'), frase: item.frase }),
   coerencia: (item) => ({ selos: item.selos.map((s) => `- ${s}`).join('\n'), paragrafo: item.paragrafo }),
   lacunas: (item) => ({ mensagem: item.pedido, campo: item.rotulo_campo }),
 }
@@ -132,17 +133,34 @@ function acertou(ponto, linha) {
   return true
 }
 
-function medirEscolha(ponto, linhas, limiar) {
-  const aceitas = linhas.filter((l) => (respostaDe(l, ponto)?.confidence ?? 0) >= limiar)
-  return { limiar, precisao: fracao(aceitas.filter((l) => acertou(ponto, l)).length, aceitas.length), cobertura: fracao(aceitas.length, linhas.length), aceitas: aceitas.length }
+// As opções que mudam o que a pessoa recebe: é sobre elas que a precisão interessa. A resposta fixa do cartão é uma ação, e "outro assunto"
+// segue o caminho de hoje; a recusa fixa é uma ação, e "dúvida de documento" só escolhe ferramentas.
+const OPCOES_QUE_AGEM = {
+  intencao: ['fora_de_escopo', 'outro_relatorio', 'modelo_em_branco', 'montar_relatorio'],
+  cartao: ['responde_ao_cartao'],
 }
 
-/** A regra do plano: limiar com precisão ≥ 95% e cobertura ≥ 50% no ajuste, confirmado com precisão ≥ 93% no reserva. Fica o menor, que cobre mais. */
+function medirEscolha(ponto, linhas, limiar) {
+  const agem = OPCOES_QUE_AGEM[ponto]
+  const conta = (l) => !agem || agem.includes(respostaDe(l, ponto)?.choice)
+  const aceitas = linhas.filter((l) => conta(l) && (respostaDe(l, ponto)?.confidence ?? 0) >= limiar)
+  const devidas = agem ? linhas.filter((l) => agem.includes(l.rotulo)) : linhas
+  const achadas = agem ? aceitas.filter((l) => acertou(ponto, l)).length : aceitas.length
+  return { limiar, precisao: fracao(aceitas.filter((l) => acertou(ponto, l)).length, aceitas.length), cobertura: fracao(achadas, devidas.length), aceitas: aceitas.length }
+}
+
+/**
+ * A regra do plano: limiar com precisão ≥ 95% e cobertura ≥ 50% no ajuste, confirmado com precisão ≥ 93% no reserva. Entre os que passam,
+ * fica o de maior precisão e, no empate, o mais alto que ainda cobre 75%: abaixo do limiar a mensagem só vai ao modelo, que acerta, e uma
+ * recusa errada custa bem mais que uma ida a mais. O limiar sai só do ajuste.
+ */
 function decidirEscolha(ponto, linhas) {
   const ajuste = doSplit(linhas, 'ajuste')
   const reserva = doSplit(linhas, 'reserva')
   const curva = LIMIARES.map((limiar) => medirEscolha(ponto, ajuste, limiar))
-  const bom = curva.find((m) => m.precisao !== null && m.precisao >= 0.95 && m.cobertura >= 0.5)
+  const passam = curva.filter((m) => m.precisao !== null && m.precisao >= 0.95 && m.cobertura >= 0.5)
+  const melhores = passam.filter((m) => m.precisao === Math.max(...passam.map((p) => p.precisao)))
+  const bom = melhores.filter((m) => m.cobertura >= 0.75).at(-1) ?? melhores[0]
   if (!bom) return { ponto, liga: false, motivo: 'nenhum limiar com precisão de 95% e cobertura de 50% no ajuste', melhor: curva.filter((m) => m.precisao !== null).sort((a, b) => b.precisao - a.precisao || b.cobertura - a.cobertura)[0], curva }
   const noReserva = medirEscolha(ponto, reserva, bom.limiar)
   const liga = noReserva.precisao !== null && noReserva.precisao >= 0.93
