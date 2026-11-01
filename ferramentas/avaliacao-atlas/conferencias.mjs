@@ -143,7 +143,8 @@ export function numerosSemOrigem(turnos, hoje = new Date()) {
 }
 
 // Etapas que rodam em paralelo (seção 8.4 do plano): ficam fora da soma e podem terminar depois do turno.
-const EM_PARALELO = new Set(['RESUMO', 'R3_FONTES'])
+// A BUSCA roda dentro da FERRAMENTA, que já conta o tempo dela: entra aqui para não contar duas vezes.
+const EM_PARALELO = new Set(['RESUMO', 'R3_FONTES', 'BUSCA'])
 const FOLGA_MS = 50
 
 /**
