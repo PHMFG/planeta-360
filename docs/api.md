@@ -1960,8 +1960,9 @@ Cada item de `campos` do cartão é um campo do catálogo (rota 39) mais `obriga
   "secoes": [
     { "id": "aplicacoes", "titulo": "Aplicações de marca", "blocos": [
       { "id": "b-kpi-aplic", "tipo": "kpi_grade", "itens": [
-        { "rotulo": "Previstas", "valor": "19", "indisponivel": null, "ref": "cons:aplicacoes.previstas" },
-        { "rotulo": "Comprovação", "valor": "89,4%", "indisponivel": null, "ref": "cons:aplicacoes.percentual" } ] },
+        { "rotulo": "Previstas", "valor": "19", "indisponivel": null, "ref": "cons:aplicacoes.previstas", "selo": null },
+        { "rotulo": "Comprovadas", "valor": "17", "indisponivel": null, "ref": "cons:aplicacoes.comprovadas", "selo": "abaixo do previsto" },
+        { "rotulo": "Comprovação", "valor": "89,4%", "indisponivel": null, "ref": "cons:aplicacoes.percentual", "selo": null } ] },
       { "id": "b-tab-aplic", "tipo": "tabela", "colunas": ["Aplicação", "Previsto", "Comprovadas", "Fotos"],
         "linhas": [["Elemento na Arena", "1", "1", "2"]], "ref": "lista:aplicacoes" } ] } ] }
 ```
@@ -1974,12 +1975,14 @@ Cada item de `campos` do cartão é um campo do catálogo (rota 39) mais `obriga
 | `titulo` | `texto` |
 | `paragrafo` | `texto`, `redigidoPor`: `"ATLAS"` (o modelo de linguagem escreveu) ou `"MODELO"` (a frase-modelo do arquivo do modelo) |
 | `kpi` | `item` |
-| `kpi_grade` | `itens` |
+| `kpi_grade` | `itens`: `{rotulo, valor, indisponivel, ref, selo}`. O `selo` é o **selo do servidor** (veja abaixo) e vem em todo item, `null` na maioria |
 | `tabela` | `colunas`, `linhas` (todas as células já formatadas), `ref` |
 | `galeria_comprovacoes` | `itens`: `{arquivoId, nomeOriginal, aplicacao, descricao, registradoEm}` (o `arquivoId` é o que a rota 18 baixa) |
 | `campo_informado` | `rotulo`, `valor`, `origem` |
 | `aviso_indisponivel` | `motivo` |
 | `fontes` | `itens`: `{ref, rotulo, valor, origem}` |
+
+**Os selos "acima do previsto" e "abaixo do previsto"** (M7) saem em `itens[].selo` de um `kpi_grade`, calculados **em código** pelo servidor (nunca pelo modelo): o item exibido de um par previsto &times; exibido recebe `"acima do previsto"` se o número exibido é maior que o previsto e `"abaixo do previsto"` se é menor, quando os dois têm valor. Hoje o único par é o da grade de aplicações do modelo-base: `cons:aplicacoes.comprovadas` contra `cons:aplicacoes.previstas`, e o selo vai no item "Comprovadas". Igual, ou com um dos números sem valor, o `selo` é `null`. O relatório pronto guarda o selo no `snapshot` (o de antes do M7 não tem o campo, e sai `null`), e o de montagem o recalcula com os números de agora. O ponto `coerencia` do JEV lê os selos.
 
 **Os números** saem como texto, no padrão do portal e **cortados** na primeira casa como em todo o portal: `"1.200"`, `"89,3%"` (1.072 de 1.200). Um item de KPI sem valor traz `valor: null` e `indisponivel` com o motivo (`"Não informado pela marca."`, `"Faltam dados para o cálculo: ..."`, `"Não dá para calcular: Visitantes no espaço é zero."`, `"Esta parceria não tem aplicações de marca no plano comercial."`). **Nunca zero no lugar de "sem dado".** Um parágrafo cuja frase tem uma referência sem valor sai como `aviso_indisponivel` (`"Sem os dados para escrever este texto: Visitantes no espaço e Taxa de cadastro."`); uma tabela ou galeria vazia, também.
 

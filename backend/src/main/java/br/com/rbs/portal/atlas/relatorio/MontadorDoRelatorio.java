@@ -33,6 +33,7 @@ import org.springframework.stereotype.Component;
  * os blocos já com os valores, no formato da rota 47 e do snapshot. [ATLAS] [RELATORIO] As regras que valem em todo bloco:
  * <ul>
  *   <li>Nunca zero no lugar de "sem dado": o número sem valor sai com {@code valor} nulo e o motivo em {@code indisponivel}.</li>
+ *   <li>O item exibido de um par previsto &times; exibido da grade leva o {@code selo} do servidor ({@link SelosDoRelatorio}).</li>
  *   <li>Parágrafo cuja frase tem referência sem valor sai como {@code aviso_indisponivel}: frase com buraco não existe.</li>
  *   <li>Parágrafo redigível ainda sem texto mostra a frase-modelo do modelo-base (redigido por MODELO). No relatório pronto o texto
  *       sempre existe: a finalização o exige ou o plano B o preenche antes.</li>
@@ -80,8 +81,8 @@ public class MontadorDoRelatorio {
             case Especificacao.Titulo t -> new TituloDto(t.id(), t.texto());
             case Especificacao.Paragrafo p -> paragrafo(p, resolucao, usadas);
             case Especificacao.Kpi k -> new KpiDto(k.id(), item(k.rotulo(), k.valor().ref(), resolucao, usadas));
-            case Especificacao.KpiGrade g -> new KpiGradeDto(g.id(), g.itens().stream()
-                    .map(i -> item(i.rotulo(), i.valor().ref(), resolucao, usadas)).toList());
+            case Especificacao.KpiGrade g -> new KpiGradeDto(g.id(), SelosDoRelatorio.comSelos(g.itens(), g.itens().stream()
+                    .map(i -> item(i.rotulo(), i.valor().ref(), resolucao, usadas)).toList(), resolucao));
             case Especificacao.Tabela t -> tabela(t, resolucao, usadas);
             case Especificacao.GaleriaComprovacoes g -> galeria(g, resolucao, usadas);
             case Especificacao.CampoInformado c -> campo(c, resolucao, usadas);

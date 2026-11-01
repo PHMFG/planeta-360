@@ -173,7 +173,9 @@ class AtlasControllerTest {
         assertThat(chaves(doRelatorio, "$.secoes[1].blocos[0]")).containsExactly("tipo", "id", "texto", "redigidoPor");
         assertThat(lerJson(doRelatorio, "$.secoes[1].blocos[0].redigidoPor")).isEqualTo("MODELO");
         assertThat(lerJson(doRelatorio, "$.secoes[2].blocos[0].tipo")).isEqualTo("kpi_grade");
-        assertThat(chaves(doRelatorio, "$.secoes[2].blocos[0].itens[0]")).containsExactly("rotulo", "valor", "indisponivel", "ref");
+        assertThat(chaves(doRelatorio, "$.secoes[2].blocos[0].itens[0]")).containsExactly("rotulo", "valor", "indisponivel", "ref", "selo");
+        // o selo do servidor (M7): só o item exibido de um par previsto x exibido, aqui 17 comprovadas contra 19 previstas
+        assertThat(lerLista(doRelatorio, "$.secoes[2].blocos[0].itens[*].selo")).containsExactly(null, "abaixo do previsto", null, null);
         assertThat(lerJson(doRelatorio, "$.secoes[2].blocos[0].itens[0].ref")).isEqualTo("cons:aplicacoes.previstas");
         assertThat(lerJson(doRelatorio, "$.secoes[2].blocos[0].itens[0].indisponivel")).isNull();
         assertThat(lerJson(doRelatorio, "$.secoes[2].blocos[1].tipo")).isEqualTo("tabela");
