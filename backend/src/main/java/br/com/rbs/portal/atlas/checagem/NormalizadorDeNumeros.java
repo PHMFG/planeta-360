@@ -496,8 +496,12 @@ public final class NormalizadorDeNumeros {
      * R$ 4} são números comuns e precisam estar na fonte como número), e uma data da resposta vale se o <i>texto</i> da fonte tem o dia como número e alguma data
      * do mesmo mês (e do mesmo ano, se a resposta o disse): "29 e 30 de janeiro de 2027" com a fonte "sexta-feira, 29, e no sábado, 30
      * de janeiro de 2027". O número da página, da seção e da versão da fonte ({@link #adicionar}) não é o dia: com a fonte na página
-     * 5, "05/12/2026" não vale só porque a fonte tem a data 04/12/2026. A mensagem da pessoa, a data de hoje e as contas também não
-     * dizem isso.
+     * 5, "05/12/2026" não vale só porque a fonte tem a data 04/12/2026. A mensagem da pessoa e a data de hoje também não dizem isso.
+     * <p>
+     * <b>O registro e a conta citados dizem o dia, e só o dia</b> ({@link #adicionarRegistro}): "O prazo é o dia 4 [R1]" vale com
+     * R1 em 04/12/2026, e "Cai no dia 30 [C1]" com a conta em 30/11/2026. A montagem de data em pedaços (o dia solto de um número
+     * mais o mês de outra data) continua só no trecho de documento: com R1 "até 30 segundos, atualizada em 27/10/2026",
+     * "30/10/2026" não vale.
      */
     public static final class Origens {
 
@@ -516,17 +520,26 @@ public final class NormalizadorDeNumeros {
             }
         }
 
-        /** Um texto que vale como está escrito: a mensagem da pessoa, o resultado de uma conta. */
+        /** Um texto que vale como está escrito: a mensagem da pessoa, os metadados de uma fonte. */
         public Origens adicionar(String texto) {
-            return somar(texto, false);
+            return somar(texto, false, false);
         }
 
-        /** O texto de uma fonte citada na frase: vale como está escrito e também em pedaços (veja o resumo da classe). */
+        /**
+         * O texto de um registro do portal ou de uma conta citados na frase: vale por inteiro, e o dia de uma data que ele traz inteira
+         * vale como o número depois de "dia" ("Prazo: 04/12/2026" diz "dia 4"). A data em pedaços (o dia solto mais o mês de outra
+         * data) fica só no trecho de documento ({@link #adicionarFonteCitada}).
+         */
+        public Origens adicionarRegistro(String texto) {
+            return somar(texto, false, true);
+        }
+
+        /** O texto de um trecho de documento citado na frase: vale como está escrito e também em pedaços (veja o resumo da classe). */
         public Origens adicionarFonteCitada(String texto) {
-            return somar(texto, true);
+            return somar(texto, true, true);
         }
 
-        private Origens somar(String texto, boolean citada) {
+        private Origens somar(String texto, boolean emPedacos, boolean comODiaDaData) {
             for (Achado achado : extrair(texto == null ? "" : texto, true)) {
                 if (achado.ehData()) {
                     valores.add("data:" + achado.dia());
@@ -536,8 +549,10 @@ public final class NormalizadorDeNumeros {
                         valores.add("dataComAno:" + achado.dia());
                         valores.add("ano:" + achado.ano());
                     }
-                    if (citada) {
+                    if (comODiaDaData) {
                         valores.add("dia:" + Integer.parseInt(achado.dia().substring(3)));
+                    }
+                    if (emPedacos) {
                         valores.add("mes:" + mes);
                         valores.add(achado.ano() != null ? "mesAno:" + achado.ano() + "-" + mes : "mesSemAno:" + mes);
                     }
@@ -550,7 +565,7 @@ public final class NormalizadorDeNumeros {
                         if (!ehAno || valor.startsWith("ano:")) {   // o ano vale como ano, e não como o número
                             valores.add(valor);
                         }
-                        if (citada && ehDiaDoMes(valor)) {
+                        if (emPedacos && ehDiaDoMes(valor)) {
                             valores.add("numeroDoTexto:" + valor);
                         }
                     }

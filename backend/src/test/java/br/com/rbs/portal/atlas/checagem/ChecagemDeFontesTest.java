@@ -788,7 +788,6 @@ class ChecagemDeFontesTest {
         comRegistro.registrarRegistro("entrega", 1, "Reenvio do VT", "Mídia", reenvio, java.util.Map.of());
         recusa(comRegistro, "Reenvie o VT até 30/10/2026 [R1].");
         aprova(comRegistro, "Foi atualizada em 27/10/2026 [R1].");
-        recusa(comRegistro, "Foi atualizada no dia 27 [R1].");
         aprova(turno("Quando?", reenvio), "Foi atualizada no dia 27 [T1].");
         FontesDoTurno comConta = turno("Quando?");
         comConta.registrarCalculo(null, "Contagem de dias", contagem, java.util.Map.of());
@@ -796,6 +795,34 @@ class ChecagemDeFontesTest {
         recusa(comConta, "Fica pronto no dia 10 de novembro [C1].");
         aprova(comConta, "Contei 10 dias a partir de 03/11/2026 [C1].");
         aprova(comConta, "Fica pronto em 13/11/2026 [C1].");
+    }
+
+    @Test
+    void oRegistroEAContaTambemDizemODiaDeUmaDataQueTrazemPorInteiro() {
+        FontesDoTurno comRegistro = turno("Quando?");
+        comRegistro.registrarRegistro("prazo", 1, "Informar os geradores", "Prazos", "Informar os geradores. Prazo: 04/12/2026 às 18h.",
+                java.util.Map.of());
+        aprova(comRegistro, "O prazo é o dia 4 [R1].");
+        aprova(comRegistro, "O prazo é no dia 4 [R1].");
+        aprova(comRegistro, "Vence no dia 04 [R1].");
+        recusa(comRegistro, "O prazo é o dia 5 [R1].");
+        recusa(comRegistro, "O prazo é o dia 4.");   // sem a citação na frase, o dia não tem de onde vir
+        recusa(comRegistro, "São 4 geradores [R1].");   // dia só vale depois da palavra "dia"
+
+        FontesDoTurno comConta = turno("Quando?");
+        comConta.registrarCalculo(null, "Contagem de dias", "Contei 20 dias depois de 10/11/2026, sem contar o dia de início. Resultado: 30/11/2026.",
+                java.util.Map.of());
+        aprova(comConta, "Cai no dia 30 [C1].");
+        aprova(comConta, "Começou no dia 10 [C1].");
+        recusa(comConta, "Cai no dia 29 [C1].");
+
+        // a data em pedaços continua só no trecho de documento: o 30 e o mês 10 da fonte não fazem 30/10/2026
+        FontesDoTurno reenvio = turno("Quando?");
+        reenvio.registrarRegistro("entrega", 1, "Reenvio do VT", "Mídia", "Reenvio do VT em até 30 segundos. Atualizada em 27/10/2026.",
+                java.util.Map.of());
+        recusa(reenvio, "Reenvie o VT até 30/10/2026 [R1].");
+        recusa(reenvio, "Reenvie o VT no dia 30 de outubro [R1].");
+        aprova(reenvio, "Foi atualizada no dia 27 [R1].");
     }
 
     @ParameterizedTest(name = "\"{0}\" na fonte e \"{1}\" na resposta")
