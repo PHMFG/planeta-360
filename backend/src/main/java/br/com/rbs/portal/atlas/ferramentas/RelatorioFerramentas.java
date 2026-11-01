@@ -59,7 +59,8 @@ import org.springframework.stereotype.Component;
  * texto de cada parágrafo diz o contrário dos selos do servidor ("acima do previsto", "abaixo do previsto"; sem selo, não roda) e, em
  * {@code ATIVO}, o incoerente é recusado como qualquer texto recusado (nova redação; na segunda, a frase-modelo); em
  * {@code relatorio_solicitar_campos}, o ponto {@code lacunas} pergunta, por lacuna <b>opcional</b>, se vale perguntar, e a que ficar
- * abaixo do limiar não entra no cartão (na dúvida, pergunta; as obrigatórias nunca saem). O botão (plano B, sem modelo) não consulta o JEV.
+ * abaixo do limiar não entra no cartão (na dúvida, pergunta; as obrigatórias nunca saem), e o cartão com uma lacuna a menos leva a mensagem
+ * fixa {@link #MENSAGEM_DO_CARTAO_SEM_LACUNAS}, porque a do modelo poderia citar o campo que saiu. O botão (plano B, sem modelo) não consulta o JEV.
  * <p>
  * Erro de ferramenta não é exceção para quem chama o modelo: {@link #erroComoJson} o transforma na mensagem de ferramenta que
  * volta ao modelo, e o loop nunca devolve 500 por causa dele.
@@ -290,6 +291,11 @@ public class RelatorioFerramentas {
                 dispensado.put("aviso", "Estes campos são opcionais e não valem uma pergunta agora: siga sem abrir o cartão.");
                 return Execucao.resultado(AtlasJson.escrever(dispensado));
             }
+            if (restantes.size() < campos.size()) {
+                // A mensagem que o modelo escreveu foi feita para os campos que ele pediu e pode citar o que saiu ("e, se quiser, os
+                // brindes..."): o cartão não pode contar uma pergunta que não está nele. Quando o JEV tira uma lacuna, a mensagem é fixa.
+                mensagem = MENSAGEM_DO_CARTAO_SEM_LACUNAS;
+            }
             campos = restantes;
         }
         CartaoAberto cartao = relatorios.solicitarCampos(contexto, relatorio.id(), mensagem, campos, chamadaId);
@@ -414,6 +420,9 @@ public class RelatorioFerramentas {
         }
         return relatorio;
     }
+
+    /** A mensagem do cartão quando o JEV ativo tirou alguma lacuna opcional dele: a do modelo poderia citar o campo que saiu. */
+    public static final String MENSAGEM_DO_CARTAO_SEM_LACUNAS = "Faltam estes números para o relatório.";
 
     /** A frase de erro de toda ferramenta chamada com o cartão aberto. */
     public static final String AGUARDANDO_O_CARTAO = "Aguardando a resposta do cartão. Nenhuma ferramenta do relatório roda até ela voltar.";

@@ -126,6 +126,55 @@ class JevLacunasTest {
                 .containsEntry("acao", "fez: manteve a lacuna no cartão");
     }
 
+    private static String todosOsCamposComAMensagem(String mensagem) {
+        return AtlasJson.escrever(Map.of("mensagem", mensagem, "campos", List.of(VISITANTES, CADASTROS, DISPONIVEIS, DISTRIBUIDOS)));
+    }
+
+    private static String mensagemDoCartao(ConversaDto conversa) {
+        return conversa.itens().stream().filter(ItemCartao.class::isInstance).map(ItemCartao.class::cast).findFirst().orElseThrow().mensagem();
+    }
+
+    @Test
+    void quandoOJevTiraUmaLacunaAMensagemDoCartaoViraAFixa() {
+        // o modelo escreveu o cartão para quatro campos e citou os brindes; sem eles, o texto dele contaria uma pergunta que não está lá
+        soOsDistribuidosValem();
+        long conversa = conversa();
+        modelo.chamada(INICIAR, ARGS_INICIAR).chamada(SOLICITAR, todosOsCamposComAMensagem(
+                "Preciso dos visitantes, dos cadastros e, se quiser, dos brindes disponíveis e distribuídos."));
+
+        ConversaDto resposta = falar(conversa, "quero o relatório só do público");
+
+        assertThat(chavesDoCartao(resposta)).containsExactly(VISITANTES, CADASTROS, DISTRIBUIDOS);
+        assertThat(mensagemDoCartao(resposta)).isEqualTo("Faltam estes números para o relatório.");
+        assertThat(jdbc.sql("SELECT s.mensagem FROM atlas_solicitacao s JOIN atlas_relatorio r ON r.id = s.relatorio_id WHERE r.conversa_id = :c")
+                .param("c", conversa).query(String.class).single()).isEqualTo("Faltam estes números para o relatório.");
+    }
+
+    @Test
+    void semLacunaRetiradaAMensagemDoModeloFica() {
+        jev.lacunas(estado -> 0.85);   // todas valem a pergunta
+        long conversa = conversa();
+        modelo.chamada(INICIAR, ARGS_INICIAR).chamada(SOLICITAR, todosOsCamposComAMensagem(
+                "Preciso dos visitantes, dos cadastros e, se quiser, dos brindes disponíveis e distribuídos."));
+
+        ConversaDto resposta = falar(conversa, "monta o relatório");
+
+        assertThat(chavesDoCartao(resposta)).containsExactly(VISITANTES, CADASTROS, DISPONIVEIS, DISTRIBUIDOS);
+        assertThat(mensagemDoCartao(resposta)).isEqualTo("Preciso dos visitantes, dos cadastros e, se quiser, dos brindes disponíveis e distribuídos.");
+    }
+
+    @Test
+    void emSombraAMensagemDoModeloFicaMesmoQueOJevTiraria() {
+        config.limpar().ligar(PontoDoJev.LACUNAS, ModoDoJev.SOMBRA);
+        soOsDistribuidosValem();
+        long conversa = conversa();
+        modelo.chamada(INICIAR, ARGS_INICIAR).chamada(SOLICITAR, todosOsCamposComAMensagem("Preciso destes números, brindes inclusive."));
+
+        ConversaDto resposta = falar(conversa, "monta o relatório");
+
+        assertThat(mensagemDoCartao(resposta)).isEqualTo("Preciso destes números, brindes inclusive.");
+    }
+
     @Test
     void naDuvidaPergunta() {
         jev.lacunas(estado -> 0.31);   // acima do limiar de 0.30: vale perguntar
