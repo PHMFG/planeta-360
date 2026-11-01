@@ -1,4 +1,4 @@
-// Atlas na gestão da RBS: os turnos de todas as parcerias, com o mesmo traço da gaveta da marca, e o estado dos provedores (rotas 50 a 53). [ATLAS]
+// Atlas na gestão da RBS: os turnos de todas as parcerias, com o mesmo traço da gaveta da marca, o estado dos provedores (rotas 50 a 53) e os documentos. [ATLAS]
 import { useEffect, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router'
 import { ErroApi } from '../../api/cliente'
@@ -17,12 +17,14 @@ import { Seletor } from '../../componentes/Formulario'
 import { Paginacao } from '../../componentes/LinhaDoTempo'
 import { Tabela, type Coluna } from '../../componentes/Tabela'
 import { dataHora, numero } from '../../util/formatar'
+import { AbaDocumentos } from './AtlasDocumentos'
 
-type Aba = 'turnos' | 'provedores'
+type Aba = 'turnos' | 'provedores' | 'documentos'
 
 const ABAS: { codigo: Aba; nome: string }[] = [
   { codigo: 'turnos', nome: 'Turnos' },
   { codigo: 'provedores', nome: 'Provedores' },
+  { codigo: 'documentos', nome: 'Documentos' },
 ]
 
 const NOME_DO_PROVEDOR: Record<NomeDoProvedor, string> = { llm: 'Modelo de linguagem', jev: 'JEV', gemini: 'Embeddings (Gemini)' }
@@ -231,7 +233,7 @@ function AbaProvedores() {
 
 export function AtlasRbs() {
   const [busca, setBusca] = useSearchParams()
-  const aba: Aba = busca.get('aba') === 'provedores' ? 'provedores' : 'turnos'
+  const aba: Aba = ABAS.find((item) => item.codigo === busca.get('aba'))?.codigo ?? 'turnos'
   const turno = busca.get('turno')
 
   function mudar(campo: 'aba' | 'turno', valor: string | null) {
@@ -245,7 +247,7 @@ export function AtlasRbs() {
 
   return (
     <div data-secao="neutro" className="flex min-w-0 flex-col gap-4">
-      <CabecalhoSecao trilha="Planeta Atlântida / RBS · Gestão" titulo="Atlas" subtitulo="O que o assistente fez em cada turno, em todas as parcerias, e o estado dos provedores." />
+      <CabecalhoSecao trilha="Planeta Atlântida / RBS · Gestão" titulo="Atlas" subtitulo="O que o assistente fez em cada turno, em todas as parcerias, o estado dos provedores e os documentos de que ele se alimenta." />
       <div className="flex flex-wrap gap-2" role="tablist" aria-label="Atlas na gestão">
         {ABAS.map((item) => (
           <button
@@ -260,7 +262,9 @@ export function AtlasRbs() {
           </button>
         ))}
       </div>
-      {aba === 'turnos' ? <AbaTurnos aoAbrir={(valor) => mudar('turno', valor)} /> : <AbaProvedores />}
+      {aba === 'turnos' && <AbaTurnos aoAbrir={(valor) => mudar('turno', valor)} />}
+      {aba === 'provedores' && <AbaProvedores />}
+      {aba === 'documentos' && <AbaDocumentos />}
       {turno && <GavetaDoTurno turno={turno} aoFechar={() => mudar('turno', null)} />}
     </div>
   )
