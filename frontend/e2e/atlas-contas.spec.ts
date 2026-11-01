@@ -68,7 +68,7 @@ test('a contagem de dias mostra a regra e os feriados pulados', async ({ page })
       variaveis: [],
       resultado: '02/12/2026',
       regra: '20 dias úteis depois de 03/11/2026. O dia de início não conta.',
-      feriadosConsiderados: [{ data: '2026-11-20', nome: 'Consciência Negra' }],
+      feriadosConsiderados: [{ data: '20/11/2026', nome: 'Consciência Negra' }],
     },
     { tipo: 'texto', texto: 'Fica pronto em 02/12/2026 [C1].', porModelo: true, fontes: [{ marcador: 'C1', tipo: 'CALCULO', substituido: false, revogado: false }] },
   ])

@@ -48,6 +48,7 @@ export type CalculoDaResposta = {
   variaveis: VariavelDoCalculo[]
   resultado: string
   regra: string | null
+  /** {@code data} já vem como dd/MM/aaaa, como o resto da conta. */
   feriadosConsiderados: { data: string; nome: string }[]
 }
 

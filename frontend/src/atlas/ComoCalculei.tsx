@@ -1,7 +1,6 @@
 // "Como calculei": a conta ou a contagem de dias de uma resposta, com a origem de cada número. Fechado, não atrapalha a leitura;
 // aberto, mostra o que entrou, de onde veio e o que saiu. A origem que é documento abre pelo mesmo chip da resposta. [ATLAS]
 import type { CalculoDaResposta, FonteDaResposta, VariavelDoCalculo } from '../api/atlas'
-import { data } from '../util/formatar'
 import { TextoComCitacoes } from './Fontes'
 
 const MARCADOR = /^[TRC]\d{1,3}$/
@@ -58,7 +57,7 @@ export function ComoCalculei({ calculo, fontes, aoAbrir }: Props) {
             <ul className="mt-1 flex flex-col gap-0.5">
               {calculo.feriadosConsiderados.map((feriado) => (
                 <li key={feriado.data}>
-                  {data(feriado.data)} · {feriado.nome}
+                  {feriado.data} · {feriado.nome}
                 </li>
               ))}
             </ul>
