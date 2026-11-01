@@ -248,8 +248,8 @@ class LoopDoAgenteTest {
 
         // o prompt de sistema leva a data de hoje e o nome da marca, nunca ids
         String sistema = modelo.pedidos().get(0).mensagens().get(0).conteudo();
-        assertThat(sistema).contains("Cliente Amarelo").doesNotContain("@MARCA@").doesNotContain("@DATA@")
-                .doesNotContain(String.valueOf(amarelo()) + ",").contains("relatorio_iniciar");
+        assertThat(sistema).isEqualTo(ApoioDosPrompts.esperado(true, "Cliente Amarelo")).contains("Cliente Amarelo")
+                .doesNotContain("@MARCA@").doesNotContain("@DATA@").doesNotContain("parceria_id").contains("relatorio_iniciar");
         assertThat(modelo.pedidos().get(0).sessao()).isEqualTo(String.valueOf(conversa));
 
         // 2. a pessoa responde o cartão (rota 46): a resposta da ferramenta pendente entra com o MESMO tool_call_id e o loop retoma
@@ -747,6 +747,34 @@ class LoopDoAgenteTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void definirTextoComNumeroOuDataPorExtensoERecusadoNoRelatorioEDepoisOBlocoFicaComAFraseModelo() {
+        informarTudo();
+        long conversa = abrirConversa();
+        modelo.chamada(INICIAR, ARGS_INICIAR)
+                .chamada(EDITAR, edicao("b-resumo", "A marca teve dezessete aplicações comprovadas.", "b-publico", PUBLICO))
+                .chamada(EDITAR, edicao("b-resumo", "A ativação foi no primeiro de dezembro, com vinte e três brindes."))
+                .chamada(FINALIZAR, "{}");
+
+        ConversaDto turno = falar(conversa, "Monte o relatório.");
+
+        assertThat(tipos(turno)).containsExactly("usuario", "relatorio_pronto");
+        List<Mensagem> respostas = mensagens(conversa).stream().filter(m -> "tool".equals(m.papel())).toList();
+        Map<String, Object> primeira = json(respostas.get(1).conteudo());
+        assertThat((List<Map<String, Object>>) primeira.get("operacoes")).extracting(o -> o.get("resultado")).containsExactly("recusada", "aplicada");
+        assertThat(respostas.get(1).conteudo()).contains("por extenso").contains("dezessete");
+        // a segunda recusa do mesmo bloco põe a frase-modelo, e o número por extenso não entra no relatório
+        Map<String, Object> segunda = json(respostas.get(2).conteudo());
+        assertThat((List<Map<String, Object>>) segunda.get("operacoes")).extracting(o -> o.get("resultado")).containsExactly("frase_modelo");
+        RelatorioAtlasDto relatorio = atlas.verRelatorio(marca(), ((ItemRelatorioPronto) turno.itens().get(1)).relatorioId());
+        var paragrafos = relatorio.secoes().stream().flatMap(s -> s.blocos().stream()).filter(ParagrafoDto.class::isInstance)
+                .map(ParagrafoDto.class::cast).toList();
+        assertThat(paragrafos).extracting("id", "redigidoPor").containsExactly(
+                org.assertj.core.groups.Tuple.tuple("b-resumo", "MODELO"), org.assertj.core.groups.Tuple.tuple("b-publico", "ATLAS"));
+        assertThat(paragrafos).extracting("texto").noneMatch(t -> t.toString().contains("dezessete") || t.toString().contains("vinte e três"));
+    }
+
+    @Test
     void referenciaInventadaNoTextoDoRelatorioERecusada() {
         informarTudo();
         long conversa = abrirConversa();
@@ -1003,7 +1031,7 @@ class LoopDoAgenteTest {
     }
 
     @Test
-    void idsEItensNaoVazamParaOPromptNemParaOModelo() throws Exception {
+    void idsEItensNaoVazamParaOPromptNemParaOModelo() {
         long conversa = abrirConversa();
         modelo.texto("Olá!");
 
@@ -1011,19 +1039,62 @@ class LoopDoAgenteTest {
 
         String prompt = modelo.pedidos().get(0).mensagens().get(0).conteudo();
         assertThat(prompt).doesNotContain(marca().email()).doesNotContain("parceria_id");
-        // o prompt é o arquivo com a data de hoje e o nome da marca, e mais nada: id de parceria, de conversa ou de usuário nunca entra
-        String arquivo = new String(new org.springframework.core.io.ClassPathResource("atlas/prompts/relatorio.txt").getInputStream()
-                .readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
-        assertThat(prompt).isEqualTo(arquivo.replace("@MARCA@", "Cliente Amarelo")
-                .replace("@DATA@", java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy").format(br.com.rbs.portal.comum.Datas.hoje())));
+        // o prompt é o do modo (chat com o relatório ligado, e o fim do relatório) com a data de hoje e o nome da marca, e mais nada:
+        // id de parceria, de conversa ou de usuário nunca entra
+        assertThat(prompt).isEqualTo(ApoioDosPrompts.esperado(true, "Cliente Amarelo"));
     }
 
     @Test
-    void oPromptEUmArquivoTxtVersionadoEPermitidoPeloGit() throws Exception {
-        var recurso = new org.springframework.core.io.ClassPathResource("atlas/prompts/relatorio.txt");
-        assertThat(recurso.exists()).isTrue();
-        String texto = new String(recurso.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
-        assertThat(texto).contains("@MARCA@", "@DATA@", "nunca escreve um número", "relatorio_iniciar", "relatorio_finalizar");
-        assertThat(new org.springframework.core.io.ClassPathResource("atlas/prompts/relatorio.md").exists()).isFalse();
+    void oPromptLigadoTemARotaDoRelatorioEAsDuasRegrasDeNumeroSeparadas() {
+        long conversa = abrirConversa();
+        modelo.texto("Olá!");
+
+        falar(conversa, "Oi.");
+
+        String prompt = modelo.pedidos().get(0).mensagens().get(0).conteudo();
+        // a rota: relatório da ativação monta aqui; qualquer outro relatório vai para a resposta direta
+        assertThat(prompt).contains("Há dois caminhos para um pedido de relatório")
+                .contains("chame relatorio_iniciar com o modelo ATIVACAO_EVENTO")
+                .contains("Qualquer outro relatório (pós-evento, de mídia, oficial, consolidado): chame pedido_de_relatorio")
+                .contains("Se não der para saber qual é, pergunte em uma frase.")
+                .contains("chame gerar_modelo com o tipo");
+        assertThat(prompt.indexOf("relatorio_iniciar")).isLessThan(prompt.indexOf("pedido_de_relatorio"));
+        // a regra do número do chat: copiado da fonte, com a citação
+        assertThat(prompt).contains("Números e datas que vêm de documento: copie exatamente como estão no trecho")
+                .contains("ponha a citação na mesma frase");
+        // a regra do número do texto do relatório: nenhum, só marcador; e a diz que não vale na conversa
+        assertThat(prompt).contains("No texto de um bloco (relatorio_editar) nunca escreva número nem data, nem com algarismo nem por extenso")
+                .contains("Esta regra vale só para o texto do relatório: na conversa, um número de documento vai copiado da fonte com a citação");
+        // as duas regras estão em linhas diferentes
+        assertThat(prompt.lines().filter(l -> l.contains("copie exatamente como estão no trecho")).findFirst().orElseThrow())
+                .doesNotContain("relatorio_editar");
+        assertThat(prompt.lines().filter(l -> l.contains("nunca escreva número nem data")).findFirst().orElseThrow())
+                .doesNotContain("copie exatamente como estão no trecho");
+        // o antigo "nunca escreve um número, nem na conversa" saiu
+        assertThat(prompt).doesNotContain("nunca escreve um número").doesNotContain("nem na conversa, nem nos textos do relatório");
+    }
+
+    @Test
+    void oPromptLigadoFicaAbaixoDeTrezeMilCaracteresESemMarcadorQueSobrou() {
+        long conversa = abrirConversa();
+        modelo.texto("Olá!");
+
+        falar(conversa, "Oi.");
+
+        String prompt = modelo.pedidos().get(0).mensagens().get(0).conteudo();
+        assertThat(prompt.length()).as("o prompt do chat com o relatório ligado tem de ficar curto").isLessThan(13000);
+        assertThat(ApoioDosPrompts.MARCADOR_QUE_SOBROU.matcher(prompt).find()).as("sobrou um marcador @...@ no prompt").isFalse();
+    }
+
+    @Test
+    void oPromptEUmArquivoTxtVersionadoEPermitidoPeloGit() {
+        for (String nome : List.of("chat", "relatorio", "relatorio-ligado", "relatorio-desligado")) {
+            var recurso = new org.springframework.core.io.ClassPathResource("atlas/prompts/" + nome + ".txt");
+            assertThat(recurso.exists()).as(nome).isTrue();
+            assertThat(new org.springframework.core.io.ClassPathResource("atlas/prompts/" + nome + ".md").exists()).as(nome + ".md").isFalse();
+        }
+        String relatorio = ApoioDosPrompts.arquivo("relatorio");
+        assertThat(relatorio).contains("relatorio_iniciar", "relatorio_finalizar", "relatorio_editar", "relatorio_solicitar_campos");
+        assertThat(ApoioDosPrompts.arquivo("chat")).contains(ApoioDosPrompts.MARCADOR, "@MARCA@", "@DATA@");
     }
 }

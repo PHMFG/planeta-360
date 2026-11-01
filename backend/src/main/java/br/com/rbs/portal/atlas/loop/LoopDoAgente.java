@@ -47,9 +47,6 @@ import br.com.rbs.portal.atlas.relatorio.ResolvedorDeReferencias;
 import br.com.rbs.portal.atlas.relatorio.ResolvedorDeReferencias.Resolucao;
 import br.com.rbs.portal.comum.Datas;
 import br.com.rbs.portal.dados.DadosDtos.ValorRequisicao;
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -63,7 +60,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.core.JacksonException;
@@ -212,7 +208,7 @@ public class LoopDoAgente {
         this.resumos = resumos;
         this.modo = modo;
         this.prazoDoTurno = prazoDoTurno;
-        this.prompt = lerPrompt(modo.relatorioLigado() ? "relatorio" : "chat");
+        this.prompt = PromptsDoAtlas.compor(modo.relatorioLigado());
     }
 
     /**
@@ -750,16 +746,6 @@ public class LoopDoAgente {
                 }
                 case CALCULO -> repositorio.inserirFonteDeCalculo(mensagemId, fonte.marcador(), fonte.dados());
             }
-        }
-    }
-
-    /** O prompt do modo: {@code relatorio.txt} com o relatório ligado, {@code chat.txt} (sem o fluxo do relatório) desligado. */
-    private static String lerPrompt(String nome) {
-        String caminho = "atlas/prompts/" + nome + ".txt";
-        try {
-            return new String(new ClassPathResource(caminho).getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-        } catch (IOException erro) {
-            throw new UncheckedIOException("Não consegui ler o prompt do Atlas (resources/" + caminho + ").", erro);
         }
     }
 

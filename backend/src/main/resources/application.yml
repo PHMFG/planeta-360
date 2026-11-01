@@ -76,8 +76,9 @@ atlas:
     # [ATLAS] TEMPORÁRIO: a conversa mostra cada ferramenta que o agente chamou (nome, argumentos e resultado crus; item "ferramenta" e
     # evento "ferramenta" do fluxo). Desligado por padrão; ligado no perfil dev, abaixo. O raciocínio cru nunca sai, nem por aqui.
     ferramentas: ${ATLAS_DEBUG_FERRAMENTAS:false}
-  # [ATLAS] O relatório de trabalho (cartão de perguntas, relatório pronto, rotas 46 a 48, ferramentas relatorio_*). Desligado por
-  # padrão, no dev também: o Atlas é só o chat, com parceria_consultar. O código e as tabelas ficam, para o relatório voltar.
+  # [ATLAS] O relatório de trabalho (cartão de perguntas, relatório pronto, rotas 46 a 48 e 65, ferramentas relatorio_*). Desligado
+  # por padrão: o Atlas é só o chat, com o prompt chat.txt. Ligado no perfil dev (M6) e no de teste, abaixo; ATLAS_RELATORIO=false
+  # desliga no dev.
   relatorio:
     ligado: ${ATLAS_RELATORIO:false}
   # [ATLAS] O diagnóstico (M2 do plano do Atlas completo): cada turno deixa um traço em atlas_traco (V10) e as rotas 49 a 53 existem.
@@ -164,6 +165,8 @@ atlas:
   debug:
     chaves: true
     ferramentas: ${ATLAS_DEBUG_FERRAMENTAS:true}
+  relatorio:
+    ligado: ${ATLAS_RELATORIO:true}
   diagnostico:
     ligado: ${ATLAS_DIAGNOSTICO:true}
     marca: ${ATLAS_DIAGNOSTICO_MARCA:true}

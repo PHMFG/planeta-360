@@ -1,8 +1,10 @@
 package br.com.rbs.portal.atlas.relatorio;
 
+import br.com.rbs.portal.atlas.checagem.NormalizadorDeNumeros;
 import br.com.rbs.portal.atlas.relatorio.ResolvedorDeReferencias.ReferenciaDesconhecidaException;
 import br.com.rbs.portal.atlas.relatorio.ResolvedorDeReferencias.Resolucao;
 import br.com.rbs.portal.atlas.relatorio.ResolvedorDeReferencias.Valor;
+import java.util.List;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -14,7 +16,8 @@ import org.springframework.stereotype.Component;
  * garante isso, no texto de um parágrafo do relatório e no texto do chat:
  * <ol>
  *   <li>tira os marcadores e recusa <b>qualquer algarismo</b> que sobrar (todo dígito Unicode, também os de outros alfabetos,
- *       fração e expoente; número por extenso escapa da regra, e o prompt o proíbe);</li>
+ *       fração e expoente) e, só no parágrafo do relatório (M6), o número e a data por extenso (o chat de fontes tem a regra
+ *       própria da {@code ChecagemDeFontes}, que aceita o que vem da fonte citada);</li>
  *   <li>todo marcador tem de resolver nesta parceria ({@link Resolucao#valor}): referência inventada, de campo fora do
  *       catálogo, de cálculo que o modelo não define ou de lista é recusada;</li>
  *   <li>(só parágrafo do relatório) até {@value #MAXIMO_DE_FRASES} frases e {@value #MAXIMO_DE_CARACTERES} caracteres;</li>
@@ -115,6 +118,13 @@ public class ChecagemDeTexto {
         }
 
         if (limitarTamanho) {
+            // M6: no texto do relatório o número e a data por extenso também são recusados ("dezessete", "vinte e três brindes",
+            // "primeiro de dezembro"); o chat de fontes tem a própria regra (ChecagemDeFontes) e aceita o que vem da fonte
+            List<NormalizadorDeNumeros.Achado> porExtenso = NormalizadorDeNumeros.extrair(semMarcadores, false);
+            if (!porExtenso.isEmpty()) {
+                return Veredito.recusado("O texto tem número ou data por extenso (\"" + porExtenso.get(0).trecho().strip() + "\"). Não "
+                        + "escreva número nem data, nem por extenso: cite o dado com o marcador {{ref}}, que o servidor preenche.");
+            }
             if (texto.length() > MAXIMO_DE_CARACTERES) {
                 return Veredito.recusado("O texto tem " + texto.length() + " caracteres; o máximo é " + MAXIMO_DE_CARACTERES + ".");
             }

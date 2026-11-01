@@ -150,7 +150,7 @@ Com o banco recém-criado (amostra original):
 
 ### Roteiro do Atlas
 
-Nesta versão o Atlas é o chat: a marca pergunta sobre os números da própria parceria e sobre os documentos do evento, e o que vem de documento cita a fonte. Ele precisa do modelo de linguagem ligado (veja abaixo). O relatório montado pelo Atlas está desabilitado até entrarem o JEV e as outras ferramentas de que ele precisa: o botão aparece, sem funcionar.
+O Atlas é o chat: a marca pergunta sobre os números da própria parceria e sobre os documentos do evento, e o que vem de documento cita a fonte. No perfil `dev` o relatório da ativação também funciona, na mesma conversa (o modo só chat, sem o relatório, continua existindo: `ATLAS_RELATORIO=false`). Ele precisa do modelo de linguagem ligado (veja abaixo); sem o modelo, o botão "Montar relatório" monta o relatório sem ele.
 
 1. Como `b2b@rbs.example`, em **Patrocinadores**, cadastre a parceria "Cliente Teste" na edição 2027. Em **Cargas**, escolha "Plano comercial" e envie `docs/exemplos/plano.csv`: 8 linhas entram, 1 é duplicada e 2 são rejeitadas, com o motivo (mídia sem tipo e uma marca sem parceria).
 2. Abra a parceria do Cliente Amarelo, em **Aplicações da marca**: o plano linha a linha, com as fotos de comprovação. Use "Anexar foto" numa linha sem foto, e o total de comprovadas sobe.
@@ -160,6 +160,7 @@ Nesta versão o Atlas é o chat: a marca pergunta sobre os números da própria 
 6. Pergunte "até quando preciso informar os geradores?": a resposta traz a data com um chip, como `T1`, e a lista "Fontes" embaixo. O chip abre o manual ao lado da conversa, na página citada, com o trecho destacado.
 7. Peça os números de outra marca: o Atlas não tem como consultá-los e responde só "Não encontrei isso nos documentos do portal. Para essa dúvida, fale com o atendimento da RBS.", sem dizer se existem e sem número nenhum.
 8. Como `b2b@rbs.example`, em **Atlas**, abra **Busca de teste**, escolha uma parceria e escreva uma consulta: aparecem as duas listas da busca, o que o modelo receberia e o que essa parceria enxerga, sem gastar o modelo.
+9. Como `marketing@amarelo.example`, peça ao Atlas "monta o relatório da ativação": ele junta o que o portal já sabe, pede num cartão os números que só a marca tem, escreve os textos (só com marcadores, o servidor põe os números) e o relatório pronto abre com "Fontes e cálculos". Pedir "o relatório pós-evento" é outro caminho: o Atlas explica, em texto fixo, que o oficial é da RBS e oferece um modelo em branco.
 
 ### Ligar o modelo de linguagem (opcional)
 
@@ -187,7 +188,7 @@ No Windows (PowerShell): `$env:ATLAS_LLM="openai"; $env:OPENCODE_API_KEY="sua-ch
 | `ATLAS_RACIOCINIO` | `true` | O raciocínio do modelo, com o resumo na conversa. Ligado, cada resposta demora uns segundos a mais e gasta mais do limite do provedor |
 | `ATLAS_PRAZO_DO_RESUMO` | `PT15S` | Quanto o fim do turno espera pelos resumos do raciocínio; o que passar do prazo aparece na próxima leitura da conversa |
 | `ATLAS_TETO_DIARIO` | `200` | Mensagens do Atlas por parceria por dia; depois disso, o chat responde 429 |
-| `ATLAS_RELATORIO` | `false` | Liga o relatório montado pelo Atlas (botão, cartão e documento). Desligado nesta versão: o código continua no projeto |
+| `ATLAS_RELATORIO` | `false` (`true` no perfil `dev`) | Liga o relatório montado pelo Atlas (pedido no chat, botão, cartão e documento). Desligado, o Atlas é só o chat e as rotas do relatório respondem 404 |
 | `ATLAS_DEBUG_FERRAMENTAS` | `false` (`true` no perfil `dev`) | Mostra na conversa as ferramentas que o modelo usou, com argumentos e resultado. Temporário |
 | `ATLAS_DIAGNOSTICO` | `false` (`true` no perfil `dev`) | O diagnóstico: cada turno do Atlas deixa um traço (etapas, tempos, tokens, custo) que a RBS lê pelas rotas 50 a 53. Desligado, nada é gravado e as rotas respondem 404. Veja `docs/api.md`, "Diagnóstico do Atlas" |
 | `ATLAS_DIAGNOSTICO_MARCA` | `false` (`true` no perfil `dev`) | A marca vê o diagnóstico das próprias conversas (rota 49). Só vale com o diagnóstico ligado |
@@ -231,7 +232,7 @@ Com as chaves no arquivo de segredos, `scripts/fumaca-provedores.sh` confere o O
 - O plano comercial de uma parceria cadastrada ao vivo entra pela carga "Plano comercial" (Cargas), e as fotos de comprovação pela aba Aplicações da marca (só a RBS anexa). Os números do festival ainda entram só pela amostra: "O festival em números" sai como indisponível nos relatórios de 2027, porque só há números de 2026.
 - Corrigir uma linha do plano comercial: o reenvio com outra quantidade conta como duplicado (vale a primeira versão), e não há tela para editar a linha.
 - Telas próprias de Cortesias, Credenciamento e Contrato: nesta versão cada uma dessas abas mostra as próprias entregas.
-- Relatório montado pelo Atlas: desabilitado nesta versão (`ATLAS_RELATORIO`), até entrarem o JEV e as outras ferramentas de que ele precisa. O código continua no projeto e as tabelas ficam sem uso.
+- Relatório montado pelo Atlas: ligado no perfil `dev` e desligado no padrão (`ATLAS_RELATORIO`). No texto do relatório o modelo não escreve número nem data (nem por extenso): os números vêm do servidor, com a origem em "Fontes e cálculos".
 - Atlas com o modelo de linguagem: testado contra um servidor falso e com a chave de verdade do OpenCode Go. Para decidir com a equipe: os termos de uso do OpenCode, que falam em uso interno de quem assina, e o acordo de retenção zero do DeepSeek no Go, que vale até 30/11/2026 e é renovado mês a mês.
 - Dado pessoal no modelo: a consulta do Atlas leva ao modelo o nome de quem informou cada dado ("Informado por ... em ..."). Fica assim por decisão do dono do produto.
 - Dados informados pela marca entram sem aprovação da RBS, com o nome de quem informou e a data.

@@ -87,10 +87,25 @@ class ChecagemDeTextoTest {
         assertThat(chat(texto).aprovado()).as("chat: " + texto).isFalse();
     }
 
-    @Test
-    void numeroPorExtensoEscapaDaRegraEOPromptOProibe() {
-        // Limite conhecido do plano (10.6): a regra olha algarismo. O prompt proíbe o extenso e o conjunto de avaliação confere.
-        assertThat(paragrafo("Foram dezessete aplicações comprovadas.").aprovado()).isTrue();
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "Foram dezessete aplicações comprovadas.", "Quase cem por cento das aplicações.", "Vinte e três brindes foram entregues.",
+            "Foram dois mil visitantes.", "A ativação foi no primeiro de dezembro.", "Dez de dezembro foi o dia.", "Zero cadastros.",
+            "Duas aplicações de marca.", "Trezentos e doze pessoas passaram."})
+    void recusaNumeroEDataPorExtensoNoParagrafoDoRelatorio(String texto) {
+        // M6: o prompt do relatório manda não escrever número nem data, "nem com algarismo nem por extenso", e o servidor confere
+        Veredito veredito = paragrafo(texto);
+
+        assertThat(veredito.aprovado()).as(texto).isFalse();
+        assertThat(veredito.motivo()).as(texto).contains("por extenso").contains("marcador");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "Um dos destaques foi o espaço da marca.", "A primeira vez da marca no festival.", "Os dois manuais valem.",
+            "Em março, a marca esteve no festival.", "O espaço recebeu os visitantes no meio do festival."})
+    void aceitaPalavraQueNaoENumeroNoParagrafoDoRelatorio(String texto) {
+        assertThat(paragrafo(texto).aprovado()).as(texto).isTrue();
     }
 
     @Test

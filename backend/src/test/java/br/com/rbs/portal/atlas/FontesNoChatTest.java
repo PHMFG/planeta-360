@@ -45,9 +45,9 @@ import tools.jackson.core.type.TypeReference;
         "atlas.relatorio.ligado=false"})
 class FontesNoChatTest {
 
-    private static final String BUSCAR = "buscar_documentos";
-    private static final String CONSULTA = "prazo para informar os geradores próprios";
-    private static final String PRAZO = "04/12/2026";
+    static final String BUSCAR = "buscar_documentos";
+    static final String CONSULTA = "prazo para informar os geradores próprios";
+    static final String PRAZO = "04/12/2026";
 
     @Autowired
     AtlasService atlas;
@@ -74,6 +74,16 @@ class FontesNoChatTest {
     @AfterEach
     void apagarOQueOTesteConfirmou() {
         limpeza.apagar();
+    }
+
+    /** O limite de tamanho do prompt do modo: o só chat tem 10.000 caracteres; com o relatório ligado, 13.000. */
+    int limiteDoPrompt() {
+        return 10000;
+    }
+
+    /** A frase fixa do texto recusado duas vezes, que muda com o modo. */
+    String fraseFixa() {
+        return LoopDoAgente.FRASE_FIXA_NO_CHAT;
     }
 
     long abrir() {
@@ -313,7 +323,7 @@ class FontesNoChatTest {
         ConversaDto turno = falar(conversa, "Se o briefing sair em 03/11/2026, quando vencem 18 dias úteis?");
 
         // a contagem de verdade está na tela (item "calculo"); dizer "não encontrei" sobre ela seria o contrário do que ela mostra
-        assertThat(textoFinal(turno).texto()).isEqualTo(LoopDoAgente.FRASE_FIXA_NO_CHAT);
+        assertThat(textoFinal(turno).texto()).isEqualTo(fraseFixa());
         assertThat(turno.itens().stream().anyMatch(AtlasDtos.ItemCalculo.class::isInstance)).isTrue();
         Linha saida = primeira(ultimoTurno(conversa), "SAIDA");
         assertThat(saida.dados()).containsEntry("tipo", "FRASE_FIXA").containsEntry("motivo", "TEXTO_RECUSADO");
@@ -649,6 +659,6 @@ class FontesNoChatTest {
         assertThat(prompt).contains("texto simples").contains("sem negrito, títulos nem outra marcação").contains("Boa tarde!")
                 .contains("vá direto à resposta");
         // continua curto
-        assertThat(prompt.length()).as("o prompt do chat tem de ficar curto").isLessThan(10000);
+        assertThat(prompt.length()).as("o prompt do chat tem de ficar curto").isLessThan(limiteDoPrompt());
     }
 }

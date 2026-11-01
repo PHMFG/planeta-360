@@ -249,6 +249,12 @@ class AtlasSoChatTest {
             String prompt = pedido.mensagens().get(0).conteudo();
             assertThat(prompt).contains("Cliente Amarelo", "parceria_consultar", "chame pedido_de_relatorio", "chame gerar_modelo")
                     .doesNotContain("relatorio_", "O fluxo do relatório", "@MARCA@", "@DATA@");
+            // o prompt é o do modo só chat: a base, as duas linhas do relatório desligado, a data de hoje e o nome da marca
+            assertThat(prompt).isEqualTo(ApoioDosPrompts.esperado(false, "Cliente Amarelo"));
+            assertThat(prompt.length()).as("o prompt do chat tem de ficar curto").isLessThan(10000);
+            assertThat(ApoioDosPrompts.MARCADOR_QUE_SOBROU.matcher(prompt).find()).as("sobrou um marcador @...@").isFalse();
+            assertThat(prompt).doesNotContain("Há dois caminhos para um pedido de relatório", "No texto de um bloco", "relatorio_iniciar")
+                    .contains("chame pedido_de_relatorio", "A conversa pode ter mensagens antigas sobre um relatório");
             ProvedorRoteirizado.exigirHistoricoValido(pedido);
         }
         assertThat(contar("atlas_relatorio")).isZero();

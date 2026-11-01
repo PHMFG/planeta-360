@@ -17,9 +17,6 @@ import br.com.rbs.portal.atlas.diagnostico.ServidorHttpFalso;
 import br.com.rbs.portal.atlas.provedor.ServidorDeLlmFalso;
 import br.com.rbs.portal.atlas.provedor.ServidorDeLlmFalso.Fluxo;
 import com.jayway.jsonpath.JsonPath;
-import java.io.IOException;
-import java.io.UncheckedIOException;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -31,7 +28,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.system.CapturedOutput;
 import org.springframework.boot.test.system.OutputCaptureExtension;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -111,14 +107,10 @@ class DiagnosticoSemSegredoTest {
 
     /** A maior linha do prompt do modo em uso (o relatório está ligado no perfil de teste) que não tem campo a preencher. */
     private static String umaFraseDoPrompt() {
-        try {
-            String prompt = new String(new ClassPathResource("atlas/prompts/relatorio.txt").getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-            String linha = prompt.lines().filter(l -> !l.contains("@") && l.strip().length() >= 70)
-                    .max(Comparator.comparingInt(l -> l.strip().length())).orElseThrow();
-            return linha.strip().substring(0, 70);
-        } catch (IOException erro) {
-            throw new UncheckedIOException(erro);
-        }
+        String prompt = ApoioDosPrompts.esperadoSemMarcaNemData(true);
+        String linha = prompt.lines().filter(l -> !l.contains("@") && l.strip().length() >= 70)
+                .max(Comparator.comparingInt(l -> l.strip().length())).orElseThrow();
+        return linha.strip().substring(0, 70);
     }
 
     // ---------------------------------------------------------------------
