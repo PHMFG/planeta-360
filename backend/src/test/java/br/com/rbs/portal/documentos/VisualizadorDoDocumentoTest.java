@@ -176,27 +176,67 @@ class VisualizadorDoDocumentoTest extends ApoioDeDocumentos {
         assertThat(aberturas(doKit("D04"))).isEqualTo(antesD04);
     }
 
+    /** Os cabeçalhos {@code Range} que a rota tem de ignorar: o que fatiava (e escapava da contagem) e o que não é faixa nenhuma. */
+    private static final List<String> FAIXAS = List.of("bytes=-99999999", "bytes=00-", "bytes=1-", "lixo", "bytes=0-99", "bytes=100-199",
+            "bytes=5000-", "bytes=0-0,5-9", "bytes=99999999999-", "bytes=9-1", "BYTES=1-", "bytes=1-,");
+
     @Test
-    void aFaixaQueNaoComecaEmZeroEOHeadNaoGravamDownloadMasAPrimeiraFaixaGrava() {
+    void aRotaIgnoraORangeEmTodoGetDevolveOArquivoInteiroEGravaDownload() {
+        for (String email : List.of(AMARELO, RBS)) {
+            SessaoDeApi pessoa = entrar(email);
+            for (String idDoKit : List.of("D02", "D08")) {
+                long documento = doKit(idDoKit);
+                long tamanho = contar("SELECT tamanho_bytes FROM arquivo WHERE id = ?", arquivoDoKit(idDoKit));
+                byte[] inteiro = conteudo(pessoa, documento).getResponse().getContentAsByteArray();
+                assertThat((long) inteiro.length).isEqualTo(tamanho);
+                for (String faixa : FAIXAS) {
+                    long antes = aberturas(documento);
+
+                    MvcTestResult resposta = pessoa.getComCabecalho("/api/documentos/" + documento + "/conteudo", "Range", faixa);
+
+                    String quem = email + " " + idDoKit + " com Range: " + faixa;
+                    assertThat(resposta).as(quem).hasStatus(HttpStatus.OK);
+                    assertThat(resposta.getResponse().getContentAsByteArray()).as(quem + ": o arquivo inteiro").isEqualTo(inteiro);
+                    assertThat(resposta.getResponse().getHeader("Content-Range")).as(quem).isNull();
+                    assertThat(resposta.getResponse().getHeaders("Accept-Ranges")).as(quem).containsExactly("none");
+                    assertThat(resposta.getResponse().getHeaders("Content-Length")).as(quem).containsExactly(String.valueOf(tamanho));
+                    assertThat(resposta.getResponse().getHeaders("Content-Security-Policy")).as(quem).containsExactly("sandbox");
+                    assertThat(resposta.getResponse().getHeaders("Cache-Control")).as(quem).containsExactly("private, no-store");
+                    assertThat(aberturas(documento) - antes).as(quem + ": uma linha nova no histórico").isEqualTo(1);
+                }
+            }
+        }
+    }
+
+    @Test
+    void oGetSemRangeTambemGravaUmaLinhaEDeclaraQueNaoAceitaFaixa() {
         SessaoDeApi amarelo = entrar(AMARELO);
         long d02 = doKit("D02");
         long antes = aberturas(d02);
 
-        MvcTestResult primeira = amarelo.getComCabecalho("/api/documentos/" + d02 + "/conteudo", "Range", "bytes=0-99");
-        MvcTestResult continuacao = amarelo.getComCabecalho("/api/documentos/" + d02 + "/conteudo", "Range", "bytes=100-199");
-        MvcTestResult resto = amarelo.getComCabecalho("/api/documentos/" + d02 + "/conteudo", "Range", "bytes=5000-");
-        MvcTestResult cabeca = amarelo.head("/api/documentos/" + d02 + "/conteudo");
+        MvcTestResult resposta = conteudo(amarelo, d02);
 
-        assertThat(primeira).hasStatus(HttpStatus.PARTIAL_CONTENT);
-        assertThat(primeira.getResponse().getContentAsByteArray()).hasSize(100);
-        assertThat(primeira.getResponse().getHeader("Content-Range")).startsWith("bytes 0-99/");
-        assertThat(continuacao).hasStatus(HttpStatus.PARTIAL_CONTENT);
-        assertThat(resto).hasStatus(HttpStatus.PARTIAL_CONTENT);
+        assertThat(resposta).hasStatus(HttpStatus.OK);
+        assertThat(resposta.getResponse().getHeaders("Accept-Ranges")).containsExactly("none");
+        assertThat(aberturas(d02) - antes).isEqualTo(1);
+    }
+
+    @Test
+    void soOHeadNaoGravaDownload() {
+        SessaoDeApi amarelo = entrar(AMARELO);
+        long d02 = doKit("D02");
+        long antes = aberturas(d02);
+
+        MvcTestResult cabeca = amarelo.head("/api/documentos/" + d02 + "/conteudo");
+        MvcTestResult cabecaComFaixa = amarelo.headComCabecalho("/api/documentos/" + d02 + "/conteudo", "Range", "bytes=0-99");
+
         assertThat(cabeca).hasStatus(HttpStatus.OK);
-        assertThat(aberturas(d02) - antes).as("só a primeira faixa foi uma abertura").isEqualTo(1);
-        for (MvcTestResult resposta : List.of(primeira, continuacao, resto)) {
+        assertThat(cabecaComFaixa).hasStatus(HttpStatus.OK);
+        assertThat(aberturas(d02)).as("o HEAD não é uma abertura").isEqualTo(antes);
+        for (MvcTestResult resposta : List.of(cabeca, cabecaComFaixa)) {
+            // o MockMvc não tira o corpo do HEAD (o Tomcat tira); o que vale aqui são o status e os cabeçalhos
             assertThat(resposta.getResponse().getHeaders("Content-Security-Policy")).containsExactly("sandbox");
-            assertThat(resposta.getResponse().getHeaders("Cache-Control")).containsExactly("private, no-store");
+            assertThat(resposta.getResponse().getHeader("Content-Range")).isNull();
         }
     }
 

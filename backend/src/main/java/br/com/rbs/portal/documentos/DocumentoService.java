@@ -373,15 +373,15 @@ public class DocumentoService {
      * (indexado ou substituído, no escopo de alguma parceria dela): o resto, inclusive o revogado, o recusado, o que ainda não foi
      * aprovado e o de outra edição, cota ou parceria, dá 404 com a mesma frase. É o único caminho da marca até o arquivo de um documento:
      * a rota 18 o recusa. [HISTORICO] Grava DOWNLOAD na entidade {@code documento} (com a parceria só no escopo PARCERIA; nos outros, com
-     * o usuário), uma vez por abertura: a continuação de uma leitura por faixas (pedaço que não começa em 0) e o HEAD não gravam.
+     * o usuário), uma linha por GET: a rota ignora o {@code Range}, e só o HEAD não grava.
      */
     @Transactional
-    public ConteudoDoDocumento conteudo(UsuarioAutenticado usuario, long id, boolean primeiraLeitura, HttpServletRequest requisicao) {
+    public ConteudoDoDocumento conteudo(UsuarioAutenticado usuario, long id, boolean gravarDownload, HttpServletRequest requisicao) {
         var linha = (usuario.ehRbs() ? repositorio.conteudo(id) : repositorio.conteudoParaAMarca(id, usuario.id()))
                 .orElseThrow(DocumentoService::naoEncontrado);
         Path caminho = armazenamento.localizar(linha.arquivoCaminho()).orElseThrow(
                 () -> new NaoEncontradoException("Este documento não está mais disponível. Avise a equipe da RBS."));
-        if (primeiraLeitura) {
+        if (gravarDownload) {
             historico.registrar(AcaoHistorico.DOWNLOAD, usuario, linha.parceriaId(), "documento", linha.id(), null, linha.arquivoNome(),
                     null, requisicao);
         }

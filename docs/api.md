@@ -2171,10 +2171,11 @@ O arquivo do documento, para o visualizador abri-lo na página da fonte de uma r
 | `X-Content-Type-Options` | `nosniff` | O navegador não reinterpreta o tipo do arquivo. |
 | `Content-Security-Policy` | `sandbox` | Um arquivo aberto direto não roda script nem acessa a sessão. |
 | `Cache-Control` | `private, no-store` | Nada fica em cache do navegador nem de intermediário. |
+| `Accept-Ranges` | `none` | O leitor sabe que o arquivo vem inteiro, de uma vez. |
 
-A rota aceita `Range` (o leitor de PDF pede o arquivo por faixas) e responde **206** com `Content-Range`; sem `Range`, 200 com o arquivo todo.
+**A rota ignora o cabeçalho `Range`**, qualquer que seja o valor (`bytes=-99999999`, `bytes=00-`, `bytes=1-`, `lixo`): todo `GET` responde **200** com o arquivo inteiro e o `Content-Length` dele, sem `206`, sem `416` e sem `Content-Range`. Assim cada leitura é uma abertura inteira e inteira entra no histórico; não há como baixar o arquivo em pedaços que escapem da contagem.
 
-**Histórico:** cada abertura grava `DOWNLOAD` na entidade `documento`, com o nome original do arquivo em `valorNovo`. No documento de escopo `PARCERIA` a linha leva a `parceria_id` dele; nos outros fica sem parceria, com o usuário. **Só a primeira leitura grava**: uma faixa que não começa no byte 0 (a continuação da mesma abertura) e o `HEAD` não gravam. A marca não vê essas linhas na rota 20; a RBS as vê nas rotas 20 e 21.
+**Histórico:** cada abertura grava `DOWNLOAD` na entidade `documento`, com o nome original do arquivo em `valorNovo`. No documento de escopo `PARCERIA` a linha leva a `parceria_id` dele; nos outros fica sem parceria, com o usuário. **Todo `GET` grava uma linha**, com ou sem `Range`; só o `HEAD` não grava. A marca não vê essas linhas na rota 20; a RBS as vê nas rotas 20 e 21.
 
 **Erros:** 401; 404 (não existe, a marca não pode vê-lo, id que não é número; ou o arquivo sumiu do armazenamento: `"Este documento não está mais disponível. Avise a equipe da RBS."`).
 

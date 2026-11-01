@@ -77,6 +77,15 @@ public final class SessaoDeApi {
         return pedido.exchange();
     }
 
+    /** Um HEAD com mais um cabeçalho. */
+    public MvcTestResult headComCabecalho(String uri, String nome, String valor) {
+        var pedido = mvc.method(HttpMethod.HEAD).uri(uri).session(sessao).header(nome, valor);
+        if (agente != null) {
+            pedido = pedido.header("User-Agent", agente);
+        }
+        return pedido.exchange();
+    }
+
     public MvcTestResult post(String uri, String json) {
         return enviar(HttpMethod.POST, uri, json, true);
     }

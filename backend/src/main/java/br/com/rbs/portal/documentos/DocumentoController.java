@@ -16,7 +16,8 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
-import org.springframework.core.io.FileSystemResource;
+import java.nio.file.Files;
+import org.springframework.core.io.InputStreamResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
@@ -109,19 +110,24 @@ public class DocumentoController {
      * 59. O arquivo do documento para o visualizador, na própria página (inline), nunca como anexo. Os cabeçalhos tiram do arquivo
      * qualquer poder sobre a página: {@code nosniff} (o navegador não reinterpreta o tipo), {@code Content-Security-Policy: sandbox}
      * (um PDF ou TXT aberto direto não roda script nem acessa a sessão) e {@code Cache-Control: private, no-store} (nada fica em cache
-     * do navegador ou de intermediário). Aceita {@code Range}, como o leitor de PDF pede; só a primeira leitura vai ao histórico.
+     * do navegador ou de intermediário). A rota ignora o {@code Range}: todo GET devolve 200 com o arquivo inteiro e grava o DOWNLOAD,
+     * e o {@code Accept-Ranges: none} avisa ao leitor. Por isso o corpo é um {@link InputStreamResource}, que o Spring não fatia (um
+     * {@link Resource} de arquivo seria fatiado em 206, e um {@code Range} inválido daria 416 com o arquivo inteiro no corpo, sem a
+     * contagem). Só o HEAD não grava.
      */
     @GetMapping("/{id}/conteudo")
     public ResponseEntity<Resource> conteudo(@AuthenticationPrincipal UsuarioAutenticado usuario, @PathVariable long id,
-                                             HttpServletRequest requisicao) {
-        ConteudoDoDocumento arquivo = servico.conteudo(usuario, id, ehPrimeiraLeitura(requisicao), requisicao);
+                                             HttpServletRequest requisicao) throws IOException {
+        ConteudoDoDocumento arquivo = servico.conteudo(usuario, id, !"HEAD".equals(requisicao.getMethod()), requisicao);
         HttpHeaders cabecalhos = new HttpHeaders();
         cabecalhos.setContentType(tipo(arquivo.mimeType()));
+        cabecalhos.setContentLength(Files.size(arquivo.caminho()));
         cabecalhos.setContentDisposition(ContentDisposition.inline().filename(arquivo.nomeOriginal(), StandardCharsets.UTF_8).build());
+        cabecalhos.set(HttpHeaders.ACCEPT_RANGES, "none");
         cabecalhos.set("X-Content-Type-Options", "nosniff");
         cabecalhos.set("Content-Security-Policy", "sandbox");
         cabecalhos.set("Cache-Control", "private, no-store");
-        return ResponseEntity.ok().headers(cabecalhos).body(new FileSystemResource(arquivo.caminho()));
+        return ResponseEntity.ok().headers(cabecalhos).body(new InputStreamResource(Files.newInputStream(arquivo.caminho())));
     }
 
     /** 60. O trecho inteiro, com a página e o texto, para o destaque no visualizador. */
@@ -129,15 +135,6 @@ public class DocumentoController {
     public TrechoDoVisualizadorDto trechoDoVisualizador(@AuthenticationPrincipal UsuarioAutenticado usuario, @PathVariable long id,
                                                         @PathVariable long trechoId) {
         return servico.trechoDoVisualizador(usuario, id, trechoId);
-    }
-
-    /** Só a primeira leitura grava o DOWNLOAD: nem o HEAD nem a faixa que não começa no byte 0 (continuação da mesma leitura). */
-    private static boolean ehPrimeiraLeitura(HttpServletRequest requisicao) {
-        if ("HEAD".equals(requisicao.getMethod())) {
-            return false;
-        }
-        String faixa = requisicao.getHeader(HttpHeaders.RANGE);
-        return faixa == null || faixa.replace(" ", "").startsWith("bytes=0-");
     }
 
     /** O tipo do arquivo; o TXT sai com o conjunto de caracteres dito (UTF-8), para a tela não adivinhar os acentos. */
