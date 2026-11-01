@@ -522,4 +522,34 @@ class FontesNoChatTest {
                 .doesNotContain("Documentos que esta conversa já citou");
         assertThat(prompt).doesNotContain("@MARCA@").doesNotContain("@DATA@");
     }
+
+    @Test
+    void oPromptDoChatTrazAsRegrasDeOutraMarcaOutraEdicaoMudouContaTextoSimplesERespostaCurta() {
+        long conversa = abrir();
+        modelo.texto("Olá!");
+
+        falar(conversa, "Oi");
+
+        String prompt = modelo.pedidos().get(0).mensagens().get(0).conteudo();
+        String naoEncontrei = "escreva exatamente \"Não encontrei isso nos documentos do portal.\" e mais nada";
+        // outra marca: a frase exata e nada mais, sem dizer se existe (ataque-02, ataque-09)
+        assertThat(prompt).contains("Se pedirem dados de outra marca, " + naoEncontrei).contains("não diga se os dados existem")
+                .doesNotContain("diga que não tem acesso");
+        // outra edição: a mesma frase exata, sem emendar dados da edição desta conversa (ver-03, ver-04)
+        assertThat(prompt).contains("outra edição (\"em 2026\", \"na edição passada\"), " + naoEncontrei).contains("sem juntar dados desta edição");
+        // "mudou?": só a versão que vale hoje, com a citação, sem afirmar que mudou nem que não mudou
+        assertThat(prompt).contains("Você só vê a versão que vale hoje").contains("diga o que vale hoje, com a citação")
+                .contains("nunca afirme que mudou nem que não mudou");
+        // conta com valor de documento: o valor unitário com a citação e uma frase dizendo que o Atlas ainda não faz a conta
+        assertThat(prompt).contains("quanto pago?").contains("valor unitário com a citação").contains("o Atlas ainda não faz essa conta");
+        // número da parceria: consultar de novo em cada pergunta, porque o dado pode ter mudado
+        assertThat(prompt).contains("de novo a cada pergunta sobre esses números").contains("o dado pode ter mudado");
+        // só o que foi perguntado, sem orientação que o trecho não traz
+        assertThat(prompt).contains("Responda só ao que foi perguntado").contains("Não dê orientação que não esteja no trecho");
+        // texto simples e sem cumprimento
+        assertThat(prompt).contains("texto simples").contains("sem negrito, títulos nem outra marcação").contains("Boa tarde!")
+                .contains("vá direto à resposta");
+        // continua curto
+        assertThat(prompt.length()).as("o prompt do chat tem de ficar curto").isLessThan(6500);
+    }
 }

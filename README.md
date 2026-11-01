@@ -157,7 +157,7 @@ Nesta versão o Atlas é só o chat: a marca pergunta sobre os números da próp
 3. Entre como `marketing@amarelo.example` e, em **Aplicações**, informe os números que só a marca sabe (visitantes, cadastros e brindes): eles ficam com o seu nome e a data.
 4. Toque em **atlas**, no menu (ou use a caixa "atlas · como posso ajudar?" em Minha parceria). O Atlas abre numa janela própria, com o menu à vista. Pergunte "quantas aplicações já foram comprovadas?": a resposta chega enquanto o modelo escreve, e os números vêm do portal.
 5. No perfil `dev`, cada resposta mostra, em caixas amarelas de debug, as ferramentas que o modelo usou, com o que ele pediu e o que recebeu de volta. Sem ferramenta, a resposta diz isso.
-6. Peça os números de outra marca: o Atlas não tem como consultá-los e diz isso, sem número nenhum.
+6. Peça os números de outra marca: o Atlas não tem como consultá-los e responde só "Não encontrei isso nos documentos do portal. Para essa dúvida, fale com o atendimento da RBS.", sem dizer se existem e sem número nenhum.
 
 ### Ligar o modelo de linguagem (opcional)
 
