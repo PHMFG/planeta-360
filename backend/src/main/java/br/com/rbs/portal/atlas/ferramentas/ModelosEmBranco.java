@@ -31,22 +31,35 @@ public class ModelosEmBranco {
     /** A aba da Pesquisa: só quem a tem aberta recebe as perguntas da pesquisa. */
     static final String ABA_PESQUISA = "PESQUISA";
 
-    /** Os tipos de modelo, com o título, o arquivo de onde vêm, o nome do arquivo que a pessoa baixa e a aba que o libera (se houver). */
+    /**
+     * Os tipos de modelo, com o título, o arquivo de onde vêm, o nome do arquivo que a pessoa baixa, a aba que o libera (se houver) e se
+     * é só do Atlas da RBS ({@link #soDaRbs}): o esqueleto do relatório da cota nunca é oferecido nem entregue à marca.
+     */
     public enum Tipo {
-        BRIEFING_CONTEUDO("Briefing de conteúdo", "briefing-conteudo.txt", "briefing-de-conteudo.md", null),
-        PERGUNTAS_PESQUISA("Perguntas da pesquisa", "perguntas-pesquisa.txt", "perguntas-da-pesquisa.md", ABA_PESQUISA),
-        PLANO_OPERACIONAL_ATIVACAO("Plano operacional da ativação", "plano-operacional.txt", "plano-operacional-da-ativacao.md", null);
+        BRIEFING_CONTEUDO("Briefing de conteúdo", "briefing-conteudo.txt", "briefing-de-conteudo.md", null, false),
+        PERGUNTAS_PESQUISA("Perguntas da pesquisa", "perguntas-pesquisa.txt", "perguntas-da-pesquisa.md", ABA_PESQUISA, false),
+        PLANO_OPERACIONAL_ATIVACAO("Plano operacional da ativação", "plano-operacional.txt", "plano-operacional-da-ativacao.md", null,
+                false),
+        ESQUELETO_RELATORIO_COTA("Esqueleto do relatório da cota", "esqueleto-relatorio-cota.txt", "esqueleto-do-relatorio-da-cota.md",
+                null, true);
 
         private final String titulo;
         private final String arquivo;
         private final String nomeDoArquivo;
         private final String aba;
+        private final boolean soDaRbs;
 
-        Tipo(String titulo, String arquivo, String nomeDoArquivo, String aba) {
+        Tipo(String titulo, String arquivo, String nomeDoArquivo, String aba, boolean soDaRbs) {
             this.titulo = titulo;
             this.arquivo = arquivo;
             this.nomeDoArquivo = nomeDoArquivo;
             this.aba = aba;
+            this.soDaRbs = soDaRbs;
+        }
+
+        /** O modelo é só da RBS: a marca não o recebe, não o vê na lista e nem o nome dele aparece num erro dela. */
+        public boolean soDaRbs() {
+            return soDaRbs;
         }
 
         public String titulo() {
@@ -96,11 +109,16 @@ public class ModelosEmBranco {
     public List<Tipo> disponiveis(UsuarioAutenticado usuario, long parceriaId) {
         List<Tipo> tipos = new ArrayList<>();
         for (Tipo tipo : Tipo.values()) {
-            if (tipo.livre() || verificador.podeVerAba(usuario, parceriaId, tipo.aba)) {
+            if (!tipo.soDaRbs() && (tipo.livre() || verificador.podeVerAba(usuario, parceriaId, tipo.aba))) {
                 tipos.add(tipo);
             }
         }
         return tipos;
+    }
+
+    /** Os tipos do Atlas da RBS: todos, na ordem do contrato, inclusive o que é só dela. A conversa da RBS não tem parceria nem aba. */
+    public List<Tipo> disponiveisDaRbs() {
+        return List.of(Tipo.values());
     }
 
     /** Os modelos que o {@code pedido_de_relatorio} oferece: os {@link #disponiveis}, com o título. */

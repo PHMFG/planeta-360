@@ -1706,7 +1706,9 @@ Algumas ferramentas respondem à pessoa sozinhas: é o `returnDirect` do plano, 
 | `BRIEFING_CONTEUDO` | Briefing de conteúdo | `briefing-de-conteudo.md` |
 | `PERGUNTAS_PESQUISA` | Perguntas da pesquisa | `perguntas-da-pesquisa.md` |
 | `PLANO_OPERACIONAL_ATIVACAO` | Plano operacional da ativação | `plano-operacional-da-ativacao.md` |
+| `ESQUELETO_RELATORIO_COTA` (**só da RBS**) | Esqueleto do relatório da cota | `esqueleto-do-relatorio-da-cota.md` |
 
+- **`ESQUELETO_RELATORIO_COTA` é só do Atlas da RBS** (veja "O Atlas da RBS"): um esqueleto do relatório da cota, `esqueleto-relatorio-cota.txt`, **sem nenhum algarismo**, com as 6 seções do relatório oficial (rota 35), na ordem, e os 17 indicadores do catálogo, cada um na seção dele (um teste confere contra a tabela `indicador`). Para a marca o tipo não existe: não é entregue, não entra em `modelos` do pedido de relatório e o nome dele não aparece no erro de tipo desconhecido, que lista só os três de sempre.
 - **A Pesquisa é só da Master** (decisão do projeto): `PERGUNTAS_PESQUISA` para quem não tem a aba Pesquisa aberta (conferida no banco na hora, como a consulta da parceria faz; a Roxo e a Verde não a têm, e o Amarelo a perde se a RBS a fecha) volta ao modelo como erro, em palavras (`{"erro": "O modelo de perguntas da pesquisa não está disponível para esta parceria: a aba Pesquisa não está aberta para ela. ..."}`), e não aparece em `modelos` do pedido.
 
 ## O JEV nos pontos de decisão (M7)

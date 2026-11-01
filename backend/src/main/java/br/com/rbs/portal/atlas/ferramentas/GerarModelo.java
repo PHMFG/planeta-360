@@ -93,7 +93,8 @@ public class GerarModelo implements Ferramenta {
         desconhecidos(argumentos, ARGUMENTOS, erros);
         String pedido = texto(argumentos, "tipo", true, erros);
         List<Tipo> disponiveis = modelos.disponiveis(contexto.usuario(), contexto.parceriaId());
-        Tipo tipo = pedido == null ? null : Tipo.deNome(pedido).orElse(null);
+        // O tipo que é só da RBS não existe para a marca: o erro dela não o nomeia (nem pede a aba de uma Pesquisa que não é o caso).
+        Tipo tipo = pedido == null ? null : Tipo.deNome(pedido).filter(t -> !t.soDaRbs()).orElse(null);
         if (pedido != null && tipo == null) {
             erros.put("tipo", "Tipo desconhecido.");
         }

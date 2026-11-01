@@ -133,8 +133,8 @@ class GerarModeloTest {
     }
 
     @Test
-    void osTresArquivosExistemSemAlgarismoMoedaNemValor() throws IOException {
-        for (String nome : List.of("briefing-conteudo.txt", "perguntas-pesquisa.txt", "plano-operacional.txt")) {
+    void osArquivosExistemSemAlgarismoMoedaNemValor() throws IOException {
+        for (String nome : List.of("briefing-conteudo.txt", "perguntas-pesquisa.txt", "plano-operacional.txt", "esqueleto-relatorio-cota.txt")) {
             String texto = arquivo(nome);
 
             assertThat(texto).as(nome).isNotBlank().startsWith("# ");
@@ -146,7 +146,7 @@ class GerarModeloTest {
 
     @Test
     void osModelosNaoLevamMarcaEdicaoNemInstrucaoAoModeloDeLinguagem() throws IOException {
-        for (String nome : List.of("briefing-conteudo.txt", "perguntas-pesquisa.txt", "plano-operacional.txt")) {
+        for (String nome : List.of("briefing-conteudo.txt", "perguntas-pesquisa.txt", "plano-operacional.txt", "esqueleto-relatorio-cota.txt")) {
             assertThat(arquivo(nome).toLowerCase()).as(nome).doesNotContain("atlas").doesNotContain("rbs").doesNotContain("planeta")
                     .doesNotContain("atlântida").doesNotContain("edição").doesNotContain("você é");
         }
