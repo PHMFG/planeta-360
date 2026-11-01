@@ -351,6 +351,36 @@ class ContarDiasTest {
     }
 
     @Test
+    void osPedacosDeUmaDataSoValemDentroDaMesmaFonte() {
+        // T1 "R$ 20,00" e T2 "04/12/2026" aceitavam 20/12 juntando o 20 de uma com o mês da outra
+        FontesDoTurno duasFontes = new FontesDoTurno("Quantos dias?", 2027, HOJE);
+        duasFontes.registrarTrecho(1, 1, "Tabela", 1, 1, "Valores", "Diária: R$ 20,00 por pessoa.");
+        duasFontes.registrarTrecho(2, 1, "Calendário", 1, 2, "Prazos", "A entrega é em 10/05/2027.");
+        assertThat(camposSemOrigem(duasFontes, "{\"inicio\":\"2027-05-10\",\"fim\":\"2027-05-20\"}")).containsOnlyKeys("fim");
+        // na mesma fonte, o 20 e o mês 05 da data dela fazem 20/05/2027
+        FontesDoTurno mesmaFonte = new FontesDoTurno("Quantos dias?", 2027, HOJE);
+        mesmaFonte.registrarTrecho(1, 1, "Manual", 1, 1, "Prazos", "Diária: R$ 20,00 por pessoa. A entrega é em 10/05/2027.");
+        assertThat(contarComOQueTem(ferramenta, mesmaFonte, "{\"inicio\":\"2027-05-10\",\"fim\":\"2027-05-20\"}")).containsEntry("resultado", "10");
+    }
+
+    @Test
+    void foraDaJanelaLivreADataSemAnoSoValeNosAnosDaEdicaoDoAnteriorEDeHoje() {
+        // a edição é 2027 e hoje é 2026: valem 2027 e 2026; 2030 não
+        FontesDoTurno turno = new FontesDoTurno("A entrega é em 10/05 e a retirada em 20/05.", 2027, HOJE);
+        assertThat(contarComOQueTem(ferramenta, turno, "{\"inicio\":\"2027-05-10\",\"fim\":\"2027-05-20\"}")).containsEntry("resultado", "10");
+        assertThat(contarComOQueTem(ferramenta, turno, "{\"inicio\":\"2026-05-10\",\"fim\":\"2026-05-20\"}")).containsEntry("resultado", "10");
+        assertThat(camposSemOrigem(turno, "{\"inicio\":\"2030-05-10\",\"fim\":\"2030-05-20\"}")).containsOnlyKeys("inicio", "fim");
+        // a pessoa que escreveu o ano vale como escreveu
+        assertThat(contarComOQueTem(ferramenta, new FontesDoTurno("Entre 10/05/2030 e 20/05/2030?", 2027, HOJE),
+                "{\"inicio\":\"2030-05-10\",\"fim\":\"2030-05-20\"}")).containsEntry("resultado", "10");
+        // o mesmo vale para o registro com a data sem ano
+        FontesDoTurno registro = new FontesDoTurno("Quanto?", 2027, HOJE);
+        registro.registrarRegistro("prazo", 1, "Prazo", "Prazos", "Prazo: 10/05.", Map.of());
+        assertThat(camposSemOrigem(registro, "{\"inicio\":\"2030-05-10\",\"dias\":1}")).containsOnlyKeys("inicio");
+        assertThat(contarComOQueTem(ferramenta, registro, "{\"inicio\":\"2027-05-10\",\"dias\":1}")).containsEntry("resultado", "11/05/2027");
+    }
+
+    @Test
     void oResultadoDeOutraContagemDoTurnoServeDeInicio() {
         FontesDoTurno turno = new FontesDoTurno("Quando vencem 80 dias úteis depois de 03/11/2026?", 2027, HOJE);
 

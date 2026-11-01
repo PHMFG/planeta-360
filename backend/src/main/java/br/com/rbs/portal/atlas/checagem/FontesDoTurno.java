@@ -7,9 +7,11 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * O que o turno tem de onde tirar uma afirmação: as fontes que as ferramentas devolveram NESTE turno (os trechos de documento
@@ -138,6 +140,14 @@ public final class FontesDoTurno {
 
     public int anoDaEdicao() {
         return anoDaEdicao;
+    }
+
+    /**
+     * Os anos que uma data sem ano libera na resposta: o da edição, o anterior a ela e o de hoje. É a regra da checagem do texto, e a
+     * origem das datas do {@code contar_dias} fora da janela livre usa a mesma.
+     */
+    public Set<String> anosAceitos() {
+        return new LinkedHashSet<>(List.of(String.valueOf(anoDaEdicao), String.valueOf(anoDaEdicao - 1), String.valueOf(hoje.getYear())));
     }
 
     public LocalDate hoje() {

@@ -193,7 +193,7 @@ public class ChecagemDeFontes {
     private static Optional<String> motivoDeNumero(FontesDoTurno fontes, String texto) {
         int edicao = fontes.anoDaEdicao();
         int anoDeHoje = fontes.hoje().getYear();
-        Set<String> anosAceitos = new LinkedHashSet<>(List.of(String.valueOf(edicao), String.valueOf(edicao - 1), String.valueOf(anoDeHoje)));
+        Set<String> anosAceitos = fontes.anosAceitos();
         Origens daPessoa = new Origens(fontes.mensagemDaPessoa());   // só a deste turno: a data com ano vale como está
         Origens geral = fontes.origensDaPessoa().anosAceitos(anosAceitos);   // o que a pessoa escreveu em qualquer mensagem da conversa
         geral.adicionarAnoLivre(edicao).adicionarAnoLivre(anoDeHoje).adicionarData(fontes.hoje());

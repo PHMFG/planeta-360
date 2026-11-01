@@ -46,8 +46,10 @@ import org.springframework.stereotype.Component;
  *       ({@code T#}, {@code R#}; o texto de uma conta do {@code calcular} não vale), comparado por valor como o literal do
  *       {@code calcular}. {@code inicio} e {@code fim} valem sem fonte de {@value #DIAS_LIVRES_ANTES_DE_HOJE} dias antes de hoje a
  *       {@value #DIAS_LIVRES_DEPOIS_DE_HOJE} depois ("ontem", "dia 20", "fim do mês", "segunda passada"); fora disso precisam ser uma
- *       data do que a pessoa escreveu ou de uma fonte deste turno (data sem ano vale, como em {@link Origens}). O resultado de
- *       outra contagem do turno é uma fonte, então serve de {@code inicio}.</li>
+ *       data do que a pessoa escreveu ou de uma fonte deste turno. A data sem ano só vale nos anos da edição, do anterior a ela e de
+ *       hoje (a regra da checagem da resposta, em {@link Origens}), e as datas em pedaços (o dia solto de um número mais o mês de
+ *       outra data) só valem dentro do mesmo trecho de documento; registro e contagem valem por inteiro. O
+ *       resultado de outra contagem do turno é uma fonte, então serve de {@code inicio}.</li>
  * </ul>
  */
 @Component
@@ -192,8 +194,9 @@ public class ContarDias implements Ferramenta {
      * deste turno (por valor, como o literal do {@code calcular}): o texto de uma conta do {@code calcular} ({@code C#}) não vale,
      * porque o modelo escolhe os valores que entram nela. {@code inicio} e {@code fim} valem sem fonte de {@value #DIAS_LIVRES_ANTES_DE_HOJE}
      * dias antes de hoje a {@value #DIAS_LIVRES_DEPOIS_DE_HOJE} depois ("ontem", "dia 20", "fim do mês"); fora disso vêm do que a pessoa
-     * escreveu ou de uma fonte deste turno, inclusive o resultado de outra contagem de dias. O trecho de documento ainda diz as datas em
-     * pedaços; registro e contagem, por inteiro.
+     * escreveu ou de uma fonte deste turno, inclusive o resultado de outra contagem de dias. A data sem ano só vale nos anos da edição, do
+     * anterior a ela e de hoje (a regra da checagem da resposta), e os pedaços de uma data (o dia solto de um número mais o mês de outra
+     * data) só valem dentro do mesmo trecho de documento; registro e contagem valem por inteiro.
      */
     private static void conferirAOrigem(FontesDoTurno turno, LocalDate inicio, LocalDate fim, Integer dias, Map<String, String> erros) {
         if (dias != null && dias > DIAS_LIVRES) {
@@ -231,19 +234,22 @@ public class ContarDias implements Ferramenta {
     }
 
     /**
-     * De onde uma data fora da janela livre pode vir: o que a pessoa escreveu e as fontes do turno. O trecho de documento diz os
-     * pedaços; o registro e a contagem de dias, a data por inteiro. O texto de uma conta do {@code calcular} fica de fora.
+     * De onde uma data fora da janela livre pode vir: o que a pessoa escreveu, e cada fonte do turno <b>por si</b> (os pedaços de uma
+     * data, o dia solto mais o mês de outra data, não se juntam entre fontes). O trecho de documento diz os pedaços; o registro e a
+     * contagem de dias, a data por inteiro. O texto de uma conta do {@code calcular} fica de fora.
      */
     private static List<Origens> origensDasDatas(FontesDoTurno turno) {
-        Origens origens = turno.origensDaPessoa();
+        Set<String> anos = turno.anosAceitos();
+        List<Origens> origens = new ArrayList<>();
+        origens.add(turno.origensDaPessoa().anosAceitos(anos));
         for (Fonte fonte : turno.fontes()) {
             if (fonte.tipo() == FontesDoTurno.Tipo.TRECHO) {
-                origens.adicionarFonteCitada(fonte.texto());
+                origens.add(new Origens().adicionarFonteCitada(fonte.texto()).anosAceitos(anos));
             } else if (fonte.tipo() == FontesDoTurno.Tipo.REGISTRO || NOME.equals(fonte.dados().get("ferramenta"))) {
-                origens.adicionar(fonte.texto());
+                origens.add(new Origens().adicionar(fonte.texto()).anosAceitos(anos));
             }
         }
-        return List.of(origens);
+        return origens;
     }
 
     // ---------------------------------------------------------------------
