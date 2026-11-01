@@ -400,7 +400,7 @@ class ContarDiasTest {
     }
 
     @Test
-    void ointervaloComFimVaiAte800DiasEOsFeriadosListadosNuncaPassamDe40() {
+    void ointervaloComFimVaiAte800DiasEOsFeriadosListadosSaoTodosOsDoIntervalo() {
         LocalDate inicio = LocalDate.of(2026, 11, 3);
         LocalDate ate800 = inicio.plusDays(800);
         LocalDate ate801 = inicio.plusDays(801);
@@ -408,7 +408,13 @@ class ContarDiasTest {
 
         Map<String, Object> maximo = contar(ferramenta, turno, "{\"inicio\":\"" + inicio + "\",\"fim\":\"" + ate800 + "\",\"uteis\":true}");
         assertThat(maximo).containsKey("resultado");
-        assertThat(feriados(maximo)).isNotEmpty().hasSizeLessThanOrEqualTo(40);
+        // sem teto: os feriados que caem em dia de semana dentro dos 800 dias (nenhuma contagem possível chega a 40) vêm todos, em ordem
+        List<Map<String, String>> listados = feriados(maximo);
+        long emDiaDeSemana = inicio.plusDays(1).datesUntil(ate800.plusDays(1))
+                .filter(data -> data.getDayOfWeek().getValue() <= 5 && !new Feriados(false).diaUtil(data)).count();
+        assertThat(listados).hasSize((int) emDiaDeSemana).isNotEmpty();
+        assertThat(listados).extracting(f -> f.get("data")).isSortedAccordingTo(
+                java.util.Comparator.<String, LocalDate>comparing(texto -> LocalDate.parse(texto, DIA)));
         comOrigem(turno, "{\"inicio\":\"" + inicio + "\",\"fim\":\"" + ate801 + "\"}");
         assertThat(camposSemOrigem(turno, "{\"inicio\":\"" + inicio + "\",\"fim\":\"" + ate801 + "\"}")).containsOnlyKeys("fim");
         assertThat(camposSemOrigem(turno, "{\"inicio\":\"" + inicio + "\",\"fim\":\"" + ate801 + "\"}").get("fim")).contains("801", "800");

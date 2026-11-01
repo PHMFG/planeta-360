@@ -61,8 +61,6 @@ public class ContarDias implements Ferramenta {
     static final int DIAS_MAXIMO = 400;
     /** O intervalo de {@code inicio} a {@code fim}: sem isso, 01/01/2000 a 31/12/2100 devolvia 819 feriados e 41 KB por chamada. */
     static final int INTERVALO_MAXIMO = 800;
-    /** Quantos feriados a resposta lista, no máximo. */
-    static final int FERIADOS_MAXIMOS = 40;
     /** Uma quantidade de 1 a 31 dias vale sem fonte: "duas semanas depois de 03/11" são 14, e a pessoa não escreveu o 14. */
     static final int DIAS_LIVRES = 31;
     /** De 31 dias antes de hoje a 90 depois valem como data de partida ou de chegada sem fonte ("ontem", "dia 20", "fim do mês"). */
@@ -288,7 +286,7 @@ public class ContarDias implements Ferramenta {
         LocalDate de = inicio.isBefore(ultimo) ? inicio.plusDays(1) : ultimo;
         LocalDate ate = inicio.isBefore(ultimo) ? ultimo : inicio.minusDays(1);
         List<Feriado> pulados = new ArrayList<>();
-        for (LocalDate data = de; !data.isAfter(ate) && pulados.size() < FERIADOS_MAXIMOS; data = data.plusDays(1)) {
+        for (LocalDate data = de; !data.isAfter(ate); data = data.plusDays(1)) {
             Optional<Feriado> feriado = Feriados.fimDeSemana(data) ? Optional.empty() : feriados.em(data);
             feriado.ifPresent(pulados::add);
         }
