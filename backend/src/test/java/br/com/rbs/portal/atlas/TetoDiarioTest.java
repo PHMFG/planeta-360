@@ -233,6 +233,29 @@ class TetoDiarioTest {
     }
 
     @Test
+    void aVagaMarcadaSoltaDepoisDoTurnoDoConflitoEDoTetoAtingido() {
+        SessaoDeApi pessoa = entrar(AMARELO);
+        long amarelo = parceria("Cliente Amarelo");
+        long conversa = conversaDe(pessoa, amarelo);
+        gravarMensagensDoModelo(conversa, 10, 0, null);
+
+        modelo.texto("Posso ajudar.");
+        assertThat(pessoa.post("/api/atlas/conversas/" + conversa + "/mensagens", TEXTO)).hasStatus(HttpStatus.OK);
+        assertThat(teto.reservadas(amarelo)).as("turno que terminou").isZero();
+
+        // o 409 (turno em andamento) não pode deixar a vaga marcada
+        jdbc.sql("UPDATE atlas_conversa SET turno_desde = now() WHERE id = :c").param("c", conversa).update();
+        assertThat(pessoa.post("/api/atlas/conversas/" + conversa + "/mensagens", TEXTO)).hasStatus(HttpStatus.CONFLICT);
+        assertThat(teto.reservadas(amarelo)).as("turno recusado com 409").isZero();
+        jdbc.sql("UPDATE atlas_conversa SET turno_desde = NULL WHERE id = :c").param("c", conversa).update();
+
+        // o teto atingido (429) também não deixa nada marcado
+        gravarMensagensDoModelo(conversa, 200, 0, null);
+        assertThat(pessoa.post("/api/atlas/conversas/" + conversa + "/mensagens", TEXTO)).hasStatus(HttpStatus.TOO_MANY_REQUESTS);
+        assertThat(teto.reservadas(amarelo)).as("turno recusado com 429").isZero();
+    }
+
+    @Test
     void oTetoVemDaConfiguracao() {
         // O mesmo contador, outro limite: nenhum recurso novo, só o número da propriedade.
         SessaoDeApi pessoa = entrar(AMARELO);

@@ -25,6 +25,7 @@ import br.com.rbs.portal.atlas.loop.OuvinteDoTurno;
 import br.com.rbs.portal.atlas.loop.PlanoBSemLlm;
 import br.com.rbs.portal.atlas.loop.TetoDaRbs;
 import br.com.rbs.portal.atlas.loop.TetoDiario;
+import br.com.rbs.portal.atlas.loop.TetoDiario.Reserva;
 import br.com.rbs.portal.atlas.provedor.DisponibilidadeDoLlm;
 import br.com.rbs.portal.atlas.relatorio.ModeloBase;
 import br.com.rbs.portal.atlas.relatorio.RelatorioAtlasDtos.RelatorioAtlasDto;
@@ -242,21 +243,29 @@ public class AtlasService {
             // O traço do diagnóstico abre aqui: a etapa G1_LIMITES cobre o teto diário (429) e a trava do turno (409).
             Traco traco = registro.abrir(conversa.parceriaId(), conversa.id());
             Etapa limites = traco.abrir(EtapaDoTraco.G1_LIMITES).dado("tetoPorParceria", teto.teto());
+            Reserva reserva;
             try {
-                limites.dado("usadasHoje", teto.exigirFolga(conversa.parceriaId()));   // 429: o teto diário de mensagens por parceria
+                // 429: o teto diário de mensagens por parceria. Confere e marca a vaga no mesmo passo (pedidos em paralelo).
+                reserva = teto.reservar(conversa.parceriaId());
+                limites.dado("usadasHoje", reserva.usadas());
             } catch (LimiteDeUsoException atingido) {
                 limites.dado("motivo", "TETO_DIARIO").fim(ResultadoDaEtapa.RECUSADO);
                 traco.encerrar(ResultadoDaEtapa.RECUSADO, "RECUSADO_ANTES_DO_TURNO", "TETO_DIARIO");
                 throw atingido;
             }
-            String texto = corpo.texto().strip();
-            AtlasContexto contexto = contextos.para(usuario, conversa.parceriaId(), conversa.id(), requisicao).comTraco(traco);
-            return comecarTurno(usuario, conversa, traco, limites, () -> loop.prepararConversa(contexto, texto),
-                    ouvinte -> loop.conduzir(contexto, ouvinte));
+            try {
+                String texto = corpo.texto().strip();
+                AtlasContexto contexto = contextos.para(usuario, conversa.parceriaId(), conversa.id(), requisicao).comTraco(traco);
+                return comecarTurno(usuario, conversa, traco, limites, reserva, () -> loop.prepararConversa(contexto, texto),
+                        ouvinte -> loop.conduzir(contexto, ouvinte));
+            } catch (RuntimeException | Error semTurno) {
+                reserva.soltar();   // o que falhou antes de o turno começar não pode deixar a vaga marcada
+                throw semTurno;
+            }
         }
         String modeloDoAtalho = modelo;
         AtlasContexto contexto = contextos.para(usuario, conversa.parceriaId(), conversa.id(), requisicao);
-        return comecarTurno(usuario, conversa, Traco.NENHUM, Traco.NENHUM.abrir(EtapaDoTraco.G1_LIMITES),
+        return comecarTurno(usuario, conversa, Traco.NENHUM, Traco.NENHUM.abrir(EtapaDoTraco.G1_LIMITES), null,
                 () -> planoB.montar(contexto, modeloDoAtalho), null);
     }
 
@@ -318,18 +327,24 @@ public class AtlasService {
             throw new ConflitoException(RelatorioAtlasService.CARTAO_JA_RESPONDIDO);
         }
         AtlasContexto contexto = contextos.para(usuario, conversa.parceriaId(), conversa.id(), requisicao);
-        long usadas = llm.disponivel() ? teto.usadasHoje(conversa.parceriaId()) : 0;
-        if (llm.disponivel() && usadas < teto.teto()) {
+        Reserva reserva = llm.disponivel() ? teto.tentarReservar(conversa.parceriaId()).orElse(null) : null;
+        if (reserva != null) {
             Traco traco = registro.abrir(conversa.parceriaId(), conversa.id());
-            Etapa limites = traco.abrir(EtapaDoTraco.G1_LIMITES).dado("tetoPorParceria", teto.teto()).dado("usadasHoje", usadas)
+            Etapa limites = traco.abrir(EtapaDoTraco.G1_LIMITES).dado("tetoPorParceria", teto.teto()).dado("usadasHoje", reserva.usadas())
                     .dado("retomada", true);
             AtlasContexto doTurno = contexto.comTraco(traco);
-            return comecarTurno(usuario, conversa, traco, limites, () -> loop.prepararRetomada(doTurno, solicitacaoId, acao, valores),
-                    ouvinte -> loop.conduzirRetomada(doTurno, ouvinte));
+            try {
+                return comecarTurno(usuario, conversa, traco, limites, reserva,
+                        () -> loop.prepararRetomada(doTurno, solicitacaoId, acao, valores),
+                        ouvinte -> loop.conduzirRetomada(doTurno, ouvinte));
+            } catch (RuntimeException | Error semTurno) {
+                reserva.soltar();
+                throw semTurno;
+            }
         }
         // Sem modelo, ou com o teto diário atingido: o cartão respondido segue o plano B (não gasta o modelo e a pessoa não fica
         // presa a um cartão aberto).
-        return comecarTurno(usuario, conversa, Traco.NENHUM, Traco.NENHUM.abrir(EtapaDoTraco.G1_LIMITES),
+        return comecarTurno(usuario, conversa, Traco.NENHUM, Traco.NENHUM.abrir(EtapaDoTraco.G1_LIMITES), null,
                 () -> planoB.responder(contexto, solicitacaoId, acao, valores), null);
     }
 
@@ -388,20 +403,29 @@ public class AtlasService {
         final int antes;
         final Consumer<OuvinteDoTurno> resto;
         final Traco traco;
+        private final Reserva reserva;
         private final AtomicBoolean encerrado = new AtomicBoolean();
 
-        TurnoAberto(UsuarioAutenticado usuario, LinhaDeConversa conversa, int antes, Consumer<OuvinteDoTurno> resto, Traco traco) {
+        TurnoAberto(UsuarioAutenticado usuario, LinhaDeConversa conversa, int antes, Consumer<OuvinteDoTurno> resto, Traco traco,
+                    Reserva reserva) {
             this.usuario = usuario;
             this.conversa = conversa;
             this.antes = antes;
             this.resto = resto;
             this.traco = traco;
+            this.reserva = reserva;
         }
 
-        /** Solta a trava da conversa. Uma vez só: depois disso, outro pedido pode ter começado outro turno. */
+        /** Solta a trava da conversa e a vaga do teto diário. Uma vez só: depois disso, outro pedido pode ter começado outro turno. */
         void encerrar() {
             if (encerrado.compareAndSet(false, true)) {
-                repositorio.encerrarTurno(conversa.id());
+                try {
+                    repositorio.encerrarTurno(conversa.id());
+                } finally {
+                    if (reserva != null) {
+                        reserva.soltar();
+                    }
+                }
             }
         }
 
@@ -413,18 +437,27 @@ public class AtlasService {
 
     /**
      * Começa o turno (409 se outro está em andamento) e faz {@code antes} nele; se {@code antes} falha (o 422 dos valores do
-     * cartão, por exemplo), o turno termina e o erro sobe, ainda antes de qualquer fluxo abrir.
+     * cartão, por exemplo), o turno termina e o erro sobe, ainda antes de qualquer fluxo abrir. A {@code reserva} é a vaga do teto
+     * diário que o pedido marcou (nula no botão): se o turno não começa, ela é solta aqui; se começa, o turno a solta ao acabar.
      */
     private TurnoAberto comecarTurno(UsuarioAutenticado usuario, LinhaDeConversa conversa, Traco traco, Etapa limites,
-                                     Runnable antes, Consumer<OuvinteDoTurno> resto) {
+                                     Reserva reserva, Runnable antes, Consumer<OuvinteDoTurno> resto) {
         int ordem = repositorio.ultimaOrdem(conversa.id());
-        if (!repositorio.iniciarTurno(conversa.id())) {
+        boolean comecou = false;
+        try {
+            comecou = repositorio.iniciarTurno(conversa.id());
+        } finally {
+            if (!comecou && reserva != null) {
+                reserva.soltar();
+            }
+        }
+        if (!comecou) {
             limites.dado("motivo", "TURNO_EM_ANDAMENTO").fim(ResultadoDaEtapa.RECUSADO);
             traco.encerrar(ResultadoDaEtapa.RECUSADO, "RECUSADO_ANTES_DO_TURNO", "TURNO_EM_ANDAMENTO");
             throw new ConflitoException(TURNO_EM_ANDAMENTO);
         }
         limites.fim(ResultadoDaEtapa.OK);   // a etapa dos limites termina com a trava na mão
-        TurnoAberto turno = new TurnoAberto(usuario, conversa, ordem, resto, traco);
+        TurnoAberto turno = new TurnoAberto(usuario, conversa, ordem, resto, traco, reserva);
         try {
             antes.run();
         } catch (RuntimeException | Error erro) {
