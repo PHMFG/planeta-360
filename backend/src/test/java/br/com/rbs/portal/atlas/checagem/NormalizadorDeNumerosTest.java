@@ -189,6 +189,14 @@ class NormalizadorDeNumerosTest {
         assertThat(valores(texto)).containsExactly(esperado);
     }
 
+    @ParameterizedTest(name = "\"{0}\" vale {1}")
+    @CsvSource(delimiter = '|', value = {"zero geradores | 0", "zero | 0", "Zero | 0", "zero reais | 0", "nota zero | 0"})
+    void zeroPorExtensoTambemEUmNumero(String texto, String esperado) {
+        assertThat(valores(texto)).containsExactly(esperado);
+        assertThat(aceita(new Origens("0 geradores"), texto)).isTrue();
+        assertThat(aceita(new Origens(texto), "0")).as("a fonte com zero por extenso é a origem do 0").isTrue();
+    }
+
     @ParameterizedTest(name = "\"{0}\" vale {1}: dois e duas contam com unidade ou escala")
     @CsvSource(delimiter = '|', value = {"dois reais | 2", "duas inserções | 2", "dois por cento | 2", "dois % | 2", "duas horas | 2",
             "dois milhões de reais | 2000000", "dois milhoes | 2000000", "dois mil | 2000", "vinte porcento | 20", "vinte % | 20"})

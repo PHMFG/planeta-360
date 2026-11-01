@@ -481,6 +481,14 @@ class ChecagemDeFontesTest {
     }
 
     @Test
+    void zeroPorExtensoContaComoNumero() {
+        recusa(turno("Quantos?"), "Hoje há zero geradores.");
+        recusa(turno("Quantos?", "Pode ter até 2 geradores."), "Hoje há zero geradores [T1].");
+        aprova(turno("Quantos?", "Hoje há 0 geradores."), "Hoje há zero geradores [T1].");
+        aprova(turno("Quantos?", "Hoje há zero geradores."), "Hoje há 0 geradores [T1].");
+    }
+
+    @Test
     void umEUmaSaoArtigoENuncaSaoOrigemDe1() {
         aprova(turno("Quanto?"), "Vale um dia de antecedência e uma credencial por pessoa.");
         // "uma credencial" na pergunta não é o 1 de "R$ 1,00"

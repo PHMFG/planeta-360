@@ -40,12 +40,12 @@ public final class NormalizadorDeNumeros {
     private static final Map<String, Integer> EXTENSO = new LinkedHashMap<>();
 
     static {
-        String[] nomes = {"um", "uma", "dois", "duas", "três", "tres", "quatro", "cinco", "seis", "sete", "oito", "nove", "dez", "onze",
+        String[] nomes = {"zero", "um", "uma", "dois", "duas", "três", "tres", "quatro", "cinco", "seis", "sete", "oito", "nove", "dez", "onze",
                 "doze", "treze", "quatorze", "catorze", "quinze", "dezesseis", "dezessete", "dezoito", "dezenove", "vinte", "trinta",
                 "quarenta", "cinquenta", "sessenta", "setenta", "oitenta", "noventa", "cem", "cento", "duzentos", "duzentas",
                 "trezentos", "trezentas", "quatrocentos", "quatrocentas", "quinhentos", "quinhentas", "seiscentos", "seiscentas",
                 "setecentos", "setecentas", "oitocentos", "oitocentas", "novecentos", "novecentas"};
-        int[] valores = {1, 1, 2, 2, 3, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 14, 15, 16, 17, 18, 19, 20, 30, 40, 50, 60, 70, 80, 90,
+        int[] valores = {0, 1, 1, 2, 2, 3, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 14, 15, 16, 17, 18, 19, 20, 30, 40, 50, 60, 70, 80, 90,
                 100, 100, 200, 200, 300, 300, 400, 400, 500, 500, 600, 600, 700, 700, 800, 800, 900, 900};
         for (int i = 0; i < nomes.length; i++) {
             EXTENSO.put(nomes[i], valores[i]);
