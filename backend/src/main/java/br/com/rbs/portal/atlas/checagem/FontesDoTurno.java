@@ -174,6 +174,41 @@ public final class FontesDoTurno {
     }
 
     // ---------------------------------------------------------------------
+    // Desfazer: a ferramenta que registrou e não chegou a gravar
+    // ---------------------------------------------------------------------
+
+    /**
+     * Uma fotografia das fontes, dos marcadores e dos números livres do turno (não das tentativas de busca, que contam mesmo quando a
+     * busca falha).
+     */
+    public record Marca(Map<String, Fonte> fontes, Map<Long, String> marcadorDoTrecho, Map<Tipo, Integer> contadores,
+                        List<String> numerosLivres, int buscasComTrecho) {
+    }
+
+    /** Tira a fotografia, antes de a ferramenta rodar. */
+    public Marca marcar() {
+        return new Marca(new LinkedHashMap<>(fontes), new HashMap<>(marcadorDoTrecho), new HashMap<>(contadores),
+                new ArrayList<>(numerosLivres), buscasComTrecho);
+    }
+
+    /**
+     * Volta ao que a {@link Marca} guardou. A ferramenta registra as fontes na fase que roda dentro da transação do loop, e o
+     * rollback não desfaz a memória: se a gravação do resultado falha, o modelo recebe um erro e nunca viu aqueles marcadores, mas
+     * eles continuariam valendo para citação. A numeração volta junto: o próximo trecho que o modelo receber será o T1 de verdade.
+     */
+    public void desfazer(Marca marca) {
+        fontes.clear();
+        fontes.putAll(marca.fontes());
+        marcadorDoTrecho.clear();
+        marcadorDoTrecho.putAll(marca.marcadorDoTrecho());
+        contadores.clear();
+        contadores.putAll(marca.contadores());
+        numerosLivres.clear();
+        numerosLivres.addAll(marca.numerosLivres());
+        buscasComTrecho = marca.buscasComTrecho();
+    }
+
+    // ---------------------------------------------------------------------
     // Números que valem na frase toda
     // ---------------------------------------------------------------------
 

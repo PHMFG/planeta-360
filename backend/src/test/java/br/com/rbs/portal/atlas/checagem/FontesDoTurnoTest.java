@@ -60,4 +60,47 @@ class FontesDoTurnoTest {
 
         assertThat(turno.nenhumaBuscaTrouxeTrecho()).isFalse();
     }
+
+    @Test
+    void desfazerVoltaAsFontesAsNumeracoesEOsNumerosLivresMasNaoAsTentativasDeBusca() {
+        FontesDoTurno turno = turno();
+        turno.contarBusca();
+        turno.registrarTrecho(10, 1, "Manual", 2, 3, "S", "O prazo é 04/12/2026.");
+        turno.concluirBusca(false);
+        turno.adicionarNumeroLivre("2 + 2 = 4");
+        FontesDoTurno.Marca antes = turno.marcar();
+
+        // uma ferramenta que registra e depois falha na gravação
+        turno.contarBusca();
+        FontesDoTurno.Fonte fantasma = turno.registrarTrecho(11, 1, "Manual", 2, 4, "S", "A multa é R$ 999,00.");
+        turno.concluirBusca(false);
+        turno.adicionarNumeroLivre("3 + 3 = 6");
+        assertThat(fantasma.marcador()).isEqualTo("T2");
+        assertThat(turno.existe("T2")).isTrue();
+
+        turno.desfazer(antes);
+
+        assertThat(turno.existe("T2")).as("o modelo nunca recebeu o T2").isFalse();
+        assertThat(turno.existe("T1")).isTrue();
+        assertThat(turno.numerosLivres()).containsExactly("2 + 2 = 4");
+        assertThat(turno.buscas()).as("a busca que falhou continua contando no limite de três").isEqualTo(2);
+        // a numeração volta junto: o próximo trecho que o modelo receber é o T2 de verdade, e o mesmo trecho não ganha dois marcadores
+        assertThat(turno.registrarTrecho(12, 1, "Manual", 2, 5, "S", "Outro trecho.").marcador()).isEqualTo("T2");
+        assertThat(turno.registrarTrecho(10, 1, "Manual", 2, 3, "S", "O prazo é 04/12/2026.").marcador()).isEqualTo("T1");
+    }
+
+    @Test
+    void desfazerTambemVoltaOQueABuscaTrouxe() {
+        FontesDoTurno turno = turno();
+        turno.contarBusca();
+        FontesDoTurno.Marca antes = turno.marcar();
+        turno.registrarTrecho(10, 1, "Manual", 2, 3, "S", "Texto.");
+        turno.concluirBusca(false);
+        assertThat(turno.nenhumaBuscaTrouxeTrecho()).isFalse();
+
+        turno.desfazer(antes);
+
+        assertThat(turno.nenhumaBuscaTrouxeTrecho()).as("o resultado dessa busca não chegou ao modelo").isTrue();
+        assertThat(turno.fontes()).isEmpty();
+    }
 }

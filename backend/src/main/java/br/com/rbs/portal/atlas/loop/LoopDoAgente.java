@@ -512,6 +512,7 @@ public class LoopDoAgente {
     private Rodada executar(AtlasContexto contexto, Turno turno, long mensagemId, ChamadaDeFerramenta chamada) {
         long inicio = System.nanoTime();
         int[] medido = new int[1];   // o mesmo tempo que a trilha guarda, para o evento do debug dizer igual
+        FontesDoTurno.Marca antes = turno.fontes.marcar();
         try {
             // Fase 1, SEM transação: a ferramenta que chama um provedor (os embeddings da busca) faz a chamada aqui, e a conexão do
             // pool só é pega na fase 2. Os argumentos errados e a ferramenta que não existe sobem daqui, como erro de ferramenta.
@@ -532,6 +533,9 @@ public class LoopDoAgente {
             });
             return new Rodada(feita, false, medido[0]);
         } catch (RuntimeException erro) {
+            // O rollback desfaz o banco, mas não a memória: as fontes que a ferramenta registrou valeriam para citação sem o modelo
+            // ter recebido os marcadores (ele recebe só o erro).
+            turno.fontes.desfazer(antes);
             String json = RelatorioFerramentas.erroComoJson(erro, modo.relatorioLigado());
             int ms = (int) ((System.nanoTime() - inicio) / 1_000_000);
             transacao.executeWithoutResult(estado -> gravarErro(contexto, mensagemId, chamada, json, erro.getMessage(), ms));

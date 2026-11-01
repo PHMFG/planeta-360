@@ -221,6 +221,41 @@ class LoopSemTransacaoTest {
                 + "WHERE m.conversa_id = :c").param("c", conversa).query(Boolean.class).single()).isTrue();
     }
 
+    @Test
+    void falhaNaGravacaoDoResultadoNaoDeixaOModeloCitarOMarcadorQueNuncaRecebeu() {
+        UsuarioAutenticado pessoa = marca();
+        long conversa = atlas.abrirConversa(pessoa, amarelo(), null, requisicao()).conversaId();
+        // um trecho real, com a data: o texto abaixo só passaria na checagem se o marcador T1 existisse no turno
+        Map<String, Object> trecho = jdbc.sql("""
+                SELECT t.id, t.documento_id, d.titulo, t.versao, t.pagina_inicio, t.secao_caminho, t.texto
+                FROM documento_trecho t JOIN documento d ON d.id = t.documento_id
+                WHERE t.ativo AND t.texto LIKE '%04/12/2026%' ORDER BY t.id LIMIT 1
+                """).query().singleRow();
+        ferramentaDeTeste.fonteQueNaoGrava(new FerramentaDeTeste.TrechoDeTeste(((Number) trecho.get("id")).longValue(),
+                ((Number) trecho.get("documento_id")).longValue(), (String) trecho.get("titulo"), ((Number) trecho.get("versao")).intValue(),
+                ((Number) trecho.get("pagina_inicio")).intValue(), (String) trecho.get("secao_caminho"), (String) trecho.get("texto")));
+        // o modelo recebe um erro, e não o trecho; mesmo assim cita o T1 que adivinhou (a numeração é previsível)
+        modelo.chamada(FerramentaDeTeste.NOME, "{}").texto("Os geradores devem ser informados até 04/12/2026 [T1].")
+                .texto("Não consegui consultar isso agora.");
+
+        ConversaDto resposta = atlas.enviarMensagem(pessoa, conversa, new MensagemRequisicao("Qual o prazo?", null, null), requisicao());
+
+        String resultado = jdbc.sql("SELECT conteudo FROM atlas_mensagem WHERE conversa_id = :c AND papel = 'tool'").param("c", conversa)
+                .query(String.class).single();
+        assertThat(resultado).contains("erro").doesNotContain("04/12/2026");
+        assertThat(jdbc.sql("SELECT count(*) FROM atlas_tool_call t JOIN atlas_mensagem m ON m.id = t.mensagem_id WHERE m.conversa_id = :c "
+                + "AND t.erro IS NOT NULL").param("c", conversa).query(Long.class).single()).isEqualTo(1);
+        // o T1 nunca chegou ao modelo: a citação é recusada (uma nova redação), e nada é gravado como fonte
+        assertThat(modelo.pedidos()).hasSize(3);
+        MensagemDeChat pedidoDeRedacao = modelo.ultimoPedido().mensagens().get(modelo.ultimoPedido().mensagens().size() - 1);
+        assertThat(pedidoDeRedacao.conteudo()).contains("recusada").contains("[T1]").contains("não existe");
+        assertThat(jdbc.sql("SELECT count(*) FROM atlas_fonte f JOIN atlas_mensagem m ON m.id = f.mensagem_id WHERE m.conversa_id = :c")
+                .param("c", conversa).query(Long.class).single()).isZero();
+        assertThat(resposta.itens().stream().filter(AtlasDtos.ItemTexto.class::isInstance).map(AtlasDtos.ItemTexto.class::cast)
+                .map(AtlasDtos.ItemTexto::texto).toList()).containsExactly("Não consegui consultar isso agora.");
+        modelo.pedidos().forEach(ProvedorRoteirizado::exigirHistoricoValido);
+    }
+
     /** O modelo lento e seguro para várias threads: pede a ferramenta e, com o resultado na mão, responde. Anota a transação de cada ida. */
     static final class ModeloLento implements ProvedorDeLlm {
 

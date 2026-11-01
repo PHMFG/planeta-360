@@ -24,7 +24,16 @@ public class FerramentaDeTeste implements Ferramenta {
 
     /** O que acontece na fase 1: nada, falhar, ou esperar (como um provedor lento). */
     public enum Comportamento {
-        NORMAL, FALHAR_NO_PREPARO, FALHAR_NA_EXECUCAO, DEMORAR
+        NORMAL, FALHAR_NO_PREPARO, FALHAR_NA_EXECUCAO, DEMORAR,
+        /**
+         * Registra um trecho no turno (como a busca faz na fase 2) e devolve um resultado que o loop não consegue gravar: o JSON com o
+         * escape de nulo, que o PostgreSQL não guarda no jsonb. A transação do loop desfaz, e o modelo recebe um erro.
+         */
+        FONTE_E_RESULTADO_QUE_NAO_GRAVA
+    }
+
+    /** O trecho (real, do banco) que o comportamento {@link Comportamento#FONTE_E_RESULTADO_QUE_NAO_GRAVA} registra no turno. */
+    public record TrechoDeTeste(long trechoId, long documentoId, String titulo, int versao, int pagina, String secao, String texto) {
     }
 
     public record Registro(String fase, boolean transacaoAberta, String thread) {
@@ -33,8 +42,10 @@ public class FerramentaDeTeste implements Ferramenta {
     private final List<Registro> registros = new CopyOnWriteArrayList<>();
     private volatile Comportamento comportamento = Comportamento.NORMAL;
     private volatile long demoraEmMs = 0;
+    private volatile TrechoDeTeste trechoDeTeste;
 
     public void limpar() {
+        trechoDeTeste = null;
         registros.clear();
         comportamento = Comportamento.NORMAL;
         demoraEmMs = 0;
@@ -42,6 +53,11 @@ public class FerramentaDeTeste implements Ferramenta {
 
     public void comportamento(Comportamento novo) {
         this.comportamento = novo;
+    }
+
+    public void fonteQueNaoGrava(TrechoDeTeste trecho) {
+        this.trechoDeTeste = trecho;
+        this.comportamento = Comportamento.FONTE_E_RESULTADO_QUE_NAO_GRAVA;
     }
 
     public void demora(long milissegundos) {
@@ -95,6 +111,12 @@ public class FerramentaDeTeste implements Ferramenta {
         registros.add(new Registro("executar", TransactionSynchronizationManager.isActualTransactionActive(), Thread.currentThread().getName()));
         if (comportamento == Comportamento.FALHAR_NA_EXECUCAO) {
             throw new br.com.rbs.portal.comum.DadosInvalidosException("A execução da ferramenta de teste falhou.", Map.of());
+        }
+        if (comportamento == Comportamento.FONTE_E_RESULTADO_QUE_NAO_GRAVA) {
+            TrechoDeTeste t = trechoDeTeste;
+            turno.registrarTrecho(t.trechoId(), t.documentoId(), t.titulo(), t.versao(), t.pagina(), t.secao(), t.texto());
+            turno.concluirBusca(false);
+            return Execucao.resultado("{\"texto\":\"\\u0000\"}");
         }
         return Execucao.resultado("{\"preparado\":\"" + preparado + "\"}");
     }
