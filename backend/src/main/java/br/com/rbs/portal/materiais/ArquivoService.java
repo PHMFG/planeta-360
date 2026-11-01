@@ -39,7 +39,10 @@ public class ArquivoService {
     static final Set<String> CATEGORIAS_DO_PATROCINADOR = Set.of("MATERIAL_MARCA", "MATERIAL_MIDIA", "DOCUMENTO_INGRESSOS",
             "CONTRATO", "OUTRO");
 
-    /** Todas as categorias do banco (CHECK ck_arquivo_categoria): as do patrocinador e as só da RBS. */
+    /**
+     * As categorias que a rota 17 aceita: as do patrocinador e as só da RBS. O CHECK ck_arquivo_categoria tem mais uma, a DOCUMENTO,
+     * que é só dos documentos do Atlas (rota 54): fica de fora de propósito, e a rota 17 a recusa como categoria inválida.
+     */
     static final Set<String> CATEGORIAS = Set.of("PLANO_COMERCIAL", "MATERIAL_MARCA", "MATERIAL_MIDIA", "RELATORIO_VEICULACAO",
             "COMPROVACAO", "PESQUISA", "CONTRATO", "DOCUMENTO_INGRESSOS", "RELATORIO_PARCERIA", "OUTRO");
 
