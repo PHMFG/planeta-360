@@ -152,6 +152,25 @@ class DocumentoEnvioTest extends ApoioDeDocumentos {
     }
 
     @Test
+    void nomeDeArquivoComPastaOuCaractereDeControleNaoSaiDaPastaDoArmazenamento() {
+        SessaoDeApi rbs = entrar(RBS);
+        byte[] pdf = KitDeDocumentos.por("D09").conteudo();
+
+        MvcTestResult comPasta = enviar(rbs, "../../etc/segredo.pdf", pdf, global("Com pasta", "teste-nome-1"));
+        MvcTestResult doWindows = enviar(rbs, "C:\\fotos\\aviso.pdf", pdf, global("Do Windows", "teste-nome-2"));
+        MvcTestResult comControle = enviar(rbs, "no\u0000me\n.pdf", pdf, global("Com controle", "teste-nome-3"));
+
+        assertThat(lerJson(comPasta, "$.arquivo.nomeOriginal")).isEqualTo("segredo.pdf");
+        assertThat(lerJson(doWindows, "$.arquivo.nomeOriginal")).isEqualTo("aviso.pdf");
+        assertThat(lerJson(comControle, "$.arquivo.nomeOriginal")).isEqualTo("nome.pdf");
+        for (MvcTestResult resposta : List.of(comPasta, doWindows, comControle)) {
+            // o nome em disco é gerado pelo servidor (UUID): o nome original só existe no banco
+            assertThat(jdbc.sql("SELECT a.caminho FROM arquivo a JOIN documento d ON d.arquivo_id = a.id WHERE d.id = :id")
+                    .param("id", id(resposta)).query(String.class).single()).matches("geral/[0-9a-f-]{36}\\.pdf");
+        }
+    }
+
+    @Test
     void txtEAceitoEContaComoUmaPagina() {
         MvcTestResult resposta = enviar(entrar(RBS), "faq.txt", KitDeDocumentos.por("D08").conteudo(), global("FAQ de teste", "teste-faq"));
 
