@@ -86,8 +86,15 @@ public final class NormalizadorDeNumeros {
     // "2 milhões", "1,5 milhão", "3 mil": o algarismo com a escala por extenso vale o número inteiro.
     private static final Pattern ALGARISMO_COM_ESCALA = Pattern.compile("(?<![\\p{L}\\p{N}.,])(\\d+(?:,\\d+)?)\\s+(mil|milh(?:ão|ões|ao|oes))(?![\\p{L}\\p{N}])",
             Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
-    private static final Pattern NUMERO = Pattern.compile("\\d+(?:[.,]\\d+)*");
+    /** O espaço, o insecável e o fino que separam os grupos de milhar: "2 220,00". */
+    private static final String ESPACO_DE_GRUPO = "[ \u00A0\u202F]";
+    /**
+     * Um número. Três dígitos depois de um espaço, com até três antes, são o mesmo número ({@code 2 220,00} é 2220): na resposta
+     * valem juntos, e é o inteiro que precisa de origem. {@code 12 3456}, {@code 220 2} e {@code 2 22} são números separados.
+     */
+    private static final Pattern NUMERO = Pattern.compile("\\d{1,3}(?:" + ESPACO_DE_GRUPO + "\\d{3})+(?!\\d)(?:[.,]\\d+)?|\\d+(?:[.,]\\d+)*");
     private static final Pattern ANO = Pattern.compile("^\\d{4}$");
+    private static final Pattern SEPARADOR_DE_GRUPO = Pattern.compile(ESPACO_DE_GRUPO);
     private static final Pattern REAL_ANTES = Pattern.compile("R\\$\\s*$");
     /** A palavra que, logo antes de quatro dígitos, faz deles um ano: "edição 2027", "em 2026", "Planeta Atlântida 2027". */
     private static final Pattern PALAVRA_DE_ANO_ANTES = Pattern.compile("(?<![\\p{L}\\p{N}])(?:edi[çc][ãa]o|edi[çc][õo]es|ano|em|de|desde|at[ée]"
@@ -119,7 +126,7 @@ public final class NormalizadorDeNumeros {
 
     /** "1.250,50" vira "1250.5"; "312" fica "312". Ponto só é milhar quando separa grupos de 3. */
     public static String normalizarNumero(String bruto) {
-        String t = bruto.replaceAll("\\s", "");
+        String t = bruto.replaceAll("[\\s\u00A0\u202F]", "");
         if (MILHAR_BR.matcher(t).matches()) {
             t = t.replace(".", "").replace(',', '.');
         } else {
@@ -245,6 +252,16 @@ public final class NormalizadorDeNumeros {
         // O resto: números com milhar e decimal. A vírgula de uma lista ("19, 17") não é decimal, porque vem seguida de espaço.
         consumir(texto, NUMERO, achados, (m, todo) -> {
             String trecho = m.group();
+            if (SEPARADOR_DE_GRUPO.matcher(trecho).find()) {
+                // "2 220,00": o inteiro. Numa fonte, as partes também valem, porque tabela tem colunas de números.
+                List<String> valores = new ArrayList<>(List.of(normalizarNumero(trecho)));
+                if (fonte) {
+                    for (String parte : SEPARADOR_DE_GRUPO.split(trecho)) {
+                        valores.add(normalizarNumero(parte));
+                    }
+                }
+                return List.of(valor(trecho, valores.toArray(new String[0])));
+            }
             return List.of(ehAno(m, todo) ? valor(trecho, normalizarNumero(trecho), "ano:" + trecho)
                     : valor(trecho, normalizarNumero(trecho)));
         });

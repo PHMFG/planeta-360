@@ -72,6 +72,37 @@ class NormalizadorDeNumerosTest {
         assertThat(valores("12 mil")).containsExactly("12000");
     }
 
+    @ParameterizedTest(name = "\"{0}\" é um número só: {1}")
+    @CsvSource(delimiter = '|', value = {"R$ 2 220,00 | 2220", "2 220 | 2220", "1 234 567 | 1234567", "12 345 | 12345", "2 220,50 | 2220.5", "20 200 | 20200",
+            "R$ 1 000 000,00 | 1000000"})
+    void gruposDeTresDigitosSeparadosPorEspacoSaoUmNumeroSoNaResposta(String texto, String esperado) {
+        assertThat(valores(texto)).containsExactly(esperado);
+    }
+
+    @Test
+    void gruposSeparadosPorEspacoFinoOuInsecavelTambemSaoUmNumeroSo() {
+        assertThat(valores("R$ 2\u00A0220,00")).containsExactly("2220");
+        assertThat(valores("R$ 2\u202F220,00")).containsExactly("2220");
+    }
+
+    @Test
+    void numaFonteValeOInteiroEAsPartesPorqueTabelaTemColunas() {
+        assertThat(valores("2 220", true)).containsExactly("2220", "2", "220");
+        assertThat(valores("R$ 1 234 567,50", true)).containsExactly("1234567.5", "1", "234", "567.5");
+        Origens tabela = new Origens("Gerador 2 220,00");
+        assertThat(aceita(tabela, "R$ 2 220,00")).isTrue();
+        assertThat(aceita(tabela, "2")).isTrue();
+        assertThat(aceita(tabela, "R$ 220,00")).isTrue();
+        assertThat(aceita(tabela, "R$ 22 200")).isFalse();
+    }
+
+    @ParameterizedTest(name = "\"{0}\" não é um número só")
+    @ValueSource(strings = {"220 2", "2 22", "12 3456", "2 geradores 220", "R$ 220,00 e 2 geradores", "1234 567", "2,5 220", "19 17", "5 12 30"})
+    void numerosQueSoEstaoPertoNaoViramUmSo(String texto) {
+        assertThat(valores(texto).size()).as(texto).isGreaterThanOrEqualTo(2);
+        assertThat(valores(texto)).doesNotContain(texto.replaceAll("[^0-9]", ""));
+    }
+
     @Test
     void oPontoDeMilharEOPontoDecimalNaoSeConfundem() {
         assertThat(valores("1.250")).containsExactly("1250");

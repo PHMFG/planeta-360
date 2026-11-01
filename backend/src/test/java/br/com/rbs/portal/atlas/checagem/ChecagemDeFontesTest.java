@@ -481,6 +481,29 @@ class ChecagemDeFontesTest {
     }
 
     @Test
+    void gruposSeparadosPorEspacoSaoUmNumeroSoEPrecisamDeOrigemComoUm() {
+        FontesDoTurno turno = turno("Quanto?", "O gerador custa R$ 220,00 por dia, e a cota dá direito a 2 geradores.");
+
+        recusa(turno, "O custo total é R$ 2 220,00 [T1].");
+        recusa(turno, "O custo total é R$ 2 220 [T1].");
+        recusa(turno, "O custo total é R$ 2\u00A0220,00 [T1].");
+        aprova(turno, "O gerador custa R$ 220,00 [T1].");
+        aprova(turno, "A cota dá direito a 2 geradores [T1].");
+        aprova(turno, "O gerador custa R$ 220,00 e a cota dá direito a 2 geradores [T1].");
+    }
+
+    @Test
+    void numeroComEspacoDeMilharNaFonteVaiPorInteiroEPorPartes() {
+        FontesDoTurno turno = turno("Quanto?", "A multa é de R$ 2 220,00.");
+
+        aprova(turno, "A multa é de R$ 2.220,00 [T1].");
+        aprova(turno, "A multa é de R$ 2 220,00 [T1].");
+        aprova(turno, "A multa é de R$ 2220 [T1].");
+        aprova(turno, "A multa tem a parcela de R$ 220,00 [T1].");   // coluna de tabela: as partes valem
+        recusa(turno, "A multa é de R$ 22 200,00 [T1].");
+    }
+
+    @Test
     void zeroPorExtensoContaComoNumero() {
         recusa(turno("Quantos?"), "Hoje há zero geradores.");
         recusa(turno("Quantos?", "Pode ter até 2 geradores."), "Hoje há zero geradores [T1].");
