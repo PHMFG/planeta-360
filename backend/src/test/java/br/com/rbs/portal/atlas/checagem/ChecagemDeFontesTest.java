@@ -174,6 +174,28 @@ class ChecagemDeFontesTest {
     }
 
     @Test
+    void numeroNoComecoDaLinhaForaDeSequenciaNaoEListaEPrecisaDeOrigem() {
+        recusa(turno("Quanto?"), "312. É o valor da tarifa em reais.");
+        recusa(turno("Quanto?"), "99) kVA é o limite.");
+        recusa(turno("Quanto?"), "**500.** reais é a multa.");
+        recusa(turno("Quanto?"), "2. Sem o primeiro item.");
+        recusa(turno("Quanto?", TARIFA), "1. A tarifa é de R$ 312 [T1]\n3. A taxa é de R$ 450 [T1]");
+        aprova(turno("Quanto?", "312"), "312 é o valor da tarifa em reais [T1].");   // com origem, é só um número
+    }
+
+    @Test
+    void listaEmSequenciaNosFormatosQueOModeloUsaNaoContaComoNumero() {
+        FontesDoTurno turno = turno("Qual o prazo?", PRAZO);
+
+        aprova(turno, "### 1. Prazo\nAté 04/12/2026 [T1].");
+        aprova(turno, "1 - O prazo é 04/12/2026 [T1].");
+        aprova(turno, "1. Prazo até 04/12/2026 [T1].\n2. Às 18h [T1].");
+        aprova(turno, "1) Prazo até 04/12/2026 [T1]\n2) Às 18h [T1]\n3) No horário de Brasília [T1]");
+        aprova(turno, "**1.** Prazo até 04/12/2026 [T1]\n**2.** Às 18h [T1]");
+        aprova(turno, "1. Prazo até 04/12/2026 [T1].\n2. Às 18h [T1].\n1. Outra lista: 18h [T1].\n2. Fim [T1].");
+    }
+
+    @Test
     void abreviaturaComPontoNaoCortaAFrase() {
         aprova(turno("Onde?", "A regra está descrita na página 5 do manual."), "Veja a p. 5 do manual [T1].");
         aprova(turno("Onde?", "O prazo é 04/12/2026 conforme a página 5."), "O prazo é 04/12/2026 conforme a p. 5 [T1].");

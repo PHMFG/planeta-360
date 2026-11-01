@@ -56,6 +56,13 @@ class FrasesTest {
     void numeracaoDeListaNoComecoDaLinhaNaoCorta() {
         assertThat(Frases.dividir("Passos:\n1. Primeiro\n2. Segundo")).containsExactly("Passos:", "1. Primeiro", "2. Segundo");
         assertThat(Frases.dividir("**1.** Primeiro. Segundo.")).containsExactly("**1.** Primeiro.", "Segundo.");
+        assertThat(Frases.dividir("### 1. Prazo\n2) Horário")).containsExactly("### 1. Prazo", "2) Horário");
+    }
+
+    @Test
+    void numeroNoComecoDaLinhaForaDeSequenciaNaoEListaEFechaAFrase() {
+        assertThat(Frases.dividir("312. É o valor da tarifa em reais.")).containsExactly("312.", "É o valor da tarifa em reais.");
+        assertThat(Frases.dividir("1. Primeiro\n5. Quinto")).containsExactly("1. Primeiro", "5.", "Quinto");
     }
 
     @Test

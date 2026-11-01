@@ -26,10 +26,10 @@ import org.springframework.stereotype.Component;
  *       outro formato com número ({@code [1]}) é recusada.</li>
  *   <li>Todo número ou data fora de um marcador {@code {{ref}}} aparece <b>numa fonte citada na MESMA frase</b>, no resultado de uma
  *       conta ou contagem de dias deste turno, ou na mensagem da pessoa neste turno. A página, a seção, a versão e o título da fonte
- *       valem como parte dela. A numeração de lista no começo da linha não conta. O ano da edição da parceria e a data de hoje valem
+ *       valem como parte dela. A numeração de lista no começo da linha só não conta se estiver em sequência (1, 2, 3...). O ano da edição da parceria e a data de hoje valem
  *       sem fonte. A comparação é por valor ({@link NormalizadorDeNumeros}): {@code 1.250.000,00} e {@code 1250000}, {@code R$ 312} e
  *       {@code 312}, {@code 04/12/2026}, {@code 4/12}, {@code 4 de dezembro} e {@code 2026-12-04}, {@code 6h30} e {@code 06:30},
- *       {@code 89,4%} e {@code 89,4}. Numeral por extenso com unidade conta como número.</li>
+ *       {@code 89,4%} e {@code 89,4}. Todo numeral por extenso conta como número, menos "um" e "uma" (artigo) e "dois"/"duas" sem unidade.</li>
  *   <li>Sem URL, link nem imagem em Markdown, sem HTML, sem nome de ferramenta nem chave crua, e todo marcador {@code {{ref}}} resolve e
  *       tem valor (as regras de forma e de marcador são as da {@link ChecagemDeTexto}).</li>
  * </ol>

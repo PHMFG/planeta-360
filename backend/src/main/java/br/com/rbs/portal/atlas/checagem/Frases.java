@@ -15,7 +15,9 @@ import java.util.regex.Pattern;
  *       {@code 1.250,00}, {@code 3.2} e {@code 04/12/2026.} (sem espaço depois do ponto) não cortam;</li>
  *   <li>as citações que vêm logo depois do ponto ({@code ...2026. [T1]}) ficam presas à frase anterior, que é a que elas apoiam;</li>
  *   <li>o ponto de {@code p.}, {@code art.}, {@code Sr.} e dos outros apelidos de abreviatura não termina a frase;</li>
- *   <li>o ponto dentro de um marcador {@code {{ref}}} não conta, e a numeração de lista no começo da linha ({@code 1. }) não corta.</li>
+ *   <li>o ponto dentro de um marcador {@code {{ref}}} não conta, e a numeração de lista no começo da linha ({@code 1. }, {@code **1.**},
+ *       {@code ### 1.}) não corta, mas só em sequência ({@link NormalizadorDeNumeros#numeracoesDeLista}): {@code 312. } é um número
+ *       seguido do fim da frase.</li>
  * </ul>
  * Para o fluxo, {@link #fimDaPrimeiraFraseCompleta} diz até onde um texto que ainda está chegando já tem uma frase de que não vai
  * mudar mais: enquanto o que vem depois do ponto pode ser o começo de uma citação, a frase fica em aberto.
@@ -26,7 +28,6 @@ public final class Frases {
     public static final Pattern CITACAO = Pattern.compile("\\[\\s*[TRC]\\d{1,3}(?:\\s*,\\s*[TRC]\\d{1,3})*\\s*]");
 
     private static final Pattern COMECO_DE_CITACAO_ABERTA = Pattern.compile("\\[\\s*[TRC]?\\d{0,3}(?:\\s*,?\\s*[TRC]?\\d{0,3})*\\s*");
-    private static final Pattern NUMERACAO_DE_LISTA_NA_LINHA = Pattern.compile("^[ \\t]*(?:\\*\\*)?\\d{1,3}[.)]");
     private static final Set<String> ABREVIATURAS = Set.of("p", "pp", "pág", "págs", "pag", "pags", "art", "arts", "sr", "sra", "dr", "dra",
             "prof", "av", "tel", "cel", "ex", "obs", "cf", "vol", "fl", "fls", "cap", "inc", "sec", "seç", "ver", "nº", "n");
     private static final String FECHAMENTOS = "\"')»”’";
@@ -152,9 +153,13 @@ public final class Frases {
         if (!palavra.isEmpty() && ABREVIATURAS.contains(palavra)) {
             return true;
         }
-        // "1. " no começo da linha é numeração de lista, não o fim de uma frase
-        int linha = texto.lastIndexOf('\n', posicaoDoPonto) + 1;
-        return NUMERACAO_DE_LISTA_NA_LINHA.matcher(texto.substring(Math.max(linha, 0), posicaoDoPonto + 1)).matches();
+        // "1. " no começo da linha, em sequência, é numeração de lista, não o fim de uma frase; "312. " é um número
+        for (int[] numeracao : NormalizadorDeNumeros.numeracoesDeLista(texto)) {
+            if (posicaoDoPonto >= numeracao[0] && posicaoDoPonto < numeracao[1]) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** As citações ({@code T1}, {@code R2}, {@code C3}) de um texto, na ordem em que aparecem, repetidas incluídas. */

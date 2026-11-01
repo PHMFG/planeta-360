@@ -308,6 +308,32 @@ class NormalizadorDeNumerosTest {
         assertThat(valores(NormalizadorDeNumeros.semNumeracaoDeLista("2027. Um ano"))).as("quatro dígitos não é lista").containsExactly("2027", "ano:2027");
     }
 
+    @ParameterizedTest(name = "\"{0}\" é numeração de lista")
+    @ValueSource(strings = {"1. Primeiro", "1) Primeiro", "**1.** Primeiro", "### 1. Primeiro", "1 - Primeiro", "  1. Primeiro", "## 1) Primeiro"})
+    void osFormatosDeNumeracaoDeLista(String linha) {
+        assertThat(valores(NormalizadorDeNumeros.semNumeracaoDeLista(linha))).isEmpty();
+        assertThat(NormalizadorDeNumeros.semNumeracaoDeLista(linha).strip()).isEqualTo("Primeiro");
+    }
+
+    @ParameterizedTest(name = "\"{0}\" é um número, e não numeração de lista")
+    @ValueSource(strings = {"312. É o valor da tarifa", "99) kVA é o limite", "**500.** reais é a multa", "2. Sem o primeiro item", "10 - dez",
+            "0. Zero"})
+    void numeroNoComecoDaLinhaForaDeSequenciaContaComoNumero(String linha) {
+        assertThat(NormalizadorDeNumeros.semNumeracaoDeLista(linha)).isEqualTo(linha);
+        assertThat(valores(NormalizadorDeNumeros.semNumeracaoDeLista(linha))).isNotEmpty();
+    }
+
+    @Test
+    void aListaSoValeEmSequenciaEOUmReiniciaAConta() {
+        assertThat(NormalizadorDeNumeros.semNumeracaoDeLista("1. a\n2. b\n3. c")).isEqualTo("a\nb\nc");
+        assertThat(NormalizadorDeNumeros.semNumeracaoDeLista("1. a\n2. b\n1. c\n2. d")).as("o 1 reinicia").isEqualTo("a\nb\nc\nd");
+        assertThat(NormalizadorDeNumeros.semNumeracaoDeLista("1. a\n3. b")).as("pulou o 2").isEqualTo("a\n3. b");
+        assertThat(NormalizadorDeNumeros.semNumeracaoDeLista("1. a\n2. b\n2. c")).as("repetiu o 2").isEqualTo("a\nb\n2. c");
+        assertThat(NormalizadorDeNumeros.semNumeracaoDeLista("1. a\n### 2. b\n3 - c")).as("formatos misturados em sequência")
+                .isEqualTo("a\nb\nc");
+        assertThat(NormalizadorDeNumeros.semNumeracaoDeLista("5. a\n1. b\n2. c")).isEqualTo("5. a\nb\nc");
+    }
+
     @Test
     void asPalavrasEmVoltaDoNumeroSobram() {
         assertThat(NormalizadorDeNumeros.palavrasFora("Portão 5").strip()).isEqualTo("Portão");

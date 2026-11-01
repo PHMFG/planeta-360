@@ -89,8 +89,9 @@ public final class NormalizadorDeNumeros {
     private static final Pattern NUMERO = Pattern.compile("\\d+(?:[.,]\\d+)*");
     private static final Pattern ANO = Pattern.compile("^\\d{4}$");
 
-    /** A numeração de lista no começo da linha ("1. ", "2) ", "**1.** ") não conta como número da resposta. */
-    private static final Pattern NUMERACAO_DE_LISTA = Pattern.compile("(?m)^([ \\t]*)(?:\\*\\*)?\\d{1,3}[.)](?:\\*\\*)?[ \\t]");
+    /** Um número de 1 a 3 dígitos no começo da linha, nos formatos de lista: {@code 1.}, {@code 1)}, {@code **1.**}, {@code ### 1.}, {@code 1 - }. */
+    private static final Pattern MARCADOR_DE_LISTA = Pattern.compile(
+            "(?m)^([ \\t]*)(?:#{1,6}[ \\t]+)?(?:\\*\\*)?(\\d{1,3})(?:[.)]|[ \\t]+-)(?:\\*\\*)?[ \\t]");
 
     private NormalizadorDeNumeros() {
     }
@@ -353,9 +354,39 @@ public final class NormalizadorDeNumeros {
     // Apoio do texto
     // ---------------------------------------------------------------------
 
-    /** O texto sem a numeração de lista do começo da linha ({@code 1. }, {@code 2) }, {@code **1.** }). */
+    /**
+     * Onde estão, no texto, as numerações de lista: o começo da linha com {@code 1.}, {@code 1)}, {@code **1.**}, {@code ### 1.} ou
+     * {@code 1 - }, <b>só em sequência</b>. A lista começa em 1 e cresce de um em um; um novo 1 recomeça a conta. Um número fora da
+     * sequência ({@code 312. É o valor}, {@code 99) kVA}, {@code **500.** reais}) não é numeração: é um número, e precisa de origem.
+     * Cada item é {@code [início, fim)}, sem o recuo da linha.
+     */
+    public static List<int[]> numeracoesDeLista(String texto) {
+        List<int[]> numeracoes = new ArrayList<>();
+        int esperado = 1;
+        Matcher m = MARCADOR_DE_LISTA.matcher(texto);
+        while (m.find()) {
+            int numero = Integer.parseInt(m.group(2));
+            if (numero == 1) {
+                esperado = 1;
+            }
+            if (numero != esperado) {
+                continue;
+            }
+            esperado++;
+            numeracoes.add(new int[] {m.end(1), m.end()});
+        }
+        return numeracoes;
+    }
+
+    /** O texto sem a numeração de lista do começo da linha ({@link #numeracoesDeLista}); o recuo da linha fica. */
     public static String semNumeracaoDeLista(String texto) {
-        return NUMERACAO_DE_LISTA.matcher(texto).replaceAll("$1");
+        StringBuilder saida = new StringBuilder(texto.length());
+        int desde = 0;
+        for (int[] numeracao : numeracoesDeLista(texto)) {
+            saida.append(texto, desde, numeracao[0]);
+            desde = numeracao[1];
+        }
+        return saida.append(texto, desde, texto.length()).toString();
     }
 
     /** O que sobra do texto sem os números: "Portão 5" vira "Portão". Serve para conferir as palavras em volta do número. */
