@@ -593,7 +593,10 @@ class FontesNoChatTest {
         assertThat(prompt).contains("Se pedirem dados de outra marca, " + naoEncontrei).contains("não diga se os dados existem")
                 .doesNotContain("diga que não tem acesso");
         // outra edição: a mesma frase exata, sem emendar dados da edição desta conversa (ver-03, ver-04)
-        assertThat(prompt).contains("outra edição (\"em 2026\", \"na edição passada\"), " + naoEncontrei).contains("sem juntar dados desta edição");
+        assertThat(prompt).contains("outra edição (\"quanto era na edição de 2026?\", \"na edição passada\"), " + naoEncontrei)
+                .contains("sem juntar dados desta edição").doesNotContain("(\"em 2026\"");
+        // lista simples: a citação vai em cada item, porque cada linha é uma frase
+        assertThat(prompt).contains("lista simples pode, com a citação [T1] em cada item");
         // "mudou?": só a versão que vale hoje, com a citação, sem afirmar que mudou nem que não mudou
         assertThat(prompt).contains("Você só vê a versão que vale hoje").contains("diga o que vale hoje, com a citação")
                 .contains("nunca afirme que mudou nem que não mudou");
