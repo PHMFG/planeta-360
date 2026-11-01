@@ -27,6 +27,13 @@ import java.util.regex.Pattern;
  * ordem decrescente de grandeza (centena, dezena de 20 a 90, unidade de 1 a 19): "trezentos e doze" é 312, mas "três e quatro" são
  * o 3 e o 4, e "dez e trinta", o 10 e o 30. Cada número separado é conferido por si.
  * <p>
+ * <p>
+ * <b>Grupos e anos.</b> Grupos de três dígitos separados por espaço são um número só na resposta ({@code R$ 2 220,00} é 2220); numa
+ * fonte valem o inteiro e as partes, porque tabela tem colunas. Quatro dígitos só são um <i>ano</i> se não têm separador, não vêm
+ * depois de {@code R$}, não vêm antes de uma unidade e a palavra de antes é de ano (edição, edições, ano, em, de, desde, até,
+ * Atlântida): {@code a edição 2027} e {@code em 2026} são anos; {@code R$ 2027}, {@code 2026 credenciais} e {@code São 2027 geradores}
+ * são valores. O ano da edição e o de hoje só valem como ano ({@link Origens#adicionarAnoLivre}).
+ * <p>
  * Datas e horas são consumidas antes dos números, para {@code 04/12/2026} não virar três números. Cada dígito conta: o que vem
  * dentro de uma palavra ({@code planeta360}, {@code D09}) também. "Planeta 360", o nome do festival, não é número. Sem estado: tudo
  * estático.
