@@ -247,7 +247,7 @@ class AtlasSoChatTest {
         for (PedidoAoLlm pedido : modelo.pedidos()) {
             assertThat(nomesDasFerramentas(pedido)).containsExactlyElementsOf(LoopDoAgenteTest.DO_CHAT);
             String prompt = pedido.mensagens().get(0).conteudo();
-            assertThat(prompt).contains("Cliente Amarelo", "parceria_consultar", "ainda não está disponível nesta versão")
+            assertThat(prompt).contains("Cliente Amarelo", "parceria_consultar", "chame pedido_de_relatorio", "chame gerar_modelo")
                     .doesNotContain("relatorio_", "O fluxo do relatório", "@MARCA@", "@DATA@");
             ProvedorRoteirizado.exigirHistoricoValido(pedido);
         }

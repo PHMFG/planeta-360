@@ -600,8 +600,11 @@ class FontesNoChatTest {
         // "mudou?": só a versão que vale hoje, com a citação, sem afirmar que mudou nem que não mudou
         assertThat(prompt).contains("Você só vê a versão que vale hoje").contains("diga o que vale hoje, com a citação")
                 .contains("nunca afirme que mudou nem que não mudou");
-        // conta com valor de documento: o valor unitário com a citação e uma frase dizendo que o Atlas ainda não faz a conta
-        assertThat(prompt).contains("quanto pago?").contains("valor unitário com a citação").contains("o Atlas ainda não faz essa conta");
+        // conta com valor de documento: passa por calcular, com a origem de cada número, e nunca de cabeça
+        assertThat(prompt).contains("quanto pago?").contains("chame calcular").contains("Nunca faça conta de cabeça")
+                .contains("{\"fonte\":\"usuario\",\"valor\":\"3\"}").contains("nunca traz o número escrito");
+        // registro do portal e conta: as citações [R1] e [C1], só deste turno
+        assertThat(prompt).contains("[R1]").contains("[C1]").contains("Conta e marcador de turno anterior não valem");
         // número da parceria: consultar de novo em cada pergunta, porque o dado pode ter mudado
         assertThat(prompt).contains("de novo a cada pergunta sobre esses números").contains("o dado pode ter mudado");
         // só o que foi perguntado, sem orientação que o trecho não traz
@@ -610,6 +613,6 @@ class FontesNoChatTest {
         assertThat(prompt).contains("texto simples").contains("sem negrito, títulos nem outra marcação").contains("Boa tarde!")
                 .contains("vá direto à resposta");
         // continua curto
-        assertThat(prompt.length()).as("o prompt do chat tem de ficar curto").isLessThan(6500);
+        assertThat(prompt.length()).as("o prompt do chat tem de ficar curto").isLessThan(9500);
     }
 }
