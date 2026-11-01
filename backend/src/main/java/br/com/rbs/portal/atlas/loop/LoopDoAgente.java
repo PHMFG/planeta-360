@@ -79,7 +79,9 @@ import tools.jackson.core.JacksonException;
  *       {@code ToolCallingManager}: ele responderia todas as chamadas da rodada de uma vez.</li>
  *   <li><b>Resposta direta</b> (M5, o {@code returnDirect} feito no nosso loop): se a rodada tem uma ferramenta que respondeu direto
  *       ({@link Execucao#direta()}), as outras chamadas da rodada rodam normalmente e a resposta de todas é gravada. Rodada só com
- *       ferramentas diretas termina o turno ali, sem nova ida ao modelo. Rodada com uma direta <b>e</b> com outra ferramenta que não é
+ *       ferramentas diretas termina o turno ali, sem nova ida ao modelo, <b>se nenhuma outra ferramenta rodou antes no turno</b> (com uma
+ *       consulta na primeira rodada e só a direta na segunda, o resultado da consulta ficaria sem resposta: o turno segue). Rodada
+ *       com uma direta <b>e</b> com outra ferramenta que não é
  *       direta (uma busca, uma conta: "quero o relatório, e me fala até quando informo os geradores") mostra o item e <b>segue</b>,
  *       com uma nova ida ao modelo para responder o resto; as diretas saem da oferta nessa ida e nas seguintes do turno, para não
  *       haver laço, e o resultado delas diz ao modelo que o servidor já mostrou a resposta. É diferente da pausa do cartão e do
@@ -227,6 +229,8 @@ public class LoopDoAgente {
         boolean limiteAtingido;
         /** Uma resposta direta foi mostrada numa rodada que também teve outra ferramenta: as diretas saem da oferta até o fim do turno. */
         boolean diretasForaDaOferta;
+        /** Alguma ferramenta que não responde direto rodou neste turno (em qualquer rodada): o modelo ainda precisa responder a ela. */
+        boolean outraFerramentaRodou;
         boolean pediuNovaRedacao;
         ResumosDoTurno resumos;
         // O desfecho, para a etapa SAIDA do traço: o que terminou o turno e a última mensagem que ele gravou.
@@ -564,14 +568,17 @@ public class LoopDoAgente {
             turno.tipoDaSaida = pausa ? "CARTAO" : "RELATORIO_PRONTO";
             return true;
         }
-        if (direta && (!outraRodou || turno.limiteAtingido)) {
-            // só ferramentas diretas na rodada (ou o limite estourou depois de uma resposta direta, e a frase do limite só confundiria)
+        boolean outraNoTurno = outraRodou || turno.outraFerramentaRodou;
+        turno.outraFerramentaRodou = outraNoTurno;
+        if (direta && (!outraNoTurno || turno.limiteAtingido)) {
+            // só ferramentas diretas no turno (ou o limite estourou depois de uma resposta direta, e a frase do limite só confundiria)
             turno.tipoDaSaida = "RESPOSTA_DIRETA";
             return true;
         }
         if (direta) {
-            // a rodada tinha também outra ferramenta (uma busca, uma conta...): o item já foi mostrado e o turno segue, com uma nova
-            // ida ao modelo para responder o resto. As diretas saem da oferta, e o resultado delas diz que o servidor já mostrou a resposta
+            // o turno tinha também outra ferramenta (uma busca, uma conta... nesta rodada ou numa anterior): o item já foi mostrado e o
+            // turno segue, com uma nova ida ao modelo para responder o resto, que sem isto se perdia. As diretas saem da oferta, e o
+            // resultado delas diz que o servidor já mostrou a resposta
             turno.diretasForaDaOferta = true;
             return false;
         }

@@ -209,6 +209,48 @@ class RespostaDiretaNoLoopTest {
     }
 
     @Test
+    void outraFerramentaNumaRodadaEDepoisSoDiretaNaoEncerraOTurnoSemResponderAoResultadoDaOutra() {
+        long conversa = abrir();
+        // [consulta] na primeira rodada e [direta] na segunda: o resultado da consulta ainda não foi respondido
+        modelo.chamada(LoopDoAgenteTest.CONSULTAR, "{}").chamada(DIRETA, "{}").texto("Aqui está o resto.");
+
+        ConversaDto turno = falar(conversa, "Me diz os números e me dá isto.");
+
+        assertThat(modelo.pedidos()).as("segue com uma ida sem as diretas, como quando as duas vêm na mesma rodada").hasSize(3);
+        assertThat(modelo.sobraDoRoteiro()).isZero();
+        assertThat(papeis(conversa)).containsExactly("user", "assistant", "tool", "assistant", "tool", "assistant");
+        assertThat(ProvedorRoteirizado.nomesDasFerramentas(modelo.ultimoPedido())).doesNotContain(DIRETA, "gerar_modelo", "pedido_de_relatorio")
+                .contains(LoopDoAgenteTest.CONSULTAR);
+        exigirHistoricoValido(modelo.ultimoPedido());
+        assertThat(turno.itens().stream().filter(ItemTexto.class::isInstance).map(ItemTexto.class::cast).map(ItemTexto::texto))
+                .containsExactly("Aqui está o resto.");
+    }
+
+    @Test
+    void aDiretaSozinhaNoTurnoSemOutraFerramentaContinuaEncerrandoOTurno() {
+        long conversa = abrir();
+        modelo.chamada(DIRETA, "{}");
+
+        falar(conversa, "Preciso disto.");
+
+        assertThat(modelo.pedidos()).hasSize(1);
+        assertThat(modelo.sobraDoRoteiro()).isZero();
+        assertThat(papeis(conversa)).containsExactly("user", "assistant", "tool");
+    }
+
+    @Test
+    void oErroDeOutraFerramentaEmUmaRodadaAnteriorTambemFazADiretaDaSeguinteNaoEncerrar() {
+        long conversa = abrir();
+        // relatorio_finalizar sem relatório em montagem dá erro; ele não é direta, e o modelo ainda não respondeu a ele
+        modelo.chamada(LoopDoAgenteTest.FINALIZAR, "{}").chamada(DIRETA, "{}").texto("Não há relatório em montagem.");
+
+        falar(conversa, "Finalize o relatório e me dá isto.");
+
+        assertThat(modelo.pedidos()).hasSize(3);
+        assertThat(modelo.sobraDoRoteiro()).isZero();
+    }
+
+    @Test
     void diretaPedidaDeNovoDepoisDeSairDaOfertaContaNoLimiteDeChamadasEOTurnoAcaba() {
         long conversa = abrir();
         // a primeira rodada tem uma consulta e uma direta (2 chamadas); o modelo insiste na direta em toda ida, 30 vezes
