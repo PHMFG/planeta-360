@@ -25,6 +25,8 @@ export function Compositor({ valor, aoMudar, aoEnviar, rotuloEnviar, ocupado, ha
     evento?.preventDefault()
     if (!valor.trim() || ocupado || !habilitado) return
     aoEnviar()
+    // Com mouse, o clique em Enviar tirava o foco do campo. No toque, ele fica fora, para o teclado não cobrir a resposta.
+    if (window.matchMedia('(pointer: fine)').matches) campo.current?.focus()
   }
 
   function teclar(evento: KeyboardEvent<HTMLTextAreaElement>) {
