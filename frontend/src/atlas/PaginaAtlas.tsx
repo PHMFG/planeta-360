@@ -29,6 +29,7 @@ import { LinkBotao } from '../componentes/Botao'
 import { CabecalhoSecao } from '../componentes/CabecalhoSecao'
 import { nomeCota } from '../componentes/Menu'
 import { RenderizadorDeRelatorio } from '../componentes/relatorio/RenderizadorDeRelatorio'
+import { origemParaLer } from '../util/formatar'
 import { BotaoDescartar } from './BotaoDescartar'
 import { useParceria } from '../paginas/parceria/ContextoParceria'
 import { useSessao } from '../sessao/Sessao'
@@ -525,7 +526,7 @@ function FontesDoDocumento({ relatorio, aoVoltar }: { relatorio: RelatorioAtlas;
               <span className="text-atlas-lilas">[{indice + 1}]</span> {item.rotulo}
               {item.valor !== null && <span className="font-medium text-white/90">: {item.valor}</span>}
             </p>
-            <p className="mt-0.5 text-xs font-medium text-white/64">{item.origem}</p>
+            <p className="mt-0.5 text-xs font-medium text-white/64">{origemParaLer(item.origem)}</p>
           </div>
         </div>
       ))}

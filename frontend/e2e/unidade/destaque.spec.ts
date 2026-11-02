@@ -2,6 +2,13 @@
 import { expect, test } from '@playwright/test'
 import { escaparHtml, faixasDoTrecho, htmlDoItem, partesDoTexto } from '../../src/atlas/destaque.ts'
 import { partesComCitacoes } from '../../src/atlas/citacoes.ts'
+import { origemParaLer } from '../../src/util/formatar.ts'
+
+test('a origem de uma conta do relatório sai sem a notação interna', () => {
+  expect(origemParaLer('pct(cadastros, visitantes) com cadastros = 1.072 e visitantes = 1.200')).toBe('cadastros ÷ visitantes (em %) com cadastros = 1.072 e visitantes = 1.200')
+  expect(origemParaLer('pct(distribuidos, disponiveis): Faltam dados para o cálculo.')).toBe('distribuidos ÷ disponiveis (em %): Faltam dados para o cálculo.')
+  expect(origemParaLer('Consolidação do portal: plano comercial')).toBe('Consolidação do portal: plano comercial')
+})
 
 /** O que ficou marcado, pedaço a pedaço. */
 function marcado(itens: string[], trecho: string) {

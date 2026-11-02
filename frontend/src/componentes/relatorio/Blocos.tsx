@@ -5,7 +5,7 @@
 import { useEffect, useState } from 'react'
 import type { Bloco, ItemKpi } from '../../api/atlas'
 import { pedirArquivo } from '../../api/cliente'
-import { dataHora } from '../../util/formatar'
+import { dataHora, origemParaLer } from '../../util/formatar'
 
 /** O número da referência de cada fonte ([1], [2]...), na ordem do bloco "fontes". */
 export type Referencias = Map<string, number>
@@ -224,7 +224,7 @@ export function BlocoDoRelatorio({ bloco, referencias }: { bloco: Bloco; referen
               <span className="min-w-0">
                 <span className="font-semibold text-[#222]">{item.rotulo}</span>
                 {/* Uma lista (lista:aplicacoes) não tem um valor só: aparece com a origem, sem "indisponível". */}
-                {item.valor !== null ? `: ${item.valor}` : item.ref.startsWith('lista:') ? '' : ': indisponível'} · {item.origem}
+                {item.valor !== null ? `: ${item.valor}` : item.ref.startsWith('lista:') ? '' : ': indisponível'} · {origemParaLer(item.origem)}
               </span>
             </li>
           ))}
