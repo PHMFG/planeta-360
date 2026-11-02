@@ -64,7 +64,7 @@ CREATE DATABASE portal_teste OWNER portal;
 scripts/preparar-banco-atlas.sh
 ```
 
-O script instala o pgvector pelo Homebrew, se precisar, e prepara os bancos `portal` e `portal_teste`: extensão no schema `extensoes` e papel `atlas_ro`. Pode rodar de novo sem problema, e aceita outros bancos como argumento. Ele precisa de um superusuário do PostgreSQL. No macOS é o usuário atual. No Linux, instale o pacote (`sudo apt install postgresql-18-pgvector`) e rode com `sudo -u postgres`. No Windows, instale o pgvector como manda o [README dele](https://github.com/pgvector/pgvector#windows) e rode no `psql` os comandos SQL do script.
+O script instala o pgvector pelo Homebrew, se precisar, e prepara os bancos `portal` e `portal_teste`: extensão no schema `extensoes` e papel `atlas_ro`. O Atlas precisa do pgvector 0.8.0 ou mais novo. O script pode rodar de novo sem problema, e aceita outros bancos como argumento. Ele precisa de um superusuário do PostgreSQL. No macOS é o usuário atual. No Linux, instale o pacote (`sudo apt install postgresql-18-pgvector`) e rode com `sudo -u postgres`, ou informe `PGUSER`, `PGHOST` e `PGPASSWORD`. No Windows, instale o pgvector como manda o [README dele](https://github.com/pgvector/pgvector#windows) e rode no `psql` os comandos SQL do script.
 
 **2. Subir a API**, num terminal:
 
@@ -80,7 +80,7 @@ cd backend
 .\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=dev"
 ```
 
-A API está pronta quando aparece `Started PortalApplication`. O perfil `dev` carrega a amostra de demonstração e, ao subir, cria em `backend/armazenamento/` um arquivo de exemplo para cada arquivo da amostra (é o que faz o botão "Baixar" funcionar na demonstração); sem perfil, sobe só a estrutura (como em produção, sem amostra e sem arquivos de exemplo). O perfil `demo` (`SPRING_PROFILES_ACTIVE=demo`, ou `ATLAS_PERFIL=demo scripts/atlas-dev.sh start`) é o da apresentação: sobe como o `dev` (amostra, arquivos de exemplo e o kit de documentos do Atlas, com as chaves do mesmo arquivo de segredos), com o relatório e o diagnóstico ligados, mas **sem** as rotas de debug da chave do modelo (404) e sem a caixa de debug das ferramentas. Use um banco descartável com ele. A 8080 é só a API: as telas ficam no front (passo 3).
+A API está pronta quando aparece `Started PortalApplication`. O perfil `dev` carrega a amostra de demonstração e, ao subir, cria em `backend/armazenamento/` um arquivo de exemplo para cada arquivo da amostra (é o que faz o botão "Baixar" funcionar na demonstração); sem perfil, sobe só a estrutura (como em produção, sem amostra e sem arquivos de exemplo). O perfil `demo` (`SPRING_PROFILES_ACTIVE=demo`, ou `ATLAS_PERFIL=demo scripts/atlas-dev.sh start`) é o da apresentação: sobe como o `dev` (amostra, arquivos de exemplo e o kit de documentos do Atlas, com as chaves do mesmo arquivo de segredos), com o relatório, o diagnóstico e o Atlas da RBS ligados, mas **sem** as rotas de debug da chave do modelo (404) e sem a caixa de debug das ferramentas: quem mostra como a resposta foi feita é o diagnóstico. Ele usa as chaves de verdade. Use um banco descartável com ele. A 8080 é só a API: as telas ficam no front (passo 3).
 
 **PostgreSQL em outra porta** (a Sprint 1 usava a 5433)? Informe a URL do banco no mesmo terminal, antes de subir a API:
 
@@ -104,7 +104,7 @@ Abra <http://localhost:5173>. O Vite repassa as chamadas `/api` para a porta 808
 
 **Quem já tinha o banco `portal` criado precisa recomeçar do zero para ver a amostra nova.** A amostra só carrega num banco vazio e não roda de novo sobre um banco que já a tem. A versão atual traz: entregas Enviado, Em análise e Aprovado com o arquivo que a marca mandou, o VT do Roxo em "Ajuste solicitado" com o recado da RBS no histórico, horários sempre no passado (contados a partir do dia em que o banco é criado) e nenhum "(simulada)" no nome da pesquisa. Num banco criado antes, as migrações novas (V4 a V6) rodam sozinhas ao subir a API, mas a amostra antiga continua como estava. O mesmo vale para o alinhamento com os planos comerciais do kit de documentos do Atlas: as cortesias e as credenciais do Roxo (Subcota G: 6 e 3 por dia, 8 credenciais) e da Verde (Subcota: 3 e 1 por dia, 12 credenciais) e o portão do Camarote e do Lounge (Portão 4) só aparecem num banco recriado.
 
-**Atlas (V7 a V9).** As migrações do plano comercial, dos dados informados e do Atlas rodam sozinhas ao subir a API, sobre o banco que já existe. A amostra não mudou: não é preciso recriar o banco.
+**Atlas (V7 a V15).** As migrações rodam sozinhas ao subir a API, sobre o banco que já existe, mas a V11 precisa do pgvector e do papel `atlas_ro`: rode antes o `scripts/preparar-banco-atlas.sh`, ou a subida para com a mensagem que pede isso. O kit de documentos e os prazos do Atlas não dependem de recriar o banco: entram na subida, nos perfis `dev` e `demo`, com os embeddings ligados.
 
 ## Se algo der errado
 
@@ -116,6 +116,7 @@ Abra <http://localhost:5173>. O Vite repassa as chamadas `/api` para a porta 808
 | API: `Connection to localhost:5432 refused` | O PostgreSQL está parado ou em outra porta. macOS: `brew services start postgresql@18`. Windows: inicie o serviço `postgresql-x64-18` em Serviços. Outra porta: `PORTAL_BD_URL` (passo 2). |
 | API: `database "portal" does not exist`, `role "portal" does not exist` ou `password authentication failed for user "portal"` | O passo 1 não rodou nesse PostgreSQL. Confira se a porta é a mesma. |
 | API: `Found non-empty schema(s) "public" but no schema history table` | O banco `portal` tem as tabelas antigas da Sprint 1. Apague e crie de novo (passo 1). |
+| API: `O Atlas precisa da extensão vector (pgvector) neste banco` ou `O Atlas precisa do papel atlas_ro neste PostgreSQL` | Rode `scripts/preparar-banco-atlas.sh` e suba a API de novo. |
 | API: `Port 8080 was already in use` | Outra API ainda está rodando, talvez em outro terminal. Feche-a (no macOS e no Linux, `lsof -i :8080` mostra quem usa a porta). |
 | API: erro de compilação com `release version 21` | O Maven achou um JDK anterior ao 21. Confira `java -version` e, se existir, o `JAVA_HOME`. |
 | API, no PowerShell: `Unknown lifecycle phase ".run.profiles=dev"` | Faltaram as aspas em `"-Dspring-boot.run.profiles=dev"`. |
@@ -150,17 +151,19 @@ Com o banco recém-criado (amostra original):
 
 ### Roteiro do Atlas
 
-O Atlas é o chat: a marca pergunta sobre os números da própria parceria e sobre os documentos do evento, e o que vem de documento cita a fonte. No perfil `dev` o relatório da ativação também funciona, na mesma conversa (o modo só chat, sem o relatório, continua existindo: `ATLAS_RELATORIO=false`). Ele precisa do modelo de linguagem ligado (veja abaixo); sem o modelo, o botão "Montar relatório" monta o relatório sem ele.
+O Atlas é o chat: a marca pergunta sobre os números da própria parceria e sobre os documentos do evento, e o que vem de documento cita a fonte. Nos perfis `dev` e `demo` o relatório da ativação também funciona, na mesma conversa (o modo só chat, sem o relatório, continua existindo: `ATLAS_RELATORIO=false`). Ele precisa do modelo de linguagem ligado (veja abaixo); sem o modelo, o botão "Montar relatório" monta o relatório sem ele.
 
 1. Como `b2b@rbs.example`, em **Patrocinadores**, cadastre a parceria "Cliente Teste" na edição 2027. Em **Cargas**, escolha "Plano comercial" e envie `docs/exemplos/plano.csv`: 8 linhas entram, 1 é duplicada e 2 são rejeitadas, com o motivo (mídia sem tipo e uma marca sem parceria).
 2. Abra a parceria do Cliente Amarelo, em **Aplicações da marca**: o plano linha a linha, com as fotos de comprovação. Use "Anexar foto" numa linha sem foto, e o total de comprovadas sobe.
-3. Entre como `marketing@amarelo.example` e, em **Aplicações**, informe os números que só a marca sabe (visitantes, cadastros e brindes): eles ficam com o seu nome e a data. A planilha de contagem da agência (xlsx, xls ou csv, até 20 MB) também fica ali, como um valor com autor e data (API: `POST /api/parcerias/{id}/dados-informados/ativacao.planilha_agencia/arquivo`, rota 66, e o download é a rota 18); ela não entra no relatório do Atlas.
+3. Entre como `marketing@amarelo.example` e, em **Aplicações da marca**, informe os números que só a marca sabe (visitantes, cadastros e brindes): eles ficam com o seu nome e a data. A planilha de contagem da agência (xlsx, xls ou csv, até 20 MB) também fica ali, como um valor com autor e data (API: `POST /api/parcerias/{id}/dados-informados/ativacao.planilha_agencia/arquivo`, rota 66, e o download é a rota 18); ela não entra no relatório do Atlas.
 4. Toque em **atlas**, no menu (ou use a caixa "atlas · como posso ajudar?" em Minha parceria). O Atlas abre numa janela própria, com o menu à vista. Pergunte "quantas aplicações já foram comprovadas?": a resposta chega enquanto o modelo escreve, e os números vêm do portal.
-5. No perfil `dev`, cada resposta mostra, em caixas amarelas de debug, as ferramentas que o modelo usou, com o que ele pediu e o que recebeu de volta. Sem ferramenta, a resposta diz isso.
+5. No perfil `dev`, cada resposta mostra, em caixas amarelas de debug, as ferramentas que o modelo usou, com o que ele pediu e o que recebeu de volta. Sem ferramenta, a resposta diz isso. Nos perfis `dev` e `demo`, o botão **Diagnóstico** embaixo da resposta abre as etapas do turno: busca, JEV, checagem e tempos.
 6. Pergunte "até quando preciso informar os geradores?": a resposta traz a data com um chip, como `T1`, e a lista "Fontes" embaixo. O chip abre o manual ao lado da conversa, na página citada, com o trecho destacado.
 7. Peça os números de outra marca: o Atlas não tem como consultá-los e responde só "Não encontrei isso nos documentos do portal. Para essa dúvida, fale com o atendimento da RBS.", sem dizer se existem e sem número nenhum.
-8. Como `b2b@rbs.example`, em **Atlas**, abra **Busca de teste**, escolha uma parceria e escreva uma consulta: aparecem as duas listas da busca, o que o modelo receberia e o que essa parceria enxerga, sem gastar o modelo.
+8. Como `b2b@rbs.example`, abra **Atlas**. As abas são Turnos e Provedores (o diagnóstico), Documentos, Busca de teste, Prazos e Conversa (o Atlas da RBS, por edição). Em **Busca de teste**, escolha uma parceria e escreva uma consulta: aparecem as duas listas da busca, o que o modelo receberia e o que essa parceria enxerga, sem gastar o modelo.
 9. Como `marketing@amarelo.example`, peça ao Atlas "monta o relatório da ativação": ele junta o que o portal já sabe, pede num cartão os números que só a marca tem, escreve os textos (só com marcadores, o servidor põe os números) e o relatório pronto abre com "Fontes e cálculos". Um relatório que ficou pela metade (em montagem ou esperando o cartão) pode ser descartado pela API (`POST /api/atlas/relatorios/{id}/descartar`, rota 65): o cartão fecha e a conversa segue livre para começar outro. Pedir "o relatório pós-evento" é outro caminho: o Atlas explica, em texto fixo, que o oficial é da RBS e oferece um modelo em branco.
+
+A apresentação segue um roteiro de oito passos, que o ensaio automático percorre: veja "Ensaio da demonstração", em Testes.
 
 ### Ligar o modelo de linguagem (opcional)
 
@@ -197,8 +200,12 @@ No Windows (PowerShell): `$env:ATLAS_LLM="openai"; $env:OPENCODE_API_KEY="sua-ch
 | `ATLAS_DEBUG_FERRAMENTAS` | `false` (`true` no perfil `dev`; sempre `false` no `demo`) | Mostra na conversa as ferramentas que o modelo usou, com argumentos e resultado. Temporário |
 | `ATLAS_DIAGNOSTICO` | `false` (`true` nos perfis `dev` e `demo`) | O diagnóstico: cada turno do Atlas deixa um traço (etapas, tempos, tokens, custo) que a RBS lê pelas rotas 50 a 53. Desligado, nada é gravado e as rotas respondem 404. Veja `docs/api.md`, "Diagnóstico do Atlas" |
 | `ATLAS_DIAGNOSTICO_MARCA` | `false` (`true` nos perfis `dev` e `demo`) | A marca vê o diagnóstico das próprias conversas (rota 49). Só vale com o diagnóstico ligado |
-| `ATLAS_EMBEDDINGS`, `GEMINI_API_KEY` | `none`, — | Os embeddings dos documentos do Atlas: `gemini` (o Gemini de verdade, com a chave), `teste` (determinístico e sem rede, **só em banco descartável** como o `portal_e2e`: os vetores não têm o significado dos do Gemini) ou `none`. Com `none`, a API sobe do mesmo jeito, aprovar um documento o deixa em `ERRO` com o motivo, e a amostra do `dev` não cria os documentos de exemplo (avisa no log; quando a chave chega, a próxima subida cria e indexa o kit). A cota gratuita do Gemini é de 1.000 chamadas por dia: sem cota, a busca segue só com a lista textual, e documento novo fica em `ERRO` (na hora, com "A cota do dia do Gemini acabou; ...") até reindexar. O limite por minuto, ao contrário, a indexação espera sozinha, pelo tempo que o Gemini pede (até `atlas.embeddings.espera-maxima-no-429`, 90 s). Veja `docs/api.md`, "Os documentos do Atlas" |
-| `ATLAS_JEV`, `TYPESAFE_API_KEY` | `none`, — | O JEV (modo e chave): por enquanto só a rota 52 mostra o estado dele e a 53 testa a conexão |
+| `ATLAS_EMBEDDINGS`, `GEMINI_API_KEY` | `none`, — | Os embeddings dos documentos do Atlas: `gemini` (o Gemini de verdade, com a chave), `teste` (determinístico e sem rede, **só em banco descartável** como o `portal_e2e`: os vetores não têm o significado dos do Gemini) ou `none`. Com `none`, a API sobe do mesmo jeito, aprovar um documento o deixa em `ERRO` com o motivo, e a amostra dos perfis `dev` e `demo` não cria os documentos de exemplo (avisa no log; quando a chave chega, a próxima subida cria e indexa o kit). A cota gratuita do Gemini é de 1.000 chamadas por dia: sem cota, a busca segue só com a lista textual, e documento novo fica em `ERRO` (na hora, com "A cota do dia do Gemini acabou; ...") até reindexar. O limite por minuto, ao contrário, a indexação espera sozinha, pelo tempo que o Gemini pede (até `atlas.embeddings.espera-maxima-no-429`, 90 s). Veja `docs/api.md`, "Os documentos do Atlas" |
+| `ATLAS_JEV`, `TYPESAFE_API_KEY` | `none`, — | O JEV, um classificador que entra em seis pontos de decisão, e a chave dele. Sem perfil, `ATLAS_JEV` dá o modo de todos: `none`, `sombra` (só observa) ou `ativo`. Nos perfis `dev` e `demo` cada ponto já vem fixado pela calibração, e `ATLAS_JEV` não muda nada: intenção, cartão e resposta ativos; fontes, coerência e lacunas em sombra. Ele nunca é barreira: se falhar, o turno segue com o modelo. Veja `docs/api.md`, "O JEV nos pontos de decisão" |
+| `ATLAS_JEV_<PONTO>` | Fixado nos perfis `dev` e `demo` | Troca o modo de um ponto: `INTENCAO`, `CARTAO`, `FONTES`, `RESPOSTA`, `COERENCIA` ou `LACUNAS` |
+| `ATLAS_JEV_MODELO` | `jev-1.14.0` | A versão do JEV |
+| `ATLAS_JEV_BASE_URL`, `ATLAS_GEMINI_BASE_URL` | Endereços oficiais | Os endereços do JEV e do Gemini |
+| `ATLAS_PRECO_ENTRADA`, `ATLAS_PRECO_SAIDA` | `0.30`, `1.20` | US$ por milhão de tokens, usados no custo do diagnóstico quando a resposta do provedor não traz o preço |
 
 Todo número do chat tem origem: vem da base do portal, do que a marca informou ou de um documento citado na mesma frase. O servidor confere isso antes de a frase chegar à tela. Use só dados fictícios enquanto o provedor estiver em teste.
 
@@ -211,13 +218,34 @@ cd backend
 ./mvnw test
 ```
 
-No Windows: `.\mvnw.cmd test`. Os testes usam o banco `portal_teste`, que é apagado e recriado a cada execução (nunca aponte para o `portal`). Com o PostgreSQL em outra porta, informe `PORTAL_BD_TESTE_URL` (por exemplo, `jdbc:postgresql://localhost:5433/portal_teste`) do mesmo jeito que o `PORTAL_BD_URL` do passo 2. Eles cobrem o isolamento entre parcerias pela API, as permissões, o envio com histórico, a carga sem duplicidade e o relatório. As conferências do banco ficam em `backend/src/test/resources/db/verificacao.sql`.
+No Windows: `.\mvnw.cmd test`. Os testes usam o banco `portal_teste`, que é apagado e recriado a cada execução (nunca aponte para o `portal`). Com o PostgreSQL em outra porta, informe `PORTAL_BD_TESTE_URL` (por exemplo, `jdbc:postgresql://localhost:5433/portal_teste`) do mesmo jeito que o `PORTAL_BD_URL` do passo 2. Eles cobrem o isolamento entre parcerias pela API, as permissões, o envio com histórico, a carga sem duplicidade e o relatório. As conferências do banco ficam em `backend/src/test/resources/db/verificacao.sql`. Esses testes usam provedores falsos e não pedem chave. Os marcados `@Tag("avaliacao")` chamam os provedores de verdade e ficam de fora; para rodá-los, use `./mvnw test -Dgroups=avaliacao -Dtestes.excluidos=`.
 
 No front, `npm run build` confere os tipos e gera a versão de produção; `npm run lint` roda o Oxlint.
 
-**No navegador.** Na primeira vez, `npx playwright install chromium`, em `frontend/`. Com a API no ar (`scripts/atlas-dev.sh start`), `npm run e2e` roda os testes de `frontend/e2e/`, e as capturas ficam em `frontend/e2e/capturas/`. Os testes marcados `@vivo` usam o modelo de verdade; sem chave, rode `npm run e2e -- --grep-invert @vivo`. Com a API em outra porta, informe `PORTAL_API_URL=http://localhost:8090`.
+**No navegador.** Na primeira vez, `npx playwright install chromium`, em `frontend/`. Com a API no ar (`scripts/atlas-dev.sh start`), `npm run e2e` roda os testes de `frontend/e2e/`, e as capturas ficam em `frontend/e2e/capturas/`. Os testes marcados `@vivo` usam o modelo de verdade; sem chave, rode `npm run e2e -- --grep-invert @vivo`. O kit de documentos precisa estar indexado (`ATLAS_EMBEDDINGS` em `gemini` ou `teste`), porque os testes das fontes dependem dele. Com a API em outra porta (`ATLAS_DEV_PORTA=8090 scripts/atlas-dev.sh start`), informe `PORTAL_API_URL=http://localhost:8090`. O front do teste sobe na porta 5190, ou na de `E2E_PORTA_FRONT`.
 
-Com as chaves no arquivo de segredos, `scripts/fumaca-provedores.sh` confere o OpenCode Go, o JEV e o Gemini com chamadas reais, sem imprimir nenhuma chave.
+**Ensaio da demonstração.** `frontend/e2e/demo.spec.ts` percorre o roteiro inteiro com o modelo e o Gemini de verdade: os documentos da RBS e o envio do FAQ, o prazo com o PDF aberto na página citada, a conta com "Como calculei", os dias úteis, o relatório até o PDF, o pedido do pós-evento e o modelo em branco, o ataque como Cliente Roxo e o diagnóstico. Ele precisa do perfil `demo` num banco recém-criado, e cada turno tem até 30 s:
+
+```bash
+scripts/preparar-banco-atlas.sh portal_demo
+ATLAS_DEV_PORTA=8099 ATLAS_PERFIL=demo PORTAL_BD_URL=jdbc:postgresql://localhost:5432/portal_demo scripts/atlas-dev.sh start
+cd frontend
+E2E_DEMO=1 PORTAL_API_URL=http://localhost:8099 npx playwright test e2e/demo.spec.ts
+```
+
+As capturas de cada passo e os tempos (`demo-tempos.json`) ficam em `frontend/e2e/capturas/`. Sem `E2E_DEMO`, o teste é pulado. Para repetir, recrie o banco: o envio do FAQ muda a versão dele.
+
+**Avaliador de conversas.** `ferramentas/avaliacao-atlas/` (Node 22, sem dependências) conversa com o Atlas de verdade, com casos e gabarito, e confere vazamento entre parcerias, origem dos números, ferramentas, fontes, contas e latência. Ele precisa da API no perfil `dev`, porque lê o debug das ferramentas:
+
+```bash
+node ferramentas/avaliacao-atlas/avaliar.mjs --marco M9 --split ajuste
+```
+
+Opções: `--split` (`ajuste`, `reserva` ou `todos`), `--categoria`, `--casos`, `--api` e, para uma conversa solta, `--livre "pergunta" --persona amarelo`. O resultado vai para `docs/atlas/controle/avaliacoes/`, que fica fora do Git, e a saída é 1 se houver vazamento, número sem origem ou caso com erro. Os testes dele: `node --test ferramentas/avaliacao-atlas/testes/*.test.mjs`. Os documentos fictícios do kit são gerados em `ferramentas/documentos-ficticios/` (`npm run gerar` e `npm run conferir`).
+
+**CI.** `.github/workflows/ci.yml` roda a cada push na `atlas-completo` e em todo PR: a suíte do back num PostgreSQL 18 com pgvector, sem nenhuma chave, e o build e o lint do front. O e2e, o avaliador e os testes `@Tag("avaliacao")` ficam de fora, porque precisam da API ou dos provedores.
+
+**Conferências com as chaves.** `scripts/fumaca-provedores.sh` confere o OpenCode Go, o JEV e o Gemini com chamadas reais, sem imprimir nenhuma chave. `scripts/conferir-segredos.sh` procura as chaves nos arquivos versionados, nos logs, em `backend/target/` e no traço de um banco, também sem imprimi-las (`--banco portal_e2e`, e `--historico` para todo o histórico do Git).
 
 ## Itens da Entrega 2
 
@@ -237,7 +265,7 @@ Com as chaves no arquivo de segredos, `scripts/fumaca-provedores.sh` confere o O
 - O plano comercial de uma parceria cadastrada ao vivo entra pela carga "Plano comercial" (Cargas), e as fotos de comprovação pela aba Aplicações da marca (só a RBS anexa). Os números do festival ainda entram só pela amostra: "O festival em números" sai como indisponível nos relatórios de 2027, porque só há números de 2026.
 - Corrigir uma linha do plano comercial: o reenvio com outra quantidade conta como duplicado (vale a primeira versão), e não há tela para editar a linha.
 - Telas próprias de Cortesias, Credenciamento e Contrato: nesta versão cada uma dessas abas mostra as próprias entregas.
-- Relatório montado pelo Atlas: ligado no perfil `dev` e desligado no padrão (`ATLAS_RELATORIO`). No texto do relatório o modelo não escreve número nem data (nem por extenso): os números vêm do servidor, com a origem em "Fontes e cálculos".
+- Relatório montado pelo Atlas: ligado nos perfis `dev` e `demo` e desligado no padrão (`ATLAS_RELATORIO`). No texto do relatório o modelo não escreve número nem data (nem por extenso): os números vêm do servidor, com a origem em "Fontes e cálculos".
 - Atlas com o modelo de linguagem: testado contra um servidor falso e com a chave de verdade do OpenCode Go. Para decidir com a equipe: os termos de uso do OpenCode, que falam em uso interno de quem assina, e o acordo de retenção zero do DeepSeek no Go, que vale até 30/11/2026 e é renovado mês a mês.
 - Dado pessoal no modelo: a consulta do Atlas leva ao modelo o nome de quem informou cada dado ("Informado por ... em ..."). Fica assim por decisão do dono do produto.
 - Dados informados pela marca entram sem aprovação da RBS, com o nome de quem informou e a data.
@@ -245,19 +273,24 @@ Com as chaves no arquivo de segredos, `scripts/fumaca-provedores.sh` confere o O
 - PDF do relatório: pela impressão do navegador.
 - A confirmar com a RBS: abas por cota (hoje todas liberadas, Pesquisa só para Master), limite de usuários por parceria, quem envia as fotos de comprovação, formato dos resultados da pesquisa, quem aprova as perguntas, a lista final de formatos de arquivo (o `.ai` do Illustrator ficou de fora) e o limite de 20 MB.
 - Segurança para produção: limite de tentativas de login e cookie de sessão `Secure` atrás de HTTPS.
-- Fora desta versão: no Atlas, o cálculo livre pedido pelo modelo e as fotos dentro do relatório; JEV, n8n, Open Staff, cifra de arquivos, Docker e Swagger.
+- Fora desta versão: n8n, Open Staff, cifra de arquivos, Docker, Swagger e a implantação pública.
 
 ## Pastas
 
 ```text
-backend/    API Spring Boot (pacotes comum, acesso, parceria, materiais, pesquisa, consolidacao, relatorio,
-            aplicacoes, dados, atlas)
-            src/main/resources/db/migration  estrutura, regras e dados base (Flyway)
-            src/main/resources/db/dev        amostra de demonstração
-            src/main/resources/atlas         modelo do relatório do Atlas e o prompt
-frontend/   React + Vite (api, atlas, componentes, estilos, paginas/acesso, paginas/parceria, paginas/rbs, sessao, util)
-scripts/    preparar-banco-atlas.sh (pgvector e papel atlas_ro), fumaca-provedores.sh e atlas-dev.sh (API em segundo plano)
-docs/       banco.md, api.md, exemplos de CSV e a modelagem da Sprint 1
+backend/      API Spring Boot (pacotes comum, acesso, parceria, materiais, pesquisa, consolidacao, relatorio,
+              aplicacoes, dados, documentos, prazos, atlas)
+              src/main/resources/db/migration  estrutura, regras e dados base (Flyway)
+              src/main/resources/db/dev        amostra de demonstração
+              src/main/resources/atlas         prompts, modelos do relatório, modelos em branco e as perguntas do JEV
+              src/main/resources/dev           arquivos de exemplo e o kit de documentos do Atlas
+frontend/     React + Vite (api, atlas, componentes, estilos, paginas/acesso, paginas/parceria, paginas/rbs, sessao, util)
+              e2e                              testes no navegador e o ensaio da demonstração
+ferramentas/  avaliacao-atlas (avaliador de conversas e calibração do JEV) e documentos-ficticios (o kit)
+scripts/      preparar-banco-atlas.sh (pgvector e papel atlas_ro), atlas-dev.sh (API em segundo plano),
+              fumaca-provedores.sh e conferir-segredos.sh
+.github/      workflows/ci.yml
+docs/         banco.md, api.md, exemplos de CSV e a modelagem da Sprint 1
 ```
 
 ## Referências

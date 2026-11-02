@@ -101,8 +101,8 @@ atlas:
     # evento "ferramenta" do fluxo). Desligado por padrão; ligado no perfil dev, abaixo. O raciocínio cru nunca sai, nem por aqui.
     ferramentas: ${ATLAS_DEBUG_FERRAMENTAS:false}
   # [ATLAS] O relatório de trabalho (cartão de perguntas, relatório pronto, rotas 46 a 48 e 65, ferramentas relatorio_*). Desligado
-  # por padrão: o Atlas é só o chat, com o prompt chat.txt. Ligado no perfil dev (M6) e no de teste, abaixo; ATLAS_RELATORIO=false
-  # desliga no dev.
+  # por padrão: o Atlas é só o chat, com o prompt chat.txt. Ligado nos perfis dev (M6), demo e test, abaixo; ATLAS_RELATORIO=false
+  # desliga no dev e no demo.
   relatorio:
     ligado: ${ATLAS_RELATORIO:false}
   # [ATLAS] O Atlas da RBS (M8): a conversa da equipe da RBS por edição, sem parceria, que tira dúvidas operacionais dos documentos
