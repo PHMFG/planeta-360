@@ -53,7 +53,7 @@ public class DocumentoService {
     static final Set<String> ESCOPOS = Set.of("GLOBAL", "COTA", "PARCERIA");
     static final Set<String> STATUS = Set.of("AGUARDANDO_APROVACAO", "RECUSADO", "PROCESSANDO", "INDEXADO", "ERRO", "SUBSTITUIDO", "REVOGADO");
     static final Set<String> COTAS = Set.of("MASTER", "SUBCOTA_G", "SUBCOTA");
-    private static final Pattern CHAVE = Pattern.compile("^[a-z0-9]+(-[a-z0-9]+)*$");
+    private static final Pattern CHAVE = Pattern.compile("^[a-z0-9]+(-[a-z0-9]+)*+$");
     private static final int LIMITE_TITULO = 200;
     private static final int LIMITE_CHAVE = 80;
     private static final int LIMITE_OBSERVACAO = 500;

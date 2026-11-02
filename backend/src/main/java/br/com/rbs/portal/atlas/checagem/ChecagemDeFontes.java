@@ -106,7 +106,7 @@ public class ChecagemDeFontes {
 
     /** Um endereço de e-mail inteiro: a parte antes do arroba só começa onde a palavra começa, para o custo não crescer com o texto. */
     private static final Pattern EMAIL = Pattern.compile(
-            "(?<![\\p{L}\\p{N}._%+-])[\\p{L}\\p{N}._%+-]+@[\\p{L}\\p{N}-]+(?:\\.[\\p{L}\\p{N}-]+)+");
+            "(?<![\\p{L}\\p{N}._%+-])[\\p{L}\\p{N}._%+-]+@[\\p{L}\\p{N}-]+(?:\\.[\\p{L}\\p{N}-]+)++");
     private static final Pattern COM_ALGARISMO_COMUM = Pattern.compile("[0-9]");
 
     /**

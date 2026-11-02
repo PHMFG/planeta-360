@@ -26,7 +26,7 @@ import java.util.regex.Pattern;
 public final class Frases {
 
     /** {@code [T1]}, {@code [R2]}, {@code [C3]} e {@code [T1, T2]}: a citação de uma fonte do turno. */
-    public static final Pattern CITACAO = Pattern.compile("\\[\\s*[TRC]\\d{1,3}(?:\\s*,\\s*[TRC]\\d{1,3})*\\s*]");
+    public static final Pattern CITACAO = Pattern.compile("\\[\\s*[TRC]\\d{1,3}(?:\\s*,\\s*[TRC]\\d{1,3})*+\\s*]");
 
     private static final Set<String> ABREVIATURAS = Set.of("p", "pp", "pág", "págs", "pag", "pags", "art", "arts", "sr", "sra", "dr", "dra",
             "prof", "av", "tel", "cel", "ex", "obs", "cf", "vol", "fl", "fls", "cap", "inc", "sec", "seç", "nº", "n");

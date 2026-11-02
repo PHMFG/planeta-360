@@ -81,7 +81,7 @@ public final class NormalizadorDeNumeros {
      * {@link #porExtenso}).
      */
     private static final Pattern CORRIDA_POR_EXTENSO = Pattern.compile("(?<![\\p{L}\\p{N}])(?:(?<!\\bpor\\s{1,8})|(?!cento"
-            + NAO_ACABA_A_PALAVRA + "))((?:" + PALAVRA + "|" + ESCALA + ")(?:\\s+(?:e\\s+)?(?:" + PALAVRA + "|" + ESCALA + "))*)"
+            + NAO_ACABA_A_PALAVRA + "))((?:" + PALAVRA + "|" + ESCALA + ")(?:\\s+(?:e\\s+)?(?:" + PALAVRA + "|" + ESCALA + ")){0,30})"
             + NAO_ACABA_A_PALAVRA + "(\\s+(?:de\\s+)?(?:" + UNIDADES + ")" + NAO_ACABA_A_PALAVRA + ")?",
             Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     /**
@@ -89,7 +89,7 @@ public final class NormalizadorDeNumeros {
      * "de mês" é data. "Primeiro" só é número assim, antes de "de mês": "a primeira vez" nunca é número.
      */
     private static final Pattern DATA_COM_NUMERAL = Pattern.compile("(?<![\\p{L}\\p{N}])(primeiro|(?:" + PALAVRA + ")(?:\\s+(?:e\\s+)?(?:" + PALAVRA
-            + "))*)\\s+de\\s+(" + NOME_DO_MES + ")(?:\\s+de\\s+(\\d{4}))?" + NAO_ACABA_A_PALAVRA,
+            + ")){0,30})\\s+de\\s+(" + NOME_DO_MES + ")(?:\\s+de\\s+(\\d{4}))?" + NAO_ACABA_A_PALAVRA,
             Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     /** O nome do festival, em qualquer caixa: não é o número 360. */
     private static final Pattern NOME_DO_FESTIVAL = Pattern.compile("(?<![\\p{L}\\p{N}])planeta\\s+360(?!\\p{N})",
@@ -102,7 +102,7 @@ public final class NormalizadorDeNumeros {
     private static final Pattern DATA_COM_ANO_CURTO = Pattern.compile("\\b(\\d{1,2})/(\\d{1,2})/(\\d{2})\\b");
     private static final Pattern DATA_SEM_ANO = Pattern.compile("\\b(\\d{1,2})/(\\d{1,2})\\b");
     // "29 e 30 de janeiro", "de 25 a 28 de janeiro" e "4 de dezembro de 2026".
-    private static final Pattern DATA_POR_EXTENSO = Pattern.compile("\\b(\\d{1,2})[º°]?((?:\\s*(?:,|\\be\\b|\\ba\\b|até(?![\\p{L}]))\\s*\\d{1,2}[º°]?)*)\\s+de\\s+("
+    private static final Pattern DATA_POR_EXTENSO = Pattern.compile("\\b(\\d{1,2})[º°]?((?:\\s*(?:,|\\be\\b|\\ba\\b|até(?![\\p{L}]))\\s*\\d{1,2}[º°]?)*+)\\s+de\\s+("
             + NOME_DO_MES + ")(?:\\s+de\\s+(\\d{4}))?", Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     // "18:00", "18:00h", "05:00hs": a hora com dois pontos, com o "h" (e o "s" ou "oras") que a segue, se houver.
     private static final Pattern HORA_DOIS_PONTOS = Pattern.compile("\\b(\\d{1,2}):(\\d{2})(?: ?h(?:s|oras?)?)?" + NAO_ACABA_A_PALAVRA,
@@ -119,7 +119,7 @@ public final class NormalizadorDeNumeros {
      * Um número. Três dígitos depois de um espaço, com até três antes, são o mesmo número ({@code 2 220,00} é 2220): na resposta
      * valem juntos, e é o inteiro que precisa de origem. {@code 12 3456}, {@code 220 2} e {@code 2 22} são números separados.
      */
-    private static final Pattern NUMERO = Pattern.compile("\\d{1,3}(?:" + ESPACO_DE_GRUPO + "\\d{3})+(?!\\d)(?:[.,]\\d+)?|\\d+(?:[.,]\\d+)*");
+    private static final Pattern NUMERO = Pattern.compile("\\d{1,3}(?:" + ESPACO_DE_GRUPO + "\\d{3})+(?!\\d)(?:[.,]\\d+)?|\\d+(?:[.,]\\d+)*+");
     private static final Pattern ANO = Pattern.compile("^\\d{4}$");
     private static final Pattern DIA_DO_MES = Pattern.compile("[1-9]|[12][0-9]|3[01]");
     /** A palavra "dia" ou "dias" (inteira) no fim do trecho antes de um número. */

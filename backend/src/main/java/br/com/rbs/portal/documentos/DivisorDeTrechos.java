@@ -280,10 +280,10 @@ public class DivisorDeTrechos {
     // Seções e títulos
     // ---------------------------------------------------------------------
 
-    private static final Pattern TITULO_NUMERADO = Pattern.compile("^(\\d{1,2}(?:\\.\\d{1,2})*)\\.?\\s+(\\p{Lu}.*)$");
+    private static final Pattern TITULO_NUMERADO = Pattern.compile("^(\\d{1,2}(?:\\.\\d{1,2})*+)\\.?\\s+(\\p{Lu}.*)$");
     private static final Pattern TITULO_EM_CAIXA_ALTA = Pattern.compile("^[\\p{Lu}\\d \\t·•\\-–—:&/(),.'’\"“”%]+$");
     private static final Pattern TITULO_SOLTO = Pattern.compile("(?i)^(sumário|índice)$");
-    private static final Pattern NUMERACAO_DO_ROTULO = Pattern.compile("^\\d{1,2}(?:\\.\\d{1,2})*\\s+(.*)$");
+    private static final Pattern NUMERACAO_DO_ROTULO = Pattern.compile("^\\d{1,2}(?:\\.\\d{1,2})*+\\s+(.*)$");
     private static final int TAMANHO_MAXIMO_DE_TITULO = 110;
 
     /**
@@ -889,7 +889,7 @@ public class DivisorDeTrechos {
         return !rotulo.isEmpty() && !NUMERACAO_COM_PONTO_INTERNO.matcher(rotulo).find();
     }
 
-    private static final Pattern NUMERACAO_COM_PONTO_INTERNO = Pattern.compile("^\\d{1,2}(?:\\.\\d{1,2})+\\s");
+    private static final Pattern NUMERACAO_COM_PONTO_INTERNO = Pattern.compile("^\\d{1,2}(?:\\.\\d{1,2})++\\s");
 
     private static Trecho comOrdem(Trecho trecho, int ordem) {
         return new Trecho(ordem, trecho.paginaInicio(), trecho.paginaFim(), trecho.secaoCaminho(), trecho.texto(), trecho.tokens());

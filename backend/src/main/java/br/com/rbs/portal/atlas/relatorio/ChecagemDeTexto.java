@@ -57,12 +57,12 @@ public class ChecagemDeTexto {
     private static final Pattern ENDERECO_SEM_ESQUEMA = Pattern.compile(
             "(?<![\\p{L}\\p{N}_-])[\\p{L}\\p{N}_-]{2,}\\.\\p{L}{2,}(?![\\p{L}\\p{N}_-])");
     private static final Pattern ENDERECO_DE_DOMINIO_DE_TOPO = Pattern.compile(
-            "(?i)\\b[a-z0-9_][a-z0-9_-]*(?:\\.[a-z0-9_-]+)*\\.(?:com|org|net|edu|gov|io|dev|app|br|co|me|info|biz|xyz|ly|ai)\\b");
+            "(?i)\\b[a-z0-9_][a-z0-9_-]*(?:\\.[a-z0-9_-]+){0,30}\\.(?:com|org|net|edu|gov|io|dev|app|br|co|me|info|biz|xyz|ly|ai)\\b");
     /** O ponto de outras escritas (largura total, ideográfico, ideográfico de meia largura) vale como ponto na conferência do endereço. */
     private static final Pattern PONTO_DE_OUTRA_ESCRITA = Pattern.compile("[\\uFF0E\\u3002\\uFF61]");
     /** Chave de referência escrita fora de marcador ({@code dado:ativacao.visitantes_total}) ou nome de ferramenta. */
     private static final Pattern CHAVE_INTERNA = Pattern.compile(
-            "(?iU)\\b(?:parc|evento|cons|lista|dado|calc):[a-z_]+(?:\\.[a-z0-9_]+)*"
+            "(?iU)\\b(?:parc|evento|cons|lista|dado|calc):[a-z_]+(?:\\.[a-z0-9_]+)*+"
                     + "|\\b(?:relatorio|parceria|buscar|listar|consultar|contar|pedido|gerar|executar)_[a-z_]+");
     /** Palavras do funcionamento interno que a marca não deve ler. */
     private static final Pattern TERMO_INTERNO = Pattern.compile(

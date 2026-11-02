@@ -35,7 +35,7 @@ public final class MascaraDoJev {
 
     private static final List<Pattern> DADOS_PESSOAIS = List.of(
             // e-mail
-            Pattern.compile("(?<![\\p{L}\\p{N}._%+-])[\\p{L}\\p{N}._%+-]+@[\\p{L}\\p{N}-]+(?:\\.[\\p{L}\\p{N}-]+)+"),
+            Pattern.compile("(?<![\\p{L}\\p{N}._%+-])[\\p{L}\\p{N}._%+-]+@[\\p{L}\\p{N}-]+(?:\\.[\\p{L}\\p{N}-]+)++"),
             // CNPJ e CPF com pontuação
             Pattern.compile(ANTES + "\\d{2}\\.\\d{3}\\.\\d{3}/\\d{4}-\\d{2}" + DEPOIS),
             Pattern.compile(ANTES + "\\d{3}\\.\\d{3}\\.\\d{3}-\\d{2}" + DEPOIS),

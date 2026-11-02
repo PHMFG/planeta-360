@@ -2,6 +2,7 @@ package br.com.rbs.portal.atlas.checagem;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import br.com.rbs.portal.PilhaPequena;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -158,6 +159,24 @@ class FrasesTest {
         assertThat(Frases.fimDaPrimeiraFraseCompleta(texto, 0)).isEqualTo(-1);
         assertThat(Frases.fimDaPrimeiraFraseCompleta(texto + " X", 0)).isEqualTo("Texto.".length());
         assertThat((System.nanoTime() - inicio) / 1_000_000).as("em milissegundos: tem de ser linear").isLessThan(2000);
+    }
+
+    /**
+     * Uma lista longa de citações no texto do modelo ({@code [T1, T2, T2, ...]}) não estoura a pilha. A repetição do grupo da citação era
+     * recursiva (uma volta de pilha por item): com a pilha de 1 MB do Linux x64 ela estourava com poucos milhares de itens, e com a de
+     * 2 MB do Mac arm64 não. A thread de 256 KB faz o teste pegar nos dois sistemas.
+     */
+    @Test
+    void listaLongaDeCitacoesNaoEstouraAPilha() {
+        String aberta = "Texto. [ T1" + " , T2".repeat(5000);
+        String fechada = "Veja [T1" + ", T2".repeat(5000) + "] hoje.";
+        PilhaPequena.rodar(() -> {
+            assertThat(Frases.fimDaPrimeiraFraseCompleta(aberta, 0)).isEqualTo(-1);
+            assertThat(Frases.fimDaPrimeiraFraseCompleta(aberta + " X", 0)).isEqualTo("Texto.".length());
+            assertThat(Frases.citacoes(fechada)).hasSize(5001).first().isEqualTo("T1");
+            assertThat(Frases.semCitacoes(fechada).replaceAll("\\s+", " ")).isEqualTo("Veja hoje.");
+            assertThat(Frases.dividir(fechada)).hasSize(1);
+        });
     }
 
     @Test

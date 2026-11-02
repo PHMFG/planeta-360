@@ -78,7 +78,7 @@ public class DetectorDeDadosPessoais {
                     + NUMERO_DE_RG + ")" + SEM_DIGITO_DEPOIS, OPCOES_SEM_CAIXA);
     private static final Pattern RG_FORMATADO = Pattern.compile(SEM_DIGITO_ANTES + "\\d{1,2}\\.\\d{3}\\.\\d{3}-[\\dxX]" + SEM_DIGITO_DEPOIS);
 
-    private static final Pattern EMAIL = Pattern.compile("[\\w.+-]+@[\\w-]+(?:\\.[\\w-]+)+");
+    private static final Pattern EMAIL = Pattern.compile("[\\w.+-]+@[\\w-]+(?:\\.[\\w-]+)++");
     /** O que vem depois do DDD: o 9 do celular (com ou sem espaço), 4 dígitos, um hífen com ou sem espaços (ou nada) e 4 dígitos. */
     private static final String NUMERO_DE_TELEFONE = "(?:9[ \\t]?)?\\d{4}[ \\t]*-?[ \\t]*\\d{4}";
     /**
