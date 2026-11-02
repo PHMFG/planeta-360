@@ -18,6 +18,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * [ATLAS] O que o debug das ferramentas ({@code atlas.debug.ferramentas=true}) tem de igual nos dois modos do relatório: o campo
@@ -25,7 +26,12 @@ import org.springframework.test.web.servlet.assertj.MvcTestResult;
  * argumentos e o resultado crus (iguais ao que o histórico guarda e ao que o modelo recebeu), o corte em 20.000 caracteres, o erro
  * de ferramenta, o raciocínio cru que nunca sai e o 404 de quem não é da parceria. As classes concretas ligam a propriedade e
  * escolhem o modo. Não faz parte da API.
+ * <p>
+ * É {@code @Transactional} aqui, na classe que declara os testes, e não só nas concretas: o Spring procura o {@code @Transactional} de um
+ * método na classe que o declara, então o da subclasse não vale para o teste herdado, que rodava sem transação, gravava as conversas com
+ * commit e deixava cinco delas no banco para o teste que viesse depois (o AtlasControllerTest viu 6 conversas onde esperava 1).
  */
+@Transactional
 abstract class DebugDeFerramentasBase {
 
     /** O que o provedor roteirizado põe no reasoning_content e que não pode aparecer em nenhum corpo da API. */

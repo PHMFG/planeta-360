@@ -25,14 +25,18 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * [ATLAS] Os itens {@code pedido_relatorio} e {@code modelo} da conversa (M5), derivados do histórico das respostas diretas, nos dois
  * modos do relatório (as classes concretas escolhem o modo): o turno traz o item, a releitura pela rota 45 traz o mesmo, o
  * {@code relatorioOficial} e os modelos do item são os de agora (falso e depois verdadeiro quando a RBS disponibiliza; a Pesquisa
  * muda com a aba), a Pesquisa é recusada para a Roxo e a Verde e aceita para o Amarelo, e resposta com erro não gera item. Cada
- * teste é desfeito no fim (@Transactional nas classes concretas). Não faz parte da API.
+ * teste é desfeito no fim (@Transactional aqui, na classe que declara os testes: o do Spring procura o {@code @Transactional} de um método
+ * na classe que o declara, então o da subclasse não vale para o teste herdado, que gravava com commit e deixava conversas no banco).
+ * Não faz parte da API.
  */
+@Transactional
 abstract class RespostasDiretasNaConversaBase {
 
     /** O modo do relatório da classe concreta: o texto fixo do pedido muda com ele. */
