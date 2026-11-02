@@ -3,8 +3,8 @@
 // Quando a marca pede um documento (o botão, ou o modelo começando um relatório), a conversa vai para o painel à direita e o
 // centro mostra a pré-visualização do documento, que se atualiza a cada turno. Só a marca conversa; a RBS vê os relatórios na
 // tela Relatório. A resposta do modelo chega em fluxo (pensamento, texto e etapas); o botão do relatório, sem modelo, espera o
-// turno inteiro.
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+// turno inteiro. A fonte de uma resposta abre no visualizador, ao lado da conversa, ou no lugar do documento quando ele está aberto.
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import {
   abrirConversa,
@@ -17,6 +17,7 @@ import {
   type Conversa,
   type ConversasDaParceria,
   type EventoDoTurno,
+  type FonteDaResposta,
   type RelatorioAtlas,
   type RespostaDoCartao,
   type StatusRelatorioAtlas,
@@ -28,12 +29,17 @@ import { LinkBotao } from '../componentes/Botao'
 import { CabecalhoSecao } from '../componentes/CabecalhoSecao'
 import { nomeCota } from '../componentes/Menu'
 import { RenderizadorDeRelatorio } from '../componentes/relatorio/RenderizadorDeRelatorio'
+import { origemParaLer } from '../util/formatar'
+import { BotaoDescartar } from './BotaoDescartar'
 import { useParceria } from '../paginas/parceria/ContextoParceria'
 import { useSessao } from '../sessao/Sessao'
 import { aplicar, SEM_RESPOSTA, type RespostaAoVivo } from './AoVivo'
 import { AreaDaConversa } from './Conversa'
 import { AvisoAtlas, Chip, ChipLink, LinhaBuscando, PainelLateral, PONTO_APLICACOES, PONTO_RASCUNHO, Tag } from './Elementos'
 import { Inicio } from './Inicio'
+
+// O leitor de PDF é pesado: só baixa quando alguém abre a primeira fonte.
+const Visualizador = lazy(() => import('./Visualizador'))
 
 /** O que a caixa do Atlas em Minha parceria pede ao abrir esta tela: uma pergunta para mandar ou o atalho do relatório. */
 export type PedidoAoAtlas = { mensagem?: string; montar?: boolean }
@@ -105,6 +111,9 @@ export function PaginaAtlas() {
   const [aoVivo, setAoVivo] = useState<RespostaAoVivo | null>(null)
   const [enviada, setEnviada] = useState<string | null>(null)
   const [texto, setTexto] = useState('')
+  const [fonteAberta, setFonteAberta] = useState<FonteDaResposta | null>(null)
+  /** O chip que abriu a fonte: o foco volta para ele ao fechar. */
+  const origemDaFonte = useRef<HTMLElement | null>(null)
   /** A conversa que já está na tela: trocar a URL depois de um turno não a carrega de novo. */
   const carregada = useRef<number | null | undefined>(undefined)
   const pedidoAtendido = useRef(false)
@@ -130,6 +139,7 @@ export function PaginaAtlas() {
     setCarregando(true)
     setFalha(null)
     setBloqueio(null)
+    setFonteAberta(null)
     ;(async () => {
       try {
         const lista = await listarConversas(parceria.id)
@@ -241,6 +251,18 @@ export function PaginaAtlas() {
     }
   }
 
+  /** Descartado o documento, volta à conversa: o cartão aberto agora aparece cancelado, e um pedido novo começa outro relatório. */
+  async function aposDescartar() {
+    if (conversa === null) return
+    const lista = await listarConversas(parceria.id)
+    const { atual, documento } = await lerConversa(conversa.conversaId, lista)
+    setConversas(lista)
+    setConversa(atual)
+    setRelatorio(documento)
+    setDocumentoAberto(false)
+    setVistaMovel('documento')
+  }
+
   function montar() {
     if (!relatorioDisponivel) return
     turno(() => (conversa ? montarRelatorio(conversa.conversaId) : abrirConversa(parceria.id, true)), { emFluxo: false })
@@ -270,6 +292,17 @@ export function PaginaAtlas() {
     setAbaLateral(aba)
     setVistaMovel('documento')
   }
+
+  function abrirFonte(fonte: FonteDaResposta) {
+    origemDaFonte.current = document.activeElement as HTMLElement | null
+    // Um objeto novo a cada clique: o mesmo chip, depois de paginar, volta à página citada.
+    setFonteAberta({ ...fonte })
+  }
+
+  const fecharFonte = useCallback(() => {
+    setFonteAberta(null)
+    origemDaFonte.current?.focus()
+  }, [])
 
   // O pedido da caixa de Minha parceria roda uma vez, depois que a tela sabe se o chat está ligado.
   useEffect(() => {
@@ -314,12 +347,14 @@ export function PaginaAtlas() {
     llm,
     relatorioDisponivel,
     debugDeFerramentas: conversa?.debugDeFerramentas ?? false,
+    conversaDoDiagnostico: conversa?.diagnosticoDisponivel ? conversa.conversaId : null,
     texto,
     aoMudarTexto: setTexto,
     aoEnviar: () => perguntar(texto),
     aoMontar: montar,
     aoResponder: responder,
     aoAbrirDocumento: abrirDocumento,
+    aoAbrirFonte: abrirFonte,
   }
   const acoesDaConversa = (
     <>
@@ -340,7 +375,7 @@ export function PaginaAtlas() {
       {/* O fundo cobre a tela toda, por trás do menu flutuante: fluido na tela inicial, grafite depois. */}
       <div aria-hidden="true" className={`fixed inset-0 -z-10 transition-colors duration-500 print:hidden ${fluido ? 'fundo-fluido' : 'bg-atlas'}`} />
 
-      <section className={`flex min-w-0 flex-1 flex-col ${modoDocumento && vistaMovel === 'conversa' ? 'max-lg:hidden' : ''}`} aria-label="Atlas">
+      <section className={`flex min-w-0 flex-1 flex-col ${modoDocumento && vistaMovel === 'conversa' ? 'max-lg:hidden' : ''} ${modoDocumento && fonteAberta ? 'lg:hidden' : ''}`} aria-label="Atlas">
         {modoDocumento ? (
           <>
             <BarraDoAtlas
@@ -361,6 +396,9 @@ export function PaginaAtlas() {
             <div className="min-h-0 flex-1 overflow-y-auto px-1 py-6 sm:px-6">
               <div className="mx-auto flex w-full max-w-[680px] flex-col gap-4">
                 <div className="flex flex-wrap justify-end gap-2.5">
+                  {EM_MONTAGEM.includes(relatorio.status) && (
+                    <BotaoDescartar relatorioId={relatorio.id} noAtlas desabilitado={pensando} aoDescartar={aposDescartar} />
+                  )}
                   <ChipLink to={`${base}/relatorios-atlas/${relatorio.id}`} icone="ri-external-link-line">
                     Página inteira
                   </ChipLink>
@@ -431,6 +469,12 @@ export function PaginaAtlas() {
         )}
       </section>
 
+      {fonteAberta && (
+        <Suspense fallback={<LinhaBuscando texto="Abrindo o documento…" />}>
+          <Visualizador fonte={fonteAberta} aoFechar={fecharFonte} className={modoDocumento ? 'lg:flex-1' : 'lg:w-[46%] lg:max-w-[720px] lg:shrink-0'} />
+        </Suspense>
+      )}
+
       {modoDocumento && (
         <PainelLateral
           sobretitulo={abaLateral === 'conversa' ? 'Atlas' : 'Fontes citadas'}
@@ -482,7 +526,7 @@ function FontesDoDocumento({ relatorio, aoVoltar }: { relatorio: RelatorioAtlas;
               <span className="text-atlas-lilas">[{indice + 1}]</span> {item.rotulo}
               {item.valor !== null && <span className="font-medium text-white/90">: {item.valor}</span>}
             </p>
-            <p className="mt-0.5 text-xs font-medium text-white/64">{item.origem}</p>
+            <p className="mt-0.5 text-xs font-medium text-white/64">{origemParaLer(item.origem)}</p>
           </div>
         </div>
       ))}

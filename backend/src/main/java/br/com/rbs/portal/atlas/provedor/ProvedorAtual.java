@@ -1,5 +1,7 @@
 package br.com.rbs.portal.atlas.provedor;
 
+import br.com.rbs.portal.atlas.disjuntor.DisjuntorDoProvedor;
+import br.com.rbs.portal.atlas.disjuntor.DisjuntoresDosProvedores;
 import br.com.rbs.portal.comum.UsuarioAutenticado;
 import java.time.OffsetDateTime;
 import java.util.Optional;
@@ -19,6 +21,9 @@ import org.springframework.stereotype.Component;
  * A chave do debug fica só na memória da API (some quando ela reinicia), dentro do provedor montado; aqui guarda-se só o final
  * dela, para mostrar. A troca é atômica (um {@link AtomicReference} com um registro imutável): quem já pegou o provedor (um turno
  * em andamento) termina com ele, e a próxima consulta já vê o novo.
+ * <p>
+ * [M8] O provedor que sai daqui já vem com o disjuntor do modelo de linguagem em volta ({@link ProvedorComDisjuntor}): é um só para
+ * a chave do debug e para o ambiente, e trocar ou esquecer a chave do debug o fecha de novo (a chave nova merece outra chance).
  */
 @Component
 public class ProvedorAtual {
@@ -36,19 +41,25 @@ public class ProvedorAtual {
     }
 
     private final ObjectProvider<ProvedorDeLlm> doAmbiente;
+    private final DisjuntorDoProvedor disjuntor;
     private final AtomicReference<ChaveDoDebug> debug = new AtomicReference<>();
 
-    public ProvedorAtual(ObjectProvider<ProvedorDeLlm> doAmbiente) {
+    public ProvedorAtual(ObjectProvider<ProvedorDeLlm> doAmbiente, DisjuntoresDosProvedores disjuntores) {
         this.doAmbiente = doAmbiente;
+        this.disjuntor = disjuntores.llm();
     }
 
     public Escolha escolha() {
         ChaveDoDebug chave = debug.get();
         if (chave != null) {
-            return new Escolha(Origem.DEBUG, chave.provedor(), chave);
+            return new Escolha(Origem.DEBUG, comDisjuntor(chave.provedor()), chave);
         }
         ProvedorDeLlm ambiente = doAmbiente.getIfAvailable();
-        return ambiente != null ? new Escolha(Origem.AMBIENTE, ambiente, null) : new Escolha(Origem.NENHUM, null, null);
+        return ambiente != null ? new Escolha(Origem.AMBIENTE, comDisjuntor(ambiente), null) : new Escolha(Origem.NENHUM, null, null);
+    }
+
+    private ProvedorDeLlm comDisjuntor(ProvedorDeLlm provedor) {
+        return provedor instanceof ProvedorComDisjuntor ? provedor : new ProvedorComDisjuntor(provedor, disjuntor);
     }
 
     /** O provedor que vale agora, se houver. Quem conduz um turno pega uma vez e usa o mesmo até o fim. */
@@ -59,10 +70,12 @@ public class ProvedorAtual {
     /** Passa a usar a chave do debug (troca a anterior, se houver). */
     public void usarChaveDoDebug(ChaveDoDebug chave) {
         debug.set(chave);
+        disjuntor.reiniciar();
     }
 
     /** Esquece a chave do debug: volta ao provedor das variáveis de ambiente, ou a nenhum. */
     public void esquecerChaveDoDebug() {
         debug.set(null);
+        disjuntor.reiniciar();
     }
 }

@@ -73,12 +73,18 @@ class TetoDiarioTest {
 
     /** Põe {@code quantas} mensagens do assistente na conversa, como se o modelo as tivesse escrito {@code horasAtras} horas atrás. */
     void gravarMensagensDoModelo(long conversa, int quantas, int horasAtras, String toolCalls) {
+        gravarMensagens(conversa, quantas, horasAtras, toolCalls, false, false);
+    }
+
+    /** O mesmo, dizendo se as mensagens são {@code sem_modelo} (o servidor as escreveu) e {@code fora_do_modelo} (V15). */
+    void gravarMensagens(long conversa, int quantas, int horasAtras, String toolCalls, boolean semModelo, boolean foraDoModelo) {
         jdbc.sql("""
-                INSERT INTO atlas_mensagem (conversa_id, ordem, papel, conteudo, tool_calls, criada_em)
+                INSERT INTO atlas_mensagem (conversa_id, ordem, papel, conteudo, tool_calls, criada_em, sem_modelo, fora_do_modelo)
                 SELECT :conversa, coalesce((SELECT max(ordem) FROM atlas_mensagem WHERE conversa_id = :conversa), 0) + g,
-                       'assistant', 'Texto do assistente.', CAST(:calls AS jsonb), now() - make_interval(hours => :horas)
+                       'assistant', 'Texto do assistente.', CAST(:calls AS jsonb), now() - make_interval(hours => :horas), :sem, :fora
                 FROM generate_series(1, :quantas) g
-                """).param("conversa", conversa).param("quantas", quantas).param("horas", horasAtras).param("calls", toolCalls).update();
+                """).param("conversa", conversa).param("quantas", quantas).param("horas", horasAtras).param("calls", toolCalls)
+                .param("sem", semModelo).param("fora", foraDoModelo).update();
     }
 
     @Test
@@ -138,8 +144,8 @@ class TetoDiarioTest {
 
         gravarMensagensDoModelo(conversaDoRoxo, 300, 0, null);                                  // outra parceria: não conta
         gravarMensagensDoModelo(conversaDoAmarelo, 300, 48, null);                              // há dois dias: não conta
-        gravarMensagensDoModelo(conversaDoAmarelo, 300, 0, "[{\"id\":\"botao_abc\",\"type\":\"function\","
-                + "\"function\":{\"name\":\"relatorio_finalizar\",\"arguments\":\"{}\"}}]");    // do botão: não conta
+        gravarMensagens(conversaDoAmarelo, 300, 0, "[{\"id\":\"botao_abc\",\"type\":\"function\","
+                + "\"function\":{\"name\":\"relatorio_finalizar\",\"arguments\":\"{}\"}}]", true, false);    // do botão: não conta
         assertThat(repositorio.mensagensDoModeloHoje(amarelo)).isZero();
         assertThat(repositorio.mensagensDoModeloHoje(roxo)).isEqualTo(300);
         modelo.texto("Posso ajudar.");
@@ -151,6 +157,23 @@ class TetoDiarioTest {
         MvcTestResult doRoxoBarrado = doRoxo.post("/api/atlas/conversas/" + conversaDoRoxo + "/mensagens", TEXTO);
         assertThat(doRoxoBarrado).hasStatus(HttpStatus.TOO_MANY_REQUESTS);
         assertThat(modelo.pedidos()).hasSize(1);
+    }
+
+    @Test
+    void aRecusaESemModeloEAMensagemForaDoModeloNaoContamNoTeto() {
+        SessaoDeApi pessoa = entrar(AMARELO);
+        long amarelo = parceria("Cliente Amarelo");
+        long conversa = conversaDe(pessoa, amarelo);
+
+        gravarMensagens(conversa, 150, 0, null, true, false);    // a recusa de fora de escopo: o servidor escreveu, sem chamada de ferramenta
+        gravarMensagens(conversa, 150, 0, null, false, true);    // a resposta fixa de um cartão aberto: fora do modelo
+        gravarMensagens(conversa, 150, 0, null, true, true);
+
+        assertThat(repositorio.mensagensDoModeloHoje(amarelo)).isZero();
+        assertThat(teto.atingido(amarelo)).isFalse();
+        assertThat(repositorio.mensagensDoModeloHojePorParceria()).noneMatch(uso -> uso.parceriaId() == amarelo);
+        gravarMensagensDoModelo(conversa, 3, 0, null);
+        assertThat(repositorio.mensagensDoModeloHoje(amarelo)).isEqualTo(3);   // só a do modelo conta
     }
 
     @Test
@@ -210,6 +233,29 @@ class TetoDiarioTest {
     }
 
     @Test
+    void aVagaMarcadaSoltaDepoisDoTurnoDoConflitoEDoTetoAtingido() {
+        SessaoDeApi pessoa = entrar(AMARELO);
+        long amarelo = parceria("Cliente Amarelo");
+        long conversa = conversaDe(pessoa, amarelo);
+        gravarMensagensDoModelo(conversa, 10, 0, null);
+
+        modelo.texto("Posso ajudar.");
+        assertThat(pessoa.post("/api/atlas/conversas/" + conversa + "/mensagens", TEXTO)).hasStatus(HttpStatus.OK);
+        assertThat(teto.reservadas(amarelo)).as("turno que terminou").isZero();
+
+        // o 409 (turno em andamento) não pode deixar a vaga marcada
+        jdbc.sql("UPDATE atlas_conversa SET turno_desde = now() WHERE id = :c").param("c", conversa).update();
+        assertThat(pessoa.post("/api/atlas/conversas/" + conversa + "/mensagens", TEXTO)).hasStatus(HttpStatus.CONFLICT);
+        assertThat(teto.reservadas(amarelo)).as("turno recusado com 409").isZero();
+        jdbc.sql("UPDATE atlas_conversa SET turno_desde = NULL WHERE id = :c").param("c", conversa).update();
+
+        // o teto atingido (429) também não deixa nada marcado
+        gravarMensagensDoModelo(conversa, 200, 0, null);
+        assertThat(pessoa.post("/api/atlas/conversas/" + conversa + "/mensagens", TEXTO)).hasStatus(HttpStatus.TOO_MANY_REQUESTS);
+        assertThat(teto.reservadas(amarelo)).as("turno recusado com 429").isZero();
+    }
+
+    @Test
     void oTetoVemDaConfiguracao() {
         // O mesmo contador, outro limite: nenhum recurso novo, só o número da propriedade.
         SessaoDeApi pessoa = entrar(AMARELO);
@@ -217,8 +263,8 @@ class TetoDiarioTest {
         long conversa = conversaDe(pessoa, amarelo);
         gravarMensagensDoModelo(conversa, 3, 0, null);
 
-        TetoDiario tetoDeTres = new TetoDiario(repositorio, 3, new ModoDoAtlas(true, false));
-        TetoDiario tetoDeQuatro = new TetoDiario(repositorio, 4, new ModoDoAtlas(true, false));
+        TetoDiario tetoDeTres = new TetoDiario(repositorio, 3, new ModoDoAtlas(true, false, false, false));
+        TetoDiario tetoDeQuatro = new TetoDiario(repositorio, 4, new ModoDoAtlas(true, false, false, false));
 
         assertThat(tetoDeTres.atingido(amarelo)).isTrue();
         assertThatThrownBy(() -> tetoDeTres.exigirFolga(amarelo)).isInstanceOf(LimiteDeUsoException.class).hasMessage(FRASE_DO_429);

@@ -1,6 +1,6 @@
--- Confere o banco depois de V1 a V9 e da amostra R__amostra.sql: contagens, cargas, relatórios, órfãos e uma tentativa de violar cada regra.
+-- Confere o banco depois de V1 a V15 e da amostra R__amostra.sql: contagens, cargas, relatórios, órfãos e uma tentativa de violar cada regra.
 -- Atende o item 1 da Entrega 2 (amostra e verificações), prova as 8 correções do item 8 e, na seção 8, o plano comercial, o
--- catálogo e os dados informados da V7 e, na seção 9, as tabelas do Atlas da V8 e o resumo do raciocínio da V9. Nenhuma linha fica gravada: as tentativas são desfeitas (só as sequências avançam).
+-- catálogo e os dados informados da V7 e, na seção 9, as tabelas do Atlas da V8, o resumo do raciocínio da V9 e o traço do diagnóstico da V10 e, na seção 10, os documentos, os trechos, a busca sem acento e a RLS da V11 e, na seção 11, as fontes citadas, o documento congelado e o plural da busca da V12 e, na seção 12, os prazos da V13 e, na seção 14, o JEV e a conversa sem parceria da V15. Nenhuma linha fica gravada: as tentativas são desfeitas (só as sequências avançam).
 
 -- Como rodar (banco de dev ou de teste com a amostra carregada; sem meta-comandos, serve também para JDBC com o texto inteiro):
 --   PGPASSWORD=portal psql -X -P pager=off -v ON_ERROR_STOP=1 -h localhost -U portal -d <banco> -f verificacao.sql
@@ -69,7 +69,7 @@ END $f$;
 DO $$
 BEGIN
     -- A tabela de controle do Flyway (flyway_schema_history) não é do portal: fica de fora quando o banco foi criado pelo Flyway.
-    PERFORM pg_temp.confere('ESTRUTURA', 'tabelas (29 da modelagem + 4 novas na V1 + 3 na V7 + 7 na V8)', 43,
+    PERFORM pg_temp.confere('ESTRUTURA', 'tabelas (29 da modelagem + 4 novas na V1 + 3 na V7 + 7 na V8 + 1 na V10 + 2 na V11 + 1 na V12 + 1 na V13)', 48,
        (SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
            AND table_name <> 'flyway_schema_history'));
     PERFORM pg_temp.confere('ESTRUTURA', 'visões (7 de consolidação + vw_dado_vigente)', 8,
@@ -77,7 +77,7 @@ BEGIN
     PERFORM pg_temp.confere('ESTRUTURA', 'funções fn_carregar_veiculacoes, fn_carregar_pesquisa, fn_carregar_plano, fn_gerar_relatorio', 4,
        (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
          WHERE n.nspname = 'public' AND p.proname IN ('fn_carregar_veiculacoes', 'fn_carregar_pesquisa', 'fn_carregar_plano', 'fn_gerar_relatorio')));
-    PERFORM pg_temp.confere('ESTRUTURA', 'gatilhos de regra (rn_*)', 17,
+    PERFORM pg_temp.confere('ESTRUTURA', 'gatilhos de regra (rn_*)', 29,
        (SELECT count(*) FROM pg_trigger WHERE NOT tgisinternal AND tgname LIKE 'rn\_%'));
     PERFORM pg_temp.confere('BASE', 'tipos de cota', 3, (SELECT count(*) FROM cota_tipo));
     PERFORM pg_temp.confere('BASE', 'abas do menu', 7, (SELECT count(*) FROM aba));
@@ -241,7 +241,9 @@ BEGIN
     PERFORM pg_temp.confere('ÓRFÃOS', 'veiculações sem carga de origem', 0, (SELECT count(*) FROM veiculacao WHERE carga_id IS NULL));
 
     -- [UPLOAD] Todo material de uma parceria está numa aba (arquivo sem parceria é geral da RBS e não tem aba)
-    PERFORM pg_temp.confere('ÓRFÃOS', 'materiais de parceria sem aba', 0, (SELECT count(*) FROM arquivo WHERE parceria_id IS NOT NULL AND aba_id IS NULL));
+    -- Fora a categoria DOCUMENTO: o anexo de uma parceria (D06, D07, D11 do kit) é um arquivo da parceria sem aba, de propósito.
+    PERFORM pg_temp.confere('ÓRFÃOS', 'materiais de parceria sem aba (fora os documentos do Atlas)', 0,
+       (SELECT count(*) FROM arquivo WHERE parceria_id IS NOT NULL AND aba_id IS NULL AND categoria <> 'DOCUMENTO'));
     -- [DATAS] A amostra conta os horários para trás a partir do dia em que o banco nasce: nada fica no futuro
     PERFORM pg_temp.confere('AMOSTRA', 'horários no futuro (histórico, arquivos, cargas, relatórios, entregas, perguntas, exibições)', 0,
         (SELECT (SELECT count(*) FROM historico WHERE ocorrido_em > now()) + (SELECT count(*) FROM arquivo WHERE enviado_em > now())
@@ -466,7 +468,7 @@ BEGIN
         DELETE FROM parceria WHERE id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027) $q$);
 END $$;
 
--- [ITEM-6] A destinação de cortesias não passa da cota (Amarelo, Arena de sexta: 25 de 25; Verde, Arena de sábado: 2 de 4)
+-- [ITEM-6] A destinação de cortesias não passa da cota (Amarelo, Arena de sexta: 25 de 25; Verde, Arena de sábado: 2 de 3)
 DO $$
 BEGIN
     PERFORM pg_temp.recusa('ITEM-6', 'mais uma cortesia além da cota cheia (25 de 25)', 'rn_cortesia_limite', $q$
@@ -477,7 +479,7 @@ BEGIN
         INSERT INTO cortesia_destinacao (cortesia_cota_id, destinatario_nome, quantidade, registrado_por)
         SELECT cc.id, 'Lote gigante', 522, (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example')
         FROM cortesia_cota cc WHERE cc.setor = 'ARENA' AND cc.dia = 'SEXTA' AND cc.parceria_id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027) $q$);
-    PERFORM pg_temp.recusa('ITEM-6', 'aumentar uma destinação além da cota (Verde: 2 passam a 5 de 4)', 'rn_cortesia_limite', $q$
+    PERFORM pg_temp.recusa('ITEM-6', 'aumentar uma destinação além da cota (Verde: 2 passam a 5 de 3)', 'rn_cortesia_limite', $q$
         UPDATE cortesia_destinacao SET quantidade = 5
         WHERE cortesia_cota_id = (SELECT id FROM cortesia_cota WHERE setor = 'ARENA' AND dia = 'SABADO' AND parceria_id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Verde' AND edicao = 2027)) $q$);
     PERFORM pg_temp.recusa('ITEM-6', 'mover uma destinação para uma cota que não comporta', 'rn_cortesia_limite', $q$
@@ -485,9 +487,9 @@ BEGIN
         WHERE cortesia_cota_id = (SELECT id FROM cortesia_cota WHERE setor = 'ARENA' AND dia = 'SABADO' AND parceria_id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Verde' AND edicao = 2027)) $q$);
     PERFORM pg_temp.recusa('ITEM-6', 'reduzir a cota abaixo do que já foi destinado', 'rn_cortesia_cota_reducao', $q$
         UPDATE cortesia_cota SET quantidade = 20 WHERE setor = 'ARENA' AND dia = 'SEXTA' AND parceria_id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027) $q$);
-    PERFORM pg_temp.aceita('ITEM-6', 'destinar as 2 cortesias que sobram da Verde (4 de 4)', $q$
+    PERFORM pg_temp.aceita('ITEM-6', 'destinar a cortesia que sobra da Verde (3 de 3)', $q$
         INSERT INTO cortesia_destinacao (cortesia_cota_id, destinatario_nome, quantidade, registrado_por)
-        SELECT cc.id, 'Convidados finais', 2, (SELECT id FROM _ver_usr WHERE email = 'marketing@verde.example')
+        SELECT cc.id, 'Convidados finais', 1, (SELECT id FROM _ver_usr WHERE email = 'marketing@verde.example')
         FROM cortesia_cota cc WHERE cc.setor = 'ARENA' AND cc.dia = 'SABADO' AND cc.parceria_id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Verde' AND edicao = 2027) $q$);
     PERFORM pg_temp.afirma('ITEM-6', 'o gatilho trava a linha da cota (SELECT ... FOR UPDATE) contra destinações simultâneas',
         pg_get_functiondef('tg_cortesia_destinacao_limite'::regproc) LIKE '%FOR UPDATE%');
@@ -686,8 +688,6 @@ BEGIN
         (SELECT limite_campo FROM campo_catalogo WHERE chave = 'ativacao.cadastros_consentidos') = 'ativacao.visitantes_total'
         AND (SELECT limite_campo FROM campo_catalogo WHERE chave = 'ativacao.brindes_distribuidos') = 'ativacao.brindes_disponiveis'
         AND (SELECT count(*) FROM campo_catalogo WHERE limite_campo IS NOT NULL) = 2);
-    PERFORM pg_temp.afirma('V7 CATÁLOGO', 'o campo de arquivo da agência ainda não existe (entra na etapa seguinte)',
-        NOT EXISTS (SELECT 1 FROM campo_catalogo WHERE tipo = 'ARQUIVO'));
     PERFORM pg_temp.recusa('V7 CATÁLOGO', 'campo que limita a si mesmo', 'ck_campo_limite_proprio', $q$
         UPDATE campo_catalogo SET limite_campo = chave WHERE chave = 'ativacao.brindes_disponiveis' $q$);
 END $$;
@@ -883,7 +883,7 @@ END $$;
 -- ---------------------------------------------------------------------
 DO $$
 BEGIN
-    PERFORM pg_temp.confere('V8 ESTRUTURA', 'tabelas do Atlas (conversa, mensagem, relatório, solicitação, cálculo, tool_call e decisão)', 7,
+    PERFORM pg_temp.confere('V8 ESTRUTURA', 'tabelas do Atlas (conversa, mensagem, relatório, solicitação, cálculo, tool_call, decisão e, desde a V10, traço e, desde a V12, fonte)', 9,
         (SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE' AND table_name LIKE 'atlas\_%'));
     PERFORM pg_temp.afirma('V8 ESTRUTURA', 'o gatilho rn_atlas_relatorio_congelado existe, com a função tg_atlas_relatorio_congelado',
         EXISTS (SELECT 1 FROM pg_trigger t JOIN pg_proc p ON p.oid = t.tgfoid
@@ -1114,6 +1114,62 @@ BEGIN
         format(c_novo, 'assistant', quote_literal('Conferi os números.')));
 END $$;
 
+-- O traço do diagnóstico (V10): uma linha por etapa do turno, presa à conversa e à parceria dela, com a lista completa de etapas.
+DO $$
+DECLARE
+    -- O molde de cada tentativa: uma conversa do Amarelo e, nela, um traço com a etapa (%1$s), o resultado (%2$s) e a duração (%3$s) dados.
+    c_novo CONSTANT TEXT := $c$
+        DO $d$
+        DECLARE v_conversa BIGINT;
+        BEGIN
+            INSERT INTO atlas_conversa (parceria_id, usuario_id)
+            SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example')
+            RETURNING id INTO v_conversa;
+            INSERT INTO atlas_traco (parceria_id, conversa_id, turno, ordem, etapa, resultado, iniciada_em, duracao_ms)
+            SELECT c.parceria_id, c.id, gen_random_uuid(), 1, '%1$s', '%2$s', now(), %3$s FROM atlas_conversa c WHERE c.id = v_conversa;
+        END $d$ $c$;
+BEGIN
+    PERFORM pg_temp.afirma('V10 ESTRUTURA', 'o CHECK de etapa aceita as 15 etapas do plano',
+        (SELECT count(*) FROM unnest(ARRAY['G1_LIMITES','J1_INTENCAO','J1_CARTAO','LLM_IDA','FERRAMENTA','BUSCA','R3_FONTES','CHECAGEM',
+                                           'R5_RESPOSTA','V2_COERENCIA','LACUNAS','RESUMO','SAIDA','DISJUNTOR','ERRO']) e
+          WHERE (SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = 'ck_atlas_traco_etapa') LIKE '%''' || e || '''%') = 15);
+    PERFORM pg_temp.confere('V10 ESTRUTURA', 'a amostra não traz traço do diagnóstico', 0, (SELECT count(*) FROM atlas_traco));
+    PERFORM pg_temp.aceita('V10 TRACO', 'um traço de LLM_IDA numa conversa do Amarelo', format(c_novo, 'LLM_IDA', 'OK', '12'));
+    PERFORM pg_temp.recusa('V10 TRACO', 'etapa fora da lista', 'ck_atlas_traco_etapa', format(c_novo, 'INVENTADA', 'OK', '12'));
+    PERFORM pg_temp.recusa('V10 TRACO', 'resultado fora da lista', 'ck_atlas_traco_resultado', format(c_novo, 'LLM_IDA', 'TALVEZ', '12'));
+    PERFORM pg_temp.recusa('V10 TRACO', 'duração negativa', 'ck_atlas_traco_duracao', format(c_novo, 'LLM_IDA', 'OK', '-1'));
+    PERFORM pg_temp.recusa('V10 ISOLAMENTO', 'traço da parceria Roxo numa conversa do Amarelo', 'fk_atlas_traco_conversa', $q$
+        DO $d$
+        DECLARE v_conversa BIGINT;
+        BEGIN
+            INSERT INTO atlas_conversa (parceria_id, usuario_id)
+            SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example')
+            RETURNING id INTO v_conversa;
+            INSERT INTO atlas_traco (parceria_id, conversa_id, turno, ordem, etapa, resultado, iniciada_em, duracao_ms)
+            VALUES ((SELECT id FROM _ver_parc WHERE cliente = 'Cliente Roxo' AND edicao = 2027), v_conversa, gen_random_uuid(), 1, 'LLM_IDA', 'OK', now(), 1);
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V10 TRACO', 'duas etapas com a mesma ordem no mesmo turno', 'uq_atlas_traco_ordem', $q$
+        DO $d$
+        DECLARE v_conversa BIGINT; v_turno UUID := gen_random_uuid();
+        BEGIN
+            INSERT INTO atlas_conversa (parceria_id, usuario_id)
+            SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example')
+            RETURNING id INTO v_conversa;
+            INSERT INTO atlas_traco (parceria_id, conversa_id, turno, ordem, etapa, resultado, iniciada_em, duracao_ms)
+            SELECT c.parceria_id, c.id, v_turno, 1, e, 'OK', now(), 1 FROM atlas_conversa c, unnest(ARRAY['G1_LIMITES','LLM_IDA']) e WHERE c.id = v_conversa;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V10 TRACO', 'dados que não são um objeto JSON', 'ck_atlas_traco_dados', $q$
+        DO $d$
+        DECLARE v_conversa BIGINT;
+        BEGIN
+            INSERT INTO atlas_conversa (parceria_id, usuario_id)
+            SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example')
+            RETURNING id INTO v_conversa;
+            INSERT INTO atlas_traco (parceria_id, conversa_id, turno, ordem, etapa, resultado, iniciada_em, duracao_ms, dados)
+            SELECT c.parceria_id, c.id, gen_random_uuid(), 1, 'LLM_IDA', 'OK', now(), 1, '["texto"]' FROM atlas_conversa c WHERE c.id = v_conversa;
+        END $d$ $q$);
+END $$;
+
 -- Órfãos das tabelas novas: esperado 0 em cada linha
 DO $$
 BEGIN
@@ -1131,10 +1187,1223 @@ BEGIN
         (SELECT count(*) FROM atlas_calculo k LEFT JOIN atlas_relatorio r ON r.id = k.relatorio_id WHERE r.id IS NULL));
     PERFORM pg_temp.confere('ÓRFÃOS', 'relatórios do Atlas prontos sem snapshot, ou com snapshot sem estarem prontos', 0,
         (SELECT count(*) FROM atlas_relatorio WHERE (status = 'PRONTO') <> (snapshot IS NOT NULL)));
+    PERFORM pg_temp.confere('ÓRFÃOS', 'traços do Atlas ligados a uma mensagem de outra conversa', 0,
+        (SELECT count(*) FROM atlas_traco t JOIN atlas_mensagem m ON m.id = t.mensagem_id WHERE m.conversa_id <> t.conversa_id));
 END $$;
 
 -- ---------------------------------------------------------------------
--- 10. Resultado: a lista de conferências e, se alguma falhou, o erro final (saída diferente de zero com ON_ERROR_STOP)
+-- 10. V11: documentos, trechos, busca textual sem acento e RLS do atlas_ro
+-- ---------------------------------------------------------------------
+-- O kit de documentos fica confirmado no banco de teste (KitDeDocumentosDeTeste) e pode estar aqui: os documentos montados abaixo têm
+-- chaves e títulos próprios (rls-*, v11-*), e as consultas só olham para eles. Cada tentativa é desfeita.
+
+-- Tentativa de uma operação que o papel não pode fazer: roda o comando COMO o papel e exige a recusa 42501 (permissão negada). O
+-- pg_temp.recusa só aceita a classe 23 (violação de regra), por isso este auxiliar. O papel volta ao normal no fim (a tentativa é desfeita).
+CREATE OR REPLACE FUNCTION pg_temp.nega(p_grupo TEXT, p_conferencia TEXT, p_papel TEXT, p_comando TEXT)
+RETURNS VOID LANGUAGE plpgsql AS $f$
+DECLARE v_estado TEXT := 'ZZ001';
+BEGIN
+    BEGIN
+        EXECUTE format('SET LOCAL ROLE %I', p_papel);
+        EXECUTE p_comando;
+        RAISE EXCEPTION 'desfazer a tentativa' USING ERRCODE = 'ZZ001';
+    EXCEPTION WHEN OTHERS THEN
+        GET STACKED DIAGNOSTICS v_estado = RETURNED_SQLSTATE;
+    END;
+    INSERT INTO _ver (grupo, conferencia, esperado, obtido, ok)
+    VALUES (p_grupo, p_conferencia, 'recusa 42501 (sem permissão)',
+            CASE WHEN v_estado = 'ZZ001' THEN 'ACEITO (sem recusa)' ELSE v_estado END, v_estado = '42501');
+END $f$;
+
+-- Atalhos: a edição, o usuário da RBS, um vetor de 768 dimensões qualquer e um arquivo de documento (da parceria do cliente, ou geral).
+CREATE OR REPLACE FUNCTION pg_temp.ev(p_ano INT) RETURNS BIGINT LANGUAGE sql AS $f$
+    SELECT id FROM evento WHERE nome = 'Planeta Atlântida' AND edicao = p_ano
+$f$;
+CREATE OR REPLACE FUNCTION pg_temp.rbs() RETURNS BIGINT LANGUAGE sql AS $f$
+    SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example'
+$f$;
+CREATE OR REPLACE FUNCTION pg_temp.vetor() RETURNS vector LANGUAGE sql AS $f$
+    SELECT ('[' || array_to_string(array_fill(0.1::float8, ARRAY[768]), ',') || ']')::vector
+$f$;
+CREATE OR REPLACE FUNCTION pg_temp.arq(p_cliente TEXT DEFAULT NULL, p_categoria TEXT DEFAULT 'DOCUMENTO') RETURNS BIGINT LANGUAGE sql AS $f$
+    INSERT INTO arquivo (parceria_id, categoria, nome_original, mime_type, tamanho_bytes, caminho, enviado_por)
+    VALUES ((SELECT id FROM _ver_parc WHERE cliente = p_cliente AND edicao = 2027), p_categoria, 'v11.pdf', 'application/pdf', 10,
+            'teste/' || gen_random_uuid() || '.pdf', pg_temp.rbs())
+    RETURNING id
+$f$;
+
+-- Monta um documento de teste e o arquivo dele; devolve o id do documento. p_estado: AGUARDANDO (só enviado), PROCESSANDO (aprovado,
+-- com um trecho inativo, sem publicar) ou INDEXADO (aprovado, com um trecho e publicado por fn_publicar_documento). A versão é a maior
+-- do grupo mais 1. O trecho se chama "Trecho de <título>".
+CREATE OR REPLACE FUNCTION pg_temp.doc(p_titulo TEXT, p_chave TEXT, p_escopo TEXT, p_ano INT, p_cota TEXT, p_cliente TEXT, p_estado TEXT,
+                                       p_dados BOOLEAN DEFAULT FALSE)
+RETURNS BIGINT LANGUAGE plpgsql AS $f$
+DECLARE
+    v_evento BIGINT := pg_temp.ev(p_ano);
+    v_cota SMALLINT := (SELECT id FROM cota_tipo WHERE codigo = p_cota);
+    v_parceria BIGINT := (SELECT id FROM _ver_parc WHERE cliente = p_cliente AND edicao = p_ano);
+    v_doc BIGINT;
+BEGIN
+    INSERT INTO documento (titulo, chave, versao, tipo, escopo, evento_id, cota_tipo_id, parceria_id, arquivo_id, enviado_por,
+                           contem_dados_pessoais)
+    VALUES (p_titulo, p_chave,
+            (SELECT coalesce(max(versao), 0) + 1 FROM documento WHERE evento_id = v_evento AND escopo = p_escopo
+              AND cota_tipo_id IS NOT DISTINCT FROM v_cota AND parceria_id IS NOT DISTINCT FROM v_parceria AND chave = p_chave),
+            'OUTRO', p_escopo, v_evento, v_cota, v_parceria, pg_temp.arq(p_cliente), pg_temp.rbs(), p_dados)
+    RETURNING id INTO v_doc;
+    IF p_estado <> 'AGUARDANDO' THEN
+        UPDATE documento SET status = 'PROCESSANDO', aprovado_por = pg_temp.rbs(), aprovado_por_perfil = 'ADMIN_RBS', aprovado_em = now()
+         WHERE id = v_doc;
+        INSERT INTO documento_trecho (documento_id, ordem, pagina_inicio, pagina_fim, texto, tokens, embedding)
+        VALUES (v_doc, 1, 1, 1, 'Trecho de ' || p_titulo, 5, pg_temp.vetor());
+        UPDATE documento SET modelo_embedding = 'teste', dimensoes = 768 WHERE id = v_doc;
+        IF p_estado = 'INDEXADO' THEN
+            PERFORM fn_publicar_documento(v_doc);
+        END IF;
+    END IF;
+    RETURN v_doc;
+END $f$;
+
+-- Os dois textos casam na busca (nos dois sentidos), com a mesma função na coluna e na consulta.
+CREATE OR REPLACE FUNCTION pg_temp.casa(p_a TEXT, p_b TEXT) RETURNS BOOLEAN LANGUAGE sql AS $f$
+    SELECT to_tsvector('pt_sem_acento', fn_texto_de_busca(p_a)) @@ plainto_tsquery('pt_sem_acento', fn_texto_de_busca(p_b))
+       AND to_tsvector('pt_sem_acento', fn_texto_de_busca(p_b)) @@ plainto_tsquery('pt_sem_acento', fn_texto_de_busca(p_a))
+$f$;
+
+-- Estrutura
+DO $$
+BEGIN
+    PERFORM pg_temp.afirma('V11 ESTRUTURA', 'a extensão unaccent está em public',
+        (SELECT count(*) = 1 FROM pg_extension e JOIN pg_namespace n ON n.oid = e.extnamespace WHERE e.extname = 'unaccent' AND n.nspname = 'public'));
+    PERFORM pg_temp.afirma('V11 ESTRUTURA', 'a configuração de busca pt_sem_acento existe',
+        (SELECT count(*) = 1 FROM pg_ts_config WHERE cfgname = 'pt_sem_acento'));
+    PERFORM pg_temp.confere('V11 ESTRUTURA', 'funções fn_texto_de_busca, fn_trava_grupo_documento, fn_publicar_documento', 3,
+        (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+          WHERE n.nspname = 'public' AND p.proname IN ('fn_texto_de_busca', 'fn_trava_grupo_documento', 'fn_publicar_documento')));
+    PERFORM pg_temp.afirma('V11 ESTRUTURA', 'fn_texto_de_busca é IMMUTABLE (entra na coluna gerada)',
+        (SELECT provolatile = 'i' FROM pg_proc WHERE proname = 'fn_texto_de_busca' AND pronamespace = 'public'::regnamespace));
+    PERFORM pg_temp.confere('V11 ESTRUTURA', 'gatilhos rn_documento* (7 da V11 e o rn_documento_congelado da V12)', 8,
+        (SELECT count(*) FROM pg_trigger WHERE NOT tgisinternal AND tgname LIKE 'rn\_documento%'));
+    PERFORM pg_temp.afirma('V11 ESTRUTURA', 'tsv é coluna gerada STORED (no PostgreSQL 18 a gerada é virtual por padrão)',
+        (SELECT attgenerated = 's' FROM pg_attribute WHERE attrelid = 'documento_trecho'::regclass AND attname = 'tsv'));
+    PERFORM pg_temp.afirma('V11 ESTRUTURA', 'o vetor do trecho tem 768 dimensões',
+        (SELECT format_type(atttypid, atttypmod) = 'vector(768)' FROM pg_attribute WHERE attrelid = 'documento_trecho'::regclass AND attname = 'embedding'));
+    PERFORM pg_temp.afirma('V11 ESTRUTURA', 'índices HNSW (cosseno) no vetor e GIN no tsvector',
+        (SELECT count(*) = 2 FROM pg_indexes WHERE tablename = 'documento_trecho'
+          AND (indexdef LIKE '%USING hnsw (embedding%' OR indexdef LIKE '%USING gin (tsv)%')));
+    PERFORM pg_temp.afirma('V11 ESTRUTURA', 'o índice único do grupo e da versão é NULLS NOT DISTINCT',
+        (SELECT i.indnullsnotdistinct AND i.indisunique FROM pg_index i WHERE i.indexrelid = 'uq_documento_grupo_versao'::regclass));
+    PERFORM pg_temp.afirma('V11 ESTRUTURA', 'o CHECK de arquivo aceita a categoria DOCUMENTO',
+        (SELECT pg_get_constraintdef(oid) LIKE '%''DOCUMENTO''%' FROM pg_constraint WHERE conname = 'ck_arquivo_categoria'));
+    PERFORM pg_temp.afirma('V11 RLS', 'a RLS está ligada nas duas tabelas e sem FORCE (o dono segue como antes)',
+        (SELECT bool_and(relrowsecurity AND NOT relforcerowsecurity) AND count(*) = 2 FROM pg_class
+          WHERE oid IN ('documento'::regclass, 'documento_trecho'::regclass)));
+    PERFORM pg_temp.afirma('V11 RLS', 'uma política de leitura por tabela, só para o atlas_ro',
+        (SELECT count(*) = 2 AND bool_and(cmd = 'SELECT' AND roles = ARRAY['atlas_ro']::name[]) FROM pg_policies
+          WHERE tablename IN ('documento', 'documento_trecho')));
+    PERFORM pg_temp.afirma('V11 RLS', 'o atlas_ro lê documento e documento_trecho e não grava em nenhuma',
+        has_table_privilege('atlas_ro', 'documento', 'SELECT') AND has_table_privilege('atlas_ro', 'documento_trecho', 'SELECT')
+        AND NOT has_table_privilege('atlas_ro', 'documento', 'INSERT') AND NOT has_table_privilege('atlas_ro', 'documento', 'UPDATE')
+        AND NOT has_table_privilege('atlas_ro', 'documento', 'DELETE') AND NOT has_table_privilege('atlas_ro', 'documento_trecho', 'INSERT')
+        AND NOT has_table_privilege('atlas_ro', 'documento_trecho', 'UPDATE') AND NOT has_table_privilege('atlas_ro', 'documento_trecho', 'DELETE'));
+    PERFORM pg_temp.afirma('V11 RLS', 'o atlas_ro não lê nenhuma outra tabela nem visão do portal (camada 4)',
+        (SELECT NOT coalesce(bool_or(has_table_privilege('atlas_ro', c.oid, 'SELECT')), FALSE) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+          WHERE n.nspname = 'public' AND c.relkind IN ('r', 'v') AND c.relname NOT IN ('documento', 'documento_trecho')));
+END $$;
+
+-- Busca textual: singular e plural, com e sem acento, casam (conferido em 30/10 com 11 pares)
+DO $$
+BEGIN
+    PERFORM pg_temp.afirma('V11 BUSCA', 'inserção ~ inserções', pg_temp.casa('inserção', 'inserções'));
+    PERFORM pg_temp.afirma('V11 BUSCA', 'inserção ~ insercoes', pg_temp.casa('inserção', 'insercoes'));
+    PERFORM pg_temp.afirma('V11 BUSCA', 'inserções ~ insercao', pg_temp.casa('inserções', 'insercao'));
+    PERFORM pg_temp.afirma('V11 BUSCA', 'credencial ~ credenciais', pg_temp.casa('credencial', 'credenciais'));
+    PERFORM pg_temp.afirma('V11 BUSCA', 'informação ~ informacoes', pg_temp.casa('informação', 'informacoes'));
+    PERFORM pg_temp.afirma('V11 BUSCA', 'informações ~ informacao', pg_temp.casa('informações', 'informacao'));
+    PERFORM pg_temp.afirma('V11 BUSCA', 'material ~ materiais', pg_temp.casa('material', 'materiais'));
+    PERFORM pg_temp.afirma('V11 BUSCA', 'geral ~ gerais', pg_temp.casa('geral', 'gerais'));
+    PERFORM pg_temp.afirma('V11 BUSCA', 'gerador ~ geradores', pg_temp.casa('gerador', 'geradores'));
+    PERFORM pg_temp.afirma('V11 BUSCA', 'portão ~ portões', pg_temp.casa('portão', 'portões'));
+    PERFORM pg_temp.afirma('V11 BUSCA', 'tarifa ~ Tarifas', pg_temp.casa('tarifa', 'Tarifas'));
+    PERFORM pg_temp.afirma('V11 BUSCA', 'palavras diferentes não casam (tarifa de energia x credencial)', NOT pg_temp.casa('tarifa de energia', 'credencial'));
+END $$;
+
+-- A coluna tsv indexa a seção e o texto, e acha o plural sem acento (a coluna gerada e a consulta usam a mesma função)
+DO $$
+DECLARE v_achou BOOLEAN;
+BEGIN
+    BEGIN
+        PERFORM pg_temp.doc('v11-busca', 'v11-busca', 'GLOBAL', 2027, NULL, NULL, 'PROCESSANDO');
+        UPDATE documento_trecho SET secao_caminho = '3 Energia › 3.2 Tarifa', texto = 'Cobrança das inserções do patrocinador'
+         WHERE documento_id = (SELECT id FROM documento WHERE titulo = 'v11-busca');
+        SELECT bool_and(tsv @@ plainto_tsquery('pt_sem_acento', fn_texto_de_busca(consulta))) INTO v_achou
+          FROM documento_trecho, unnest(ARRAY['insercao', 'insercoes', 'inserção', 'tarifa', 'energia', 'patrocinador']) AS consulta
+         WHERE documento_id = (SELECT id FROM documento WHERE titulo = 'v11-busca');
+        RAISE EXCEPTION 'desfazer' USING ERRCODE = 'ZZ001';
+    EXCEPTION WHEN SQLSTATE 'ZZ001' THEN NULL;
+    END;
+    PERFORM pg_temp.afirma('V11 BUSCA', 'o tsv gerado acha seção e texto no singular e no plural, com e sem acento', coalesce(v_achou, FALSE));
+END $$;
+
+-- As regras do documento
+DO $$
+BEGIN
+    -- O escopo
+    PERFORM pg_temp.recusa('V11 DOCUMENTO', 'GLOBAL com cota', 'ck_documento_escopo', $q$
+        INSERT INTO documento (titulo, chave, versao, tipo, escopo, evento_id, cota_tipo_id, arquivo_id, enviado_por)
+        VALUES ('v11-x', 'v11-x', 1, 'OUTRO', 'GLOBAL', pg_temp.ev(2027), 1, pg_temp.arq(), pg_temp.rbs()) $q$);
+    PERFORM pg_temp.recusa('V11 DOCUMENTO', 'COTA sem cota', 'ck_documento_escopo', $q$
+        INSERT INTO documento (titulo, chave, versao, tipo, escopo, evento_id, arquivo_id, enviado_por)
+        VALUES ('v11-x', 'v11-x', 1, 'OUTRO', 'COTA', pg_temp.ev(2027), pg_temp.arq(), pg_temp.rbs()) $q$);
+    PERFORM pg_temp.recusa('V11 DOCUMENTO', 'COTA com parceria', 'ck_documento_escopo', $q$
+        INSERT INTO documento (titulo, chave, versao, tipo, escopo, evento_id, cota_tipo_id, parceria_id, arquivo_id, enviado_por)
+        VALUES ('v11-x', 'v11-x', 1, 'OUTRO', 'COTA', pg_temp.ev(2027), 1, (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027),
+                pg_temp.arq('Cliente Amarelo'), pg_temp.rbs()) $q$);
+    PERFORM pg_temp.recusa('V11 DOCUMENTO', 'PARCERIA sem parceria', 'ck_documento_escopo', $q$
+        INSERT INTO documento (titulo, chave, versao, tipo, escopo, evento_id, arquivo_id, enviado_por)
+        VALUES ('v11-x', 'v11-x', 1, 'OUTRO', 'PARCERIA', pg_temp.ev(2027), pg_temp.arq(), pg_temp.rbs()) $q$);
+    PERFORM pg_temp.recusa('V11 DOCUMENTO', 'PARCERIA com cota', 'ck_documento_escopo', $q$
+        INSERT INTO documento (titulo, chave, versao, tipo, escopo, evento_id, cota_tipo_id, parceria_id, arquivo_id, enviado_por)
+        VALUES ('v11-x', 'v11-x', 1, 'OUTRO', 'PARCERIA', pg_temp.ev(2027), 1, (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027),
+                pg_temp.arq('Cliente Amarelo'), pg_temp.rbs()) $q$);
+    -- O arquivo e a edição
+    PERFORM pg_temp.recusa('V11 DOCUMENTO', 'documento GLOBAL com o arquivo de uma parceria', 'rn_documento_coerente', $q$
+        INSERT INTO documento (titulo, chave, versao, tipo, escopo, evento_id, arquivo_id, enviado_por)
+        VALUES ('v11-x', 'v11-x', 1, 'OUTRO', 'GLOBAL', pg_temp.ev(2027), pg_temp.arq('Cliente Amarelo'), pg_temp.rbs()) $q$);
+    PERFORM pg_temp.recusa('V11 DOCUMENTO', 'documento PARCERIA com arquivo geral (sem parceria)', 'rn_documento_coerente', $q$
+        INSERT INTO documento (titulo, chave, versao, tipo, escopo, evento_id, parceria_id, arquivo_id, enviado_por)
+        VALUES ('v11-x', 'v11-x', 1, 'OUTRO', 'PARCERIA', pg_temp.ev(2027), (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027),
+                pg_temp.arq(), pg_temp.rbs()) $q$);
+    PERFORM pg_temp.recusa('V11 ISOLAMENTO', 'documento do Amarelo com o arquivo do Roxo', 'rn_documento_coerente', $q$
+        INSERT INTO documento (titulo, chave, versao, tipo, escopo, evento_id, parceria_id, arquivo_id, enviado_por)
+        VALUES ('v11-x', 'v11-x', 1, 'OUTRO', 'PARCERIA', pg_temp.ev(2027), (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027),
+                pg_temp.arq('Cliente Roxo'), pg_temp.rbs()) $q$);
+    PERFORM pg_temp.recusa('V11 DOCUMENTO', 'arquivo de outra categoria que não DOCUMENTO', 'rn_documento_coerente', $q$
+        INSERT INTO documento (titulo, chave, versao, tipo, escopo, evento_id, arquivo_id, enviado_por)
+        VALUES ('v11-x', 'v11-x', 1, 'OUTRO', 'GLOBAL', pg_temp.ev(2027), pg_temp.arq(NULL, 'OUTRO'), pg_temp.rbs()) $q$);
+    PERFORM pg_temp.recusa('V11 DOCUMENTO', 'documento PARCERIA de uma edição que não é a da parceria', 'rn_documento_coerente', $q$
+        INSERT INTO documento (titulo, chave, versao, tipo, escopo, evento_id, parceria_id, arquivo_id, enviado_por)
+        VALUES ('v11-x', 'v11-x', 1, 'OUTRO', 'PARCERIA', pg_temp.ev(2026), (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027),
+                pg_temp.arq('Cliente Amarelo'), pg_temp.rbs()) $q$);
+    PERFORM pg_temp.recusa('V11 DOCUMENTO', 'um arquivo serve a um documento só', 'uq_documento_arquivo', $q$
+        DO $d$
+        DECLARE v_arq BIGINT := pg_temp.arq();
+        BEGIN
+            INSERT INTO documento (titulo, chave, versao, tipo, escopo, evento_id, arquivo_id, enviado_por)
+            VALUES ('v11-a', 'v11-a', 1, 'OUTRO', 'GLOBAL', pg_temp.ev(2027), v_arq, pg_temp.rbs());
+            INSERT INTO documento (titulo, chave, versao, tipo, escopo, evento_id, arquivo_id, enviado_por)
+            VALUES ('v11-b', 'v11-b', 1, 'OUTRO', 'GLOBAL', pg_temp.ev(2027), v_arq, pg_temp.rbs());
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V11 DOCUMENTO', 'chave que não é um identificador (maiúsculas e espaço)', 'documento_chave_check', $q$
+        INSERT INTO documento (titulo, chave, versao, tipo, escopo, evento_id, arquivo_id, enviado_por)
+        VALUES ('v11-x', 'Manual Operacoes', 1, 'OUTRO', 'GLOBAL', pg_temp.ev(2027), pg_temp.arq(), pg_temp.rbs()) $q$);
+    PERFORM pg_temp.recusa('V11 DOCUMENTO', 'tipo fora da lista', 'documento_tipo_check', $q$
+        INSERT INTO documento (titulo, chave, versao, tipo, escopo, evento_id, arquivo_id, enviado_por)
+        VALUES ('v11-x', 'v11-x', 1, 'PLANILHA', 'GLOBAL', pg_temp.ev(2027), pg_temp.arq(), pg_temp.rbs()) $q$);
+    -- O grupo e a versão
+    PERFORM pg_temp.recusa('V11 GRUPO', 'dois documentos GLOBAL iguais (mesma edição, chave e versão): a cota e a parceria são nulas', 'uq_documento_grupo_versao', $q$
+        DO $d$
+        BEGIN
+            PERFORM pg_temp.doc('v11-dup', 'v11-dup', 'GLOBAL', 2027, NULL, NULL, 'AGUARDANDO');
+            INSERT INTO documento (titulo, chave, versao, tipo, escopo, evento_id, arquivo_id, enviado_por)
+            VALUES ('v11-dup', 'v11-dup', 1, 'OUTRO', 'GLOBAL', pg_temp.ev(2027), pg_temp.arq(), pg_temp.rbs());
+        END $d$ $q$);
+    PERFORM pg_temp.aceita('V11 GRUPO', 'anexos de duas parcerias com a mesma chave convivem, os dois na versão 1', $q$
+        DO $d$
+        BEGIN
+            PERFORM pg_temp.doc('v11-anexo-amarelo', 'v11-anexo', 'PARCERIA', 2027, NULL, 'Cliente Amarelo', 'INDEXADO');
+            PERFORM pg_temp.doc('v11-anexo-roxo', 'v11-anexo', 'PARCERIA', 2027, NULL, 'Cliente Roxo', 'INDEXADO');
+            IF (SELECT count(*) FROM documento WHERE chave = 'v11-anexo' AND versao = 1 AND status = 'INDEXADO') <> 2 THEN
+                RAISE EXCEPTION 'os dois anexos deviam estar indexados na versão 1';
+            END IF;
+        END $d$ $q$);
+    PERFORM pg_temp.aceita('V11 GRUPO', 'a mesma chave em outra edição nasce na versão 1 e não toca a outra (o D10)', $q$
+        DO $d$
+        BEGIN
+            PERFORM pg_temp.doc('v11-manual-27', 'v11-manual', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+            PERFORM pg_temp.doc('v11-manual-26', 'v11-manual', 'GLOBAL', 2026, NULL, NULL, 'INDEXADO');
+            IF (SELECT count(*) FROM documento WHERE chave = 'v11-manual' AND versao = 1 AND status = 'INDEXADO') <> 2 THEN
+                RAISE EXCEPTION 'as duas edições deviam estar indexadas na versão 1';
+            END IF;
+        END $d$ $q$);
+    PERFORM pg_temp.aceita('V11 GRUPO', 'o mesmo plano em cotas diferentes convive (D03, D04 e D05)', $q$
+        DO $d$
+        BEGIN
+            PERFORM pg_temp.doc('v11-plano-m', 'v11-plano', 'COTA', 2027, 'MASTER', NULL, 'INDEXADO');
+            PERFORM pg_temp.doc('v11-plano-g', 'v11-plano', 'COTA', 2027, 'SUBCOTA_G', NULL, 'INDEXADO');
+            PERFORM pg_temp.doc('v11-plano-s', 'v11-plano', 'COTA', 2027, 'SUBCOTA', NULL, 'INDEXADO');
+            IF (SELECT count(*) FROM documento WHERE chave = 'v11-plano' AND status = 'INDEXADO') <> 3 THEN
+                RAISE EXCEPTION 'os três planos deviam estar indexados';
+            END IF;
+        END $d$ $q$);
+END $$;
+
+-- O ciclo de status
+DO $$
+BEGIN
+    PERFORM pg_temp.recusa('V11 STATUS', 'documento novo nasce INDEXADO', 'rn_documento_transicao', $q$
+        INSERT INTO documento (titulo, chave, versao, tipo, escopo, evento_id, arquivo_id, enviado_por, status)
+        VALUES ('v11-x', 'v11-x', 1, 'OUTRO', 'GLOBAL', pg_temp.ev(2027), pg_temp.arq(), pg_temp.rbs(), 'INDEXADO') $q$);
+    PERFORM pg_temp.recusa('V11 STATUS', 'documento novo nasce ERRO sem dizer o erro', 'ck_documento_erro', $q$
+        INSERT INTO documento (titulo, chave, versao, tipo, escopo, evento_id, arquivo_id, enviado_por, status)
+        VALUES ('v11-x', 'v11-x', 1, 'OUTRO', 'GLOBAL', pg_temp.ev(2027), pg_temp.arq(), pg_temp.rbs(), 'ERRO') $q$);
+    PERFORM pg_temp.aceita('V11 STATUS', 'documento novo nasce ERRO com o motivo e sem aprovado_por (PDF sem texto)', $q$
+        INSERT INTO documento (titulo, chave, versao, tipo, escopo, evento_id, arquivo_id, enviado_por, status, erro)
+        VALUES ('v11-x', 'v11-x', 1, 'OUTRO', 'GLOBAL', pg_temp.ev(2027), pg_temp.arq(), pg_temp.rbs(), 'ERRO', 'Sem texto extraível; OCR fora do escopo.') $q$);
+    PERFORM pg_temp.recusa('V11 STATUS', 'aguardando aprovação direto para INDEXADO', 'rn_documento_transicao', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v11-t1', 'v11-t1', 'GLOBAL', 2027, NULL, NULL, 'AGUARDANDO');
+        BEGIN
+            UPDATE documento SET status = 'INDEXADO' WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V11 STATUS', 'aprovar sem dizer quem aprovou', 'rn_documento_aprovacao', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v11-t2', 'v11-t2', 'GLOBAL', 2027, NULL, NULL, 'AGUARDANDO');
+        BEGIN
+            UPDATE documento SET status = 'PROCESSANDO' WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V11 PERMISSAO', 'aprovar com um Admin Patrocinador (a chave composta só aceita a RBS)', 'fk_documento_aprovador', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v11-t3', 'v11-t3', 'GLOBAL', 2027, NULL, NULL, 'AGUARDANDO');
+        BEGIN
+            UPDATE documento SET status = 'PROCESSANDO', aprovado_por = (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example'),
+                                 aprovado_por_perfil = 'ADMIN_RBS', aprovado_em = now() WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V11 PERMISSAO', 'aprovado_por_perfil que não é ADMIN_RBS', 'documento_aprovado_por_perfil_check', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v11-t4', 'v11-t4', 'GLOBAL', 2027, NULL, NULL, 'AGUARDANDO');
+        BEGIN
+            UPDATE documento SET status = 'PROCESSANDO', aprovado_por = (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example'),
+                                 aprovado_por_perfil = 'ADMIN_PATROCINADOR', aprovado_em = now() WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V11 DADOS PESSOAIS', 'aprovar documento com suspeita de dado pessoal (o D11)', 'rn_documento_dados_pessoais', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v11-t5', 'v11-t5', 'PARCERIA', 2027, NULL, 'Cliente Verde', 'AGUARDANDO', TRUE);
+        BEGIN
+            UPDATE documento SET status = 'PROCESSANDO', aprovado_por = pg_temp.rbs(), aprovado_por_perfil = 'ADMIN_RBS', aprovado_em = now() WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V11 DADOS PESSOAIS', 'aprovar um documento que nasceu em ERRO e tem suspeita de dado pessoal', 'rn_documento_dados_pessoais', $q$
+        DO $d$
+        DECLARE v_id BIGINT;
+        BEGIN
+            INSERT INTO documento (titulo, chave, versao, tipo, escopo, evento_id, arquivo_id, status, erro, contem_dados_pessoais, enviado_por)
+            VALUES ('v11-t6', 'v11-t6', 1, 'OUTRO', 'GLOBAL', pg_temp.ev(2027), pg_temp.arq(), 'ERRO', 'Falha de teste.', TRUE, pg_temp.rbs())
+            RETURNING id INTO v_id;
+            UPDATE documento SET status = 'PROCESSANDO', erro = NULL, aprovado_por = pg_temp.rbs(), aprovado_por_perfil = 'ADMIN_RBS',
+                                 aprovado_em = now() WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V11 STATUS', 'reindexar documento que nasceu em ERRO (nunca foi aprovado)', 'rn_documento_aprovacao', $q$
+        DO $d$
+        DECLARE v_id BIGINT;
+        BEGIN
+            INSERT INTO documento (titulo, chave, versao, tipo, escopo, evento_id, arquivo_id, enviado_por, status, erro)
+            VALUES ('v11-t7', 'v11-t7', 1, 'OUTRO', 'GLOBAL', pg_temp.ev(2027), pg_temp.arq(), pg_temp.rbs(), 'ERRO', 'Sem texto extraível.') RETURNING id INTO v_id;
+            UPDATE documento SET status = 'PROCESSANDO', erro = NULL WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.aceita('V11 STATUS', 'reindexar documento aprovado que deu erro (ERRO volta a PROCESSANDO)', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v11-t8', 'v11-t8', 'GLOBAL', 2027, NULL, NULL, 'PROCESSANDO');
+        BEGIN
+            UPDATE documento SET status = 'ERRO', erro = 'Falha de teste.' WHERE id = v_id;
+            UPDATE documento SET status = 'PROCESSANDO', erro = NULL WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V11 STATUS', 'documento indexado voltando a PROCESSANDO', 'rn_documento_transicao', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v11-t9', 'v11-t9', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+        BEGIN
+            UPDATE documento SET status = 'PROCESSANDO' WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V11 STATUS', 'documento recusado voltando a PROCESSANDO', 'rn_documento_transicao', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v11-t10', 'v11-t10', 'GLOBAL', 2027, NULL, NULL, 'AGUARDANDO');
+        BEGIN
+            UPDATE documento SET status = 'RECUSADO' WHERE id = v_id;
+            UPDATE documento SET status = 'PROCESSANDO', aprovado_por = pg_temp.rbs(), aprovado_por_perfil = 'ADMIN_RBS', aprovado_em = now() WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V11 STATUS', 'documento revogado voltando a INDEXADO', 'rn_documento_transicao', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v11-t11', 'v11-t11', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+        BEGIN
+            UPDATE documento SET status = 'REVOGADO', revogado_por = pg_temp.rbs(), revogado_em = now() WHERE id = v_id;
+            UPDATE documento SET status = 'INDEXADO' WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V11 STATUS', 'indexar sem nenhum trecho', 'ck_documento_indexado', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v11-t12', 'v11-t12', 'GLOBAL', 2027, NULL, NULL, 'AGUARDANDO');
+        BEGIN
+            UPDATE documento SET status = 'PROCESSANDO', aprovado_por = pg_temp.rbs(), aprovado_por_perfil = 'ADMIN_RBS', aprovado_em = now() WHERE id = v_id;
+            UPDATE documento SET status = 'INDEXADO', modelo_embedding = 'teste', dimensoes = 768 WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V11 STATUS', 'revogar sem dizer quem revogou', 'ck_documento_revogado', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v11-t13', 'v11-t13', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+        BEGIN
+            UPDATE documento SET status = 'REVOGADO' WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.aceita('V11 STATUS', 'um documento substituído ainda pode ser revogado', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v11-t14', 'v11-t14', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+        BEGIN
+            PERFORM pg_temp.doc('v11-t14-v2', 'v11-t14', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+            UPDATE documento SET status = 'REVOGADO', revogado_por = pg_temp.rbs(), revogado_em = now() WHERE id = v_id AND status = 'SUBSTITUIDO';
+            IF (SELECT status FROM documento WHERE id = v_id) <> 'REVOGADO' THEN
+                RAISE EXCEPTION 'a v1 substituída devia ter sido revogada';
+            END IF;
+        END $d$ $q$);
+END $$;
+
+-- Os trechos e fn_publicar_documento
+DO $$
+DECLARE
+    v_ok_substituicao BOOLEAN; v_ok_anexos BOOLEAN; v_ok_edicoes BOOLEAN; v_ok_revogacao BOOLEAN; v_ok_antiga BOOLEAN; v_ok_copia BOOLEAN;
+    v_ok_publicar_duas_vezes BOOLEAN;
+    v1 BIGINT; v2 BIGINT; a BIGINT; b BIGINT;
+BEGIN
+    -- v2 desativa a v1 na mesma transação
+    BEGIN
+        v1 := pg_temp.doc('v11-s', 'v11-s', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+        v2 := pg_temp.doc('v11-s-v2', 'v11-s', 'GLOBAL', 2027, NULL, NULL, 'PROCESSANDO');
+        PERFORM fn_publicar_documento(v2);
+        v_ok_substituicao := (SELECT status FROM documento WHERE id = v1) = 'SUBSTITUIDO'
+            AND (SELECT status FROM documento WHERE id = v2) = 'INDEXADO'
+            AND (SELECT count(*) FROM documento_trecho WHERE documento_id = v1 AND ativo) = 0
+            AND (SELECT count(*) FROM documento_trecho WHERE documento_id = v2 AND ativo) = 1
+            AND (SELECT versao FROM documento WHERE id = v2) = 2 AND (SELECT trechos FROM documento WHERE id = v2) = 1;
+        BEGIN
+            PERFORM fn_publicar_documento(v2);
+            v_ok_publicar_duas_vezes := FALSE;
+        EXCEPTION WHEN OTHERS THEN
+            v_ok_publicar_duas_vezes := TRUE;
+        END;
+        RAISE EXCEPTION 'desfazer' USING ERRCODE = 'ZZ001';
+    EXCEPTION WHEN SQLSTATE 'ZZ001' THEN NULL;
+    END;
+    PERFORM pg_temp.afirma('V11 PUBLICAR', 'publicar a v2 passa a v1 a SUBSTITUIDO com os trechos inativos e a v2 a INDEXADO com os trechos ativos', coalesce(v_ok_substituicao, FALSE));
+    PERFORM pg_temp.afirma('V11 PUBLICAR', 'publicar um documento que não está em processamento é recusado', coalesce(v_ok_publicar_duas_vezes, FALSE));
+
+    -- Publicar um anexo não toca o de outra parceria (mesma chave)
+    BEGIN
+        a := pg_temp.doc('v11-an-a', 'v11-an', 'PARCERIA', 2027, NULL, 'Cliente Amarelo', 'INDEXADO');
+        b := pg_temp.doc('v11-an-r', 'v11-an', 'PARCERIA', 2027, NULL, 'Cliente Roxo', 'INDEXADO');
+        v2 := pg_temp.doc('v11-an-a2', 'v11-an', 'PARCERIA', 2027, NULL, 'Cliente Amarelo', 'PROCESSANDO');
+        PERFORM fn_publicar_documento(v2);
+        v_ok_anexos := (SELECT status FROM documento WHERE id = a) = 'SUBSTITUIDO' AND (SELECT status FROM documento WHERE id = b) = 'INDEXADO'
+            AND (SELECT count(*) FROM documento_trecho WHERE documento_id = b AND ativo) = 1;
+        RAISE EXCEPTION 'desfazer' USING ERRCODE = 'ZZ001';
+    EXCEPTION WHEN SQLSTATE 'ZZ001' THEN NULL;
+    END;
+    PERFORM pg_temp.afirma('V11 PUBLICAR', 'publicar a v2 do anexo do Amarelo não toca o anexo do Roxo (mesma chave)', coalesce(v_ok_anexos, FALSE));
+
+    -- Publicar a edição de 2027 não toca a de 2026 (o D10)
+    BEGIN
+        a := pg_temp.doc('v11-ed-26', 'v11-ed', 'GLOBAL', 2026, NULL, NULL, 'INDEXADO');
+        v2 := pg_temp.doc('v11-ed-27', 'v11-ed', 'GLOBAL', 2027, NULL, NULL, 'PROCESSANDO');
+        PERFORM fn_publicar_documento(v2);
+        v_ok_edicoes := (SELECT status FROM documento WHERE id = a) = 'INDEXADO' AND (SELECT versao FROM documento WHERE id = v2) = 1
+            AND (SELECT count(*) FROM documento_trecho WHERE documento_id = a AND ativo) = 1;
+        RAISE EXCEPTION 'desfazer' USING ERRCODE = 'ZZ001';
+    EXCEPTION WHEN SQLSTATE 'ZZ001' THEN NULL;
+    END;
+    PERFORM pg_temp.afirma('V11 PUBLICAR', 'publicar o manual de 2027 não toca o de 2026', coalesce(v_ok_edicoes, FALSE));
+
+    -- A versão mais velha que termina depois da mais nova já indexada nasce substituída
+    BEGIN
+        v1 := pg_temp.doc('v11-vel', 'v11-vel', 'GLOBAL', 2027, NULL, NULL, 'PROCESSANDO');
+        v2 := pg_temp.doc('v11-vel-v2', 'v11-vel', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+        PERFORM fn_publicar_documento(v1);
+        v_ok_antiga := (SELECT status FROM documento WHERE id = v1) = 'SUBSTITUIDO' AND (SELECT status FROM documento WHERE id = v2) = 'INDEXADO'
+            AND (SELECT count(*) FROM documento_trecho WHERE documento_id = v1 AND ativo) = 0
+            AND (SELECT count(*) FROM documento_trecho WHERE documento_id = v2 AND ativo) = 1;
+        RAISE EXCEPTION 'desfazer' USING ERRCODE = 'ZZ001';
+    EXCEPTION WHEN SQLSTATE 'ZZ001' THEN NULL;
+    END;
+    PERFORM pg_temp.afirma('V11 PUBLICAR', 'a versão velha que termina depois da nova fica substituída, sem trecho ativo', coalesce(v_ok_antiga, FALSE));
+
+    -- Revogar desliga os trechos na hora
+    BEGIN
+        a := pg_temp.doc('v11-rev', 'v11-rev', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+        UPDATE documento SET status = 'REVOGADO', revogado_por = pg_temp.rbs(), revogado_em = now() WHERE id = a;
+        v_ok_revogacao := (SELECT count(*) FROM documento_trecho WHERE documento_id = a AND ativo) = 0
+            AND (SELECT count(*) FROM documento_trecho WHERE documento_id = a) = 1;
+        RAISE EXCEPTION 'desfazer' USING ERRCODE = 'ZZ001';
+    EXCEPTION WHEN SQLSTATE 'ZZ001' THEN NULL;
+    END;
+    PERFORM pg_temp.afirma('V11 PUBLICAR', 'revogar o documento desliga os trechos na hora (e não os apaga)', coalesce(v_ok_revogacao, FALSE));
+
+    -- O trecho copia do documento o escopo, a edição, a cota, a parceria e a versão, qualquer que seja o valor dado
+    BEGIN
+        a := pg_temp.doc('v11-cp', 'v11-cp', 'PARCERIA', 2027, NULL, 'Cliente Amarelo', 'AGUARDANDO');
+        UPDATE documento SET status = 'PROCESSANDO', aprovado_por = pg_temp.rbs(), aprovado_por_perfil = 'ADMIN_RBS', aprovado_em = now() WHERE id = a;
+        INSERT INTO documento_trecho (documento_id, escopo, evento_id, cota_tipo_id, parceria_id, versao, ordem, pagina_inicio, pagina_fim, texto, tokens, embedding)
+        VALUES (a, 'GLOBAL', pg_temp.ev(2026), 1, (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Roxo' AND edicao = 2027), 99, 1, 1, 1, 'x', 1, pg_temp.vetor());
+        v_ok_copia := (SELECT (t.escopo, t.evento_id, t.cota_tipo_id, t.parceria_id, t.versao) IS NOT DISTINCT FROM (d.escopo, d.evento_id, d.cota_tipo_id, d.parceria_id, d.versao)
+                         FROM documento_trecho t JOIN documento d ON d.id = t.documento_id WHERE t.documento_id = a);
+        RAISE EXCEPTION 'desfazer' USING ERRCODE = 'ZZ001';
+    EXCEPTION WHEN SQLSTATE 'ZZ001' THEN NULL;
+    END;
+    PERFORM pg_temp.afirma('V11 TRECHO', 'o trecho copia o escopo, a edição, a cota, a parceria e a versão do documento', coalesce(v_ok_copia, FALSE));
+
+    PERFORM pg_temp.recusa('V11 TRECHO', 'trocar o escopo de um trecho', 'rn_documento_trecho_coerente', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v11-t20', 'v11-t20', 'PARCERIA', 2027, NULL, 'Cliente Amarelo', 'PROCESSANDO');
+        BEGIN
+            UPDATE documento_trecho SET escopo = 'GLOBAL', parceria_id = NULL WHERE documento_id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V11 TRECHO', 'mover um trecho para outro documento', 'rn_documento_trecho_coerente', $q$
+        DO $d$
+        DECLARE
+            v_de BIGINT := pg_temp.doc('v11-t21', 'v11-t21', 'PARCERIA', 2027, NULL, 'Cliente Amarelo', 'PROCESSANDO');
+            v_para BIGINT := pg_temp.doc('v11-t21b', 'v11-t21b', 'GLOBAL', 2027, NULL, NULL, 'AGUARDANDO');
+        BEGIN
+            UPDATE documento_trecho SET documento_id = v_para WHERE documento_id = v_de;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V11 TRECHO', 'trecho ativo de documento que não está indexado', 'rn_documento_trecho_ativo', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v11-t22', 'v11-t22', 'GLOBAL', 2027, NULL, NULL, 'PROCESSANDO');
+        BEGIN
+            UPDATE documento_trecho SET ativo = TRUE WHERE documento_id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V11 TRECHO', 'dois trechos com a mesma ordem no mesmo documento', 'uq_documento_trecho_ordem', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v11-t23', 'v11-t23', 'GLOBAL', 2027, NULL, NULL, 'PROCESSANDO');
+        BEGIN
+            INSERT INTO documento_trecho (documento_id, ordem, pagina_inicio, pagina_fim, texto, tokens, embedding)
+            VALUES (v_id, 1, 1, 1, 'repetido', 1, pg_temp.vetor());
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V11 TRECHO', 'trecho que termina antes de começar', 'ck_documento_trecho_paginas', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v11-t24', 'v11-t24', 'GLOBAL', 2027, NULL, NULL, 'PROCESSANDO');
+        BEGIN
+            INSERT INTO documento_trecho (documento_id, ordem, pagina_inicio, pagina_fim, texto, tokens, embedding)
+            VALUES (v_id, 2, 3, 2, 'invertido', 1, pg_temp.vetor());
+        END $d$ $q$);
+END $$;
+
+-- RLS: o que o atlas_ro enxerga. Sem contexto, nada; com o contexto do Amarelo em 2027, só o que é dele. Os documentos são montados
+-- como o dono do banco (que a RLS não alcança) e lidos depois de SET LOCAL ROLE atlas_ro.
+DO $$
+DECLARE
+    v_amarelo BIGINT := (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027);
+    v_evento27 BIGINT := pg_temp.ev(2027);
+    v_master SMALLINT := (SELECT id FROM cota_tipo WHERE codigo = 'MASTER');
+    v_subcota_g SMALLINT := (SELECT id FROM cota_tipo WHERE codigo = 'SUBCOTA_G');
+    v_roxo BIGINT := (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Roxo' AND edicao = 2027);
+    v_evento26 BIGINT := pg_temp.ev(2026);
+    v_revogado BIGINT;
+    n_nunca_definido INT; n_texto_vazio INT; n_documentos_visiveis INT;
+    v_visiveis TEXT[]; v_visiveis_da_cota_g TEXT[]; v_visiveis_de_2026 TEXT[]; n_sem_parceria INT;
+BEGIN
+    BEGIN
+        PERFORM pg_temp.doc('rls-global-2027', 'rls-global', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+        PERFORM pg_temp.doc('rls-global-2026', 'rls-global', 'GLOBAL', 2026, NULL, NULL, 'INDEXADO');
+        PERFORM pg_temp.doc('rls-cota-master-2027', 'rls-cota', 'COTA', 2027, 'MASTER', NULL, 'INDEXADO');
+        PERFORM pg_temp.doc('rls-cota-subcota-g-2027', 'rls-cota', 'COTA', 2027, 'SUBCOTA_G', NULL, 'INDEXADO');
+        PERFORM pg_temp.doc('rls-cota-subcota-2027', 'rls-cota', 'COTA', 2027, 'SUBCOTA', NULL, 'INDEXADO');
+        PERFORM pg_temp.doc('rls-parceria-amarelo-2027', 'rls-anexo', 'PARCERIA', 2027, NULL, 'Cliente Amarelo', 'INDEXADO');
+        PERFORM pg_temp.doc('rls-parceria-roxo-2027', 'rls-anexo', 'PARCERIA', 2027, NULL, 'Cliente Roxo', 'INDEXADO');
+        PERFORM pg_temp.doc('rls-parceria-verde-2027', 'rls-anexo', 'PARCERIA', 2027, NULL, 'Cliente Verde', 'INDEXADO');
+        PERFORM pg_temp.doc('rls-aguardando-2027', 'rls-aguardando', 'GLOBAL', 2027, NULL, NULL, 'AGUARDANDO');
+        PERFORM pg_temp.doc('rls-processando-2027', 'rls-processando', 'GLOBAL', 2027, NULL, NULL, 'PROCESSANDO');
+        v_revogado := pg_temp.doc('rls-revogado-2027', 'rls-revogado', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+        UPDATE documento SET status = 'REVOGADO', revogado_por = pg_temp.rbs(), revogado_em = now() WHERE id = v_revogado;
+
+        SET LOCAL ROLE atlas_ro;
+        -- 1. Sem contexto (o parâmetro nunca foi definido nesta sessão): não vê nada.
+        SELECT count(*) INTO n_nunca_definido FROM documento_trecho WHERE texto LIKE 'Trecho de rls-%';
+        -- 2. Depois de um set_config(..., true) o parâmetro fica como texto vazio: continua sem ver nada, e sem erro de conversão.
+        PERFORM set_config('app.evento_id', '', true);
+        PERFORM set_config('app.cota_tipo_id', '', true);
+        PERFORM set_config('app.parceria_id', '', true);
+        SELECT count(*) INTO n_texto_vazio FROM documento_trecho WHERE texto LIKE 'Trecho de rls-%';
+        -- 3. O contexto do Amarelo em 2027 (Master).
+        PERFORM set_config('app.evento_id', v_evento27::text, true);
+        PERFORM set_config('app.cota_tipo_id', v_master::text, true);
+        PERFORM set_config('app.parceria_id', v_amarelo::text, true);
+        SELECT array_agg(substr(texto, 11) ORDER BY texto) INTO v_visiveis FROM documento_trecho WHERE texto LIKE 'Trecho de rls-%';
+        SELECT count(*) INTO n_documentos_visiveis FROM documento WHERE titulo LIKE 'rls-%';
+        -- 4. Sem a parceria no contexto, o anexo de ninguém aparece; a cota e a edição continuam valendo.
+        PERFORM set_config('app.parceria_id', '', true);
+        SELECT count(*) INTO n_sem_parceria FROM documento_trecho WHERE texto LIKE 'Trecho de rls-parceria%';
+        -- 5. A Subcota G (o Roxo) em 2027, sem a parceria Amarelo.
+        PERFORM set_config('app.cota_tipo_id', v_subcota_g::text, true);
+        PERFORM set_config('app.parceria_id', v_roxo::text, true);
+        SELECT array_agg(substr(texto, 11) ORDER BY texto) INTO v_visiveis_da_cota_g FROM documento_trecho WHERE texto LIKE 'Trecho de rls-%';
+        -- 6. A edição de 2026: só o global de 2026.
+        PERFORM set_config('app.evento_id', v_evento26::text, true);
+        SELECT array_agg(substr(texto, 11) ORDER BY texto) INTO v_visiveis_de_2026 FROM documento_trecho WHERE texto LIKE 'Trecho de rls-%';
+        RESET ROLE;
+        RAISE EXCEPTION 'desfazer' USING ERRCODE = 'ZZ001';
+    EXCEPTION WHEN SQLSTATE 'ZZ001' THEN NULL;
+    END;
+    PERFORM pg_temp.confere('V11 RLS', 'sem contexto (parâmetro nunca definido), o atlas_ro não vê nenhum trecho', 0, n_nunca_definido);
+    PERFORM pg_temp.confere('V11 RLS', 'com o contexto vazio (depois de um set_config local), não vê nada e não dá erro de conversão', 0, n_texto_vazio);
+    PERFORM pg_temp.afirma('V11 RLS', 'no contexto do Amarelo em 2027 (Master) vê o GLOBAL de 2027, a COTA Master e o anexo do Amarelo, e só isso',
+        v_visiveis IS NOT DISTINCT FROM ARRAY['rls-cota-master-2027', 'rls-global-2027', 'rls-parceria-amarelo-2027']);
+    PERFORM pg_temp.confere('V11 RLS', 'a tabela documento mostra os mesmos 3 (indexados): nem aguardando, processando, revogado, 2026, outra cota ou outra parceria', 3, n_documentos_visiveis);
+    PERFORM pg_temp.confere('V11 RLS', 'sem a parceria no contexto, nenhum anexo de parceria aparece', 0, n_sem_parceria);
+    PERFORM pg_temp.afirma('V11 RLS', 'no contexto do Roxo (Subcota G) vê o GLOBAL, a COTA Subcota G e o anexo do Roxo, e não o do Amarelo nem o do Verde',
+        v_visiveis_da_cota_g IS NOT DISTINCT FROM ARRAY['rls-cota-subcota-g-2027', 'rls-global-2027', 'rls-parceria-roxo-2027']);
+    PERFORM pg_temp.afirma('V11 RLS', 'no contexto de 2026 vê só o GLOBAL de 2026',
+        v_visiveis_de_2026 IS NOT DISTINCT FROM ARRAY['rls-global-2026']);
+
+    PERFORM pg_temp.nega('V11 RLS', 'atlas_ro: SELECT em parceria', 'atlas_ro', 'SELECT count(*) FROM parceria');
+    PERFORM pg_temp.nega('V11 RLS', 'atlas_ro: SELECT em arquivo', 'atlas_ro', 'SELECT count(*) FROM arquivo');
+    PERFORM pg_temp.nega('V11 RLS', 'atlas_ro: SELECT em usuario', 'atlas_ro', 'SELECT count(*) FROM usuario');
+    PERFORM pg_temp.nega('V11 RLS', 'atlas_ro: SELECT em dado_informado', 'atlas_ro', 'SELECT count(*) FROM dado_informado');
+    PERFORM pg_temp.nega('V11 RLS', 'atlas_ro: INSERT em documento_trecho', 'atlas_ro', $q$
+        INSERT INTO documento_trecho (documento_id, ordem, pagina_inicio, pagina_fim, texto, tokens, embedding)
+        VALUES (1, 1, 1, 1, 'x', 1, NULL) $q$);
+    PERFORM pg_temp.nega('V11 RLS', 'atlas_ro: UPDATE em documento', 'atlas_ro', $q$ UPDATE documento SET titulo = 'x' $q$);
+    PERFORM pg_temp.nega('V11 RLS', 'atlas_ro: DELETE em documento_trecho', 'atlas_ro', 'DELETE FROM documento_trecho');
+END $$;
+
+-- ---------------------------------------------------------------------
+-- 11. V12: as fontes que a resposta cita, o documento congelado e o plural da busca
+-- ---------------------------------------------------------------------
+-- Uma mensagem do assistente numa conversa do Amarelo (ou, com p_papel, de outro papel) e o trecho de um documento indexado.
+CREATE OR REPLACE FUNCTION pg_temp.msg(p_papel TEXT DEFAULT 'assistant') RETURNS BIGINT LANGUAGE plpgsql AS $f$
+DECLARE v_conversa BIGINT; v_msg BIGINT;
+BEGIN
+    INSERT INTO atlas_conversa (parceria_id, usuario_id)
+    SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example')
+    RETURNING id INTO v_conversa;
+    INSERT INTO atlas_mensagem (conversa_id, ordem, papel, conteudo) VALUES (v_conversa, 1, p_papel, 'texto') RETURNING id INTO v_msg;
+    RETURN v_msg;
+END $f$;
+CREATE OR REPLACE FUNCTION pg_temp.trecho_de(p_documento BIGINT) RETURNS BIGINT LANGUAGE sql AS $f$
+    SELECT id FROM documento_trecho WHERE documento_id = p_documento ORDER BY ordem LIMIT 1
+$f$;
+
+-- Estrutura
+DO $$
+BEGIN
+    PERFORM pg_temp.afirma('V12 ESTRUTURA', 'a tabela atlas_fonte existe e a amostra não traz fonte nenhuma',
+        (SELECT count(*) = 0 FROM atlas_fonte));
+    PERFORM pg_temp.afirma('V12 ESTRUTURA', 'os gatilhos rn_atlas_fonte_mensagem e rn_documento_congelado existem',
+        (SELECT count(*) = 2 FROM pg_trigger WHERE NOT tgisinternal AND tgname IN ('rn_atlas_fonte_mensagem', 'rn_documento_congelado')));
+    PERFORM pg_temp.afirma('V12 ESTRUTURA', 'a coluna tsv continua STORED e com o índice GIN, refeitos com a função nova',
+        (SELECT attgenerated = 's' FROM pg_attribute WHERE attrelid = 'documento_trecho'::regclass AND attname = 'tsv')
+        AND EXISTS (SELECT 1 FROM pg_indexes WHERE tablename = 'documento_trecho' AND indexdef LIKE '%USING gin (tsv)%'));
+    PERFORM pg_temp.afirma('V12 ESTRUTURA', 'o kit indexado continua achável pela coluna tsv refeita (o tsv não ficou vazio)',
+        (SELECT count(*) FILTER (WHERE tsv = ''::tsvector) = 0 FROM documento_trecho));
+    PERFORM pg_temp.afirma('V12 ESTRUTURA', 'o atlas_ro não lê atlas_fonte (ela é do portal)',
+        NOT has_table_privilege('atlas_ro', 'atlas_fonte', 'SELECT'));
+END $$;
+
+-- atlas_fonte: o que a resposta cita
+DO $$
+BEGIN
+    PERFORM pg_temp.aceita('V12 FONTE', 'uma fonte de trecho com título e seção em dados', $q$
+        DO $d$
+        DECLARE v_doc BIGINT := pg_temp.doc('v12-ok', 'v12-ok', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+        BEGIN
+            INSERT INTO atlas_fonte (mensagem_id, marcador, tipo, trecho_id, documento_id, versao, pagina, dados)
+            VALUES (pg_temp.msg(), 'T1', 'TRECHO', pg_temp.trecho_de(v_doc), v_doc, 1, 1, '{"titulo": "v12-ok", "secao": "1 Teste"}');
+        END $d$ $q$);
+    PERFORM pg_temp.aceita('V12 FONTE', 'uma fonte de registro (entidade e id) e uma de conta (dados)', $q$
+        DO $d$
+        DECLARE v_msg BIGINT := pg_temp.msg();
+        BEGIN
+            INSERT INTO atlas_fonte (mensagem_id, marcador, tipo, registro_entidade, registro_id) VALUES (v_msg, 'R1', 'REGISTRO', 'entrega', 1);
+            INSERT INTO atlas_fonte (mensagem_id, marcador, tipo, dados) VALUES (v_msg, 'C1', 'CALCULO', '{"script": "34 * 312", "resultado": "10608"}');
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V12 FONTE', 'fonte numa mensagem da pessoa (só o assistente cita)', 'rn_atlas_fonte_mensagem', $q$
+        INSERT INTO atlas_fonte (mensagem_id, marcador, tipo, dados) VALUES (pg_temp.msg('user'), 'C1', 'CALCULO', '{}') $q$);
+    PERFORM pg_temp.recusa('V12 FONTE', 'fonte numa mensagem de ferramenta', 'rn_atlas_fonte_mensagem', $q$
+        INSERT INTO atlas_fonte (mensagem_id, marcador, tipo, dados) VALUES (pg_temp.msg('tool'), 'C1', 'CALCULO', '{}') $q$);
+    PERFORM pg_temp.recusa('V12 FONTE', 'o mesmo marcador duas vezes na mesma mensagem', 'uq_atlas_fonte_marcador', $q$
+        DO $d$
+        DECLARE v_msg BIGINT := pg_temp.msg();
+        BEGIN
+            INSERT INTO atlas_fonte (mensagem_id, marcador, tipo, dados) VALUES (v_msg, 'C1', 'CALCULO', '{}');
+            INSERT INTO atlas_fonte (mensagem_id, marcador, tipo, dados) VALUES (v_msg, 'C1', 'CALCULO', '{}');
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V12 FONTE', 'marcador que não é T, R ou C seguido de número (X1)', 'atlas_fonte_marcador_check', $q$
+        INSERT INTO atlas_fonte (mensagem_id, marcador, tipo, dados) VALUES (pg_temp.msg(), 'X1', 'CALCULO', '{}') $q$);
+    PERFORM pg_temp.recusa('V12 FONTE', 'marcador com zero (T0) ou minúsculo (t1)', 'atlas_fonte_marcador_check', $q$
+        INSERT INTO atlas_fonte (mensagem_id, marcador, tipo, dados) VALUES (pg_temp.msg(), 't1', 'CALCULO', '{}') $q$);
+    PERFORM pg_temp.recusa('V12 FONTE', 'tipo fora de TRECHO, REGISTRO e CALCULO', 'atlas_fonte_tipo_check', $q$
+        INSERT INTO atlas_fonte (mensagem_id, marcador, tipo, dados) VALUES (pg_temp.msg(), 'C1', 'OUTRO', '{}') $q$);
+    PERFORM pg_temp.recusa('V12 FONTE', 'a letra do marcador não é a do tipo (R1 num TRECHO)', 'ck_atlas_fonte_tipo', $q$
+        DO $d$
+        DECLARE v_doc BIGINT := pg_temp.doc('v12-t3', 'v12-t3', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+        BEGIN
+            INSERT INTO atlas_fonte (mensagem_id, marcador, tipo, trecho_id, documento_id, versao, pagina)
+            VALUES (pg_temp.msg(), 'R1', 'TRECHO', pg_temp.trecho_de(v_doc), v_doc, 1, 1);
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V12 FONTE', 'fonte de trecho sem o trecho', 'rn_atlas_fonte_mensagem', $q$
+        INSERT INTO atlas_fonte (mensagem_id, marcador, tipo, documento_id, versao, pagina) VALUES (pg_temp.msg(), 'T1', 'TRECHO', 1, 1, 1) $q$);
+    PERFORM pg_temp.recusa('V12 FONTE', 'conta com trecho colado', 'ck_atlas_fonte_tipo', $q$
+        DO $d$
+        DECLARE v_doc BIGINT := pg_temp.doc('v12-t4', 'v12-t4', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+        BEGIN
+            INSERT INTO atlas_fonte (mensagem_id, marcador, tipo, trecho_id) VALUES (pg_temp.msg(), 'C1', 'CALCULO', pg_temp.trecho_de(v_doc));
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V12 FONTE', 'registro sem a entidade ou sem o id', 'ck_atlas_fonte_tipo', $q$
+        INSERT INTO atlas_fonte (mensagem_id, marcador, tipo, registro_entidade) VALUES (pg_temp.msg(), 'R1', 'REGISTRO', 'entrega') $q$);
+    PERFORM pg_temp.recusa('V12 FONTE', 'dados que não é um objeto', 'atlas_fonte_dados_check', $q$
+        INSERT INTO atlas_fonte (mensagem_id, marcador, tipo, dados) VALUES (pg_temp.msg(), 'C1', 'CALCULO', '[1, 2]') $q$);
+    PERFORM pg_temp.recusa('V12 FONTE', 'trecho que não é do documento citado', 'rn_atlas_fonte_mensagem', $q$
+        DO $d$
+        DECLARE v_um BIGINT := pg_temp.doc('v12-t6a', 'v12-t6a', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+                v_outro BIGINT := pg_temp.doc('v12-t6b', 'v12-t6b', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+        BEGIN
+            INSERT INTO atlas_fonte (mensagem_id, marcador, tipo, trecho_id, documento_id, versao, pagina)
+            VALUES (pg_temp.msg(), 'T1', 'TRECHO', pg_temp.trecho_de(v_um), v_outro, 1, 1);
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V12 FONTE', 'página que o trecho não tem (a 7 num trecho da página 1)', 'rn_atlas_fonte_mensagem', $q$
+        DO $d$
+        DECLARE v_doc BIGINT := pg_temp.doc('v12-t7', 'v12-t7', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+        BEGIN
+            INSERT INTO atlas_fonte (mensagem_id, marcador, tipo, trecho_id, documento_id, versao, pagina)
+            VALUES (pg_temp.msg(), 'T1', 'TRECHO', pg_temp.trecho_de(v_doc), v_doc, 1, 7);
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V12 FONTE', 'versão do trecho trocada na citação', 'rn_atlas_fonte_mensagem', $q$
+        DO $d$
+        DECLARE v_doc BIGINT := pg_temp.doc('v12-t8', 'v12-t8', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+        BEGIN
+            INSERT INTO atlas_fonte (mensagem_id, marcador, tipo, trecho_id, documento_id, versao, pagina)
+            VALUES (pg_temp.msg(), 'T1', 'TRECHO', pg_temp.trecho_de(v_doc), v_doc, 2, 1);
+        END $d$ $q$);
+END $$;
+
+-- documento congelado
+DO $$
+BEGIN
+    PERFORM pg_temp.recusa('V12 CONGELADO', 'trocar o escopo de um documento ativo', 'rn_documento_congelado', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v12-c1', 'v12-c1', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+        BEGIN
+            UPDATE documento SET escopo = 'COTA' WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V12 CONGELADO', 'tornar global o anexo de uma parceria', 'rn_documento_congelado', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v12-c2', 'v12-c2', 'PARCERIA', 2027, NULL, 'Cliente Amarelo', 'INDEXADO');
+        BEGIN
+            UPDATE documento SET escopo = 'GLOBAL', parceria_id = NULL, arquivo_id = pg_temp.arq() WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V12 CONGELADO', 'trocar a chave', 'rn_documento_congelado', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v12-c3', 'v12-c3', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+        BEGIN
+            UPDATE documento SET chave = 'manual-operacoes' WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V12 CONGELADO', 'trocar a versão', 'rn_documento_congelado', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v12-c4', 'v12-c4', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+        BEGIN
+            UPDATE documento SET versao = 9 WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V12 CONGELADO', 'trocar a edição', 'rn_documento_congelado', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v12-c5', 'v12-c5', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+        BEGIN
+            UPDATE documento SET evento_id = pg_temp.ev(2026) WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V12 CONGELADO', 'pôr uma cota num documento global', 'rn_documento_congelado', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v12-c6', 'v12-c6', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+        BEGIN
+            UPDATE documento SET cota_tipo_id = (SELECT id FROM cota_tipo WHERE codigo = 'MASTER') WHERE id = v_id;
+        END $d$ $q$);
+    -- A parceria já é guardada pelo rn_documento_coerente (o arquivo é da parceria); aqui o gatilho de coerência é desligado, dentro da
+    -- tentativa que é desfeita, para provar que o congelado a guarda sozinho.
+    PERFORM pg_temp.recusa('V12 CONGELADO', 'trocar a parceria do anexo (com a coerência desligada)', 'rn_documento_congelado', $q$
+        DO $d$
+        DECLARE v_doc BIGINT := pg_temp.doc('v12-c7', 'v12-c7', 'PARCERIA', 2027, NULL, 'Cliente Amarelo', 'INDEXADO');
+        BEGIN
+            ALTER TABLE documento DISABLE TRIGGER rn_documento_coerente;
+            UPDATE documento SET parceria_id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Roxo' AND edicao = 2027) WHERE id = v_doc;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V12 CONGELADO', 'tirar a suspeita de dado pessoal', 'rn_documento_congelado', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v12-c8', 'v12-c8', 'GLOBAL', 2027, NULL, NULL, 'AGUARDANDO', TRUE);
+        BEGIN
+            UPDATE documento SET contem_dados_pessoais = FALSE WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V12 CONGELADO', 'o contorno de antes: aprovar tirando a suspeita no mesmo UPDATE', 'rn_documento_congelado', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v12-c9', 'v12-c9', 'PARCERIA', 2027, NULL, 'Cliente Verde', 'AGUARDANDO', TRUE);
+        BEGIN
+            UPDATE documento SET status = 'PROCESSANDO', contem_dados_pessoais = FALSE, aprovado_por = pg_temp.rbs(), aprovado_por_perfil = 'ADMIN_RBS',
+                             aprovado_em = now() WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V12 CONGELADO', 'o contorno de antes: trocar o escopo e aprovar no mesmo UPDATE', 'rn_documento_congelado', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v12-c10', 'v12-c10', 'PARCERIA', 2027, NULL, 'Cliente Verde', 'AGUARDANDO', TRUE);
+        BEGIN
+            UPDATE documento SET status = 'PROCESSANDO', escopo = 'GLOBAL', parceria_id = NULL, arquivo_id = pg_temp.arq(),
+                             aprovado_por = pg_temp.rbs(), aprovado_por_perfil = 'ADMIN_RBS', aprovado_em = now() WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.aceita('V12 CONGELADO', 'o que continua mudando: título, tipo, erro, modelo e as colunas da ingestão', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v12-c11', 'v12-c11', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+        BEGIN
+            UPDATE documento SET titulo = 'v12-novo', tipo = 'FAQ', paginas = 3, modelo_embedding = 'outro', dimensoes = 768, extracao_ms = 5 WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.aceita('V12 CONGELADO', 'a revogação e a publicação seguem como antes (status e trechos)', $q$
+        DO $d$
+        DECLARE v_um BIGINT := pg_temp.doc('v12-c12', 'v12-c12', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+                v_dois BIGINT := pg_temp.doc('v12-c12', 'v12-c12', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+        BEGIN
+            UPDATE documento SET status = 'REVOGADO', revogado_por = pg_temp.rbs(), revogado_em = now() WHERE id = v_dois;
+            IF (SELECT status FROM documento WHERE id = v_um) <> 'SUBSTITUIDO' THEN
+                RAISE EXCEPTION 'a v2 devia ter substituído a v1';
+            END IF;
+        END $d$ $q$);
+END $$;
+
+-- O plural da busca: singular e plural casam nos dois sentidos, e as palavras que não são plural não mudam
+DO $$
+DECLARE
+    v_par TEXT[];
+    v_doc BIGINT;
+    v_visto BOOLEAN;
+BEGIN
+    FOREACH v_par SLICE 1 IN ARRAY ARRAY[
+        ['animal', 'animais'], ['nacional', 'nacionais'], ['final', 'finais'], ['social', 'sociais'], ['geral', 'gerais'],
+        ['principal', 'principais'], ['pessoal', 'pessoais'], ['profissional', 'profissionais'], ['canal', 'canais'],
+        ['real', 'reais'], ['moral', 'morais'], ['corporal', 'corporais'], ['papel', 'papéis'],
+        ['hotel', 'hotéis'], ['inflamável', 'inflamáveis'], ['reciclável', 'recicláveis'], ['possível', 'possíveis'],
+        ['útil', 'úteis'], ['cão', 'cães'], ['pão', 'pães'], ['credencial', 'credenciais'], ['material', 'materiais'],
+        ['informação', 'informações'], ['inserção', 'inserções']] LOOP
+        PERFORM pg_temp.afirma('V12 BUSCA', v_par[1] || ' e ' || v_par[2] || ' casam, no singular e no plural', pg_temp.casa(v_par[1], v_par[2]));
+    END LOOP;
+    PERFORM pg_temp.afirma('V12 BUSCA', 'mais, demais, jamais, pais, cais e vais não mudam (nem viram mal, dem, jam ou pai)',
+        (SELECT bool_and(fn_texto_de_busca(p) = p) FROM unnest(ARRAY['mais', 'demais', 'jamais', 'pais', 'cais', 'vais']) AS p));
+    PERFORM pg_temp.afirma('V12 BUSCA', 'reis, leis, bois e dois (plural de -ei, -oi) também não mudam',
+        (SELECT bool_and(fn_texto_de_busca(p) = p) FROM unnest(ARRAY['reis', 'leis', 'bois', 'dois', 'gás', 'país']) AS p));
+    PERFORM pg_temp.afirma('V12 BUSCA', 'só o plural muda: aqui, mesmo e ainda ficam, jornais vira jornal',
+        fn_texto_de_busca('aqui mesmo ainda jornais') = 'aqui mesmo ainda jornal');
+    PERFORM pg_temp.afirma('V12 BUSCA', 'sais passa a ser o plural de sal', fn_texto_de_busca('sais') = 'sal');
+    PERFORM pg_temp.afirma('V12 BUSCA', 'mais, demais, jamais, pais e cais não viram mal, jamal, pal nem cal (o -ais não vira -al neles)',
+        NOT pg_temp.casa('mal', 'mais') AND NOT pg_temp.casa('mal', 'demais') AND NOT pg_temp.casa('jamal', 'jamais')
+        AND NOT pg_temp.casa('pal', 'pais') AND NOT pg_temp.casa('cal', 'cais'));
+    PERFORM pg_temp.afirma('V12 BUSCA', 'a função continua IMMUTABLE e PARALLEL SAFE (a coluna gerada a usa)',
+        (SELECT provolatile = 'i' AND proparallel = 's' FROM pg_proc WHERE proname = 'fn_texto_de_busca' AND pronamespace = 'public'::regnamespace));
+    -- A coluna tsv gravada usa a regra nova: um trecho com "animais" é achado pela consulta "animal"
+    v_visto := NULL;
+    BEGIN
+        v_doc := pg_temp.doc('animais de estimação e papéis', 'v12-busca', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+        v_visto := (SELECT tsv @@ plainto_tsquery('pt_sem_acento', fn_texto_de_busca('animal papel')) FROM documento_trecho WHERE documento_id = v_doc);
+        RAISE EXCEPTION 'desfazer' USING ERRCODE = 'ZZ001';
+    EXCEPTION WHEN SQLSTATE 'ZZ001' THEN NULL;
+    END;
+    PERFORM pg_temp.afirma('V12 BUSCA', 'o tsv gravado do trecho "animais ... papéis" casa com a consulta "animal papel"', coalesce(v_visto, FALSE));
+END $$;
+
+-- ---------------------------------------------------------------------
+-- 12. V13: os prazos da edição, da cota e da parceria
+-- ---------------------------------------------------------------------
+-- Estrutura
+DO $$
+BEGIN
+    PERFORM pg_temp.afirma('V13 ESTRUTURA', 'a tabela prazo existe',
+        EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'prazo'));
+    PERFORM pg_temp.afirma('V13 ESTRUTURA', 'os gatilhos rn_prazo_coerente e rn_prazo_imutavel existem',
+        (SELECT count(*) = 2 FROM pg_trigger WHERE NOT tgisinternal AND tgname IN ('rn_prazo_coerente', 'rn_prazo_imutavel')));
+    PERFORM pg_temp.afirma('V13 ESTRUTURA', 'o atlas_ro não lê prazo (ele é do portal: a ferramenta lê como o resto do portal)',
+        NOT has_table_privilege('atlas_ro', 'prazo', 'SELECT'));
+    PERFORM pg_temp.afirma('V13 ESTRUTURA', 'a hora é TIME(0) e a data é DATE',
+        (SELECT bool_and(CASE column_name WHEN 'hora' THEN data_type = 'time without time zone' AND datetime_precision = 0
+                                          WHEN 'data' THEN data_type = 'date' END)
+           FROM information_schema.columns WHERE table_name = 'prazo' AND column_name IN ('hora', 'data')));
+END $$;
+
+-- As regras do prazo
+DO $$
+BEGIN
+    PERFORM pg_temp.aceita('V13 PRAZO', 'prazo GLOBAL da edição, sem documento', $q$
+        INSERT INTO prazo (evento_id, escopo, titulo, data, criado_por)
+        VALUES (pg_temp.ev(2027), 'GLOBAL', 'v13-global', DATE '2026-12-04', pg_temp.rbs()) $q$);
+    PERFORM pg_temp.aceita('V13 PRAZO', 'prazo COTA com hora e descrição', $q$
+        INSERT INTO prazo (evento_id, escopo, cota_tipo_id, titulo, data, hora, descricao, criado_por)
+        VALUES (pg_temp.ev(2027), 'COTA', 1, 'v13-cota', DATE '2026-12-04', TIME '18:00', 'Entregar o briefing.', pg_temp.rbs()) $q$);
+    PERFORM pg_temp.aceita('V13 PRAZO', 'prazo PARCERIA do Amarelo em 2027', $q$
+        INSERT INTO prazo (evento_id, escopo, parceria_id, titulo, data, criado_por)
+        VALUES (pg_temp.ev(2027), 'PARCERIA', (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027),
+                'v13-parceria', DATE '2026-12-04', pg_temp.rbs()) $q$);
+    -- O escopo
+    PERFORM pg_temp.recusa('V13 PRAZO', 'GLOBAL com cota', 'ck_prazo_escopo', $q$
+        INSERT INTO prazo (evento_id, escopo, cota_tipo_id, titulo, data, criado_por)
+        VALUES (pg_temp.ev(2027), 'GLOBAL', 1, 'v13-x', DATE '2026-12-04', pg_temp.rbs()) $q$);
+    PERFORM pg_temp.recusa('V13 PRAZO', 'GLOBAL com parceria', 'ck_prazo_escopo', $q$
+        INSERT INTO prazo (evento_id, escopo, parceria_id, titulo, data, criado_por)
+        VALUES (pg_temp.ev(2027), 'GLOBAL', (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027),
+                'v13-x', DATE '2026-12-04', pg_temp.rbs()) $q$);
+    PERFORM pg_temp.recusa('V13 PRAZO', 'COTA sem cota', 'ck_prazo_escopo', $q$
+        INSERT INTO prazo (evento_id, escopo, titulo, data, criado_por)
+        VALUES (pg_temp.ev(2027), 'COTA', 'v13-x', DATE '2026-12-04', pg_temp.rbs()) $q$);
+    PERFORM pg_temp.recusa('V13 PRAZO', 'COTA com parceria', 'ck_prazo_escopo', $q$
+        INSERT INTO prazo (evento_id, escopo, cota_tipo_id, parceria_id, titulo, data, criado_por)
+        VALUES (pg_temp.ev(2027), 'COTA', 1, (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027),
+                'v13-x', DATE '2026-12-04', pg_temp.rbs()) $q$);
+    PERFORM pg_temp.recusa('V13 PRAZO', 'PARCERIA sem parceria', 'ck_prazo_escopo', $q$
+        INSERT INTO prazo (evento_id, escopo, titulo, data, criado_por)
+        VALUES (pg_temp.ev(2027), 'PARCERIA', 'v13-x', DATE '2026-12-04', pg_temp.rbs()) $q$);
+    PERFORM pg_temp.recusa('V13 PRAZO', 'PARCERIA com cota', 'ck_prazo_escopo', $q$
+        INSERT INTO prazo (evento_id, escopo, cota_tipo_id, parceria_id, titulo, data, criado_por)
+        VALUES (pg_temp.ev(2027), 'PARCERIA', 1, (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027),
+                'v13-x', DATE '2026-12-04', pg_temp.rbs()) $q$);
+    PERFORM pg_temp.recusa('V13 PRAZO', 'escopo fora da lista', 'ck_prazo_escopo', $q$
+        INSERT INTO prazo (evento_id, escopo, titulo, data, criado_por)
+        VALUES (pg_temp.ev(2027), 'TODOS', 'v13-x', DATE '2026-12-04', pg_temp.rbs()) $q$);
+    -- Os campos
+    PERFORM pg_temp.recusa('V13 PRAZO', 'título em branco', 'prazo_titulo_check', $q$
+        INSERT INTO prazo (evento_id, escopo, titulo, data, criado_por)
+        VALUES (pg_temp.ev(2027), 'GLOBAL', '   ', DATE '2026-12-04', pg_temp.rbs()) $q$);
+    PERFORM pg_temp.recusa('V13 PRAZO', 'data antes do ano 2000', 'prazo_data_check', $q$
+        INSERT INTO prazo (evento_id, escopo, titulo, data, criado_por)
+        VALUES (pg_temp.ev(2027), 'GLOBAL', 'v13-x', DATE '1999-12-31', pg_temp.rbs()) $q$);
+    PERFORM pg_temp.recusa('V13 PRAZO', 'data depois do ano 2100', 'prazo_data_check', $q$
+        INSERT INTO prazo (evento_id, escopo, titulo, data, criado_por)
+        VALUES (pg_temp.ev(2027), 'GLOBAL', 'v13-x', DATE '2101-01-01', pg_temp.rbs()) $q$);
+    PERFORM pg_temp.recusa('V13 PRAZO', 'hora com segundos', 'ck_prazo_hora', $q$
+        INSERT INTO prazo (evento_id, escopo, titulo, data, hora, criado_por)
+        VALUES (pg_temp.ev(2027), 'GLOBAL', 'v13-x', DATE '2026-12-04', TIME '18:00:30', pg_temp.rbs()) $q$);
+    PERFORM pg_temp.recusa('V13 PRAZO', 'descrição em branco', 'prazo_descricao_check', $q$
+        INSERT INTO prazo (evento_id, escopo, titulo, data, descricao, criado_por)
+        VALUES (pg_temp.ev(2027), 'GLOBAL', 'v13-x', DATE '2026-12-04', '  ', pg_temp.rbs()) $q$);
+    PERFORM pg_temp.recusa('V13 PRAZO', 'página sem documento', 'ck_prazo_pagina', $q$
+        INSERT INTO prazo (evento_id, escopo, titulo, data, pagina, criado_por)
+        VALUES (pg_temp.ev(2027), 'GLOBAL', 'v13-x', DATE '2026-12-04', 3, pg_temp.rbs()) $q$);
+    PERFORM pg_temp.recusa('V13 PRAZO', 'página 0 (a primeira é a 1)', 'ck_prazo_pagina', $q$
+        INSERT INTO prazo (evento_id, escopo, titulo, data, documento_id, pagina, criado_por)
+        VALUES (pg_temp.ev(2027), 'GLOBAL', 'v13-x', DATE '2026-12-04',
+                pg_temp.doc('v13-pagina-zero', 'v13-pagina-zero', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO'), 0, pg_temp.rbs()) $q$);
+    -- Quem cadastra é da RBS
+    PERFORM pg_temp.recusa('V13 PERMISSAO', 'prazo criado por um Admin Patrocinador', 'fk_prazo_criador', $q$
+        INSERT INTO prazo (evento_id, escopo, titulo, data, criado_por)
+        VALUES (pg_temp.ev(2027), 'GLOBAL', 'v13-x', DATE '2026-12-04', (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example')) $q$);
+    PERFORM pg_temp.recusa('V13 PERMISSAO', 'perfil de quem criou que não é ADMIN_RBS', 'prazo_criado_por_perfil_check', $q$
+        INSERT INTO prazo (evento_id, escopo, titulo, data, criado_por, criado_por_perfil)
+        VALUES (pg_temp.ev(2027), 'GLOBAL', 'v13-x', DATE '2026-12-04', (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example'),
+                'ADMIN_PATROCINADOR') $q$);
+END $$;
+
+-- A parceria, o documento e a página batem com o prazo; o prazo não tem alcance maior que o do documento
+DO $$
+BEGIN
+    PERFORM pg_temp.recusa('V13 ISOLAMENTO', 'prazo de 2026 com a parceria do Amarelo de 2027', 'rn_prazo_coerente', $q$
+        INSERT INTO prazo (evento_id, escopo, parceria_id, titulo, data, criado_por)
+        VALUES (pg_temp.ev(2026), 'PARCERIA', (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027),
+                'v13-x', DATE '2026-12-04', pg_temp.rbs()) $q$);
+    PERFORM pg_temp.recusa('V13 ISOLAMENTO', 'prazo de 2027 com um documento de 2026', 'rn_prazo_coerente', $q$
+        INSERT INTO prazo (evento_id, escopo, titulo, data, documento_id, criado_por)
+        VALUES (pg_temp.ev(2027), 'GLOBAL', 'v13-x', DATE '2026-12-04',
+                pg_temp.doc('v13-doc-2026', 'v13-doc-2026', 'GLOBAL', 2026, NULL, NULL, 'INDEXADO'), pg_temp.rbs()) $q$);
+    PERFORM pg_temp.recusa('V13 PRAZO', 'página maior que as páginas do documento', 'rn_prazo_coerente', $q$
+        DO $d$
+        DECLARE v_doc BIGINT := pg_temp.doc('v13-tres-paginas', 'v13-tres-paginas', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+        BEGIN
+            UPDATE documento SET paginas = 3 WHERE id = v_doc;
+            INSERT INTO prazo (evento_id, escopo, titulo, data, documento_id, pagina, criado_por)
+            VALUES (pg_temp.ev(2027), 'GLOBAL', 'v13-x', DATE '2026-12-04', v_doc, 4, pg_temp.rbs());
+        END $d$ $q$);
+    PERFORM pg_temp.aceita('V13 PRAZO', 'a última página do documento serve', $q$
+        DO $d$
+        DECLARE v_doc BIGINT := pg_temp.doc('v13-tres-paginas', 'v13-tres-paginas', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+        BEGIN
+            UPDATE documento SET paginas = 3 WHERE id = v_doc;
+            INSERT INTO prazo (evento_id, escopo, titulo, data, documento_id, pagina, criado_por)
+            VALUES (pg_temp.ev(2027), 'GLOBAL', 'v13-x', DATE '2026-12-04', v_doc, 3, pg_temp.rbs());
+        END $d$ $q$);
+    -- Documento GLOBAL: o prazo pode ser de qualquer alcance
+    PERFORM pg_temp.aceita('V13 PRAZO', 'documento GLOBAL: prazo da edição, da cota e de uma parceria', $q$
+        DO $d$
+        DECLARE v_doc BIGINT := pg_temp.doc('v13-global', 'v13-global', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+        BEGIN
+            INSERT INTO prazo (evento_id, escopo, titulo, data, documento_id, criado_por)
+            VALUES (pg_temp.ev(2027), 'GLOBAL', 'v13-a', DATE '2026-12-04', v_doc, pg_temp.rbs());
+            INSERT INTO prazo (evento_id, escopo, cota_tipo_id, titulo, data, documento_id, criado_por)
+            VALUES (pg_temp.ev(2027), 'COTA', 2, 'v13-b', DATE '2026-12-04', v_doc, pg_temp.rbs());
+            INSERT INTO prazo (evento_id, escopo, parceria_id, titulo, data, documento_id, criado_por)
+            VALUES (pg_temp.ev(2027), 'PARCERIA', (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Roxo' AND edicao = 2027),
+                    'v13-c', DATE '2026-12-04', v_doc, pg_temp.rbs());
+        END $d$ $q$);
+    -- Documento COTA (Master): só prazo da Master ou de uma parceria Master
+    PERFORM pg_temp.recusa('V13 ISOLAMENTO', 'documento da cota Master com prazo da edição inteira', 'rn_prazo_coerente', $q$
+        INSERT INTO prazo (evento_id, escopo, titulo, data, documento_id, criado_por)
+        VALUES (pg_temp.ev(2027), 'GLOBAL', 'v13-x', DATE '2026-12-04',
+                pg_temp.doc('v13-plano-master', 'v13-plano-master', 'COTA', 2027, 'MASTER', NULL, 'INDEXADO'), pg_temp.rbs()) $q$);
+    PERFORM pg_temp.recusa('V13 ISOLAMENTO', 'documento da cota Master com prazo da Subcota G', 'rn_prazo_coerente', $q$
+        INSERT INTO prazo (evento_id, escopo, cota_tipo_id, titulo, data, documento_id, criado_por)
+        VALUES (pg_temp.ev(2027), 'COTA', 2, 'v13-x', DATE '2026-12-04',
+                pg_temp.doc('v13-plano-master', 'v13-plano-master', 'COTA', 2027, 'MASTER', NULL, 'INDEXADO'), pg_temp.rbs()) $q$);
+    PERFORM pg_temp.recusa('V13 ISOLAMENTO', 'documento da cota Master com prazo da parceria do Roxo (Subcota G)', 'rn_prazo_coerente', $q$
+        INSERT INTO prazo (evento_id, escopo, parceria_id, titulo, data, documento_id, criado_por)
+        VALUES (pg_temp.ev(2027), 'PARCERIA', (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Roxo' AND edicao = 2027),
+                'v13-x', DATE '2026-12-04',
+                pg_temp.doc('v13-plano-master', 'v13-plano-master', 'COTA', 2027, 'MASTER', NULL, 'INDEXADO'), pg_temp.rbs()) $q$);
+    PERFORM pg_temp.aceita('V13 PRAZO', 'documento da cota Master: prazo da Master e da parceria do Amarelo (Master)', $q$
+        DO $d$
+        DECLARE v_doc BIGINT := pg_temp.doc('v13-plano-master', 'v13-plano-master', 'COTA', 2027, 'MASTER', NULL, 'INDEXADO');
+        BEGIN
+            INSERT INTO prazo (evento_id, escopo, cota_tipo_id, titulo, data, documento_id, criado_por)
+            VALUES (pg_temp.ev(2027), 'COTA', 1, 'v13-a', DATE '2026-12-04', v_doc, pg_temp.rbs());
+            INSERT INTO prazo (evento_id, escopo, parceria_id, titulo, data, documento_id, criado_por)
+            VALUES (pg_temp.ev(2027), 'PARCERIA', (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027),
+                    'v13-b', DATE '2026-12-04', v_doc, pg_temp.rbs());
+        END $d$ $q$);
+    -- Documento PARCERIA (Amarelo): só prazo daquela parceria
+    PERFORM pg_temp.recusa('V13 ISOLAMENTO', 'anexo do Amarelo com prazo da edição inteira', 'rn_prazo_coerente', $q$
+        INSERT INTO prazo (evento_id, escopo, titulo, data, documento_id, criado_por)
+        VALUES (pg_temp.ev(2027), 'GLOBAL', 'v13-x', DATE '2026-12-04',
+                pg_temp.doc('v13-anexo-amarelo', 'v13-anexo', 'PARCERIA', 2027, NULL, 'Cliente Amarelo', 'INDEXADO'), pg_temp.rbs()) $q$);
+    PERFORM pg_temp.recusa('V13 ISOLAMENTO', 'anexo do Amarelo com prazo da cota Master', 'rn_prazo_coerente', $q$
+        INSERT INTO prazo (evento_id, escopo, cota_tipo_id, titulo, data, documento_id, criado_por)
+        VALUES (pg_temp.ev(2027), 'COTA', 1, 'v13-x', DATE '2026-12-04',
+                pg_temp.doc('v13-anexo-amarelo', 'v13-anexo', 'PARCERIA', 2027, NULL, 'Cliente Amarelo', 'INDEXADO'), pg_temp.rbs()) $q$);
+    PERFORM pg_temp.recusa('V13 ISOLAMENTO', 'anexo do Amarelo com prazo da parceria do Roxo', 'rn_prazo_coerente', $q$
+        INSERT INTO prazo (evento_id, escopo, parceria_id, titulo, data, documento_id, criado_por)
+        VALUES (pg_temp.ev(2027), 'PARCERIA', (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Roxo' AND edicao = 2027),
+                'v13-x', DATE '2026-12-04',
+                pg_temp.doc('v13-anexo-amarelo', 'v13-anexo', 'PARCERIA', 2027, NULL, 'Cliente Amarelo', 'INDEXADO'), pg_temp.rbs()) $q$);
+    PERFORM pg_temp.aceita('V13 PRAZO', 'anexo do Amarelo com prazo da parceria do Amarelo', $q$
+        INSERT INTO prazo (evento_id, escopo, parceria_id, titulo, data, documento_id, criado_por)
+        VALUES (pg_temp.ev(2027), 'PARCERIA', (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027),
+                'v13-x', DATE '2026-12-04',
+                pg_temp.doc('v13-anexo-amarelo', 'v13-anexo', 'PARCERIA', 2027, NULL, 'Cliente Amarelo', 'INDEXADO'), pg_temp.rbs()) $q$);
+END $$;
+
+-- Depois de criado, o prazo só se desativa
+DO $$
+BEGIN
+    PERFORM pg_temp.recusa('V13 IMUTAVEL', 'mudar o título', 'rn_prazo_imutavel', $q$
+        DO $d$
+        BEGIN
+            INSERT INTO prazo (evento_id, escopo, titulo, data, criado_por) VALUES (pg_temp.ev(2027), 'GLOBAL', 'v13-i', DATE '2026-12-04', pg_temp.rbs());
+            UPDATE prazo SET titulo = 'v13-outro' WHERE titulo = 'v13-i';
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V13 IMUTAVEL', 'mudar a data', 'rn_prazo_imutavel', $q$
+        DO $d$
+        BEGIN
+            INSERT INTO prazo (evento_id, escopo, titulo, data, criado_por) VALUES (pg_temp.ev(2027), 'GLOBAL', 'v13-i', DATE '2026-12-04', pg_temp.rbs());
+            UPDATE prazo SET data = DATE '2026-12-05' WHERE titulo = 'v13-i';
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V13 IMUTAVEL', 'mudar a hora', 'rn_prazo_imutavel', $q$
+        DO $d$
+        BEGIN
+            INSERT INTO prazo (evento_id, escopo, titulo, data, criado_por) VALUES (pg_temp.ev(2027), 'GLOBAL', 'v13-i', DATE '2026-12-04', pg_temp.rbs());
+            UPDATE prazo SET hora = TIME '18:00' WHERE titulo = 'v13-i';
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V13 IMUTAVEL', 'passar de GLOBAL para uma parceria', 'rn_prazo_imutavel', $q$
+        DO $d$
+        BEGIN
+            INSERT INTO prazo (evento_id, escopo, titulo, data, criado_por) VALUES (pg_temp.ev(2027), 'GLOBAL', 'v13-i', DATE '2026-12-04', pg_temp.rbs());
+            UPDATE prazo SET escopo = 'PARCERIA',
+                             parceria_id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027)
+             WHERE titulo = 'v13-i';
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V13 IMUTAVEL', 'trocar o documento de origem', 'rn_prazo_imutavel', $q$
+        DO $d$
+        BEGIN
+            INSERT INTO prazo (evento_id, escopo, titulo, data, criado_por) VALUES (pg_temp.ev(2027), 'GLOBAL', 'v13-i', DATE '2026-12-04', pg_temp.rbs());
+            UPDATE prazo SET documento_id = pg_temp.doc('v13-troca', 'v13-troca', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO') WHERE titulo = 'v13-i';
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V13 IMUTAVEL', 'mudar o título junto com a desativação', 'rn_prazo_imutavel', $q$
+        DO $d$
+        BEGIN
+            INSERT INTO prazo (evento_id, escopo, titulo, data, criado_por) VALUES (pg_temp.ev(2027), 'GLOBAL', 'v13-i', DATE '2026-12-04', pg_temp.rbs());
+            UPDATE prazo SET titulo = 'v13-outro', ativo = FALSE WHERE titulo = 'v13-i';
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V13 IMUTAVEL', 'reativar um prazo desativado', 'rn_prazo_imutavel', $q$
+        DO $d$
+        BEGIN
+            INSERT INTO prazo (evento_id, escopo, titulo, data, criado_por, ativo) VALUES (pg_temp.ev(2027), 'GLOBAL', 'v13-i', DATE '2026-12-04', pg_temp.rbs(), FALSE);
+            UPDATE prazo SET ativo = TRUE WHERE titulo = 'v13-i';
+        END $d$ $q$);
+    PERFORM pg_temp.aceita('V13 IMUTAVEL', 'desativar um prazo (e repetir a desativação)', $q$
+        DO $d$
+        BEGIN
+            INSERT INTO prazo (evento_id, escopo, titulo, data, criado_por) VALUES (pg_temp.ev(2027), 'GLOBAL', 'v13-i', DATE '2026-12-04', pg_temp.rbs());
+            UPDATE prazo SET ativo = FALSE WHERE titulo = 'v13-i';
+            UPDATE prazo SET ativo = FALSE WHERE titulo = 'v13-i';
+            IF (SELECT ativo FROM prazo WHERE titulo = 'v13-i') THEN
+                RAISE EXCEPTION 'o prazo devia estar desativado';
+            END IF;
+        END $d$ $q$);
+END $$;
+
+-- ---------------------------------------------------------------------
+-- 13. V14: o campo de arquivo da planilha da agência (M6)
+-- ---------------------------------------------------------------------
+-- A V14 só acrescenta uma linha ao catálogo: o tipo ARQUIVO, a coluna dado_informado.arquivo_id e a chave composta que prende o arquivo à
+-- parceria são da V7. Aqui se confere a linha nova e que o valor de arquivo funciona como os outros (vigente, um valor só, mesma parceria).
+DO $$
+BEGIN
+    PERFORM pg_temp.confere('V14 CATÁLOGO', 'campos da aba Aplicações (os quatro inteiros e a planilha)', 5,
+        (SELECT count(*) FROM campo_catalogo c JOIN aba a ON a.id = c.aba_id WHERE a.codigo = 'APLICACOES'));
+    PERFORM pg_temp.confere('V14 CATÁLOGO', 'campos de arquivo no catálogo (só a planilha da agência)', 1,
+        (SELECT count(*) FROM campo_catalogo WHERE tipo = 'ARQUIVO'));
+    PERFORM pg_temp.afirma('V14 CATÁLOGO', 'a planilha: aba Aplicações, ordem 5, rótulo e ajuda, sem unidade, limites nem campo-limite',
+        EXISTS (SELECT 1 FROM campo_catalogo c JOIN aba a ON a.id = c.aba_id
+                 WHERE c.chave = 'ativacao.planilha_agencia' AND a.codigo = 'APLICACOES' AND c.tipo = 'ARQUIVO' AND c.ordem = 5
+                   AND c.rotulo = 'Planilha da agência' AND c.ajuda ILIKE '%planilha%agência%'
+                   AND c.unidade IS NULL AND c.minimo IS NULL AND c.maximo IS NULL AND c.limite_campo IS NULL));
+    PERFORM pg_temp.afirma('V14 CATÁLOGO', 'a planilha vem depois dos quatro inteiros na ordem do formulário',
+        (SELECT max(ordem) FROM campo_catalogo WHERE tipo = 'INTEIRO') < (SELECT ordem FROM campo_catalogo WHERE chave = 'ativacao.planilha_agencia'));
+    PERFORM pg_temp.afirma('V14 CATÁLOGO', 'nenhum campo limita a planilha nem é limitado por ela',
+        NOT EXISTS (SELECT 1 FROM campo_catalogo WHERE limite_campo = 'ativacao.planilha_agencia'));
+    PERFORM pg_temp.aceita('V14 DADOS', 'a planilha do Amarelo com um arquivo do próprio Amarelo', $q$
+        INSERT INTO dado_informado (parceria_id, campo_chave, arquivo_id, origem, informado_por)
+        SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), 'ativacao.planilha_agencia',
+               (SELECT a.id FROM arquivo a WHERE a.categoria = 'COMPROVACAO' AND a.parceria_id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027) LIMIT 1),
+               'PORTAL', (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example') $q$);
+    PERFORM pg_temp.recusa('V14 DADOS', 'a planilha do Amarelo com um arquivo da Verde', 'fk_dado_informado_arquivo_parceria', $q$
+        INSERT INTO dado_informado (parceria_id, campo_chave, arquivo_id, origem, informado_por)
+        SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), 'ativacao.planilha_agencia',
+               (SELECT a.id FROM arquivo a WHERE a.categoria = 'COMPROVACAO' AND a.parceria_id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Verde' AND edicao = 2027) LIMIT 1),
+               'PORTAL', (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example') $q$);
+    PERFORM pg_temp.recusa('V14 DADOS', 'a planilha com o arquivo e um número ao mesmo tempo', 'ck_dado_informado_um_valor', $q$
+        INSERT INTO dado_informado (parceria_id, campo_chave, valor_numero, arquivo_id, origem, informado_por)
+        SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), 'ativacao.planilha_agencia', 10,
+               (SELECT a.id FROM arquivo a WHERE a.categoria = 'COMPROVACAO' AND a.parceria_id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027) LIMIT 1),
+               'PORTAL', (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example') $q$);
+    PERFORM pg_temp.aceita('V14 DADOS', 'a planilha vigente é o arquivo mais recente, e o anterior fica guardado', $q$
+        DO $d$
+        DECLARE
+            v_parceria BIGINT := (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027);
+            v_usuario  BIGINT := (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example');
+            v_arquivos BIGINT[] := ARRAY(SELECT a.id FROM arquivo a WHERE a.categoria = 'COMPROVACAO' AND a.parceria_id = v_parceria ORDER BY a.id LIMIT 2);
+        BEGIN
+            INSERT INTO dado_informado (parceria_id, campo_chave, arquivo_id, origem, informado_por, informado_em)
+            VALUES (v_parceria, 'ativacao.planilha_agencia', v_arquivos[1], 'PORTAL', v_usuario, now() - interval '1 hour'),
+                   (v_parceria, 'ativacao.planilha_agencia', v_arquivos[2], 'PORTAL', v_usuario, now());
+            IF (SELECT arquivo_id FROM vw_dado_vigente WHERE parceria_id = v_parceria AND campo_chave = 'ativacao.planilha_agencia') IS DISTINCT FROM v_arquivos[2] THEN
+                RAISE EXCEPTION 'o vigente devia ser o arquivo mais recente';
+            END IF;
+            IF (SELECT count(*) FROM dado_informado WHERE parceria_id = v_parceria AND campo_chave = 'ativacao.planilha_agencia') <> 2 THEN
+                RAISE EXCEPTION 'o arquivo anterior devia continuar guardado';
+            END IF;
+        END $d$ $q$);
+    PERFORM pg_temp.confere('V14 DADOS', 'as tentativas não deixaram planilha nenhuma na amostra', 0,
+        (SELECT count(*) FROM dado_informado WHERE campo_chave = 'ativacao.planilha_agencia'));
+END $$;
+
+-- ---------------------------------------------------------------------
+-- 14. V15: o JEV nos pontos de decisão e a conversa sem parceria (M7, com a reserva do M8)
+-- ---------------------------------------------------------------------
+-- A V15 só acrescenta colunas e regras: atlas_decisao (ponto, modo, limiar, acao, alvo e turno), atlas_mensagem (fora_do_modelo e
+-- sem_modelo) e, para o Atlas da RBS, a conversa e o traço sem parceria (evento_id na conversa, a regra "parceria ou evento" e o gatilho que
+-- impede um traço sem parceria numa conversa de parceria).
+DO $$
+DECLARE
+    -- O molde de cada tentativa: uma conversa do Amarelo com uma mensagem da pessoa e uma decisão do JEV com o ponto (%1$s), o modo (%2$s)
+    -- e o limiar (%3$s) dados.
+    c_decisao CONSTANT TEXT := $c$
+        DO $d$
+        DECLARE v_conversa BIGINT; v_mensagem BIGINT;
+        BEGIN
+            INSERT INTO atlas_conversa (parceria_id, usuario_id)
+            SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example')
+            RETURNING id INTO v_conversa;
+            INSERT INTO atlas_mensagem (conversa_id, ordem, papel, conteudo) VALUES (v_conversa, 1, 'user', 'oi') RETURNING id INTO v_mensagem;
+            INSERT INTO atlas_decisao (mensagem_id, pergunta, escolha, confianca, ponto, modo, limiar, acao, alvo, turno)
+            VALUES (v_mensagem, 'intencao', 'saudacao_uso', 0.9876, %1$s, %2$s, %3$s, 'teria respondido sem o modelo', NULL, gen_random_uuid());
+        END $d$ $c$;
+    -- Uma mensagem (%1$s papel, %2$s fora_do_modelo, %3$s sem_modelo) numa conversa do Amarelo.
+    c_mensagem CONSTANT TEXT := $c$
+        DO $d$
+        DECLARE v_conversa BIGINT;
+        BEGIN
+            INSERT INTO atlas_conversa (parceria_id, usuario_id)
+            SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example')
+            RETURNING id INTO v_conversa;
+            INSERT INTO atlas_mensagem (conversa_id, ordem, papel, conteudo, tool_call_id, fora_do_modelo, sem_modelo)
+            VALUES (v_conversa, 1, '%1$s', 'texto', CASE WHEN '%1$s' = 'tool' THEN 'call_x' END, %2$s, %3$s);
+        END $d$ $c$;
+BEGIN
+    PERFORM pg_temp.confere('V15 ESTRUTURA', 'as 6 colunas novas de atlas_decisao', 6,
+        (SELECT count(*) FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'atlas_decisao'
+            AND column_name IN ('ponto', 'modo', 'limiar', 'acao', 'alvo', 'turno')));
+    PERFORM pg_temp.afirma('V15 ESTRUTURA', 'fora_do_modelo e sem_modelo: obrigatórias, falsas por padrão',
+        (SELECT count(*) = 2 AND bool_and(is_nullable = 'NO' AND column_default = 'false') FROM information_schema.columns
+          WHERE table_schema = 'public' AND table_name = 'atlas_mensagem' AND column_name IN ('fora_do_modelo', 'sem_modelo')));
+    PERFORM pg_temp.afirma('V15 ESTRUTURA', 'parceria_id deixou de ser obrigatório em atlas_conversa e em atlas_traco',
+        (SELECT count(*) = 2 AND bool_and(is_nullable = 'YES') FROM information_schema.columns
+          WHERE table_schema = 'public' AND column_name = 'parceria_id' AND table_name IN ('atlas_conversa', 'atlas_traco')));
+    PERFORM pg_temp.afirma('V15 ESTRUTURA', 'atlas_conversa.evento_id existe e aponta para evento',
+        EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_atlas_conversa_evento' AND contype = 'f' AND conrelid = 'atlas_conversa'::regclass
+                  AND confrelid = 'evento'::regclass));
+    PERFORM pg_temp.afirma('V15 ESTRUTURA', 'o gatilho rn_atlas_traco_parceria existe',
+        EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'rn_atlas_traco_parceria' AND NOT tgisinternal));
+    PERFORM pg_temp.confere('V15 ESTRUTURA', 'a amostra não traz decisão do JEV', 0, (SELECT count(*) FROM atlas_decisao));
+    PERFORM pg_temp.confere('V15 ESTRUTURA', 'nenhuma conversa da amostra está sem parceria', 0,
+        (SELECT count(*) FROM atlas_conversa WHERE parceria_id IS NULL));
+
+    -- atlas_decisao
+    PERFORM pg_temp.aceita('V15 DECISAO', 'uma decisão em sombra, com ponto, modo, limiar, ação e turno', format(c_decisao, '''intencao''', '''SOMBRA''', '0.9'));
+    PERFORM pg_temp.aceita('V15 DECISAO', 'uma decisão ativa de outro ponto', format(c_decisao, '''fontes''', '''ATIVO''', '0.5'));
+    PERFORM pg_temp.recusa('V15 DECISAO', 'ponto fora da lista', 'ck_atlas_decisao_ponto', format(c_decisao, '''inventado''', '''SOMBRA''', '0.9'));
+    PERFORM pg_temp.recusa('V15 DECISAO', 'o modo DESLIGADO nunca grava', 'ck_atlas_decisao_modo', format(c_decisao, '''intencao''', '''DESLIGADO''', '0.9'));
+    PERFORM pg_temp.recusa('V15 DECISAO', 'limiar acima de 1', 'ck_atlas_decisao_limiar', format(c_decisao, '''intencao''', '''SOMBRA''', '1.5'));
+
+    -- atlas_mensagem
+    PERFORM pg_temp.aceita('V15 MENSAGEM', 'a mensagem da pessoa fora do modelo', format(c_mensagem, 'user', 'TRUE', 'FALSE'));
+    PERFORM pg_temp.aceita('V15 MENSAGEM', 'a mensagem do assistente fora do modelo e sem modelo', format(c_mensagem, 'assistant', 'TRUE', 'TRUE'));
+    PERFORM pg_temp.recusa('V15 MENSAGEM', 'mensagem de ferramenta fora do modelo (deixaria o pedido dela sem resposta)', 'ck_atlas_mensagem_fora_do_modelo',
+        format(c_mensagem, 'tool', 'TRUE', 'FALSE'));
+    PERFORM pg_temp.recusa('V15 MENSAGEM', 'mensagem da pessoa marcada como sem modelo', 'ck_atlas_mensagem_sem_modelo', format(c_mensagem, 'user', 'FALSE', 'TRUE'));
+    PERFORM pg_temp.recusa('V15 MENSAGEM', 'mensagem de ferramenta marcada como sem modelo', 'ck_atlas_mensagem_sem_modelo', format(c_mensagem, 'tool', 'FALSE', 'TRUE'));
+
+    -- A conversa sem parceria
+    PERFORM pg_temp.aceita('V15 CONVERSA', 'uma conversa de um evento, sem parceria', $q$
+        INSERT INTO atlas_conversa (parceria_id, evento_id, usuario_id)
+        VALUES (NULL, (SELECT id FROM evento WHERE edicao = 2027), (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example')) $q$);
+    PERFORM pg_temp.recusa('V15 CONVERSA', 'conversa sem parceria e sem evento', 'ck_atlas_conversa_dono', $q$
+        INSERT INTO atlas_conversa (parceria_id, evento_id, usuario_id)
+        VALUES (NULL, NULL, (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example')) $q$);
+    PERFORM pg_temp.recusa('V15 CONVERSA', 'conversa de um evento que não existe', 'fk_atlas_conversa_evento', $q$
+        INSERT INTO atlas_conversa (parceria_id, evento_id, usuario_id)
+        VALUES (NULL, -1, (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example')) $q$);
+    PERFORM pg_temp.aceita('V15 TRACO', 'o traço sem parceria de uma conversa sem parceria', $q$
+        DO $d$
+        DECLARE v_conversa BIGINT;
+        BEGIN
+            INSERT INTO atlas_conversa (parceria_id, evento_id, usuario_id)
+            VALUES (NULL, (SELECT id FROM evento WHERE edicao = 2027), (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example'))
+            RETURNING id INTO v_conversa;
+            INSERT INTO atlas_traco (parceria_id, conversa_id, turno, ordem, etapa, resultado, iniciada_em, duracao_ms)
+            VALUES (NULL, v_conversa, gen_random_uuid(), 1, 'LLM_IDA', 'OK', now(), 1);
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V15 ISOLAMENTO', 'traço sem parceria numa conversa de parceria', 'rn_atlas_traco_parceria', $q$
+        DO $d$
+        DECLARE v_conversa BIGINT;
+        BEGIN
+            INSERT INTO atlas_conversa (parceria_id, usuario_id)
+            SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example')
+            RETURNING id INTO v_conversa;
+            INSERT INTO atlas_traco (parceria_id, conversa_id, turno, ordem, etapa, resultado, iniciada_em, duracao_ms)
+            VALUES (NULL, v_conversa, gen_random_uuid(), 1, 'LLM_IDA', 'OK', now(), 1);
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V15 ISOLAMENTO', 'traço com parceria numa conversa sem parceria', 'fk_atlas_traco_conversa', $q$
+        DO $d$
+        DECLARE v_conversa BIGINT;
+        BEGIN
+            INSERT INTO atlas_conversa (parceria_id, evento_id, usuario_id)
+            VALUES (NULL, (SELECT id FROM evento WHERE edicao = 2027), (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example'))
+            RETURNING id INTO v_conversa;
+            INSERT INTO atlas_traco (parceria_id, conversa_id, turno, ordem, etapa, resultado, iniciada_em, duracao_ms)
+            VALUES ((SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), v_conversa, gen_random_uuid(), 1, 'LLM_IDA', 'OK', now(), 1);
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V15 ISOLAMENTO', 'relatório do Atlas numa conversa sem parceria', 'fk_atlas_relatorio_conversa', $q$
+        DO $d$
+        DECLARE v_conversa BIGINT;
+        BEGIN
+            INSERT INTO atlas_conversa (parceria_id, evento_id, usuario_id)
+            VALUES (NULL, (SELECT id FROM evento WHERE edicao = 2027), (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example'))
+            RETURNING id INTO v_conversa;
+            INSERT INTO atlas_relatorio (parceria_id, conversa_id, modelo, status, especificacao, criado_por)
+            VALUES ((SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), v_conversa, 'ATIVACAO_EVENTO', 'MONTANDO', '{}',
+                    (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example'));
+        END $d$ $q$);
+    PERFORM pg_temp.confere('V15 CONVERSA', 'as tentativas não deixaram conversa sem parceria', 0,
+        (SELECT count(*) FROM atlas_conversa WHERE parceria_id IS NULL));
+END $$;
+
+-- ---------------------------------------------------------------------
+-- 15. Resultado: a lista de conferências e, se alguma falhou, o erro final (saída diferente de zero com ON_ERROR_STOP)
 -- ---------------------------------------------------------------------
 SELECT grupo, conferencia, esperado, obtido, CASE WHEN ok THEN 'ok' ELSE 'FALHOU' END AS resultado FROM _ver ORDER BY ordem;
 SELECT count(*) AS conferencias, count(*) FILTER (WHERE ok) AS ok, count(*) FILTER (WHERE NOT ok) AS falhas FROM _ver;

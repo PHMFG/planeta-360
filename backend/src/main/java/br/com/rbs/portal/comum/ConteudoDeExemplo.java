@@ -34,6 +34,8 @@ final class ConteudoDeExemplo {
             case XLSX -> pronto("exemplo.xlsx");
             case PPTX -> pronto("exemplo.pptx");
             case ZIP -> pronto("exemplo.zip");
+            case TXT -> txt(nomeOriginal);
+            case XLS -> null;   // só a planilha da agência (rota 66) aceita .xls; a amostra não tem arquivo desse tipo
         });
     }
 
@@ -43,6 +45,12 @@ final class ConteudoDeExemplo {
         } catch (IOException erro) {
             throw new UncheckedIOException("Não consegui ler o arquivo de exemplo " + recurso, erro);
         }
+    }
+
+    /** O texto de um documento de exemplo: o nome do arquivo e o aviso de que é fictício. Só os documentos do Atlas usam .txt. */
+    static byte[] txt(String nomeOriginal) {
+        return ("Arquivo de exemplo\n" + nomeOriginal + "\nDocumento fictício da demonstração do Portal do Patrocinador.\n")
+                .getBytes(StandardCharsets.UTF_8);
     }
 
     static byte[] csv(String nomeOriginal) {

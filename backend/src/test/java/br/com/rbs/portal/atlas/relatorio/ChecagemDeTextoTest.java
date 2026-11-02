@@ -87,10 +87,25 @@ class ChecagemDeTextoTest {
         assertThat(chat(texto).aprovado()).as("chat: " + texto).isFalse();
     }
 
-    @Test
-    void numeroPorExtensoEscapaDaRegraEOPromptOProibe() {
-        // Limite conhecido do plano (10.6): a regra olha algarismo. O prompt proíbe o extenso e o conjunto de avaliação confere.
-        assertThat(paragrafo("Foram dezessete aplicações comprovadas.").aprovado()).isTrue();
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "Foram dezessete aplicações comprovadas.", "Quase cem por cento das aplicações.", "Vinte e três brindes foram entregues.",
+            "Foram dois mil visitantes.", "A ativação foi no primeiro de dezembro.", "Dez de dezembro foi o dia.", "Zero cadastros.",
+            "Duas aplicações de marca.", "Trezentos e doze pessoas passaram."})
+    void recusaNumeroEDataPorExtensoNoParagrafoDoRelatorio(String texto) {
+        // M6: o prompt do relatório manda não escrever número nem data, "nem com algarismo nem por extenso", e o servidor confere
+        Veredito veredito = paragrafo(texto);
+
+        assertThat(veredito.aprovado()).as(texto).isFalse();
+        assertThat(veredito.motivo()).as(texto).contains("por extenso").contains("marcador");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "Um dos destaques foi o espaço da marca.", "A primeira vez da marca no festival.", "Os dois manuais valem.",
+            "Em março, a marca esteve no festival.", "O espaço recebeu os visitantes no meio do festival."})
+    void aceitaPalavraQueNaoENumeroNoParagrafoDoRelatorio(String texto) {
+        assertThat(paragrafo(texto).aprovado()).as(texto).isTrue();
     }
 
     @Test
@@ -181,6 +196,97 @@ class ChecagemDeTextoTest {
     void recusaHtmlLinkImagemEUrl(String texto) {
         assertThat(paragrafo(texto).aprovado()).as(texto).isFalse();
         assertThat(chat(texto).aprovado()).as("chat: " + texto).isFalse();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "Veja coleta-atlas.invalid/relatorio agora.", "Veja coleta-atlas.invalid agora.", "Veja coleta-atlas.click hoje.", "Veja site.link hoje.",
+            "Veja //coleta-atlas.click/x hoje.", "Veja coleta-atlas[.]com agora.", "Veja coleta-atlas(.)com agora.", "Veja COLETA-ATLAS.INVALID agora.",
+            "Veja Coleta.Click hoje.", "Veja a.b.coleta-atlas.invalid agora.", "Veja site-novo.link.", "Veja açaí.com agora.", "Veja o portal.rbs hoje.",
+            "Escreva para alguem@coleta-atlas.invalid hoje.", "Veja exemplo.com.br/x.", "Veja sub.dominio.example hoje.",
+            // a regra de dois rótulos de 2 ou mais caracteres abriu estes, que a lista de domínios de topo recusava: a união das duas
+            "Veja x.com/coleta hoje.", "Veja t.co/abc hoje.", "Escreva para coleta@x.io hoje.", "Veja a.b.com hoje.", "Veja x.io hoje.",
+            "Veja X.COM hoje.", "Veja coleta_atlas.invalid hoje.", "Veja a_b.com hoje.", "Veja coleta_atlas.click/x hoje.",
+            // o ponto de outra escrita vale como ponto
+            "Veja coleta-atlas\uFF0Eclick hoje.", "Veja coleta-atlas\u3002click hoje.", "Veja coleta-atlas\uFF61click hoje.", "Veja x\uFF0Ecom hoje.",
+            "Veja www\uFF0Eexemplo\uFF0Ecom hoje.", "Veja //coleta\uFF0Eclick/x hoje.", "Veja coleta-atlas[\uFF0E]com hoje."})
+    void recusaEnderecoSemEsquemaDeQualquerDominioDeTopo(String texto) {
+        assertThat(paragrafo(texto).aprovado()).as("parágrafo: " + texto).isFalse();
+        assertThat(chat(texto).aprovado()).as("chat: " + texto).isFalse();
+        assertThat(paragrafo(texto).motivo()).as(texto).contains("endereço");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "Fale com a produção, p.ex. amanhã cedo.", "O titular, com R.G. e S.A. juntos, assina.", "Cliente Amarelo S.A. participa do evento.",
+            "Etc. e tal. Fim.", "Veja a p. do manual.", "Aguarde... e depois decida.", "Pronto?! Sim.", "Lembre-se: e.g. isto vale.",
+            "A marca teve 100% de adesão", "Ex.: o gerador próprio.", "Veja o item a.b e o c.d.", "Responda com sim ou não.", "Falta pouco... muito pouco.",
+            "Abre às a.m. e fecha às p.m.", "Veja a seção 3.2 e a versão v2.0.", "O item 3.2.1 vale.", "Vale e.g. isto e i.e. aquilo.", "A S.A. e a R.G. valem.",
+            "Escreva a data como 04/12/2026 e a hora como 18h.", "O gerador de 10.000 kVA custa 1.250,00 por dia."})
+    void naoRecusaPontuacaoNemAbreviaturaComUmaLetra(String texto) {
+        assertThat(ChecagemDeTexto.motivoDeForma(texto, texto)).as(texto).isEmpty();
+    }
+
+    /**
+     * A conferência de forma olha também o texto em NFKC: o ponto U+2024 (ponto de preenchimento) e U+FE52 (ponto pequeno) e os dois-pontos
+     * largos U+FF1A viram o caractere comum, e o endereço ou o esquema que escondiam aparece. O ponto U+FF0E, o U+3002 e o U+FF61 já
+     * eram recusados pela regra própria deles.
+     */
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "Veja coleta-atlas\u2024click hoje.", "Veja coleta-atlas\uFE52click hoje.", "Veja x\u2024com hoje.", "Veja x\uFE52com hoje.",
+            "Veja www\u2024exemplo\u2024com hoje.", "Veja www\uFE52exemplo\uFE52com hoje.", "Escreva para alguem@coleta-atlas\u2024invalid hoje.",
+            "Abra javascript\uFF1Aalert agora.", "Abra mailto\uFF1Aalguem agora.", "Abra data\uFF1Atext/html agora.", "Abra ｊａｖａｓｃｒｉｐｔ：alert agora.",
+            "Abra https\uFF1A\u2024\u2024coleta agora.", "Abra ｆｉｌｅ：arquivo agora."})
+    void recusaAVarianteUnicodeDoPontoEDosDoisPontosQueEscondeEnderecoOuEsquema(String texto) {
+        assertThat(ChecagemDeTexto.motivoDeForma(texto, texto)).as(texto).isPresent();
+        assertThat(paragrafo(texto).aprovado()).as("parágrafo: " + texto).isFalse();
+        assertThat(chat(texto).aprovado()).as("chat: " + texto).isFalse();
+        assertThat(paragrafo(texto).motivo()).as(texto).contains("endereço");
+    }
+
+    /** Consequência de olhar o texto em NFKC: os sinais de HTML e de link de largura total viram os comuns e são recusados como eles. */
+    @ParameterizedTest
+    @ValueSource(strings = {"Veja ＜b＞isto＜/b＞ hoje.", "Veja ［aqui］（destino） hoje."})
+    void recusaOHtmlEOLinkDeLarguraTotal(String texto) {
+        assertThat(ChecagemDeTexto.motivoDeForma(texto, texto)).as(texto).isPresent();
+    }
+
+    /** O pedido normal ao lado do aperto: o que o NFKC muda no texto (², ½, º, …, ligadura) não pode virar endereço nem esquema. */
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "A área da ativação tem 36 m² no total.", "A área da ativação tem 36 m².", "Foram 4½ horas de montagem.", "Foram 4½.",
+            "O valor é R$ 10.608,00 por mês.", "O valor é R$ 10.608,00.", "O prazo vai até 30/11/2026.", "O prazo vai até 30/11/2026. Depois, não.",
+            "Aguarde… a produção responde logo.", "Aguarde…", "Aguarde…Depois a produção responde.", "Falta pouco… muito pouco… quase lá.",
+            "A marca ficou em 1º lugar no ranking.", "A marca ficou em 1º.", "O espaço tem 2 km² de área.", "O espaço tem 2 km².",
+            "O portão abre cedo — e fecha tarde.", "O portão abre cedo — fecha tarde — e reabre.", "Veja a seção 3.2 — é curta.",
+            "O ﬁnal do evento é cedo.", "Reunião nº 5, às 18h, no 2º andar.", "A temperatura passa de 30 ℃ à tarde.", "O espaço tem 80 ㎡.",
+            "Responda com sim ou não: «sim» ou «não».", "A marca™ e a empresa® assinam.", "Veja a p. 4 do manual – é rápido."})
+    void naoRecusaTextoNormalComCaractereQueONfkcMuda(String texto) {
+        assertThat(ChecagemDeTexto.motivoDeForma(texto, texto)).as(texto).isEmpty();
+    }
+
+    /** A normalização serve só para conferir: o texto que sai para a pessoa é o que o modelo escreveu, com os caracteres originais. */
+    @Test
+    void oTextoAprovadoSaiComOsCaracteresOriginais() {
+        String texto = "Aguarde… o ﬁnal do evento — a produção avisa ½ dia antes.";
+
+        assertThat(paragrafo(texto).aprovado()).isFalse();   // o ½ é número: a regra dos números segue como estava
+        String semNumero = "Aguarde… o ﬁnal do evento — a produção avisa logo.";
+        Veredito paragrafo = paragrafo(semNumero);
+        Veredito chat = chat(semNumero);
+
+        assertThat(paragrafo.aprovado()).isTrue();
+        assertThat(paragrafo.texto()).isEqualTo(semNumero);
+        assertThat(chat.aprovado()).isTrue();
+        assertThat(chat.texto()).isEqualTo(semNumero);
+        assertThat(checagem.mensagemDoCartao(semNumero).texto()).isEqualTo(semNumero);
+    }
+
+    @Test
+    void depoisDoPontoSemEspacoPareceEnderecoEERecusadoEIssoFoiDecidido() {
+        // "Prazo.Depois" tem a forma de rótulo.rótulo: a regra não distingue de um domínio, e o modelo reescreve com o espaço
+        assertThat(ChecagemDeTexto.motivoDeForma("O prazo.Depois disso, não.", "O prazo.Depois disso, não.")).isPresent();
     }
 
     @Test

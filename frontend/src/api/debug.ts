@@ -1,5 +1,5 @@
 // [TEMPORARIO] Rotas de debug para pôr a chave do modelo de linguagem do Atlas pela tela. Só existem no perfil dev da API
-// (atlas.debug.chaves); em qualquer outro ambiente respondem 404 e o botão não aparece. A chave nunca volta da API: só o final.
+// (atlas.debug.chaves) e só para a RBS; a marca recebe 403, os outros ambientes 404, e o botão não aparece. A chave nunca volta da API: só o final.
 import { ErroApi, pedir } from './cliente'
 import type { UsuarioResumo } from './parcerias'
 
@@ -18,12 +18,12 @@ export type EstadoDoLlm = {
 
 export type TesteDoLlm = { ok: boolean; milissegundos: number; modelo: string; resposta?: string; erro?: string }
 
-/** O estado do modelo, ou null quando a API não tem as rotas de debug (fora do perfil dev). */
+/** O estado do modelo, ou null quando as rotas de debug não valem para quem está na tela: fora do perfil dev (404) ou para a marca (403). */
 export async function obterEstadoDoLlm(): Promise<EstadoDoLlm | null> {
   try {
     return await pedir<EstadoDoLlm>('/debug/llm')
   } catch (erro) {
-    if (erro instanceof ErroApi && erro.status === 404) return null
+    if (erro instanceof ErroApi && (erro.status === 404 || erro.status === 403)) return null
     throw erro
   }
 }

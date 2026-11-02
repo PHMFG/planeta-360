@@ -4,6 +4,9 @@ const DATA_HORA = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeSty
 const DATA = new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeZone: 'America/Sao_Paulo' })
 const NUMERO = new Intl.NumberFormat('pt-BR')
 
+/** A origem de uma conta do relatório como quem lê entende: "pct(a, b) com ..." vira "a ÷ b (em %) com ...". O que a API devolve não muda. */
+export const origemParaLer = (origem: string) => origem.replace(/\bpct\(\s*(\w+)\s*,\s*(\w+)\s*\)/g, '$1 ÷ $2 (em %)')
+
 export function dataHora(iso: string | null | undefined) {
   return iso ? DATA_HORA.format(new Date(iso)) : '—'
 }

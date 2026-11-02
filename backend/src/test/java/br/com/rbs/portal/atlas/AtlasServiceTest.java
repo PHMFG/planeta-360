@@ -139,6 +139,9 @@ class AtlasServiceTest {
             case ItemAviso a -> "aviso";
             case ItemCartao c -> "cartao";
             case ItemRelatorioPronto p -> "relatorio_pronto";
+            case AtlasDtos.ItemCalculo c -> "calculo";
+            case AtlasDtos.ItemPedidoRelatorio r -> "pedido_relatorio";
+            case AtlasDtos.ItemModelo m -> "modelo";
         }).toList();
     }
 
@@ -870,6 +873,7 @@ class AtlasServiceTest {
         assertThat(status("atlas_solicitacao", cartao.solicitacaoId())).isEqualTo("CANCELADA");
         assertThat(tipos(inteira)).containsExactly("usuario", "texto", "cartao", "aviso");
         assertThat(((ItemCartao) inteira.itens().get(2)).status()).isEqualTo("CANCELADA");
+        assertThat(((ItemAviso) inteira.itens().get(3)).texto()).isEqualTo("Relatório descartado. Você pode pedir um novo quando quiser.");
         confereQueToolCallTemResposta(aberta.conversaId(), 0);
         assertThat(atlas.verRelatorio(marca(), cartao.relatorioId()).status()).isEqualTo("DESCARTADO");
     }

@@ -1,0 +1,55 @@
+# Esqueleto do relatório da cota
+
+Use este esqueleto para montar, fora do portal, o relatório de uma cota de patrocínio. Ele traz as seções do relatório oficial e os indicadores de cada uma, sem nenhum número: cada dado vem do portal (consolidação, plano comercial e dados do festival) e deve ser copiado de lá, com a base de cálculo. Onde não houver dado, escreva "indisponível" e o motivo; nunca estime nem deixe zero no lugar.
+
+## Identificação
+
+- Cota:
+- Marca patrocinadora:
+- Ano do festival:
+- Versão do relatório e data em que foi gerado:
+- Pessoa responsável pela conferência:
+
+## Cumprimento das entregas
+
+- Entregas concluídas (percentual e base de cálculo):
+- Entregas pendentes (quantidade):
+
+## Mídia: previsto x exibido
+
+| Indicador | Unidade ou veículo | Dado | Base de cálculo |
+| --- | --- | --- | --- |
+| Mídia prevista |  |  |  |
+| Mídia exibida |  |  |  |
+| Entrega de mídia |  |  |  |
+| Entrega por veículo |  |  |  |
+
+## Ativação no evento
+
+- Aplicações de marca previstas:
+- Aplicações comprovadas:
+- Aplicações comprovadas (%):
+- Fotos de comprovação:
+
+## Pesquisa da ativação
+
+Só para a cota que inclui a pesquisa.
+
+- Base da pesquisa da ativação (respondentes):
+- Resultado por pergunta (sempre com a base de respondentes):
+
+## Cortesias e credenciamento
+
+- Cortesias disponíveis (por setor e dia):
+- Cortesias destinadas (percentual e base de cálculo):
+- Credenciais de serviço por dia (por setor e beneficiário):
+
+## O festival em números
+
+- O festival em números (público, marcas e alcance):
+- Pesquisa geral do festival (com a base de respondentes):
+
+## Observações
+
+- Dados que ainda faltam e quem vai enviá-los:
+- Pontos para validar com a marca:

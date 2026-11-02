@@ -6,15 +6,22 @@
 // A resposta do modelo chega em tempo real: o tempo pensando com o resumo do raciocínio, o texto e o que ele está fazendo; no
 // fim do turno, a conversa gravada toma o lugar da versão ao vivo. Com o debug ligado no servidor, as ferramentas que o modelo
 // usou aparecem na ordem em que rodaram. Com o relatório desligado na API, o botão dele aparece desabilitado.
-import { useEffect, useRef } from 'react'
-import type { ItemDaConversa, RespostaDoCartao } from '../api/atlas'
+// O que a resposta cita dos documentos vira chip no texto e entra na lista "Fontes", e abre no visualizador. A conta aparece depois
+// do texto, em "Como calculei". O pedido de outro relatório e o modelo em branco são respostas diretas, sem nova ida ao modelo.
+import { Fragment, useEffect, useRef } from 'react'
+import type { FonteDaResposta, ItemDaConversa, RespostaDoCartao } from '../api/atlas'
 import type { ParceriaResumo } from '../api/tipos'
 import type { RespostaAoVivo } from './AoVivo'
 import { CartaoDocumento } from './CartaoDocumento'
+import { CartaoModelo } from './CartaoModelo'
+import { CartaoPedidoDeRelatorio } from './CartaoPedidoDeRelatorio'
 import { CartaoSolicitacao } from './CartaoSolicitacao'
+import { ComoCalculei } from './ComoCalculei'
 import { Compositor } from './Compositor'
+import { BotaoDiagnostico } from './Diagnostico'
 import { AvisoAtlas, BlocoDoAtlas, BlocoDoSistema, Chip, LinhaBuscando, MensagemVoce, TextoDoAtlas, TextoDoSistema } from './Elementos'
 import { FerramentaDebug, SemFerramentaDebug } from './FerramentaDebug'
+import { ListaDeFontes, TextoComCitacoes } from './Fontes'
 import { Raciocinio } from './Raciocinio'
 
 /** Na tela, pensamentos seguidos viram uma caixa só, com o resumo de cada um. */
@@ -46,10 +53,23 @@ function agrupar(itens: ItemDaConversa[]): Grupo[] {
 }
 
 /** Sem o campo, o servidor é de antes da marcação e todo texto conta como do modelo. O pensamento só existe com o modelo. */
-const doModelo = (item: ItemDaResposta) => item.tipo === 'raciocinio' || item.tipo === 'ferramenta' || (item.tipo === 'texto' && item.porModelo !== false)
+const doModelo = (item: ItemDaResposta) =>
+  item.tipo === 'raciocinio' || item.tipo === 'ferramenta' || item.tipo === 'calculo' || item.tipo === 'pedido_relatorio' || item.tipo === 'modelo' || (item.tipo === 'texto' && item.porModelo !== false)
+
+/** A conta roda antes de o modelo escrever, mas se lê depois do texto que a usa. O resto fica na ordem em que aconteceu. */
+function naOrdemDeLeitura(itens: ItemDaResposta[]) {
+  const ultimoTexto = itens.findLastIndex((item) => item.tipo === 'texto')
+  if (ultimoTexto < 0) return itens
+  const contas = itens.slice(0, ultimoTexto).filter((item) => item.tipo === 'calculo')
+  return contas.length === 0 ? itens : [...itens.slice(0, ultimoTexto + 1).filter((item) => item.tipo !== 'calculo'), ...contas, ...itens.slice(ultimoTexto + 1)]
+}
+
+/** As fontes citadas na resposta: "Como calculei" abre a origem de um número pelo mesmo chip. */
+const fontesDoGrupo = (itens: ItemDaResposta[]) => itens.flatMap((item) => (item.tipo === 'texto' ? (item.fontes ?? []) : []))
 
 type Props = {
-  parceria: ParceriaResumo
+  /** Nula na conversa da RBS, que é por edição e não tem cartão, relatório nem pedido de relatório. */
+  parceria: ParceriaResumo | null
   itens: ItemDaConversa[]
   /** A mensagem que acabou de sair, mostrada enquanto a resposta não chega. */
   enviada: string | null
@@ -62,12 +82,15 @@ type Props = {
   relatorioDisponivel: boolean
   /** Com o debug ligado no servidor, a resposta sem ferramenta também diz isso. */
   debugDeFerramentas: boolean
+  /** A conversa, quando esta pessoa pode abrir o diagnóstico de cada resposta. */
+  conversaDoDiagnostico: number | null
   texto: string
   aoMudarTexto: (texto: string) => void
   aoEnviar: () => void
   aoMontar: () => void
   aoResponder: (solicitacaoId: number, resposta: RespostaDoCartao) => Promise<void>
   aoAbrirDocumento: (aba: 'conversa' | 'fontes') => void
+  aoAbrirFonte: (fonte: FonteDaResposta) => void
   compacta?: boolean
 }
 
@@ -81,12 +104,14 @@ export function AreaDaConversa({
   llm,
   relatorioDisponivel,
   debugDeFerramentas,
+  conversaDoDiagnostico,
   texto,
   aoMudarTexto,
   aoEnviar,
   aoMontar,
   aoResponder,
   aoAbrirDocumento,
+  aoAbrirFonte,
   compacta = false,
 }: Props) {
   const fim = useRef<HTMLDivElement>(null)
@@ -115,21 +140,42 @@ export function AreaDaConversa({
   const largura = compacta ? 'w-full' : 'mx-auto w-full max-w-[760px]'
   const espaco = compacta ? 'gap-5' : 'gap-[26px]'
 
-  function conteudo(item: ItemDaResposta, posicao: number) {
+  function conteudo(item: ItemDaResposta, posicao: number, grupo: ItemDaResposta[]) {
     switch (item.tipo) {
       case 'raciocinio':
         return <Raciocinio key={posicao} resumos={item.resumos} />
       case 'ferramenta':
         return <FerramentaDebug key={posicao} ferramenta={item} />
       case 'texto':
-        return doModelo(item) ? <TextoDoAtlas key={posicao}>{item.texto}</TextoDoAtlas> : <TextoDoSistema key={posicao}>{item.texto}</TextoDoSistema>
+        return doModelo(item) ? (
+          <Fragment key={posicao}>
+            <TextoDoAtlas>
+              <TextoComCitacoes texto={item.texto} fontes={item.fontes ?? []} aoAbrir={aoAbrirFonte} />
+            </TextoDoAtlas>
+            {item.fontes && <ListaDeFontes fontes={item.fontes} aoAbrir={aoAbrirFonte} />}
+          </Fragment>
+        ) : (
+          <TextoDoSistema key={posicao}>{item.texto}</TextoDoSistema>
+        )
       case 'aviso':
         return <TextoDoSistema key={posicao}>{item.texto}</TextoDoSistema>
       case 'cartao':
         return <CartaoSolicitacao key={posicao} item={item} aoResponder={aoResponder} />
       case 'relatorio_pronto':
-        return <CartaoDocumento key={posicao} parceria={parceria} relatorioId={item.relatorioId} titulo={item.titulo} aoAbrir={aoAbrirDocumento} />
+        return parceria && <CartaoDocumento key={posicao} parceria={parceria} relatorioId={item.relatorioId} titulo={item.titulo} aoAbrir={aoAbrirDocumento} />
+      case 'calculo':
+        return <ComoCalculei key={posicao} calculo={item} fontes={fontesDoGrupo(grupo)} aoAbrir={aoAbrirFonte} />
+      case 'pedido_relatorio':
+        return parceria && <CartaoPedidoDeRelatorio key={posicao} parceria={parceria} item={item} aoPedirModelo={aoMudarTexto} />
+      case 'modelo':
+        return <CartaoModelo key={posicao} titulo={item.titulo} conteudo={item.conteudo} nomeArquivo={item.nomeArquivo} />
     }
+  }
+
+  /** O botão do diagnóstico da resposta. Um grupo pode ter mais de um turno (a resposta de um cartão): vale o último. */
+  function diagnosticoDe(grupo: ItemDaResposta[]) {
+    const turno = grupo.map((item) => ('turno' in item ? item.turno : undefined)).filter(Boolean).at(-1)
+    return conversaDoDiagnostico !== null && turno ? <BotaoDiagnostico conversaId={conversaDoDiagnostico} turno={turno} /> : null
   }
 
   return (
@@ -143,11 +189,15 @@ export function AreaDaConversa({
                 <MensagemVoce key={indice} texto={grupo.texto} />
               ) : grupo.itens.some(doModelo) ? (
                 <BlocoDoAtlas key={indice} compacto={compacta}>
-                  {grupo.itens.map(conteudo)}
+                  {naOrdemDeLeitura(grupo.itens).map((item, posicao, ordenados) => conteudo(item, posicao, ordenados))}
                   {debugDeFerramentas && !grupo.itens.some((item) => item.tipo === 'ferramenta') && <SemFerramentaDebug />}
+                  {diagnosticoDe(grupo.itens)}
                 </BlocoDoAtlas>
               ) : (
-                <BlocoDoSistema key={indice}>{grupo.itens.map(conteudo)}</BlocoDoSistema>
+                <BlocoDoSistema key={indice}>
+                  {grupo.itens.map((item, posicao, todos) => conteudo(item, posicao, todos))}
+                  {diagnosticoDe(grupo.itens)}
+                </BlocoDoSistema>
               ),
             )}
           </div>
@@ -161,7 +211,7 @@ export function AreaDaConversa({
                   <FerramentaDebug key={posicao} ferramenta={parte} />
                 ) : (
                   <TextoDoAtlas key={posicao} digitando={posicao === aoVivo.partes.length - 1 && !aoVivo.etapa}>
-                    {parte.texto}
+                    <TextoComCitacoes texto={parte.texto} />
                   </TextoDoAtlas>
                 ),
               )}
@@ -176,20 +226,22 @@ export function AreaDaConversa({
       </div>
 
       <div className={`${largura} flex flex-col gap-2.5 ${compacta ? 'pt-3' : 'px-4 pb-1 sm:px-0'}`}>
-        <div>
-          <Chip
-            icone="ri-file-chart-line"
-            carregando={pensando && !aoVivo}
-            disabled={!relatorioDisponivel || pensando || cartaoAberto}
-            title={relatorioDisponivel ? undefined : 'O relatório não está disponível nesta versão'}
-            onClick={aoMontar}
-          >
-            Montar relatório da ativação{!relatorioDisponivel && ' · em breve'}
-          </Chip>
-        </div>
+        {parceria && (
+          <div>
+            <Chip
+              icone="ri-file-chart-line"
+              carregando={pensando && !aoVivo}
+              disabled={!relatorioDisponivel || pensando || cartaoAberto}
+              title={relatorioDisponivel ? undefined : 'O relatório não está disponível nesta versão'}
+              onClick={aoMontar}
+            >
+              Montar relatório da ativação{!relatorioDisponivel && ' · em breve'}
+            </Chip>
+          </div>
+        )}
         {llm && <Compositor valor={texto} aoMudar={aoMudarTexto} aoEnviar={aoEnviar} rotuloEnviar="Enviar" ocupado={pensando} habilitado compacto={compacta} />}
         {!llm && !relatorioDisponivel && <AvisoAtlas titulo="O Atlas está sem o modelo de linguagem agora">Dá para ler a conversa, mas não enviar mensagens. Tente de novo mais tarde.</AvisoAtlas>}
-        <p className="pb-1 text-center text-xs text-white/55 max-sm:hidden">Só os dados desta parceria · o Atlas não escreve números por conta própria</p>
+        <p className="pb-1 text-center text-xs text-white/55 max-sm:hidden">{parceria ? 'Só os dados desta parceria' : 'Só os documentos gerais da edição'} · todo número do Atlas vem de uma fonte</p>
       </div>
     </div>
   )

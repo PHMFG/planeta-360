@@ -15,10 +15,10 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Rotas 46 a 48 do contrato (docs/api.md): o cartão de perguntas e o relatório que o Atlas monta. [ATLAS] Só existem com
+ * Rotas 46 a 48 e 65 do contrato (docs/api.md): o cartão de perguntas, o relatório que o Atlas monta e o descarte dele. [ATLAS] Só existem com
  * {@code atlas.relatorio.ligado=true}; sem a propriedade (o padrão: o Atlas é só o chat) o Spring não as mapeia e elas respondem
- * 404, como qualquer rota que não existe. A rota 46 é só do Admin Patrocinador (o PermissaoAntesDoCorpo responde 403 à RBS antes
- * de o corpo ser lido); as rotas 47 e 48 são de quem é da parceria e da RBS. [ISOLAMENTO] Cartão de outra parceria ou de outro
+ * 404, como qualquer rota que não existe. As rotas 46 e 65 são só do Admin Patrocinador (o PermissaoAntesDoCorpo responde 403 à RBS
+ * antes de o corpo ser lido); as rotas 47 e 48 são de quem é da parceria e da RBS. [ISOLAMENTO] Cartão de outra parceria ou de outro
  * usuário dá 404. Todas as regras estão no AtlasService.
  */
 @RestController
@@ -51,5 +51,12 @@ public class AtlasRelatorioController {
     @GetMapping("/api/parcerias/{id}/atlas/relatorios")
     public List<RelatorioAtlasResumoDto> listarRelatorios(@AuthenticationPrincipal UsuarioAutenticado usuario, @PathVariable long id) {
         return servico.listarRelatorios(usuario, id);
+    }
+
+    /** 65. O mesmo corpo da 47, já com o status {@code DESCARTADO}. Só o Admin Patrocinador (a RBS recebe 403 antes de tudo). */
+    @PostMapping("/api/atlas/relatorios/{id}/descartar")
+    public RelatorioAtlasDto descartarRelatorio(@AuthenticationPrincipal UsuarioAutenticado usuario, @PathVariable long id,
+                                                HttpServletRequest requisicao) {
+        return servico.descartarRelatorio(usuario, id, requisicao);
     }
 }

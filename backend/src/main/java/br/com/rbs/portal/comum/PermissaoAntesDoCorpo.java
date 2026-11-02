@@ -4,6 +4,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.Map;
 import java.util.Set;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
@@ -20,12 +21,17 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
  * Três regras, cada uma com as mesmas frases dos Services (que continuam conferindo: aqui é só a primeira linha de defesa):
  * <ul>
  *   <li>{@link #ROTAS_SO_DA_RBS}: perfil que não é Admin RBS recebe 403 ("Esta operação é restrita à equipe da RBS.").</li>
- *   <li>{@link #ROTAS_SO_DO_PATROCINADOR}: a conversa com o Atlas (rotas 42 a 46); a RBS recebe 403 ("Só o Admin Patrocinador da
+ *   <li>{@link #ROTAS_SO_DO_PATROCINADOR}: a conversa com o Atlas (rotas 42, 43 e 46); a RBS recebe 403 ("Só o Admin Patrocinador da
  *       parceria conversa com o Atlas.") antes de o corpo ser lido. Parceria, dono da conversa e aba o service confere depois.</li>
+ *   <li>{@link #ROTAS_DA_CONVERSA_DO_ATLAS}: a mensagem, a leitura e o diagnóstico da conversa (rotas 44, 45 e 49). São do dono da
+ *       conversa: o patrocinador, na conversa da parceria dele, e, com {@code atlas.rbs.ligado}, a RBS, na conversa dela (a do Atlas da
+ *       RBS, sem parceria). A RBS recebe o mesmo 403 antes do corpo quando o Atlas da RBS está desligado ou quando a conversa é de uma
+ *       parceria; conversa que não existe ou é de outra pessoa da RBS o service responde com 404.</li>
  *   <li>O envio das perguntas da pesquisa (PUT): a RBS recebe 403; o patrocinador precisa ser da parceria (404 se não for)
  *       e ter a aba PESQUISA liberada (403), e só depois o corpo é lido e validado.</li>
  * </ul>
- * A lista usa o método e o padrão exatamente como estão nos controllers. O PermissaoAntesDoCorpoTest confere que toda rota
+ * A lista usa o método e o padrão exatamente como estão nos controllers; o HEAD vale como GET (senão ele contornaria a conferência
+ * e a validação dos parâmetros viria antes do 403). O PermissaoAntesDoCorpoTest confere que toda rota
  * da API está em uma das listas (estas duas ou a de rotas de ambos os perfis, no teste), então rota nova não passa sem decisão.
  */
 @Component
@@ -52,19 +58,59 @@ public class PermissaoAntesDoCorpo implements HandlerInterceptor, WebMvcConfigur
             "GET /api/relatorios.csv",
             "POST /api/parcerias/{id}/relatorios",
             "PATCH /api/relatorios/{id}/status",
-            "POST /api/parcerias/{id}/aplicacoes/{aproveitamentoId}/comprovacoes");
+            "POST /api/parcerias/{id}/aplicacoes/{aproveitamentoId}/comprovacoes",
+            // O diagnóstico do Atlas (rotas 50 a 53): os turnos de todas as conversas e os provedores. Sempre mapeadas; com o
+            // diagnóstico desligado a RBS recebe 404 do service.
+            "GET /api/atlas/diagnostico/turnos",
+            "GET /api/atlas/diagnostico/turnos/{turno}",
+            "GET /api/atlas/provedores",
+            "POST /api/atlas/provedores/{nome}/teste",
+            // Os documentos do Atlas (rotas 54, 55, 57 e 58): enviar, listar, aprovar/recusar/revogar/reindexar e ver os trechos. A 56
+            // (ver um documento) é das duas pontas: a marca vê o que o escopo dela permite.
+            "POST /api/documentos",
+            "GET /api/documentos",
+            "PATCH /api/documentos/{id}/status",
+            "GET /api/documentos/{id}/trechos",
+            // A busca de teste do Atlas (rota 61): a RBS escolhe uma parceria e uma consulta e vê o que a busca faria por ela. As
+            // rotas 59 e 60 (o visualizador: o arquivo e um trecho do documento) são das duas pontas, como a 56.
+            "POST /api/atlas/busca-teste",
+            // Os prazos da edição, da cota e da parceria (rotas 62 a 64): listar, cadastrar e desativar.
+            "GET /api/eventos/{id}/prazos",
+            "POST /api/eventos/{id}/prazos",
+            "DELETE /api/prazos/{id}",
+            // O Atlas da RBS (rotas 67 e 68): abrir e listar as conversas da RBS por edição. Sempre mapeadas; com atlas.rbs.ligado=false
+            // a RBS recebe 404 do service.
+            "POST /api/eventos/{eventoId}/atlas/conversas",
+            "GET /api/eventos/{eventoId}/atlas/conversas",
+            // As rotas de debug da chave do modelo (temporárias, só no perfil dev): só a RBS as usa. Só existem com
+            // atlas.debug.chaves=true; o teste de classificação liga a propriedade, porque no perfil test elas não existem.
+            "GET /api/debug/llm",
+            "PUT /api/debug/llm",
+            "DELETE /api/debug/llm",
+            "POST /api/debug/llm/teste");
 
     /**
-     * As rotas que só o Admin Patrocinador usa e que a RBS não usa por ele: a conversa com o Atlas e o cartão de perguntas (rotas 42
-     * a 46 do docs/api.md). A RBS só lê o relatório que o Atlas montou (rotas 47 e 48, que não estão aqui). Rota nova só da marca:
+     * As rotas que só o Admin Patrocinador usa e que a RBS não usa por ele: abrir e listar as conversas da parceria com o Atlas e o
+     * cartão de perguntas (rotas 42, 43 e 46 do docs/api.md) e o descarte do relatório (rota 65). A RBS só lê o relatório que o Atlas
+     * montou (rotas 47 e 48, que não estão aqui) e o diagnóstico de todas as conversas (rotas 50 a 53, na lista da RBS). A mensagem, a
+     * leitura e o diagnóstico da conversa (rotas 44, 45 e 49) estão em {@link #ROTAS_DA_CONVERSA_DO_ATLAS}. Rota nova só da marca:
      * acrescente aqui.
      */
     public static final Set<String> ROTAS_SO_DO_PATROCINADOR = Set.of(
             "POST /api/parcerias/{id}/atlas/conversas",
             "GET /api/parcerias/{id}/atlas/conversas",
+            "POST /api/atlas/solicitacoes/{id}/respostas",
+            // Descartar o relatório pela tela (rota 65): existe só com atlas.relatorio.ligado=true, como as rotas 46 a 48.
+            "POST /api/atlas/relatorios/{id}/descartar");
+
+    /**
+     * A mensagem, a leitura e o diagnóstico de uma conversa do Atlas (rotas 44, 45 e 49): do dono dela. O patrocinador passa; a RBS só
+     * passa na conversa dela (Atlas da RBS, M8) e com {@code atlas.rbs.ligado}. Rota nova da conversa: acrescente aqui.
+     */
+    public static final Set<String> ROTAS_DA_CONVERSA_DO_ATLAS = Set.of(
             "POST /api/atlas/conversas/{id}/mensagens",
             "GET /api/atlas/conversas/{id}",
-            "POST /api/atlas/solicitacoes/{id}/respostas");
+            "GET /api/atlas/conversas/{id}/diagnostico");
 
     /** PUT /api/parcerias/{id}/pesquisa/perguntas: do Admin Patrocinador da parceria, com a aba liberada. */
     static final String ENVIO_DAS_PERGUNTAS = "PUT /api/parcerias/{id}/pesquisa/perguntas";
@@ -72,9 +118,11 @@ public class PermissaoAntesDoCorpo implements HandlerInterceptor, WebMvcConfigur
     static final String SO_PATROCINADOR_ENVIA_PERGUNTAS = "Só o Admin Patrocinador da parceria envia as perguntas da pesquisa.";
 
     private final VerificadorDeAcesso verificador;
+    private final boolean rbsLigado;
 
-    public PermissaoAntesDoCorpo(VerificadorDeAcesso verificador) {
+    public PermissaoAntesDoCorpo(VerificadorDeAcesso verificador, @Value("${atlas.rbs.ligado:false}") boolean rbsLigado) {
         this.verificador = verificador;
+        this.rbsLigado = rbsLigado;
     }
 
     @Override
@@ -93,15 +141,21 @@ public class PermissaoAntesDoCorpo implements HandlerInterceptor, WebMvcConfigur
         if (padrao == null) {
             return true;
         }
-        String rota = requisicao.getMethod() + " " + padrao;
+        // HEAD é o GET sem corpo na resposta: o Spring o atende pelo mesmo método do controller, então a regra é a mesma.
+        String metodo = "HEAD".equals(requisicao.getMethod()) ? "GET" : requisicao.getMethod();
+        String rota = metodo + " " + padrao;
 
         if (ROTAS_SO_DA_RBS.contains(rota)) {
             verificador.exigirRbs(usuario);
         } else if (ROTAS_SO_DO_PATROCINADOR.contains(rota)) {
             verificador.exigirPatrocinador(usuario, VerificadorDeAcesso.SO_PATROCINADOR_USA_O_ATLAS);
+        } else if (ROTAS_DA_CONVERSA_DO_ATLAS.contains(rota)) {
+            if (usuario.ehRbs() && !rbsPodeEntrarNaConversa(requisicao)) {
+                verificador.exigirPatrocinador(usuario, VerificadorDeAcesso.SO_PATROCINADOR_USA_O_ATLAS);
+            }
         } else if (ENVIO_DAS_PERGUNTAS.equals(rota)) {
             verificador.exigirPatrocinador(usuario, SO_PATROCINADOR_ENVIA_PERGUNTAS);
-            Long parceriaId = idDaParceria(requisicao);
+            Long parceriaId = idDoCaminho(requisicao);
             if (parceriaId != null) {   // id que não é número: quem responde é o tratador de erros (404), depois daqui
                 verificador.exigirParceria(usuario, parceriaId);
                 verificador.exigirAbaLiberada(usuario, parceriaId, ABA_DA_PESQUISA);
@@ -110,9 +164,21 @@ public class PermissaoAntesDoCorpo implements HandlerInterceptor, WebMvcConfigur
         return true;
     }
 
+    /**
+     * A RBS entra na conversa do Atlas só com o Atlas da RBS ligado e se a conversa não é de uma parceria (conversa que não existe passa:
+     * o service responde 404). Fora disso ela recebe o 403 de sempre, antes do corpo e sem dizer se a conversa existe.
+     */
+    private boolean rbsPodeEntrarNaConversa(HttpServletRequest requisicao) {
+        if (!rbsLigado) {
+            return false;
+        }
+        Long conversaId = idDoCaminho(requisicao);
+        return conversaId == null || !verificador.conversaDoAtlasEDeParceria(conversaId);
+    }
+
     /** O {id} da URL, ou nulo se não for um número. */
     @SuppressWarnings("unchecked")
-    private static Long idDaParceria(HttpServletRequest requisicao) {
+    private static Long idDoCaminho(HttpServletRequest requisicao) {
         Map<String, String> variaveis = (Map<String, String>) requisicao.getAttribute(HandlerMapping.URI_TEMPLATE_VARIABLES_ATTRIBUTE);
         try {
             return variaveis == null ? null : Long.valueOf(variaveis.get("id"));

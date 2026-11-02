@@ -43,6 +43,13 @@ public final class ServidorDeLlmFalso implements AutoCloseable {
     /** O prompt do resumo do raciocínio, o mesmo recurso que a API manda como mensagem de sistema. */
     private static final String PROMPT_DO_RESUMO = lerOPromptDoResumo();
 
+    /** O uso que toda resposta falsa traz: 10 tokens de entrada, 5 de saída e o custo de lista do OpenCode Go (usage.opencode.list_cost). */
+    public static final String USO = "\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":5,\"total_tokens\":15,"
+            + "\"opencode\":{\"list_cost\":0.0004}}";
+    public static final int TOKENS_DE_ENTRADA = 10;
+    public static final int TOKENS_DE_SAIDA = 5;
+    public static final String CUSTO_DE_LISTA = "0.0004";
+
     /** A frase do 400 de quando falta o reasoning_content (a do DeepSeek). */
     public static final String SEM_RACIOCINIO = "The reasoning_content in the thinking mode must be passed back to the API.";
 
@@ -265,6 +272,11 @@ public final class ServidorDeLlmFalso implements AutoCloseable {
         return completacao("\"content\":" + json(conteudo), "stop");
     }
 
+    /** Uma resposta só de texto, com o reasoning_content (o raciocínio cru do modelo, que não pode sair da API). */
+    public static String textoComRaciocinio(String conteudo, String raciocinio) {
+        return completacao("\"content\":" + json(conteudo) + ",\"reasoning_content\":" + json(raciocinio), "stop");
+    }
+
     /** Uma resposta com um pedido de ferramenta, e o reasoning_content se não for nulo. */
     public static String chamada(String id, String nome, String argumentosJson, String raciocinio) {
         String chamada = "{\"id\":" + json(id) + ",\"type\":\"function\",\"function\":{\"name\":" + json(nome)
@@ -277,7 +289,7 @@ public final class ServidorDeLlmFalso implements AutoCloseable {
     private static String completacao(String mensagem, String motivo) {
         return "{\"id\":\"chatcmpl-teste\",\"object\":\"chat.completion\",\"created\":1,\"model\":\"deepseek-v4.1-flash\","
                 + "\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\"," + mensagem + "},\"finish_reason\":\"" + motivo + "\"}],"
-                + "\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":5,\"total_tokens\":15}}";
+                + USO + "}";
     }
 
     static String json(String texto) {
@@ -327,8 +339,7 @@ public final class ServidorDeLlmFalso implements AutoCloseable {
         public String fim(String motivo) {
             evento("{\"index\":0,\"delta\":{},\"finish_reason\":\"" + motivo + "\"}");
             eventos.append("data: {\"id\":\"chatcmpl-fluxo\",\"object\":\"chat.completion.chunk\",\"created\":1,"
-                    + "\"model\":\"deepseek-v4.1-flash\",\"choices\":[],"
-                    + "\"usage\":{\"prompt_tokens\":10,\"completion_tokens\":5,\"total_tokens\":15}}\n\n");
+                    + "\"model\":\"deepseek-v4.1-flash\",\"choices\":[]," + USO + "}\n\n");
             eventos.append("data: [DONE]\n\n");
             return eventos.toString();
         }

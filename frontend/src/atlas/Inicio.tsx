@@ -60,10 +60,10 @@ export function Inicio({ parceria, llm, relatorioDisponivel, conversas, texto, a
         <p className="text-center text-base text-white/80">
           {!relatorioDisponivel
             ? llm
-              ? 'Pergunte sobre os números da sua parceria.'
+              ? 'Pergunte sobre os números da sua parceria ou sobre os documentos do evento.'
               : 'O Atlas está sem o modelo de linguagem agora. Tente de novo mais tarde.'
             : llm
-              ? 'Monte o relatório da sua ativação ou pergunte sobre os números da sua parceria.'
+              ? 'Monte o relatório da sua ativação ou pergunte sobre os números da parceria e os documentos do evento.'
               : 'Monte o relatório da sua ativação com os números do portal.'}
         </p>
         {llm && (
@@ -89,6 +89,9 @@ export function Inicio({ parceria, llm, relatorioDisponivel, conversas, texto, a
           </button>
           {llm && (
             <>
+              <button type="button" className={CARTAO} onClick={() => aoPerguntar('Até quando preciso informar os geradores na Arena?')} disabled={pensando}>
+                <ConteudoSugestao icone="ri-file-search-line" titulo="Até quando informo os geradores?" assunto="Documentos do evento" />
+              </button>
               <button type="button" className={CARTAO} onClick={() => aoPerguntar('Quantas aplicações de marca já foram comprovadas?')} disabled={pensando}>
                 <ConteudoSugestao icone="ri-checkbox-circle-line" titulo="Quantas aplicações foram comprovadas?" assunto="Aplicações da marca" />
               </button>
@@ -128,7 +131,7 @@ export function Inicio({ parceria, llm, relatorioDisponivel, conversas, texto, a
           </div>
         )}
       </div>
-      <p className="pt-6 text-center text-xs text-white/55">Só os dados desta parceria · o Atlas não escreve números por conta própria</p>
+      <p className="pt-6 text-center text-xs text-white/55">Só os dados desta parceria · todo número do Atlas vem de uma fonte</p>
     </div>
   )
 }

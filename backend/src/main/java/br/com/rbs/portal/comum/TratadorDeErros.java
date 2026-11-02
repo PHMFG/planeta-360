@@ -46,12 +46,15 @@ public class TratadorDeErros extends ResponseEntityExceptionHandler {
      * Regras do banco que NÃO são gatilhos nossos (únicos, checks e chaves estrangeiras) e a frase que o usuário deve ler.
      * Os gatilhos "rn_*" já trazem a frase pronta em português e passam direto. Cada etapa acrescenta aqui o que precisar.
      */
-    private static final Map<String, String> REGRAS_CONHECIDAS = Map.of(
-            "uq_parceria", "Este patrocinador já tem parceria nesta edição do evento.",
-            "uq_email_autorizado", "Este e-mail já está autorizado nesta parceria.",
-            "uq_usuario_email", "Já existe um usuário com este e-mail.",
-            "uq_patrocinador_nome", "Já existe um patrocinador com este nome.",
-            "fk_parceria_usuario_so_admin_patrocinador", "Só usuários do perfil Admin Patrocinador podem ser vinculados a uma parceria.");
+    private static final Map<String, String> REGRAS_CONHECIDAS = Map.ofEntries(
+            Map.entry("uq_parceria", "Este patrocinador já tem parceria nesta edição do evento."),
+            Map.entry("uq_email_autorizado", "Este e-mail já está autorizado nesta parceria."),
+            Map.entry("uq_usuario_email", "Já existe um usuário com este e-mail."),
+            Map.entry("uq_patrocinador_nome", "Já existe um patrocinador com este nome."),
+            Map.entry("fk_parceria_usuario_so_admin_patrocinador", "Só usuários do perfil Admin Patrocinador podem ser vinculados a uma parceria."),
+            Map.entry("uq_documento_grupo_versao", "Já existe um documento com esta chave e esta versão neste escopo. Envie de novo."),
+            Map.entry("uq_documento_arquivo", "Este arquivo já pertence a outro documento."),
+            Map.entry("fk_documento_aprovador", "Só a equipe da RBS aprova um documento."));
 
     // ---------------------------------------------------------------------
     // Erros do próprio portal
@@ -187,6 +190,8 @@ public class TratadorDeErros extends ResponseEntityExceptionHandler {
                         case "aplicacoes" -> "Não encontramos esta aplicação.";
                         case "conversas" -> "Não encontramos esta conversa.";
                         case "solicitacoes" -> "Não encontramos esta solicitação.";
+                        // O id de um trecho na URL (rota 60) não é número: a mesma frase do documento, para o 404 não dizer qual dos dois falhou.
+                        case "documentos", "trechos" -> "Não encontramos este documento.";
                         default -> Problemas.detalhePadrao(HttpStatus.NOT_FOUND);
                     };
                 }

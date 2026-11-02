@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
 import org.springframework.transaction.annotation.Transactional;
@@ -23,9 +24,12 @@ import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandl
 /**
  * [PERMISSAO] O perfil (e, no envio das perguntas, a parceria e a aba liberada) é conferido ANTES de o Spring ler o corpo e
  * as validações: o patrocinador recebe 403 numa rota da RBS qualquer que seja o corpo, e não 422 (ou 400) de campo.
- * Atende o item 3 da Entrega 2. Cada teste é desfeito no fim (@Transactional).
+ * Atende o item 3 da Entrega 2. Cada teste é desfeito no fim (@Transactional). As rotas de debug da chave do modelo (só da RBS) só
+ * existem com {@code atlas.debug.chaves=true}, que no perfil test vem desligado: por isso o teste de classificação liga a propriedade
+ * (é o mesmo contexto do DebugDoLlmTest).
  */
 @TesteDeIntegracao
+@TestPropertySource(properties = "atlas.debug.chaves=true")
 @Transactional
 class PermissaoAntesDoCorpoTest {
 
@@ -131,6 +135,34 @@ class PermissaoAntesDoCorpoTest {
         }
     }
 
+    @Test
+    void headContaComoGetEPatrocinadorRecebe403NasRotasDaRbsMesmoComFiltroInvalido() {
+        SessaoDeApi amarelo = SessaoDeApi.entrar(mvc, AMARELO);
+
+        for (String uri : List.of("/api/atlas/diagnostico/turnos?tamanho=999", "/api/atlas/diagnostico/turnos?de=ontem",
+                "/api/historico?tamanho=999", "/api/historico?pagina=-1", "/api/historico.csv?q=" + "x".repeat(200),
+                "/api/entregas?tamanho=999", "/api/cargas?pagina=-1", "/api/relatorios?status=INVENTADO", "/api/atlas/provedores")) {
+            assertThat(amarelo.head(uri)).as("HEAD " + uri).hasStatus(HttpStatus.FORBIDDEN);
+            assertThat(amarelo.get(uri)).as("GET " + uri).hasStatus(HttpStatus.FORBIDDEN);
+        }
+    }
+
+    @Test
+    void headDaRbsContinuaComAValidacaoDoGet() {
+        SessaoDeApi rbs = SessaoDeApi.entrar(mvc, RBS);
+
+        assertThat(rbs.head("/api/historico?tamanho=999")).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(rbs.head("/api/historico")).hasStatus(HttpStatus.OK);
+    }
+
+    @Test
+    void rbsRecebe403NoHeadDoDiagnosticoDaConversa() {
+        SessaoDeApi rbs = SessaoDeApi.entrar(mvc, RBS);
+
+        assertThat(rbs.head("/api/atlas/conversas/1/diagnostico")).hasStatus(HttpStatus.FORBIDDEN);
+        assertThat(rbs.head("/api/parcerias/1/atlas/conversas")).hasStatus(HttpStatus.FORBIDDEN);
+    }
+
     // ---------------------------------------------------------------------
     // PUT das perguntas: perfil, parceria e aba liberada antes da validação
     // ---------------------------------------------------------------------
@@ -196,8 +228,11 @@ class PermissaoAntesDoCorpoTest {
             "GET /api/parcerias/{id}/pesquisa", "PUT /api/parcerias/{id}/pesquisa/perguntas",
             "GET /api/parcerias/{id}/consolidacao", "GET /api/parcerias/{id}/relatorio", "GET /api/relatorios/{id}/csv",
             "GET /api/parcerias/{id}/aplicacoes", "GET /api/campos", "GET /api/parcerias/{id}/dados",
-            "POST /api/parcerias/{id}/dados",
-            "GET /api/atlas/relatorios/{id}", "GET /api/parcerias/{id}/atlas/relatorios");
+            "POST /api/parcerias/{id}/dados", "POST /api/parcerias/{id}/dados-informados/{chave}/arquivo",
+            "GET /api/atlas/relatorios/{id}", "GET /api/parcerias/{id}/atlas/relatorios",
+            // Rota 56: a RBS vê o documento inteiro; a marca, pelo escopo dela, só o que a rota mostra. Rotas 59 e 60: o visualizador
+            // (o arquivo e um trecho inteiro), com a mesma regra de acesso.
+            "GET /api/documentos/{id}", "GET /api/documentos/{id}/conteudo", "GET /api/documentos/{id}/trechos/{trechoId}");
 
     @Test
     void todaRotaDaApiEstaClassificadaEAListaDaRbsSoTemRotasQueExistem() {
@@ -220,10 +255,14 @@ class PermissaoAntesDoCorpoTest {
         assertThat(mapeadas).as("rota nova sem decisão: é só da RBS (PermissaoAntesDoCorpo.ROTAS_SO_DA_RBS), só do patrocinador "
                 + "(PermissaoAntesDoCorpo.ROTAS_SO_DO_PATROCINADOR) ou dos dois (ROTAS_DO_PATROCINADOR neste teste)?")
                 .containsExactlyInAnyOrderElementsOf(unir(PermissaoAntesDoCorpo.ROTAS_SO_DA_RBS,
-                        PermissaoAntesDoCorpo.ROTAS_SO_DO_PATROCINADOR, ROTAS_DO_PATROCINADOR));
-        assertThat(PermissaoAntesDoCorpo.ROTAS_SO_DA_RBS).as("uma rota não é das duas listas")
-                .doesNotContainAnyElementsOf(PermissaoAntesDoCorpo.ROTAS_SO_DO_PATROCINADOR);
-        assertThat(PermissaoAntesDoCorpo.ROTAS_SO_DO_PATROCINADOR).hasSize(5);
+                        PermissaoAntesDoCorpo.ROTAS_SO_DO_PATROCINADOR, PermissaoAntesDoCorpo.ROTAS_DA_CONVERSA_DO_ATLAS,
+                        ROTAS_DO_PATROCINADOR));
+        assertThat(PermissaoAntesDoCorpo.ROTAS_SO_DA_RBS).as("uma rota não é das listas do patrocinador")
+                .doesNotContainAnyElementsOf(PermissaoAntesDoCorpo.ROTAS_SO_DO_PATROCINADOR)
+                .doesNotContainAnyElementsOf(PermissaoAntesDoCorpo.ROTAS_DA_CONVERSA_DO_ATLAS);
+        assertThat(PermissaoAntesDoCorpo.ROTAS_SO_DO_PATROCINADOR).doesNotContainAnyElementsOf(PermissaoAntesDoCorpo.ROTAS_DA_CONVERSA_DO_ATLAS);
+        assertThat(PermissaoAntesDoCorpo.ROTAS_SO_DO_PATROCINADOR).hasSize(4);
+        assertThat(PermissaoAntesDoCorpo.ROTAS_DA_CONVERSA_DO_ATLAS).hasSize(3);
     }
 
     @SafeVarargs
@@ -233,6 +272,40 @@ class PermissaoAntesDoCorpoTest {
             todas.addAll(conjunto);
         }
         return todas;
+    }
+
+    // ---------------------------------------------------------------------
+    // Documentos do Atlas (rotas 54, 55, 57 e 58): só da RBS, qualquer que seja o corpo, o filtro ou o id; a 56 é das duas pontas
+    // ---------------------------------------------------------------------
+
+    @Test
+    void patrocinadorRecebe403NasRotasDeDocumentoDaRbsQualquerQueSejaOCorpoOFiltroOuOId() {
+        SessaoDeApi amarelo = SessaoDeApi.entrar(mvc, AMARELO);
+
+        for (String corpo : List.of("", "{}", "isto nao e json", "{\"acao\":\"APAGAR\"}", "{\"acao\":\"REVOGAR\"}")) {
+            for (String uri : List.of("/api/documentos/1/status", "/api/documentos/999999/status", "/api/documentos/abc/status")) {
+                MvcTestResult resposta = amarelo.patch(uri, corpo);
+                assertThat(resposta).as("PATCH " + uri + " [" + corpo + "]").hasStatus(HttpStatus.FORBIDDEN);
+                assertThat(lerJson(resposta, "$.detail")).isEqualTo(SO_RBS);
+            }
+        }
+        for (String uri : List.of("/api/documentos", "/api/documentos?status=TALVEZ", "/api/documentos?tamanho=999", "/api/documentos?eventoId=abc",
+                "/api/documentos/1/trechos", "/api/documentos/999999/trechos", "/api/documentos/abc/trechos", "/api/documentos/1/trechos?tamanho=999")) {
+            MvcTestResult resposta = amarelo.get(uri);
+            assertThat(resposta).as("GET " + uri).hasStatus(HttpStatus.FORBIDDEN);
+            assertThat(lerJson(resposta, "$.detail")).isEqualTo(SO_RBS);
+            assertThat(amarelo.head(uri)).as("HEAD " + uri).hasStatus(HttpStatus.FORBIDDEN);
+        }
+    }
+
+    @Test
+    void aRota56EDasDuasPontasEAMarcaDe404NoQueNaoEDela() {
+        SessaoDeApi amarelo = SessaoDeApi.entrar(mvc, AMARELO);
+        SessaoDeApi rbs = SessaoDeApi.entrar(mvc, RBS);
+
+        assertThat(amarelo.get("/api/documentos/999999")).hasStatus(HttpStatus.NOT_FOUND);
+        assertThat(rbs.get("/api/documentos/999999")).hasStatus(HttpStatus.NOT_FOUND);
+        assertThat(amarelo.get("/api/documentos")).hasStatus(HttpStatus.FORBIDDEN);
     }
 
     // ---------------------------------------------------------------------
@@ -278,6 +351,42 @@ class PermissaoAntesDoCorpoTest {
         assertThat(amarelo.post("/api/parcerias/" + parceria + "/atlas/conversas", "isto nao e json")).hasStatus(HttpStatus.BAD_REQUEST);
         assertThat(amarelo.post("/api/parcerias/" + parceria + "/atlas/conversas", "{\"atalho\":\"OUTRO\",\"modelo\":\"X\"}"))
                 .hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
+    }
+
+    @Test
+    void rbsRecebe403NoDiagnosticoDaConversaQualquerQueSejaOId() {
+        SessaoDeApi rbs = SessaoDeApi.entrar(mvc, RBS);
+
+        for (String uri : List.of("/api/atlas/conversas/1/diagnostico", "/api/atlas/conversas/999999/diagnostico")) {
+            MvcTestResult resposta = rbs.get(uri);
+            assertThat(resposta).as(uri).hasStatus(HttpStatus.FORBIDDEN);
+            assertThat(lerJson(resposta, "$.detail")).isEqualTo(SO_PATROCINADOR_ATLAS);
+        }
+    }
+
+    // ---------------------------------------------------------------------
+    // O diagnóstico (rotas 50 a 53) e o debug da chave: só da RBS, qualquer que seja o corpo, o filtro ou o id
+    // ---------------------------------------------------------------------
+
+    @Test
+    void patrocinadorRecebe403NoDiagnosticoDaRbsEmNoDebugDaChaveMesmoComFiltroOuCorpoInvalido() {
+        SessaoDeApi amarelo = SessaoDeApi.entrar(mvc, AMARELO);
+
+        for (String uri : List.of("/api/atlas/diagnostico/turnos", "/api/atlas/diagnostico/turnos?tamanho=999",
+                "/api/atlas/diagnostico/turnos?pagina=-1", "/api/atlas/diagnostico/turnos?parceriaId=abc",
+                "/api/atlas/diagnostico/turnos/" + java.util.UUID.randomUUID(), "/api/atlas/diagnostico/turnos/nao-e-um-uuid",
+                "/api/atlas/provedores", "/api/debug/llm")) {
+            MvcTestResult resposta = amarelo.get(uri);
+            assertThat(resposta).as(uri).hasStatus(HttpStatus.FORBIDDEN);
+            assertThat(lerJson(resposta, "$.detail")).isEqualTo(SO_RBS);
+        }
+        for (String corpo : List.of("", "{}", "isto nao e json", "{\"chave\":\"x\"}")) {
+            assertThat(amarelo.post("/api/atlas/provedores/llm/teste", corpo)).as("teste do llm com [" + corpo + "]").hasStatus(HttpStatus.FORBIDDEN);
+            assertThat(amarelo.post("/api/atlas/provedores/inexistente/teste", corpo)).hasStatus(HttpStatus.FORBIDDEN);
+            assertThat(amarelo.put("/api/debug/llm", corpo)).as("PUT do debug com [" + corpo + "]").hasStatus(HttpStatus.FORBIDDEN);
+            assertThat(amarelo.post("/api/debug/llm/teste", corpo)).hasStatus(HttpStatus.FORBIDDEN);
+        }
+        assertThat(amarelo.delete("/api/debug/llm")).hasStatus(HttpStatus.FORBIDDEN);
     }
 
     @Test

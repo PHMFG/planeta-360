@@ -4,22 +4,19 @@ import br.com.rbs.portal.atlas.debug.DebugDoLlmDtos.ChaveRequisicao;
 import br.com.rbs.portal.atlas.debug.DebugDoLlmDtos.EstadoDto;
 import br.com.rbs.portal.atlas.debug.DebugDoLlmDtos.TesteDto;
 import br.com.rbs.portal.atlas.debug.DebugDoLlmDtos.UsuarioResumoDto;
+import br.com.rbs.portal.atlas.diagnostico.DiagnosticoDtos.TesteDeProvedorDto;
+import br.com.rbs.portal.atlas.diagnostico.ProvedoresService;
 import br.com.rbs.portal.atlas.provedor.FabricaDeProvedor;
 import br.com.rbs.portal.atlas.provedor.ProvedorAtual;
 import br.com.rbs.portal.atlas.provedor.ProvedorAtual.ChaveDoDebug;
 import br.com.rbs.portal.atlas.provedor.ProvedorAtual.Escolha;
 import br.com.rbs.portal.atlas.provedor.ProvedorAtual.Origem;
-import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.MensagemDeChat;
-import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.PedidoAoLlm;
-import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.RespostaDoLlm;
 import br.com.rbs.portal.atlas.provedor.ProvedorSpringAi;
 import br.com.rbs.portal.comum.DadosInvalidosException;
 import br.com.rbs.portal.comum.Datas;
 import br.com.rbs.portal.comum.UsuarioAutenticado;
-import java.io.IOException;
 import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
@@ -31,17 +28,12 @@ import org.springframework.stereotype.Service;
  * [ATLAS] Recurso TEMPORÁRIO de debug: pôr a chave do modelo de linguagem do Atlas pela tela, sem reiniciar a API e sem variável
  * de ambiente. Só existe com {@code atlas.debug.chaves=true} (ligado no perfil dev). A chave vai para o {@link ProvedorAtual} e
  * fica só na memória (some quando a API reinicia): nunca no banco, em arquivo ou em log. O log de cada troca leva só quem trocou,
- * a origem, a base URL, o modelo e o final da chave. Qualquer usuário logado pode usar: é ferramenta da equipe em desenvolvimento.
+ * a origem, a base URL, o modelo e o final da chave. Só a RBS pode usar (o controller e o PermissaoAntesDoCorpo conferem o perfil): é
+ * ferramenta da equipe em desenvolvimento.
  */
 @Service
 @ConditionalOnProperty(name = "atlas.debug.chaves", havingValue = "true")
 public class DebugDoLlmService {
-
-    /** A mensagem do teste: mínima, sem ferramentas. */
-    static final String MENSAGEM_DO_TESTE = "Responda só com a palavra ok.";
-    static final String SEM_CHAVE = "Nenhuma chave configurada.";
-    static final String SESSAO_DO_TESTE = "debug-teste";
-    static final int LIMITE_DA_RESPOSTA = 200;
 
     static final String CHAVE_INVALIDA = "A chave precisa ter de 8 a 500 caracteres, sem espaços.";
     static final String BASE_URL_INVALIDA = "A base URL precisa começar com https:// (ou ser http://localhost ou http://127.0.0.1).";
@@ -56,10 +48,12 @@ public class DebugDoLlmService {
 
     private final ProvedorAtual provedor;
     private final FabricaDeProvedor fabrica;
+    private final ProvedoresService provedores;
 
-    public DebugDoLlmService(ProvedorAtual provedor, FabricaDeProvedor fabrica) {
+    public DebugDoLlmService(ProvedorAtual provedor, FabricaDeProvedor fabrica, ProvedoresService provedores) {
         this.provedor = provedor;
         this.fabrica = fabrica;
+        this.provedores = provedores;
     }
 
     /** GET: o que vale agora. */
@@ -89,7 +83,7 @@ public class DebugDoLlmService {
         String modeloUsado = modelo != null ? modelo : fabrica.modeloPadrao();
         boolean raciocinio = corpo.raciocinio() != null ? corpo.raciocinio() : raciocinioAtual(provedor.escolha());
         provedor.usarChaveDoDebug(new ChaveDoDebug(fabrica.montar(chave, baseUrlUsada, modeloUsado, raciocinio), baseUrlUsada,
-                modeloUsado, raciocinio, finalDa(chave), usuario, Datas.emBrasilia(OffsetDateTime.now())));
+                modeloUsado, raciocinio, ProvedoresService.finalDa(chave), usuario, Datas.emBrasilia(OffsetDateTime.now())));
         return registrarTroca(usuario);
     }
 
@@ -102,26 +96,11 @@ public class DebugDoLlmService {
     /**
      * POST /teste: manda ao provedor atual uma mensagem mínima, sem ferramentas, e diz se respondeu. Não grava nada (não conta
      * para o teto diário do Atlas, que conta as mensagens gravadas). O erro é o do {@link ProvedorSpringAi}, já sem a chave, e
-     * passa de novo pela limpeza.
+     * passa de novo pela limpeza. É o mesmo teste da rota 53 para o provedor {@code llm} ({@link ProvedoresService#testarLlm}).
      */
     public TesteDto testar() {
-        Escolha escolha = provedor.escolha();
-        String modelo = estado(escolha).modelo();
-        if (escolha.provedor() == null) {
-            return new TesteDto(false, 0, modelo, null, SEM_CHAVE);
-        }
-        long inicio = System.nanoTime();
-        try {
-            RespostaDoLlm resposta = escolha.provedor().responder(
-                    new PedidoAoLlm(SESSAO_DO_TESTE, List.of(MensagemDeChat.usuario(MENSAGEM_DO_TESTE)), List.of()));
-            String texto = resposta.texto() == null ? "" : resposta.texto();
-            if (texto.length() > LIMITE_DA_RESPOSTA) {
-                texto = texto.substring(0, LIMITE_DA_RESPOSTA);
-            }
-            return new TesteDto(true, desde(inicio), modelo, texto, null);
-        } catch (RuntimeException erro) {
-            return new TesteDto(false, desde(inicio), modelo, null, motivo(erro));
-        }
+        TesteDeProvedorDto teste = provedores.testarLlm();
+        return new TesteDto(teste.ok(), teste.milissegundos(), teste.modelo(), teste.resposta(), teste.erro());
     }
 
     // ---------------------------------------------------------------------
@@ -140,7 +119,7 @@ public class DebugDoLlmService {
                         raciocinio);
             }
             case AMBIENTE -> new EstadoDto(Origem.AMBIENTE.name(), fabrica.baseUrlPadrao(), fabrica.modeloPadrao(),
-                    finalDa(fabrica.chaveDoAmbiente()), null, null, disponivel, raciocinio);
+                    ProvedoresService.finalDa(fabrica.chaveDoAmbiente()), null, null, disponivel, raciocinio);
             case NENHUM -> new EstadoDto(Origem.NENHUM.name(), fabrica.baseUrlPadrao(), fabrica.modeloPadrao(), null, null, null,
                     disponivel, raciocinio);
         };
@@ -167,36 +146,7 @@ public class DebugDoLlmService {
         return agora;
     }
 
-    /**
-     * O motivo da falha, sem a chave: a mensagem do {@link ProvedorSpringAi} (que já risca a chave) e, quando a causa mais funda é
-     * de rede ({@link IOException}: servidor fora do ar, nome que não resolve, tempo esgotado), o nome e a frase dela, que nunca
-     * levam a chave. As outras causas (o erro HTTP do provedor, cujo corpo pode repetir a chave) não entram.
-     */
-    private static String motivo(RuntimeException erro) {
-        String motivo = erro.getMessage() == null || erro.getMessage().isBlank() ? erro.getClass().getSimpleName() : erro.getMessage();
-        Throwable raiz = erro;
-        while (raiz.getCause() != null && raiz.getCause() != raiz) {
-            raiz = raiz.getCause();
-        }
-        if (raiz instanceof IOException rede) {
-            motivo = motivo + " Causa: " + rede.getClass().getSimpleName() + (rede.getMessage() == null ? "" : ": " + rede.getMessage());
-        }
-        return ProvedorSpringAi.limpar(motivo, null);
-    }
-
-    /** Os 4 últimos caracteres da chave; nulo sem chave ou com chave curta demais (menos de 8), para não mostrá-la inteira. */
-    static String finalDa(String chave) {
-        if (chave == null || chave.length() < 8) {
-            return null;
-        }
-        return chave.substring(chave.length() - 4);
-    }
-
     private static String vazioViraNulo(String texto) {
         return texto == null || texto.isBlank() ? null : texto.strip();
-    }
-
-    private static long desde(long inicio) {
-        return (System.nanoTime() - inicio) / 1_000_000;
     }
 }

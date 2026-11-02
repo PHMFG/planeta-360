@@ -1,0 +1,30 @@
+{"paragrafo": "A entrega de mídia ficou em [VALOR], acima do previsto no plano.", "selos": ["acima do previsto"], "rotulo": "coerente", "split": "ajuste"}
+{"paragrafo": "Foram comprovadas [VALOR] aplicações, abaixo do que o plano previa.", "selos": ["abaixo do previsto"], "rotulo": "coerente", "split": "ajuste"}
+{"paragrafo": "As inserções exibidas chegaram a [VALOR] e superaram o previsto.", "selos": ["acima do previsto"], "rotulo": "coerente", "split": "reserva"}
+{"paragrafo": "A comprovação das aplicações ficou em [VALOR], ainda abaixo do previsto.", "selos": ["abaixo do previsto"], "rotulo": "coerente", "split": "ajuste"}
+{"paragrafo": "O exibido passou do combinado, com [VALOR].", "selos": ["acima do previsto"], "rotulo": "coerente", "split": "ajuste"}
+{"paragrafo": "O resultado de [VALOR] não alcançou o previsto para a mídia.", "selos": ["abaixo do previsto"], "rotulo": "coerente", "split": "reserva"}
+{"paragrafo": "A mídia entregou mais do que o plano: [VALOR].", "selos": ["acima do previsto"], "rotulo": "coerente", "split": "ajuste"}
+{"paragrafo": "Faltou chegar ao previsto: foram [VALOR] aplicações comprovadas.", "selos": ["abaixo do previsto"], "rotulo": "coerente", "split": "ajuste"}
+{"paragrafo": "Com [VALOR], a entrega de mídia superou o plano comercial.", "selos": ["acima do previsto"], "rotulo": "coerente", "split": "reserva"}
+{"paragrafo": "As aplicações comprovadas, [VALOR], ficaram aquém do plano.", "selos": ["abaixo do previsto"], "rotulo": "coerente", "split": "ajuste"}
+{"paragrafo": "A mídia ficou acima do previsto, e as aplicações, abaixo: [VALOR] e [VALOR].", "selos": ["acima do previsto", "abaixo do previsto"], "rotulo": "coerente", "split": "ajuste"}
+{"paragrafo": "Enquanto a entrega de mídia superou o plano, com [VALOR], a comprovação não chegou ao previsto, com [VALOR].", "selos": ["acima do previsto", "abaixo do previsto"], "rotulo": "coerente", "split": "ajuste"}
+{"paragrafo": "A entrega de mídia, com [VALOR], foi além do contratado.", "selos": ["acima do previsto"], "rotulo": "coerente", "split": "reserva"}
+{"paragrafo": "O número de aplicações comprovadas, [VALOR], ficou menor que o combinado.", "selos": ["abaixo do previsto"], "rotulo": "coerente", "split": "ajuste"}
+{"paragrafo": "A entrega registrada foi de [VALOR], acima do que estava no plano da cota.", "selos": ["acima do previsto"], "rotulo": "coerente", "split": "ajuste"}
+{"paragrafo": "A entrega de mídia ficou em [VALOR], abaixo do previsto no plano.", "selos": ["acima do previsto"], "rotulo": "incoerente", "split": "reserva"}
+{"paragrafo": "Foram comprovadas [VALOR] aplicações, acima do que o plano previa.", "selos": ["abaixo do previsto"], "rotulo": "incoerente", "split": "ajuste"}
+{"paragrafo": "As inserções exibidas chegaram a [VALOR] e não alcançaram o previsto.", "selos": ["acima do previsto"], "rotulo": "incoerente", "split": "ajuste"}
+{"paragrafo": "A comprovação das aplicações ficou em [VALOR], superando o previsto.", "selos": ["abaixo do previsto"], "rotulo": "incoerente", "split": "reserva"}
+{"paragrafo": "O exibido ficou menor que o combinado, com [VALOR].", "selos": ["acima do previsto"], "rotulo": "incoerente", "split": "ajuste"}
+{"paragrafo": "O resultado de [VALOR] ultrapassou o previsto para a mídia.", "selos": ["abaixo do previsto"], "rotulo": "incoerente", "split": "ajuste"}
+{"paragrafo": "A mídia entregou menos do que o plano: [VALOR].", "selos": ["acima do previsto"], "rotulo": "incoerente", "split": "ajuste"}
+{"paragrafo": "Foi além do previsto: foram [VALOR] aplicações comprovadas.", "selos": ["abaixo do previsto"], "rotulo": "incoerente", "split": "reserva"}
+{"paragrafo": "Com [VALOR], a entrega de mídia não chegou ao plano comercial.", "selos": ["acima do previsto"], "rotulo": "incoerente", "split": "ajuste"}
+{"paragrafo": "As aplicações comprovadas, [VALOR], superaram o plano.", "selos": ["abaixo do previsto"], "rotulo": "incoerente", "split": "ajuste"}
+{"paragrafo": "A mídia ficou abaixo do previsto, e as aplicações, acima: [VALOR] e [VALOR].", "selos": ["acima do previsto", "abaixo do previsto"], "rotulo": "incoerente", "split": "reserva"}
+{"paragrafo": "Enquanto a entrega de mídia não alcançou o plano, com [VALOR], a comprovação superou o previsto, com [VALOR].", "selos": ["acima do previsto", "abaixo do previsto"], "rotulo": "incoerente", "split": "ajuste"}
+{"paragrafo": "A entrega de mídia, com [VALOR], ficou aquém do contratado.", "selos": ["acima do previsto"], "rotulo": "incoerente", "split": "ajuste"}
+{"paragrafo": "O número de aplicações comprovadas, [VALOR], foi maior que o combinado.", "selos": ["abaixo do previsto"], "rotulo": "incoerente", "split": "reserva"}
+{"paragrafo": "A entrega registrada foi de [VALOR], abaixo do que estava no plano da cota.", "selos": ["acima do previsto"], "rotulo": "incoerente", "split": "ajuste"}

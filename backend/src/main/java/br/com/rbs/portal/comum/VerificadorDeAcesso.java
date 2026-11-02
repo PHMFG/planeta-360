@@ -66,6 +66,18 @@ public class VerificadorDeAcesso {
     }
 
     /**
+     * [PERMISSAO] A conversa do Atlas existe e é de uma parceria (a da marca)? A RBS não conversa pelas conversas das marcas: com o
+     * Atlas da RBS ligado, as rotas da conversa só deixam a RBS entrar quando isto é falso. Conversa que não existe é falso (o
+     * service responde 404).
+     */
+    public boolean conversaDoAtlasEDeParceria(long conversaId) {
+        return jdbc.sql("SELECT EXISTS (SELECT 1 FROM atlas_conversa WHERE id = :id AND parceria_id IS NOT NULL)")
+                .param("id", conversaId)
+                .query(Boolean.class)
+                .single();
+    }
+
+    /**
      * [PERMISSAO] O patrocinador só passa numa aba liberada para a parceria dele; a RBS passa em qualquer aba. Como no
      * contrato (objeto Aba), a aba só conta como liberada se estiver liberada E visível. O 403 diz o motivo: aba que a
      * cota não inclui ({@link #ABA_FORA_DA_COTA}) ou aba da cota que a RBS ainda não abriu ({@link #ABA_NAO_LIBERADA}).

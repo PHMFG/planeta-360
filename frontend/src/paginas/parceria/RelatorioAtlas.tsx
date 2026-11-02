@@ -1,9 +1,10 @@
 // Relatório do Atlas: documento de trabalho da marca, em A4, com a origem de cada número em "Fontes e cálculos". [ATLAS]
 // Não é o relatório oficial: a RBS não valida este documento, e o selo diz isso em toda página.
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 import { ErroApi } from '../../api/cliente'
 import { NOME_STATUS_ATLAS, listarRelatoriosAtlas, obterRelatorioAtlas, type RelatorioAtlasResumo } from '../../api/atlas'
+import { BotaoDescartar } from '../../atlas/BotaoDescartar'
 import { useDados } from '../../api/useDados'
 import { Aviso } from '../../componentes/Aviso'
 import { Botao, LinkBotao } from '../../componentes/Botao'
@@ -16,6 +17,33 @@ import { useSessao } from '../../sessao/Sessao'
 import { dataHora } from '../../util/formatar'
 import { useParceria, useRecarregarSeAbaFechou } from './ContextoParceria'
 
+/**
+ * Abre a impressão quando as fotos da galeria já chegaram (até 8 s): uma foto a caminho sairia em branco no A4. Sair da página cancela,
+ * para não imprimir a tela seguinte, e um segundo clique durante a espera não abre outro diálogo.
+ */
+function useImprimirComAsFotos() {
+  const espera = useRef<number | null>(null)
+  useEffect(
+    () => () => {
+      if (espera.current !== null) window.clearTimeout(espera.current)
+    },
+    [],
+  )
+  return useCallback(() => {
+    if (espera.current !== null) return
+    const inicio = Date.now()
+    const tentar = () => {
+      if (document.querySelector('[data-foto-carregando]') && Date.now() - inicio < 8000) {
+        espera.current = window.setTimeout(tentar, 150)
+      } else {
+        espera.current = null
+        window.print()
+      }
+    }
+    espera.current = window.setTimeout(tentar, 300)
+  }, [])
+}
+
 export function RelatorioAtlas() {
   const parceria = useParceria()
   const { usuario } = useSessao()
@@ -27,12 +55,13 @@ export function RelatorioAtlas() {
   const [busca, setBusca] = useSearchParams()
   const impresso = useRef(false)
   const pronto = relatorio.pronto
+  const imprimir = useImprimirComAsFotos()
   useEffect(() => {
     if (!pronto || impresso.current || busca.get('imprimir') !== '1') return
     impresso.current = true
     setBusca({}, { replace: true })
-    window.setTimeout(() => window.print(), 300)
-  }, [pronto, busca, setBusca])
+    imprimir()
+  }, [pronto, busca, setBusca, imprimir])
   useRecarregarSeAbaFechou(relatorio)
 
   return (
@@ -51,17 +80,18 @@ export function RelatorioAtlas() {
             {dado.status !== 'PRONTO' && (
               <Aviso tipo="ausente" titulo={`Relatório ${NOME_STATUS_ATLAS[dado.status].toLowerCase()}`}>
                 {dado.status === 'DESCARTADO'
-                  ? 'Ficou parado por mais de 7 dias e foi descartado. Peça um relatório novo ao Atlas.'
+                  ? 'Este relatório não segue mais. Peça um relatório novo ao Atlas.'
                   : 'Ainda não terminou: os números abaixo são os de agora e podem mudar até o Atlas finalizar.'}
               </Aviso>
             )}
             <div className="flex flex-wrap gap-3 print:hidden">
-              <Botao variante="secundario" icone="ri-printer-line" onClick={() => window.print()}>
+              <Botao variante="secundario" icone="ri-printer-line" onClick={imprimir}>
                 Imprimir ou salvar PDF
               </Botao>
               <LinkBotao to={`/parceria/${parceria.id}/relatorio`} variante="secundario" icone="ri-arrow-left-line">
                 Voltar aos relatórios
               </LinkBotao>
+              {!rbs && dado.criadoPor?.id === usuario?.id && (dado.status === 'MONTANDO' || dado.status === 'AGUARDANDO_RESPOSTA') && <BotaoDescartar relatorioId={dado.id} aoDescartar={relatorio.recarregar} />}
             </div>
             <p className="text-xs font-medium text-texto-2 print:hidden">
               Pedido por {dado.criadoPor?.nome ?? '—'} em {dataHora(dado.criadoEm)}

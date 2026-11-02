@@ -1,0 +1,40 @@
+{"mensagem": "foram 1200 visitantes", "rotulo": "responde_ao_cartao", "split": "ajuste"}
+{"mensagem": "1072 cadastros", "rotulo": "responde_ao_cartao", "split": "ajuste"}
+{"mensagem": "deu uns 900 de publico", "rotulo": "responde_ao_cartao", "split": "reserva"}
+{"mensagem": "visitantes 1500 e cadastros 300", "rotulo": "responde_ao_cartao", "split": "ajuste"}
+{"mensagem": "a agencia disse 2 mil", "rotulo": "responde_ao_cartao", "split": "ajuste"}
+{"mensagem": "mil e duzentos", "rotulo": "responde_ao_cartao", "split": "reserva"}
+{"mensagem": "pode colocar 1200", "rotulo": "responde_ao_cartao", "split": "ajuste"}
+{"mensagem": "brindes 500 distribuidos 480", "rotulo": "responde_ao_cartao", "split": "ajuste"}
+{"mensagem": "o total de visitantes foi 3400", "rotulo": "responde_ao_cartao", "split": "reserva"}
+{"mensagem": "já tenho o número: 1.200", "rotulo": "responde_ao_cartao", "split": "ajuste"}
+{"mensagem": "até quando informo os geradores?", "rotulo": "outro_assunto", "split": "ajuste"}
+{"mensagem": "antes disso, quantas aplicações temos?", "rotulo": "outro_assunto", "split": "ajuste"}
+{"mensagem": "qual a tarifa de energia", "rotulo": "outro_assunto", "split": "reserva"}
+{"mensagem": "quem é o contato do plantão", "rotulo": "outro_assunto", "split": "ajuste"}
+{"mensagem": "me manda o modelo de briefing", "rotulo": "outro_assunto", "split": "ajuste"}
+{"mensagem": "quantas cortesias tenho", "rotulo": "outro_assunto", "split": "reserva"}
+{"mensagem": "o logo foi aprovado?", "rotulo": "outro_assunto", "split": "ajuste"}
+{"mensagem": "quando abre o credenciamento", "rotulo": "outro_assunto", "split": "ajuste"}
+{"mensagem": "e o relatório de mídia?", "rotulo": "outro_assunto", "split": "reserva"}
+{"mensagem": "qual meu prazo mais próximo", "rotulo": "outro_assunto", "split": "ajuste"}
+{"mensagem": "deixa pra lá", "rotulo": "cancelar", "split": "ajuste"}
+{"mensagem": "cancela", "rotulo": "cancelar", "split": "ajuste"}
+{"mensagem": "não quero mais o relatório", "rotulo": "cancelar", "split": "reserva"}
+{"mensagem": "desiste", "rotulo": "cancelar", "split": "ajuste"}
+{"mensagem": "agora não", "rotulo": "cancelar", "split": "ajuste"}
+{"mensagem": "depois eu vejo isso", "rotulo": "cancelar", "split": "reserva"}
+{"mensagem": "esquece esse relatório", "rotulo": "cancelar", "split": "ajuste"}
+{"mensagem": "para", "rotulo": "cancelar", "split": "ajuste"}
+{"mensagem": "não vou preencher agora", "rotulo": "cancelar", "split": "reserva"}
+{"mensagem": "fecha isso", "rotulo": "cancelar", "split": "ajuste"}
+{"mensagem": "o que conta como visitante?", "rotulo": "outro_assunto", "split": "ajuste", "dificil": true}
+{"mensagem": "isso é obrigatório?", "rotulo": "outro_assunto", "split": "ajuste", "dificil": true}
+{"mensagem": "tenho que informar os geradores até quando?", "rotulo": "outro_assunto", "split": "reserva", "dificil": true}
+{"mensagem": "como informo a lista de credenciados?", "rotulo": "outro_assunto", "split": "ajuste", "dificil": true}
+{"mensagem": "quem informa as cargas elétricas à produção?", "rotulo": "outro_assunto", "split": "ajuste", "dificil": true}
+{"mensagem": "quantos brindes? sei lá, uns 500", "rotulo": "responde_ao_cartao", "split": "ajuste", "dificil": true}
+{"mensagem": "uns 1200 mais ou menos", "rotulo": "responde_ao_cartao", "split": "ajuste", "dificil": true}
+{"mensagem": "foram 1200", "rotulo": "responde_ao_cartao", "split": "reserva", "dificil": true}
+{"mensagem": "onde coloco os visitantes?", "rotulo": "responde_ao_cartao", "split": "ajuste", "dificil": true}
+{"mensagem": "desisto, deixa pra lá", "rotulo": "cancelar", "split": "ajuste", "dificil": true}

@@ -59,6 +59,33 @@ public final class SessaoDeApi {
         return pedido.exchange();
     }
 
+    /** Um GET com mais um cabeçalho (o {@code Range} do leitor de PDF, por exemplo). */
+    public MvcTestResult getComCabecalho(String uri, String nome, String valor) {
+        var pedido = mvc.get().uri(uri).session(sessao).header(nome, valor);
+        if (agente != null) {
+            pedido = pedido.header("User-Agent", agente);
+        }
+        return pedido.exchange();
+    }
+
+    /** Um HEAD: a mesma rota do GET, sem corpo na resposta. */
+    public MvcTestResult head(String uri) {
+        var pedido = mvc.method(HttpMethod.HEAD).uri(uri).session(sessao);
+        if (agente != null) {
+            pedido = pedido.header("User-Agent", agente);
+        }
+        return pedido.exchange();
+    }
+
+    /** Um HEAD com mais um cabeçalho. */
+    public MvcTestResult headComCabecalho(String uri, String nome, String valor) {
+        var pedido = mvc.method(HttpMethod.HEAD).uri(uri).session(sessao).header(nome, valor);
+        if (agente != null) {
+            pedido = pedido.header("User-Agent", agente);
+        }
+        return pedido.exchange();
+    }
+
     public MvcTestResult post(String uri, String json) {
         return enviar(HttpMethod.POST, uri, json, true);
     }

@@ -23,6 +23,13 @@ const ROTULOS: Record<string, { nome: string; cor: string }> = {
   RASCUNHO: { nome: 'Rascunho', cor: '#572781' },
   VALIDADO: { nome: 'Validado', cor: '#0a6e80' },
   DISPONIBILIZADO: { nome: 'Disponibilizado', cor: '#007a2a' },
+  AGUARDANDO_APROVACAO: { nome: 'Aguardando aprovação', cor: '#8a6a00' },
+  RECUSADO: { nome: 'Recusado', cor: '#c8203f' },
+  PROCESSANDO: { nome: 'Processando', cor: '#073c89' },
+  INDEXADO: { nome: 'Indexado', cor: '#007a2a' },
+  ERRO: { nome: 'Erro', cor: '#c8203f' },
+  SUBSTITUIDO: { nome: 'Substituído', cor: '#616161' },
+  REVOGADO: { nome: 'Revogado', cor: '#424242' },
 }
 
 export const STATUS_ENTREGA: StatusEntrega[] = [

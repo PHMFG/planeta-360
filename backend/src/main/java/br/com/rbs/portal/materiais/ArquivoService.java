@@ -39,7 +39,10 @@ public class ArquivoService {
     static final Set<String> CATEGORIAS_DO_PATROCINADOR = Set.of("MATERIAL_MARCA", "MATERIAL_MIDIA", "DOCUMENTO_INGRESSOS",
             "CONTRATO", "OUTRO");
 
-    /** Todas as categorias do banco (CHECK ck_arquivo_categoria): as do patrocinador e as só da RBS. */
+    /**
+     * As categorias que a rota 17 aceita: as do patrocinador e as só da RBS. O CHECK ck_arquivo_categoria tem mais uma, a DOCUMENTO,
+     * que é só dos documentos do Atlas (rota 54): fica de fora de propósito, e a rota 17 a recusa como categoria inválida.
+     */
     static final Set<String> CATEGORIAS = Set.of("PLANO_COMERCIAL", "MATERIAL_MARCA", "MATERIAL_MIDIA", "RELATORIO_VEICULACAO",
             "COMPROVACAO", "PESQUISA", "CONTRATO", "DOCUMENTO_INGRESSOS", "RELATORIO_PARCERIA", "OUTRO");
 
@@ -145,6 +148,12 @@ public class ArquivoService {
     @Transactional
     public ArquivoBaixado baixar(UsuarioAutenticado usuario, long arquivoId, HttpServletRequest requisicao) {
         ArquivoParaDownload arquivo = arquivos.buscar(arquivoId).orElseThrow(ArquivoService::naoEncontrado);
+        // [ISOLAMENTO] O arquivo de um documento do Atlas (M3) não sai pela rota 18 para a marca, nem o do anexo da própria parceria:
+        // um documento recusado, não aprovado ou revogado (como o D11, com CPFs) sairia por aqui. A marca só lê documento pelo
+        // visualizador, que confere o status e o escopo.
+        if (arquivo.documentoId() != null && !usuario.ehRbs()) {
+            throw naoEncontrado();
+        }
         if (arquivo.parceriaId() == null) {
             if (!usuario.ehRbs()) {
                 throw naoEncontrado();
@@ -174,8 +183,14 @@ public class ArquivoService {
             throw new UncheckedIOException(erro);
         }
 
-        historico.registrar(AcaoHistorico.DOWNLOAD, usuario, arquivo.parceriaId(), "arquivo", arquivoId, null,
-                arquivo.nomeOriginal() + " (versão " + arquivo.versao() + ")", null, requisicao);
+        // O download de um arquivo de documento fica na entidade documento: a marca não vê essas linhas na rota 20.
+        if (arquivo.documentoId() != null) {
+            historico.registrar(AcaoHistorico.DOWNLOAD, usuario, arquivo.parceriaId(), "documento", arquivo.documentoId(), null,
+                    arquivo.nomeOriginal(), null, requisicao);
+        } else {
+            historico.registrar(AcaoHistorico.DOWNLOAD, usuario, arquivo.parceriaId(), "arquivo", arquivoId, null,
+                    arquivo.nomeOriginal() + " (versão " + arquivo.versao() + ")", null, requisicao);
+        }
         return new ArquivoBaixado(caminho, arquivo.nomeOriginal(), arquivo.mimeType(), tamanho);
     }
 

@@ -3,13 +3,15 @@
 # Três jeitos de rodar:
 #   sem perfil  -> banco "portal", só as migrações de todos os ambientes (db/migration). É o jeito de produção.
 #   perfil dev  -> banco "portal", migrações + a amostra de exemplo (db/dev). Uso diário de quem desenvolve.
+#   perfil demo -> a amostra, o kit de documentos, o relatório e o diagnóstico ligados, como na apresentação: sem as rotas de debug da
+#                  chave e sem a caixa de debug das ferramentas (o diagnóstico as substitui). Veja o bloco "demo", abaixo.
 #   perfil test -> banco "portal_teste", igual ao dev, e os testes o apagam e recriam a cada execução.
 #
 # Usuário, senha e endereço do banco vêm de variáveis de ambiente; o padrão serve para a máquina de desenvolvimento.
 #
 # [ATLAS] O modelo de linguagem do Atlas vem DESLIGADO (spring.ai.model.chat=none): o portal e a suíte sobem para todo mundo,
 # sem chave, e a mensagem de texto do Atlas responde 503 (com atlas.relatorio.ligado, o botão "Montar relatório" é o plano B). Para ligar: ATLAS_LLM=openai e OPENCODE_API_KEY, e, se
-# quiser, ATLAS_LLM_BASE_URL e ATLAS_LLM_MODELO. Chave só em variável de ambiente, nunca neste arquivo.
+# quiser, ATLAS_LLM_BASE_URL e ATLAS_LLM_MODELO. Chave em variável de ambiente ou, no perfil dev, em config/segredos.local.properties; nunca neste arquivo.
 
 spring:
   application:
@@ -60,6 +62,28 @@ spring:
 # Com o teto atingido, a rota 44 com texto responde 429. Serve para uma rodada de testes não gastar o limite do provedor.
 atlas:
   teto-diario-por-parceria: ${ATLAS_TETO_DIARIO:200}
+  # [ATLAS] Os limites por usuário (Bucket4j, na memória; M8): mensagens de texto por hora (rota 44, da marca e da RBS), relatórios por
+  # dia que o modelo monta (relatorio_iniciar), aberturas de documento por hora (rota 59, em que cada GET grava uma linha de DOWNLOAD)
+  # e buscas de teste por hora (rota 61, em que cada chamada gasta um embedding do Gemini). O botão não conta. Acima do limite, a rota
+  # responde 429 com quanto falta (a mensagem, o documento e a busca), e o relatório do modelo volta como erro de ferramenta. A ficha
+  # volta aos poucos, sem esperar a hora inteira. No perfil test os valores são altos: o balde fica na memória e o rollback dos testes
+  # não o zera.
+  limites:
+    mensagens-por-hora: ${ATLAS_LIMITE_MENSAGENS_POR_HORA:20}
+    relatorios-por-dia: ${ATLAS_LIMITE_RELATORIOS_POR_DIA:3}
+    documentos-por-hora: ${ATLAS_LIMITE_DOCUMENTOS_POR_HORA:120}
+    buscas-de-teste-por-hora: ${ATLAS_LIMITE_BUSCAS_DE_TESTE_POR_HORA:60}
+  # [ATLAS] Os disjuntores do modelo de linguagem, do JEV e do Gemini (Resilience4j; M8). Cada um abre com 5 falhas seguidas ou 50% das
+  # 10 últimas chamadas e deixa uma chamada de prova passar depois de 60 s; aberto, o modelo dá a frase fixa de falha na hora, o JEV fica
+  # como se estivesse desligado e a busca segue só na lista textual. O estado está na rota 52 (disjuntor) e a recusa no traço (DISJUNTOR).
+  # ligado=false desliga os três (as chamadas passam direto): é o que o perfil test faz, porque o estado fica na memória e o contexto do
+  # Spring é compartilhado; os testes dos disjuntores ligam num contexto próprio.
+  disjuntores:
+    ligado: ${ATLAS_DISJUNTORES:true}
+    falhas-seguidas: 5
+    taxa-de-falha: 50
+    janela: 10
+    espera: PT60S
   # [ATLAS] O raciocínio do modelo (o "thinking" do DeepSeek, {"type":"enabled"} ou "disabled"). Ligado, o reasoning_content de cada
   # resposta é gravado e volta ao modelo em todas as idas seguintes (com ferramentas, o DeepSeek responde 400 sem ele), mas NUNCA
   # sai do servidor: a conversa recebe só um resumo curto dele, gerado numa chamada à parte (o item "raciocinio" com "resumo", e os
@@ -76,10 +100,75 @@ atlas:
     # [ATLAS] TEMPORÁRIO: a conversa mostra cada ferramenta que o agente chamou (nome, argumentos e resultado crus; item "ferramenta" e
     # evento "ferramenta" do fluxo). Desligado por padrão; ligado no perfil dev, abaixo. O raciocínio cru nunca sai, nem por aqui.
     ferramentas: ${ATLAS_DEBUG_FERRAMENTAS:false}
-  # [ATLAS] O relatório de trabalho (cartão de perguntas, relatório pronto, rotas 46 a 48, ferramentas relatorio_*). Desligado por
-  # padrão, no dev também: o Atlas é só o chat, com parceria_consultar. O código e as tabelas ficam, para o relatório voltar.
+  # [ATLAS] O relatório de trabalho (cartão de perguntas, relatório pronto, rotas 46 a 48 e 65, ferramentas relatorio_*). Desligado
+  # por padrão: o Atlas é só o chat, com o prompt chat.txt. Ligado nos perfis dev (M6), demo e test, abaixo; ATLAS_RELATORIO=false
+  # desliga no dev e no demo.
   relatorio:
     ligado: ${ATLAS_RELATORIO:false}
+  # [ATLAS] O Atlas da RBS (M8): a conversa da equipe da RBS por edição, sem parceria, que tira dúvidas operacionais dos documentos
+  # globais da edição (rotas 67 e 68; a mensagem, a leitura e o diagnóstico usam as rotas 44, 45 e 49). Desligado por padrão e na
+  # suíte (ligado por classe de teste); ligado nos perfis dev e demo. Desligado, as rotas 67 e 68 respondem 404 à RBS e nada muda.
+  # teto-diario é o teto da pessoa da RBS (as mensagens do modelo que ela gastou no dia de Brasília), no lugar do teto por parceria.
+  rbs:
+    ligado: ${ATLAS_RBS:false}
+    teto-diario: ${ATLAS_RBS_TETO_DIARIO:200}
+  # [ATLAS] O diagnóstico (M2 do plano do Atlas completo): cada turno deixa um traço em atlas_traco (V10) e as rotas 49 a 53 existem.
+  # Desligado por padrão e na suíte (ligado por classe de teste); ligado no perfil dev, abaixo. Desligado, nada é gravado e as rotas
+  # respondem 404. O traço nunca leva o raciocínio cru, chave nem o prompt de sistema.
+  diagnostico:
+    ligado: ${ATLAS_DIAGNOSTICO:false}
+    # A marca vê o diagnóstico das próprias conversas (rota 49, o campo diagnosticoDisponivel e o turno dos itens). Só vale com o
+    # diagnóstico ligado. A RBS vê o de todas as conversas (rotas 50 a 53) quando o diagnóstico está ligado.
+    marca: ${ATLAS_DIAGNOSTICO_MARCA:false}
+    # O custo do turno, em dólares. O OpenCode Go é uma assinatura com limite de uso (US$ 80 por mês), não cobra por token, e o preço do
+    # DeepSeek V4.1 Flash no Go não consta em docs/atlas/referencias/. Por isso o custo vem de usage.opencode.list_cost, que o Go devolve
+    # em cada resposta (somado pelo diagnóstico e gravado em dados.custoUsd da etapa LLM_IDA, com custoOrigem RESPOSTA). Estes dois preços
+    # (US$ por milhão de tokens) só valem quando uma resposta NÃO traz o list_cost, com custoOrigem PRECO_CONFIGURADO. Os valores vêm do
+    # quadro do Atlas (docs/atlas/referencias/quadro-fluxo-ia-atlas.txt, tabela "Provedores"): preço de lista do mesmo modelo no OpenCode
+    # Zen, 0,30 de entrada e 1,20 de saída por milhão (o preço de cache, 0,006, não entra: a API não separa os tokens em cache).
+    # 0 nos dois = sem estimativa (o custo fica de fora).
+    preco-por-milhao:
+      entrada: ${ATLAS_PRECO_ENTRADA:0.30}
+      saida: ${ATLAS_PRECO_SAIDA:1.20}
+  # [ATLAS] O JEV (TypeSafe) e os embeddings (Gemini). Os embeddings valem desde o M3 (EmbeddingsGemini, na ingestão dos documentos). O JEV
+  # (M7) entra em seis pontos de decisão (intencao, cartao, fontes, resposta, coerencia e lacunas, perguntas em atlas/jev/perguntas.json).
+  # As chaves vêm de variável de ambiente ou, no perfil dev, de config/segredos.local.properties; nunca deste arquivo. As URLs base são
+  # configuráveis para os testes usarem um servidor falso.
+  jev:
+    # O modo de TODOS os pontos: none (desligado), sombra (consulta e só grava "teria feito X") ou ativo (age quando a confiança chega ao
+    # limiar). Cada ponto troca o dele com atlas.jev.<ponto>.modo e o limiar com atlas.jev.<ponto>.limiar (de 0 a 1), por exemplo
+    # atlas.jev.intencao.modo=ativo. Neste bloco base nenhum ponto tem override (tudo fica em none): quem liga cada um é quem opera. Os
+    # perfis dev e demo, mais abaixo, fixam o modo e o limiar dos seis pontos com o resultado da calibração (ATLAS_JEV_<PONTO> troca o
+    # modo de um deles).
+    modo: ${ATLAS_JEV:none}                       # none | sombra | ativo
+    modelo: ${ATLAS_JEV_MODELO:jev-1.14.0}
+    base-url: ${ATLAS_JEV_BASE_URL:https://api.typesafe.ai}
+    chave: ${TYPESAFE_API_KEY:}
+    # O tempo que o turno espera o JEV: a requisição inteira em 800 ms, a conexão em 300 ms. Passou disso, o turno segue o caminho do modelo
+    # de linguagem, sem nova tentativa.
+    timeout: PT0.8S
+    timeout-conexao: PT0.3S
+  embeddings:
+    provedor: ${ATLAS_EMBEDDINGS:none}            # gemini | teste | none
+    modelo: gemini-embedding-2
+    base-url: ${ATLAS_GEMINI_BASE_URL:https://generativelanguage.googleapis.com}
+    chave: ${GEMINI_API_KEY:}
+    # Quanto esperar antes de tentar de novo depois de um 429 do Gemini que não diz quanto esperar (cresce a cada tentativa). Quando diz,
+    # vale o que ele diz: o retryDelay do corpo do 429 (o Retry-After é a reserva). Só a ingestão dos documentos espera: a pergunta de um
+    # turno faz uma tentativa só.
+    espera-no-429: PT5S
+    # A maior espera que a ingestão aceita no 429, e por isso o corte entre os dois limites do Gemini gratuito: até aqui é o limite por minuto
+    # (espera o que ele pediu mais 1 s e tenta de novo, até 6 tentativas por lote); acima é o limite do dia (1.000 por dia, renova em horas):
+    # o documento vai para ERRO na hora, sem esperar, com "A cota do dia do Gemini acabou; ...".
+    espera-maxima-no-429: PT90S
+    # O tempo total que o embedding da pergunta tem para o Gemini responder (uma tentativa, sem esperar no 429 nem nos 5xx). Estourou
+    # ou falhou: a busca segue só com a lista textual (EMBEDDING_FALHOU).
+    limite-da-consulta: PT5S
+  # [ATLAS] A ingestão dos documentos (M3): extrair, dividir, embeddings e gravar os trechos, numa fila na memória (2 threads, atlas-ingestao-).
+  # Aprovar um documento (rota 57) o põe em PROCESSANDO e enfileira DEPOIS do commit. sincrona=true só nos testes: o callback do commit manda
+  # a tarefa ao executor e espera o resultado, para o teste ler o documento já indexado (nunca roda na thread do callback).
+  ingestao:
+    sincrona: false
 
 server:
   port: 8080
@@ -105,15 +194,91 @@ spring:
   config:
     activate:
       on-profile: dev
+    # [ATLAS] As chaves dos provedores, se existir o arquivo (fora do Git). O caminho é relativo à pasta em que a API sobe: backend/.
+    import: optional:file:./config/segredos.local.properties
   flyway:
     # [ITEM-1] A amostra (Amarelo, Roxo e Verde) mora em db/dev e só carrega neste perfil e no de teste.
     locations: classpath:db/migration,classpath:db/dev
 
-# [ATLAS] As rotas de debug da chave do modelo de linguagem (temporárias) só existem no desenvolvimento.
+# [ATLAS] As rotas de debug da chave do modelo de linguagem (temporárias) só existem no desenvolvimento, e só a RBS as usa.
+# O diagnóstico fica ligado no dev, também para a marca ver o das próprias conversas.
 atlas:
   debug:
     chaves: true
     ferramentas: ${ATLAS_DEBUG_FERRAMENTAS:true}
+  relatorio:
+    ligado: ${ATLAS_RELATORIO:true}
+  rbs:
+    ligado: ${ATLAS_RBS:true}
+  diagnostico:
+    ligado: ${ATLAS_DIAGNOSTICO:true}
+    marca: ${ATLAS_DIAGNOSTICO_MARCA:true}
+  # O resultado de ferramentas/avaliacao-atlas/jev/calibrar-jev.mjs: fontes, coerencia e lacunas não confirmaram no conjunto de reserva
+  # e ficam em sombra. Para desligar um ponto: ATLAS_JEV_<PONTO>=none.
+  jev:
+    intencao:
+      modo: ${ATLAS_JEV_INTENCAO:ativo}
+      limiar: 0.92
+    cartao:
+      modo: ${ATLAS_JEV_CARTAO:ativo}
+      limiar: 0.98
+    fontes:
+      modo: ${ATLAS_JEV_FONTES:sombra}
+      limiar: 0.97
+    resposta:
+      modo: ${ATLAS_JEV_RESPOSTA:ativo}
+      limiar: 0.5
+    coerencia:
+      modo: ${ATLAS_JEV_COERENCIA:sombra}
+      limiar: 0.92
+    lacunas:
+      modo: ${ATLAS_JEV_LACUNAS:sombra}
+      limiar: 0.80
+
+---
+# [ATLAS] O perfil demo (M8): o portal como vai à apresentação. Sobe como o dev (a amostra, os arquivos de exemplo e o kit de documentos
+# aprovados e indexados, com as chaves do mesmo arquivo de segredos), com o relatório e o diagnóstico ligados e os pontos do JEV da
+# calibração, mas SEM as rotas de debug da chave do modelo (404) e sem a caixa de debug das ferramentas: o diagnóstico da RBS e o da marca
+# fazem esse papel. Uso: SPRING_PROFILES_ACTIVE=demo, num banco descartável (a amostra se carrega a cada subida).
+spring:
+  config:
+    activate:
+      on-profile: demo
+    import: optional:file:./config/segredos.local.properties
+  flyway:
+    locations: classpath:db/migration,classpath:db/dev
+
+atlas:
+  rbs:
+    ligado: ${ATLAS_RBS:true}
+  debug:
+    chaves: false
+    ferramentas: false
+  relatorio:
+    ligado: ${ATLAS_RELATORIO:true}
+  diagnostico:
+    ligado: ${ATLAS_DIAGNOSTICO:true}
+    marca: ${ATLAS_DIAGNOSTICO_MARCA:true}
+  # O mesmo resultado da calibração do perfil dev (ferramentas/avaliacao-atlas/jev/calibrar-jev.mjs).
+  jev:
+    intencao:
+      modo: ${ATLAS_JEV_INTENCAO:ativo}
+      limiar: 0.92
+    cartao:
+      modo: ${ATLAS_JEV_CARTAO:ativo}
+      limiar: 0.98
+    fontes:
+      modo: ${ATLAS_JEV_FONTES:sombra}
+      limiar: 0.97
+    resposta:
+      modo: ${ATLAS_JEV_RESPOSTA:ativo}
+      limiar: 0.5
+    coerencia:
+      modo: ${ATLAS_JEV_COERENCIA:sombra}
+      limiar: 0.92
+    lacunas:
+      modo: ${ATLAS_JEV_LACUNAS:sombra}
+      limiar: 0.80
 
 ---
 spring:
@@ -139,14 +304,36 @@ spring:
       chat: none
 
 # [ATLAS] As rotas de debug ficam desligadas no contexto de teste normal; a classe de teste delas as liga.
+# [ATLAS] Os limites por usuário ficam altos no teste normal (o contexto do Spring é compartilhado e o balde não volta no rollback);
+# o LimitesPorUsuarioTest e o LimitesDeDocumentosEBuscaDeTesteTest usam os valores padrão num contexto próprio.
 # [ATLAS] No teste o relatório fica ligado (os testes dele continuam valendo) e o debug das ferramentas, desligado; as classes de
 # teste do modo só chat e do debug mudam isso com @TestPropertySource.
 atlas:
+  limites:
+    mensagens-por-hora: 100000
+    relatorios-por-dia: 100000
+    documentos-por-hora: 100000
+    buscas-de-teste-por-hora: 100000
+  disjuntores:
+    ligado: false
   debug:
     chaves: false
     ferramentas: false
   relatorio:
     ligado: true
+  # O Atlas da RBS fica desligado no contexto de teste normal; as classes dele o ligam (@TesteDoAtlasDaRbs).
+  rbs:
+    ligado: false
+  # O diagnóstico fica desligado no contexto de teste normal (nada é gravado em atlas_traco); a classe de teste que o confere o liga.
+  diagnostico:
+    ligado: false
+    marca: false
+  # Os embeddings da suíte são os de teste (determinísticos, sem rede) e a ingestão espera o fim: o kit de documentos sobe e indexa a cada
+  # contexto, e nenhum teste comum chama o Gemini. Os testes @Tag("avaliacao") trocam isto pelo perfil avaliacao.
+  embeddings:
+    provedor: teste
+  ingestao:
+    sincrona: true
 
 # [UPLOAD] Nos testes, os arquivos vão para dentro de target/ (apagado pelo "mvn clean"), nunca para a pasta de desenvolvimento.
 portal:

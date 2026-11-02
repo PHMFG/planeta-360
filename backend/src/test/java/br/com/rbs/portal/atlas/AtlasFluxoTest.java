@@ -15,6 +15,7 @@ import static br.com.rbs.portal.atlas.ApoioDoFluxo.nomes;
 import static br.com.rbs.portal.atlas.ApoioDoFluxo.raciociniosGravados;
 import static br.com.rbs.portal.atlas.ApoioDoFluxo.resumos;
 import static br.com.rbs.portal.atlas.ApoioDoFluxo.resumosGravados;
+import static br.com.rbs.portal.atlas.ApoioDoFluxo.semResumos;
 import static br.com.rbs.portal.atlas.ApoioDoFluxo.sequencia;
 import static br.com.rbs.portal.atlas.ApoioDoFluxo.turnoSolto;
 import static br.com.rbs.portal.atlas.provedor.ServidorDeLlmFalso.RESUMO_PADRAO;
@@ -207,7 +208,7 @@ class AtlasFluxoTest {
     }
 
     @Test
-    void algarismoSoltoNoMeioDoTextoParaORepasseEVemANovaRedacao() {
+    void algarismoSemFonteNoMeioDaFraseSegueAFraseInteiraEVemANovaRedacao() {
         SessaoDeApi pessoa = SessaoDeApi.entrar(mvc, AMARELO);
         long conversa = conversa(pessoa, jdbc);
         SERVIDOR.responderEmFluxo(new Fluxo().texto("Vocês tiveram ").texto("muitas visitas, ").texto("19 ao todo").texto(", e foi bom.")
@@ -216,9 +217,10 @@ class AtlasFluxoTest {
 
         List<Evento> eventos = eventos(falarEmFluxo(pessoa, conversa, "Quantas visitas?"));
 
-        assertThat(sequencia(eventos)).containsExactly("texto", "texto_recusado", "texto", "fim");
+        // a frase com o 19 sem fonte fica retida até o fim da ida e não chega à tela; o texto_recusado avisa e vem a nova redação
+        assertThat(sequencia(eventos)).containsExactly("texto_recusado", "texto", "fim");
         int recusa = nomes(eventos).indexOf("texto_recusado");
-        assertThat(juntar(eventos.subList(0, recusa), "texto", "delta")).isEqualTo("Vocês tiveram muitas visitas, ");
+        assertThat(juntar(eventos.subList(0, recusa), "texto", "delta")).isEmpty();
         assertThat(eventos.get(recusa).dados()).isEqualTo("{}");
         assertThat(juntar(eventos.subList(recusa, eventos.size()), "texto", "delta"))
                 .isEqualTo("Para Cliente Amarelo, os números estão no portal.");
@@ -243,9 +245,10 @@ class AtlasFluxoTest {
 
         List<Evento> eventos = eventos(falarEmFluxo(pessoa, conversa, "Oi"));
 
-        assertThat(sequencia(eventos)).containsExactly("texto", "texto_recusado", "texto", "texto_recusado", "texto", "fim");
+        // cada resposta é uma frase só, retida até o fim da ida e recusada: nada dela chega à tela
+        assertThat(nomes(semResumos(eventos))).containsExactly("texto_recusado", "texto_recusado", "texto", "fim");
         List<String> textos = eventos.stream().filter(e -> e.nome().equals("texto")).map(e -> e.<String>ler("$.delta")).toList();
-        assertThat(textos).containsExactly("Vou usar a ", "Um ", LoopDoAgente.FRASE_FIXA);
+        assertThat(textos).containsExactly(LoopDoAgente.FRASE_FIXA);
         assertThat(fim(eventos).<List<String>>ler("$.itens[*].tipo")).containsExactly("usuario", "texto");
         assertThat(fim(eventos).<Boolean>ler("$.itens[1].porModelo")).isFalse();
     }

@@ -76,6 +76,36 @@ public class Armazenamento {
     }
 
     /**
+     * Confere um arquivo de documento do Atlas sem gravar nada, para a rota 54 recusar o que não é PDF nem TXT (415), o que passa do
+     * limite (413) e o arquivo vazio (422) ANTES de extrair o texto. Devolve o tipo. O mesmo teste roda de novo dentro de
+     * {@link #gravarDocumento(byte[], String, long, Long)}.
+     */
+    public TipoDeArquivo conferirDocumento(byte[] conteudo, String nomeOriginal) {
+        return preparar(conteudo, nomeOriginal, Aceitos.DOCUMENTOS).tipo();
+    }
+
+    /**
+     * Grava o arquivo de um documento do Atlas (rota 54): categoria DOCUMENTO, só PDF ou TXT (as outras extensões dão 415 com a lista
+     * dos dois). {@code parceriaId} nulo = arquivo geral da RBS (documento GLOBAL ou de COTA); preenchido, o arquivo é da parceria
+     * (documento PARCERIA) e o gatilho do documento confere que as duas pontas batem. Sem aba, de propósito: a marca nunca baixa
+     * este arquivo pela rota 18 (o ArquivoRepositorio sabe que ele é de um documento). Chame de dentro de uma transação, como
+     * {@link #gravar(byte[], String, String, long, Long)}.
+     */
+    public Arquivo gravarDocumento(byte[] conteudo, String nomeOriginal, long enviadoPor, Long parceriaId) {
+        Preparado pronto = preparar(conteudo, nomeOriginal, Aceitos.DOCUMENTOS);
+        String caminho = (parceriaId == null ? "geral" : "parcerias/" + parceriaId) + "/" + pronto.nomeNoDisco();
+        escrever(caminho, conteudo);
+        return inserir("""
+                        INSERT INTO arquivo (parceria_id, categoria, nome_original, mime_type, tamanho_bytes, caminho,
+                                             hash_sha256, enviado_por)
+                        VALUES (:parceriaId, 'DOCUMENTO', :nome, :mime, :tamanho, :caminho, :hash, :enviadoPor)
+                        RETURNING\s""" + COLUNAS,
+                Map.of("nome", pronto.nomeOriginal(), "mime", pronto.tipo().mime(), "tamanho", (long) conteudo.length,
+                        "caminho", caminho, "hash", pronto.hash(), "enviadoPor", enviadoPor),
+                parceriaId, caminho);
+    }
+
+    /**
      * Grava um arquivo avulso de uma parceria (sem entrega) que pertence a uma aba, por exemplo a foto de comprovação de uma
      * aplicação, na aba APLICACOES. [PERMISSAO] A aba importa: o download (rota 18) só confere se a aba está aberta para a
      * marca quando o arquivo tem aba; sem ela, a marca baixaria o arquivo com a aba fechada. O {@code abaCodigo} é um dos 7
@@ -84,10 +114,25 @@ public class Armazenamento {
      */
     public Arquivo gravar(byte[] conteudo, String nomeOriginal, String categoria, long enviadoPor, Long parceriaId,
                           String abaCodigo) {
+        return gravarNaAba(conteudo, nomeOriginal, categoria, enviadoPor, parceriaId, abaCodigo, Aceitos.COMUNS);
+    }
+
+    /**
+     * Grava a planilha da agência (rota 66, o campo {@code ativacao.planilha_agencia}): um arquivo avulso da parceria, na aba dela
+     * (APLICACOES) e na categoria OUTRO, para o download (rota 18) conferir a parceria e a aba. Aceita só {@code .xlsx}, {@code .xls}
+     * e {@code .csv}, conferidos pelo conteúdo (413 acima do limite, 415 fora da lista ou com o conteúdo que não bate, 422 se vazio).
+     * Chame de dentro de uma transação, como {@link #gravar(byte[], String, String, long, Long)}.
+     */
+    public Arquivo gravarPlanilha(byte[] conteudo, String nomeOriginal, long enviadoPor, long parceriaId, String abaCodigo) {
+        return gravarNaAba(conteudo, nomeOriginal, "OUTRO", enviadoPor, parceriaId, abaCodigo, Aceitos.PLANILHAS);
+    }
+
+    private Arquivo gravarNaAba(byte[] conteudo, String nomeOriginal, String categoria, long enviadoPor, Long parceriaId,
+                                String abaCodigo, Aceitos aceitos) {
         if (parceriaId == null) {
             throw new IllegalArgumentException("Arquivo geral da RBS (sem parceria) não pertence a uma aba.");
         }
-        Preparado pronto = preparar(conteudo, nomeOriginal);
+        Preparado pronto = preparar(conteudo, nomeOriginal, aceitos);
         Integer abaId = jdbc.sql("SELECT id FROM aba WHERE codigo = :codigo").param("codigo", abaCodigo)
                 .query(Integer.class).optional()
                 .orElseThrow(() -> new IllegalArgumentException("A aba " + abaCodigo + " não existe."));
@@ -183,8 +228,42 @@ public class Armazenamento {
     private record Preparado(String nomeOriginal, TipoDeArquivo tipo, String hash, String nomeNoDisco) {
     }
 
+    /** Os tipos que um envio aceita: os comuns, os do documento do Atlas (rota 54) e os da planilha da agência (rota 66). */
+    private enum Aceitos {
+        COMUNS(null),
+        DOCUMENTOS("pdf, txt"),
+        PLANILHAS("xlsx, xls, csv");
+
+        private final String extensoes;
+
+        Aceitos(String extensoes) {
+            this.extensoes = extensoes;
+        }
+
+        String extensoes() {
+            return this == COMUNS ? TipoDeArquivo.listaDeExtensoes() : extensoes;
+        }
+
+        boolean aceita(TipoDeArquivo tipo) {
+            return switch (this) {
+                case COMUNS -> tipo != TipoDeArquivo.TXT && tipo != TipoDeArquivo.XLS;
+                case DOCUMENTOS -> tipo == TipoDeArquivo.PDF || tipo == TipoDeArquivo.TXT;
+                case PLANILHAS -> tipo == TipoDeArquivo.XLSX || tipo == TipoDeArquivo.XLS || tipo == TipoDeArquivo.CSV;
+            };
+        }
+    }
+
     /** [UPLOAD] Vazio (422), grande demais (413), extensão fora da lista ou conteúdo que não bate com ela (415). */
     private Preparado preparar(byte[] conteudo, String nomeInformado) {
+        return preparar(conteudo, nomeInformado, Aceitos.COMUNS);
+    }
+
+    /**
+     * O mesmo, para cada lista de tipos: a comum (a de {@link TipoDeArquivo#listaDeExtensoes()}, sem o TXT nem o XLS), a do documento
+     * do Atlas (só PDF e TXT) e a da planilha da agência (XLSX, XLS e CSV). [ATLAS] O .txt só existe na rota 54, e o .xls só na rota
+     * 66: a rota 17 continua recusando os dois.
+     */
+    private Preparado preparar(byte[] conteudo, String nomeInformado, Aceitos aceitos) {
         if (conteudo == null || conteudo.length == 0) {
             throw new DadosInvalidosException(Map.of("arquivo", "O arquivo está vazio."));
         }
@@ -193,11 +272,15 @@ public class Armazenamento {
                     "O arquivo passa do limite de " + descreverLimite() + ". Envie um arquivo menor.");
         }
         String nome = limparNome(nomeInformado);
-        TipoDeArquivo tipo = TipoDeArquivo.daExtensao(nome).orElseThrow(() -> new ArquivoRecusadoException(
-                HttpStatus.UNSUPPORTED_MEDIA_TYPE,
-                "Este tipo de arquivo não é aceito. Envie um destes: " + TipoDeArquivo.listaDeExtensoes() + "."));
-        if (!tipo.conteudoConfere(conteudo)) {
-            throw new ArquivoRecusadoException(HttpStatus.UNSUPPORTED_MEDIA_TYPE, frasePorConteudo(tipo, conteudo));
+        TipoDeArquivo tipo = TipoDeArquivo.daExtensao(nome)
+                .filter(aceitos::aceita)
+                .orElseThrow(() -> new ArquivoRecusadoException(HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+                        "Este tipo de arquivo não é aceito. Envie um destes: " + aceitos.extensoes() + "."));
+        // A planilha da agência (rota 66) em CSV aceita qualquer codificação sem byte nulo: ninguém a lê no servidor, e o Excel em
+        // português a grava em ANSI. Nas outras rotas o CSV precisa ser UTF-8 (a carga e a entrega leem ou mostram o texto).
+        boolean csvDaPlanilha = aceitos == Aceitos.PLANILHAS && tipo == TipoDeArquivo.CSV;
+        if (csvDaPlanilha ? !TipoDeArquivo.semBytesNulos(conteudo) : !tipo.conteudoConfere(conteudo)) {
+            throw new ArquivoRecusadoException(HttpStatus.UNSUPPORTED_MEDIA_TYPE, frasePorConteudo(tipo, conteudo, csvDaPlanilha));
         }
         return new Preparado(nome, tipo, sha256(conteudo), UUID.randomUUID() + "." + tipo.extensao());
     }
@@ -205,10 +288,12 @@ public class Armazenamento {
     /**
      * A frase do 415 por conteúdo que não bate com a extensão. Planilha que é texto, mas não está em UTF-8 (o Excel grava
      * em ANSI/Latin-1 ou em UTF-16 quando não se escolhe "CSV UTF-8"), recebe a instrução de como salvar de novo; o que não
-     * tem cara de texto (um PNG renomeado para .csv, por exemplo) recebe a frase de arquivo renomeado.
+     * tem cara de texto (um PNG renomeado para .csv, por exemplo) recebe a frase de arquivo renomeado. O CSV da planilha da agência
+     * ({@code csvDaPlanilha}) não tem a frase do UTF-8: a codificação não importa lá, e o que o reprova (byte nulo) é arquivo que não
+     * é texto de planilha, ou UTF-16.
      */
-    private static String frasePorConteudo(TipoDeArquivo tipo, byte[] conteudo) {
-        if (tipo == TipoDeArquivo.CSV && TipoDeArquivo.ehTextoQueNaoEUtf8(conteudo)) {
+    private static String frasePorConteudo(TipoDeArquivo tipo, byte[] conteudo, boolean csvDaPlanilha) {
+        if (tipo == TipoDeArquivo.CSV && !csvDaPlanilha && TipoDeArquivo.ehTextoQueNaoEUtf8(conteudo)) {
             return "A planilha não está em UTF-8 (por isso os acentos não seriam lidos certo). No Excel, use Salvar como e "
                     + "escolha \"CSV UTF-8 (separado por vírgulas)\"; depois envie de novo.";
         }

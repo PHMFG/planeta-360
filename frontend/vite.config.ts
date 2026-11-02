@@ -1,6 +1,7 @@
 // Configuração do Vite para o front do Planeta 360. [ITEM-7]
 // Em desenvolvimento, as chamadas a /api vão para a API Spring Boot na porta 8080.
 // Front e API ficam na mesma origem, então o cookie de sessão e o token CSRF funcionam sem CORS.
+// PORTAL_API_URL aponta para outra API (os testes de ponta a ponta usam, quando a 8080 está ocupada).
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -10,7 +11,7 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': 'http://localhost:8080',
+      '/api': process.env.PORTAL_API_URL ?? 'http://localhost:8080',
     },
   },
 })

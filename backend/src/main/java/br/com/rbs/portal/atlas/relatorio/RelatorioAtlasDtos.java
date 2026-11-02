@@ -35,8 +35,21 @@ public final class RelatorioAtlasDtos {
     public record SecaoDto(String id, String titulo, List<BlocoDto> blocos) {
     }
 
-    /** Um número do relatório: já formatado, ou indisponível com o motivo. {@code ref} diz de onde ele vem (ou nulo). */
-    public record ItemKpiDto(String rotulo, String valor, String indisponivel, String ref) {
+    /**
+     * Um número do relatório: já formatado, ou indisponível com o motivo. {@code ref} diz de onde ele vem (ou nulo). {@code selo} é o
+     * selo do servidor ({@link SelosDoRelatorio#ACIMA} ou {@link SelosDoRelatorio#ABAIXO}) do número que o relatório compara com o
+     * previsto: só o item "exibido" de um par previsto × exibido, quando os dois têm valor e são diferentes; nulo nos outros.
+     */
+    public record ItemKpiDto(String rotulo, String valor, String indisponivel, String ref, String selo) {
+
+        public ItemKpiDto(String rotulo, String valor, String indisponivel, String ref) {
+            this(rotulo, valor, indisponivel, ref, null);
+        }
+
+        /** O mesmo item com o selo dado. */
+        public ItemKpiDto comSelo(String novo) {
+            return new ItemKpiDto(rotulo, valor, indisponivel, ref, novo);
+        }
     }
 
     /** Uma foto da galeria de comprovações. {@code registradoEm} é o instante com o fuso de Brasília, como texto ISO 8601. */

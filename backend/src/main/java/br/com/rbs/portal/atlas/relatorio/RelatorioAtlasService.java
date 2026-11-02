@@ -71,6 +71,8 @@ public class RelatorioAtlasService {
     public static final String SOLICITACAO_NAO_ENCONTRADA = "Não encontramos esta solicitação.";
     public static final String CARTAO_JA_RESPONDIDO = "Este cartão já foi respondido.";
     public static final String INFORME_ESTE_NUMERO = "Informe este número.";
+    /** O campo que a resposta do cartão ganha quando ele foi fechado porque o relatório foi descartado, e não porque a pessoa o cancelou. */
+    public static final String RELATORIO_DESCARTADO = "relatorioDescartado";
 
     /** As três respostas do cartão, com os mesmos nomes do formulário de elicitação do MCP (minúsculas no JSON). */
     public enum AcaoDoCartao {
@@ -126,6 +128,19 @@ public class RelatorioAtlasService {
             Map<String, Object> corpo = new LinkedHashMap<>();
             corpo.put("acao", acao.nome());
             corpo.put("campos", campos);
+            return AtlasJson.escrever(corpo);
+        }
+
+        /**
+         * A resposta de um cartão fechado porque o relatório foi descartado: o {@code cancel} de sempre, com
+         * {@code "relatorioDescartado": true}. Sem isso o histórico fingiria um cancelamento comum, e o modelo diria que o relatório
+         * continua aberto.
+         */
+        public String resultadoDoDescarteJson() {
+            Map<String, Object> corpo = new LinkedHashMap<>();
+            corpo.put("acao", acao.nome());
+            corpo.put("campos", campos);
+            corpo.put(RELATORIO_DESCARTADO, true);
             return AtlasJson.escrever(corpo);
         }
     }
@@ -293,8 +308,9 @@ public class RelatorioAtlasService {
     /**
      * Abre o cartão de perguntas pedido pelo modelo e pausa o relatório (AGUARDANDO_RESPOSTA). {@code chaves} são de 1 a 8 chaves
      * do catálogo da aba do modelo, sem repetir e sem campo de arquivo (o cartão não tem upload no MVP); {@code mensagem} tem até
-     * 400 caracteres; {@code toolCallId} liga o cartão ao pedido de ferramenta na conversa. Ordem das respostas: 404 (relatório
-     * de outra conversa), 422 (argumentos), 409 (o relatório não está em montagem, ou já teve três cartões).
+     * 400 caracteres e passa pela {@link ChecagemDeTexto#mensagemDoCartao} (sem número, endereço, HTML nem chave crua); {@code toolCallId}
+     * liga o cartão ao pedido de ferramenta na conversa. Ordem das respostas: 404 (relatório de outra conversa), 422 (argumentos,
+     * inclusive a mensagem recusada), 409 (o relatório não está em montagem, ou já teve três cartões).
      */
     @Transactional
     public CartaoAberto solicitarCampos(AtlasContexto contexto, long relatorioId, String mensagem, List<String> chaves,
@@ -330,6 +346,12 @@ public class RelatorioAtlasService {
             erros.put("mensagem", "Escreva a mensagem do cartão.");
         } else if (mensagem.trim().length() > LIMITE_DA_MENSAGEM) {
             erros.put("mensagem", "A mensagem do cartão tem no máximo " + LIMITE_DA_MENSAGEM + " caracteres.");
+        } else {
+            // a mesma regra do parágrafo: sem número, endereço, HTML nem chave crua (o botão manda uma mensagem fixa, que passa)
+            Veredito veredito = checagem.mensagemDoCartao(mensagem);
+            if (!veredito.aprovado()) {
+                erros.put("mensagem", veredito.motivo());
+            }
         }
         if (toolCallId == null || toolCallId.isBlank() || toolCallId.length() > LIMITE_DO_ID_DA_CHAMADA) {
             erros.put("toolCallId", "O id do pedido tem de 1 a " + LIMITE_DO_ID_DA_CHAMADA + " caracteres.");
@@ -474,12 +496,23 @@ public class RelatorioAtlasService {
      */
     @Transactional
     public ResultadoDaEdicao definirTextos(AtlasContexto contexto, long relatorioId, List<OperacaoDeTexto> operacoes) {
+        return definirTextos(contexto, relatorioId, operacoes, Map.of());
+    }
+
+    /**
+     * O mesmo, com as recusas do JEV (M7, ponto {@code coerencia}), por bloco: o texto que passou na {@link ChecagemDeTexto} mas que o
+     * JEV achou incoerente com os selos do servidor é recusado com o motivo dele, e conta como qualquer recusa: uma nova redação e, na
+     * segunda vez, a frase-modelo. O JEV roda antes, sem transação (esta é a transação do loop); aqui só se aplica o que ele decidiu.
+     */
+    @Transactional
+    public ResultadoDaEdicao definirTextos(AtlasContexto contexto, long relatorioId, List<OperacaoDeTexto> operacoes,
+                                           Map<String, String> recusasDoJev) {
         LinhaDeRelatorio relatorio = relatorioDoContexto(contexto, relatorioId, true);
         Especificacao original = ler(relatorio);
         verificador.exigirAbaLiberada(contexto.usuario(), contexto.parceriaId(), original.aba());
         exigirMontando(relatorio);
 
-        Resolucao resolucao = resolvedor.abrir(contexto.usuario(), contexto.parceriaId(), original);
+        Resolucao resolucao = resolvedor.abrirDoRelatorio(contexto.usuario(), contexto.parceriaId(), original, relatorioId);
         Especificacao especificacao = original;
         List<ResultadoDaOperacao> resultados = new ArrayList<>();
         for (int i = 0; i < operacoes.size(); i++) {
@@ -492,6 +525,9 @@ public class RelatorioAtlasService {
                 continue;
             }
             Veredito veredito = checagem.paragrafo(resolucao, operacao.texto());
+            if (veredito.aprovado() && recusasDoJev.containsKey(paragrafo.id())) {
+                veredito = Veredito.recusado(recusasDoJev.get(paragrafo.id()));
+            }
             if (veredito.aprovado()) {
                 especificacao = especificacao.comTexto(paragrafo.id(), veredito.texto(), "ATLAS");
                 resultados.add(new ResultadoDaOperacao(i, paragrafo.id(), "aplicada", null));
@@ -512,6 +548,20 @@ public class RelatorioAtlasService {
         List<String> semTexto = especificacao.redigiveis().stream().filter(p -> p.texto() == null || p.texto().isBlank())
                 .map(Especificacao.Paragrafo::id).toList();
         return new ResultadoDaEdicao(relatorioId, resultados, semTexto);
+    }
+
+    /**
+     * Os selos do servidor do relatório em montagem ("Comprovadas: abaixo do previsto"), calculados em código com os números de agora
+     * (veja {@link SelosDoRelatorio}); vazio quando o relatório não tem nenhum. É o que o ponto {@code coerencia} do JEV lê antes de
+     * {@code relatorio_editar}. Não confere permissão: o contexto já foi conferido.
+     */
+    @Transactional(readOnly = true)
+    public List<String> selosDoRelatorio(AtlasContexto contexto, long relatorioId) {
+        LinhaDeRelatorio relatorio = relatorioDoContexto(contexto, relatorioId, false);
+        Especificacao especificacao = ler(relatorio);
+        SnapshotDto montado = montador.montar(especificacao,
+                resolvedor.abrirDoRelatorio(contexto.usuario(), contexto.parceriaId(), especificacao, relatorioId));
+        return SelosDoRelatorio.frases(montado.secoes());
     }
 
     // ---------------------------------------------------------------------
@@ -539,8 +589,12 @@ public class RelatorioAtlasService {
         }
         exigirLacunasResolvidas(contexto, relatorio, especificacao);
 
-        SnapshotDto snapshot = montador.montar(especificacao, resolvedor.abrir(contexto.usuario(), contexto.parceriaId(), especificacao));
+        SnapshotDto snapshot = montador.montar(especificacao,
+                resolvedor.abrirDoRelatorio(contexto.usuario(), contexto.parceriaId(), especificacao, relatorioId));
         for (CalculoDto conta : snapshot.calculos()) {
+            if (!especificacao.calculos().containsKey(conta.nome())) {
+                continue;   // a conta do chat (calcular) já foi gravada em atlas_calculo quando foi feita
+            }
             repositorio.inserirCalculo(relatorioId, conta.nome(), conta.script(), AtlasJson.escrever(conta.variaveis()),
                     conta.resultado(), conta.unidade());
         }
@@ -586,18 +640,42 @@ public class RelatorioAtlasService {
      */
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public RelatorioAtlasDto ver(UsuarioAutenticado usuario, long relatorioId) {
-        LinhaDeRelatorio relatorio = repositorio.relatorio(relatorioId).orElseThrow(() -> new NaoEncontradoException(NAO_ENCONTRADO));
-        exigirParceriaDoRecurso(usuario, relatorio.parceriaId());
+        LinhaDeRelatorio relatorio = exigirAcesso(usuario, relatorioId);
         Especificacao especificacao = ler(relatorio);
-        verificador.exigirAbaLiberada(usuario, relatorio.parceriaId(), especificacao.aba());
         SnapshotDto conteudo = "PRONTO".equals(relatorio.status()) && relatorio.snapshot() != null
                 ? AtlasJson.ler(relatorio.snapshot(), SnapshotDto.class)
-                : montador.montar(especificacao, resolvedor.abrir(usuario, relatorio.parceriaId(), especificacao));
+                : montador.montar(especificacao, resolvedor.abrirDoRelatorio(usuario, relatorio.parceriaId(), especificacao, relatorio.id()));
         return new RelatorioAtlasDto(relatorio.id(), relatorio.parceriaId(), relatorio.patrocinador(), relatorio.modelo(),
                 especificacao.titulo(), relatorio.status(),
                 new UsuarioResumoDto(relatorio.criadoPor(), relatorio.criadoPorNome(), relatorio.criadoPorPerfil()),
                 Datas.emBrasilia(relatorio.criadoEm()), Datas.emBrasilia(relatorio.finalizadoEm()),
                 RelatorioAtlasDtos.SELO, conteudo.secoes());
+    }
+
+    /**
+     * O relatório que o usuário pode alcançar: 404 se não existe ou é de outra parceria (a mesma frase), 403 se a aba do modelo está
+     * fechada para a marca. É a conferência da rota 47 (o relatório é da parceria); a rota 65 usa {@link #exigirAcessoDoDono}.
+     */
+    public LinhaDeRelatorio exigirAcesso(UsuarioAutenticado usuario, long relatorioId) {
+        LinhaDeRelatorio relatorio = repositorio.relatorio(relatorioId).orElseThrow(() -> new NaoEncontradoException(NAO_ENCONTRADO));
+        exigirParceriaDoRecurso(usuario, relatorio.parceriaId());
+        verificador.exigirAbaLiberada(usuario, relatorio.parceriaId(), ler(relatorio).aba());
+        return relatorio;
+    }
+
+    /**
+     * O relatório que o usuário criou: a seleção "por id e dono" da rota 65, na ordem das rotas 45 e 46 (conversa e cartão): 404 se
+     * não existe ou é de outra parceria, 404 se é de outra pessoa da mesma parceria (a mesma frase), e só então 403 se a aba do
+     * modelo está fechada para a marca. Quem vê o relatório (rota 47) não é por isso quem pode descartá-lo: a conversa é do dono.
+     */
+    public LinhaDeRelatorio exigirAcessoDoDono(UsuarioAutenticado usuario, long relatorioId) {
+        LinhaDeRelatorio relatorio = repositorio.relatorio(relatorioId).orElseThrow(() -> new NaoEncontradoException(NAO_ENCONTRADO));
+        exigirParceriaDoRecurso(usuario, relatorio.parceriaId());
+        if (!relatorio.criadoPor().equals(usuario.id())) {
+            throw new NaoEncontradoException(NAO_ENCONTRADO);
+        }
+        verificador.exigirAbaLiberada(usuario, relatorio.parceriaId(), ler(relatorio).aba());
+        return relatorio;
     }
 
     /**

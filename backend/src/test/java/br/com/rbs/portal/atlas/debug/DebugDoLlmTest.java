@@ -37,7 +37,8 @@ import org.springframework.transaction.annotation.Transactional;
  * [ATLAS] As rotas de debug (temporárias) da chave do modelo de linguagem, com {@code atlas.debug.chaves=true}: pôr, ver, apagar
  * e testar a chave pela tela, como o front as usa (login, sessão e CSRF). O modelo montado com a chave vai a um servidor HTTP
  * falso e local: nenhum provedor de verdade é chamado, e a chave é de mentira. Confere também que a chave inteira nunca sai numa
- * resposta nem no log. Cada teste é desfeito no fim (@Transactional) e começa sem chave de debug.
+ * resposta nem no log, e que as quatro rotas são só da RBS (o patrocinador recebe 403). Cada teste é desfeito no fim
+ * (@Transactional) e começa sem chave de debug.
  */
 @TesteDeIntegracao
 @TestPropertySource(properties = "atlas.debug.chaves=true")
@@ -193,14 +194,34 @@ class DebugDoLlmTest {
     }
 
     @Test
-    void baseUrlEModeloVaziosFicamComOsPadroesEOPatrocinadorTambemPodeUsar() {
-        MvcTestResult resposta = entrar(AMARELO).put("/api/debug/llm", json(CHAVE, "", "  "));
+    void baseUrlEModeloVaziosFicamComOsPadroes() {
+        MvcTestResult resposta = entrar(RBS).put("/api/debug/llm", json(CHAVE, "", "  "));
 
         assertThat(resposta).hasStatus(HttpStatus.OK);
         assertThat(lerJson(resposta, "$.baseUrl")).isEqualTo(BASE_URL_PADRAO);
         assertThat(lerJson(resposta, "$.modelo")).isEqualTo(MODELO_PADRAO);
-        assertThat(lerJson(resposta, "$.configuradoPor.perfil")).isEqualTo("ADMIN_PATROCINADOR");
-        assertThat(entrar(AMARELO).put("/api/debug/llm", "{\"chave\":\"" + CHAVE + "\"}")).hasStatus(HttpStatus.OK);
+        assertThat(lerJson(resposta, "$.configuradoPor.perfil")).isEqualTo("ADMIN_RBS");
+        assertThat(entrar(RBS).put("/api/debug/llm", "{\"chave\":\"" + CHAVE + "\"}")).hasStatus(HttpStatus.OK);
+    }
+
+    @Test
+    void asQuatroRotasSaoSoDaRbsEOPatrocinadorRecebe403SemMexerNaChave() {
+        SessaoDeApi rbs = entrar(RBS);
+        porAChave(rbs);
+        SessaoDeApi marca = entrar(AMARELO);
+        String soRbs = "Esta operação é restrita à equipe da RBS.";
+
+        for (MvcTestResult resposta : List.of(marca.get("/api/debug/llm"), marca.put("/api/debug/llm", json(OUTRA_CHAVE, null, null)),
+                marca.delete("/api/debug/llm"), marca.post("/api/debug/llm/teste", null))) {
+            assertThat(resposta).hasStatus(HttpStatus.FORBIDDEN);
+            assertThat(lerJson(resposta, "$.detail")).isEqualTo(soRbs);
+            assertThat(corpo(resposta)).doesNotContain(CHAVE).doesNotContain(OUTRA_CHAVE);
+        }
+        // nada mudou: a chave da RBS continua valendo, e o provedor falso não recebeu chamada nenhuma
+        assertThat(lerJson(rbs.get("/api/debug/llm"), "$.finalDaChave")).isEqualTo("a1b2");
+        assertThat(SERVIDOR.recebidas()).isEmpty();
+        // sem sessão, 401, como sempre
+        assertThat(SessaoDeApi.anonima(mvc).get("/api/debug/llm")).hasStatus(HttpStatus.UNAUTHORIZED);
     }
 
     @Test

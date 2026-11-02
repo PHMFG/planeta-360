@@ -66,6 +66,47 @@ class ArmazenamentoTest {
     }
 
     @Test
+    void gravarDocumentoAceitaPdfETxtComACategoriaDocumentoGeralOuDaParceria() throws Exception {
+        byte[] faq = "Pergunta frequente: horário dos portões.\n".getBytes(StandardCharsets.UTF_8);
+
+        Arquivo geral = armazenamento.gravarDocumento("%PDF-1.4 x".getBytes(StandardCharsets.US_ASCII), "manual.pdf", rbs(), null);
+        Arquivo daParceria = armazenamento.gravarDocumento(faq, "faq.txt", rbs(), amarelo());
+
+        assertThat(geral.categoria()).isEqualTo("DOCUMENTO");
+        assertThat(geral.parceriaId()).isNull();
+        assertThat(geral.abaId()).as("o arquivo de documento não tem aba: a rota 18 é fechada para a marca").isNull();
+        assertThat(geral.mimeType()).isEqualTo("application/pdf");
+        assertThat(geral.caminho()).matches("geral/[0-9a-f-]{36}\\.pdf");
+        assertThat(daParceria.categoria()).isEqualTo("DOCUMENTO");
+        assertThat(daParceria.parceriaId()).isEqualTo(amarelo());
+        assertThat(daParceria.mimeType()).isEqualTo("text/plain");
+        assertThat(daParceria.caminho()).matches("parcerias/" + amarelo() + "/[0-9a-f-]{36}\\.txt");
+        assertThat(Files.readAllBytes(armazenamento.localizar(daParceria.caminho()).orElseThrow())).isEqualTo(faq);
+    }
+
+    @Test
+    void gravarDocumentoRecusaOQueNaoEPdfNemTxtEOConferirNaoGravaNada() {
+        long antes = jdbc.sql("SELECT count(*) FROM arquivo").query(Long.class).single();
+
+        for (String nome : new String[] {"a.docx", "a.pptx", "a.zip", "a.png", "a.csv", "a.exe", "a"}) {
+            assertThatThrownBy(() -> armazenamento.gravarDocumento(new byte[] {'P', 'K', 3, 4}, nome, rbs(), null)).as(nome)
+                    .isInstanceOf(ArquivoRecusadoException.class).hasMessage("Este tipo de arquivo não é aceito. Envie um destes: pdf, txt.");
+        }
+        assertThatThrownBy(() -> armazenamento.gravarDocumento(new byte[] {'M', 'Z', 0, 0}, "falso.pdf", rbs(), null))
+                .hasMessageStartingWith("O conteúdo do arquivo não é um PDF de verdade");
+        assertThat(armazenamento.conferirDocumento("texto".getBytes(StandardCharsets.UTF_8), "a.txt")).isEqualTo(TipoDeArquivo.TXT);
+        assertThat(jdbc.sql("SELECT count(*) FROM arquivo").query(Long.class).single()).isEqualTo(antes);
+    }
+
+    @Test
+    void osEnviosComunsContinuamRecusandoTxt() {
+        assertThatThrownBy(() -> armazenamento.gravar("texto".getBytes(StandardCharsets.UTF_8), "nota.txt", "OUTRO", rbs(), null))
+                .isInstanceOf(ArquivoRecusadoException.class)
+                .satisfies(erro -> assertThat(((ArquivoRecusadoException) erro).status()).isEqualTo(HttpStatus.UNSUPPORTED_MEDIA_TYPE))
+                .hasMessage("Este tipo de arquivo não é aceito. Envie um destes: pdf, png, jpg, jpeg, docx, xlsx, pptx, csv, mp4, mp3, zip.");
+    }
+
+    @Test
     void gravarArquivoDeUmaParceriaSemEntregaGuardaOCaminhoDaParceria() {
         Arquivo gravado = armazenamento.gravar("%PDF-1.4 x".getBytes(StandardCharsets.US_ASCII), "plano.pdf", "PLANO_COMERCIAL", rbs(),
                 amarelo());

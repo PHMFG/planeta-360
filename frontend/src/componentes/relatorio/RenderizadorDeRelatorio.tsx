@@ -10,7 +10,7 @@ const SITUACAO: Record<StatusRelatorioAtlas, string> = {
   MONTANDO: 'Em montagem: os números são os de agora',
   AGUARDANDO_RESPOSTA: 'Em montagem: esperando os números da marca',
   PRONTO: 'Documento de trabalho da marca, para revisão',
-  DESCARTADO: 'Descartado depois de 7 dias parado',
+  DESCARTADO: 'Descartado',
 }
 
 type Capa = Extract<Bloco, { tipo: 'capa' }>

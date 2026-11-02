@@ -3,7 +3,9 @@ package br.com.rbs.portal.atlas;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
@@ -17,8 +19,16 @@ import org.springframework.stereotype.Repository;
 @Repository
 public class AtlasRepositorio {
 
-    /** A conversa, com o dono e o turno em andamento (nulo = livre). */
-    public record LinhaDeConversa(Long id, Long parceriaId, Long usuarioId, OffsetDateTime criadaEm, OffsetDateTime turnoDesde) {
+    /**
+     * A conversa, com o dono e o turno em andamento (nulo = livre). Uma conversa é de uma parceria (a da marca) ou de um evento (a da
+     * RBS, V15): {@code parceriaId} é nulo na do evento, e {@code eventoId} só vem nela.
+     */
+    public record LinhaDeConversa(Long id, Long parceriaId, Long eventoId, Long usuarioId, OffsetDateTime criadaEm,
+                                  OffsetDateTime turnoDesde) {
+    }
+
+    /** Uma conversa da RBS na lista da rota 68: quando foi mexida pela última vez e o começo da primeira mensagem da pessoa. */
+    public record LinhaDeConversaDaRbs(Long id, OffsetDateTime criadaEm, OffsetDateTime atualizadaEm, String previa) {
     }
 
     /** Uma conversa da lista da rota 43: quando foi mexida pela última vez e o relatório mais novo dela, se houver. */
@@ -29,10 +39,13 @@ public class AtlasRepositorio {
     /**
      * Uma mensagem do histórico. {@code toolCalls} é o JSON dos pedidos de ferramenta do assistente (ou nulo) e
      * {@code reasoningContent} o raciocínio que o modelo mandou com a mensagem, se mandou (volta ao modelo na retomada; cru, nunca
-     * vai à API nem ao log). {@code resumoDoRaciocinio} é o resumo dele que a conversa mostra (V9), ou nulo.
+     * vai à API nem ao log). {@code resumoDoRaciocinio} é o resumo dele que a conversa mostra (V9), ou nulo. {@code foraDoModelo} (V15)
+     * é a mensagem que fica na conversa mas não vai ao modelo, nem conta no teto diário nem no relógio de 7 dias; {@code semModelo}
+     * (V15) é a do assistente que o servidor escreveu sem gastar o modelo (não conta no teto, e continua no histórico do modelo).
      */
     public record LinhaDeMensagem(Long id, Integer ordem, String papel, String conteudo, String toolCalls, String toolCallId,
-                                  OffsetDateTime criadaEm, String reasoningContent, String resumoDoRaciocinio) {
+                                  OffsetDateTime criadaEm, String reasoningContent, String resumoDoRaciocinio, boolean foraDoModelo,
+                                  boolean semModelo) {
 
         /** Sem o raciocínio cru: um {@code toString} (de um log, de uma mensagem de erro) não pode levá-lo. */
         @Override
@@ -103,8 +116,19 @@ public class AtlasRepositorio {
                 .query(Long.class).single();
     }
 
+    /** Abre a conversa da RBS: de uma pessoa da RBS num evento, sem parceria (V15). */
+    public long criarConversaDaRbs(long eventoId, long usuarioId) {
+        return jdbc.sql("INSERT INTO atlas_conversa (parceria_id, evento_id, usuario_id) VALUES (NULL, :evento, :usuario) RETURNING id")
+                .param("evento", eventoId).param("usuario", usuarioId)
+                .query(Long.class).single();
+    }
+
+    public boolean eventoExiste(long eventoId) {
+        return jdbc.sql("SELECT EXISTS (SELECT 1 FROM evento WHERE id = :id)").param("id", eventoId).query(Boolean.class).single();
+    }
+
     public Optional<LinhaDeConversa> conversa(long conversaId) {
-        return jdbc.sql("SELECT id, parceria_id, usuario_id, criada_em, turno_desde FROM atlas_conversa WHERE id = :id")
+        return jdbc.sql("SELECT id, parceria_id, evento_id, usuario_id, criada_em, turno_desde FROM atlas_conversa WHERE id = :id")
                 .param("id", conversaId)
                 .query(LinhaDeConversa.class).optional();
     }
@@ -151,6 +175,26 @@ public class AtlasRepositorio {
                 .query(LinhaDeConversaResumo.class).list();
     }
 
+    /**
+     * As conversas da RBS desta pessoa neste evento (sem parceria), da mexida há menos tempo para a mais antiga. {@code previa} é o
+     * começo (80 caracteres) da primeira mensagem que a pessoa escreveu, ou nulo se ela ainda não escreveu.
+     */
+    public List<LinhaDeConversaDaRbs> conversasDaRbs(long eventoId, long usuarioId, int limite) {
+        return jdbc.sql("""
+                        SELECT c.id, c.criada_em,
+                               greatest(c.criada_em, coalesce((SELECT max(m.criada_em) FROM atlas_mensagem m WHERE m.conversa_id = c.id),
+                                                              c.criada_em)) AS atualizada_em,
+                               (SELECT left(m.conteudo, 80) FROM atlas_mensagem m
+                                WHERE m.conversa_id = c.id AND m.papel = 'user' ORDER BY m.ordem LIMIT 1) AS previa
+                        FROM atlas_conversa c
+                        WHERE c.parceria_id IS NULL AND c.evento_id = :evento AND c.usuario_id = :usuario
+                        ORDER BY atualizada_em DESC, c.id DESC
+                        LIMIT :limite
+                        """)
+                .param("evento", eventoId).param("usuario", usuarioId).param("limite", limite)
+                .query(LinhaDeConversaDaRbs.class).list();
+    }
+
     /** Os ids das conversas de uma pessoa nesta parceria (para o descarte). */
     public List<Long> idsDasConversasDoUsuario(long parceriaId, long usuarioId) {
         return jdbc.sql("SELECT id FROM atlas_conversa WHERE parceria_id = :parceria AND usuario_id = :usuario")
@@ -163,6 +207,59 @@ public class AtlasRepositorio {
     // ---------------------------------------------------------------------
 
     /** A ordem da última mensagem da conversa (0 se não tem nenhuma). */
+    /** A última coisa que a pessoa escreveu na conversa (vale como origem dos números do turno), ou vazio se ainda não escreveu. */
+    public Optional<String> ultimaMensagemDaPessoa(long conversaId) {
+        return jdbc.sql("SELECT conteudo FROM atlas_mensagem WHERE conversa_id = :id AND papel = 'user' ORDER BY ordem DESC LIMIT 1")
+                .param("id", conversaId).query(String.class).optional();
+    }
+
+    /** O id da última mensagem da pessoa na conversa: a que as decisões do JEV do turno apontam. */
+    public Optional<Long> idDaUltimaMensagemDaPessoa(long conversaId) {
+        return jdbc.sql("SELECT id FROM atlas_mensagem WHERE conversa_id = :id AND papel = 'user' ORDER BY ordem DESC LIMIT 1")
+                .param("id", conversaId).query(Long.class).optional();
+    }
+
+    /**
+     * Grava uma decisão do JEV (V15): onde foi consultado, no modo e com o limiar que valiam, o que respondeu e o que o servidor fez
+     * (ou, em sombra, teria feito). Chamar numa transação curta, depois das chamadas ao JEV. Nunca leva o estado enviado a ele.
+     */
+    public void inserirDecisao(long mensagemId, java.util.UUID turno, String ponto, String modo, double limiar, String pergunta,
+                               String escolha, Double confianca, String probabilidadesJson, String modelo, String decisaoLlm,
+                               Long latenciaMs, String erro, String acao, String alvo) {
+        jdbc.sql("""
+                        INSERT INTO atlas_decisao (mensagem_id, turno, ponto, modo, limiar, pergunta, escolha, confianca, probabilidades,
+                                                   modelo, decisao_llm, latencia_ms, erro, acao, alvo)
+                        VALUES (:mensagem, :turno, :ponto, :modo, :limiar, :pergunta, :escolha, :confianca, CAST(:probabilidades AS jsonb),
+                                :modelo, :decisaoLlm, :latencia, :erro, :acao, :alvo)
+                        """)
+                .param("mensagem", mensagemId).param("turno", turno).param("ponto", ponto).param("modo", modo)
+                .param("limiar", java.math.BigDecimal.valueOf(limiar)).param("pergunta", cortar(pergunta, 40))
+                .param("escolha", cortar(escolha, 40))
+                .param("confianca", confianca == null ? null : java.math.BigDecimal.valueOf(Math.max(0, Math.min(1, confianca))))
+                .param("probabilidades", probabilidadesJson).param("modelo", cortar(modelo, 40))
+                .param("decisaoLlm", cortar(decisaoLlm, 60)).param("latencia", latenciaMs == null ? null : (int) Math.min(Integer.MAX_VALUE, latenciaMs))
+                .param("erro", erro).param("acao", cortar(acao, 80)).param("alvo", cortar(alvo, 200))
+                .update();
+    }
+
+    private static String cortar(String texto, int maximo) {
+        return texto == null || texto.length() <= maximo ? texto : texto.substring(0, maximo);
+    }
+
+    /**
+     * O que a pessoa escreveu antes da última mensagem dela, da mais nova para a mais antiga, até {@code limite} (o botão "Montar
+     * relatório" também grava uma mensagem {@code user}, mas não foi a pessoa que a escreveu: {@code textoDoBotao} a deixa de fora).
+     */
+    public List<String> mensagensAnterioresDaPessoa(long conversaId, int limite, String textoDoBotao) {
+        return jdbc.sql("""
+                        SELECT conteudo FROM atlas_mensagem
+                        WHERE conversa_id = :id AND papel = 'user' AND conteudo <> :botao
+                          AND ordem < coalesce((SELECT max(ordem) FROM atlas_mensagem WHERE conversa_id = :id AND papel = 'user'), 0)
+                        ORDER BY ordem DESC LIMIT :limite
+                        """)
+                .param("id", conversaId).param("botao", textoDoBotao).param("limite", limite).query(String.class).list();
+    }
+
     public int ultimaOrdem(long conversaId) {
         return jdbc.sql("SELECT coalesce(max(ordem), 0) FROM atlas_mensagem WHERE conversa_id = :id")
                 .param("id", conversaId)
@@ -172,36 +269,82 @@ public class AtlasRepositorio {
     /** Grava a mensagem na próxima ordem da conversa e devolve o id. Chamar dentro da transação, com a conversa travada. */
     public long inserirMensagem(long conversaId, String papel, String conteudo, String toolCallsJson, String toolCallId,
                                 String reasoningContent) {
+        return inserirMensagem(conversaId, papel, conteudo, toolCallsJson, toolCallId, reasoningContent, false, false);
+    }
+
+    /** O mesmo, dizendo se a mensagem é {@code fora_do_modelo} e se é {@code sem_modelo} (V15). */
+    public long inserirMensagem(long conversaId, String papel, String conteudo, String toolCallsJson, String toolCallId,
+                                String reasoningContent, boolean foraDoModelo, boolean semModelo) {
         int ordem = ultimaOrdem(conversaId) + 1;
         return jdbc.sql("""
-                        INSERT INTO atlas_mensagem (conversa_id, ordem, papel, conteudo, tool_calls, tool_call_id, reasoning_content)
-                        VALUES (:conversa, :ordem, :papel, :conteudo, CAST(:calls AS jsonb), :toolCallId, :raciocinio) RETURNING id
+                        INSERT INTO atlas_mensagem (conversa_id, ordem, papel, conteudo, tool_calls, tool_call_id, reasoning_content,
+                                                    fora_do_modelo, sem_modelo)
+                        VALUES (:conversa, :ordem, :papel, :conteudo, CAST(:calls AS jsonb), :toolCallId, :raciocinio, :fora, :sem)
+                        RETURNING id
                         """)
                 .param("conversa", conversaId).param("ordem", ordem).param("papel", papel).param("conteudo", conteudo)
                 .param("calls", toolCallsJson).param("toolCallId", toolCallId).param("raciocinio", reasoningContent)
+                .param("fora", foraDoModelo).param("sem", semModelo)
                 .query(Long.class).single();
     }
 
     /**
      * Quantas mensagens do assistente que vieram do modelo de linguagem foram gravadas hoje (dia de Brasília) nas conversas da
-     * parceria. As do botão (plano B) têm id de pedido {@code botao_...} e não entram: não gastam o modelo. É o contador do
-     * teto diário.
+     * parceria. As que o servidor escreveu sem o modelo ({@code sem_modelo}: o botão, a recusa de fora de escopo, a resposta direta
+     * do JEV) e as {@code fora_do_modelo} não entram: não gastam o modelo. É o contador do teto diário.
      */
     public long mensagensDoModeloHoje(long parceriaId) {
         return jdbc.sql("""
                         SELECT count(*) FROM atlas_mensagem m JOIN atlas_conversa c ON c.id = m.conversa_id
                         WHERE c.parceria_id = :parceria AND m.papel = 'assistant'
                           AND m.criada_em >= (date_trunc('day', now() AT TIME ZONE 'America/Sao_Paulo') AT TIME ZONE 'America/Sao_Paulo')
-                          AND NOT coalesce(jsonb_path_exists(m.tool_calls, '$[*].id ? (@ like_regex "^botao_")'), false)
+                          AND NOT m.sem_modelo AND NOT m.fora_do_modelo
                         """)
                 .param("parceria", parceriaId)
                 .query(Long.class).single();
     }
 
+    /**
+     * Quantas mensagens do assistente que vieram do modelo de linguagem esta pessoa da RBS gastou hoje (dia de Brasília) nas conversas
+     * dela, que não têm parceria. As mesmas regras de {@link #mensagensDoModeloHoje}: as {@code sem_modelo} e as
+     * {@code fora_do_modelo} não contam. É o contador do teto diário do Atlas da RBS, por pessoa e não por parceria.
+     */
+    public long mensagensDoModeloHojeDaRbs(long usuarioId) {
+        return jdbc.sql("""
+                        SELECT count(*) FROM atlas_mensagem m JOIN atlas_conversa c ON c.id = m.conversa_id
+                        WHERE c.parceria_id IS NULL AND c.usuario_id = :usuario AND m.papel = 'assistant'
+                          AND m.criada_em >= (date_trunc('day', now() AT TIME ZONE 'America/Sao_Paulo') AT TIME ZONE 'America/Sao_Paulo')
+                          AND NOT m.sem_modelo AND NOT m.fora_do_modelo
+                        """)
+                .param("usuario", usuarioId)
+                .query(Long.class).single();
+    }
+
+    /** Quanto uma parceria gastou do teto diário hoje (as mesmas mensagens que {@link #mensagensDoModeloHoje}). */
+    public record UsoDoTeto(Long parceriaId, String parceria, Long usadas) {
+    }
+
+    /** O uso do teto diário de cada parceria que gastou alguma mensagem hoje, da que mais gastou para a que menos gastou. */
+    public List<UsoDoTeto> mensagensDoModeloHojePorParceria() {
+        return jdbc.sql("""
+                        SELECT c.parceria_id, p.nome_canonico AS parceria, count(*) AS usadas
+                        FROM atlas_mensagem m
+                        JOIN atlas_conversa c ON c.id = m.conversa_id
+                        JOIN parceria pa ON pa.id = c.parceria_id
+                        JOIN patrocinador p ON p.id = pa.patrocinador_id
+                        WHERE m.papel = 'assistant'
+                          AND m.criada_em >= (date_trunc('day', now() AT TIME ZONE 'America/Sao_Paulo') AT TIME ZONE 'America/Sao_Paulo')
+                          AND NOT m.sem_modelo AND NOT m.fora_do_modelo
+                        GROUP BY c.parceria_id, p.nome_canonico
+                        ORDER BY usadas DESC, p.nome_canonico
+                        """)
+                .query(UsoDoTeto.class).list();
+    }
+
     public List<LinhaDeMensagem> mensagens(long conversaId) {
         return jdbc.sql("""
                         SELECT id, ordem, papel, conteudo, CAST(tool_calls AS text) AS tool_calls, tool_call_id, criada_em,
-                               reasoning_content, resumo_do_raciocinio
+                               reasoning_content, resumo_do_raciocinio, fora_do_modelo, sem_modelo
                         FROM atlas_mensagem WHERE conversa_id = :id ORDER BY ordem
                         """)
                 .param("id", conversaId)
@@ -266,6 +409,101 @@ public class AtlasRepositorio {
     }
 
     // ---------------------------------------------------------------------
+    // Fontes citadas (V12)
+    // ---------------------------------------------------------------------
+
+    /** Grava a fonte de trecho que uma mensagem do assistente citou; {@code dados} guarda o título e a seção como estavam. */
+    public void inserirFonteDeTrecho(long mensagemId, String marcador, long trechoId, long documentoId, int versao, int pagina,
+                                     String titulo, String secao) {
+        Map<String, Object> dados = new LinkedHashMap<>();
+        dados.put("titulo", titulo);
+        dados.put("secao", secao);
+        jdbc.sql("""
+                        INSERT INTO atlas_fonte (mensagem_id, marcador, tipo, trecho_id, documento_id, versao, pagina, dados)
+                        VALUES (:mensagem, :marcador, 'TRECHO', :trecho, :documento, :versao, :pagina, CAST(:dados AS jsonb))
+                        """)
+                .param("mensagem", mensagemId).param("marcador", marcador).param("trecho", trechoId).param("documento", documentoId)
+                .param("versao", versao).param("pagina", pagina).param("dados", AtlasJson.escrever(dados)).update();
+    }
+
+    /**
+     * Grava a fonte de registro do portal ({@code [R#]}) que uma mensagem citou. O CHECK da tabela proíbe, no registro, as colunas do
+     * documento: se o registro veio de um documento, o {@code documentoId}, a {@code versao} e a {@code pagina} ficam em {@code dados},
+     * junto do título e da seção.
+     */
+    public void inserirFonteDeRegistro(long mensagemId, String marcador, String entidade, long id, Map<String, Object> dados) {
+        jdbc.sql("""
+                        INSERT INTO atlas_fonte (mensagem_id, marcador, tipo, registro_entidade, registro_id, dados)
+                        VALUES (:mensagem, :marcador, 'REGISTRO', :entidade, :id, CAST(:dados AS jsonb))
+                        """)
+                .param("mensagem", mensagemId).param("marcador", marcador).param("entidade", entidade).param("id", id)
+                .param("dados", AtlasJson.escrever(dados)).update();
+    }
+
+    /** Grava a fonte de conta ({@code [C#]}, do {@code calcular} ou do {@code contar_dias}): a conta inteira vai em {@code dados}. */
+    public void inserirFonteDeCalculo(long mensagemId, String marcador, Map<String, Object> dados) {
+        jdbc.sql("""
+                        INSERT INTO atlas_fonte (mensagem_id, marcador, tipo, dados)
+                        VALUES (:mensagem, :marcador, 'CALCULO', CAST(:dados AS jsonb))
+                        """)
+                .param("mensagem", mensagemId).param("marcador", marcador).param("dados", AtlasJson.escrever(dados)).update();
+    }
+
+    /**
+     * Uma fonte citada numa mensagem, como a conversa a mostra. {@code substituido} e {@code revogado} são o estado de AGORA do
+     * documento (ele pode ter mudado depois da resposta). {@code documentoId}, {@code versao} e {@code pagina} são das colunas num
+     * trecho e de {@code dados} num registro que veio de um documento. {@code titulo} é o do trecho ou do registro e, na conta, o
+     * nome dela. {@code dados} é o JSON cru (a conta, para a releitura resolver o {@code {{calc:nome}}} daquela mensagem).
+     */
+    public record LinhaDeFonte(Long mensagemId, String marcador, String tipo, Long trechoId, Long documentoId, Integer versao,
+                               Integer pagina, String titulo, String secao, boolean substituido, boolean revogado, String dados) {
+    }
+
+    /** O documento a que a fonte aponta: a coluna, no trecho, ou o {@code documentoId} de {@code dados}, no registro. */
+    private static final String DOCUMENTO_DA_FONTE = """
+            coalesce(f.documento_id, CASE WHEN jsonb_typeof(f.dados -> 'documentoId') = 'number'
+                                          THEN (f.dados ->> 'documentoId')::bigint END)""";
+
+    /** As fontes de todas as mensagens da conversa, por mensagem e pelo número do marcador. */
+    public List<LinhaDeFonte> fontesDaConversa(long conversaId) {
+        return jdbc.sql("""
+                        SELECT f.mensagem_id, f.marcador, f.tipo, f.trecho_id,
+                               %s AS documento_id,
+                               coalesce(f.versao, CASE WHEN jsonb_typeof(f.dados -> 'versao') = 'number' THEN (f.dados ->> 'versao')::int END) AS versao,
+                               coalesce(f.pagina, CASE WHEN jsonb_typeof(f.dados -> 'pagina') = 'number' THEN (f.dados ->> 'pagina')::int END) AS pagina,
+                               coalesce(f.dados ->> 'titulo', f.dados ->> 'nome') AS titulo, f.dados ->> 'secao' AS secao,
+                               coalesce(d.status = 'SUBSTITUIDO', FALSE) AS substituido, coalesce(d.status = 'REVOGADO', FALSE) AS revogado,
+                               f.dados::text AS dados
+                        FROM atlas_fonte f
+                        JOIN atlas_mensagem m ON m.id = f.mensagem_id
+                        LEFT JOIN documento d ON d.id = %s
+                        WHERE m.conversa_id = :conversa
+                        ORDER BY f.mensagem_id, f.id
+                        """.formatted(DOCUMENTO_DA_FONTE, DOCUMENTO_DA_FONTE))
+                .param("conversa", conversaId).query(LinhaDeFonte.class).list();
+    }
+
+    /** Um documento que a conversa já citou e que deixou de valer (revogado, ou substituído por uma versão mais nova). */
+    public record DocumentoRetirado(String titulo, Integer versao) {
+    }
+
+    /**
+     * Os documentos que alguma resposta desta conversa citou (pela {@code atlas_fonte}) e que hoje estão revogados ou substituídos. O
+     * prompt do turno avisa o modelo de cada um, para ele não repetir o que disse deles.
+     */
+    public List<DocumentoRetirado> documentosCitadosQueSairamDoAr(long conversaId) {
+        return jdbc.sql("""
+                        SELECT DISTINCT d.titulo, d.versao
+                        FROM atlas_fonte f
+                        JOIN atlas_mensagem m ON m.id = f.mensagem_id
+                        JOIN documento d ON d.id = %s
+                        WHERE m.conversa_id = :conversa AND d.status IN ('REVOGADO', 'SUBSTITUIDO')
+                        ORDER BY d.titulo, d.versao
+                        """.formatted(DOCUMENTO_DA_FONTE))
+                .param("conversa", conversaId).query(DocumentoRetirado.class).list();
+    }
+
+    // ---------------------------------------------------------------------
     // Relatório
     // ---------------------------------------------------------------------
 
@@ -287,6 +525,15 @@ public class AtlasRepositorio {
         return jdbc.sql(RELATORIO + " WHERE r.conversa_id = :id AND r.status IN ('MONTANDO','AGUARDANDO_RESPOSTA')")
                 .param("id", conversaId)
                 .query(LinhaDeRelatorio.class).optional();
+    }
+
+    /**
+     * O relatório mais novo da conversa foi descartado? Então a conversa não tem relatório em andamento (o criar recusa um segundo
+     * em andamento, e o que está em andamento é sempre o mais novo). Um relatório pronto depois do descartado desfaz a resposta.
+     */
+    public boolean ultimoRelatorioDescartado(long conversaId) {
+        return jdbc.sql("SELECT status = 'DESCARTADO' FROM atlas_relatorio WHERE conversa_id = :id ORDER BY id DESC LIMIT 1")
+                .param("id", conversaId).query(Boolean.class).optional().orElse(false);
     }
 
     public long criarRelatorio(long parceriaId, long conversaId, String modelo, String especificacaoJson, long usuarioId) {
@@ -339,8 +586,9 @@ public class AtlasRepositorio {
 
     /**
      * Os relatórios em montagem ou esperando cartão, destas conversas, sem nenhuma mensagem nova há mais de {@code dias} dias
-     * (a última atividade é a mensagem mais nova da conversa, ou a criação do relatório). Trava as linhas; as que outro pedido
-     * está mexendo ficam de fora (não estão paradas).
+     * (a última atividade é a mensagem mais nova da conversa, ou a criação do relatório; a mensagem {@code fora_do_modelo}, a resposta
+     * fixa de um cartão aberto, não conta: conversar com o cartão aberto não mantém o relatório vivo). Trava as linhas; as que outro
+     * pedido está mexendo ficam de fora (não estão paradas).
      */
     public List<Parado> relatoriosParados(List<Long> conversaIds, int dias) {
         if (conversaIds.isEmpty()) {
@@ -351,7 +599,7 @@ public class AtlasRepositorio {
                         FROM atlas_relatorio r
                         WHERE r.conversa_id IN (:conversas) AND r.status IN ('MONTANDO','AGUARDANDO_RESPOSTA')
                           AND greatest(r.criado_em, coalesce((SELECT max(m.criada_em) FROM atlas_mensagem m
-                                                              WHERE m.conversa_id = r.conversa_id), r.criado_em))
+                                                              WHERE m.conversa_id = r.conversa_id AND NOT m.fora_do_modelo), r.criado_em))
                               < now() - make_interval(days => :dias)
                         ORDER BY r.id
                         FOR UPDATE OF r SKIP LOCKED
@@ -421,6 +669,21 @@ public class AtlasRepositorio {
                 .update();
     }
 
+    /**
+     * As contas do {@code calcular} que a conversa gravou para o relatório (M5), como o JSON de {@code ContaDoChat.comoDados()}. As
+     * linhas das fórmulas fixas guardam em {@code variaveis} uma lista; as do chat, um objeto: é assim que se distinguem.
+     */
+    public List<String> contasDoChatDoRelatorio(long relatorioId) {
+        return jdbc.sql("SELECT variaveis::text FROM atlas_calculo WHERE relatorio_id = :relatorio AND jsonb_typeof(variaveis) = 'object' ORDER BY id")
+                .param("relatorio", relatorioId).query(String.class).list();
+    }
+
+    /** O relatório já tem uma conta com este nome (do chat, ou uma fórmula fixa já gravada)? */
+    public boolean calculoExiste(long relatorioId, String nome) {
+        return jdbc.sql("SELECT EXISTS (SELECT 1 FROM atlas_calculo WHERE relatorio_id = :relatorio AND nome = :nome)")
+                .param("relatorio", relatorioId).param("nome", nome).query(Boolean.class).single();
+    }
+
     // ---------------------------------------------------------------------
     // Apoio
     // ---------------------------------------------------------------------
@@ -430,6 +693,37 @@ public class AtlasRepositorio {
         return jdbc.sql("SELECT p.nome_canonico FROM parceria pa JOIN patrocinador p ON p.id = pa.patrocinador_id WHERE pa.id = :id")
                 .param("id", parceriaId)
                 .query(String.class).single();
+    }
+
+    /** O evento (a edição do festival), a cota e o ano da parceria: o que a busca nos documentos usa para saber o que a marca enxerga. */
+    public record EscopoDaParceria(Long eventoId, Integer cotaTipoId, String cotaCodigo, Integer edicao) {
+    }
+
+    /** O escopo da parceria nos documentos (M4): a edição do festival e a cota. Parceria sempre tem os dois. */
+    public EscopoDaParceria escopoDaParceria(long parceriaId) {
+        return jdbc.sql("""
+                        SELECT pa.evento_id, pa.cota_tipo_id, ct.codigo AS cota_codigo, ev.edicao
+                        FROM parceria pa JOIN cota_tipo ct ON ct.id = pa.cota_tipo_id JOIN evento ev ON ev.id = pa.evento_id
+                        WHERE pa.id = :id
+                        """)
+                .param("id", parceriaId)
+                .query(EscopoDaParceria.class).single();
+    }
+
+    /** O mesmo escopo, ou vazio se a parceria não existe (a busca de teste da RBS recebe o id de quem digitou). */
+    public Optional<EscopoDaParceria> escopoDaParceriaSeExistir(long parceriaId) {
+        return jdbc.sql("""
+                        SELECT pa.evento_id, pa.cota_tipo_id, ct.codigo AS cota_codigo, ev.edicao
+                        FROM parceria pa JOIN cota_tipo ct ON ct.id = pa.cota_tipo_id JOIN evento ev ON ev.id = pa.evento_id
+                        WHERE pa.id = :id
+                        """)
+                .param("id", parceriaId)
+                .query(EscopoDaParceria.class).optional();
+    }
+
+    /** A edição (o ano) de um evento: o que o texto de uma resposta pode dizer como "o ano da edição" na conversa da RBS. */
+    public int edicaoDoEvento(long eventoId) {
+        return jdbc.sql("SELECT edicao FROM evento WHERE id = :id").param("id", eventoId).query(Integer.class).single();
     }
 
     /** O código da cota da parceria (MASTER, SUBCOTA_G ou SUBCOTA). */

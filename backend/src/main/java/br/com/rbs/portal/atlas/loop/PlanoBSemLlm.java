@@ -50,6 +50,8 @@ public class PlanoBSemLlm {
     public static final String AVISO_CARTAO_FECHADO = "Cartão fechado. Use Montar relatório para continuar.";
     /** O mesmo aviso quando o modelo de linguagem está ligado: a pessoa pode continuar pelo chat. */
     public static final String AVISO_CARTAO_FECHADO_COM_MODELO = "Cartão fechado. Quando tiver os números, peça para continuar.";
+    /** O aviso do cartão que se fechou porque o relatório foi descartado (pela tela ou por ter ficado parado): vale com ou sem modelo. */
+    public static final String AVISO_RELATORIO_DESCARTADO = "Relatório descartado. Você pode pedir um novo quando quiser.";
     public static final String CARTAO_ABERTO = "Este relatório está esperando a resposta do cartão. Responda ou feche o cartão antes de montar de novo.";
     static final String OBJETIVO = "Montar o relatório de ativação no evento, pelo botão";
 
@@ -126,7 +128,8 @@ public class PlanoBSemLlm {
     private long executarIniciar(AtlasContexto contexto, String modelo) {
         String id = HistoricoDaConversa.novoIdDeChamada();
         String argumentos = json("modelo", modelo, "objetivo", OBJETIVO);
-        long mensagem = historico.assistente(contexto.conversaId(), null, List.of(new Chamada(id, "relatorio_iniciar", argumentos)));
+        long mensagem = historico.assistenteDoServidor(contexto.conversaId(), null,
+                List.of(new Chamada(id, "relatorio_iniciar", argumentos)));
         ResumoDoRelatorio resumo = medir(mensagem, "relatorio_iniciar", argumentos,
                 () -> relatorios.iniciar(contexto, modelo, OBJETIVO));
         historico.resultado(contexto.conversaId(), id, AtlasJson.escrever(resumo));
@@ -138,7 +141,7 @@ public class PlanoBSemLlm {
         List<String> chaves = lacunas.stream().map(Lacuna::chave).limit(RelatorioAtlasService.MAXIMO_DE_CAMPOS_NO_CARTAO).toList();
         String argumentos = json("mensagem", MENSAGEM_DO_CARTAO, "campos", chaves);
         CartaoAberto cartao = relatorios.solicitarCamposDoBotao(contexto, relatorioId, MENSAGEM_DO_CARTAO, chaves, id);
-        long mensagem = historico.assistente(contexto.conversaId(), introducao,
+        long mensagem = historico.assistenteDoServidor(contexto.conversaId(), introducao,
                 List.of(new Chamada(cartao.toolCallId(), "relatorio_solicitar_campos", argumentos)));
         // A ferramenta fica sem resultado até a pessoa responder o cartão (rota 46).
         repositorio.registrarChamada(mensagem, "relatorio_solicitar_campos", argumentos, null, null, null);
@@ -148,7 +151,7 @@ public class PlanoBSemLlm {
     private void concluir(AtlasContexto contexto, long relatorioId) {
         relatorios.preencherFrasesModelo(contexto, relatorioId);
         String id = HistoricoDaConversa.novoIdDeChamada();
-        long mensagem = historico.assistente(contexto.conversaId(), TEXTO_PRONTO,
+        long mensagem = historico.assistenteDoServidor(contexto.conversaId(), TEXTO_PRONTO,
                 List.of(new Chamada(id, "relatorio_finalizar", "{}")));
         RelatorioFinalizado pronto = medir(mensagem, "relatorio_finalizar", "{}", () -> relatorios.finalizar(contexto, relatorioId));
         historico.resultado(contexto.conversaId(), id, pronto.resultadoJson());

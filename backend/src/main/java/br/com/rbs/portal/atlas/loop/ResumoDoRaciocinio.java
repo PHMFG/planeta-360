@@ -2,8 +2,12 @@ package br.com.rbs.portal.atlas.loop;
 
 import br.com.rbs.portal.atlas.AtlasRepositorio;
 import br.com.rbs.portal.atlas.contexto.AtlasContexto;
+import br.com.rbs.portal.atlas.diagnostico.EtapaDoTraco;
+import br.com.rbs.portal.atlas.diagnostico.ResultadoDaEtapa;
+import br.com.rbs.portal.atlas.diagnostico.Traco.Etapa;
 import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm;
 import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.PedidoDeResumo;
+import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.ResumoDoLlm;
 import br.com.rbs.portal.atlas.relatorio.ChecagemDeTexto;
 import br.com.rbs.portal.atlas.relatorio.ChecagemDeTexto.Veredito;
 import br.com.rbs.portal.atlas.relatorio.ModeloBase;
@@ -118,12 +122,15 @@ public class ResumoDoRaciocinio {
                 return;
             }
             Pedido pedido = new Pedido(mensagemId);
+            // No traço o resumo corre em paralelo ao turno: entra aberto, e fica pendente se o turno acabar antes dele.
+            pedido.etapa = contexto.traco().abrir(EtapaDoTraco.RESUMO).mensagem(mensagemId);
             try {
                 pedido.futuro = executor.submit(() -> gerar(contexto, provedor, ouvinte, pedido, raciocinio));
                 pedidos.add(pedido);
             } catch (RuntimeException naoComecou) {   // o servidor está parando: a mensagem fica sem resumo
                 log.warn("Atlas: o resumo do raciocínio da mensagem {} não pôde começar ({})", mensagemId,
                         naoComecou.getClass().getSimpleName());
+                pedido.etapa.dado("erro", naoComecou.getClass().getSimpleName()).fim(ResultadoDaEtapa.ERRO);
             }
         }
 
@@ -131,17 +138,22 @@ public class ResumoDoRaciocinio {
          * Espera os resumos pedidos, todos juntos, por até o prazo ({@code atlas.prazo-do-resumo}). O que não ficou pronto é
          * abandonado: sai sem resumo no {@code fim} e nunca é avisado ao fluxo depois dele, mas a chamada continua e, se o
          * resumo for aprovado, ainda é gravado. Quando volta, nenhum aviso de resumo vai mais sair para o fluxo antes do
-         * {@code fim}: ou já saiu, ou não sairá.
+         * {@code fim}: ou já saiu, ou não sairá. Devolve quantos resumos ficaram para trás (o diagnóstico os mostra pendentes).
          */
-        public void esperar() {
+        public int esperar() {
             long limite = System.nanoTime() + prazo.toNanos();
+            int abandonados = 0;
             try {
                 for (Pedido pedido : pedidos) {
                     aguardar(pedido, Math.max(0, limite - System.nanoTime()));
+                    if (!pedido.futuro.isDone()) {
+                        abandonados++;
+                    }
                 }
             } finally {
                 pedidos.clear();
             }
+            return abandonados;
         }
 
         private void aguardar(Pedido pedido, long nanos) {
@@ -175,6 +187,8 @@ public class ResumoDoRaciocinio {
 
         final long mensagemId;
         volatile Future<?> futuro;
+        /** A etapa RESUMO deste pedido no traço do diagnóstico (inerte com o diagnóstico desligado). */
+        volatile Etapa etapa;
         private final AtomicReference<Aviso> aviso = new AtomicReference<>(Aviso.PENDENTE);
 
         Pedido(long mensagemId) {
@@ -198,28 +212,37 @@ public class ResumoDoRaciocinio {
 
     /** Pede, confere, grava e avisa. Nunca lança: o que der errado deixa a mensagem sem resumo, e o log diz só isso. */
     private void gerar(AtlasContexto contexto, ProvedorDeLlm provedor, OuvinteDoTurno ouvinte, Pedido pedido, String raciocinio) {
+        Etapa etapa = pedido.etapa;
         try {
-            String bruto;
+            ResumoDoLlm gerado;
             try {
-                bruto = provedor.resumir(new PedidoDeResumo(String.valueOf(contexto.conversaId()), prompt, entrada(raciocinio)));
+                gerado = provedor.resumirMedindo(new PedidoDeResumo(String.valueOf(contexto.conversaId()), prompt, entrada(raciocinio)));
             } catch (RuntimeException falha) {
                 log.warn("Atlas: o resumo do raciocínio da mensagem {} falhou ({})", pedido.mensagemId, falha.getClass().getSimpleName());
+                etapa.dado("erro", falha.getClass().getSimpleName()).fim(ResultadoDaEtapa.ERRO);
                 return;
             }
-            String resumo = conferir(contexto, bruto);
+            // O traço guarda só o que a chamada gastou e o veredito: nunca o raciocínio nem o resumo (derivado dele).
+            etapa.dados(contexto.traco().dadosDoUso(gerado == null ? null : gerado.uso(), provedor.modelo()));
+            String resumo = conferir(contexto, gerado == null ? null : gerado.texto());
             if (resumo == null) {
                 log.warn("Atlas: o resumo do raciocínio da mensagem {} foi recusado", pedido.mensagemId);
+                etapa.dado("motivo", "RECUSADO_PELA_CHECAGEM").fim(ResultadoDaEtapa.RECUSADO);
                 return;
             }
             if (!repositorio.gravarResumoDoRaciocinio(pedido.mensagemId, resumo)) {
                 log.warn("Atlas: o resumo do raciocínio da mensagem {} não foi gravado (a mensagem não está mais lá)", pedido.mensagemId);
+                etapa.dado("motivo", "MENSAGEM_SUMIU").fim(ResultadoDaEtapa.ERRO);
                 return;
             }
-            if (pedido.podeAvisar()) {
+            boolean avisado = pedido.podeAvisar();
+            etapa.dado("caracteres", resumo.length()).dado("noPrazo", avisado).fim(ResultadoDaEtapa.OK);
+            if (avisado) {
                 ouvinte.resumo(resumo);
             }
         } catch (RuntimeException falha) {   // banco, ouvinte...: nada disso derruba o turno
             log.warn("Atlas: o resumo do raciocínio da mensagem {} falhou ({})", pedido.mensagemId, falha.getClass().getSimpleName());
+            etapa.dado("erro", falha.getClass().getSimpleName()).fim(ResultadoDaEtapa.ERRO);   // sem efeito se a etapa já terminou
         }
     }
 
@@ -232,9 +255,7 @@ public class ResumoDoRaciocinio {
         if (texto.isEmpty() || texto.contains("{{")) {
             return null;
         }
-        Veredito veredito = checagem.chat(
-                resolvedor.abrir(contexto.usuario(), contexto.parceriaId(), modelos.obter(ModeloBase.ATIVACAO_EVENTO).orElseThrow()),
-                texto);
+        Veredito veredito = checagem.chat(resolvedor.abrir(contexto, modelos.obter(ModeloBase.ATIVACAO_EVENTO).orElseThrow()), texto);
         return veredito.aprovado() ? veredito.texto() : null;
     }
 

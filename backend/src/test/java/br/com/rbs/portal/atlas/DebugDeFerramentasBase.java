@@ -18,6 +18,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.test.web.servlet.assertj.MvcTestResult;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * [ATLAS] O que o debug das ferramentas ({@code atlas.debug.ferramentas=true}) tem de igual nos dois modos do relatório: o campo
@@ -25,7 +26,12 @@ import org.springframework.test.web.servlet.assertj.MvcTestResult;
  * argumentos e o resultado crus (iguais ao que o histórico guarda e ao que o modelo recebeu), o corte em 20.000 caracteres, o erro
  * de ferramenta, o raciocínio cru que nunca sai e o 404 de quem não é da parceria. As classes concretas ligam a propriedade e
  * escolhem o modo. Não faz parte da API.
+ * <p>
+ * É {@code @Transactional} aqui, na classe que declara os testes, e não só nas concretas: o Spring procura o {@code @Transactional} de um
+ * método na classe que o declara, então o da subclasse não vale para o teste herdado, que rodava sem transação, gravava as conversas com
+ * commit e deixava cinco delas no banco para o teste que viesse depois (o AtlasControllerTest viu 6 conversas onde esperava 1).
  */
+@Transactional
 abstract class DebugDeFerramentasBase {
 
     /** O que o provedor roteirizado põe no reasoning_content e que não pode aparecer em nenhum corpo da API. */
@@ -137,6 +143,23 @@ abstract class DebugDeFerramentasBase {
         assertThat(corpo(inteira)).doesNotContain(SENTINELA);
         assertThat(jdbc.sql("SELECT count(*) FROM atlas_mensagem WHERE conversa_id = :c AND reasoning_content LIKE :s").param("c", conversa)
                 .param("s", "%" + SENTINELA + "%").query(Long.class).single()).isEqualTo(1);   // gravado no servidor, só lá
+    }
+
+    @Test
+    void aRespostaDiretaTambemApareceNoDebugComoFerramenta() {
+        SessaoDeApi pessoa = entrar(AMARELO);
+        long conversa = abrirConversa(pessoa);
+        modelo.chamada("gerar_modelo", "{\"tipo\":\"BRIEFING_CONTEUDO\"}");
+
+        MvcTestResult resposta = falar(pessoa, conversa, "Me dá um modelo de briefing.");
+
+        assertThat(modelo.pedidos()).hasSize(1);   // o turno acabou na resposta direta
+        assertThat(lerLista(resposta, "$.itens[*].tipo")).containsExactly("usuario", "ferramenta", "modelo");   // a ferramenta, depois o item dela
+        List<Map<String, Object>> ferramentas = lerLista(resposta, "$.itens[?(@.tipo=='ferramenta')]");
+        assertThat(ferramentas).hasSize(1);
+        assertThat(ferramentas.get(0)).containsEntry("nome", "gerar_modelo").containsEntry("argumentos", "{\"tipo\":\"BRIEFING_CONTEUDO\"}")
+                .containsEntry("erro", false).containsEntry("resultado", respostasGravadas(conversa).get(0));
+        assertThat((String) ferramentas.get(0).get("resultado")).contains("\"nomeArquivo\":\"briefing-de-conteudo.md\"");
     }
 
     @Test

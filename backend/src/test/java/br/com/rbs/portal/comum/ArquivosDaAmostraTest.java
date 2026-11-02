@@ -46,8 +46,8 @@ class ArquivosDaAmostraTest {
     }
 
     @Test
-    void soExisteNoPerfilDevENuncaNosTestesNemEmProducao() {
-        assertThat(ArquivosDaAmostra.class.getAnnotation(Profile.class).value()).containsExactly("dev");
+    void soExisteNosPerfisDevEDemoENuncaNosTestesNemEmProducao() {
+        assertThat(ArquivosDaAmostra.class.getAnnotation(Profile.class).value()).containsExactlyInAnyOrder("dev", "demo");
         assertThat(noContextoDeTeste).as("o perfil test não carrega o passo").isNull();
     }
 

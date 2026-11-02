@@ -18,6 +18,7 @@ import { Pesquisa } from './paginas/parceria/Pesquisa'
 import { PaginaAtlas } from './atlas/PaginaAtlas'
 import { RelatorioAtlas } from './paginas/parceria/RelatorioAtlas'
 import { RelatorioParceria } from './paginas/parceria/RelatorioParceria'
+import { AtlasRbs } from './paginas/rbs/Atlas'
 import { Cargas } from './paginas/rbs/Cargas'
 import { Fila } from './paginas/rbs/Fila'
 import { HistoricoGeral } from './paginas/rbs/HistoricoGeral'
@@ -100,6 +101,7 @@ export function App() {
         <Route path="cargas" element={<Cargas />} />
         <Route path="relatorios" element={<Relatorios />} />
         <Route path="historico" element={<HistoricoGeral />} />
+        <Route path="atlas" element={<AtlasRbs />} />
       </Route>
 
       <Route

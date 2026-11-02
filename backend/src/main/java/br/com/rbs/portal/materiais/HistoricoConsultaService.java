@@ -15,7 +15,6 @@ import br.com.rbs.portal.materiais.MateriaisDtos.ParceriaDoHistoricoDto;
 import br.com.rbs.portal.materiais.MateriaisDtos.UsuarioResumoDto;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
-import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -120,8 +119,8 @@ public class HistoricoConsultaService {
                 }
             }
         }
-        LocalDate dia1 = data("de", de, campos);
-        LocalDate dia2 = data("ate", ate, campos);
+        LocalDate dia1 = Datas.diaDoFiltro("de", de, campos);
+        LocalDate dia2 = Datas.diaDoFiltro("ate", ate, campos);
         if (dia1 != null && dia2 != null && dia2.isBefore(dia1)) {
             campos.putIfAbsent("ate", "A data final não pode ser anterior à inicial.");
         }
@@ -134,18 +133,6 @@ public class HistoricoConsultaService {
         String entidadeLimpa = entidade == null || entidade.isBlank() ? null : entidade.trim().toLowerCase(Locale.ROOT);
         String textoLimpo = texto == null || texto.isBlank() ? null : texto.trim();
         return new Filtro(parceriaId, usuarioId, acoes, entidadeLimpa, inicio, fim, textoLimpo, semAcessos, semEtapasInternas);
-    }
-
-    private static LocalDate data(String campo, String valor, Map<String, String> campos) {
-        if (valor == null || valor.isBlank()) {
-            return null;
-        }
-        try {
-            return LocalDate.parse(valor.trim());
-        } catch (DateTimeParseException invalida) {
-            campos.put(campo, "Data inválida. Use o formato AAAA-MM-DD, por exemplo 2026-10-23.");
-            return null;
-        }
     }
 
     private static UsuarioResumoDto autor(Linha l) {

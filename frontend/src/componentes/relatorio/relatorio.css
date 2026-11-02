@@ -11,6 +11,18 @@
   .rel-secao {
     break-before: auto;
   }
+  /* O título da seção não fica sozinho no fim da página. */
+  .rel-secao > h3 {
+    break-after: avoid;
+  }
+  /* O fundo do portal não sai no papel, mesmo com "gráficos de plano de fundo" ligado. */
+  html,
+  body,
+  #root,
+  #root div:has(> article),
+  main {
+    background: #fff !important;
+  }
   .nao-imprimir {
     display: none !important;
   }

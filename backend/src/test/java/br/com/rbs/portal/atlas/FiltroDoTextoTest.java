@@ -93,25 +93,51 @@ class FiltroDoTextoTest {
     }
 
     @Test
-    void marcadorPartidoSaiResolvidoEAUltimaPalavraEsperaOEspaco() {
+    void marcadorPartidoSaiResolvidoEAFraseInteiraSaiDeUmaVez() {
         modelo.textoEmPedacos("Penso nisto.", "A marca ", "{{parc:", "patrocinador", "}} tem ", "tool", "box e ", "relatório.");
 
         List<String> eventos = turno("Oi");
 
-        // o raciocínio chega em dois pedaços, mas vira um aviso só (nada dele sai): "pensando", uma vez por ida
-        assertThat(eventos).containsExactly("pensando", "texto:A marca ", "texto:Cliente Amarelo tem ", "texto:toolbox e ",
-                "texto:relatório.");
+        // o raciocínio chega em dois pedaços, mas vira um aviso só (nada dele sai): "pensando", uma vez por ida. A frase só termina
+        // no fim da ida (o ponto final não tem o que o siga): sai inteira, com o marcador já resolvido
+        assertThat(eventos).containsExactly("pensando", "texto:A marca Cliente Amarelo tem toolbox e relatório.");
     }
 
     @Test
-    void algarismoSoltoParaORepasseEANovaRedacaoVem() {
+    void oTextoAvancaFraseAFraseEMarcadorAbertoSegura() {
+        modelo.textoEmPedacos(null, "Primeira frase. ", "Segunda {{parc:", "patrocinador}} frase. ", "Terceira");
+
+        List<String> eventos = turno("Oi");
+
+        assertThat(eventos).containsExactly("texto:Primeira frase.", "texto: Segunda Cliente Amarelo frase.", "texto: Terceira");
+    }
+
+    @Test
+    void respostaSemPontuacaoSaiNoFecharDaIda() {
+        modelo.textoEmPedacos(null, "Isto não ", "tem ponto ", "final");
+
+        assertThat(turno("Oi")).containsExactly("texto:Isto não tem ponto final");
+    }
+
+    @Test
+    void algarismoSemFonteReprovaAFraseInteiraEANovaRedacaoVem() {
         modelo.textoEmPedacos(null, "Foram ", "muitas, ", "mais de ", "1", "0 mil.")
                 .textoEmPedacos(null, "Foram muitas, ", "segundo {{parc:patrocinador}}.");
 
         List<String> eventos = turno("Quantas?");
 
-        assertThat(eventos).containsExactly("texto:Foram ", "texto:muitas, ", "texto:mais de ", "texto_recusado", "texto:Foram muitas, ",
-                "texto:segundo ", "texto:Cliente Amarelo.");
+        // a frase com o número sem origem fica retida até o fim da ida e nunca chega à tela
+        assertThat(eventos).containsExactly("texto_recusado", "texto:Foram muitas, segundo Cliente Amarelo.");
+    }
+
+    @Test
+    void aFraseBoaJaSaiQuandoAProximaComecaEAFraseComNumeroSemOrigemEReprovada() {
+        modelo.textoEmPedacos(null, "Tudo certo por aqui. ", "Foram mais de ", "10 mil.")
+                .textoEmPedacos(null, "Os números estão no portal.");
+
+        List<String> eventos = turno("Quantas?");
+
+        assertThat(eventos).containsExactly("texto:Tudo certo por aqui.", "texto_recusado", "texto:Os números estão no portal.");
     }
 
     @Test
@@ -122,8 +148,7 @@ class FiltroDoTextoTest {
         List<String> eventos = turno("Oi");
 
         // o dado de visitantes ainda não foi informado: no chat, marcador sem valor é recusado como o que não existe
-        assertThat(eventos).containsExactly("texto:Veja ", "texto_recusado", "texto:Visitantes: ", "texto_recusado",
-                "texto:" + LoopDoAgente.FRASE_FIXA);
+        assertThat(eventos).containsExactly("texto_recusado", "texto_recusado", "texto:" + LoopDoAgente.FRASE_FIXA);
     }
 
     @Test
@@ -133,8 +158,7 @@ class FiltroDoTextoTest {
 
         List<String> eventos = turno("Oi");
 
-        // um pedaço com espaço sai até o espaço; o resto, no fim da ida
-        assertThat(eventos).containsExactly("texto:Para ", "texto_recusado", "texto:Tudo ", "texto:certo.");
+        assertThat(eventos).containsExactly("texto_recusado", "texto:Tudo certo.");
     }
 
     @Test

@@ -1,13 +1,25 @@
 package br.com.rbs.portal.atlas.ferramentas;
 
+import static br.com.rbs.portal.atlas.ferramentas.Argumentos.desconhecidos;
+import static br.com.rbs.portal.atlas.ferramentas.Argumentos.exigirSemErros;
+import static br.com.rbs.portal.atlas.ferramentas.Argumentos.lista;
+import static br.com.rbs.portal.atlas.ferramentas.Argumentos.texto;
+
 import br.com.rbs.portal.atlas.AtlasJson;
 import br.com.rbs.portal.atlas.AtlasRepositorio;
 import br.com.rbs.portal.atlas.AtlasRepositorio.LinhaDeRelatorio;
 import br.com.rbs.portal.atlas.ModoDoAtlas;
+import br.com.rbs.portal.atlas.checagem.FontesDoTurno;
 import br.com.rbs.portal.atlas.contexto.AtlasContexto;
+import br.com.rbs.portal.atlas.jev.PontoDoJev;
+import br.com.rbs.portal.atlas.jev.ServicoDoJev;
+import br.com.rbs.portal.atlas.jev.ServicoDoJev.LacunaOpcional;
+import br.com.rbs.portal.atlas.jev.ServicoDoJev.ParagrafoParaJulgar;
+import br.com.rbs.portal.atlas.limites.LimitesPorUsuario;
 import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.DefinicaoDeFerramenta;
 import br.com.rbs.portal.atlas.relatorio.ConsultaDaParceria;
 import br.com.rbs.portal.atlas.relatorio.RelatorioAtlasService;
+import br.com.rbs.portal.atlas.relatorio.RelatorioAtlasService.Lacuna;
 import br.com.rbs.portal.atlas.relatorio.RelatorioAtlasService.CartaoAberto;
 import br.com.rbs.portal.atlas.relatorio.RelatorioAtlasService.OperacaoDeTexto;
 import br.com.rbs.portal.atlas.relatorio.RelatorioAtlasService.RelatorioFinalizado;
@@ -18,6 +30,7 @@ import br.com.rbs.portal.comum.NaoEncontradoException;
 import br.com.rbs.portal.comum.SemPermissaoException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -25,8 +38,6 @@ import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-import tools.jackson.core.JacksonException;
-import tools.jackson.core.type.TypeReference;
 
 /**
  * As ferramentas que o modelo de linguagem chama (plano, seção 10.2): {@code relatorio_iniciar},
@@ -40,10 +51,18 @@ import tools.jackson.core.type.TypeReference;
  *       não está no esquema (um {@code parceria_id}, por exemplo) é recusado, e o resultado não muda de parceria nunca.</li>
  *   <li><b>A validação dos argumentos é nossa</b>, em Java (o modo {@code strict} dos provedores é beta e não vale aqui): tipo,
  *       tamanho e argumento desconhecido. O JSON Schema que vai ao modelo só o orienta.</li>
- *   <li><b>O servidor oferece só as ferramentas do estado atual</b> (seção 10.1): sem relatório, {@code parceria_consultar} e
- *       {@code relatorio_iniciar}; em montagem, {@code parceria_consultar} e as outras três; com o cartão aberto, nenhuma (o
- *       loop nem chama o modelo).</li>
+ *   <li><b>O servidor oferece só as ferramentas do estado atual</b> (seção 10.1): quem escolhe é o
+ *       {@link RegistroDeFerramentas}, que recebe daqui as cinco ({@link #ferramentas()}) e as junta às outras do Atlas (a busca
+ *       nos documentos, desde o M4). Com o cartão aberto, nenhuma é oferecida (o loop nem chama o modelo).</li>
  * </ul>
+ * <p>
+ * <b>O JEV (M7)</b> entra na fase 1 (sem transação) de duas delas: em {@code relatorio_editar}, o ponto {@code coerencia} confere se o
+ * texto de cada parágrafo diz o contrário dos selos do servidor ("acima do previsto", "abaixo do previsto"; sem selo, não roda) e, em
+ * {@code ATIVO}, o incoerente é recusado como qualquer texto recusado (nova redação; na segunda, a frase-modelo); em
+ * {@code relatorio_solicitar_campos}, o ponto {@code lacunas} pergunta, por lacuna <b>opcional</b>, se vale perguntar, e a que ficar
+ * abaixo do limiar não entra no cartão (na dúvida, pergunta; as obrigatórias nunca saem), e o cartão com uma lacuna a menos leva a mensagem
+ * fixa {@link #MENSAGEM_DO_CARTAO_SEM_LACUNAS}, porque a do modelo poderia citar o campo que saiu. O botão (plano B, sem modelo) não consulta o JEV.
+ * <p>
  * Erro de ferramenta não é exceção para quem chama o modelo: {@link #erroComoJson} o transforma na mensagem de ferramenta que
  * volta ao modelo, e o loop nunca devolve 500 por causa dele.
  */
@@ -55,14 +74,6 @@ public class RelatorioFerramentas {
     public static final String EDITAR = "relatorio_editar";
     public static final String FINALIZAR = "relatorio_finalizar";
     public static final String CONSULTAR = "parceria_consultar";
-
-    /** O que uma ferramenta fez: o JSON do resultado; {@code pausa} se abriu o cartão (sem resultado até a pessoa responder). */
-    public record Execucao(String resultadoJson, boolean pausa, boolean pronto) {
-
-        static Execucao resultado(String json) {
-            return new Execucao(json, false, false);
-        }
-    }
 
     private static final Logger log = LoggerFactory.getLogger(RelatorioFerramentas.class);
 
@@ -82,7 +93,7 @@ public class RelatorioFerramentas {
                     + "volta como { acao, campos }, com acao accept, decline ou cancel.",
             """
             {"type":"object","properties":{
-              "mensagem":{"type":"string","maxLength":400,"description":"O que você diz à pessoa no cartão, em português e sem números."},
+              "mensagem":{"type":"string","maxLength":400,"description":"O que você diz à pessoa no cartão, em português, sem número (nem por extenso), sem link nem chave."},
               "campos":{"type":"array","minItems":1,"maxItems":8,"items":{"type":"string"},
                         "description":"As chaves das lacunas (campo chave), por exemplo ativacao.visitantes_total."}},
              "required":["mensagem","campos"],"additionalProperties":false}""");
@@ -127,71 +138,126 @@ public class RelatorioFerramentas {
     private final ConsultaDaParceria consulta;
     private final AtlasRepositorio repositorio;
     private final ModoDoAtlas modo;
+    private final ServicoDoJev jev;
+    private final LimitesPorUsuario limitesPorUsuario;
 
     public RelatorioFerramentas(RelatorioAtlasService relatorios, ConsultaDaParceria consulta, AtlasRepositorio repositorio,
-                                ModoDoAtlas modo) {
+                                ModoDoAtlas modo, ServicoDoJev jev, LimitesPorUsuario limitesPorUsuario) {
         this.relatorios = relatorios;
         this.consulta = consulta;
         this.repositorio = repositorio;
         this.modo = modo;
+        this.jev = jev;
+        this.limitesPorUsuario = limitesPorUsuario;
     }
 
     // ---------------------------------------------------------------------
-    // O que é oferecido ao modelo
+    // As ferramentas (o RegistroDeFerramentas escolhe quais oferecer em cada estado)
     // ---------------------------------------------------------------------
 
     /**
-     * As ferramentas do estado atual (plano, seção 10.1). {@code ativo} é o relatório em montagem da conversa, se houver;
-     * {@code podePedirCartao} é falso quando ele já usou os três cartões que o modelo pode pedir. Com o relatório desligado
-     * ({@code atlas.relatorio.ligado=false}), só {@code parceria_consultar}, qualquer que seja o estado.
+     * As cinco ferramentas desta classe, na ordem em que o registro as oferece: a consulta (sempre), e, com o relatório ligado,
+     * {@code relatorio_iniciar} (sem relatório em andamento) ou as outras três (em montagem, {@code relatorio_solicitar_campos}
+     * só enquanto couber outro cartão). Com o cartão aberto nenhuma é oferecida (o loop nem chama o modelo). Com o relatório
+     * desligado ({@code atlas.relatorio.ligado=false}) só a consulta existe: histórico antigo pode induzir o modelo a chamar uma
+     * {@code relatorio_*}, e isso volta como erro de ferramenta, sem criar nada.
      */
-    public List<DefinicaoDeFerramenta> oferecidas(Optional<LinhaDeRelatorio> ativo, boolean podePedirCartao) {
-        if (!modo.relatorioLigado()) {
-            return List.of(DEFINICAO_CONSULTAR);
-        }
-        if (ativo.isEmpty()) {
-            return List.of(DEFINICAO_CONSULTAR, DEFINICAO_INICIAR);
-        }
-        if (!"MONTANDO".equals(ativo.get().status())) {
-            return List.of();   // AGUARDANDO_RESPOSTA: nenhuma ferramenta do relatório roda até o cartão voltar
-        }
-        List<DefinicaoDeFerramenta> ferramentas = new ArrayList<>();
-        ferramentas.add(DEFINICAO_CONSULTAR);
-        if (podePedirCartao) {
-            ferramentas.add(DEFINICAO_SOLICITAR);
-        }
-        ferramentas.add(DEFINICAO_EDITAR);
-        ferramentas.add(DEFINICAO_FINALIZAR);
-        return ferramentas;
+    List<Ferramenta> ferramentas() {
+        return List.of(
+                new FerramentaDoRelatorio(CONSULTAR, 10, DEFINICAO_CONSULTAR, e -> !e.cartaoAberto(), false, null,
+                        (contexto, argumentos, ativo, chamadaId, preparado) -> consultar(contexto, argumentos)),
+                new FerramentaDoRelatorio(INICIAR, 100, DEFINICAO_INICIAR, EstadoDaConversa::semRelatorio, true, null,
+                        (contexto, argumentos, ativo, chamadaId, preparado) -> iniciar(contexto, argumentos)),
+                new FerramentaDoRelatorio(SOLICITAR_CAMPOS, 110, DEFINICAO_SOLICITAR, e -> e.montando() && e.podePedirCartao(), true,
+                        this::julgarLacunas,
+                        (contexto, argumentos, ativo, chamadaId, preparado) -> solicitarCampos(contexto, argumentos, exigirMontando(ativo),
+                                chamadaId, dispensadas(preparado))),
+                new FerramentaDoRelatorio(EDITAR, 120, DEFINICAO_EDITAR, EstadoDaConversa::montando, true, this::julgarCoerencia,
+                        (contexto, argumentos, ativo, chamadaId, preparado) -> editar(contexto, argumentos, exigirMontando(ativo),
+                                recusasDoJev(preparado))),
+                new FerramentaDoRelatorio(FINALIZAR, 130, DEFINICAO_FINALIZAR, EstadoDaConversa::montando, true, null,
+                        (contexto, argumentos, ativo, chamadaId, preparado) -> finalizar(contexto, argumentos, exigirMontando(ativo))));
     }
 
-    // ---------------------------------------------------------------------
-    // Executar
-    // ---------------------------------------------------------------------
+    /** Como cada ferramenta do relatório roda: com o relatório em andamento da conversa, se houver, e o que a fase 1 preparou. */
+    @FunctionalInterface
+    private interface Corpo {
 
-    /**
-     * Executa o pedido do modelo no contexto da conversa. {@code chamadaId} é o id do pedido (liga o cartão à resposta que vai
-     * chegar depois). Qualquer problema sobe como exceção, que o loop transforma em {@link #erroComoJson}: 422 (argumentos),
-     * 409 (o relatório não está nesse estado), 403/404 (acesso).
-     */
-    public Execucao executar(AtlasContexto contexto, String nome, String argumentosJson, String chamadaId) {
-        if (!modo.relatorioLigado() && !CONSULTAR.equals(nome)) {
-            // Histórico antigo pode induzir o modelo a chamar uma ferramenta do relatório: erro de ferramenta, nada é criado.
-            throw new DadosInvalidosException(ferramentaInexistente(nome), Map.of());
-        }
-        Map<String, Object> argumentos = lerArgumentos(argumentosJson);
-        Optional<LinhaDeRelatorio> ativo = repositorio.relatorioAtivoDaConversa(contexto.conversaId());
-        return switch (nome) {
-            case CONSULTAR -> consultar(contexto, argumentos);
-            case INICIAR -> iniciar(contexto, argumentos);
-            case SOLICITAR_CAMPOS -> solicitarCampos(contexto, argumentos, exigirMontando(ativo), chamadaId);
-            case EDITAR -> editar(contexto, argumentos, exigirMontando(ativo));
-            case FINALIZAR -> finalizar(contexto, argumentos, exigirMontando(ativo));
-            default -> throw new DadosInvalidosException(ferramentaInexistente(nome), Map.of());
-        };
+        Execucao rodar(AtlasContexto contexto, Map<String, Object> argumentos, Optional<LinhaDeRelatorio> ativo, String chamadaId,
+                       Object preparado);
     }
 
-    private static String ferramentaInexistente(String nome) {
+    /** A fase 1 de uma ferramenta do relatório (sem transação): onde o JEV é consultado. */
+    @FunctionalInterface
+    private interface Preparador {
+
+        Object preparar(AtlasContexto contexto, FontesDoTurno turno, Map<String, Object> argumentos);
+    }
+
+    /** Uma das cinco ferramentas; só a {@code relatorio_solicitar_campos} e a {@code relatorio_editar} têm fase de preparo (o JEV). */
+    private final class FerramentaDoRelatorio implements Ferramenta {
+
+        private final String nome;
+        private final int ordem;
+        private final DefinicaoDeFerramenta definicao;
+        private final java.util.function.Predicate<EstadoDaConversa> oferecida;
+        private final boolean doRelatorio;
+        private final Preparador preparador;
+        private final Corpo corpo;
+
+        FerramentaDoRelatorio(String nome, int ordem, DefinicaoDeFerramenta definicao,
+                              java.util.function.Predicate<EstadoDaConversa> oferecida, boolean doRelatorio, Preparador preparador,
+                              Corpo corpo) {
+            this.nome = nome;
+            this.ordem = ordem;
+            this.definicao = definicao;
+            this.oferecida = oferecida;
+            this.doRelatorio = doRelatorio;
+            this.preparador = preparador;
+            this.corpo = corpo;
+        }
+
+        @Override
+        public String nome() {
+            return nome;
+        }
+
+        @Override
+        public DefinicaoDeFerramenta definicao() {
+            return definicao;
+        }
+
+        @Override
+        public int ordem() {
+            return ordem;
+        }
+
+        @Override
+        public boolean oferecida(EstadoDaConversa estado) {
+            return (!doRelatorio || estado.relatorioLigado()) && oferecida.test(estado);
+        }
+
+        @Override
+        public Object preparar(AtlasContexto contexto, FontesDoTurno turno, Map<String, Object> argumentos) {
+            if (preparador == null || (doRelatorio && !modo.relatorioLigado())) {
+                return null;
+            }
+            return preparador.preparar(contexto, turno, argumentos);
+        }
+
+        @Override
+        public Execucao executar(AtlasContexto contexto, FontesDoTurno turno, Map<String, Object> argumentos, String chamadaId,
+                                 Object preparado) {
+            if (doRelatorio && !modo.relatorioLigado()) {
+                // Histórico antigo pode induzir o modelo a chamar uma ferramenta do relatório: erro de ferramenta, nada é criado.
+                throw new DadosInvalidosException(ferramentaInexistente(nome), Map.of());
+            }
+            return corpo.rodar(contexto, argumentos, doRelatorio ? repositorio.relatorioAtivoDaConversa(contexto.conversaId())
+                    : Optional.empty(), chamadaId, preparado);
+        }
+    }
+
+    static String ferramentaInexistente(String nome) {
         return "Não existe a ferramenta " + nome + ". Use só as ferramentas oferecidas.";
     }
 
@@ -208,21 +274,50 @@ public class RelatorioFerramentas {
         String modelo = texto(argumentos, "modelo", true, erros);
         String objetivo = texto(argumentos, "objetivo", false, erros);
         exigirSemErros(erros);
-        return Execucao.resultado(AtlasJson.escrever(relatorios.iniciar(contexto, modelo, objetivo)));
+        // O limite de relatórios por dia do usuário (M8): do 4º em diante o modelo recebe um erro e sugere o botão. A ficha é gasta
+        // antes (dois turnos do mesmo usuário em conversas diferentes não passam juntos) e volta se o relatório não chegou a nascer.
+        if (!limitesPorUsuario.consumirRelatorio(contexto.usuario().id())) {
+            throw new ConflitoException(LimitesPorUsuario.FRASE_DO_RELATORIO);
+        }
+        try {
+            return Execucao.resultado(AtlasJson.escrever(relatorios.iniciar(contexto, modelo, objetivo)));
+        } catch (RuntimeException semRelatorio) {
+            limitesPorUsuario.devolverRelatorio(contexto.usuario().id());
+            throw semRelatorio;
+        }
     }
 
-    private Execucao solicitarCampos(AtlasContexto contexto, Map<String, Object> argumentos, LinhaDeRelatorio relatorio, String chamadaId) {
+    private Execucao solicitarCampos(AtlasContexto contexto, Map<String, Object> argumentos, LinhaDeRelatorio relatorio, String chamadaId,
+                                     Set<String> dispensadas) {
         Map<String, String> erros = new LinkedHashMap<>();
         desconhecidos(argumentos, ARGUMENTOS_DE_SOLICITAR, erros);
         String mensagem = texto(argumentos, "mensagem", true, erros);
         List<String> campos = lista(argumentos, "campos", erros);
         exigirSemErros(erros);
+        if (!dispensadas.isEmpty()) {
+            // O JEV (ativo) achou que não vale perguntar estas lacunas opcionais: elas não entram no cartão. Se eram só elas, não há cartão.
+            List<String> restantes = campos.stream().filter(chave -> !dispensadas.contains(chave)).toList();
+            if (restantes.isEmpty()) {
+                Map<String, Object> dispensado = new LinkedHashMap<>();
+                dispensado.put("cartao", "dispensado");
+                dispensado.put("campos", new ArrayList<>(dispensadas));
+                dispensado.put("aviso", "Estes campos são opcionais e não valem uma pergunta agora: siga sem abrir o cartão.");
+                return Execucao.resultado(AtlasJson.escrever(dispensado));
+            }
+            if (restantes.size() < campos.size()) {
+                // A mensagem que o modelo escreveu foi feita para os campos que ele pediu e pode citar o que saiu ("e, se quiser, os
+                // brindes..."): o cartão não pode contar uma pergunta que não está nele. Quando o JEV tira uma lacuna, a mensagem é fixa.
+                mensagem = MENSAGEM_DO_CARTAO_SEM_LACUNAS;
+            }
+            campos = restantes;
+        }
         CartaoAberto cartao = relatorios.solicitarCampos(contexto, relatorio.id(), mensagem, campos, chamadaId);
         log.debug("Atlas: cartão {} aberto na conversa {}", cartao.solicitacaoId(), contexto.conversaId());
         return new Execucao(null, true, false);
     }
 
-    private Execucao editar(AtlasContexto contexto, Map<String, Object> argumentos, LinhaDeRelatorio relatorio) {
+    private Execucao editar(AtlasContexto contexto, Map<String, Object> argumentos, LinhaDeRelatorio relatorio,
+                            Map<String, String> recusasDoJev) {
         Map<String, String> erros = new LinkedHashMap<>();
         desconhecidos(argumentos, ARGUMENTOS_DE_EDITAR, erros);
         List<OperacaoDeTexto> operacoes = new ArrayList<>();
@@ -253,7 +348,7 @@ public class RelatorioFerramentas {
             }
         }
         exigirSemErros(erros);
-        return Execucao.resultado(AtlasJson.escrever(relatorios.definirTextos(contexto, relatorio.id(), operacoes)));
+        return Execucao.resultado(AtlasJson.escrever(relatorios.definirTextos(contexto, relatorio.id(), operacoes, recusasDoJev)));
     }
 
     private Execucao finalizar(AtlasContexto contexto, Map<String, Object> argumentos, LinhaDeRelatorio relatorio) {
@@ -262,6 +357,68 @@ public class RelatorioFerramentas {
         exigirSemErros(erros);
         RelatorioFinalizado pronto = relatorios.finalizar(contexto, relatorio.id());
         return new Execucao(pronto.resultadoJson(), false, true);
+    }
+
+    // ---------------------------------------------------------------------
+    // O JEV (M7): a fase 1 de relatorio_editar e de relatorio_solicitar_campos
+    // ---------------------------------------------------------------------
+
+    /**
+     * O ponto {@code coerencia}, antes de {@code relatorio_editar} gravar: o texto de cada parágrafo contra os selos do servidor. Devolve
+     * as recusas por bloco ({@code Map<String, String>}), ou nulo quando o ponto está desligado, o relatório não está em montagem ou
+     * os argumentos não prestam (o {@code executar} os recusa em palavras). Sem selo no relatório, o JEV não é consultado.
+     */
+    private Object julgarCoerencia(AtlasContexto contexto, FontesDoTurno turno, Map<String, Object> argumentos) {
+        if (!jev.modo(contexto, PontoDoJev.COERENCIA).consulta() || !(argumentos.get("operacoes") instanceof List<?> operacoes)) {
+            return null;
+        }
+        Optional<LinhaDeRelatorio> ativo = repositorio.relatorioAtivoDaConversa(contexto.conversaId());
+        if (ativo.isEmpty() || !"MONTANDO".equals(ativo.get().status())) {
+            return null;
+        }
+        List<ParagrafoParaJulgar> paragrafos = new ArrayList<>();
+        for (Object operacao : operacoes) {
+            if (operacao instanceof Map<?, ?> campos && campos.get("bloco") instanceof String bloco
+                    && campos.get("texto") instanceof String texto && !texto.isBlank()) {
+                paragrafos.add(new ParagrafoParaJulgar(bloco, texto));
+            }
+        }
+        if (paragrafos.isEmpty()) {
+            return null;
+        }
+        return jev.coerencia(contexto, relatorios.selosDoRelatorio(contexto, ativo.get().id()), paragrafos);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, String> recusasDoJev(Object preparado) {
+        return preparado instanceof Map<?, ?> mapa ? (Map<String, String>) mapa : Map.of();
+    }
+
+    /**
+     * O ponto {@code lacunas}, antes de {@code relatorio_solicitar_campos} abrir o cartão: das lacunas opcionais que o modelo pediu e
+     * que ainda não têm valor, as que o JEV acha que não valem a pergunta. Devolve as chaves a tirar do cartão, ou nulo.
+     */
+    private Object julgarLacunas(AtlasContexto contexto, FontesDoTurno turno, Map<String, Object> argumentos) {
+        if (!jev.modo(contexto, PontoDoJev.LACUNAS).consulta() || !(argumentos.get("campos") instanceof List<?> campos)) {
+            return null;
+        }
+        Optional<LinhaDeRelatorio> ativo = repositorio.relatorioAtivoDaConversa(contexto.conversaId());
+        if (ativo.isEmpty() || !"MONTANDO".equals(ativo.get().status())) {
+            return null;
+        }
+        Set<Object> pedidas = new LinkedHashSet<>(campos);
+        List<LacunaOpcional> opcionais = relatorios.lacunas(contexto, ativo.get().id()).stream()
+                .filter(lacuna -> !lacuna.obrigatoria() && pedidas.contains(lacuna.chave()))
+                .map((Lacuna lacuna) -> new LacunaOpcional(lacuna.chave(), lacuna.rotulo())).toList();
+        if (opcionais.isEmpty()) {
+            return null;
+        }
+        return jev.lacunas(contexto, turno.mensagemDaPessoa(), opcionais);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Set<String> dispensadas(Object preparado) {
+        return preparado instanceof Set<?> conjunto ? (Set<String>) conjunto : Set.of();
     }
 
     // ---------------------------------------------------------------------
@@ -277,76 +434,11 @@ public class RelatorioFerramentas {
         return relatorio;
     }
 
+    /** A mensagem do cartão quando o JEV ativo tirou alguma lacuna opcional dele: a do modelo poderia citar o campo que saiu. */
+    public static final String MENSAGEM_DO_CARTAO_SEM_LACUNAS = "Faltam estes números para o relatório.";
+
     /** A frase de erro de toda ferramenta chamada com o cartão aberto. */
     public static final String AGUARDANDO_O_CARTAO = "Aguardando a resposta do cartão. Nenhuma ferramenta do relatório roda até ela voltar.";
-
-    // ---------------------------------------------------------------------
-    // Validação dos argumentos (nossa, em Java)
-    // ---------------------------------------------------------------------
-
-    private static Map<String, Object> lerArgumentos(String json) {
-        if (json == null || json.isBlank()) {
-            return new LinkedHashMap<>();
-        }
-        try {
-            Map<String, Object> argumentos = AtlasJson.ler(json, new TypeReference<Map<String, Object>>() {
-            });
-            return argumentos == null ? new LinkedHashMap<>() : argumentos;
-        } catch (JacksonException | ClassCastException formatoInvalido) {
-            throw new DadosInvalidosException("Os argumentos da ferramenta não são um objeto JSON válido.", Map.of());
-        }
-    }
-
-    private static void desconhecidos(Map<String, Object> argumentos, Set<String> aceitos, Map<String, String> erros) {
-        for (String nome : argumentos.keySet()) {
-            if (!aceitos.contains(nome)) {
-                erros.put(nome, "Argumento desconhecido: esta ferramenta não aceita " + nome + ".");
-            }
-        }
-    }
-
-    private static String texto(Map<String, Object> argumentos, String nome, boolean obrigatorio, Map<String, String> erros) {
-        Object valor = argumentos.get(nome);
-        if (valor == null) {
-            if (obrigatorio) {
-                erros.put(nome, "Informe " + nome + ".");
-            }
-            return null;
-        }
-        if (!(valor instanceof String texto)) {
-            erros.put(nome, nome + " tem de ser um texto.");
-            return null;
-        }
-        if (obrigatorio && texto.isBlank()) {
-            erros.put(nome, "Informe " + nome + ".");
-            return null;
-        }
-        return texto;
-    }
-
-    private static List<String> lista(Map<String, Object> argumentos, String nome, Map<String, String> erros) {
-        Object valor = argumentos.get(nome);
-        if (!(valor instanceof List<?> itens)) {
-            erros.put(nome, nome + " tem de ser uma lista de textos.");
-            return List.of();
-        }
-        List<String> textos = new ArrayList<>();
-        for (Object item : itens) {
-            if (item instanceof String texto) {
-                textos.add(texto);
-            } else {
-                erros.put(nome, nome + " tem de ser uma lista de textos.");
-                return List.of();
-            }
-        }
-        return textos;
-    }
-
-    private static void exigirSemErros(Map<String, String> erros) {
-        if (!erros.isEmpty()) {
-            throw new DadosInvalidosException("Os argumentos da ferramenta estão errados.", erros);
-        }
-    }
 
     // ---------------------------------------------------------------------
     // Erro de ferramenta volta ao modelo

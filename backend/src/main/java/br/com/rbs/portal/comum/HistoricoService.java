@@ -53,7 +53,11 @@ public class HistoricoService {
                 navegador(requisicao));
     }
 
+    /** Sem requisição (a ingestão de um documento roda numa tarefa de fundo), não há endereço nem navegador a gravar. */
     private static String enderecoIp(HttpServletRequest requisicao) {
+        if (requisicao == null) {
+            return null;
+        }
         String ip = requisicao.getRemoteAddr();
         if (ip == null) {
             return null;
@@ -64,6 +68,9 @@ public class HistoricoService {
     }
 
     private static String navegador(HttpServletRequest requisicao) {
+        if (requisicao == null) {
+            return null;
+        }
         return limitar(requisicao.getHeader("User-Agent"), LIMITE_USER_AGENT);
     }
 

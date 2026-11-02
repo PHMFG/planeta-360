@@ -4,7 +4,10 @@ import br.com.rbs.portal.atlas.AtlasDtos.ConversaDto;
 import br.com.rbs.portal.atlas.AtlasDtos.DadosDaFerramenta;
 import br.com.rbs.portal.atlas.loop.OuvinteDoTurno;
 import java.time.Duration;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
@@ -31,6 +34,10 @@ final class FluxoDoTurno implements OuvinteDoTurno {
 
     private final SseEmitter emissor = new SseEmitter(TEMPO_DO_FLUXO.toMillis());
     private volatile boolean aberto = true;
+    /** Para o diagnóstico: quantos eventos de cada tipo saíram, e quanto levou o primeiro pedaço de texto. */
+    private final Map<String, AtomicLong> enviados = new ConcurrentHashMap<>();
+    private final long inicioEmNanos = System.nanoTime();
+    private volatile long primeiroTextoMs = -1;
 
     FluxoDoTurno() {
         emissor.onTimeout(() -> aberto = false);
@@ -77,6 +84,20 @@ final class FluxoDoTurno implements OuvinteDoTurno {
         enviar("ferramenta", dados);
     }
 
+    /** Os eventos enviados por tipo, o tempo até o primeiro {@code texto} e se o cliente já foi embora (a etapa SAIDA do traço). */
+    @Override
+    public Map<String, Object> medidas() {
+        Map<String, Object> medidas = new LinkedHashMap<>();
+        Map<String, Long> eventos = new LinkedHashMap<>();
+        enviados.entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(e -> eventos.put(e.getKey(), e.getValue().get()));
+        medidas.put("eventos", eventos);
+        if (primeiroTextoMs >= 0) {
+            medidas.put("primeiroTextoMs", primeiroTextoMs);
+        }
+        medidas.put("clienteSaiu", !aberto);
+        return medidas;
+    }
+
     /** O fim do turno: o mesmo objeto Conversa da resposta JSON. Fecha o fluxo. */
     synchronized void fim(ConversaDto conversa) {
         enviar("fim", conversa);
@@ -95,6 +116,10 @@ final class FluxoDoTurno implements OuvinteDoTurno {
         }
         try {
             emissor.send(SseEmitter.event().name(evento).data(dados, MediaType.APPLICATION_JSON));
+            enviados.computeIfAbsent(evento, nome -> new AtomicLong()).incrementAndGet();
+            if (primeiroTextoMs < 0 && "texto".equals(evento)) {
+                primeiroTextoMs = (System.nanoTime() - inicioEmNanos) / 1_000_000;
+            }
         } catch (Exception clienteSaiu) {   // IOException da conexão, ou o emissor já fechado pelo servidor
             aberto = false;
             log.debug("Atlas: o cliente deixou o fluxo ({}); o turno segue no servidor.", clienteSaiu.getClass().getSimpleName());

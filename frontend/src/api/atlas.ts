@@ -1,5 +1,5 @@
 // Atlas: a conversa da marca, o cartão de perguntas e o relatório de trabalho (rotas 42 a 48 do docs/api.md). [ATLAS]
-// O Atlas monta e redige, mas nunca escreve um número: todo valor que chega aqui já veio formatado pelo servidor, com a origem.
+// Todo número do Atlas tem origem: o dado da parceria vem resolvido pelo servidor, e o do documento ou da conta vem com a citação.
 import { ErroApi, pedir, pedirEmFluxo } from './cliente'
 import type { CampoCatalogo, ValorInformado, ValorVigente } from './dados'
 import type { UsuarioResumo } from './parcerias'
@@ -19,17 +19,57 @@ export type FerramentaUsada = {
   duracaoMs: number | null
 }
 
-export type ItemDaConversa =
+/**
+ * De onde veio o que a resposta cita: o marcador [T1] do texto aponta para uma destas. Título, versão, página e seção são os do
+ * momento da resposta; {@code substituido} e {@code revogado}, os de agora. O documento revogado não abre mais.
+ */
+export type FonteDaResposta = {
+  marcador: string
+  tipo: 'TRECHO' | 'REGISTRO' | 'CALCULO'
+  documentoId?: number
+  titulo?: string
+  versao?: number
+  pagina?: number
+  secao?: string | null
+  trechoId?: number
+  substituido?: boolean
+  revogado?: boolean
+}
+
+/** Uma entrada de "Como calculei": de onde veio o número (o marcador da fonte, o dado da parceria ou o que a pessoa escreveu). */
+export type VariavelDoCalculo = { nome: string; origem: string; valor: string | null }
+
+/** Uma conta ou contagem de dias que o Atlas fez nesta resposta, com a origem de cada número. */
+export type CalculoDaResposta = {
+  marcador: string
+  ferramenta: 'calcular' | 'contar_dias'
+  nome: string | null
+  script: string | null
+  variaveis: VariavelDoCalculo[]
+  resultado: string
+  regra: string | null
+  /** {@code data} já vem como dd/MM/aaaa, como o resto da conta. */
+  feriadosConsiderados: { data: string; nome: string }[]
+}
+
+/** {@code turno}: o turno do diagnóstico que escreveu o item. Só vem com o diagnóstico ligado para quem está na tela. */
+export type ItemDaConversa = { turno?: string } & (
   | { tipo: 'usuario'; texto: string }
   /** O resumo do raciocínio do modelo, escrito no servidor e conferido como o texto. O raciocínio cru não sai do servidor. */
   | { tipo: 'raciocinio'; resumo: string }
   /** {@code porModelo} falso: frase fixa do servidor (o botão, sem modelo), que a tela não apresenta como fala do Atlas. */
-  | { tipo: 'texto'; texto: string; porModelo?: boolean }
+  | { tipo: 'texto'; texto: string; porModelo?: boolean; fontes?: FonteDaResposta[] }
   | { tipo: 'aviso'; texto: string }
   | { tipo: 'cartao'; solicitacaoId: number; relatorioId: number; mensagem: string; status: StatusCartao; campos: CampoDoCartao[] }
   | { tipo: 'relatorio_pronto'; relatorioId: number; titulo: string }
+  | ({ tipo: 'calculo' } & CalculoDaResposta)
+  /** O pedido de outro relatório: texto fixo, se a RBS já disponibilizou o oficial e os modelos em branco que dá para pedir. */
+  | { tipo: 'pedido_relatorio'; texto: string; relatorioOficial: boolean; modelos: { tipo: string; titulo: string }[] }
+  /** Um modelo em branco, para baixar ou copiar. O arquivo é gerado no navegador. */
+  | { tipo: 'modelo'; titulo: string; conteudo: string; nomeArquivo: string }
   /** Só com o debug das ferramentas ligado no servidor. */
   | ({ tipo: 'ferramenta' } & FerramentaUsada)
+)
 
 /** A conversa inteira (rota 45) ou só o que um turno produziu (rotas 42, 44 e 46). */
 export type Conversa = {
@@ -40,6 +80,8 @@ export type Conversa = {
   relatorioDisponivel: boolean
   /** Verdadeiro com atlas.debug.ferramentas ligado no servidor: a tela mostra as ferramentas que o modelo usou. */
   debugDeFerramentas: boolean
+  /** Verdadeiro quando esta pessoa pode abrir o diagnóstico de cada resposta (rota 49). */
+  diagnosticoDisponivel?: boolean
   itens: ItemDaConversa[]
 }
 
@@ -57,6 +99,13 @@ export type RespostaDoCartao = { acao: 'accept' | 'decline' | 'cancel'; valores?
 const ATALHO = { atalho: 'MONTAR_RELATORIO', modelo: 'ATIVACAO_EVENTO' } as const
 
 export const listarConversas = (parceriaId: number) => pedir<ConversasDaParceria>(`/parcerias/${parceriaId}/atlas/conversas`)
+
+export type ConversaDaRbsResumo = { id: number; criadaEm: string; atualizadaEm: string; previa: string | null }
+
+/** A conversa da RBS é por edição, sem parceria: só documentos gerais, modelos em branco, contas e datas. */
+export const listarConversasDaRbs = (eventoId: number) => pedir<{ llmDisponivel: boolean; conversas: ConversaDaRbsResumo[] }>(`/eventos/${eventoId}/atlas/conversas`)
+
+export const abrirConversaDaRbs = (eventoId: number) => pedir<Conversa>(`/eventos/${eventoId}/atlas/conversas`, { metodo: 'POST' })
 
 /** Abre uma conversa nova; com {@code montarRelatorio}, já começa o relatório pelo botão (sem passar pelo modelo). */
 export const abrirConversa = (parceriaId: number, montarRelatorio = false) =>
@@ -118,7 +167,8 @@ export const responderCartao = (solicitacaoId: number, resposta: RespostaDoCarta
 export type StatusRelatorioAtlas = 'MONTANDO' | 'AGUARDANDO_RESPOSTA' | 'PRONTO' | 'DESCARTADO'
 
 /** Um número do relatório: já formatado, ou indisponível com o motivo. Nunca zero no lugar de "sem dado". */
-export type ItemKpi = { rotulo: string; valor: string | null; indisponivel: string | null; ref: string | null }
+/** {@code selo}: calculado pelo servidor ("acima do previsto", "abaixo do previsto"), só nos indicadores que têm previsto e exibido. */
+export type ItemKpi = { rotulo: string; valor: string | null; indisponivel: string | null; ref: string | null; selo?: string | null }
 
 export type Bloco =
   | { id: string; tipo: 'capa'; titulo: string; subtitulo: string | null; edicao: string | null }
@@ -156,6 +206,9 @@ export type RelatorioAtlas = {
 export type RelatorioAtlasResumo = Omit<RelatorioAtlas, 'parceriaId' | 'patrocinador' | 'selo' | 'secoes'>
 
 export const obterRelatorioAtlas = (relatorioId: number) => pedir<RelatorioAtlas>(`/atlas/relatorios/${relatorioId}`)
+
+/** Descarta um relatório em montagem: o cartão aberto é cancelado junto, e um pedido novo começa outro relatório. */
+export const descartarRelatorioAtlas = (relatorioId: number) => pedir<RelatorioAtlas>(`/atlas/relatorios/${relatorioId}/descartar`, { metodo: 'POST' })
 
 export const listarRelatoriosAtlas = (parceriaId: number) => pedir<RelatorioAtlasResumo[]>(`/parcerias/${parceriaId}/atlas/relatorios`)
 

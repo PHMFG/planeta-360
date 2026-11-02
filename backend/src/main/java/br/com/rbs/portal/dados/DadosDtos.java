@@ -31,9 +31,16 @@ public final class DadosDtos {
 
     /**
      * O valor vigente de um campo: o mais recente, com quem informou, quando e por onde (PORTAL ou ATLAS). {@code valor} é um
-     * inteiro (campo INTEIRO), um decimal (DECIMAL), uma data AAAA-MM-DD (DATA) ou o id do arquivo (ARQUIVO).
+     * inteiro (campo INTEIRO), um decimal (DECIMAL), uma data AAAA-MM-DD (DATA) ou o id do arquivo (ARQUIVO). {@code arquivo} só vem
+     * no campo ARQUIVO (a planilha da agência, M6): o id e o nome com que a pessoa o enviou, para a tela mostrar e baixar pela
+     * rota 18; nos outros campos é nulo.
      */
-    public record VigenteDto(Object valor, String origem, UsuarioResumoDto informadoPor, OffsetDateTime informadoEm) {
+    public record VigenteDto(Object valor, String origem, UsuarioResumoDto informadoPor, OffsetDateTime informadoEm,
+                             ArquivoDoDadoDto arquivo) {
+    }
+
+    /** O arquivo vigente de um campo ARQUIVO: o id (o da rota 18) e o nome original. */
+    public record ArquivoDoDadoDto(Long id, String nomeOriginal) {
     }
 
     /** Um campo do catálogo com o valor vigente da parceria ({@code vigente} é nulo enquanto ninguém informou). */

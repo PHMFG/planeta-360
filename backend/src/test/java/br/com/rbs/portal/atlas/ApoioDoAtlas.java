@@ -17,6 +17,7 @@ public final class ApoioDoAtlas {
     public static final String AMARELO = "marketing@amarelo.example";
     public static final String AGENCIA_DO_AMARELO = "atendimento@agencia-x.example";
     public static final String ROXO = "marketing@roxo.example";
+    public static final String VERDE = "marketing@verde.example";
     public static final String VISITANTES = "ativacao.visitantes_total";
     public static final String CADASTROS = "ativacao.cadastros_consentidos";
     public static final String DISPONIVEIS = "ativacao.brindes_disponiveis";

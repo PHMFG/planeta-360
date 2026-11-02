@@ -64,7 +64,7 @@ class TipoDeArquivoTest {
     void assinaturasErradasOuCurtasDemaisReprovam() {
         byte[] executavel = bytes('M', 'Z', 0x90, 0, 3, 0, 0, 0, 4, 0, 0, 0);
         for (TipoDeArquivo tipo : TipoDeArquivo.values()) {
-            if (tipo != TipoDeArquivo.CSV) {
+            if (tipo != TipoDeArquivo.CSV && tipo != TipoDeArquivo.TXT) {
                 assertThat(tipo.conteudoConfere(executavel)).as(tipo.name() + " com executável").isFalse();
                 assertThat(tipo.conteudoConfere(new byte[0])).as(tipo.name() + " vazio").isFalse();
                 assertThat(tipo.conteudoConfere(bytes(0x00))).as(tipo.name() + " curto").isFalse();
@@ -90,6 +90,32 @@ class TipoDeArquivoTest {
     }
 
     @Test
+    void xlsEOTipoDaPlanilhaDaAgenciaEFicaForaDaListaDosEnviosComuns() {
+        assertThat(TipoDeArquivo.XLS.mime()).isEqualTo("application/vnd.ms-excel");
+        assertThat(TipoDeArquivo.daExtensao("contagem.XLS")).contains(TipoDeArquivo.XLS);
+        assertThat(TipoDeArquivo.listaDeExtensoes()).as("a frase do 415 dos envios comuns não cita o xls").doesNotContain("xls,")
+                .endsWith("zip");
+        byte[] ole2 = bytes(0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1, 0, 0);
+        assertThat(TipoDeArquivo.XLS.conteudoConfere(ole2)).isTrue();
+        assertThat(TipoDeArquivo.XLS.conteudoConfere(bytes(0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A))).as("assinatura incompleta").isFalse();
+        assertThat(TipoDeArquivo.XLS.conteudoConfere(bytes('P', 'K', 3, 4, 0))).as("um zip não é xls").isFalse();
+        assertThat(TipoDeArquivo.XLSX.conteudoConfere(ole2)).as("um xls não é xlsx").isFalse();
+        assertThat(TipoDeArquivo.CSV.conteudoConfere(ole2)).as("nem csv").isFalse();
+    }
+
+    @Test
+    void txtEOTipoDosDocumentosDoAtlasEFicaForaDaListaDosEnviosComuns() {
+        assertThat(TipoDeArquivo.TXT.mime()).isEqualTo("text/plain");
+        assertThat(TipoDeArquivo.daExtensao("faq.TXT")).contains(TipoDeArquivo.TXT);
+        assertThat(TipoDeArquivo.listaDeExtensoes()).as("a frase do 415 dos envios comuns não cita o txt").doesNotContain("txt");
+        assertThat(TipoDeArquivo.TXT.conteudoConfere("Pergunta frequente: horário dos portões.\n".getBytes(StandardCharsets.UTF_8))).isTrue();
+        assertThat(TipoDeArquivo.TXT.conteudoConfere("ação".getBytes(StandardCharsets.UTF_8))).isTrue();
+        assertThat(TipoDeArquivo.TXT.conteudoConfere(bytes('a', 0, 'b'))).as("byte nulo").isFalse();
+        assertThat(TipoDeArquivo.TXT.conteudoConfere(bytes('a', ';', 0xE7, 0xE3, 'o'))).as("Latin-1 não é UTF-8").isFalse();
+        assertThat(TipoDeArquivo.TXT.conteudoConfere(bytes('M', 'Z', 0x90, 0, 3, 0, 0, 0, 4, 0, 0, 0))).as("executável").isFalse();
+    }
+
+    @Test
     void textoQueNaoEUtf8SeDistingueDeArquivoQueNaoEhTexto() {
         // Latin-1 e ANSI do Excel: texto, só que não UTF-8. UTF-16 do "Texto Unicode" também (marca FF FE ou FE FF).
         assertThat(TipoDeArquivo.ehTextoQueNaoEUtf8("patrocinador;veículo\nJoão;Rádio\r\n".getBytes(StandardCharsets.ISO_8859_1))).isTrue();
@@ -102,6 +128,17 @@ class TipoDeArquivoTest {
         assertThat(TipoDeArquivo.ehTextoQueNaoEUtf8(bytes(0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A))).as("PNG").isFalse();
         assertThat(TipoDeArquivo.ehTextoQueNaoEUtf8(bytes('M', 'Z', 0x90, 0, 3, 0, 0, 0))).as("executável").isFalse();
         assertThat(TipoDeArquivo.ehTextoQueNaoEUtf8(bytes('a', 0xE7, 0x01, 'b'))).as("Latin-1 com caractere de controle").isFalse();
+    }
+
+    @Test
+    void csvDaPlanilhaDaAgenciaSoPrecisaDeUmArquivoSemByteNulo() {
+        // o CSV comum continua sendo UTF-8; a rota 66 confere só o byte nulo (veja Armazenamento)
+        byte[] latin1 = "hora;observação\n10h;João\n".getBytes(StandardCharsets.ISO_8859_1);
+        assertThat(TipoDeArquivo.CSV.conteudoConfere(latin1)).isFalse();
+        assertThat(TipoDeArquivo.semBytesNulos(latin1)).isTrue();
+        assertThat(TipoDeArquivo.semBytesNulos("ação;coração\n".getBytes(StandardCharsets.UTF_8))).isTrue();
+        assertThat(TipoDeArquivo.semBytesNulos(bytes(0xFF, 0xFE, 'a', 0, ';', 0))).as("UTF-16").isFalse();
+        assertThat(TipoDeArquivo.semBytesNulos(bytes(0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 13))).as("PNG").isFalse();
     }
 
     @Test

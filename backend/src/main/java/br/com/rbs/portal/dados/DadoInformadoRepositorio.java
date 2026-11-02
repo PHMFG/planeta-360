@@ -23,7 +23,7 @@ public class DadoInformadoRepositorio {
 
     /** O valor vigente de um campo, com o tipo do campo (para escolher a coluna certa) e o autor já resumido. */
     public record LinhaDeVigente(String campoChave, String tipo, BigDecimal valorNumero, LocalDate valorData, Long arquivoId,
-                                 String origem, Long usuarioId, String usuarioNome, String usuarioPerfil,
+                                 String arquivoNome, String origem, Long usuarioId, String usuarioNome, String usuarioPerfil,
                                  OffsetDateTime informadoEm) {
     }
 
@@ -69,11 +69,12 @@ public class DadoInformadoRepositorio {
     /** O valor vigente de cada campo que a parceria já informou (os campos sem valor não aparecem). */
     public List<LinhaDeVigente> vigentes(long parceriaId) {
         return jdbc.sql("""
-                        SELECT v.campo_chave, c.tipo, v.valor_numero, v.valor_data, v.arquivo_id, v.origem,
+                        SELECT v.campo_chave, c.tipo, v.valor_numero, v.valor_data, v.arquivo_id, a.nome_original AS arquivo_nome, v.origem,
                                u.id AS usuario_id, u.nome AS usuario_nome, u.perfil AS usuario_perfil, v.informado_em
                         FROM vw_dado_vigente v
                         JOIN campo_catalogo c ON c.chave = v.campo_chave
                         JOIN usuario u ON u.id = v.informado_por
+                        LEFT JOIN arquivo a ON a.id = v.arquivo_id
                         WHERE v.parceria_id = :parceriaId
                         """)
                 .param("parceriaId", parceriaId)
@@ -88,6 +89,17 @@ public class DadoInformadoRepositorio {
                         VALUES (:parceria, :chave, :valor, :origem, :usuario) RETURNING id
                         """)
                 .param("parceria", parceriaId).param("chave", chave).param("valor", valor)
+                .param("origem", origem).param("usuario", usuarioId)
+                .query(Long.class).single();
+    }
+
+    /** O mesmo, para um campo de arquivo (a planilha da agência, rota 66): o arquivo já gravado, da mesma parceria (chave composta). */
+    public long inserirArquivo(long parceriaId, String chave, long arquivoId, String origem, long usuarioId) {
+        return jdbc.sql("""
+                        INSERT INTO dado_informado (parceria_id, campo_chave, arquivo_id, origem, informado_por)
+                        VALUES (:parceria, :chave, :arquivo, :origem, :usuario) RETURNING id
+                        """)
+                .param("parceria", parceriaId).param("chave", chave).param("arquivo", arquivoId)
                 .param("origem", origem).param("usuario", usuarioId)
                 .query(Long.class).single();
     }

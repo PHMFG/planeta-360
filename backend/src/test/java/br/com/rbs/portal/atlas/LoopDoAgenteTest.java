@@ -57,6 +57,16 @@ class LoopDoAgenteTest {
     static final String EDITAR = "relatorio_editar";
     static final String FINALIZAR = "relatorio_finalizar";
     static final String CONSULTAR = "parceria_consultar";
+    static final String BUSCAR = "buscar_documentos";
+    static final String LISTAR_ENTREGAS = "listar_entregas";
+    static final String CONSULTAR_COTA = "consultar_cota";
+    static final String CONSULTAR_PRAZOS = "consultar_prazos";
+    static final String CONTAR_DIAS = "contar_dias";
+    static final String CALCULAR = "calcular";
+    static final String PEDIDO_DE_RELATORIO = "pedido_de_relatorio";
+    static final String GERAR_MODELO = "gerar_modelo";
+    /** As ferramentas que o modelo recebe no Atlas só chat, na ordem em que o registro as oferece. */
+    static final java.util.List<String> DO_CHAT = java.util.List.of(CONSULTAR, BUSCAR, LISTAR_ENTREGAS, CONSULTAR_COTA, CONSULTAR_PRAZOS, CONTAR_DIAS, CALCULAR, PEDIDO_DE_RELATORIO, GERAR_MODELO);
 
     static final String ARGS_INICIAR = "{\"modelo\":\"ATIVACAO_EVENTO\",\"objetivo\":\"Relatório da ativação\"}";
     static final String ARGS_CARTAO = "{\"mensagem\":\"Preciso destes números.\",\"campos\":[\"ativacao.visitantes_total\","
@@ -183,6 +193,9 @@ class LoopDoAgenteTest {
             case ItemAviso a -> "aviso";
             case ItemCartao c -> "cartao";
             case ItemRelatorioPronto p -> "relatorio_pronto";
+            case AtlasDtos.ItemCalculo c -> "calculo";
+            case AtlasDtos.ItemPedidoRelatorio r -> "pedido_relatorio";
+            case AtlasDtos.ItemModelo m -> "modelo";
         }).toList();
     }
 
@@ -217,8 +230,8 @@ class LoopDoAgenteTest {
         assertThat(cartao.mensagem()).isEqualTo("Preciso destes números.");
         assertThat(cartao.campos()).extracting("chave").containsExactly(VISITANTES, CADASTROS);
         assertThat(modelo.pedidos()).hasSize(2);
-        assertThat(nomesDasFerramentas(modelo.pedidos().get(0))).containsExactly(CONSULTAR, INICIAR);
-        assertThat(nomesDasFerramentas(modelo.pedidos().get(1))).containsExactly(CONSULTAR, SOLICITAR, EDITAR, FINALIZAR);
+        assertThat(nomesDasFerramentas(modelo.pedidos().get(0))).containsExactly(CONSULTAR, BUSCAR, LISTAR_ENTREGAS, CONSULTAR_COTA, CONSULTAR_PRAZOS, CONTAR_DIAS, CALCULAR, PEDIDO_DE_RELATORIO, GERAR_MODELO, INICIAR);
+        assertThat(nomesDasFerramentas(modelo.pedidos().get(1))).containsExactly(CONSULTAR, BUSCAR, LISTAR_ENTREGAS, CONSULTAR_COTA, CONSULTAR_PRAZOS, CONTAR_DIAS, CALCULAR, PEDIDO_DE_RELATORIO, GERAR_MODELO, SOLICITAR, EDITAR, FINALIZAR);
         assertThat(modelo.pedidos()).allSatisfy(ProvedorRoteirizado::exigirHistoricoValido);
 
         List<Mensagem> historico = mensagens(conversa);
@@ -235,8 +248,8 @@ class LoopDoAgenteTest {
 
         // o prompt de sistema leva a data de hoje e o nome da marca, nunca ids
         String sistema = modelo.pedidos().get(0).mensagens().get(0).conteudo();
-        assertThat(sistema).contains("Cliente Amarelo").doesNotContain("@MARCA@").doesNotContain("@DATA@")
-                .doesNotContain(String.valueOf(amarelo()) + ",").contains("relatorio_iniciar");
+        assertThat(sistema).isEqualTo(ApoioDosPrompts.esperado(true, "Cliente Amarelo")).contains("Cliente Amarelo")
+                .doesNotContain("@MARCA@").doesNotContain("@DATA@").doesNotContain("parceria_id").contains("relatorio_iniciar");
         assertThat(modelo.pedidos().get(0).sessao()).isEqualTo(String.valueOf(conversa));
 
         // 2. a pessoa responde o cartão (rota 46): a resposta da ferramenta pendente entra com o MESMO tool_call_id e o loop retoma
@@ -252,7 +265,7 @@ class LoopDoAgenteTest {
         assertThat(json(respostaDoCartao.conteudo())).containsEntry("acao", "accept");
         assertThat(respostaDoCartao.conteudo()).contains("\"chave\":\"ativacao.visitantes_total\"", "\"ref\":\"dado:ativacao.visitantes_total\"",
                 "\"valor\":1200", "\"valor\":1072");
-        assertThat(nomesDasFerramentas(modelo.pedidos().get(2))).containsExactly(CONSULTAR, SOLICITAR, EDITAR, FINALIZAR);   // sem iniciar: já há relatório
+        assertThat(nomesDasFerramentas(modelo.pedidos().get(2))).containsExactly(CONSULTAR, BUSCAR, LISTAR_ENTREGAS, CONSULTAR_COTA, CONSULTAR_PRAZOS, CONTAR_DIAS, CALCULAR, PEDIDO_DE_RELATORIO, GERAR_MODELO, SOLICITAR, EDITAR, FINALIZAR);   // sem iniciar: já há relatório
         assertThat(modelo.pedidos()).allSatisfy(ProvedorRoteirizado::exigirHistoricoValido);
         assertThat(modelo.sobraDoRoteiro()).isZero();
 
@@ -301,7 +314,7 @@ class LoopDoAgenteTest {
         assertThat(tipos(turno)).containsExactly("usuario", "texto");
         assertThat(textoDoItem(turno, 1)).isEqualTo("Posso montar o relatório de ativação da sua marca. Quer que eu comece?");
         assertThat(((ItemTexto) turno.itens().get(1)).porModelo()).isTrue();
-        assertThat(nomesDasFerramentas(modelo.ultimoPedido())).containsExactly(CONSULTAR, INICIAR);
+        assertThat(nomesDasFerramentas(modelo.ultimoPedido())).containsExactly(CONSULTAR, BUSCAR, LISTAR_ENTREGAS, CONSULTAR_COTA, CONSULTAR_PRAZOS, CONTAR_DIAS, CALCULAR, PEDIDO_DE_RELATORIO, GERAR_MODELO, INICIAR);
         assertThat(papeis(conversa)).containsExactly("user", "assistant");
     }
 
@@ -326,7 +339,7 @@ class LoopDoAgenteTest {
 
         assertThat(tipos(turno)).containsExactly("usuario", "texto");
         assertThat(textoDoItem(turno, 1)).isEqualTo("Aplicações de marca previstas: 19; comprovadas no evento: 17.");
-        assertThat(nomesDasFerramentas(modelo.pedidos().get(0))).containsExactly(CONSULTAR, INICIAR);
+        assertThat(nomesDasFerramentas(modelo.pedidos().get(0))).containsExactly(CONSULTAR, BUSCAR, LISTAR_ENTREGAS, CONSULTAR_COTA, CONSULTAR_PRAZOS, CONTAR_DIAS, CALCULAR, PEDIDO_DE_RELATORIO, GERAR_MODELO, INICIAR);
         modelo.pedidos().forEach(ProvedorRoteirizado::exigirHistoricoValido);
         assertThat(modelo.sobraDoRoteiro()).isZero();
 
@@ -575,10 +588,10 @@ class LoopDoAgenteTest {
                 conversa)).isEqualTo(3);
         List<List<String>> ofertas = modelo.pedidos().stream().map(ProvedorRoteirizado::nomesDasFerramentas).toList();
         assertThat(ofertas).hasSize(5);
-        assertThat(ofertas.get(1)).containsExactly(CONSULTAR, SOLICITAR, EDITAR, FINALIZAR);
-        assertThat(ofertas.get(2)).containsExactly(CONSULTAR, SOLICITAR, EDITAR, FINALIZAR);
-        assertThat(ofertas.get(3)).containsExactly(CONSULTAR, SOLICITAR, EDITAR, FINALIZAR);
-        assertThat(ofertas.get(4)).containsExactly(CONSULTAR, EDITAR, FINALIZAR);   // o terceiro cartão já foi: o limite do plano
+        assertThat(ofertas.get(1)).containsExactly(CONSULTAR, BUSCAR, LISTAR_ENTREGAS, CONSULTAR_COTA, CONSULTAR_PRAZOS, CONTAR_DIAS, CALCULAR, PEDIDO_DE_RELATORIO, GERAR_MODELO, SOLICITAR, EDITAR, FINALIZAR);
+        assertThat(ofertas.get(2)).containsExactly(CONSULTAR, BUSCAR, LISTAR_ENTREGAS, CONSULTAR_COTA, CONSULTAR_PRAZOS, CONTAR_DIAS, CALCULAR, PEDIDO_DE_RELATORIO, GERAR_MODELO, SOLICITAR, EDITAR, FINALIZAR);
+        assertThat(ofertas.get(3)).containsExactly(CONSULTAR, BUSCAR, LISTAR_ENTREGAS, CONSULTAR_COTA, CONSULTAR_PRAZOS, CONTAR_DIAS, CALCULAR, PEDIDO_DE_RELATORIO, GERAR_MODELO, SOLICITAR, EDITAR, FINALIZAR);
+        assertThat(ofertas.get(4)).containsExactly(CONSULTAR, BUSCAR, LISTAR_ENTREGAS, CONSULTAR_COTA, CONSULTAR_PRAZOS, CONTAR_DIAS, CALCULAR, PEDIDO_DE_RELATORIO, GERAR_MODELO, EDITAR, FINALIZAR);   // o terceiro cartão já foi: o limite do plano
     }
 
     @Test
@@ -660,7 +673,7 @@ class LoopDoAgenteTest {
         assertThat(contar("SELECT count(*) FROM atlas_tool_call t JOIN atlas_mensagem m ON m.id = t.mensagem_id WHERE m.conversa_id = ? "
                 + "AND t.resultado IS NULL AND t.erro IS NULL", conversa)).isZero();
         // o relatório que estava montando continua o mesmo, e o modelo pode pedir de novo (nenhuma ferramenta perdida)
-        assertThat(nomesDasFerramentas(modelo.ultimoPedido())).containsExactly(CONSULTAR, SOLICITAR, EDITAR, FINALIZAR);
+        assertThat(nomesDasFerramentas(modelo.ultimoPedido())).containsExactly(CONSULTAR, BUSCAR, LISTAR_ENTREGAS, CONSULTAR_COTA, CONSULTAR_PRAZOS, CONTAR_DIAS, CALCULAR, PEDIDO_DE_RELATORIO, GERAR_MODELO, SOLICITAR, EDITAR, FINALIZAR);
     }
 
     @Test
@@ -734,6 +747,34 @@ class LoopDoAgenteTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void definirTextoComNumeroOuDataPorExtensoERecusadoNoRelatorioEDepoisOBlocoFicaComAFraseModelo() {
+        informarTudo();
+        long conversa = abrirConversa();
+        modelo.chamada(INICIAR, ARGS_INICIAR)
+                .chamada(EDITAR, edicao("b-resumo", "A marca teve dezessete aplicações comprovadas.", "b-publico", PUBLICO))
+                .chamada(EDITAR, edicao("b-resumo", "A ativação foi no primeiro de dezembro, com vinte e três brindes."))
+                .chamada(FINALIZAR, "{}");
+
+        ConversaDto turno = falar(conversa, "Monte o relatório.");
+
+        assertThat(tipos(turno)).containsExactly("usuario", "relatorio_pronto");
+        List<Mensagem> respostas = mensagens(conversa).stream().filter(m -> "tool".equals(m.papel())).toList();
+        Map<String, Object> primeira = json(respostas.get(1).conteudo());
+        assertThat((List<Map<String, Object>>) primeira.get("operacoes")).extracting(o -> o.get("resultado")).containsExactly("recusada", "aplicada");
+        assertThat(respostas.get(1).conteudo()).contains("por extenso").contains("dezessete");
+        // a segunda recusa do mesmo bloco põe a frase-modelo, e o número por extenso não entra no relatório
+        Map<String, Object> segunda = json(respostas.get(2).conteudo());
+        assertThat((List<Map<String, Object>>) segunda.get("operacoes")).extracting(o -> o.get("resultado")).containsExactly("frase_modelo");
+        RelatorioAtlasDto relatorio = atlas.verRelatorio(marca(), ((ItemRelatorioPronto) turno.itens().get(1)).relatorioId());
+        var paragrafos = relatorio.secoes().stream().flatMap(s -> s.blocos().stream()).filter(ParagrafoDto.class::isInstance)
+                .map(ParagrafoDto.class::cast).toList();
+        assertThat(paragrafos).extracting("id", "redigidoPor").containsExactly(
+                org.assertj.core.groups.Tuple.tuple("b-resumo", "MODELO"), org.assertj.core.groups.Tuple.tuple("b-publico", "ATLAS"));
+        assertThat(paragrafos).extracting("texto").noneMatch(t -> t.toString().contains("dezessete") || t.toString().contains("vinte e três"));
+    }
+
+    @Test
     void referenciaInventadaNoTextoDoRelatorioERecusada() {
         informarTudo();
         long conversa = abrirConversa();
@@ -763,7 +804,9 @@ class LoopDoAgenteTest {
                     assertThat(mensagens.get(mensagens.size() - 2).papel()).isEqualTo("assistant");
                     assertThat(mensagens.get(mensagens.size() - 2).conteudo()).isEqualTo("Deu 7 por visitante.");
                     assertThat(mensagens.get(mensagens.size() - 1).papel()).isEqualTo("user");
-                    assertThat(mensagens.get(mensagens.size() - 1).conteudo()).contains("recusada").contains("algarismo \"7\"");
+                    assertThat(mensagens.get(mensagens.size() - 1).conteudo()).contains("recusada").contains("\"7\"").contains("não tem origem")
+                            .contains("citação [T#]").contains("Não encontrei isso nos documentos do portal.")
+                            .doesNotContain("sem nenhum algarismo");   // o pedido deixou de mandar escrever sem número
                     return new br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.RespostaDoLlm(
                             "Aplicações previstas: {{cons:aplicacoes.previstas}}; comprovadas: {{cons:aplicacoes.comprovadas}}.", List.of(), null);
                 });
@@ -988,7 +1031,7 @@ class LoopDoAgenteTest {
     }
 
     @Test
-    void idsEItensNaoVazamParaOPromptNemParaOModelo() throws Exception {
+    void idsEItensNaoVazamParaOPromptNemParaOModelo() {
         long conversa = abrirConversa();
         modelo.texto("Olá!");
 
@@ -996,19 +1039,62 @@ class LoopDoAgenteTest {
 
         String prompt = modelo.pedidos().get(0).mensagens().get(0).conteudo();
         assertThat(prompt).doesNotContain(marca().email()).doesNotContain("parceria_id");
-        // o prompt é o arquivo com a data de hoje e o nome da marca, e mais nada: id de parceria, de conversa ou de usuário nunca entra
-        String arquivo = new String(new org.springframework.core.io.ClassPathResource("atlas/prompts/relatorio.txt").getInputStream()
-                .readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
-        assertThat(prompt).isEqualTo(arquivo.replace("@MARCA@", "Cliente Amarelo")
-                .replace("@DATA@", java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy").format(br.com.rbs.portal.comum.Datas.hoje())));
+        // o prompt é o do modo (chat com o relatório ligado, e o fim do relatório) com a data de hoje e o nome da marca, e mais nada:
+        // id de parceria, de conversa ou de usuário nunca entra
+        assertThat(prompt).isEqualTo(ApoioDosPrompts.esperado(true, "Cliente Amarelo"));
     }
 
     @Test
-    void oPromptEUmArquivoTxtVersionadoEPermitidoPeloGit() throws Exception {
-        var recurso = new org.springframework.core.io.ClassPathResource("atlas/prompts/relatorio.txt");
-        assertThat(recurso.exists()).isTrue();
-        String texto = new String(recurso.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
-        assertThat(texto).contains("@MARCA@", "@DATA@", "nunca escreve um número", "relatorio_iniciar", "relatorio_finalizar");
-        assertThat(new org.springframework.core.io.ClassPathResource("atlas/prompts/relatorio.md").exists()).isFalse();
+    void oPromptLigadoTemARotaDoRelatorioEAsDuasRegrasDeNumeroSeparadas() {
+        long conversa = abrirConversa();
+        modelo.texto("Olá!");
+
+        falar(conversa, "Oi.");
+
+        String prompt = modelo.pedidos().get(0).mensagens().get(0).conteudo();
+        // a rota: relatório da ativação monta aqui; qualquer outro relatório vai para a resposta direta
+        assertThat(prompt).contains("Há dois caminhos para um pedido de relatório")
+                .contains("chame relatorio_iniciar com o modelo ATIVACAO_EVENTO")
+                .contains("Qualquer outro relatório (pós-evento, de mídia, oficial, consolidado): chame pedido_de_relatorio")
+                .contains("Se não der para saber qual é, pergunte em uma frase.")
+                .contains("chame gerar_modelo com o tipo");
+        assertThat(prompt.indexOf("relatorio_iniciar")).isLessThan(prompt.indexOf("pedido_de_relatorio"));
+        // a regra do número do chat: copiado da fonte, com a citação
+        assertThat(prompt).contains("Números e datas que vêm de documento: copie exatamente como estão no trecho")
+                .contains("ponha a citação na mesma frase");
+        // a regra do número do texto do relatório: nenhum, só marcador; e a diz que não vale na conversa
+        assertThat(prompt).contains("No texto de um bloco (relatorio_editar) nunca escreva número nem data, nem com algarismo nem por extenso")
+                .contains("Esta regra vale só para o texto do relatório: na conversa, um número de documento vai copiado da fonte com a citação");
+        // as duas regras estão em linhas diferentes
+        assertThat(prompt.lines().filter(l -> l.contains("copie exatamente como estão no trecho")).findFirst().orElseThrow())
+                .doesNotContain("relatorio_editar");
+        assertThat(prompt.lines().filter(l -> l.contains("nunca escreva número nem data")).findFirst().orElseThrow())
+                .doesNotContain("copie exatamente como estão no trecho");
+        // o antigo "nunca escreve um número, nem na conversa" saiu
+        assertThat(prompt).doesNotContain("nunca escreve um número").doesNotContain("nem na conversa, nem nos textos do relatório");
+    }
+
+    @Test
+    void oPromptLigadoFicaAbaixoDeTrezeMilCaracteresESemMarcadorQueSobrou() {
+        long conversa = abrirConversa();
+        modelo.texto("Olá!");
+
+        falar(conversa, "Oi.");
+
+        String prompt = modelo.pedidos().get(0).mensagens().get(0).conteudo();
+        assertThat(prompt.length()).as("o prompt do chat com o relatório ligado tem de ficar curto").isLessThan(13000);
+        assertThat(ApoioDosPrompts.MARCADOR_QUE_SOBROU.matcher(prompt).find()).as("sobrou um marcador @...@ no prompt").isFalse();
+    }
+
+    @Test
+    void oPromptEUmArquivoTxtVersionadoEPermitidoPeloGit() {
+        for (String nome : List.of("chat", "relatorio", "relatorio-ligado", "relatorio-desligado")) {
+            var recurso = new org.springframework.core.io.ClassPathResource("atlas/prompts/" + nome + ".txt");
+            assertThat(recurso.exists()).as(nome).isTrue();
+            assertThat(new org.springframework.core.io.ClassPathResource("atlas/prompts/" + nome + ".md").exists()).as(nome + ".md").isFalse();
+        }
+        String relatorio = ApoioDosPrompts.arquivo("relatorio");
+        assertThat(relatorio).contains("relatorio_iniciar", "relatorio_finalizar", "relatorio_editar", "relatorio_solicitar_campos");
+        assertThat(ApoioDosPrompts.arquivo("chat")).contains(ApoioDosPrompts.MARCADOR, "@MARCA@", "@DATA@");
     }
 }
