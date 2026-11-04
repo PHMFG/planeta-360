@@ -1,11 +1,13 @@
 // Menu lateral flutuante do Figma (P360/Navegação): marca, conta, as oito seções e o rodapé. [ITEM-7]
 // A RBS vê também os atalhos de gestão e escolhe a parceria que está consultando.
-import { useEffect, useEffectEvent, useState } from 'react'
+import { useEffect, useRef, useState, type RefObject } from 'react'
 import { Link, NavLink, useMatch, useNavigate } from 'react-router'
 import type { ParceriaResumo, UsuarioLogado } from '../api/tipos'
 import { useSessao } from '../sessao/Sessao'
 import { estadoAbaNaParceria } from './AbaFechada'
 import { GESTAO_RBS, SECOES, type Secao } from './secoes'
+import { usarFocoPreso } from './usarFocoPreso'
+
 
 const NOME_COTA: Record<ParceriaResumo['cota']['codigo'], string> = {
   MASTER: 'Master',
@@ -26,8 +28,9 @@ function iniciais(nome: string) {
     .join('')
 }
 
-const ITEM =
-  'flex h-11 items-center gap-3 rounded-[10px] px-3 text-sm transition-colors'
+// Em telas baixas (a variante `baixa`, de tema.css) o menu fica mais compacto. As classes ficam escritas por inteiro: o
+// Tailwind só gera as que aparecem no código.
+const ITEM = 'flex h-11 baixa:h-9 items-center gap-3 rounded-[10px] px-3 text-sm transition-colors'
 
 function classeItem(ativo: boolean) {
   return ativo
@@ -73,7 +76,7 @@ function ChipConta({ usuario, parceria }: { usuario: UsuarioLogado; parceria: Pa
   const nome = parceria?.patrocinador ?? (rbs ? 'Todas as parcerias' : usuario.nome)
 
   return (
-    <div className="mt-5 flex items-center gap-2.5 rounded-xl bg-cinza-100 p-2.5">
+    <div className="mt-5 baixa:mt-3 flex items-center gap-2.5 rounded-xl bg-cinza-100 p-2.5">
       <span className="grid size-8 shrink-0 place-items-center rounded-full bg-tinta font-display text-base text-white">
         {parceria ? iniciais(parceria.patrocinador) : rbs ? 'RBS' : iniciais(usuario.nome)}
       </span>
@@ -103,8 +106,7 @@ function ChipConta({ usuario, parceria }: { usuario: UsuarioLogado; parceria: Pa
   )
 }
 
-const CLASSE_BOTAO_ATLAS =
-  'relative flex h-[60px] w-full items-center justify-center gap-2 overflow-hidden rounded-2xl border border-white/22 bg-atlas text-white shadow-atlas-brilho transition-[filter]'
+const CLASSE_BOTAO_ATLAS = 'relative flex h-[60px] baixa:h-[50px] w-full items-center justify-center gap-2 overflow-hidden rounded-2xl border border-white/22 bg-atlas text-white shadow-atlas-brilho transition-[filter]'
 
 function BotaoAtlas({ destino }: { destino?: string }) {
   // [ATLAS] Só a marca conversa com o Atlas, dentro de uma parceria: o botão abre a janela dele (Figma P360/Botão Atlas,
@@ -126,15 +128,36 @@ function BotaoAtlas({ destino }: { destino?: string }) {
           {conteudo}
         </Link>
       ) : (
-        <button type="button" disabled aria-describedby="atlas-legenda" className={`${CLASSE_BOTAO_ATLAS} cursor-not-allowed`}>
+        // Desabilitado precisa parecer desabilitado (U17): a RBS não conversa com o Atlas da marca.
+        <button type="button" disabled aria-describedby="atlas-legenda" className={`${CLASSE_BOTAO_ATLAS} cursor-not-allowed opacity-55 grayscale-[40%]`}>
           {conteudo}
         </button>
       )}
       <p id="atlas-legenda" className={`mt-1.5 text-center text-[11px] font-medium ${ativo ? 'text-atlas-roxo' : 'text-texto-2'}`}>
-        {ativo ? 'Conversa aberta · assistente IA' : destino ? 'Assistente IA · números da parceria' : 'Assistente da marca'}
+        {ativo ? 'Conversa aberta · assistente IA' : destino ? 'Assistente IA · números da parceria' : 'Assistente das marcas'}
       </p>
     </div>
   )
+}
+
+/** O menu tem itens abaixo da área visível, sem ter rolado até o fim. Relê ao rolar e quando o tamanho muda. */
+function usarMaisAbaixo(nav: RefObject<HTMLElement | null>) {
+  const [mais, setMais] = useState(false)
+  useEffect(() => {
+    const elemento = nav.current
+    if (!elemento) return
+    const medir = () => setMais(elemento.scrollHeight - elemento.scrollTop - elemento.clientHeight > 4)
+    medir()
+    elemento.addEventListener('scroll', medir, { passive: true })
+    const observador = new ResizeObserver(medir)
+    observador.observe(elemento)
+    for (const filho of elemento.children) observador.observe(filho)
+    return () => {
+      elemento.removeEventListener('scroll', medir)
+      observador.disconnect()
+    }
+  })
+  return mais
 }
 
 type PropsMenu = {
@@ -150,14 +173,23 @@ export function Menu({ parceria, aberto, aoFechar, atlas }: PropsMenu) {
   const { usuario, sair } = useSessao()
   const navegar = useNavigate()
   const [ajudaAberta, setAjudaAberta] = useState(false)
-  const fecharComEsc = useEffectEvent((evento: KeyboardEvent) => evento.key === 'Escape' && aoFechar())
-
+  // Na gaveta aberta o foco entra nela, o Tab gira só dentro dela, e o Esc fecha e devolve o foco ao botão Menu (U08).
+  const gavetaRef = usarFocoPreso(aberto, aoFechar)
+  // A gaveta entra com transição de visibilidade: no quadro em que abre ela ainda está invisível, e o foco do usarFocoPreso
+  // não pega. Dois quadros depois ela já é visível e recebe o foco.
   useEffect(() => {
     if (!aberto) return
-    const aoTeclar = (evento: KeyboardEvent) => fecharComEsc(evento)
-    document.addEventListener('keydown', aoTeclar)
-    return () => document.removeEventListener('keydown', aoTeclar)
-  }, [aberto])
+    let segundo = 0
+    const primeiro = requestAnimationFrame(() => {
+      segundo = requestAnimationFrame(() => gavetaRef.current?.focus())
+    })
+    return () => {
+      cancelAnimationFrame(primeiro)
+      cancelAnimationFrame(segundo)
+    }
+  }, [aberto, gavetaRef])
+  const navRef = useRef<HTMLElement>(null)
+  const maisAbaixo = usarMaisAbaixo(navRef)
 
   if (!usuario) return null
   const rbs = usuario.perfil === 'ADMIN_RBS'
@@ -176,6 +208,8 @@ export function Menu({ parceria, aberto, aoFechar, atlas }: PropsMenu) {
       {aberto && <div className="fixed inset-0 z-40 bg-tinta/45 lg:hidden" onClick={aoFechar} aria-hidden="true" />}
       <aside
         id="menu-principal"
+        ref={gavetaRef}
+        tabIndex={-1}
         onClick={(evento) => (evento.target as HTMLElement).closest('a') && aoFechar()}
         onChange={aoFechar}
         className={`fixed top-0 bottom-0 left-0 z-50 flex w-[280px] max-w-[85vw] flex-col overflow-y-auto border border-borda-menu bg-white px-5 pt-12 pb-5 shadow-menu lg:pt-6 transition-[translate,visibility] duration-200 lg:top-4 lg:bottom-4 lg:left-4 lg:z-20 lg:w-[264px] lg:rounded-[20px] print:hidden ${gaveta}`}
@@ -188,7 +222,7 @@ export function Menu({ parceria, aberto, aoFechar, atlas }: PropsMenu) {
           Fechar <i className="ri-close-line text-lg" aria-hidden="true" />
         </button>
         <div>
-          <p className="font-display text-[56px] leading-[0.9] tracking-[-0.01em] whitespace-nowrap text-parceria uppercase">
+          <p className="font-display text-[56px] baixa:text-[44px] leading-[0.9] tracking-[-0.01em] whitespace-nowrap text-parceria uppercase">
             Planeta 360
           </p>
           <p className="mt-1.5 text-[10px] font-bold tracking-[0.14em] text-texto-2 uppercase">
@@ -198,7 +232,7 @@ export function Menu({ parceria, aberto, aoFechar, atlas }: PropsMenu) {
 
         <ChipConta usuario={usuario} parceria={parceria} />
 
-        <nav className="-mx-1 mt-5 flex-1 overflow-y-auto px-1" aria-label="Menu principal">
+        <nav ref={navRef} className="-mx-1 mt-5 baixa:mt-3 flex-1 overflow-y-auto px-1" aria-label="Menu principal">
           {rbs && (
             <>
               <ul className="flex flex-col gap-1" data-secao="neutro">
@@ -223,9 +257,20 @@ export function Menu({ parceria, aberto, aoFechar, atlas }: PropsMenu) {
               ))}
             </ul>
           )}
+          {/* Quando o menu não cabe (a RBS com uma parceria aberta), a pista mostra que há itens abaixo (U01). Não recebe
+              clique: o item que está por baixo dela continua clicável. */}
+          {maisAbaixo && (
+            <p
+              data-mais-abaixo
+              aria-hidden="true"
+              className="pointer-events-none sticky bottom-0 -mt-8 bg-gradient-to-t from-white via-white/90 to-transparent pt-6 pb-1 text-center text-[11px] font-semibold text-texto-2"
+            >
+              Role para ver mais <i className="ri-arrow-down-line" />
+            </p>
+          )}
         </nav>
 
-        <div className="mt-4 flex flex-col gap-4">
+        <div className="mt-4 baixa:mt-3 flex flex-col gap-4 baixa:gap-3">
           <BotaoAtlas destino={atlas} />
           <div className="relative flex items-center justify-between border-t border-borda pt-4 text-[13px] font-semibold">
             <button
