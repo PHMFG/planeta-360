@@ -474,7 +474,7 @@ BEGIN
         DELETE FROM parceria WHERE id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027) $q$);
 END $$;
 
--- [ITEM-6] A destinação de cortesias não passa da cota (Amarelo, Arena de sexta: 25 de 25; Verde, Arena de sábado: 2 de 3)
+-- [ITEM-6] A destinação de cortesias não passa da cota (Amarelo, Arena de sexta: 25 de 25; Verde, Arena de sábado: 2 de 4)
 DO $$
 BEGIN
     PERFORM pg_temp.recusa('ITEM-6', 'mais uma cortesia além da cota cheia (25 de 25)', 'rn_cortesia_limite', $q$
@@ -485,7 +485,7 @@ BEGIN
         INSERT INTO cortesia_destinacao (cortesia_cota_id, destinatario_nome, quantidade, registrado_por)
         SELECT cc.id, 'Lote gigante', 522, (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example')
         FROM cortesia_cota cc WHERE cc.setor = 'ARENA' AND cc.dia = 'SEXTA' AND cc.parceria_id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027) $q$);
-    PERFORM pg_temp.recusa('ITEM-6', 'aumentar uma destinação além da cota (Verde: 2 passam a 5 de 3)', 'rn_cortesia_limite', $q$
+    PERFORM pg_temp.recusa('ITEM-6', 'aumentar uma destinação além da cota (Verde: 2 passam a 5 de 4)', 'rn_cortesia_limite', $q$
         UPDATE cortesia_destinacao SET quantidade = 5
         WHERE cortesia_cota_id = (SELECT id FROM cortesia_cota WHERE setor = 'ARENA' AND dia = 'SABADO' AND parceria_id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Verde' AND edicao = 2027)) $q$);
     PERFORM pg_temp.recusa('ITEM-6', 'mover uma destinação para uma cota que não comporta', 'rn_cortesia_limite', $q$
@@ -493,7 +493,7 @@ BEGIN
         WHERE cortesia_cota_id = (SELECT id FROM cortesia_cota WHERE setor = 'ARENA' AND dia = 'SABADO' AND parceria_id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Verde' AND edicao = 2027)) $q$);
     PERFORM pg_temp.recusa('ITEM-6', 'reduzir a cota abaixo do que já foi destinado', 'rn_cortesia_cota_reducao', $q$
         UPDATE cortesia_cota SET quantidade = 20 WHERE setor = 'ARENA' AND dia = 'SEXTA' AND parceria_id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027) $q$);
-    PERFORM pg_temp.aceita('ITEM-6', 'destinar a cortesia que sobra da Verde (3 de 3)', $q$
+    PERFORM pg_temp.aceita('ITEM-6', 'destinar a cortesia que sobra da Verde (3 de 4)', $q$
         INSERT INTO cortesia_destinacao (cortesia_cota_id, destinatario_nome, quantidade, registrado_por)
         SELECT cc.id, 'Convidados finais', 1, (SELECT id FROM _ver_usr WHERE email = 'marketing@verde.example')
         FROM cortesia_cota cc WHERE cc.setor = 'ARENA' AND cc.dia = 'SABADO' AND cc.parceria_id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Verde' AND edicao = 2027) $q$);

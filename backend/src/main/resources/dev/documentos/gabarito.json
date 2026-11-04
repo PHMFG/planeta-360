@@ -1283,16 +1283,15 @@
     "edicao": 2027,
     "tipo": "valor",
     "pagina": 3,
-    "trecho": "A Subcota G tem 6 cortesias por dia na Arena e 3 por dia no Camarote.",
+    "trecho": "A Subcota G tem 4 cortesias por dia na Arena e 2 por dia no Camarote.",
     "perguntas": [
       "Quantas cortesias a gente tem por dia na Arena e no Camarote?",
       "quantas cortesias de camarote tem a nossa cota?"
     ],
-    "resposta": "6|3",
+    "resposta": "4|2",
     "visivelPara": [
       "roxo"
-    ],
-    "nota": "Número do documento. A aba Cortesias e a aba Credenciamento da amostra do portal têm valores próprios, que podem divergir. Não usar em casos de dados_parceria."
+    ]
   },
   {
     "fato": "g-credenciais",
@@ -1302,16 +1301,15 @@
     "edicao": 2027,
     "tipo": "valor",
     "pagina": 3,
-    "trecho": "Na Arena, a Subcota G tem 8 credenciais de serviço por dia",
+    "trecho": "Na Arena, a Subcota G tem 5 credenciais de serviço por dia",
     "perguntas": [
       "Quantas credenciais de serviço temos por dia na Arena?",
       "quantas credenciais posso dividir entre a equipe e a agência?"
     ],
-    "resposta": "8",
+    "resposta": "5",
     "visivelPara": [
       "roxo"
-    ],
-    "nota": "Número do documento. A aba Cortesias e a aba Credenciamento da amostra do portal têm valores próprios, que podem divergir. Não usar em casos de dados_parceria."
+    ]
   },
   {
     "fato": "g-conteudo-prazo",
@@ -1393,16 +1391,15 @@
     "edicao": 2027,
     "tipo": "valor",
     "pagina": 2,
-    "trecho": "A Subcota tem 3 cortesias por dia na Arena e 1 por dia no Camarote.",
+    "trecho": "A Subcota tem 4 cortesias por dia na Arena e 2 por dia no Camarote.",
     "perguntas": [
       "Quantas cortesias a gente tem por dia na Arena e no Camarote?",
       "quantas cortesias de camarote tem a nossa cota?"
     ],
-    "resposta": "3|1",
+    "resposta": "4|2",
     "visivelPara": [
       "verde"
-    ],
-    "nota": "Número do documento. A aba Cortesias e a aba Credenciamento da amostra do portal têm valores próprios, que podem divergir. Não usar em casos de dados_parceria."
+    ]
   },
   {
     "fato": "s-credenciais",
@@ -1412,16 +1409,15 @@
     "edicao": 2027,
     "tipo": "valor",
     "pagina": 3,
-    "trecho": "Na Arena, a Subcota tem 12 credenciais de serviço por dia",
+    "trecho": "Na Arena, a Subcota tem 10 credenciais de serviço por dia",
     "perguntas": [
       "Quantas credenciais de serviço temos por dia na Arena?",
       "quantas credenciais a gente divide entre equipe e agência?"
     ],
-    "resposta": "12",
+    "resposta": "10",
     "visivelPara": [
       "verde"
-    ],
-    "nota": "Número do documento. A aba Cortesias e a aba Credenciamento da amostra do portal têm valores próprios, que podem divergir. Não usar em casos de dados_parceria."
+    ]
   },
   {
     "fato": "s-conteudo-prazo",

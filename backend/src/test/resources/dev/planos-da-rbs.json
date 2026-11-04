@@ -1,0 +1,36 @@
+{
+  "fonte": "Números transcritos à mão dos três PDFs de planos comerciais que a RBS enviou (os PDFs não entram no repositório). Amarelo: p. 13 (investimento) e p. 11 (cortesias e credenciais). Roxo: p. 8. Verde: p. 2. Cortesias e credenciais são por dia; as destas duas cotas valem para sexta e sábado.",
+  "planos": [
+    {
+      "cliente": "Cliente Amarelo",
+      "cota": "MASTER",
+      "investimento": 1000000,
+      "base": "BRUTO_TABELA",
+      "cortesiasPorDia": { "ARENA": 25, "CAMAROTE": 40, "LOUNGE": 10 },
+      "credenciaisPorDia": {
+        "ARENA/MARCA": 20,
+        "ARENA/AGENCIA": 60,
+        "CAMAROTE/MARCA": 10,
+        "CAMAROTE/AGENCIA": 20,
+        "SALA_IMPRENSA/MARCA": 2,
+        "SALA_CONTEUDO/EQUIPE_CONTEUDO": 3
+      }
+    },
+    {
+      "cliente": "Cliente Roxo",
+      "cota": "SUBCOTA_G",
+      "investimento": 500000,
+      "base": "LIQUIDO",
+      "cortesiasPorDia": { "ARENA": 4, "CAMAROTE": 2 },
+      "credenciaisPorDia": { "ARENA/GERAL": 5 }
+    },
+    {
+      "cliente": "Cliente Verde",
+      "cota": "SUBCOTA",
+      "investimento": 100000,
+      "base": "LIQUIDO",
+      "cortesiasPorDia": { "ARENA": 4, "CAMAROTE": 2 },
+      "credenciaisPorDia": { "ARENA/GERAL": 10 }
+    }
+  ]
+}

@@ -370,7 +370,7 @@ BEGIN
      ('Cliente Verde', 'Fotos de comprovação da ativação', 'fotos_ativacao_arena.zip', 'OUTRO', 6291456, 28, '15:00', 'Fotos da ativação durante o evento.', 'APROVADO', 27, '10:00', NULL, '200.0.2.30'),
      ('Cliente Verde', 'Logo para conteúdos assinados no Instagram', 'logo_instagram_assinado.png', 'MATERIAL_MARCA', 187392, 70, '12:15', NULL, 'APROVADO', 69, '09:20', NULL, '200.0.2.30'),
      ('Cliente Verde', 'VT de 30" para o telão', 'vt_30s_telao.mp4', 'MATERIAL_MIDIA', 16252928, 65, '16:40', NULL, 'APROVADO', 63, '11:05', NULL, '200.0.2.30'),
-     ('Cliente Verde', 'Destinação das cortesias', 'destinacao_cortesias.xlsx', 'OUTRO', 39936, 2, '09:40', 'Destinamos 8 das 12 cortesias; as demais saem na semana do evento.', NULL, NULL, NULL, NULL, '200.0.2.30'),
+     ('Cliente Verde', 'Destinação das cortesias', 'destinacao_cortesias.xlsx', 'OUTRO', 39936, 2, '09:40', 'Destinamos 6 das 12 cortesias; as demais saem na semana do evento.', NULL, NULL, NULL, NULL, '200.0.2.30'),
      ('Cliente Verde', 'Cadastro dos profissionais no Open Staff', 'profissionais_open_staff.csv', 'OUTRO', 2540, 52, '14:10', NULL, 'APROVADO', 51, '10:50', NULL, '200.0.2.30'),
      ('Cliente Verde', 'Dados do signatário', 'ficha_do_signatario.pdf', 'OUTRO', 119808, 36, '11:00', NULL, 'APROVADO', 35, '16:00', NULL, '200.0.2.30');
 
@@ -448,18 +448,19 @@ BEGIN
     IF (SELECT pular FROM _amostra_ctl) THEN RETURN; END IF;
 
     -- Os números e o portão de cada cota são os do plano comercial dela (o Manual diz que o plano prevalece), os mesmos do kit de
-    -- documentos do Atlas: Master (D03) 25 na Arena, 40 no Camarote e 10 no Lounge; Subcota G (D04, o Roxo) 6 e 3; Subcota (D05, o
-    -- Verde) 3 e 1, tudo por dia. A Arena entra pelo Portão 6; o Camarote e o Lounge, pelo Portão 4, onde também sai o shuttle (D02).
+    -- documentos do Atlas, e batem com os PDFs da RBS: Master (D03, p. 11) 25 na Arena, 40 no Camarote e 10 no Lounge; Roxo (D04,
+    -- p. 8 do plano) 4 e 2; Verde (D05, p. 2) 4 e 2, tudo por dia. A Arena entra pelo Portão 6; o Camarote e o Lounge, pelo Portão 4,
+    -- onde também sai o shuttle (D02).
     INSERT INTO cortesia_cota (parceria_id, setor, dia, quantidade, com_shuttle, acesso)
     SELECT pp.id, v.setor, d.dia, v.qtd, v.shuttle, v.acesso
     FROM _amostra_parc pp
     JOIN (VALUES ('Cliente Amarelo', 'ARENA',    25, FALSE, 'Portão 6'),
                  ('Cliente Amarelo', 'CAMAROTE', 40, TRUE,  'Portão 4; shuttle via portão 4'),
                  ('Cliente Amarelo', 'LOUNGE',   10, TRUE,  'Portão 4; shuttle via portão 4'),
-                 ('Cliente Roxo',    'ARENA',     6, FALSE, 'P6'),
-                 ('Cliente Roxo',    'CAMAROTE',  3, TRUE,  'P4; shuttle via P4'),
-                 ('Cliente Verde',   'ARENA',     3, FALSE, 'P6'),
-                 ('Cliente Verde',   'CAMAROTE',  1, TRUE,  'P4; shuttle via P4')) AS v(cli, setor, qtd, shuttle, acesso)
+                 ('Cliente Roxo',    'ARENA',     4, FALSE, 'P6'),
+                 ('Cliente Roxo',    'CAMAROTE',  2, TRUE,  'P4; shuttle via P4'),
+                 ('Cliente Verde',   'ARENA',     4, FALSE, 'P6'),
+                 ('Cliente Verde',   'CAMAROTE',  2, TRUE,  'P4; shuttle via P4')) AS v(cli, setor, qtd, shuttle, acesso)
       ON v.cli = pp.cliente
     CROSS JOIN (VALUES ('SEXTA'), ('SABADO')) AS d(dia);
 
@@ -469,11 +470,11 @@ BEGIN
      ('Cliente Amarelo', 'ARENA',         'MARCA',           20), ('Cliente Amarelo', 'ARENA',    'AGENCIA', 60),
      ('Cliente Amarelo', 'CAMAROTE',      'MARCA',           10), ('Cliente Amarelo', 'CAMAROTE', 'AGENCIA', 20),
      ('Cliente Amarelo', 'SALA_IMPRENSA', 'MARCA',            2), ('Cliente Amarelo', 'SALA_CONTEUDO', 'EQUIPE_CONTEUDO', 3),
-     ('Cliente Roxo',    'ARENA',         'GERAL',            8),
-     ('Cliente Verde',   'ARENA',         'GERAL',           12)) AS v(cli, setor, benef, qtd) ON v.cli = pp.cliente;
+     ('Cliente Roxo',    'ARENA',         'GERAL',            5),
+     ('Cliente Verde',   'ARENA',         'GERAL',           10)) AS v(cli, setor, benef, qtd) ON v.cli = pp.cliente;
 
     -- [ITEM-6] As destinações respeitam a cota de cada setor e dia (o gatilho rn_cortesia_limite confere): a Amarelo usa 25 de 25
-    -- na Arena de sexta, a Verde usa 3 de 3 na de sexta e só 2 de 3 na de sábado, e o Roxo usa 4 de 6 na Arena e 2 de 3 no Camarote.
+    -- na Arena de sexta, a Verde usa 3 de 4 na de sexta e 2 de 4 na de sábado, e o Roxo usa 4 de 4 na Arena e 2 de 2 no Camarote.
     INSERT INTO cortesia_destinacao (cortesia_cota_id, destinatario_nome, quantidade, registrado_por, registrado_em)
     SELECT cc.id, 'Convidados da marca (lote)', v.qtd,
            (SELECT u.id FROM parceria_usuario pu JOIN usuario u ON u.id = pu.usuario_id
