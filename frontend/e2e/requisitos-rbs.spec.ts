@@ -33,7 +33,23 @@ test.describe('R1 · planos comerciais', () => {
     }
     await contexto.dispose()
   })
-  test.fixme('[R1.2] cortesias e credenciais da amostra iguais aos planos', pendente)
+  test('[R1.2] cortesias e credenciais da amostra iguais aos planos', async () => {
+    // Os números dos PDFs da RBS: Roxo (p. 8) 4 na Arena e 2 no Camarote por dia, 5 credenciais; Verde (p. 2) 4, 2 e 10.
+    const esperado = { roxo: { ARENA: 4, CAMAROTE: 2, credenciais: 5 }, verde: { ARENA: 4, CAMAROTE: 2, credenciais: 10 } } as const
+    const { contexto } = await sessaoDaApi('rbs')
+    for (const [persona, numeros] of Object.entries(esperado)) {
+      const id = await parceriaDa(persona as keyof typeof esperado)
+      const cortesias = await (await contexto.get(`/api/parcerias/${id}/cortesias`)).json()
+      for (const setor of ['ARENA', 'CAMAROTE'] as const) {
+        const celulas = cortesias.cotas.filter((c: { setor: string }) => c.setor === setor)
+        expect(celulas.length, `${persona} tem cota em ${setor}`).toBeGreaterThan(0)
+        for (const celula of celulas) expect(celula.cota, `${persona} ${setor} ${celula.dia}`).toBe(numeros[setor])
+      }
+      const credenciais = await (await contexto.get(`/api/parcerias/${id}/credenciais`)).json()
+      expect(credenciais.totalPorDia, `credenciais por dia de ${persona}`).toBe(numeros.credenciais)
+    }
+    await contexto.dispose()
+  })
   // R1.4 é provado no back (PlanoDoAmareloP07aP10Test): pela tela, a carga gravaria linhas no plano do Amarelo.
 })
 
