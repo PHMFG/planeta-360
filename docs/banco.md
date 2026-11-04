@@ -31,6 +31,7 @@ Os números: **49 tabelas de negócio (mais a `flyway_schema_history`, do Flyway
 | `backend/src/main/resources/dev/exemplos/` | Arquivos de exemplo (png, jpg, mp4, mp3, docx, xlsx, pptx, zip) que a API copia para o armazenamento nos perfis dev e demo | Só dev e demo |
 | `backend/src/test/resources/db/verificacao.sql` | As conferências (contagens, órfãos, uma tentativa de violar cada regra) | Quando se quiser conferir |
 | `docs/exemplos/veiculacao.csv`, `pesquisa.csv` e `plano.csv` | Exemplos de planilha para as três cargas | Teste manual |
+| `docs/exemplos/plano-amarelo-p07-p10.csv` | As 36 linhas das páginas 7 a 10 do plano do Amarelo (mídia e conteúdo, redes sociais, display, conteúdo integrado e transmissão), para a RBS carregar ao vivo; ficam fora da amostra para não mudar as contagens. As impressões de display entram na unidade `CPM` como número de impressões (1,9MM é `1900000`), como a amostra já faz | `PlanoDoAmareloP07aP10Test` |
 
 Três regras de convivência:
 
