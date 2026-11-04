@@ -54,7 +54,11 @@ export default function VisualizadorDeContrato({ arquivoId, nome, cheio = false 
         ref={(caixa) => {
           if (caixa && caixa.clientWidth !== largura) setLargura(caixa.clientWidth)
         }}
-        className={`overflow-auto rounded-xl bg-white shadow-sm ${cheio ? 'max-h-[80vh]' : 'max-h-[560px]'}`}
+        className={`overflow-auto rounded-xl bg-white shadow-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secao ${cheio ? 'max-h-[80vh]' : 'max-h-[560px]'}`}
+        // A caixa rola: recebe o foco do teclado para quem não usa o mouse conseguir rolar o PDF.
+        tabIndex={0}
+        role="region"
+        aria-label={`Contrato em PDF: ${nome}`}
       >
         {falha ? (
           <p className="p-6 text-sm text-texto-2" role="alert">
