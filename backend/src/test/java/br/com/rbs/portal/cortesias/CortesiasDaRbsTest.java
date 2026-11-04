@@ -99,7 +99,7 @@ class CortesiasDaRbsTest {
         int cota = ((Number) lerJson(cortesias, "$.totais.cota")).intValue();
         int destinadas = ((Number) lerJson(cortesias, "$.totais.destinadas")).intValue();
         assertThat(((Number) lerJson(cortesias, "$.totais.disponiveis")).intValue()).isEqualTo(cota - destinadas);
-        assertThat(cota).isEqualTo(8);          // Verde: 3 + 3 + 1 + 1
+        assertThat(cota).isEqualTo(12);         // Verde: 4 + 4 + 2 + 2
         assertThat(destinadas).isEqualTo(6);    // 3 + 2 + 1 + 0
     }
 
@@ -122,7 +122,7 @@ class CortesiasDaRbsTest {
                 .hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
 
         Map<String, Object> arena = linha(rbs.get(uri(parceria)), "ARENA", "SABADO");
-        assertThat(arena).containsEntry("cota", 3).containsEntry("destinadas", 2);
+        assertThat(arena).containsEntry("cota", 4).containsEntry("destinadas", 2);
     }
 
     @Test
@@ -202,19 +202,19 @@ class CortesiasDaRbsTest {
         SessaoDeApi rbs = SessaoDeApi.entrar(mvc, RBS);
         long antes = jdbc.sql("SELECT count(*) FROM historico WHERE parceria_id = :p").param("p", parceria).query(Long.class).single();
 
-        // a Arena de sábado da Verde: 3, sem shuttle, acesso "P6" na amostra; mandar o mesmo não muda nada
+        // a Arena de sábado da Verde: 4, sem shuttle, acesso "P6" na amostra; mandar o mesmo não muda nada
         String acesso = jdbc.sql("SELECT acesso FROM cortesia_cota WHERE parceria_id = :p AND setor = 'ARENA' AND dia = 'SABADO'")
                 .param("p", parceria).query(String.class).single();
-        assertThat(rbs.patch(uriCotas(parceria), cotas(celula("ARENA", "SABADO", 3, false, acesso)))).hasStatus(HttpStatus.OK);
+        assertThat(rbs.patch(uriCotas(parceria), cotas(celula("ARENA", "SABADO", 4, false, acesso)))).hasStatus(HttpStatus.OK);
         assertThat(jdbc.sql("SELECT count(*) FROM historico WHERE parceria_id = :p").param("p", parceria).query(Long.class).single())
                 .isEqualTo(antes);
 
-        assertThat(rbs.patch(uriCotas(parceria), cotas(celula("ARENA", "SABADO", 4, false, acesso)))).hasStatus(HttpStatus.OK);
+        assertThat(rbs.patch(uriCotas(parceria), cotas(celula("ARENA", "SABADO", 5, false, acesso)))).hasStatus(HttpStatus.OK);
         Map<String, Object> registro = jdbc.sql("""
                 SELECT valor_anterior, valor_novo, detalhe, acao FROM historico
                 WHERE parceria_id = :p AND entidade = 'cortesia_cota' ORDER BY id DESC LIMIT 1
                 """).param("p", parceria).query().singleRow();
-        assertThat(registro).containsEntry("valor_anterior", "3").containsEntry("valor_novo", "4")
+        assertThat(registro).containsEntry("valor_anterior", "4").containsEntry("valor_novo", "5")
                 .containsEntry("detalhe", "Arena · sábado").containsEntry("acao", "EDICAO");
     }
 
@@ -228,7 +228,7 @@ class CortesiasDaRbsTest {
         for (String c : List.of(corpo, "", "{}", "isto nao e json")) {
             assertThat(marca.patch(uriCotas(parceria), c)).as("corpo [" + c + "]").hasStatus(HttpStatus.FORBIDDEN);
         }
-        assertThat(linha(SessaoDeApi.entrar(mvc, RBS).get(uri(parceria)), "ARENA", "SABADO")).containsEntry("cota", 3);
+        assertThat(linha(SessaoDeApi.entrar(mvc, RBS).get(uri(parceria)), "ARENA", "SABADO")).containsEntry("cota", 4);
         // outra marca na parceria da Verde: a leitura é 404
         assertThat(SessaoDeApi.entrar(mvc, AMARELO).get(uri(parceria))).hasStatus(HttpStatus.NOT_FOUND);
         // parceria que não existe
@@ -245,18 +245,18 @@ class CortesiasDaRbsTest {
         long evento = eventoDe(jdbc, parceria);
         SessaoDeApi rbs = SessaoDeApi.entrar(mvc, RBS);
         SessaoDeApi marca = SessaoDeApi.entrar(mvc, VERDE);
-        assertThat(lerJson(marca.get(uri(parceria)), "$.cortesiasPrazo")).as("a amostra não define prazo").isNull();
+        assertThat(lerJson(marca.get(uri(parceria)), "$.cortesiasPrazo")).as("a amostra define o prazo de 15/01/2027").isEqualTo("2027-01-15");
 
-        MvcTestResult definido = rbs.patch("/api/eventos/" + evento + "/cortesias", "{\"cortesiasPrazo\":\"2027-01-15\"}");
+        MvcTestResult definido = rbs.patch("/api/eventos/" + evento + "/cortesias", "{\"cortesiasPrazo\":\"2027-02-01\"}");
 
         assertThat(definido).hasStatus(HttpStatus.OK);
-        assertThat(lerJson(definido, "$.cortesiasPrazo")).isEqualTo("2027-01-15");
+        assertThat(lerJson(definido, "$.cortesiasPrazo")).isEqualTo("2027-02-01");
         assertThat(lerJson(definido, "$.eventoId")).isEqualTo((int) evento);
         MvcTestResult lido = marca.get(uri(parceria));
-        assertThat(lerJson(lido, "$.cortesiasPrazo")).isEqualTo("2027-01-15");
+        assertThat(lerJson(lido, "$.cortesiasPrazo")).isEqualTo("2027-02-01");
         assertThat(lerJson(lido, "$.prazoEncerrado")).isEqualTo(false);
         assertThat(jdbc.sql("SELECT valor_novo FROM historico WHERE entidade = 'evento' AND entidade_id = :e ORDER BY id DESC LIMIT 1")
-                .param("e", evento).query(String.class).single()).isEqualTo("2027-01-15");
+                .param("e", evento).query(String.class).single()).isEqualTo("2027-02-01");
 
         assertThat(rbs.patch("/api/eventos/" + evento + "/cortesias", "{\"cortesiasPrazo\":null}")).hasStatus(HttpStatus.OK);
         assertThat(lerJson(marca.get(uri(parceria)), "$.cortesiasPrazo")).isNull();
@@ -266,6 +266,7 @@ class CortesiasDaRbsTest {
     void prazoComCorpoOuDataInvalidosDa422ESemEdicaoDa404() {
         long evento = eventoDe(jdbc, verde(jdbc));
         SessaoDeApi rbs = SessaoDeApi.entrar(mvc, RBS);
+        String prazoAntes = jdbc.sql("SELECT CAST(cortesias_prazo AS text) FROM evento WHERE id = :e").param("e", evento).query(String.class).single();
 
         for (String c : List.of("{}", "{\"outro\":1}", "{\"cortesiasPrazo\":\"15/01/2027\"}", "{\"cortesiasPrazo\":\"2027-02-30\"}",
                 "{\"cortesiasPrazo\":\"\"}", "{\"cortesiasPrazo\":20270115}", "{\"cortesiasPrazo\":\"+300000-01-01\"}")) {
@@ -274,8 +275,8 @@ class CortesiasDaRbsTest {
             assertThat(corpo(resposta)).contains("cortesiasPrazo");
         }
         assertThat(rbs.patch("/api/eventos/999999/cortesias", "{\"cortesiasPrazo\":\"2027-01-15\"}")).hasStatus(HttpStatus.NOT_FOUND);
-        assertThat(jdbc.sql("SELECT count(*) FROM evento WHERE id = :e AND cortesias_prazo IS NOT NULL").param("e", evento)
-                .query(Long.class).single()).as("nenhum corpo recusado mexeu no prazo").isZero();
+        assertThat(jdbc.sql("SELECT CAST(cortesias_prazo AS text) FROM evento WHERE id = :e").param("e", evento).query(String.class).single())
+                .as("nenhum corpo recusado mexeu no prazo").isEqualTo(prazoAntes);
     }
 
     @Test

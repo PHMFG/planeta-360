@@ -66,8 +66,8 @@ class ConsultarCotaTest extends ApoioDasConsultas {
         SessaoDeApi marca = SessaoDeApi.entrar(mvc, VERDE);
         Map<String, Object> antes = registrosDoTipo(resultado(contexto(VERDE, "Cliente Verde"), turno(), COTA, "{}"), "cortesia").stream()
                 .filter(c -> "Arena".equals(c.get("setor")) && "sábado".equals(c.get("dia"))).findFirst().orElseThrow();
-        // Arena de sábado da Verde: cota 3, 2 destinadas na amostra
-        assertThat(antes).containsEntry("quantidade", 3).containsEntry("destinadas", 2).containsEntry("disponiveis", 1);
+        // Arena de sábado da Verde: cota 4, 2 destinadas na amostra
+        assertThat(antes).containsEntry("quantidade", 4).containsEntry("destinadas", 2).containsEntry("disponiveis", 2);
 
         assertThat(marca.post("/api/parcerias/" + verde + "/cortesias/destinacoes",
                 "{\"setor\":\"ARENA\",\"dia\":\"SABADO\",\"quantidade\":1,\"destinatario\":\"Convidada da Verde\"}")).hasStatus(HttpStatus.CREATED);
@@ -76,8 +76,8 @@ class ConsultarCotaTest extends ApoioDasConsultas {
         Map<String, Object> resultado = resultado(contexto(VERDE, "Cliente Verde"), turno, COTA, "{}");
         Map<String, Object> depois = registrosDoTipo(resultado, "cortesia").stream()
                 .filter(c -> "Arena".equals(c.get("setor")) && "sábado".equals(c.get("dia"))).findFirst().orElseThrow();
-        assertThat(depois).containsEntry("quantidade", 3).containsEntry("destinadas", 3).containsEntry("disponiveis", 0);
-        assertThat(turno.fonte((String) depois.get("marcador")).orElseThrow().texto()).contains("Destinadas: 3", "Disponíveis para destinar: 0");
+        assertThat(depois).containsEntry("quantidade", 4).containsEntry("destinadas", 3).containsEntry("disponiveis", 1);
+        assertThat(turno.fonte((String) depois.get("marcador")).orElseThrow().texto()).contains("Destinadas: 3", "Disponíveis para destinar: 1");
         // só números: o nome de quem recebeu não chega ao modelo
         assertThat(turno.fontes().toString()).doesNotContain("Convidada");
         assertThat(resultado.toString()).doesNotContain("Convidada");

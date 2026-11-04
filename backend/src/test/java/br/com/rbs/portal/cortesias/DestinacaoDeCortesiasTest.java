@@ -55,35 +55,37 @@ class DestinacaoDeCortesiasTest {
         long parceria = verde(jdbc);
         SessaoDeApi marca = SessaoDeApi.entrar(mvc, VERDE);
 
-        // Arena de sábado: 3 de cota, 2 destinadas na amostra, 1 disponível
-        MvcTestResult criada = marca.post(uriDestinacoes(parceria), destinacao("ARENA", "SABADO", 1, "Maria Souza"));
+        // Arena de sábado: 4 de cota, 2 destinadas na amostra, 2 disponíveis
+        MvcTestResult criada = marca.post(uriDestinacoes(parceria), destinacao("ARENA", "SABADO", 2, "Maria Souza"));
 
         assertThat(criada).hasStatus(HttpStatus.CREATED);
         Map<String, Object> arena = linha(criada, "ARENA", "SABADO");
-        assertThat(arena).containsEntry("cota", 3).containsEntry("destinadas", 3).containsEntry("disponiveis", 0);
+        assertThat(arena).containsEntry("cota", 4).containsEntry("destinadas", 4).containsEntry("disponiveis", 0);
         assertThat(lerJson(criada, "$.cotas[?(@.setor=='ARENA' && @.dia=='SABADO')].destinacoes[?(@.destinatario=='Maria Souza')].quantidade"))
-                .isEqualTo(List.of(1));
-        assertThat((Number) lerJson(criada, "$.totais.destinadas")).isEqualTo(7);
-        assertThat((Number) lerJson(criada, "$.totais.disponiveis")).isEqualTo(1);
+                .isEqualTo(List.of(2));
+        assertThat((Number) lerJson(criada, "$.totais.destinadas")).isEqualTo(8);
+        assertThat((Number) lerJson(criada, "$.totais.disponiveis")).isEqualTo(4);
         // a RBS lê o mesmo
         MvcTestResult daRbs = SessaoDeApi.entrar(mvc, RBS).get(uri(parceria));
-        assertThat(linha(daRbs, "ARENA", "SABADO")).containsEntry("destinadas", 3);
+        assertThat(linha(daRbs, "ARENA", "SABADO")).containsEntry("destinadas", 4);
     }
 
     @Test
     void acimaDoDisponivelDa422EMantemOPreenchimento() {
         long parceria = verde(jdbc);
         SessaoDeApi marca = SessaoDeApi.entrar(mvc, VERDE);
+        // a Arena de sexta tem 1 disponível na amostra: a marca a esgota, e a próxima já nasce sem vaga
+        assertThat(marca.post(uriDestinacoes(parceria), destinacao("ARENA", "SEXTA", 1, "Primeira Pessoa"))).hasStatus(HttpStatus.CREATED);
         long destinacoesAntes = totalDeDestinacoes(jdbc, parceria);
         long historicoAntes = jdbc.sql("SELECT count(*) FROM historico WHERE parceria_id = :p").param("p", parceria).query(Long.class).single();
 
-        // 1 disponível na Arena de sábado: pedir 2 passa do limite; pedir 1 numa cota esgotada (Arena de sexta) também
-        MvcTestResult dois = marca.post(uriDestinacoes(parceria), destinacao("ARENA", "SABADO", 2, "Maria Souza"));
+        // 2 disponíveis na Arena de sábado: pedir 3 passa do limite; pedir 1 numa cota esgotada (Arena de sexta) também
+        MvcTestResult dois = marca.post(uriDestinacoes(parceria), destinacao("ARENA", "SABADO", 3, "Maria Souza"));
         MvcTestResult esgotada = marca.post(uriDestinacoes(parceria), destinacao("ARENA", "SEXTA", 1, "Maria Souza"));
         MvcTestResult enorme = marca.post(uriDestinacoes(parceria), destinacao("ARENA", "SABADO", 100_000, "Maria Souza"));
 
         assertThat(dois).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
-        assertThat((String) lerJson(dois, "$.campos.quantidade")).isEqualTo("Só restam 1 cortesia de Arena · sábado para destinar.");
+        assertThat((String) lerJson(dois, "$.campos.quantidade")).isEqualTo("Só restam 2 cortesias de Arena · sábado para destinar.");
         assertThat(esgotada).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat((String) lerJson(esgotada, "$.campos.quantidade")).isEqualTo("Não restam cortesias de Arena · sexta-feira para destinar.");
         assertThat(enorme).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
@@ -93,7 +95,7 @@ class DestinacaoDeCortesiasTest {
         assertThat(destinadasNoBanco(jdbc, parceria, "ARENA", "SABADO")).isEqualTo(2);
         assertThat(jdbc.sql("SELECT count(*) FROM historico WHERE parceria_id = :p").param("p", parceria).query(Long.class).single())
                 .isEqualTo(historicoAntes);
-        assertThat(linha(marca.get(uri(parceria)), "ARENA", "SABADO")).containsEntry("disponiveis", 1);
+        assertThat(linha(marca.get(uri(parceria)), "ARENA", "SABADO")).containsEntry("disponiveis", 2);
     }
 
     @Test
@@ -311,7 +313,7 @@ class DestinacaoDeCortesiasTest {
         assertThat((String) lerJson(cotas, "$.detail")).isEqualTo(CortesiaService.ENCERRADA);
         assertThat(destinadasNoBanco(jdbc, parceria, "ARENA", "SABADO")).isEqualTo(2);
         assertThat(jdbc.sql("SELECT quantidade FROM cortesia_cota WHERE parceria_id = :p AND setor = 'ARENA' AND dia = 'SABADO'")
-                .param("p", parceria).query(Long.class).single()).isEqualTo(3);
+                .param("p", parceria).query(Long.class).single()).isEqualTo(4);
     }
 
     @Test
