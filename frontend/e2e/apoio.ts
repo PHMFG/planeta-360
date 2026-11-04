@@ -48,3 +48,40 @@ export async function parceriaDa(persona: Persona): Promise<number> {
 export async function capturar(page: Page, nome: string) {
   await page.screenshot({ path: `e2e/capturas/${nome}.png`, fullPage: true })
 }
+
+/** Entra pela tela com qualquer e-mail (uma marca de teste, por exemplo). */
+export async function entrarComo(page: Page, email: string) {
+  await page.goto('/entrar')
+  await page.getByLabel('E-mail corporativo').fill(email)
+  await page.getByLabel('Senha').fill(SENHA)
+  await page.getByRole('button', { name: 'Entrar', exact: true }).click()
+  await expect(page).not.toHaveURL(/\/entrar/)
+}
+
+/**
+ * Uma marca nova, só deste teste: a RBS cria a parceria na edição de 2027 pela API, autoriza um e-mail, e o e-mail faz o
+ * primeiro acesso com a senha de sempre. Quem precisa gravar números ou destinar cortesias usa esta marca, nunca o
+ * Amarelo, o Roxo ou o Verde, cujos números o Atlas, o avaliador e o roteiro conferem.
+ */
+export async function novaMarcaDeTeste(cotaCodigo: 'MASTER' | 'SUBCOTA_G' | 'SUBCOTA' = 'SUBCOTA') {
+  const rbs = await sessaoDaApi('rbs')
+  const sufixo = `${Date.now()}${Math.floor(Math.random() * 1000)}`
+  const email = `teste-${sufixo}@marca-teste.example`
+  const eventos: { id: number; edicao: number }[] = await (await rbs.contexto.get('/api/eventos')).json()
+  const edicao = eventos.find((evento) => evento.edicao === 2027) ?? eventos[0]
+  const criada = await rbs.contexto.post('/api/parcerias', {
+    headers: rbs.cabecalhos,
+    data: { patrocinador: { nome: `Marca de Teste ${sufixo}` }, eventoId: edicao.id, cotaCodigo, emails: [{ email, vinculo: 'MARCA' }] },
+  })
+  expect(criada.status(), 'a RBS cria a parceria de teste').toBe(201)
+  const parceria = await criada.json()
+  const codigo: string = parceria.emailsAutorizados.find((item: { email: string }) => item.email === email).codigoAtivacao
+  await rbs.contexto.dispose()
+
+  const publico = await request.newContext({ baseURL: API })
+  const csrf = await (await publico.get('/api/auth/csrf')).json()
+  const ativacao = await publico.post('/api/auth/ativar', { headers: { [csrf.cabecalho]: csrf.token }, data: { email, codigo, senha: SENHA } })
+  expect(ativacao.status(), 'primeiro acesso da marca de teste').toBe(204)
+  await publico.dispose()
+  return { parceriaId: parceria.id as number, email }
+}

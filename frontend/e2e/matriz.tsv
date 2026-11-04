@@ -58,3 +58,10 @@ U02	e2e	layout.spec.ts > nenhuma violação fora da linha de base
 U08	e2e	interface.spec.ts > [U08] a gaveta do menu recebe o foco, prende o Tab e o devolve ao botão Menu
 U16	e2e	interface.spec.ts > [U16] os botões de cada e-mail autorizado dizem de qual e-mail são
 U17	e2e	interface.spec.ts > [U17] o botão do Atlas desabilitado da RBS não parece ativo e diz por quê
+U04	e2e	interface.spec.ts > [U04] sem entrega de mídia aberta, a marca sabe antes de escolher o arquivo
+U05	e2e	interface.spec.ts > [U05] aba fechada pela RBS aparece marcada no menu e explica ao abrir
+U06	e2e	interface.spec.ts > [U06] número inválido depois de um salvo não mostra "Números salvos" junto do erro
+U07	e2e	interface.spec.ts > [U07] arquivo que não é CSV é recusado ao escolher, sem resultado antigo na tela
+U09	e2e	interface.spec.ts > [U09] erro no login é anunciado e o foco vai ao campo
+U09	e2e	interface.spec.ts > [U09] erro no primeiro acesso é anunciado e o foco vai ao campo
+U19	e2e	interface.spec.ts > [U05] aba fechada pela RBS aparece marcada no menu e explica ao abrir
