@@ -7,8 +7,9 @@
 # Um teste só prova o que ele confere: o layout.spec prova U01 e U02 (as entradas da linha de base com esses IDs), e não o
 # foco da gaveta (U08), os nomes repetidos (U16) nem o Atlas desabilitado (U17), que têm testes próprios em interface.spec.ts.
 R1.1	e2e	requisitos-rbs.spec.ts > [R1.1] cota e investimento dos três clientes como a RBS informou
+R1.2	back	banco.AmostraBateComOsPdfsDaRbsTest
 R1.2	e2e	requisitos-rbs.spec.ts > [R1.2] cortesias e credenciais da amostra iguais aos planos
-R1.4	e2e	requisitos-rbs.spec.ts > [R1.4] o CSV das páginas 7 a 10 do Amarelo entra sem rejeição
+R1.4	back	consolidacao.PlanoDoAmareloP07aP10Test#csvDasPaginas7a10EntraSemRejeicao
 R2.2	back	documentos.DocumentoGrupoTest#oMesmoPlanoEmOutraCotaNaoEOutraVersaoDoMesmoPlano
 R3.1	back	consolidacao.CargaControllerTest#reenviarOMesmoArquivoNaoInsereNadaEAsLinhasDeAntesViramDuplicadas
 R3.2	e2e	requisitos-rbs.spec.ts > [R3.2] a Master baixa a comprovação mensal por mês, tipo e unidade

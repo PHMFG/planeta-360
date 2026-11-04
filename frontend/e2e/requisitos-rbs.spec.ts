@@ -30,7 +30,7 @@ test.describe('R1 · planos comerciais', () => {
     await contexto.dispose()
   })
   test.fixme('[R1.2] cortesias e credenciais da amostra iguais aos planos', pendente)
-  test.fixme('[R1.4] o CSV das páginas 7 a 10 do Amarelo entra sem rejeição', pendente)
+  // R1.4 é provado no back (PlanoDoAmareloP07aP10Test): pela tela, a carga gravaria linhas no plano do Amarelo.
 })
 
 test.describe('R3 e R4 · comprovação mensal e formatos', () => {
