@@ -46,8 +46,9 @@ public final class ParceriaDtos {
     /**
      * Uma das 7 abas. liberada = liberada E visível para esta parceria (o front mostra o cadeado quando é false).
      * incluidaNaCota = a cota da parceria inclui a aba (cota_tipo_aba); false = "fora da sua cota", e a RBS não consegue liberar.
+     * visivel = false: a RBS ocultou a aba (a marca nem vê o item no menu); fechada é liberada = false com visivel = true.
      */
-    public record AbaDto(String codigo, String nome, int ordem, boolean liberada, boolean incluidaNaCota) {
+    public record AbaDto(String codigo, String nome, int ordem, boolean liberada, boolean incluidaNaCota, boolean visivel) {
     }
 
     /** Quem fez algo (autorizou, revogou). */

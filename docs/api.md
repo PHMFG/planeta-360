@@ -190,9 +190,10 @@ Estes formatos aparecem em várias rotas.
 
 **Evento**: `{ "id": 2, "nome": "Planeta Atlântida", "edicao": 2027 }`
 
-**Aba**: `{ "codigo": "PESQUISA", "nome": "Pesquisa da ativação", "ordem": 6, "liberada": true, "incluidaNaCota": true }`. Sempre as 7 abas, em ordem. Dois booleanos dizem coisas diferentes:
+**Aba**: `{ "codigo": "PESQUISA", "nome": "Pesquisa da ativação", "ordem": 6, "liberada": true, "incluidaNaCota": true, "visivel": true }`. Sempre as 7 abas, em ordem (rotas 2, 4, 8, 9 e 10). Três booleanos dizem coisas diferentes:
 
-- `liberada: false` = a aba está **fechada** para esta parceria (a RBS ainda não abriu, fechou ou escondeu do menu); o front mostra o cadeado. Uma aba só conta como liberada se estiver liberada **e** visível no banco.
+- `liberada: false` = a aba está **fechada** para esta parceria (a RBS ainda não abriu, fechou ou ocultou); o front mostra o cadeado. Uma aba só conta como liberada se estiver liberada **e** visível no banco.
+- `visivel: false` = a RBS **ocultou** a aba (estado "Oculta" do Perfil: `liberada: false` e `visivel: false`). A marca não vê o item no menu; quem chega pela URL ou pela API recebe o mesmo 403 de aba fechada, e o Atlas não a cita. `visivel: true` com `liberada: false` é a aba **fechada** (cadeado). Parceria nova nasce com as 7 abas visíveis.
 - `incluidaNaCota: false` = a aba **não faz parte da cota** da parceria (vem de `cota_tipo_aba`; hoje a Pesquisa só está na cota Master). Aba fora da cota nunca abre: a RBS não consegue liberá-la (rota 10 devolve 422). Use este campo para mostrar "fora da sua cota" em vez de "aguardando liberação".
 
 **As duas frases do 403 de aba.** Toda rota que o patrocinador não pode usar por causa de uma aba fechada responde **403** com o mesmo `title` ("Acesso negado") e uma de duas frases em `detail`, escolhida pelo `incluidaNaCota` da aba:
@@ -257,16 +258,17 @@ Devolvido por `POST /api/auth/login` e `GET /api/auth/eu`:
     {
       "id": 2,
       "patrocinador": "Cliente Amarelo",
+      "vinculo": "MARCA",
       "cota": { "codigo": "MASTER", "nome": "Master" },
       "evento": { "id": 2, "nome": "Planeta Atlântida", "edicao": 2027 },
       "abas": [
-        { "codigo": "PERFIL", "nome": "Perfil do cliente", "ordem": 1, "liberada": true, "incluidaNaCota": true },
-        { "codigo": "APLICACOES", "nome": "Aplicações de marca no evento", "ordem": 2, "liberada": true, "incluidaNaCota": true },
-        { "codigo": "MIDIA", "nome": "Mídia e conteúdo", "ordem": 3, "liberada": true, "incluidaNaCota": true },
-        { "codigo": "CORTESIAS", "nome": "Cortesias", "ordem": 4, "liberada": true, "incluidaNaCota": true },
-        { "codigo": "CREDENCIAMENTO", "nome": "Credenciamento", "ordem": 5, "liberada": true, "incluidaNaCota": true },
-        { "codigo": "PESQUISA", "nome": "Pesquisa da ativação", "ordem": 6, "liberada": true, "incluidaNaCota": true },
-        { "codigo": "CONTRATO", "nome": "Contrato", "ordem": 7, "liberada": true, "incluidaNaCota": true }
+        { "codigo": "PERFIL", "nome": "Perfil do cliente", "ordem": 1, "liberada": true, "incluidaNaCota": true, "visivel": true },
+        { "codigo": "APLICACOES", "nome": "Aplicações de marca no evento", "ordem": 2, "liberada": true, "incluidaNaCota": true, "visivel": true },
+        { "codigo": "MIDIA", "nome": "Mídia e conteúdo", "ordem": 3, "liberada": true, "incluidaNaCota": true, "visivel": true },
+        { "codigo": "CORTESIAS", "nome": "Cortesias", "ordem": 4, "liberada": true, "incluidaNaCota": true, "visivel": true },
+        { "codigo": "CREDENCIAMENTO", "nome": "Credenciamento", "ordem": 5, "liberada": true, "incluidaNaCota": true, "visivel": true },
+        { "codigo": "PESQUISA", "nome": "Pesquisa da ativação", "ordem": 6, "liberada": true, "incluidaNaCota": true, "visivel": true },
+        { "codigo": "CONTRATO", "nome": "Contrato", "ordem": 7, "liberada": true, "incluidaNaCota": true, "visivel": true }
       ]
     }
   ]
@@ -276,6 +278,8 @@ Devolvido por `POST /api/auth/login` e `GET /api/auth/eu`:
 - `perfil` é `ADMIN_PATROCINADOR` ou `ADMIN_RBS`.
 - `parcerias` lista as parcerias a que o usuário tem vínculo, da edição mais nova para a mais antiga. Para o `ADMIN_RBS` vem **vazia**, porque a RBS enxerga todas (use `GET /api/parcerias`).
 - `abas` traz sempre as 7 abas, em ordem; `liberada` é `false` quando a aba está fechada para a parceria e `incluidaNaCota` é `false` quando a cota nem inclui a aba (por exemplo, a Pesquisa em cota que não é Master). Veja "Aba" em "Objetos que se repetem".
+- `vinculo` (em cada parceria) é como **quem está logado** entra naquela parceria: `MARCA` ou `AGENCIA`, lido de `parceria_usuario`. O front usa para dizer "Agência" no cabeçalho. Não existe para o `ADMIN_RBS` (sem parcerias).
+- `visivel` (em cada aba) é `false` quando a RBS ocultou a aba; a marca não mostra o item no menu.
 - A resposta **nunca** traz senha nem hash.
 
 ## 1. `GET /api/auth/csrf`  · etapa 3
@@ -513,16 +517,16 @@ Os e-mails são guardados em minúsculas e sem espaços nas pontas. A parceria n
 }
 ```
 
-A cota e o evento **não mudam** por aqui (mudar a cota refaria as abas). `abas` liberam (`liberada: true`) ou fecham uma aba só nesta parceria; cada aba pode levar também `visivel`.
+A cota e o evento **não mudam** por aqui (mudar a cota refaria as abas). `abas` liberam (`liberada: true`) ou fecham uma aba só nesta parceria; cada aba pode levar também `visivel`. Os três estados do Perfil: **Liberada** (`liberada: true, visivel: true`), **Fechada** (`liberada: false, visivel: true`, a marca vê o cadeado) e **Oculta** (`liberada: false, visivel: false`, a marca não vê o item). A resposta (e as rotas 2, 4, 8 e 9) devolve `visivel` em cada aba. `valorInvestimento` e `baseValor` vão juntos (R6.d1) e o histórico guarda o antes e o depois de cada um; a marca recebe 403.
 
 **Só se libera aba que a cota inclui.** A aba precisa estar em `cota_tipo_aba` para a cota da parceria (`incluidaNaCota: true`; a decisão do projeto é a Pesquisa só para a cota Master). Mandar `liberada: true` para uma aba fora da cota, que está fechada, devolve **422** e nada do `PATCH` é gravado (todo o corpo é recusado, como em qualquer outro 422). O `detail` traz a frase, e `campos` a repete na chave `abas[i].liberada` (`i` = posição da aba na lista enviada):
 
 ```json
 {
   "type": "about:blank", "title": "Dados inválidos", "status": 422,
-  "detail": "A cota Subcota G não inclui a aba Pesquisa da ativação.",
+  "detail": "Esta cota não inclui a aba Pesquisa da ativação. Para dar acesso, troque a cota da parceria.",
   "instance": "/api/parcerias/3",
-  "campos": { "abas[0].liberada": "A cota Subcota G não inclui a aba Pesquisa da ativação." }
+  "campos": { "abas[0].liberada": "Esta cota não inclui a aba Pesquisa da ativação. Para dar acesso, troque a cota da parceria." }
 }
 ```
 

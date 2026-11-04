@@ -81,6 +81,24 @@ class ConsultarCotaTest extends ApoioDasConsultas {
     }
 
     @Test
+    void abaOcultaPelaRbsNaoApareceNemComoFechadaParaAMarca() {
+        long amarelo = parceria("Cliente Amarelo");
+        fecharAba(amarelo, "MIDIA");
+        esconderAba(amarelo, "CORTESIAS");
+        AtlasContexto contexto = contexto(AMARELO, "Cliente Amarelo");
+        FontesDoTurno turno = turno();
+
+        Map<String, Object> abas = registrosDoTipo(resultado(contexto, turno, COTA, "{}"), "abas").get(0);
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> itens = (List<Map<String, Object>>) abas.get("abas");
+        assertThat(itens).extracting(a -> a.get("nome")).hasSize(6).doesNotContain("Cortesias").contains("Mídia e conteúdo");
+        assertThat(itens).filteredOn(a -> "Mídia e conteúdo".equals(a.get("nome"))).singleElement()
+                .satisfies(a -> assertThat(a).containsEntry("situacao", "fechada"));
+        assertThat(turno.fonte((String) abas.get("marcador")).orElseThrow().texto()).doesNotContain("Cortesias");
+    }
+
+    @Test
     void oPrevistoDoPlanoVemLinhaALinhaComAUnidadeEAQuantidadeNoFormatoDoPortal() {
         AtlasContexto contexto = contexto(AMARELO, "Cliente Amarelo");
         FontesDoTurno turno = turno();

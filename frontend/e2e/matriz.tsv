@@ -72,3 +72,12 @@ U12	e2e	interface.spec.ts > [U12] a marca não chama a rota de debug do modelo
 U13	e2e	interface.spec.ts > [U13] fora da cota, a aba diz como incluir, sem "contratar" e sem "A cota Subcota"
 U14	e2e	interface.spec.ts > [U14] na parceria aberta pela RBS, a próxima ação é da marca
 U11	e2e	interface.spec.ts > [U11] Ajuda abre um painel visível com o que cada aba faz e como falar com a RBS
+R6.a	back	parceria.AbasOcultasTest#marcaNaRotaDeUmaAbaOcultaRecebe403ComAFraseDeAba
+R6.a	back	parceria.AbasOcultasTest#todaRotaDeAbasDizVisivelEOcultaNaoContaComoLiberada
+R6.a	back	parceria.AbasOcultasTest#fechadaContinuaVisivelEReabrirRestauraAAba
+R6.a	back	parceria.AbasOcultasTest#parceriaNovaNasceComAsSeteAbasVisiveis
+R6.a	back	atlas.ConsultarCotaTest#abaOcultaPelaRbsNaoApareceNemComoFechadaParaAMarca
+R6.b	back	parceria.AbasEDaCotaTest#rbsNaoLiberaPesquisaParaSubcotaG
+R6.d1	back	parceria.EdicaoDoInvestimentoTest#rbsEditaValorEBaseEOHistoricoGuardaOAntesEODepois
+R6.d1	back	parceria.EdicaoDoInvestimentoTest#marcaNaoEditaOInvestimento
+U10	back	acesso.VinculoNoEuTest#agenciaDoAmareloVeVinculoAgenciaEAMarcaVeMarca
