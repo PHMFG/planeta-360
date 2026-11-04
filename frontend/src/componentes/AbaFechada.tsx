@@ -4,9 +4,10 @@ import type { AbaLiberada, CodigoAba, ParceriaResumo } from '../api/tipos'
 import { Aviso } from './Aviso'
 import { nomeCota } from './Menu'
 
-export type EstadoAba = 'LIBERADA' | 'FORA_DA_COTA' | 'FECHADA'
+export type EstadoAba = 'LIBERADA' | 'FORA_DA_COTA' | 'FECHADA' | 'OCULTA'
 
 export function estadoDaAba(aba: AbaLiberada | undefined): EstadoAba {
+  if (aba?.visivel === false) return 'OCULTA'
   if (!aba || aba.liberada) return 'LIBERADA'
   return aba.incluidaNaCota === false ? 'FORA_DA_COTA' : 'FECHADA'
 }

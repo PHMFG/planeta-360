@@ -83,7 +83,9 @@ export type MudancaParceria = {
   patrocinador?: { nome?: string; segmento?: string | null }
   nomeProduto?: string | null
   situacao?: Situacao
-  abas?: { codigo: CodigoAba; liberada: boolean }[]
+  valorInvestimento?: number | null
+  baseValor?: 'BRUTO_TABELA' | 'LIQUIDO' | null
+  abas?: { codigo: CodigoAba; liberada?: boolean; visivel?: boolean }[]
 }
 
 export const listarEventos = () => pedir<Evento[]>('/eventos')

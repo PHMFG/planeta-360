@@ -47,7 +47,9 @@ function ItemSecao({ secao, parceria, rbs }: { secao: Secao; parceria: ParceriaR
       ? rbs
         ? 'Não incluída na cota desta parceria'
         : 'Não incluída na sua cota'
-      : rbs
+      : estado === 'OCULTA'
+        ? 'Oculta para a marca'
+        : rbs
         ? 'Fechada para esta parceria'
         : 'Fechada pela RBS por enquanto'
   const destino = `/parceria/${parceria.id}${secao.caminho ? `/${secao.caminho}` : ''}`
@@ -64,7 +66,7 @@ function ItemSecao({ secao, parceria, rbs }: { secao: Secao; parceria: ParceriaR
             {estado !== 'LIBERADA' && (
               <span className={`flex items-center gap-1 text-[11px] font-semibold ${isActive ? 'text-white' : 'text-texto-2'}`} title={motivo}>
                 <i className="ri-lock-line text-sm" aria-hidden="true" />
-                {estado === 'FORA_DA_COTA' ? 'Fora da cota' : 'Fechada'}
+                {estado === 'FORA_DA_COTA' ? 'Fora da cota' : estado === 'OCULTA' ? 'Oculta' : 'Fechada'}
                 <span className="sr-only">: {motivo}</span>
               </span>
             )}
@@ -232,7 +234,7 @@ export function Menu({ parceria, aberto, aoFechar, atlas }: PropsMenu) {
             Planeta 360
           </p>
           <p className="mt-1.5 text-[10px] font-bold tracking-[0.14em] text-texto-2 uppercase">
-            {rbs ? 'RBS · Gestão' : 'Patrocinador'}
+            {rbs ? 'RBS · Gestão' : parceria?.vinculo === 'AGENCIA' ? 'Agência do patrocinador' : 'Patrocinador'}
           </p>
         </div>
 
@@ -258,7 +260,8 @@ export function Menu({ parceria, aberto, aoFechar, atlas }: PropsMenu) {
           )}
           {parceria && (
             <ul className="flex flex-col gap-1">
-              {SECOES.map((secao) => (
+              {/* A aba que a RBS ocultou some do menu da marca; a RBS continua vendo, marcada como Oculta (R6.a). */}
+              {SECOES.filter((secao) => rbs || estadoAbaNaParceria(parceria, secao.aba) !== 'OCULTA').map((secao) => (
                 <ItemSecao key={secao.chave} secao={secao} parceria={parceria} rbs={rbs} />
               ))}
             </ul>
