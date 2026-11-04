@@ -2431,7 +2431,7 @@ BEGIN
         SELECT p.id, (SELECT id FROM aba WHERE codigo = x.aba), x.titulo, 'ENVIADO', x.papel
         FROM _ver_parc p, (VALUES ('PERFIL', 'Solicitação de ingressos 8', 'DOCUMENTO_INGRESSOS'), ('PERFIL', 'Solicitação de ingressos 9', 'DOCUMENTO_INGRESSOS'),
                                   ('APLICACOES', 'MIV de teste', 'MIV'), ('APLICACOES', 'Logo de teste', 'LOGO')) AS x(aba, titulo, papel)
-        WHERE p.cliente = 'Cliente Amarelo' AND p.edicao = 2027 $q$);
+        WHERE p.cliente = 'Cliente Verde' AND p.edicao = 2027 $q$);   -- a Verde não tem MIV nem logo em Aplicações na amostra
 
     -- Categoria do arquivo e versão do arquivo avulso
     PERFORM pg_temp.recusa('V16 ARQUIVO', 'categoria fora da lista', 'ck_arquivo_categoria', $q$
@@ -2561,8 +2561,8 @@ BEGIN
         END $d$ $q$);
 
     PERFORM pg_temp.confere('V16 CONTEUDO', 'as tentativas não deixaram texto nem link gravados', 0, (SELECT count(*) FROM entrega_conteudo));
-    PERFORM pg_temp.confere('V16 PAPEL', 'a amostra continua sem entrega com papel (a F1b é que preenche)', 0, (SELECT count(*) FROM entrega WHERE papel IS NOT NULL));
-    PERFORM pg_temp.confere('V16 EVENTO', 'a amostra continua sem endereço de credenciamento', 0, (SELECT count(*) FROM evento WHERE credenciamento_url IS NOT NULL));
+    PERFORM pg_temp.confere('V16 PAPEL', 'a amostra: 3 entregas de ingressos e 2 de logo (Amarelo e Roxo), nenhuma de MIV', 5, (SELECT count(*) FROM entrega WHERE papel IN ('DOCUMENTO_INGRESSOS', 'LOGO')));
+    PERFORM pg_temp.confere('V16 EVENTO', 'a amostra tem o endereço do Open Staff só na edição de 2027', 1, (SELECT count(*) FROM evento WHERE credenciamento_url IS NOT NULL AND edicao = 2027));
 END $$;
 
 -- ---------------------------------------------------------------------

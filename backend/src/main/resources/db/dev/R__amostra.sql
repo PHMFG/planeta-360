@@ -109,6 +109,13 @@ BEGIN
     JOIN evento e ON e.nome = 'Planeta Atlântida' AND e.edicao = v.ed
     JOIN patrocinador p ON p.nome_canonico = v.pat;
 
+    -- Credenciamento e cortesias da edição de 2027: o Open Staff aponta para example.com, domínio reservado que abre uma página de
+    -- verdade na demonstração; o texto da RBS diz "Credenciamento (dezembro)"; o prazo das cortesias é o do D03 do kit.
+    UPDATE evento
+       SET credenciamento_url = 'https://example.com/', credenciamento_inicio = DATE '2026-12-01',
+           credenciamento_fim = DATE '2026-12-20', cortesias_prazo = DATE '2027-01-15'
+     WHERE nome = 'Planeta Atlântida' AND edicao = 2027;
+
     -- Atalho para o resto do script: as três parcerias de 2027 pelo nome do cliente
     DROP TABLE IF EXISTS pg_temp._amostra_parc;
     CREATE TEMP TABLE _amostra_parc AS
@@ -307,6 +314,20 @@ BEGIN
      ('Cliente Verde','CONTRATO','Dados do signatário','APROVADO',NULL)
     ) AS v(cli, aba, titulo, status, prazo)
     JOIN _amostra_parc pp ON pp.cliente = v.cli;
+
+    -- [PAPEL] As entregas que já são o "espaço" de um envio da aba ganham o papel, para o primeiro envio novo não criar uma segunda:
+    -- o documento de ingressos (aba Perfil) e a logo (aba Aplicações). A amostra não tem entrega de MIV, e o papel não se inventa.
+    -- A logo do Verde fica na aba Mídia (conteúdos assinados no Instagram), então não é a logo da aba Aplicações.
+    UPDATE entrega e SET papel = 'DOCUMENTO_INGRESSOS'
+    FROM aba a
+    WHERE a.id = e.aba_id AND a.codigo = 'PERFIL'
+      AND e.titulo = 'Documento para compra de ingressos com valor de patrocinador'
+      AND e.parceria_id IN (SELECT id FROM _amostra_parc);
+    UPDATE entrega e SET papel = 'LOGO'
+    FROM aba a
+    WHERE a.id = e.aba_id AND a.codigo = 'APLICACOES'
+      AND e.titulo IN ('Logo final para aplicações no evento', 'Logo para vinhetas e assinatura da transmissão')
+      AND e.parceria_id IN (SELECT id FROM _amostra_parc);
 
     -- [UPLOAD] Arquivo com versões (exemplo do documento do grupo): a mesma entrega, parceria e aba nas duas versões.
     -- Cada versão guarda a observação que a marca escreveu ao enviar (aparece na lista de versões da entrega).
@@ -629,17 +650,27 @@ BEGIN
     JOIN parceria pa ON pa.id = ap.parceria_id JOIN patrocinador p ON p.id = pa.patrocinador_id
     WHERE ap.categoria = 'MIDIA';
 
+    -- [MESES] As exibições do Amarelo se espalham por três faixas de 31 dias (a planilha mensal da comprovação mostra três meses);
+    -- as dos outros dois seguem juntas, como antes. Tudo passado: a última faixa termina 28 dias atrás, no máximo.
+    -- [LINKS] As três primeiras exibições de cada linha de Instagram ou TikTok do Roxo trazem o endereço do post (fictício, https).
     -- Inserções: uma linha por exibição; CPM: 10 totais diários. Dois problemas reais de arquivo já entram aqui:
     --  (a) a emissora usa o perfil correto "@rede_atlantida" e o plano do Roxo traz "@prede_atlantida": essas linhas
     --      não casam com o plano e serão rejeitadas;
     --  (b) grafia alternativa da marca: a Rádio 92 escreve "Amarelo", e a tabela patrocinador_alias resolve.
-    INSERT INTO stg_veiculacao (carga_id, linha, patrocinador, veiculo, formato, espaco_programa, exibido_em, quantidade)
+    INSERT INTO stg_veiculacao (carga_id, linha, patrocinador, veiculo, formato, espaco_programa, exibido_em, quantidade, link)
     SELECT v_c1, row_number() OVER (ORDER BY a.id, g),
            CASE WHEN a.nome_canonico = 'Cliente Amarelo' AND a.veiculo = 'Rádio 92' THEN 'Amarelo' ELSE a.nome_canonico END,
            a.veiculo, a.formato,
            CASE WHEN a.espaco_programa = 'IG @prede_atlantida' THEN 'IG @rede_atlantida' ELSE a.espaco_programa END,
-           pg_temp.quando(60, '06:00') + g * interval '97 minutes' + a.id * interval '1 minute',
-           CASE WHEN a.unidade = 'CPM' THEN a.exibir / 10 ELSE 1 END
+           CASE WHEN a.nome_canonico = 'Cliente Amarelo' THEN pg_temp.quando(110, '06:00') + (g % 3) * interval '31 days'
+                ELSE pg_temp.quando(60, '06:00') END
+             + g * interval '97 minutes' + a.id * interval '1 minute',
+           CASE WHEN a.unidade = 'CPM' THEN a.exibir / 10 ELSE 1 END,
+           CASE WHEN a.nome_canonico = 'Cliente Roxo' AND g <= 3 AND a.espaco_programa ILIKE '%tik%tok%'
+                THEN 'https://www.tiktok.com/@planetaatlantida/video/' || lpad((a.id * 10 + g)::text, 10, '0')
+                WHEN a.nome_canonico = 'Cliente Roxo' AND g <= 3 AND (a.espaco_programa ILIKE 'IG %' OR a.espaco_programa ILIKE 'Instagram%')
+                THEN 'https://www.instagram.com/p/AMOSTRA' || lpad((a.id * 10 + g)::text, 6, '0') || '/'
+           END
     FROM _amostra_alvo a
     CROSS JOIN LATERAL generate_series(1, CASE WHEN a.unidade = 'CPM' THEN 10 ELSE a.exibir::int END) AS g;
 
@@ -652,13 +683,13 @@ BEGIN
     FROM (SELECT max(linha) AS m FROM stg_veiculacao WHERE carga_id = v_c1) x;
 
     -- (e) linhas repetidas dentro do próprio arquivo (as 2 exibições do VT de telão da Verde, com número de linha novo)
-    INSERT INTO stg_veiculacao (carga_id, linha, patrocinador, veiculo, formato, espaco_programa, exibido_em, quantidade)
-    SELECT carga_id, linha + 100000, patrocinador, veiculo, formato, espaco_programa, exibido_em, quantidade
+    INSERT INTO stg_veiculacao (carga_id, linha, patrocinador, veiculo, formato, espaco_programa, exibido_em, quantidade, link)
+    SELECT carga_id, linha + 100000, patrocinador, veiculo, formato, espaco_programa, exibido_em, quantidade, link
     FROM stg_veiculacao WHERE carga_id = v_c1 AND patrocinador = 'Cliente Verde' AND formato = 'VT telão 30"';
 
     -- Carga 2: o mesmo arquivo reenviado (as mesmas 1.489 linhas, com os mesmos problemas)
-    INSERT INTO stg_veiculacao (carga_id, linha, patrocinador, veiculo, formato, espaco_programa, exibido_em, quantidade)
-    SELECT v_c2, linha, patrocinador, veiculo, formato, espaco_programa, exibido_em, quantidade
+    INSERT INTO stg_veiculacao (carga_id, linha, patrocinador, veiculo, formato, espaco_programa, exibido_em, quantidade, link)
+    SELECT v_c2, linha, patrocinador, veiculo, formato, espaco_programa, exibido_em, quantidade, link
     FROM stg_veiculacao WHERE carga_id = v_c1;
 END $$;
 
