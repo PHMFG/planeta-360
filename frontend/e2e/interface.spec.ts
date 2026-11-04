@@ -151,3 +151,18 @@ test('[U03] a lista de relatórios conta indicadores e explica as colunas', asyn
   }
   await expect(page.getByText(/Faltantes: o que impede/)).toBeVisible()
 })
+
+test('[U11] Ajuda abre um painel visível com o que cada aba faz e como falar com a RBS', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 })
+  await entrar(page, 'roxo')
+  await page.getByRole('button', { name: 'Ajuda' }).click()
+  const painel = page.getByRole('dialog', { name: /Ajuda/ })
+  await expect(painel).toBeVisible()
+  await expect(painel).toContainText('Cortesias')
+  await expect(painel).toContainText(/atendimento|time B2B/)
+  // O painel cabe na tela e não fica escondido atrás de nada.
+  const caixa = await painel.boundingBox()
+  expect(caixa && caixa.y >= 0 && caixa.y + caixa.height <= 720).toBe(true)
+  await page.keyboard.press('Escape')
+  await expect(painel).toBeHidden()
+})

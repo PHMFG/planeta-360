@@ -5,6 +5,7 @@ import { Link, NavLink, useMatch, useNavigate } from 'react-router'
 import type { ParceriaResumo, UsuarioLogado } from '../api/tipos'
 import { useSessao } from '../sessao/Sessao'
 import { estadoAbaNaParceria } from './AbaFechada'
+import { Modal } from './Modal'
 import { GESTAO_RBS, SECOES, type Secao } from './secoes'
 import { usarFocoPreso } from './usarFocoPreso'
 
@@ -281,8 +282,8 @@ export function Menu({ parceria, aberto, aoFechar, atlas }: PropsMenu) {
             <button
               type="button"
               className="flex items-center gap-1.5 hover:text-parceria"
-              aria-expanded={ajudaAberta}
-              onClick={() => setAjudaAberta((aberta) => !aberta)}
+              aria-haspopup="dialog"
+              onClick={() => setAjudaAberta(true)}
             >
               <i className="ri-question-line text-lg" aria-hidden="true" />
               Ajuda
@@ -291,14 +292,39 @@ export function Menu({ parceria, aberto, aoFechar, atlas }: PropsMenu) {
               <i className="ri-logout-box-r-line text-lg" aria-hidden="true" />
               Sair
             </button>
-            {ajudaAberta && (
-              <p className="absolute right-0 bottom-full left-0 mb-2 rounded-xl border border-borda bg-white p-3 text-xs font-medium shadow-menu">
-                Dúvidas sobre a parceria, acessos ou prazos: fale com o time B2B da RBS.
-              </p>
-            )}
+
           </div>
         </div>
       </aside>
+      {/* A ajuda abre num painel por cima da tela: dentro do menu, que rola, ela ficava cortada (U11). */}
+      <Modal titulo="Ajuda" legenda={rbs ? 'O que cada tela da gestão faz' : 'O que cada aba da parceria faz'} aberto={ajudaAberta} aoFechar={() => setAjudaAberta(false)}>
+        <ul className="flex flex-col gap-3 text-sm">
+          {(rbs ? GESTAO_RBS.map((atalho) => ({ nome: atalho.nome, texto: TEXTO_DA_GESTAO[atalho.caminho] ?? '' })) : SECOES.map((secao) => ({ nome: secao.nome, texto: secao.subtitulo }))).map(
+            (item) => (
+              <li key={item.nome}>
+                <span className="font-semibold">{item.nome}</span>
+                {item.texto && <span className="text-texto-2"> · {item.texto}</span>}
+              </li>
+            ),
+          )}
+        </ul>
+        <p className="mt-4 rounded-xl bg-cinza-100 p-3 text-sm font-medium">
+          {rbs
+            ? 'O Atlas de cada marca abre só no acesso dela. Dúvidas sobre o portal: fale com a equipe do projeto.'
+            : 'Dúvidas sobre a parceria, acessos, prazos ou cortesias: fale com o atendimento ao patrocinador da RBS (time B2B).'}
+        </p>
+      </Modal>
     </>
   )
+}
+
+/** Uma linha por tela da gestão, para a ajuda da RBS. */
+const TEXTO_DA_GESTAO: Record<string, string> = {
+  '/rbs': 'resumo das parcerias, da fila e da última carga.',
+  '/rbs/patrocinadores': 'cadastro das parcerias e dos e-mails de acesso.',
+  '/rbs/fila': 'materiais enviados pelas marcas, para aprovar ou pedir ajuste.',
+  '/rbs/cargas': 'planilhas de veiculação, de pesquisa e do plano comercial.',
+  '/rbs/relatorios': 'gerar, validar e disponibilizar o relatório de cada parceria.',
+  '/rbs/historico': 'tudo o que aconteceu no portal, com autor e data.',
+  '/rbs/atlas': 'documentos, prazos e o diagnóstico do assistente.',
 }
