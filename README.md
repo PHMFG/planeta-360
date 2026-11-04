@@ -222,7 +222,12 @@ No Windows: `.\mvnw.cmd test`. Os testes usam o banco `portal_teste`, que é apa
 
 No front, `npm run build` confere os tipos e gera a versão de produção; `npm run lint` roda o Oxlint.
 
-**No navegador.** Na primeira vez, `npx playwright install chromium`, em `frontend/`. Com a API no ar (`scripts/atlas-dev.sh start`), `npm run e2e` roda os testes de `frontend/e2e/`, e as capturas ficam em `frontend/e2e/capturas/`. Os testes marcados `@vivo` usam o modelo de verdade; sem chave, rode `npm run e2e -- --grep-invert @vivo`. O kit de documentos precisa estar indexado (`ATLAS_EMBEDDINGS` em `gemini` ou `teste`), porque os testes das fontes dependem dele. Com a API em outra porta (`ATLAS_DEV_PORTA=8090 scripts/atlas-dev.sh start`), informe `PORTAL_API_URL=http://localhost:8090`. O front do teste sobe na porta 5190, ou na de `E2E_PORTA_FRONT`.
+**No navegador.** Na primeira vez, `npx playwright install chromium`, em `frontend/`. Os testes escrevem no banco, então dizer onde eles rodam é obrigatório, e a preparação recusa o banco `portal`:
+
+- `PORTAL_E2E_PILHA=N npm run e2e` (N de 1 a 9) usa a pilha N do `.claude/pilhas-de-teste.sh`: front na 518N, API na 808N, banco `portal_qaN`.
+- `PORTAL_E2E_PILHA=dev npm run e2e` sobe o front na porta 5190 (ou na de `E2E_PORTA_FRONT`) e fala com a API do `scripts/atlas-dev.sh`, na 8080 (ou na de `ATLAS_DEV_PORTA`). Essa API precisa subir com `PORTAL_BD_URL` apontando para um banco de teste.
+
+As capturas ficam em `frontend/e2e/capturas/`, e o resultado de cada teste em `frontend/test-results/resultado.json`. Os testes marcados `@vivo` usam o modelo de verdade; sem chave, rode `npm run e2e -- --grep-invert @vivo`. O kit de documentos precisa estar indexado (`ATLAS_EMBEDDINGS` em `gemini` ou `teste`), porque os testes das fontes dependem dele.
 
 **Ensaio da demonstração.** `frontend/e2e/demo.spec.ts` percorre o roteiro inteiro com o modelo e o Gemini de verdade: os documentos da RBS e o envio do FAQ, o prazo com o PDF aberto na página citada, a conta com "Como calculei", os dias úteis, o relatório até o PDF, o pedido do pós-evento e o modelo em branco, o ataque como Cliente Roxo e o diagnóstico. Ele precisa do perfil `demo` num banco recém-criado, e cada turno tem até 30 s:
 
@@ -230,7 +235,7 @@ No front, `npm run build` confere os tipos e gera a versão de produção; `npm 
 scripts/preparar-banco-atlas.sh portal_demo
 ATLAS_DEV_PORTA=8099 ATLAS_PERFIL=demo PORTAL_BD_URL=jdbc:postgresql://localhost:5432/portal_demo scripts/atlas-dev.sh start
 cd frontend
-E2E_DEMO=1 PORTAL_API_URL=http://localhost:8099 npx playwright test e2e/demo.spec.ts
+E2E_DEMO=1 PORTAL_E2E_PILHA=dev ATLAS_DEV_PORTA=8099 npx playwright test e2e/demo.spec.ts
 ```
 
 As capturas de cada passo e os tempos (`demo-tempos.json`) ficam em `frontend/e2e/capturas/`. Sem `E2E_DEMO`, o teste é pulado. Para repetir, recrie o banco: o envio do FAQ muda a versão dele.

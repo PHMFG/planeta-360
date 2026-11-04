@@ -1,6 +1,6 @@
 // O ensaio da demonstração: o roteiro inteiro, com o modelo de verdade, no perfil demo e num banco recém-criado (a Amarelo ainda sem os números).
 // Captura cada passo e grava os tempos em e2e/capturas/demo-tempos.json. Só roda com E2E_DEMO=1:
-//   E2E_DEMO=1 PORTAL_API_URL=http://localhost:8099 npx playwright test e2e/demo.spec.ts
+//   E2E_DEMO=1 PORTAL_E2E_PILHA=dev ATLAS_DEV_PORTA=8099 npx playwright test e2e/demo.spec.ts
 import { writeFile } from 'node:fs/promises'
 import { expect, test, type Browser, type Page } from '@playwright/test'
 import { capturar, entrar, parceriaDa } from './apoio.ts'

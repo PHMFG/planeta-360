@@ -1,0 +1,57 @@
+# Matriz dos requisitos da RBS: cada ID do plano final (seção 3) ligado aos testes que o provam.
+# Colunas, separadas por tabulação: ID, onde (e2e ou back) e o teste.
+#   e2e:  arquivo > título, como o relatório do Playwright mostra.
+#   back: pacote.Classe#método, a partir de br.com.rbs.portal, como o relatório do Surefire mostra.
+# Um ID está provado quando todos os testes dele existem e passaram. Ao implementar um requisito, a linha do teste entra aqui
+# no mesmo commit. Teste listado que não aparece no resultado (pulado ou renomeado) reprova a conferência.
+# Um teste só prova o que ele confere: o layout.spec prova U01 e U02 (as entradas da linha de base com esses IDs), e não o
+# foco da gaveta (U08), os nomes repetidos (U16) nem o Atlas desabilitado (U17), que precisam de testes próprios.
+R1.1	e2e	requisitos-rbs.spec.ts > [R1.1] cota e investimento dos três clientes como a RBS informou
+R1.2	e2e	requisitos-rbs.spec.ts > [R1.2] cortesias e credenciais da amostra iguais aos planos
+R1.4	e2e	requisitos-rbs.spec.ts > [R1.4] o CSV das páginas 7 a 10 do Amarelo entra sem rejeição
+R2.2	back	documentos.DocumentoGrupoTest#oMesmoPlanoEmOutraCotaNaoEOutraVersaoDoMesmoPlano
+R3.1	back	consolidacao.CargaControllerTest#reenviarOMesmoArquivoNaoInsereNadaEAsLinhasDeAntesViramDuplicadas
+R3.2	e2e	requisitos-rbs.spec.ts > [R3.2] a Master baixa a comprovação mensal por mês, tipo e unidade
+R3.3	e2e	requisitos-rbs.spec.ts > [R3.3] a comprovação mensal não aparece para Subcota G nem Subcota
+R4.1	e2e	requisitos-rbs.spec.ts > [R4.1] .doc, .ppt e .xls sem macro entram; com macro, não
+R4.2	back	comum.TipoDeArquivoTest#listaAceitaExatamenteAsExtensoesCombinadasComARbs
+R4.3	e2e	requisitos-rbs.spec.ts > [R4.3] o link do post abre em aba nova, e javascript: é recusado
+R5.0	back	parceria.AbasEDaCotaTest#euEOLoginTrazemIncluidaNaCotaEmCadaAba
+R5.1.a	back	parceria.EmailsAutorizadosTest#rbsListaOsEmailsComQuemAutorizouEOsRevogados
+R5.1.b	e2e	requisitos-rbs.spec.ts > [R5.1.b] a RBS sobe o plano comercial e a marca baixa a última versão
+R5.1.c	e2e	requisitos-rbs.spec.ts > [R5.1.c] cada solicitação de ingressos tem a sua situação
+R5.2.a	e2e	requisitos-rbs.spec.ts > [R5.2.a] a marca envia a logo e o MIV pelos botões próprios
+R5.2.b	back	aplicacoes.AplicacaoControllerTest#rbsAnexaAFotoELinhaSemFotoPassaAContarComoComprovada
+R5.3.a	e2e	requisitos-rbs.spec.ts > [R5.3.a] a marca envia material em texto e em link
+R5.3.b	e2e	requisitos-rbs.spec.ts > [R5.3.b] os links dos posts aparecem em Posts e links
+R5.3.d	back	consolidacao.ConsolidacaoControllerTest#amareloVeOPrevistoEOExibidoDeUmaUnidadeIgualAoBanco
+R5.4.a	e2e	requisitos-rbs.spec.ts > [R5.4.a] a RBS grava a cota de cortesias com acesso e shuttle
+R5.4.b	e2e	requisitos-rbs.spec.ts > [R5.4.b] a marca vê cota, destinadas e disponíveis
+R5.4.c	e2e	requisitos-rbs.spec.ts > [R5.4.c] a marca destina dentro do disponível e é barrada acima dele
+R5.5.a	e2e	requisitos-rbs.spec.ts > [R5.5.a] a marca vê setor, quantidade e período do credenciamento
+R5.5.b	e2e	requisitos-rbs.spec.ts > [R5.5.b] o botão do Open Staff abre a URL da edição em aba nova
+R5.6.a	back	pesquisa.PesquisaControllerTest#amareloEnviaTresPerguntasEElasFicamEnviadasEComHistorico
+R5.6.b	back	consolidacao.CargaControllerTest#oExemploDePesquisaEntraEOReenvioNaoDuplica
+R5.6.c	back	pesquisa.PesquisaControllerTest#amareloVeAPesquisaComAsTresPerguntasAprovadasEOsResultadosComABase
+R5.6.d	e2e	requisitos-rbs.spec.ts > [R5.6.d] a RBS abre a pesquisa da edição pela tela
+R5.7.a	e2e	requisitos-rbs.spec.ts > [R5.7.a] a marca informa quem assina o contrato
+R5.7.b	e2e	requisitos-rbs.spec.ts > [R5.7.b] a RBS sobe o contrato assinado e a marca o abre no visualizador
+R6.a	e2e	requisitos-rbs.spec.ts > [R6.a] a aba oculta some do menu da marca
+R6.b	e2e	requisitos-rbs.spec.ts > [R6.b] a aba fora da cota aparece com o motivo, sem liberar
+R6.c	back	parceria.EmailsAutorizadosTest#autorizarExigeOTokenCsrf
+R6.d1	e2e	requisitos-rbs.spec.ts > [R6.d1] a RBS edita o investimento e a base
+R6.d2	e2e	requisitos-rbs.spec.ts > [R6.d2] Direitos por contrato mostra o mesmo que as abas
+R6.d3	e2e	requisitos-rbs.spec.ts > [R6.d3] a troca de cota mostra a prévia do impacto
+R7.1	e2e	requisitos-rbs.spec.ts > [R7.1] o emblema de 2027 aparece no login e nos cabeçalhos
+R8.1	e2e	requisitos-rbs.spec.ts > [R8.1] a marca vê o anexo de pós-venda com o relatório disponibilizado
+R8.2	e2e	requisitos-rbs.spec.ts > [R8.2] os números da edição tiram o indicador de indisponível
+E2.1	back	banco.VerificacaoDoBancoTest
+E2.2	back	relatorio.RelatorioControllerTest#cotaSemPesquisaTrazASecaoDePesquisaIndisponivelComOMotivo
+E2.3	back	comum.PermissaoAntesDoCorpoTest#rbsContinuaRecebendoAValidacaoDoCorpo
+E2.4	back	materiais.ArquivosTest#patrocinadorDoAmareloEnviaPdfEmEntregaDeMidiaERecebeAutorDataVersaoEHistorico
+E2.5	back	consolidacao.CargaControllerTest#reenviarOMesmoArquivoNaoInsereNadaEAsLinhasDeAntesViramDuplicadas
+E2.6	back	relatorio.RelatorioControllerTest#parceriaSemNenhumDadoGeraRelatorioComAsSeisSecoesEOs17IndicadoresIndisponiveis
+E2.7	back	parceria.ParceriasControllerTest#patchFechaEReabreUmaAbaDaCotaDoRoxoEOEuPassaAMostrar
+E2.8	back	banco.CriacaoDoBancoTest
+U01	e2e	layout.spec.ts > nenhuma violação fora da linha de base
+U02	e2e	layout.spec.ts > nenhuma violação fora da linha de base

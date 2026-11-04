@@ -1,0 +1,254 @@
+[
+  {
+    "chave": "agencia|/parceria/{p}/aplicacoes|projetor|menu-escondido|Contrato",
+    "u": "U01"
+  },
+  {
+    "chave": "agencia|/parceria/{p}/perfil|celular|axe|scrollable-region-focusable|.overflow-x-auto",
+    "u": "U02"
+  },
+  {
+    "chave": "agencia|/parceria/{p}/perfil|celular|rolagem-horizontal",
+    "u": "U02"
+  },
+  {
+    "chave": "agencia|/parceria/{p}/perfil|projetor|menu-escondido|Contrato",
+    "u": "U01"
+  },
+  {
+    "chave": "agencia|/parceria/{p}/|projetor|menu-escondido|Contrato",
+    "u": "U01"
+  },
+  {
+    "chave": "amarelo|/parceria/{p}/aplicacoes|projetor|menu-escondido|Contrato",
+    "u": "U01"
+  },
+  {
+    "chave": "amarelo|/parceria/{p}/contrato|projetor|menu-escondido|Contrato",
+    "u": "U01"
+  },
+  {
+    "chave": "amarelo|/parceria/{p}/cortesias|projetor|menu-escondido|Contrato",
+    "u": "U01"
+  },
+  {
+    "chave": "amarelo|/parceria/{p}/credenciamento|projetor|menu-escondido|Contrato",
+    "u": "U01"
+  },
+  {
+    "chave": "amarelo|/parceria/{p}/midia|celular|axe|scrollable-region-focusable|.overflow-x-auto:nth-child(1)",
+    "u": "U02"
+  },
+  {
+    "chave": "amarelo|/parceria/{p}/midia|celular|axe|scrollable-region-focusable|.overflow-x-auto:nth-child(2)",
+    "u": "U02"
+  },
+  {
+    "chave": "amarelo|/parceria/{p}/midia|projetor|menu-escondido|Contrato",
+    "u": "U01"
+  },
+  {
+    "chave": "amarelo|/parceria/{p}/perfil|celular|axe|scrollable-region-focusable|.overflow-x-auto",
+    "u": "U02"
+  },
+  {
+    "chave": "amarelo|/parceria/{p}/perfil|celular|rolagem-horizontal",
+    "u": "U02"
+  },
+  {
+    "chave": "amarelo|/parceria/{p}/perfil|projetor|menu-escondido|Contrato",
+    "u": "U01"
+  },
+  {
+    "chave": "amarelo|/parceria/{p}/pesquisa|celular|axe|scrollable-region-focusable|.overflow-x-auto",
+    "u": "U02"
+  },
+  {
+    "chave": "amarelo|/parceria/{p}/pesquisa|projetor|menu-escondido|Contrato",
+    "u": "U01"
+  },
+  {
+    "chave": "amarelo|/parceria/{p}/relatorio|projetor|menu-escondido|Contrato",
+    "u": "U01"
+  },
+  {
+    "chave": "amarelo|/parceria/{p}/|projetor|menu-escondido|Contrato",
+    "u": "U01"
+  },
+  {
+    "chave": "rbs|/parceria/{amarelo}/perfil|celular|rolagem-horizontal",
+    "u": "U02"
+  },
+  {
+    "chave": "rbs|/parceria/{amarelo}/perfil|computador|menu-escondido|Contrato",
+    "u": "U01"
+  },
+  {
+    "chave": "rbs|/parceria/{amarelo}/perfil|computador|menu-escondido|Cortesias",
+    "u": "U01"
+  },
+  {
+    "chave": "rbs|/parceria/{amarelo}/perfil|computador|menu-escondido|Credenciamento",
+    "u": "U01"
+  },
+  {
+    "chave": "rbs|/parceria/{amarelo}/perfil|computador|menu-escondido|Mídia e conteúdo",
+    "u": "U01"
+  },
+  {
+    "chave": "rbs|/parceria/{amarelo}/perfil|computador|menu-escondido|Pesquisa",
+    "u": "U01"
+  },
+  {
+    "chave": "rbs|/parceria/{amarelo}/perfil|projetor|menu-escondido|Aplicações da marca",
+    "u": "U01"
+  },
+  {
+    "chave": "rbs|/parceria/{amarelo}/perfil|projetor|menu-escondido|Contrato",
+    "u": "U01"
+  },
+  {
+    "chave": "rbs|/parceria/{amarelo}/perfil|projetor|menu-escondido|Cortesias",
+    "u": "U01"
+  },
+  {
+    "chave": "rbs|/parceria/{amarelo}/perfil|projetor|menu-escondido|Credenciamento",
+    "u": "U01"
+  },
+  {
+    "chave": "rbs|/parceria/{amarelo}/perfil|projetor|menu-escondido|Minha parceria",
+    "u": "U01"
+  },
+  {
+    "chave": "rbs|/parceria/{amarelo}/perfil|projetor|menu-escondido|Mídia e conteúdo",
+    "u": "U01"
+  },
+  {
+    "chave": "rbs|/parceria/{amarelo}/perfil|projetor|menu-escondido|Perfil",
+    "u": "U01"
+  },
+  {
+    "chave": "rbs|/parceria/{amarelo}/perfil|projetor|menu-escondido|Pesquisa",
+    "u": "U01"
+  },
+  {
+    "chave": "rbs|/rbs/cargas|celular|axe|scrollable-region-focusable|.overflow-x-auto",
+    "u": "U02"
+  },
+  {
+    "chave": "rbs|/rbs|celular|axe|color-contrast|.pb-2.justify-between.last\\:border-b-0:nth-child(7) > .inline-flex.gap-1\\.5.text-xs",
+    "u": "U22"
+  },
+  {
+    "chave": "rbs|/rbs|computador|axe|color-contrast|.pb-2.justify-between.last\\:border-b-0:nth-child(7) > .inline-flex.gap-1\\.5.text-xs",
+    "u": "U22"
+  },
+  {
+    "chave": "rbs|/rbs|projetor|axe|color-contrast|.pb-2.justify-between.last\\:border-b-0:nth-child(7) > .inline-flex.gap-1\\.5.text-xs",
+    "u": "U22"
+  },
+  {
+    "chave": "roxo|/parceria/{p}/aplicacoes|projetor|menu-escondido|Contrato",
+    "u": "U01"
+  },
+  {
+    "chave": "roxo|/parceria/{p}/contrato|projetor|menu-escondido|Contrato",
+    "u": "U01"
+  },
+  {
+    "chave": "roxo|/parceria/{p}/cortesias|projetor|menu-escondido|Contrato",
+    "u": "U01"
+  },
+  {
+    "chave": "roxo|/parceria/{p}/credenciamento|projetor|menu-escondido|Contrato",
+    "u": "U01"
+  },
+  {
+    "chave": "roxo|/parceria/{p}/midia|celular|axe|scrollable-region-focusable|.overflow-x-auto:nth-child(1)",
+    "u": "U02"
+  },
+  {
+    "chave": "roxo|/parceria/{p}/midia|celular|axe|scrollable-region-focusable|.overflow-x-auto:nth-child(2)",
+    "u": "U02"
+  },
+  {
+    "chave": "roxo|/parceria/{p}/midia|projetor|menu-escondido|Contrato",
+    "u": "U01"
+  },
+  {
+    "chave": "roxo|/parceria/{p}/perfil|celular|axe|scrollable-region-focusable|.overflow-x-auto",
+    "u": "U02"
+  },
+  {
+    "chave": "roxo|/parceria/{p}/perfil|celular|rolagem-horizontal",
+    "u": "U02"
+  },
+  {
+    "chave": "roxo|/parceria/{p}/perfil|projetor|menu-escondido|Contrato",
+    "u": "U01"
+  },
+  {
+    "chave": "roxo|/parceria/{p}/pesquisa|projetor|menu-escondido|Contrato",
+    "u": "U01"
+  },
+  {
+    "chave": "roxo|/parceria/{p}/relatorio|projetor|menu-escondido|Contrato",
+    "u": "U01"
+  },
+  {
+    "chave": "roxo|/parceria/{p}/|projetor|menu-escondido|Contrato",
+    "u": "U01"
+  },
+  {
+    "chave": "verde|/parceria/{p}/aplicacoes|projetor|menu-escondido|Contrato",
+    "u": "U01"
+  },
+  {
+    "chave": "verde|/parceria/{p}/contrato|projetor|menu-escondido|Contrato",
+    "u": "U01"
+  },
+  {
+    "chave": "verde|/parceria/{p}/cortesias|projetor|menu-escondido|Contrato",
+    "u": "U01"
+  },
+  {
+    "chave": "verde|/parceria/{p}/credenciamento|projetor|menu-escondido|Contrato",
+    "u": "U01"
+  },
+  {
+    "chave": "verde|/parceria/{p}/midia|celular|axe|scrollable-region-focusable|.overflow-x-auto:nth-child(1)",
+    "u": "U02"
+  },
+  {
+    "chave": "verde|/parceria/{p}/midia|celular|axe|scrollable-region-focusable|.overflow-x-auto:nth-child(2)",
+    "u": "U02"
+  },
+  {
+    "chave": "verde|/parceria/{p}/midia|projetor|menu-escondido|Contrato",
+    "u": "U01"
+  },
+  {
+    "chave": "verde|/parceria/{p}/perfil|celular|axe|scrollable-region-focusable|.overflow-x-auto",
+    "u": "U02"
+  },
+  {
+    "chave": "verde|/parceria/{p}/perfil|celular|rolagem-horizontal",
+    "u": "U02"
+  },
+  {
+    "chave": "verde|/parceria/{p}/perfil|projetor|menu-escondido|Contrato",
+    "u": "U01"
+  },
+  {
+    "chave": "verde|/parceria/{p}/pesquisa|projetor|menu-escondido|Contrato",
+    "u": "U01"
+  },
+  {
+    "chave": "verde|/parceria/{p}/relatorio|projetor|menu-escondido|Contrato",
+    "u": "U01"
+  },
+  {
+    "chave": "verde|/parceria/{p}/|projetor|menu-escondido|Contrato",
+    "u": "U01"
+  }
+]

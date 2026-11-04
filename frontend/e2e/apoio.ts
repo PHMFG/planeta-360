@@ -1,16 +1,19 @@
 // O que os testes de ponta a ponta usam em comum: usuários da amostra, login e capturas.
 import { expect, request, type APIRequestContext, type Page } from '@playwright/test'
+import { destinoDosTestes } from './destino'
 
 export const SENHA = 'senha123'
 export const USUARIOS = {
   amarelo: 'marketing@amarelo.example',
+  agencia: 'atendimento@agencia-x.example',
   roxo: 'marketing@roxo.example',
   verde: 'marketing@verde.example',
   rbs: 'b2b@rbs.example',
 } as const
 export type Persona = keyof typeof USUARIOS
 
-const API = process.env.PORTAL_API_URL ?? 'http://localhost:8080'
+// Sem padrão: a API é a do destino (PORTAL_E2E_PILHA), nunca a 8080 por acaso.
+const API = destinoDosTestes().api
 
 /** Entra pela tela e espera sair do login. */
 export async function entrar(page: Page, persona: Persona) {
