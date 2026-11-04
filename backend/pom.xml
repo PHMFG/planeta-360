@@ -32,6 +32,8 @@
         <pdfbox.version>3.0.8</pdfbox.version>
         <!-- [ATLAS] JEXL do `calcular` (M5): fixado na 3.7.1, que traz pragmaTest e namespaceInstantiation. -->
         <jexl.version>3.7.1</jexl.version>
+        <!-- Só nos testes: lê o .xlsx gerado e fabrica .doc, .xls e .ppt (OLE2) de teste. 5.5.1 é a estável mais velha que 2 semanas (a 6.0.0 é de 22/10). -->
+        <poi.version>5.5.1</poi.version>
         <!-- [ATLAS] Limites por usuário (M8): o balde de fichas na memória. O artefato jdk17 serve ao Java 21. -->
         <bucket4j.version>8.21.0</bucket4j.version>
         <!-- [ATLAS] Disjuntores (M8): só o módulo do disjuntor, sem o starter do Spring. -->
@@ -140,6 +142,18 @@
         </dependency>
 
         <!-- Testes: MockMvc/MockMvcTester e utilidades de sessão e CSRF -->
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi</artifactId>
+            <version>${poi.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>${poi.version}</version>
+            <scope>test</scope>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webmvc-test</artifactId>
