@@ -264,10 +264,12 @@ class RelatorioControllerTest {
 
         // Os números da lista batem com a tabela relatorio_indicador e com a visão de faltantes.
         long relatorio = relatorioDaAmostra(amarelo);
-        long disponiveis = jdbc.sql("SELECT count(*) FROM relatorio_indicador WHERE relatorio_id = :id AND disponivel")
+        long disponiveis = jdbc.sql("SELECT count(DISTINCT indicador_codigo) FROM relatorio_indicador WHERE relatorio_id = :id AND disponivel")
                 .param("id", relatorio).query(Long.class).single();
-        long indisponiveis = jdbc.sql("SELECT count(*) FROM relatorio_indicador WHERE relatorio_id = :id AND NOT disponivel")
-                .param("id", relatorio).query(Long.class).single();
+        long indisponiveis = jdbc.sql("""
+                        SELECT count(*) FROM indicador i WHERE NOT EXISTS (SELECT 1 FROM relatorio_indicador x
+                        WHERE x.relatorio_id = :id AND x.indicador_codigo = i.codigo AND x.disponivel)
+                        """).param("id", relatorio).query(Long.class).single();
         long faltantes = jdbc.sql("SELECT count(*) FROM vw_faltantes WHERE parceria_id = :p").param("p", amarelo)
                 .query(Long.class).single();
         assertThat(lerJson(resposta, "$[0].relatorio.indicadoresDisponiveis")).isEqualTo((int) disponiveis);
@@ -339,7 +341,7 @@ class RelatorioControllerTest {
         assertThat(java.time.OffsetDateTime.parse(amarelo[6])).isBefore(java.time.OffsetDateTime.now());
         assertThat(amarelo[7]).isEmpty();
         assertThat(amarelo[8]).isEmpty();
-        assertThat(amarelo[9]).isEqualTo("35");
+        assertThat(amarelo[9]).isEqualTo("15");
         assertThat(amarelo[10]).isEqualTo("2");
         assertThat(amarelo[12]).as("nenhuma versão disponibilizada: a marca não vê nada").isEmpty();
         assertThat(amarelo[13]).isEmpty();

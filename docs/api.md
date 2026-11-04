@@ -1131,7 +1131,7 @@ O relatório de uma parceria é uma **fotografia** dos números do momento em qu
     "relatorio": {
       "id": 1, "versao": 1, "status": "RASCUNHO", "geradoEm": "2026-11-22T10:00:00-03:00",
       "validadoEm": null, "disponibilizadoEm": null,
-      "indicadoresDisponiveis": 35, "indicadoresIndisponiveis": 2
+      "indicadoresDisponiveis": 15, "indicadoresIndisponiveis": 2
     },
     "disponibilizada": { "id": 1, "versao": 1, "disponibilizadoEm": "2026-11-23T11:00:00-03:00" },
     "faltantes": 4
@@ -1139,7 +1139,7 @@ O relatório de uma parceria é uma **fotografia** dos números do momento em qu
 ]
 ```
 
-`relatorio` é a **versão mais nova** (ou `null`, com `situacao: "SEM_RELATORIO"`). `indicadoresDisponiveis` e `indicadoresIndisponiveis` contam linhas de números do relatório (um indicador por recorte conta uma vez por recorte); o indicador do catálogo sem linha na versão conta como indisponível, como na leitura (rota 35). `faltantes` é quantos itens a consolidação (rota 29) ainda aponta para a parceria.
+`relatorio` é a **versão mais nova** (ou `null`, com `situacao: "SEM_RELATORIO"`). `indicadoresDisponiveis` e `indicadoresIndisponiveis` contam **indicadores** do catálogo, não linhas de recorte: é disponível o indicador com ao menos uma linha disponível; os outros, inclusive os sem linha na versão, são indisponíveis, como na leitura (rota 35). A soma dos dois é sempre o total do catálogo (17). `faltantes` é quantos itens a consolidação (rota 29) ainda aponta para a parceria.
 
 `disponibilizada` é a **versão que a marca vê**: a disponibilizada mais nova, com o `id`, a `versao` e quando ela foi liberada (`disponibilizadoEm`). Fica `null` se nenhuma versão foi disponibilizada. Ela pode ser mais antiga que `relatorio`: com a v3 em rascunho e a v2 disponibilizada, a linha traz `relatorio.versao` 3 (`situacao` `RASCUNHO`) e `disponibilizada.versao` 2, e a tela da RBS deve mostrar as duas ("Rascunho · v3, a marca vê a v2"). Quando a versão mais nova é a própria disponibilizada, `disponibilizada` repete o mesmo `id` e `versao`.
 
