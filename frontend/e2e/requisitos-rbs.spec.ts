@@ -6,7 +6,7 @@
 // teste deixa a execução vermelha. Nada aqui muda número do Amarelo, do Roxo ou do Verde: quem precisa escrever cria uma
 // marca de teste pela API, na pilha.
 import { expect, test } from '@playwright/test'
-import { parceriaDa, sessaoDaApi } from './apoio.ts'
+import { entrar, entrarComo, novaMarcaDeTeste, parceriaDa, sessaoDaApi } from './apoio.ts'
 
 const pendente = () => {
   throw new Error('pendente: escreva o teste ao implementar o requisito')
@@ -57,9 +57,50 @@ test.describe('R5 · as abas', () => {
 })
 
 test.describe('R6 a R8 · admin, identidade e pós-venda', () => {
-  test.fixme('[R6.a] a aba oculta some do menu da marca', pendente)
-  test.fixme('[R6.b] a aba fora da cota aparece com o motivo, sem liberar', pendente)
-  test.fixme('[R6.d1] a RBS edita o investimento e a base', pendente)
+  test('[R6.a] a aba oculta some do menu da marca', async ({ page, browser }) => {
+    const marca = await novaMarcaDeTeste('SUBCOTA')
+    // A RBS oculta a aba Contrato pela tela do Perfil.
+    await entrar(page, 'rbs')
+    await page.goto(`/parceria/${marca.parceriaId}/perfil`)
+    await page.getByLabel('Situação da aba Contrato').selectOption('OCULTA')
+    await expect(page.getByRole('status').filter({ hasText: 'foi ocultada' })).toBeVisible()
+    // A marca não vê a aba no menu, e a rota dela mostra o aviso, sem o conteúdo.
+    const outra = await browser.newPage()
+    await entrarComo(outra, marca.email)
+    const menu = outra.getByRole('navigation', { name: 'Menu principal' })
+    await expect(menu.getByRole('link', { name: /Cortesias/ })).toBeVisible()
+    await expect(menu.getByRole('link', { name: /Contrato/ })).toHaveCount(0)
+    await outra.goto(`/parceria/${marca.parceriaId}/contrato`)
+    await expect(outra.getByText(/fechada|não está disponível/i).first()).toBeVisible()
+    await outra.close()
+  })
+  test('[R6.b] a aba fora da cota aparece com o motivo, sem liberar', async ({ page }) => {
+    const marca = await novaMarcaDeTeste('SUBCOTA')
+    await entrar(page, 'rbs')
+    await page.goto(`/parceria/${marca.parceriaId}/perfil`)
+    const pesquisa = page.getByLabel('Situação da aba Pesquisa')
+    await expect(pesquisa.locator('option[value="LIBERADA"]')).toBeDisabled()
+    await expect(page.getByText('A cota desta parceria não inclui esta aba.').first()).toBeVisible()
+  })
+  test('[R6.d1] a RBS edita o investimento e a base', async ({ page }) => {
+    const marca = await novaMarcaDeTeste('SUBCOTA')
+    await entrar(page, 'rbs')
+    await page.goto(`/parceria/${marca.parceriaId}/perfil`)
+    // Os campos de edição ficam no formulário da empresa, que abre no Editar.
+    await page.getByRole('button', { name: 'Editar', exact: true }).click()
+    const valor = page.getByLabel('Investimento (R$)')
+    await valor.click()
+    await valor.pressSequentially('250.000,50')
+    await expect(valor).toHaveValue('250.000,50')
+    await page.getByLabel('Base do valor').selectOption('BRUTO_TABELA')
+    await page.getByRole('button', { name: 'Salvar empresa' }).click()
+    const { contexto } = await sessaoDaApi('rbs')
+    await expect
+      .poll(async () => (await (await contexto.get(`/api/parcerias/${marca.parceriaId}`)).json()).valorInvestimento)
+      .toBe(250000.5)
+    expect((await (await contexto.get(`/api/parcerias/${marca.parceriaId}`)).json()).baseValor).toBe('BRUTO_TABELA')
+    await contexto.dispose()
+  })
   test.fixme('[R6.d2] Direitos por contrato mostra o mesmo que as abas', pendente)
   test.fixme('[R6.d3] a troca de cota mostra a prévia do impacto', pendente)
   test.fixme('[R7.1] o emblema de 2027 aparece no login e nos cabeçalhos', pendente)

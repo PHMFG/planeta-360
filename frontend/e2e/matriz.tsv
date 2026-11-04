@@ -81,3 +81,4 @@ R6.b	back	parceria.AbasEDaCotaTest#rbsNaoLiberaPesquisaParaSubcotaG
 R6.d1	back	parceria.EdicaoDoInvestimentoTest#rbsEditaValorEBaseEOHistoricoGuardaOAntesEODepois
 R6.d1	back	parceria.EdicaoDoInvestimentoTest#marcaNaoEditaOInvestimento
 U10	back	acesso.VinculoNoEuTest#agenciaDoAmareloVeVinculoAgenciaEAMarcaVeMarca
+U10	e2e	interface.spec.ts > [U10] a agência vê que entra como agência do patrocinador

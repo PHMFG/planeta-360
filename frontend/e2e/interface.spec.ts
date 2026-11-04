@@ -166,3 +166,8 @@ test('[U11] Ajuda abre um painel visível com o que cada aba faz e como falar co
   await page.keyboard.press('Escape')
   await expect(painel).toBeHidden()
 })
+
+test('[U10] a agência vê que entra como agência do patrocinador', async ({ page }) => {
+  await entrar(page, 'agencia')
+  await expect(page.getByText('Agência do patrocinador').first()).toBeVisible()
+})
