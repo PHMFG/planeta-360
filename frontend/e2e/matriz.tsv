@@ -31,12 +31,14 @@ R5.4.a	back	cortesias.CortesiasDaRbsTest#rbsGravaAGradeInteiraEAMarcaVeAoRecarre
 R5.4.a	back	cortesias.CortesiasDaRbsTest#quantidadeNegativaAcimaDoLimiteOuAbaixoDoDestinadoDa422ENadaMuda
 R5.4.b	e2e	requisitos-rbs.spec.ts > [R5.4.b] a marca vê cota, destinadas e disponíveis
 R5.4.b	back	cortesias.CortesiasDaRbsTest#totaisSaoOsDaRota29
+R5.4.b	back	atlas.ConsultarCotaTest#cortesiaTrazADestinadaEODisponivelCertosDepoisDeUmaDestinacaoPelaRota83
 R5.4.c	e2e	requisitos-rbs.spec.ts > [R5.4.c] a marca destina dentro do disponível e é barrada acima dele
 R5.4.c	back	cortesias.DestinacaoDeCortesiasTest#acimaDoDisponivelDa422EMantemOPreenchimento
 R5.4.c	back	cortesias.DestinacaoDeCortesiasTest#marcaERbsEditamERetiramQualquerDestinacaoDaParceria
 R5.4.c	back	cortesias.DestinacaoDeCortesiasTest#depoisDoPrazoDaEdicaoAMarcaRecebe422ComADataEARbsAindaAjusta
 R5.4.c	back	cortesias.DestinacaoEmParaleloTest#doisEnviosJuntosQueCabemSoUmNaCotaPassamSoUm
 R5.4.c	back	cortesias.DestinacaoEmParaleloTest#muitosEnviosDeUmaPorVezNuncaPassamDaCota
+R5.4.c	back	atlas.DadoPessoalForaDoLogTest#oNomeSoFicaNaColunaDoDestinatarioNemEmLogNemNoAtlasNemNasRespostas
 R5.4.c	back	comum.RotasDosRequisitosDaRbsAcessoTest#idDeOutraParceriaRecebe404ParaAMarcaEParaARbs
 R5.5.a	e2e	requisitos-rbs.spec.ts > [R5.5.a] a marca vê setor, quantidade e período do credenciamento
 R5.5.b	e2e	requisitos-rbs.spec.ts > [R5.5.b] o botão do Open Staff abre a URL da edição em aba nova

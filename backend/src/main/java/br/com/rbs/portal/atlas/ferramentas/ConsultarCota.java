@@ -56,7 +56,8 @@ public class ConsultarCota implements Ferramenta {
 
     private static final DefinicaoDeFerramenta DEFINICAO = new DefinicaoDeFerramenta(NOME,
             "Devolve o que esta parceria contratou: a cota, o produto, a edição, as abas (liberadas ou fechadas), o que o plano "
-                    + "comercial prevê (inserções, CPM e aplicações de marca) das abas abertas e as cortesias e credenciais, se a aba "
+                    + "comercial prevê (inserções, CPM e aplicações de marca) das abas abertas e as cortesias (a cota, quantas já foram "
+                    + "destinadas e quantas ainda podem ser) e credenciais, se a aba "
                     + "estiver aberta. Não recebe argumento. Cada item vem com o marcador (R1, R2...): cite o marcador entre colchetes, "
                     + "como [R3], logo depois da afirmação, e copie números exatamente como estão. Não traz valores em reais do contrato. "
                     + "Quando o previsto tem a origem (documento e versão), o plano comercial está nos documentos do portal.",
@@ -251,6 +252,8 @@ public class ConsultarCota implements Ferramenta {
         String dia = DIAS.getOrDefault(c.dia(), c.dia());
         StringBuilder texto = new StringBuilder("Cota de cortesias: ").append(c.quantidade()).append(" no setor ").append(setor).append(", ")
                 .append(dia).append(c.comShuttle() ? ", com shuttle" : ", sem shuttle").append('.');
+        long disponiveis = c.quantidade() - c.destinadas();
+        texto.append(" Destinadas: ").append(c.destinadas()).append(". Disponíveis para destinar: ").append(disponiveis).append('.');
         String acesso = acessoEmPalavras(c.acesso());
         acrescentar(texto, "Acesso", acesso);
         Fonte fonte = turno.registrarRegistro("cortesia_cota", c.id(), "Cortesias · " + setor + " · " + dia, "Cortesias", texto.toString(), Map.of());
@@ -261,6 +264,8 @@ public class ConsultarCota implements Ferramenta {
         registro.put("dia", dia);
         registro.put("quantidade", c.quantidade());
         registro.put("comShuttle", c.comShuttle());
+        registro.put("destinadas", c.destinadas());
+        registro.put("disponiveis", disponiveis);
         poeSeHouver(registro, "acesso", acesso);
         return registro;
     }

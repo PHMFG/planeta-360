@@ -50,7 +50,8 @@ public class RegistrosDoPortal {
                            String tipoMidia, BigDecimal quantidadePrevista, String unidade, Integer fontePagina) {
     }
 
-    public record Cortesia(Long id, String setor, String dia, Integer quantidade, boolean comShuttle, String acesso) {
+    /** A cota de cortesias de um setor e dia e o que a marca já destinou dela (só a soma; o nome de quem recebeu nunca é lido aqui). */
+    public record Cortesia(Long id, String setor, String dia, Integer quantidade, boolean comShuttle, String acesso, Long destinadas) {
     }
 
     public record Credencial(Long id, String setor, String beneficiario, Integer quantidadePorDia) {
@@ -177,7 +178,12 @@ public class RegistrosDoPortal {
     }
 
     public List<Cortesia> cortesias(long parceriaId) {
-        return jdbc.sql("SELECT id, setor, dia, quantidade, com_shuttle, acesso FROM cortesia_cota WHERE parceria_id = :parceria ORDER BY id")
+        return jdbc.sql("""
+                        SELECT cc.id, cc.setor, cc.dia, cc.quantidade, cc.com_shuttle, cc.acesso,
+                               CAST(coalesce((SELECT sum(d.quantidade) FROM cortesia_destinacao d WHERE d.cortesia_cota_id = cc.id), 0) AS bigint)
+                                   AS destinadas
+                        FROM cortesia_cota cc WHERE cc.parceria_id = :parceria ORDER BY cc.id
+                        """)
                 .param("parceria", parceriaId).query(Cortesia.class).list();
     }
 
