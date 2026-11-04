@@ -8,6 +8,10 @@
 import { expect, test, type Page } from '@playwright/test'
 import { entrar, entrarComo, novaMarcaDeTeste, parceriaDa, sessaoDaApi } from './apoio.ts'
 
+const PDF_DE_EXEMPLO = '../backend/src/main/resources/dev/documentos/d13-circular-revogada.pdf'
+
+const PNG_DE_EXEMPLO = '../backend/src/main/resources/dev/exemplos/exemplo.png'
+
 const pendente = () => {
   throw new Error('pendente: escreva o teste ao implementar o requisito')
 }
@@ -41,9 +45,68 @@ test.describe('R3 e R4 · comprovação mensal e formatos', () => {
 })
 
 test.describe('R5 · as abas', () => {
-  test.fixme('[R5.1.b] a RBS sobe o plano comercial e a marca baixa a última versão', pendente)
-  test.fixme('[R5.1.c] cada solicitação de ingressos tem a sua situação', pendente)
-  test.fixme('[R5.2.a] a marca envia a logo e o MIV pelos botões próprios', pendente)
+  test('[R5.1.b] a RBS sobe o plano comercial e a marca baixa a última versão', async ({ page, browser }) => {
+    const marca = await novaMarcaDeTeste('SUBCOTA')
+    await entrar(page, 'rbs')
+    await page.goto(`/parceria/${marca.parceriaId}/perfil`)
+    const cartao = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Plano comercial' }) })
+    await cartao.locator('input[data-espaco="PLANO_COMERCIAL"]').setInputFiles(PDF_DE_EXEMPLO)
+    await expect(cartao.getByRole('status').filter({ hasText: 'Plano enviado' })).toContainText('versão 1')
+    await cartao.locator('input[data-espaco="PLANO_COMERCIAL"]').setInputFiles(PDF_DE_EXEMPLO)
+    await expect(cartao.getByRole('status').filter({ hasText: 'Plano enviado' })).toContainText('versão 2')
+    const outra = await browser.newPage()
+    await entrarComo(outra, marca.email)
+    await outra.goto(`/parceria/${marca.parceriaId}/perfil`)
+    const daMarca = outra.locator('section').filter({ has: outra.getByRole('heading', { name: 'Plano comercial' }) })
+    await expect(daMarca).toContainText('versão 2')
+    await expect(daMarca.getByText('Somente consulta')).toBeVisible()
+    await expect(daMarca.getByRole('button', { name: 'Baixar plano' })).toBeVisible()
+    await expect(daMarca.getByText('Versões anteriores (1)')).toBeVisible()
+    // A marca não envia o plano: não há botão, e a rota responde 403.
+    await expect(daMarca.getByRole('button', { name: /Enviar/ })).toHaveCount(0)
+    await outra.close()
+  })
+  test('[R5.1.c] cada solicitação de ingressos tem a sua situação', async ({ page, browser }) => {
+    const marca = await novaMarcaDeTeste('SUBCOTA')
+    const daMarca = await browser.newPage()
+    await entrarComo(daMarca, marca.email)
+    await daMarca.goto(`/parceria/${marca.parceriaId}/perfil`)
+    const cartao = daMarca.locator('section').filter({ has: daMarca.getByRole('heading', { name: 'Compra de ingressos com valor de patrocinador' }) })
+    for (const vez of [1, 2]) {
+      await cartao.locator('input[data-espaco="DOCUMENTO_INGRESSOS"]').setInputFiles(PDF_DE_EXEMPLO)
+      await expect(cartao.getByRole('row').filter({ hasText: `Solicitação de ingressos ${vez}` })).toContainText('Em análise pela RBS')
+    }
+    // A RBS confirma só a primeira.
+    await entrar(page, 'rbs')
+    await page.goto(`/parceria/${marca.parceriaId}/perfil`)
+    await page.getByRole('button', { name: 'Confirmar a Solicitação de ingressos 1' }).click()
+    await expect(page.getByRole('status').filter({ hasText: 'confirmada' })).toBeVisible()
+    await daMarca.reload()
+    await expect(cartao.getByRole('row').filter({ hasText: 'Solicitação de ingressos 1' })).toContainText('Confirmada')
+    await expect(cartao.getByRole('row').filter({ hasText: 'Solicitação de ingressos 2' })).toContainText('Em análise pela RBS')
+    // Depois de uma confirmada, a marca envia outra.
+    await cartao.locator('input[data-espaco="DOCUMENTO_INGRESSOS"]').setInputFiles(PDF_DE_EXEMPLO)
+    await expect(cartao.getByRole('row').filter({ hasText: 'Solicitação de ingressos 3' })).toBeVisible()
+    await daMarca.close()
+  })
+  test('[R5.2.a] a marca envia a logo e o MIV pelos botões próprios', async ({ page }) => {
+    const marca = await novaMarcaDeTeste('SUBCOTA')
+    await entrarComo(page, marca.email)
+    await page.goto(`/parceria/${marca.parceriaId}/aplicacoes`)
+    const cartao = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Enviar materiais da marca' }) })
+    await expect(cartao.getByRole('button', { name: 'Selecionar logo' })).toBeVisible()
+    await expect(cartao.getByRole('button', { name: 'Selecionar MIV' })).toBeVisible()
+    await cartao.locator('input[data-espaco="LOGO"]').setInputFiles(PNG_DE_EXEMPLO)
+    await expect(cartao.getByRole('status').filter({ hasText: 'recebido' })).toContainText('Logo recebido como versão 1')
+    await cartao.locator('input[data-espaco="LOGO"]').setInputFiles(PNG_DE_EXEMPLO)
+    await expect(cartao.getByRole('status').filter({ hasText: 'recebido' })).toContainText('Logo recebido como versão 2')
+    await cartao.locator('input[data-espaco="MIV"]').setInputFiles(PDF_DE_EXEMPLO)
+    await expect(cartao.getByRole('status').filter({ hasText: 'recebido' })).toContainText('MIV recebido como versão 1')
+    await expect(cartao.getByText('Arquivos enviados')).toBeVisible()
+    // .svg solto é recusado, com a frase que diz o caminho.
+    await cartao.locator('input[data-espaco="LOGO"]').setInputFiles({ name: 'logo.svg', mimeType: 'image/svg+xml', buffer: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>') })
+    await expect(cartao.getByRole('alert').filter({ hasText: /dentro de um \.zip/ })).toBeVisible()
+  })
   test.fixme('[R5.3.a] a marca envia material em texto e em link', pendente)
   test.fixme('[R5.3.b] os links dos posts aparecem em Posts e links', pendente)
   test('[R5.4.a] a RBS grava a cota de cortesias com acesso e shuttle', async ({ page }) => {
@@ -101,11 +164,85 @@ test.describe('R5 · as abas', () => {
     await expect(linha.getByRole('cell').nth(4)).toHaveText('2')
     await expect(page.getByRole('row').filter({ hasText: 'Clientes VIP' })).toBeVisible()
   })
-  test.fixme('[R5.5.a] a marca vê setor, quantidade e período do credenciamento', pendente)
-  test.fixme('[R5.5.b] o botão do Open Staff abre a URL da edição em aba nova', pendente)
+  test('[R5.5.a] a marca vê setor, quantidade e período do credenciamento', async ({ page, browser }) => {
+    const marca = await novaMarcaDeTeste('SUBCOTA')
+    // A RBS grava as credenciais pela tela da aba.
+    await entrar(page, 'rbs')
+    await page.goto(`/parceria/${marca.parceriaId}/credenciamento`)
+    await page.getByLabel('Setor').selectOption('ARENA')
+    await page.getByLabel('Para').selectOption('MARCA')
+    await page.getByLabel('Quantidade por dia', { exact: true }).fill('7')
+    await page.getByRole('button', { name: 'Salvar credenciais' }).click()
+    await expect(page.getByRole('status').filter({ hasText: 'Credenciais salvas' })).toBeVisible()
+    // A marca vê a liberação com o setor, a quantidade e o período da edição (01 a 20/12/2026 na amostra).
+    const outra = await browser.newPage()
+    await entrarComo(outra, marca.email)
+    await outra.goto(`/parceria/${marca.parceriaId}/credenciamento`)
+    const liberacao = outra.locator('section').filter({ has: outra.getByRole('heading', { name: 'Sua liberação' }) })
+    await expect(liberacao.getByRole('row').filter({ hasText: 'Arena' }).getByRole('cell')).toHaveText(['Arena', 'Marca', '7'])
+    await expect(liberacao).toContainText('Período de cadastro: de 01/12/2026 a 20/12/2026')
+    await outra.close()
+  })
+  test('[R5.5.b] o botão do Open Staff abre a URL da edição em aba nova', async ({ page }) => {
+    const verde = await parceriaDa('verde')
+    await entrar(page, 'verde')
+    await page.goto(`/parceria/${verde}/credenciamento`)
+    const botao = page.getByRole('link', { name: /Abrir Open Staff/ })
+    await expect(botao).toHaveAttribute('href', 'https://example.com/')
+    await expect(botao).toHaveAttribute('target', '_blank')
+    await expect(botao).toHaveAttribute('rel', 'noopener noreferrer')
+    await expect(page.getByText('Você será direcionado a um serviço externo')).toBeVisible()
+    // A API recusa endereço que não é https (o front também, antes de enviar).
+    const { contexto, cabecalhos } = await sessaoDaApi('rbs')
+    const eventos: { id: number; edicao: number }[] = await (await contexto.get('/api/eventos')).json()
+    const recusa = await contexto.patch(`/api/eventos/${eventos.find((e) => e.edicao === 2027)!.id}/credenciamento`, {
+      headers: cabecalhos,
+      data: { openStaffUrl: 'javascript:alert(1)' },
+    })
+    expect(recusa.status()).toBe(422)
+    await contexto.dispose()
+  })
   test.fixme('[R5.6.d] a RBS abre a pesquisa da edição pela tela', pendente)
-  test.fixme('[R5.7.a] a marca informa quem assina o contrato', pendente)
-  test.fixme('[R5.7.b] a RBS sobe o contrato assinado e a marca o abre no visualizador', pendente)
+  test('[R5.7.a] a marca informa quem assina o contrato', async ({ page }) => {
+    const marca = await novaMarcaDeTeste('SUBCOTA')
+    await entrarComo(page, marca.email)
+    await page.goto(`/parceria/${marca.parceriaId}/contrato`)
+    const cartao = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Signatários' }) })
+    const nome = cartao.getByLabel('Nome de quem assina')
+    await nome.click()
+    await nome.pressSequentially('Fulana de Teste')
+    await expect(nome).toHaveValue('Fulana de Teste')
+    await expect(nome).toBeFocused()
+    await cartao.getByLabel('Cargo').pressSequentially('Diretora de Marketing')
+    await cartao.getByLabel('E-mail').pressSequentially('fulana@marca-teste')
+    await cartao.getByRole('button', { name: 'Salvar signatário' }).click()
+    await expect(cartao.getByRole('alert').filter({ hasText: 'formato do e-mail' })).toBeVisible()
+    await cartao.getByLabel('E-mail').pressSequentially('.example')
+    await cartao.getByRole('button', { name: 'Salvar signatário' }).click()
+    await expect(cartao).toContainText('Patrocinador: Fulana de Teste · Diretora de Marketing')
+    // A RBS vê o mesmo signatário.
+    const { contexto } = await sessaoDaApi('rbs')
+    const contrato = await (await contexto.get(`/api/parcerias/${marca.parceriaId}/contrato`)).json()
+    await contexto.dispose()
+    expect(contrato.signatario).toMatchObject({ nome: 'Fulana de Teste', email: 'fulana@marca-teste.example' })
+  })
+  test('[R5.7.b] a RBS sobe o contrato assinado e a marca o abre no visualizador', async ({ page, browser }) => {
+    const marca = await novaMarcaDeTeste('SUBCOTA')
+    await entrar(page, 'rbs')
+    await page.goto(`/parceria/${marca.parceriaId}/contrato`)
+    await page.locator('input[type=file][accept*="pdf"]').setInputFiles(PDF_DE_EXEMPLO)
+    await page.getByRole('button', { name: 'Enviar contrato' }).click()
+    await expect(page.getByRole('status').filter({ hasText: 'Contrato enviado como versão 1' })).toBeVisible()
+    const outra = await browser.newPage()
+    await entrarComo(outra, marca.email)
+    await outra.goto(`/parceria/${marca.parceriaId}/contrato`)
+    await expect(outra.getByText(/Página 1 de \d+/)).toBeVisible({ timeout: 20_000 })
+    await expect(outra.locator('canvas').first()).toBeVisible()
+    await expect(outra.getByRole('button', { name: 'Baixar PDF' })).toBeVisible()
+    // A marca não tem como enviar: nem o cartão, nem a rota.
+    await expect(outra.getByRole('heading', { name: 'Enviar contrato assinado' })).toHaveCount(0)
+    await outra.close()
+  })
 })
 
 test.describe('R6 a R8 · admin, identidade e pós-venda', () => {

@@ -2,16 +2,34 @@
 // por papel e nome acessível, e a captura em 1440×900 e 390×844 para comparar com o PNG do Figma. Cada tela fica como
 // `fixme` até a fase dela; o corpo pendente lança erro, para o `fixme` não poder sair sem o teste.
 import { expect, test } from '@playwright/test'
-import { capturar, entrarComo, novaMarcaDeTeste, sessaoDaApi } from './apoio.ts'
+import { capturar, entrar, entrarComo, novaMarcaDeTeste, parceriaDa, sessaoDaApi } from './apoio.ts'
 
 const pendente = () => {
   throw new Error('pendente: escreva o teste ao construir a tela')
 }
 
 test.describe('Figma 06', () => {
-  test.fixme('P01 Perfil da marca: plano comercial e compra de ingressos', pendente)
+  test('P01 Perfil da marca: plano comercial e compra de ingressos', async ({ page }) => {
+    const amarelo = await parceriaDa('amarelo')
+    await entrar(page, 'amarelo')
+    await page.goto(`/parceria/${amarelo}/perfil`)
+    await expect(page.getByRole('heading', { name: 'Plano comercial' })).toBeVisible()
+    await expect(page.getByText('Cadastro divergente?')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Compra de ingressos com valor de patrocinador' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Enviar solicitação' })).toBeVisible()
+    await capturar(page, 'figma-06/P01-perfil-1440')
+  })
   test.fixme('R02 Perfil da RBS: permissões, direitos por contrato e as abas em três estados', pendente)
-  test.fixme('P02 Aplicações: Selecionar logo e Selecionar MIV', pendente)
+  test('P02 Aplicações: Selecionar logo e Selecionar MIV', async ({ page }) => {
+    const amarelo = await parceriaDa('amarelo')
+    await entrar(page, 'amarelo')
+    await page.goto(`/parceria/${amarelo}/aplicacoes`)
+    await expect(page.getByRole('heading', { name: 'Enviar materiais da marca' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Selecionar logo' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Selecionar MIV' })).toBeVisible()
+    await expect(page.getByText('Arquivos enviados')).toBeVisible()
+    await capturar(page, 'figma-06/P02-aplicacoes-1440')
+  })
   test.fixme('P03 Mídia e conteúdo: publicados pela RBS, posts e links, comprovação mensal', pendente)
   test('P04 Cortesias: destinação de ingressos', async ({ page }) => {
     const marca = await novaMarcaDeTeste('SUBCOTA')
@@ -39,6 +57,28 @@ test.describe('Figma 06', () => {
     await expect(dialogo.getByRole('button', { name: 'Revisar destinação' })).toBeVisible()
     await capturar(page, 'figma-06/F04-destinar-1440')
   })
-  test.fixme('P05 Credenciamento: sua liberação e Abrir Open Staff', pendente)
-  test.fixme('P07 Contrato: visualizador, signatários e baixar PDF', pendente)
+  test('P05 Credenciamento: sua liberação e Abrir Open Staff', async ({ page }) => {
+    const roxo = await parceriaDa('roxo')
+    await entrar(page, 'roxo')
+    await page.goto(`/parceria/${roxo}/credenciamento`)
+    await expect(page.getByRole('heading', { name: 'Sua liberação' })).toBeVisible()
+    for (const coluna of ['Setor autorizado', 'Quantidade por dia']) await expect(page.getByRole('columnheader', { name: coluna })).toBeVisible()
+    await expect(page.getByText('Período de cadastro:')).toBeVisible()
+    await expect(page.getByRole('link', { name: /Abrir Open Staff/ })).toBeVisible()
+    await expect(page.getByText('Você será direcionado a um serviço externo')).toBeVisible()
+    await expect(page.getByText('Guia de credenciamento')).toBeVisible()
+    await capturar(page, 'figma-06/P05-credenciamento-1440')
+  })
+  test('P07 Contrato: visualizador, signatários e baixar PDF', async ({ page }) => {
+    const amarelo = await parceriaDa('amarelo')
+    await entrar(page, 'amarelo')
+    await page.goto(`/parceria/${amarelo}/contrato`)
+    await expect(page.getByText('Contrato final assinado')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Signatários' })).toBeVisible()
+    await expect(page.getByText('Documento final')).toBeVisible()
+    await expect(page.getByText(/Página 1 de \d+/)).toBeVisible({ timeout: 20_000 })
+    await expect(page.getByRole('button', { name: 'Baixar PDF' })).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Abrir em tela cheia' })).toBeVisible()
+    await capturar(page, 'figma-06/P07-contrato-1440')
+  })
 })
