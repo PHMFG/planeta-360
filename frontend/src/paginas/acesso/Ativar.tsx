@@ -1,5 +1,6 @@
 // Primeiro acesso: o patrocinador usa o código que a RBS repassou e cria a própria senha. [ITEM-3]
 // [PENDENTE] Na V1 não há e-mail automático; a RBS vê o código uma vez ao autorizar o e-mail.
+import { focarPrimeiroErro } from '../../componentes/Campo'
 import { useState, type FormEvent } from 'react'
 import { useLocation } from 'react-router'
 import { ativarAcesso } from '../../api/acesso'
@@ -34,6 +35,7 @@ export function Ativar() {
     if (senha.length < SENHA_MINIMA) novos.senha = `A senha precisa de pelo menos ${SENHA_MINIMA} caracteres.`
     if (confirmacao !== senha) novos.confirmacao = 'As duas senhas precisam ser iguais.'
     setErros(novos)
+    focarPrimeiroErro()
     setFalha(null)
     if (Object.keys(novos).length > 0) return
 

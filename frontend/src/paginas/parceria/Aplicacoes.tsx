@@ -284,8 +284,8 @@ function DadosDaAtivacao({ rbs }: { rbs: boolean }) {
             campos={dado.campos.filter((campo) => campo.tipo !== 'ARQUIVO')}
             somenteMudados
             textoEnviar="Salvar números"
+            aoTentar={() => setSalvo(false)}
             aoEnviar={async (valores) => {
-              setSalvo(false)
               await informarDados(parceria.id, valores)
               setSalvo(true)
               dados.recarregar()

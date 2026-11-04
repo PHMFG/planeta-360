@@ -58,9 +58,14 @@ function ItemSecao({ secao, parceria, rbs }: { secao: Secao; parceria: ParceriaR
           <>
             <i className={`${secao.icone} text-xl ${isActive ? 'text-white' : 'text-secao'}`} aria-hidden="true" />
             <span className="flex-1">{secao.nome}</span>
-            {/* [PERMISSAO] A aba aparece para todos; o cadeado diz se a cota não a inclui ou se a RBS a fechou. */}
+            {/* [PERMISSAO] A aba aparece para todos; o estado fica escrito ao lado do cadeado, e não só no hover (U05 e U19).
+                O motivo inteiro vai no title e no texto para leitor de tela. */}
             {estado !== 'LIBERADA' && (
-              <i className={`ri-lock-line text-base ${isActive ? 'text-white' : 'text-cinza-400'}`} aria-label={motivo} title={motivo} />
+              <span className={`flex items-center gap-1 text-[11px] font-semibold ${isActive ? 'text-white' : 'text-texto-2'}`} title={motivo}>
+                <i className="ri-lock-line text-sm" aria-hidden="true" />
+                {estado === 'FORA_DA_COTA' ? 'Fora da cota' : 'Fechada'}
+                <span className="sr-only">: {motivo}</span>
+              </span>
             )}
           </>
         )}

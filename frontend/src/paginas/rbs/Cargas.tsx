@@ -82,8 +82,21 @@ export function Cargas() {
   const [selecionada, setSelecionada] = useState<Carga | null>(null)
   const evento = eventoId || String(eventos.dado?.[0]?.id ?? '')
 
+  /** Ao escolher outro arquivo, o resultado da carga anterior sai da tela, e um arquivo que não é CSV é recusado na hora (U07). */
+  function escolher(escolhido: File | null) {
+    setUltima(null)
+    if (escolhido && !escolhido.name.toLowerCase().endsWith('.csv')) {
+      setArquivo(null)
+      setCampoDoArquivo((atual) => atual + 1)
+      return setFalha(`${escolhido.name} não é CSV. A carga aceita só planilha em CSV (UTF-8, vírgula como separador); no Excel, use Salvar como › CSV UTF-8.`)
+    }
+    setFalha(null)
+    setArquivo(escolhido)
+  }
+
   async function enviar(evento_: FormEvent) {
     evento_.preventDefault()
+    setUltima(null)
     if (!arquivo) return setFalha('Escolha a planilha CSV.')
     if (!evento) return setFalha('Escolha a edição.')
     setFalha(null)
@@ -138,7 +151,7 @@ export function Cargas() {
           <label className="flex cursor-pointer items-center gap-3 rounded-xl border-[1.5px] border-dashed border-tinta bg-cinza-100 px-4 py-4 text-sm">
             <i className="ri-file-excel-2-line text-2xl" aria-hidden="true" />
             <span className="flex-1 font-semibold">{arquivo ? `${arquivo.name} · ${tamanho(arquivo.size)}` : 'Escolher a planilha CSV (UTF-8, vírgula como separador)'}</span>
-            <input key={campoDoArquivo} type="file" accept=".csv,text/csv" className="sr-only" onChange={(campo) => setArquivo(campo.target.files?.[0] ?? null)} />
+            <input key={campoDoArquivo} type="file" accept=".csv,text/csv" className="sr-only" onChange={(campo) => escolher(campo.target.files?.[0] ?? null)} />
           </label>
           <p className="text-xs text-texto-2">
             Colunas esperadas: <code>{COLUNAS[tipo]}</code>. Há exemplos em docs/exemplos no repositório.

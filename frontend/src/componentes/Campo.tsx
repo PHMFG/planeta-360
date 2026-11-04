@@ -32,10 +32,16 @@ export function Campo({ rotulo, erro, ajuda, className = '', id, ...resto }: Pro
         />
       </label>
       {(erro || ajuda) && (
-        <p id={descricaoId} className={`mt-1.5 px-1 text-xs font-medium ${erro ? 'text-[#c8203f]' : 'text-texto-2'}`}>
+        // O erro é anunciado quando aparece (U09); a ajuda, não.
+        <p id={descricaoId} role={erro ? 'alert' : undefined} className={`mt-1.5 px-1 text-xs font-medium ${erro ? 'text-[#c8203f]' : 'text-texto-2'}`}>
           {erro ?? ajuda}
         </p>
       )}
     </div>
   )
+}
+
+/** Depois de marcar os erros, leva o foco ao primeiro campo com erro (U09). Espera o React pintar os campos marcados. */
+export function focarPrimeiroErro() {
+  requestAnimationFrame(() => document.querySelector<HTMLElement>('form [aria-invalid="true"]')?.focus())
 }

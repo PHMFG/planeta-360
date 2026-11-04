@@ -179,6 +179,7 @@ function ConteudoMidia({ rbs }: { rbs: boolean }) {
   const parceria = useParceria()
   const estado = estadoAbaNaParceria(parceria, 'MIDIA')
   const entregas = useDados(() => listarEntregas(parceria.id, 'MIDIA'), [parceria.id])
+  const semEntregaAberta = Boolean(entregas.dado) && !entregas.dado?.some((entrega) => ACEITA_ENVIO.includes(entrega.status))
   useRecarregarSeAbaFechou(entregas)
   const [selecionado, setSelecionado] = useState<File | null>(null)
   // Cada arquivo escolhido abre um "Preparar envio" novo: a observação e o erro do envio anterior não passam para o próximo.
@@ -222,6 +223,13 @@ function ConteudoMidia({ rbs }: { rbs: boolean }) {
         </Aviso>
       )}
 
+      {/* Sem nenhuma entrega aberta, a marca sabe antes de escolher o arquivo, e não depois (U04). */}
+      {!rbs && semEntregaAberta && (
+        <Aviso tipo="restrito" titulo="Nenhuma entrega de mídia aceita envio agora">
+          A RBS abre cada entrega (ou pede um ajuste) quando é a hora de enviar. As entregas desta aba estão em análise, aprovadas ou
+          ainda não foram abertas. Dúvidas sobre prazos: fale com o time B2B da RBS.
+        </Aviso>
+      )}
       {!rbs && (
         <AreaEnvio
           texto={`ou selecione no computador · ${REGRA_ENVIO} · a entrega é escolhida na hora do envio`}
@@ -231,7 +239,7 @@ function ConteudoMidia({ rbs }: { rbs: boolean }) {
             setEnvios((total) => total + 1)
             setSelecionado(arquivo)
           }}
-          desabilitado={!entregas.dado}
+          desabilitado={!entregas.dado || semEntregaAberta}
         />
       )}
 
