@@ -24,7 +24,7 @@ export function LinhaArquivo({ titulo, meta, rodape, icone = 'ri-file-text-line'
         </span>
         <span className="flex min-w-0 flex-col gap-0.5">
           <span className="truncate text-sm font-semibold">{titulo}</span>
-          {meta && <span className="text-xs font-medium text-texto-2">{meta}</span>}
+          {meta && <span className="text-xs font-medium [overflow-wrap:anywhere] text-texto-2">{meta}</span>}
           {rodape && <span className="text-xs">{rodape}</span>}
         </span>
       </Corpo>
@@ -58,7 +58,7 @@ export function CartaoArquivo({ nome, meta, rodape, onClick }: PropsCartaoArquiv
       </span>
       <span className="flex flex-col gap-0.5 p-4">
         <span className="truncate text-sm font-semibold">{nome}</span>
-        {meta && <span className="text-xs font-medium text-texto-2">{meta}</span>}
+        {meta && <span className="text-xs font-medium [overflow-wrap:anywhere] text-texto-2">{meta}</span>}
         {rodape && <span className="mt-1 text-xs">{rodape}</span>}
       </span>
     </button>

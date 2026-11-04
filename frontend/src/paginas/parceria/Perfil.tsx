@@ -249,11 +249,17 @@ function AcessosRbs({ parceriaId }: { parceriaId: number }) {
                   ) : (
                     <div className="flex justify-end gap-3 text-xs font-bold">
                       {item.situacao === 'PENDENTE' && (
-                        <button type="button" className="hover:underline" onClick={() => autorizarEmail(parceriaId, item.email, item.vinculo).then(setCodigo).catch(() => setFalha('Não foi possível gerar outro código.'))}>
+                        <button
+                          type="button"
+                          className="hover:underline"
+                          aria-label={`Novo código para ${item.email}`}
+                          onClick={() => autorizarEmail(parceriaId, item.email, item.vinculo).then(setCodigo).catch(() => setFalha('Não foi possível gerar outro código.'))}
+                        >
                           Novo código
                         </button>
                       )}
-                      <button type="button" className="text-[#c8203f] hover:underline" onClick={() => revogar(item)}>
+                      {/* Cada linha repete os botões: o nome acessível diz de qual e-mail é (U16). */}
+                      <button type="button" className="text-[#c8203f] hover:underline" aria-label={`Revogar ${item.email}`} onClick={() => revogar(item)}>
                         Revogar
                       </button>
                     </div>
