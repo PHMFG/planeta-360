@@ -45,7 +45,7 @@ async function esperarConteudo(page: Page) {
  * área visível do menu precisa receber o clique no centro dele (o elemento no ponto é o próprio item). Um item que só
  * aparece rolando o menu não conta aqui: a rolagem é legítima, desde que nada fique por cima do que está à vista.
  */
-async function itensDoMenuCobertos(page: Page, largura: number): Promise<{ cobertos: string[]; escondidos: string[] }> {
+async function itensDoMenuCobertos(page: Page, largura: number, aceitaPista = false): Promise<{ cobertos: string[]; escondidos: string[] }> {
   if (largura < 1024) await page.getByRole('button', { name: 'Menu', exact: true }).click()
   const nav = page.getByRole('navigation', { name: 'Menu principal' })
   await expect(nav).toBeVisible()
@@ -53,7 +53,11 @@ async function itensDoMenuCobertos(page: Page, largura: number): Promise<{ cober
   await page.waitForFunction(() =>
     document.getAnimations().filter((a) => a instanceof CSSTransition).every((a) => a.playState !== 'running'),
   )
-  const resultado = await nav.evaluate((menu) => {
+  const resultado = await nav.evaluate((menu, aceita) => {
+    // Com a pista "Role para ver mais" à vista, o item abaixo está escondido de propósito, e a pessoa sabe que pode rolar.
+    // Só vale para a RBS, que tem os atalhos de gestão e as oito seções: o menu da marca tem de caber inteiro.
+    const pista = menu.querySelector('[data-mais-abaixo]')
+    const comPista = aceita && pista !== null && pista.getBoundingClientRect().height > 0
     const caixa = menu.getBoundingClientRect()
     const fim = Math.min(caixa.bottom, window.innerHeight)
     const cobertos: string[] = []
@@ -64,14 +68,14 @@ async function itensDoMenuCobertos(page: Page, largura: number): Promise<{ cober
       const x = r.left + r.width / 2
       const y = r.top + r.height / 2
       if (y < caixa.top || y > fim) {
-        escondidos.push(nome)
+        if (!comPista) escondidos.push(nome)
         continue
       }
       const noPonto = document.elementFromPoint(x, y)
       if (!noPonto || !item.contains(noPonto)) cobertos.push(nome)
     }
     return { cobertos, escondidos }
-  })
+  }, aceitaPista)
   if (largura < 1024) await page.keyboard.press('Escape')
   return resultado
 }
@@ -102,7 +106,7 @@ for (const persona of Object.keys(TELAS) as Persona[]) {
             await esperarConteudo(page)
             const largura = await page.evaluate(() => document.documentElement.scrollWidth)
             if (largura > tamanho.width) registrar(`${onde}|rolagem-horizontal`)
-            const menu = await itensDoMenuCobertos(page, tamanho.width)
+            const menu = await itensDoMenuCobertos(page, tamanho.width, persona === 'rbs')
             for (const item of menu.cobertos) registrar(`${onde}|menu-coberto|${item}`)
             // No computador e no projetor o menu é fixo ao lado: um item que só aparece rolando o menu, sem pista nenhuma,
             // parece não existir (U01). No celular a gaveta pode rolar.

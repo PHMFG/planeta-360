@@ -5,7 +5,7 @@
 # Um ID está provado quando todos os testes dele existem e passaram. Ao implementar um requisito, a linha do teste entra aqui
 # no mesmo commit. Teste listado que não aparece no resultado (pulado ou renomeado) reprova a conferência.
 # Um teste só prova o que ele confere: o layout.spec prova U01 e U02 (as entradas da linha de base com esses IDs), e não o
-# foco da gaveta (U08), os nomes repetidos (U16) nem o Atlas desabilitado (U17), que precisam de testes próprios.
+# foco da gaveta (U08), os nomes repetidos (U16) nem o Atlas desabilitado (U17), que têm testes próprios em interface.spec.ts.
 R1.1	e2e	requisitos-rbs.spec.ts > [R1.1] cota e investimento dos três clientes como a RBS informou
 R1.2	e2e	requisitos-rbs.spec.ts > [R1.2] cortesias e credenciais da amostra iguais aos planos
 R1.4	e2e	requisitos-rbs.spec.ts > [R1.4] o CSV das páginas 7 a 10 do Amarelo entra sem rejeição
@@ -55,3 +55,6 @@ E2.7	back	parceria.ParceriasControllerTest#patchFechaEReabreUmaAbaDaCotaDoRoxoEO
 E2.8	back	banco.CriacaoDoBancoTest
 U01	e2e	layout.spec.ts > nenhuma violação fora da linha de base
 U02	e2e	layout.spec.ts > nenhuma violação fora da linha de base
+U08	e2e	interface.spec.ts > [U08] a gaveta do menu recebe o foco, prende o Tab e o devolve ao botão Menu
+U16	e2e	interface.spec.ts > [U16] os botões de cada e-mail autorizado dizem de qual e-mail são
+U17	e2e	interface.spec.ts > [U17] o botão do Atlas desabilitado da RBS não parece ativo e diz por quê
