@@ -111,3 +111,43 @@ test('[U05] aba fechada pela RBS aparece marcada no menu e explica ao abrir', as
   await expect(page).toHaveURL(new RegExp(`/parceria/${marca.parceriaId}/cortesias$`))
   await expect(page.getByText('Esta aba está fechada no momento')).toBeVisible()
 })
+
+test('[U12] a marca não chama a rota de debug do modelo', async ({ page }) => {
+  const chamadas: string[] = []
+  page.on('request', (pedido) => {
+    if (pedido.url().includes('/api/debug/')) chamadas.push(pedido.url())
+  })
+  await entrar(page, 'roxo')
+  await page.waitForLoadState('networkidle')
+  expect(chamadas).toEqual([])
+})
+
+test('[U13] fora da cota, a aba diz como incluir, sem "contratar" e sem "A cota Subcota"', async ({ page }) => {
+  const verde = await parceriaDa('verde')
+  await entrar(page, 'verde')
+  await page.goto(`/parceria/${verde}/pesquisa`)
+  const aviso = page.getByRole('status').filter({ hasText: 'não faz parte da sua cota' })
+  await expect(aviso).toContainText('A cota da sua parceria (Subcota)')
+  await expect(aviso).not.toContainText('contratar')
+})
+
+test('[U14] na parceria aberta pela RBS, a próxima ação é da marca', async ({ page }) => {
+  const roxo = await parceriaDa('roxo')
+  await entrar(page, 'rbs')
+  await page.goto(`/parceria/${roxo}`)
+  await expect(page.getByRole('heading', { name: 'Próxima ação da marca' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Sua próxima ação' })).toHaveCount(0)
+})
+
+test('[U03] a lista de relatórios conta indicadores e explica as colunas', async ({ page }) => {
+  await entrar(page, 'rbs')
+  await page.goto('/rbs/relatorios')
+  await expect(page.getByText(/com dado ·/).first()).toBeVisible()
+  const contagens = await page.getByText(/\d+ com dado · \d+ indisponíveis/).allInnerTexts()
+  expect(contagens.length).toBeGreaterThan(0)
+  for (const texto of contagens) {
+    const [com, sem] = texto.match(/\d+/g)!.map(Number)
+    expect(com + sem, texto).toBe(17)
+  }
+  await expect(page.getByText(/Faltantes: o que impede/)).toBeVisible()
+})

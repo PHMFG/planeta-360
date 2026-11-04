@@ -65,3 +65,8 @@ U07	e2e	interface.spec.ts > [U07] arquivo que não é CSV é recusado ao escolhe
 U09	e2e	interface.spec.ts > [U09] erro no login é anunciado e o foco vai ao campo
 U09	e2e	interface.spec.ts > [U09] erro no primeiro acesso é anunciado e o foco vai ao campo
 U19	e2e	interface.spec.ts > [U05] aba fechada pela RBS aparece marcada no menu e explica ao abrir
+U03	back	relatorio.ContagemDeIndicadoresNaListaTest#listaContaIndicadoresENaoLinhasDeRecorte
+U03	e2e	interface.spec.ts > [U03] a lista de relatórios conta indicadores e explica as colunas
+U12	e2e	interface.spec.ts > [U12] a marca não chama a rota de debug do modelo
+U13	e2e	interface.spec.ts > [U13] fora da cota, a aba diz como incluir, sem "contratar" e sem "A cota Subcota"
+U14	e2e	interface.spec.ts > [U14] na parceria aberta pela RBS, a próxima ação é da marca
