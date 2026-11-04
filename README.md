@@ -265,13 +265,26 @@ Opções: `--split` (`ajuste`, `reserva` ou `todos`), `--categoria`, `--casos`, 
 - O plano comercial de uma parceria cadastrada ao vivo entra pela carga "Plano comercial" (Cargas), e as fotos de comprovação pela aba Aplicações da marca (só a RBS anexa). Os números do festival ainda entram só pela amostra: "O festival em números" sai como indisponível nos relatórios de 2027, porque só há números de 2026.
 - Corrigir uma linha do plano comercial: o reenvio com outra quantidade conta como duplicado (vale a primeira versão), e não há tela para editar a linha.
 - Telas próprias de Cortesias, Credenciamento e Contrato: nesta versão cada uma dessas abas mostra as próprias entregas.
+- Requisitos da RBS que esta versão não cobre (conferidos em 04/11/2026):
+  - A comprovação mensal entra só em CSV, e o portal não gera a planilha mensal por tipo de entrega.
+  - O link do post é gravado na carga, mas não aparece na tela.
+  - A marca não envia material de mídia só em texto.
+  - Aplicações não tem botões próprios para o MIV e a logo.
+  - Não há formulário de quem assina o contrato.
+  - A pesquisa da edição só pode ser aberta pela amostra.
+  - A RBS não oculta aba, não troca a cota e não edita o investimento pela tela.
+  - No pós-venda faltam texto editorial, fotos da edição, aftermovie, clipping e audiência por veículo.
+- A amostra de demonstração difere dos planos comerciais que a RBS enviou:
+  - O Roxo é a "Cota Apresenta", sem espaço físico.
+  - As cortesias e as credenciais do Roxo e do Verde não batem com os planos.
+  - As metragens e as datas de montagem do Amarelo também não.
 - Relatório montado pelo Atlas: ligado nos perfis `dev` e `demo` e desligado no padrão (`ATLAS_RELATORIO`). No texto do relatório o modelo não escreve número nem data (nem por extenso): os números vêm do servidor, com a origem em "Referências", no fim do documento.
 - Atlas com o modelo de linguagem: testado contra um servidor falso e com a chave de verdade do OpenCode Go. Para decidir com a equipe: os termos de uso do OpenCode, que falam em uso interno de quem assina, e o acordo de retenção zero do DeepSeek no Go, que vale até 30/11/2026 e é renovado mês a mês.
 - Dado pessoal no modelo: a consulta do Atlas leva ao modelo o nome de quem informou cada dado ("Informado por ... em ..."). Fica assim por decisão do dono do produto.
 - Dados informados pela marca entram sem aprovação da RBS, com o nome de quem informou e a data.
 - E-mail automático do código de ativação; recuperação de senha.
 - PDF do relatório: pela impressão do navegador.
-- A confirmar com a RBS: abas por cota (hoje todas liberadas, Pesquisa só para Master), limite de usuários por parceria, quem envia as fotos de comprovação, formato dos resultados da pesquisa, quem aprova as perguntas, a lista final de formatos de arquivo (o `.ai` do Illustrator ficou de fora) e o limite de 20 MB.
+- A confirmar com a RBS: abas por cota (hoje todas liberadas, Pesquisa só para Master), limite de usuários por parceria, quem envia as fotos de comprovação, formato dos resultados da pesquisa, quem aprova as perguntas, quem carrega os resultados (hoje a RBS), a lista final de formatos de arquivo (o `.ai` do Illustrator, o `.doc` e o `.ppt` ficaram de fora, e o `.xls` só entra na planilha da agência), o limite de 20 MB, se o acesso total do admin inclui liberar aba fora da cota e as cores e fontes da identidade visual de 2027.
 - Segurança para produção: limite de tentativas de login e cookie de sessão `Secure` atrás de HTTPS.
 - Fora desta versão: n8n, Open Staff, cifra de arquivos, Docker, Swagger e a implantação pública.
 
