@@ -18,6 +18,7 @@ import { Aviso } from '../../componentes/Aviso'
 import { Botao } from '../../componentes/Botao'
 import { CabecalhoSecao } from '../../componentes/CabecalhoSecao'
 import { Campo, focarPrimeiroErro } from '../../componentes/Campo'
+import { CompraDeIngressos, PlanoComercialDoPerfil } from '../../componentes/DocumentosDoPerfil'
 import { CodigoAtivacao } from '../../componentes/CodigoAtivacao'
 import { Cartao, Grade2 } from '../../componentes/Cartao'
 import { Carregando } from '../../componentes/Carregando'
@@ -396,7 +397,10 @@ export function Perfil() {
                 </Cartao>
               )}
 
-              <EntregasDaAba aba="PERFIL" titulo="Documentos da parceria" />
+              {/* Figma P01: o plano comercial e a compra de ingressos têm cartões próprios (R5.1); as outras entregas ficam abaixo. */}
+              <PlanoComercialDoPerfil parceriaId={detalhe.id} rbs={rbs} />
+              <CompraDeIngressos parceriaId={detalhe.id} rbs={rbs} />
+              <EntregasDaAba aba="PERFIL" titulo="Outros documentos da parceria" semPapel />
 
               {!rbs && (
                 <Aviso titulo="Cadastro divergente?">

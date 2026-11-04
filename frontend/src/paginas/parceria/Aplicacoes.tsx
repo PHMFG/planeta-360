@@ -24,6 +24,7 @@ import { Campo } from '../../componentes/Campo'
 import { Cartao, Indicador } from '../../componentes/Cartao'
 import { Carregando } from '../../componentes/Carregando'
 import { FormularioDadosInformados } from '../../componentes/FormularioDadosInformados'
+import { MateriaisDaMarca } from '../../componentes/MateriaisDaMarca'
 import { Modal } from '../../componentes/Modal'
 import { useSessao } from '../../sessao/Sessao'
 import { dataHora, numero, porcentagem, tamanho } from '../../util/formatar'
@@ -71,6 +72,9 @@ function ConteudoAplicacoes({ rbs }: { rbs: boolean }) {
         }
       />
 
+      {/* Figma P02: os botões próprios da logo e do MIV (R5.2.a). */}
+      <MateriaisDaMarca parceriaId={parceria.id} rbs={rbs} />
+
       {rbs && <AvisoAbaFechada parceria={parceria} estado={estado} nome={NOME} rbs />}
 
       {anexada && (
@@ -112,7 +116,7 @@ function ConteudoAplicacoes({ rbs }: { rbs: boolean }) {
 
       <DadosDaAtivacao rbs={rbs} />
 
-      <EntregasDaAba aba="APLICACOES" titulo="Entregas da aba" />
+      <EntregasDaAba aba="APLICACOES" titulo="Entregas da aba" semPapel />
 
       <AnexarFoto
         key={anexos}

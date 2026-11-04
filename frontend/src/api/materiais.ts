@@ -32,6 +32,8 @@ export type Entrega = {
   /** Da versão mais nova para a mais antiga. */
   arquivos: Arquivo[]
   ultimaObservacao: { texto: string; por: string; em: string } | null
+  /** O espaço próprio da entrega: as solicitações de ingressos no Perfil, o MIV e a logo em Aplicações (D5 do plano). */
+  papel?: 'DOCUMENTO_INGRESSOS' | 'MIV' | 'LOGO' | null
 }
 
 export type ItemFila = {

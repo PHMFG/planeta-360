@@ -103,13 +103,18 @@ type Props = {
   titulo?: string
   /** Frase do aviso quando a aba ainda não tem entregas. */
   vazio?: string
+  /** Deixa de fora as entregas com espaço próprio (ingressos, MIV e logo), que a tela mostra no cartão delas. */
+  semPapel?: boolean
 }
 
-export function EntregasDaAba({ aba, titulo = 'Entregas', vazio = 'A RBS ainda não abriu entregas nesta aba.' }: Props) {
+export function EntregasDaAba({ aba, titulo = 'Entregas', vazio = 'A RBS ainda não abriu entregas nesta aba.', semPapel = false }: Props) {
   const parceria = useParceria()
   const { usuario } = useSessao()
   const rbs = usuario?.perfil === 'ADMIN_RBS'
-  const entregas = useDados(() => listarEntregas(parceria.id, aba), [parceria.id, aba])
+  const entregas = useDados(
+    () => listarEntregas(parceria.id, aba).then((lista) => (semPapel ? lista.filter((entrega) => !entrega.papel) : lista)),
+    [parceria.id, aba, semPapel],
+  )
   useRecarregarSeAbaFechou(entregas)
   const [aberta, setAberta] = useState<Entrega | null>(null)
   const [criando, setCriando] = useState(false)
