@@ -235,7 +235,9 @@ class PermissaoAntesDoCorpoTest {
             "GET /api/documentos/{id}", "GET /api/documentos/{id}/conteudo", "GET /api/documentos/{id}/trechos/{trechoId}",
             // As cortesias (rotas 80, 83, 84 e 85): a marca da parceria (com a aba aberta) e a RBS; a cota e o prazo (81 e 82) são só da RBS.
             "GET /api/parcerias/{id}/cortesias", "POST /api/parcerias/{id}/cortesias/destinacoes",
-            "PATCH /api/parcerias/{id}/cortesias/destinacoes/{destId}", "DELETE /api/parcerias/{id}/cortesias/destinacoes/{destId}");
+            "PATCH /api/parcerias/{id}/cortesias/destinacoes/{destId}", "DELETE /api/parcerias/{id}/cortesias/destinacoes/{destId}",
+            // O contrato e as credenciais (rotas 74, 75 e 77): a marca e a RBS; a escrita da RBS (76, 78 e 79) está na lista dela.
+            "GET /api/parcerias/{id}/contrato", "PUT /api/parcerias/{id}/contrato/signatario", "GET /api/parcerias/{id}/credenciais");
 
     @Test
     void todaRotaDaApiEstaClassificadaEAListaDaRbsSoTemRotasQueExistem() {

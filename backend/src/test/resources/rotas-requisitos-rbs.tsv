@@ -7,3 +7,9 @@ PATCH	/api/eventos/{id}/cortesias	rbs
 POST	/api/parcerias/{id}/cortesias/destinacoes	ambos
 PATCH	/api/parcerias/{id}/cortesias/destinacoes/{destId}	ambos
 DELETE	/api/parcerias/{id}/cortesias/destinacoes/{destId}	ambos
+GET	/api/parcerias/{id}/contrato	ambos
+PUT	/api/parcerias/{id}/contrato/signatario	ambos
+POST	/api/parcerias/{id}/contrato/arquivo	rbs
+GET	/api/parcerias/{id}/credenciais	ambos
+PATCH	/api/parcerias/{id}/credenciais	rbs
+PATCH	/api/eventos/{id}/credenciamento	rbs

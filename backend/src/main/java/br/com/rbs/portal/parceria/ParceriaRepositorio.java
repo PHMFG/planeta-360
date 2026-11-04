@@ -59,7 +59,10 @@ public class ParceriaRepositorio {
     // ---------------------------------------------------------------------
 
     public List<EventoCompletoDto> eventos() {
-        return jdbc.sql("SELECT id, nome, edicao, data_inicio, data_fim, local FROM evento ORDER BY edicao DESC, id DESC")
+        return jdbc.sql("""
+                        SELECT id, nome, edicao, data_inicio, data_fim, local, credenciamento_url, credenciamento_inicio, credenciamento_fim, cortesias_prazo
+                        FROM evento ORDER BY edicao DESC, id DESC
+                        """)
                 .query(EventoCompletoDto.class)
                 .list();
     }

@@ -74,7 +74,19 @@ class RotasDosRequisitosDaRbsAcessoTest {
             Map.entry("POST /api/parcerias/{id}/cortesias/destinacoes", new Detalhe(
                     "{\"setor\":\"ARENA\",\"dia\":\"SABADO\",\"quantidade\":1,\"destinatario\":\"Maria Souza\"}", "CORTESIAS", true)),
             Map.entry("PATCH /api/parcerias/{id}/cortesias/destinacoes/{destId}", new Detalhe("{\"quantidade\":1}", "CORTESIAS", true)),
-            Map.entry("DELETE /api/parcerias/{id}/cortesias/destinacoes/{destId}", new Detalhe(null, "CORTESIAS", true)));
+            Map.entry("DELETE /api/parcerias/{id}/cortesias/destinacoes/{destId}", new Detalhe(null, "CORTESIAS", true)),
+            // F3 · Contrato e Credenciamento (rotas 74 a 79). A 76 é multipart: o corpo de teste dela é um formulário sem partes.
+            Map.entry("GET /api/parcerias/{id}/contrato", new Detalhe(null, "CONTRATO", true)),
+            Map.entry("PUT /api/parcerias/{id}/contrato/signatario", new Detalhe(
+                    "{\"nome\":\"Fulana de Tal\",\"email\":\"fulana@marca.com.br\",\"cargo\":\"Diretora\"}", "CONTRATO", true)),
+            Map.entry("POST /api/parcerias/{id}/contrato/arquivo", new Detalhe("{}", "CONTRATO", true)),
+            Map.entry("GET /api/parcerias/{id}/credenciais", new Detalhe(null, "CREDENCIAMENTO", true)),
+            Map.entry("PATCH /api/parcerias/{id}/credenciais", new Detalhe(
+                    "{\"credenciais\":[{\"setor\":\"ARENA\",\"beneficiario\":\"MARCA\",\"quantidadePorDia\":20}]}", "CREDENCIAMENTO", true)),
+            Map.entry("PATCH /api/eventos/{id}/credenciamento", new Detalhe("{\"inicio\":\"2027-01-05\"}", null, false)));
+
+    /** As rotas que recebem multipart: no teste vão como formulário sem partes (com JSON o Spring responderia 415 antes da permissão). */
+    private static final Set<String> MULTIPART = Set.of("POST /api/parcerias/{id}/contrato/arquivo");
 
     @Autowired
     MockMvcTester mvc;
@@ -183,6 +195,9 @@ class RotasDosRequisitosDaRbsAcessoTest {
     }
 
     private MvcTestResult chamar(SessaoDeApi sessao, Rota rota, String uri, String corpo) {
+        if (MULTIPART.contains(rota.chave())) {
+            return multipart(sessao, uri, true);
+        }
         return switch (rota.metodo()) {
             case "GET" -> sessao.get(uri);
             case "POST" -> sessao.post(uri, corpo);
@@ -193,7 +208,16 @@ class RotasDosRequisitosDaRbsAcessoTest {
         };
     }
 
+    private MvcTestResult multipart(SessaoDeApi sessao, String uri, boolean comCsrf) {
+        var csrf = br.com.rbs.portal.ApoioDeTeste.pedirCsrf(mvc);
+        var pedido = mvc.post().uri(uri).multipart().cookie(csrf.cookie()).session(sessao.sessao());
+        return (comCsrf ? pedido.header("X-XSRF-TOKEN", csrf.token()) : pedido).exchange();
+    }
+
     private MvcTestResult chamarSemCsrf(SessaoDeApi sessao, Rota rota, String uri, String corpo) {
+        if (MULTIPART.contains(rota.chave())) {
+            return multipart(sessao, uri, false);
+        }
         return sessao.semCsrf(org.springframework.http.HttpMethod.valueOf(rota.metodo()), uri, corpo);
     }
 
@@ -271,6 +295,26 @@ class RotasDosRequisitosDaRbsAcessoTest {
                         .as(rota.chave() + ": a RBS passa pela aba fechada").isNotIn(401, 403);
                 jdbc.sql("UPDATE parceria_aba SET " + coluna + " = TRUE WHERE parceria_id = :p AND aba_id = (SELECT id FROM aba WHERE codigo = :a)")
                         .param("p", amarelo()).param("a", aba).update();
+            }
+        }
+    }
+
+    @Test
+    void rotaComParceriaEAbaAntesDoCorpoDa404EDa403MesmoComCorpoQuebrado() {
+        SessaoDeApi roxo = SessaoDeApi.entrar(mvc, ROXO);
+        SessaoDeApi amarelo = SessaoDeApi.entrar(mvc, AMARELO);
+
+        for (Rota rota : rotas().stream().filter(r -> PermissaoAntesDoCorpo.ROTAS_DA_ABA_ANTES_DO_CORPO.containsKey(r.chave())).toList()) {
+            String aba = PermissaoAntesDoCorpo.ROTAS_DA_ABA_ANTES_DO_CORPO.get(rota.chave());
+            for (String corpo : List.of("", "{}", "isto nao e json")) {
+                assertThat(chamar(roxo, rota, uri(rota), corpo)).as(rota.chave() + " do Roxo [" + corpo + "]").hasStatus(HttpStatus.NOT_FOUND);
+            }
+            jdbc.sql("UPDATE parceria_aba SET liberada = FALSE WHERE parceria_id = :p AND aba_id = (SELECT id FROM aba WHERE codigo = :a)")
+                    .param("p", this.amarelo()).param("a", aba).update();
+            for (String corpo : List.of("", "{}", "isto nao e json")) {
+                MvcTestResult resposta = chamar(amarelo, rota, uri(rota), corpo);
+                assertThat(resposta).as(rota.chave() + " com a aba fechada [" + corpo + "]").hasStatus(HttpStatus.FORBIDDEN);
+                assertThat(lerJson(resposta, "$.detail")).isEqualTo(VerificadorDeAcesso.ABA_NAO_LIBERADA);
             }
         }
     }

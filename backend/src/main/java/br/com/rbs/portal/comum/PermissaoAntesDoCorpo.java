@@ -86,6 +86,11 @@ public class PermissaoAntesDoCorpo implements HandlerInterceptor, WebMvcConfigur
             // a RBS recebe 404 do service.
             "POST /api/eventos/{eventoId}/atlas/conversas",
             "GET /api/eventos/{eventoId}/atlas/conversas",
+            // O contrato e o credenciamento (rotas 76, 78 e 79): o PDF do contrato assinado, a grade de credenciais e o Open Staff da
+            // edição. As rotas 74, 75 e 77 são das duas pontas.
+            "POST /api/parcerias/{id}/contrato/arquivo",
+            "PATCH /api/parcerias/{id}/credenciais",
+            "PATCH /api/eventos/{id}/credenciamento",
             // As rotas de debug da chave do modelo (temporárias, só no perfil dev): só a RBS as usa. Só existem com
             // atlas.debug.chaves=true; o teste de classificação liga a propriedade, porque no perfil test elas não existem.
             "GET /api/debug/llm",
@@ -119,7 +124,12 @@ public class PermissaoAntesDoCorpo implements HandlerInterceptor, WebMvcConfigur
     /** PUT /api/parcerias/{id}/pesquisa/perguntas: do Admin Patrocinador da parceria, com a aba liberada. */
     static final String ENVIO_DAS_PERGUNTAS = "PUT /api/parcerias/{id}/pesquisa/perguntas";
     static final String ABA_DA_PESQUISA = "PESQUISA";
-    static final String SO_PATROCINADOR_ENVIA_PERGUNTAS = "Só o Admin Patrocinador da parceria envia as perguntas da pesquisa.";
+    /**
+     * As rotas das duas pontas com corpo em que a parceria (404) e a aba (403) vêm antes de o corpo ser lido: a marca de outra
+     * parceria ou com a aba fechada não aprende nada sobre o formato do corpo. Rota e aba.
+     */
+    static final Map<String, String> ROTAS_DA_ABA_ANTES_DO_CORPO = Map.of("PUT /api/parcerias/{id}/contrato/signatario", "CONTRATO");
+    static final String SO_PATROCINADOR_ENVIA_PERGUNTAS ="Só o Admin Patrocinador da parceria envia as perguntas da pesquisa.";
 
     private final VerificadorDeAcesso verificador;
     private final boolean rbsLigado;
@@ -163,6 +173,12 @@ public class PermissaoAntesDoCorpo implements HandlerInterceptor, WebMvcConfigur
             if (parceriaId != null) {   // id que não é número: quem responde é o tratador de erros (404), depois daqui
                 verificador.exigirParceria(usuario, parceriaId);
                 verificador.exigirAbaLiberada(usuario, parceriaId, ABA_DA_PESQUISA);
+            }
+        } else if (ROTAS_DA_ABA_ANTES_DO_CORPO.containsKey(rota)) {
+            Long parceriaId = idDoCaminho(requisicao);
+            if (parceriaId != null) {
+                verificador.exigirParceria(usuario, parceriaId);
+                verificador.exigirAbaLiberada(usuario, parceriaId, ROTAS_DA_ABA_ANTES_DO_CORPO.get(rota));
             }
         }
         return true;

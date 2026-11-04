@@ -41,13 +41,24 @@ R5.4.c	back	cortesias.DestinacaoEmParaleloTest#muitosEnviosDeUmaPorVezNuncaPassa
 R5.4.c	back	atlas.DadoPessoalForaDoLogTest#oNomeSoFicaNaColunaDoDestinatarioNemEmLogNemNoAtlasNemNasRespostas
 R5.4.c	back	comum.RotasDosRequisitosDaRbsAcessoTest#idDeOutraParceriaRecebe404ParaAMarcaEParaARbs
 R5.5.a	e2e	requisitos-rbs.spec.ts > [R5.5.a] a marca vê setor, quantidade e período do credenciamento
+R5.5.a	back	credenciamento.CredenciaisDaParceriaTest#rbsGravaAGradeEAMarcaVeSetorBeneficiarioQuantidadeEPeriodo
+R5.5.a	back	credenciamento.CredenciaisDaParceriaTest#quantidadeForaDoLimiteOuQueNaoEInteiraDa422NuncaUm500
 R5.5.b	e2e	requisitos-rbs.spec.ts > [R5.5.b] o botão do Open Staff abre a URL da edição em aba nova
+R5.5.b	back	credenciamento.CredenciaisDaParceriaTest#rbsInformaOEnderecoHttpsEAMarcaOVeNaRotaDasCredenciais
+R5.5.b	back	credenciamento.CredenciaisDaParceriaTest#httpJavascriptUsuarioArrobaEspacoControleBidiOuMuitoGrandeDao422
 R5.6.a	back	pesquisa.PesquisaControllerTest#amareloEnviaTresPerguntasEElasFicamEnviadasEComHistorico
 R5.6.b	back	consolidacao.CargaControllerTest#oExemploDePesquisaEntraEOReenvioNaoDuplica
 R5.6.c	back	pesquisa.PesquisaControllerTest#amareloVeAPesquisaComAsTresPerguntasAprovadasEOsResultadosComABase
 R5.6.d	e2e	requisitos-rbs.spec.ts > [R5.6.d] a RBS abre a pesquisa da edição pela tela
 R5.7.a	e2e	requisitos-rbs.spec.ts > [R5.7.a] a marca informa quem assina o contrato
+R5.7.a	back	contrato.ContratoDaParceriaTest#marcaGravaOSignatarioERbsVeComNomeCargoEmailEData
+R5.7.a	back	contrato.ContratoDaParceriaTest#emailInvalidoNomeCurtoECargoLongoDao422ComOCampoNaResposta
+R5.7.a	back	contrato.ContratoDaParceriaTest#parceriaEncerradaRecusaOSignatarioEOContratoMasContinuaLegivel
+R5.7.a	back	contrato.ContratoDaParceriaTest#canarioDoSignatarioSoFicaNaTabelaContratoEmNenhumHistoricoLogOuTela
 R5.7.b	e2e	requisitos-rbs.spec.ts > [R5.7.b] a RBS sobe o contrato assinado e a marca o abre no visualizador
+R5.7.b	back	contrato.ContratoDaParceriaTest#rbsEnviaV1EV2AMarcaVeAUltimaNoContratoEBaixaAsDuas
+R5.7.b	back	contrato.ContratoDaParceriaTest#marcaRecebe403NoEnvioAntesDeLerOMultipartEOutraMarcaTambem
+R5.7.b	back	materiais.CategoriaDoEnvioTest#categoriaContratoSaiuDaListaDaMarcaEContinuaNaDaRbs
 R6.a	e2e	requisitos-rbs.spec.ts > [R6.a] a aba oculta some do menu da marca
 R6.b	e2e	requisitos-rbs.spec.ts > [R6.b] a aba fora da cota aparece com o motivo, sem liberar
 R6.c	back	parceria.EmailsAutorizadosTest#autorizarExigeOTokenCsrf

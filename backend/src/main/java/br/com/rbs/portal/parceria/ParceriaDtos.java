@@ -39,8 +39,13 @@ public final class ParceriaDtos {
     public record EventoDto(Long id, String nome, Integer edicao) {
     }
 
-    /** Rota 6: a edição do festival com datas e local (as de 2027 ainda são nulas). */
-    public record EventoCompletoDto(Long id, String nome, Integer edicao, LocalDate dataInicio, LocalDate dataFim, String local) {
+    /**
+     * Rota 6: a edição do festival com datas e local (as de 2027 ainda são nulas) e o credenciamento: o endereço do Open Staff (só
+     * https) e o período de cadastro, que a RBS informa pela rota 79.
+     */
+    public record EventoCompletoDto(Long id, String nome, Integer edicao, LocalDate dataInicio, LocalDate dataFim, String local,
+                                    String credenciamentoUrl, LocalDate credenciamentoInicio, LocalDate credenciamentoFim,
+                                    LocalDate cortesiasPrazo) {
     }
 
     /**
