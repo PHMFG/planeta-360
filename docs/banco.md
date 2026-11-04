@@ -54,7 +54,7 @@ Tabelas novas:
 
 | Tabela | Para que serve |
 | --- | --- |
-| `cota_tipo_aba` | Diz quais abas abrem por padrão para cada tipo de cota. Quando uma parceria nasce, um gatilho copia estas linhas para `parceria_aba`. A API também a usa depois: devolve `incluidaNaCota` em cada aba e não deixa a RBS liberar uma aba que a cota não inclui (o banco, por si só, não impede) |
+| `cota_tipo_aba` | Diz quais abas abrem por padrão para cada tipo de cota. Quando uma parceria nasce, um gatilho cria as 7 linhas de `parceria_aba` e marca como liberadas as abas que estas linhas incluem para o tipo de cota. A API também a usa depois: devolve `incluidaNaCota` em cada aba e não deixa a RBS liberar uma aba que a cota não inclui (o banco, por si só, não impede) |
 | `codigo_ativacao` | Código de primeiro acesso, que a RBS repassa ao patrocinador (na V1 não há e-mail automático). Guarda só o hash, a validade e o uso único |
 | `stg_pesquisa` | Área de carga dos resultados da pesquisa, como `stg_veiculacao` é para a mídia |
 
@@ -129,7 +129,7 @@ A V8 abre a segunda parte do MVP do Atlas: o relatório de ativação que a marc
 | Isolamento | Chaves compostas com a parceria: o relatório só se liga a uma conversa da própria parceria (`fk_atlas_relatorio_conversa`) e o cartão só a um relatório da própria parceria (`fk_atlas_solicitacao_relatorio`) |
 | Relatório pronto não muda | O gatilho `rn_atlas_relatorio_congelado` (função `tg_atlas_relatorio_congelado`) recusa `UPDATE` de `especificacao`, `snapshot` e `status` quando o relatório está `PRONTO` ou `DESCARTADO` (os dois são finais) e o `DELETE` de um relatório `PRONTO`. O que está montando muda à vontade e sai por `PRONTO` (com o snapshot, na mesma operação) ou `DESCARTADO` |
 | Histórico | Não muda: `CRIACAO` e `EDICAO` já existem e `historico.entidade` não tem `CHECK`, então o relatório do Atlas grava essas ações com a entidade `atlas_relatorio` |
-| Relatório desligado | Com `atlas.relatorio.ligado=false` (o padrão; os perfis `dev` e `demo` e o `test` ligam a propriedade; veja `docs/api.md`, "Modo só chat"), `atlas_relatorio`, `atlas_solicitacao` e `atlas_calculo` **ficam sem uso**: nada as escreve nem as lê, e nenhuma migração muda (o relatório volta com a propriedade ligada). `atlas_conversa`, `atlas_mensagem` e `atlas_tool_call` seguem em uso pelo chat e pelo debug das ferramentas |
+| Relatório desligado | Com `atlas.relatorio.ligado=false` (o padrão; os perfis `dev` e `demo` e o `test` ligam a propriedade; veja `docs/api.md`, "Modo só chat"), `atlas_relatorio`, `atlas_solicitacao` e `atlas_calculo` **ficam sem uso**: nada as escreve (a lista de conversas e os itens ainda leem `atlas_relatorio` e `atlas_solicitacao`, sem nada para mostrar), e nenhuma migração muda (o relatório volta com a propriedade ligada). `atlas_conversa`, `atlas_mensagem` e `atlas_tool_call` seguem em uso pelo chat e pelo debug das ferramentas |
 
 O que a V8 acrescentou além do desenho do plano: os nomes explícitos das chaves compostas e dos limites (para a conferência e a API se referirem a eles), os dois índices parciais acima e os índices de apoio das consultas por parceria, conversa e relatório.
 
@@ -166,7 +166,7 @@ A V11 entrega os documentos do Atlas (marco M3 do plano): a RBS sobe um PDF ou T
 | Assunto | O que a V11 faz |
 | --- | --- |
 | Pré-requisitos | Recusa subir sem a extensão `vector` ou sem o papel `atlas_ro` (frase: "Rode scripts/preparar-banco-atlas.sh"). O `vector` mora em `extensoes` (o script) e o tipo é usado **sem prefixo de schema**, pelo `search_path` do banco. Cria o `unaccent` em `public` (extensão "trusted": o dono do banco a cria) e dá `USAGE` em `public` ao `atlas_ro` |
-| Busca sem acento | `pt_sem_acento` (cópia da configuração `portuguese`, com `unaccent` antes do stemmer) e `fn_texto_de_busca(t)` (`IMMUTABLE`): leva "-ões" e "-ais" para o singular (`regexp_replace`), porque só o stemmer não casa "informação" com "informações", "inserção" com "inserções", nem "credencial" com "credenciais". A coluna `tsv` e a consulta usam **a mesma função** |
+| Busca sem acento | `pt_sem_acento` (cópia da configuração `portuguese`, com `unaccent` antes do stemmer) e `fn_texto_de_busca(t)` (`IMMUTABLE`): leva "-ões", "-iais" e "-erais" para o singular (`regexp_replace`), porque só o stemmer não casa "informação" com "informações", "inserção" com "inserções", nem "credencial" com "credenciais". A coluna `tsv` e a consulta usam **a mesma função** |
 | `arquivo` | `ck_arquivo_categoria` passa a aceitar `DOCUMENTO` (era `arquivo_categoria_check`). Só a rota 54 grava essa categoria; a rota 17 continua recusando. O anexo de uma parceria é um arquivo da parceria **sem aba**, e a conferência "materiais de parceria sem aba" do `verificacao.sql` o exclui |
 | `documento` | O documento lógico (`chave`, como `manual-operacoes`), a `versao` dentro do grupo, o `tipo` (`MANUAL_OPERACOES`, `PLANO_COMERCIAL`, `ANEXO_PARCERIA`, `FAQ`, `COMUNICADO`, `OUTRO`) e o escopo: `escopo` (`GLOBAL`, `COTA` ou `PARCERIA`), `evento_id` (a edição), `cota_tipo_id` e `parceria_id`. `ck_documento_escopo`: GLOBAL sem cota nem parceria, COTA com cota e sem parceria, PARCERIA com parceria e sem cota. O **grupo** é (edição, escopo, cota, parceria, chave): `uq_documento_grupo_versao` é `NULLS NOT DISTINCT`, senão dois GLOBAL iguais passariam (cota e parceria nulas) |
 | Status | `AGUARDANDO_APROVACAO`, `RECUSADO`, `PROCESSANDO`, `INDEXADO`, `ERRO`, `SUBSTITUIDO` e `REVOGADO`. Aprovar é preencher `aprovado_por` (com `aprovado_por_perfil = 'ADMIN_RBS'`, chave composta com `usuario(id, perfil)`) e passar a `PROCESSANDO`: não há estado parado entre os dois. Nasce `AGUARDANDO_APROVACAO`, ou `ERRO` (PDF sem texto, com senha, corrompido), sem `aprovado_por` |
@@ -226,7 +226,7 @@ A V14 fecha o corte 2 do M6 do plano do Atlas completo: o campo de arquivo da ab
 
 ## O que a V15 mudou
 
-A V15 é o banco do M7 (o JEV nos pontos de decisão) e, junto, a reserva do que o Atlas da RBS (M8) vai precisar, para não passar da faixa V10 a V15 que é desta entrega. Só acrescenta colunas e regras e relaxa duas colunas: nenhuma tabela, visão ou função nova, e a amostra fica como está. Acrescenta 1 gatilho (`rn_atlas_traco_parceria`, e por isso são 29 `rn_*`).
+A V15 é o banco do M7 (o JEV nos pontos de decisão) e, junto, o que o Atlas da RBS (M8) usa, para não passar da faixa V10 a V15 que é desta entrega. Só acrescenta colunas e regras e relaxa duas colunas: nenhuma tabela ou visão nova, e a amostra fica como está. Acrescenta 1 gatilho (`rn_atlas_traco_parceria`, com a função `tg_atlas_traco_parceria`, e por isso são 29 `rn_*`).
 
 | Assunto | O que a V15 faz |
 | --- | --- |
@@ -242,7 +242,7 @@ A V15 é o banco do M7 (o JEV nos pontos de decisão) e, junto, a reserva do que
 
 ## Tabelas por área
 
-Negrito marca a coluna acrescentada depois da Sprint 1 numa tabela que já existia nela; as tabelas novas (`cota_tipo_aba`, `codigo_ativacao`, `stg_pesquisa`, `stg_plano`, `campo_catalogo`, `dado_informado` e as do Atlas) não usam negrito, exceto nas colunas que uma migração seguinte acrescentou a elas (as do Atlas, nas V9 e V15). `id` é sempre a chave primária. Colunas com sufixo `_id` apontam para outra tabela.
+Negrito marca a coluna acrescentada depois da Sprint 1 numa tabela que já existia nela; as tabelas novas (`cota_tipo_aba`, `codigo_ativacao`, `stg_pesquisa`, `stg_plano`, `campo_catalogo`, `dado_informado`, `prazo` e as do Atlas) não usam negrito, exceto nas colunas que uma migração seguinte acrescentou a elas (as do Atlas, nas V9 e V15). `id` é sempre a chave primária. Colunas com sufixo `_id` apontam para outra tabela, com estas exceções: `tool_call_id` é o texto do código da chamada de ferramenta; `evento_id`, `cota_tipo_id` e `parceria_id` de `documento_trecho` são cópias sem chave estrangeira; e `entidade_id` do histórico e `registro_id` das fontes do Atlas dependem da coluna `entidade` ou `registro_entidade`.
 
 ### 1. Núcleo da parceria
 
@@ -261,7 +261,7 @@ A **parceria** é a unidade de isolamento: tudo o que um patrocinador vê pende 
 
 | Tabela | Para que serve | Colunas |
 | --- | --- | --- |
-| `usuario` | Quem entra no portal. Perfil `ADMIN_RBS` ou `ADMIN_PATROCINADOR`. A senha fica em hash BCrypt (vazia até o primeiro acesso) | id, nome, email, senha_hash, perfil, ativo, criado_em |
+| `usuario` | Quem entra no portal. Perfil `ADMIN_RBS` ou `ADMIN_PATROCINADOR`. A senha fica em hash BCrypt (nula até o primeiro acesso) | id, nome, email, senha_hash, perfil, ativo, criado_em |
 | `email_autorizado` | O cadastro prévio: só e-mail autorizado cria acesso. O vínculo é `MARCA` ou `AGENCIA` | id, parceria_id, email, vinculo, autorizado_por, autorizado_em, **revogado_por**, **revogado_em** |
 | `parceria_usuario` | Quem tem acesso a qual parceria | parceria_id, usuario_id, **perfil**, vinculo, criado_em |
 | `codigo_ativacao` | Código de primeiro acesso. Só o hash (SHA-256), com validade e uso único | id, email_autorizado_id, codigo_hash, criado_em, expira_em, usado_em, invalidado_em, tentativas |
@@ -287,7 +287,7 @@ O banco não limita as transições de status da entrega. Essa regra fica na API
 | `aproveitamento_previsto` | O plano comercial: o que a cota comprou (mídia ou aplicação de marca) | id, parceria_id, categoria, bloco, veiculo, formato, espaco_programa, janela, tipo_midia, quantidade_prevista, unidade, fonte_arquivo_id, fonte_pagina |
 | `veiculacao` | Cada exibição comprovada. Única por linha do plano e data/hora | id, aproveitamento_id, exibido_em, quantidade, link, comprovante_arquivo_id, carga_id |
 | `comprovacao_marca` | Fotos das aplicações de marca no evento | id, aproveitamento_id, **parceria_id**, arquivo_id, descricao, registrado_por, registrado_em |
-| `carga` | Cada planilha processada (mídia, pesquisa, comprovação, plano) e seus totais | id, tipo, arquivo_id, **evento_id**, executada_por, executada_em, **processada_em**, linhas_lidas, linhas_inseridas, linhas_duplicadas, linhas_rejeitadas |
+| `carga` | Cada planilha processada (mídia, pesquisa e plano comercial) e seus totais. O tipo `COMPROVACAO` existe no CHECK, mas nenhuma carga o usa | id, tipo, arquivo_id, **evento_id**, executada_por, executada_em, **processada_em**, linhas_lidas, linhas_inseridas, linhas_duplicadas, linhas_rejeitadas |
 | `carga_rejeicao` | Linhas que não entraram, com o motivo | id, carga_id, linha, campo, motivo, conteudo |
 | `stg_veiculacao` | Área de carga: as linhas da planilha de veiculação como chegam | carga_id, linha, patrocinador, veiculo, formato, espaco_programa, exibido_em, quantidade, link, **exibido_em_texto**, **quantidade_texto** |
 | `stg_pesquisa` | Área de carga: as linhas do CSV de resultados da pesquisa | carga_id, linha, patrocinador, pergunta, indicador, alternativa, valor, unidade, base_respondentes, pergunta_texto, valor_texto, base_respondentes_texto |
@@ -361,7 +361,7 @@ As **7 visões de número** somam sem misturar unidades: `vw_midia_veiculo`, `vw
 
 ## Regras do banco
 
-Toda regra de negócio recusada sai com um erro da **classe 23** do PostgreSQL (`check_violation` ou `foreign_key_violation`) e uma mensagem em português.
+Toda regra de negócio recusada sai com um erro da **classe 23** do PostgreSQL (`check_violation` ou `foreign_key_violation`) e uma mensagem em português. A exceção é a `fn_publicar_documento`: documento inexistente ou fora de processamento sai com um erro comum (`P0001`), que é falha interna e não vem de uma tela.
 O nome da regra vem junto (por exemplo `rn_cortesia_limite`). A API traduz a classe 23 em erro 409, com a frase da regra (ou uma frase genérica, em restrição sem frase própria). O 422 é a validação de campos feita pela própria API. A lista abaixo traz as regras principais; não é exaustiva.
 
 ### Como as cargas funcionam
@@ -418,7 +418,7 @@ Os itens 1, 2 e 4 não são "recusas": a conferência mostra o comportamento esp
 | Vínculo exige autorização | `rn_vinculo_exige_autorizacao` | Ninguém é vinculado sem e-mail autorizado e não revogado |
 | Autorização não muda de dono | `rn_email_autorizado_imutavel` | Não se troca a parceria nem o e-mail de uma autorização |
 | Revogação | `rn_email_revogado` | Revogar remove o vínculo dessa parceria e invalida os códigos pendentes |
-| Comprovante de veiculação | `rn_veiculacao_comprovante` | O comprovante é um arquivo da mesma parceria da linha do plano |
+| Comprovante de veiculação | `rn_veiculacao_comprovante` (o erro traz `rn_veiculacao_comprovante_parceria`) | O comprovante é um arquivo da mesma parceria da linha do plano |
 | Abas padrão | `rn_parceria_abas_padrao` | A parceria nasce com as 7 abas, abertas conforme `cota_tipo_aba` |
 | Comprovação | `rn_comprovacao_*` | Foto só vale para aplicação de marca, e o arquivo precisa ser da categoria `COMPROVACAO` |
 | Fonte da pesquisa | `rn_pesquisa_fonte_geral` | O arquivo-fonte da pesquisa é geral da RBS, nunca de uma marca |
@@ -470,7 +470,7 @@ erDiagram
     parceria ||--o{ cortesia_cota : "ganha"
     cortesia_cota ||--o{ cortesia_destinacao : "e_destinada"
     parceria ||--o{ credencial_cota : "ganha"
-    parceria ||--|| contrato : "assina"
+    parceria ||--o| contrato : "assina"
     pesquisa |o--o{ pesquisa_pergunta : "reune"
     parceria ||--o{ pesquisa_pergunta : "propoe"
     pesquisa ||--o{ pesquisa_resultado : "tem"
@@ -497,7 +497,7 @@ erDiagram
     atlas_mensagem ||--o{ atlas_tool_call : "chama"
     atlas_mensagem ||--o{ atlas_decisao : "decide"
     atlas_conversa ||--o{ atlas_traco : "diagnostico"
-    atlas_mensagem ||--o{ atlas_traco : "etapa"
+    atlas_mensagem |o--o{ atlas_traco : "etapa"
     atlas_mensagem ||--o{ atlas_fonte : "cita"
     documento_trecho |o--o{ atlas_fonte : "e_citado"
     documento |o--o{ atlas_fonte : "e_citado"
@@ -553,7 +553,7 @@ As colunas são as mesmas de `stg_veiculacao`, como prevê o plano.
 O exemplo tem 11 linhas: 9 entram, 1 é repetida com o apelido "Amarelo" (duplicada) e 1 tem percentual de 140 (rejeitada).
 Reenviar o mesmo arquivo não insere nada.
 
-**`plano.csv`** (vai para `stg_plano`). É o plano comercial: uma linha por item que a cota comprou, de mídia ou de aplicação de marca. O limite de texto de cada coluna é o da coluna de `aproveitamento_previsto`; acima dele a API recusa o arquivo inteiro (422).
+**`plano.csv`** (vai para `stg_plano`). É o plano comercial: uma linha por item que a cota comprou, de mídia ou de aplicação de marca. O limite de texto de cada coluna é o da coluna do banco, com uma exceção: `quantidade_prevista` e `fonte_pagina` têm 40 caracteres, porque são lidas como número. Acima do limite a API recusa o arquivo inteiro (422).
 
 | Coluna | Obrigatória | O que é |
 | --- | --- | --- |
@@ -662,5 +662,5 @@ Estas três não são mais "decisões em aberto": o banco já impede o contrári
 | Regra | Como o banco garante | O que significa na prática |
 | --- | --- | --- |
 | Uma cota por marca por edição | Único em `(evento_id, patrocinador_id)` na `parceria` (`uq_parceria`) | Uma marca não tem Master e Subcota na mesma edição |
-| Um signatário por contrato | Único em `contrato.parceria_id` | Cada parceria tem um contrato e uma pessoa que assina. Dois signatários não cabem |
+| Um signatário por contrato | Único em `contrato.parceria_id` | Cada parceria tem no máximo um contrato, com uma pessoa que assina. Dois signatários não cabem |
 | Chave da veiculação sem janela | Único em `(aproveitamento_id, exibido_em)` (`uq_veiculacao`). A janela também fica fora da chave do plano (`uq_aprov_chave_natural`) | Duas exibições iguais, no mesmo instante e na mesma linha do plano, são uma só, mesmo com janelas diferentes |
