@@ -1,0 +1,9 @@
+# Rotas novas do plano final (requisitos da RBS), congeladas a partir da coluna "Quem" da seção 5.3 do plano.
+# Colunas, separadas por tabulação: método, caminho (como no controller) e quem chama (ambos = a marca da parceria e a RBS; rbs = só a RBS).
+# O RotasDosRequisitosDaRbsAcessoTest lê este arquivo. Uma rota por linha: cada fase acrescenta as suas. Mudar uma linha é mudar o plano.
+GET	/api/parcerias/{id}/cortesias	ambos
+PATCH	/api/parcerias/{id}/cortesias/cotas	rbs
+PATCH	/api/eventos/{id}/cortesias	rbs
+POST	/api/parcerias/{id}/cortesias/destinacoes	ambos
+PATCH	/api/parcerias/{id}/cortesias/destinacoes/{destId}	ambos
+DELETE	/api/parcerias/{id}/cortesias/destinacoes/{destId}	ambos

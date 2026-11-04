@@ -232,7 +232,10 @@ class PermissaoAntesDoCorpoTest {
             "GET /api/atlas/relatorios/{id}", "GET /api/parcerias/{id}/atlas/relatorios",
             // Rota 56: a RBS vê o documento inteiro; a marca, pelo escopo dela, só o que a rota mostra. Rotas 59 e 60: o visualizador
             // (o arquivo e um trecho inteiro), com a mesma regra de acesso.
-            "GET /api/documentos/{id}", "GET /api/documentos/{id}/conteudo", "GET /api/documentos/{id}/trechos/{trechoId}");
+            "GET /api/documentos/{id}", "GET /api/documentos/{id}/conteudo", "GET /api/documentos/{id}/trechos/{trechoId}",
+            // As cortesias (rotas 80, 83, 84 e 85): a marca da parceria (com a aba aberta) e a RBS; a cota e o prazo (81 e 82) são só da RBS.
+            "GET /api/parcerias/{id}/cortesias", "POST /api/parcerias/{id}/cortesias/destinacoes",
+            "PATCH /api/parcerias/{id}/cortesias/destinacoes/{destId}", "DELETE /api/parcerias/{id}/cortesias/destinacoes/{destId}");
 
     @Test
     void todaRotaDaApiEstaClassificadaEAListaDaRbsSoTemRotasQueExistem() {

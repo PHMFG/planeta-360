@@ -175,10 +175,16 @@ Todas prontas e testadas. A coluna "Etapa" mostra em que etapa do plano a rota e
 | 66 | `POST /api/parcerias/{id}/dados-informados/{chave}/arquivo` | Patrocinador da parceria, ou Admin RBS | Envia o arquivo de um campo de arquivo do catálogo (a planilha da agência: xlsx, xls ou csv); devolve o valor vigente | Atlas M6 |
 | 67 | `POST /api/eventos/{eventoId}/atlas/conversas` | Admin RBS (com `atlas.rbs.ligado`) | Abre uma conversa da RBS com o Atlas nesta edição, sem parceria | Atlas M8 |
 | 68 | `GET /api/eventos/{eventoId}/atlas/conversas` | Admin RBS (com `atlas.rbs.ligado`) | As conversas de quem pede nesta edição | Atlas M8 |
+| 80 | `GET /api/parcerias/{id}/cortesias` | Patrocinador da parceria (aba `CORTESIAS` aberta), ou Admin RBS | A tabela "Destinação de ingressos": por setor e tipo/dia, a cota, as destinadas, as disponíveis, o acesso e o shuttle; as destinações e o prazo da edição | Cortesias |
+| 81 | `PATCH /api/parcerias/{id}/cortesias/cotas` | Admin RBS | Grava a cota por setor e dia, com o acesso e o shuttle | Cortesias |
+| 82 | `PATCH /api/eventos/{id}/cortesias` | Admin RBS | Define (ou tira) o prazo de destinação das cortesias da edição | Cortesias |
+| 83 | `POST /api/parcerias/{id}/cortesias/destinacoes` | Patrocinador da parceria (aba aberta), ou Admin RBS | Destina cortesias a um destinatário, dentro do disponível | Cortesias |
+| 84 | `PATCH /api/parcerias/{id}/cortesias/destinacoes/{destId}` | Patrocinador da parceria (aba aberta), ou Admin RBS | Muda o destinatário ou a quantidade de uma destinação | Cortesias |
+| 85 | `DELETE /api/parcerias/{id}/cortesias/destinacoes/{destId}` | Patrocinador da parceria (aba aberta), ou Admin RBS | Retira uma destinação (apaga de verdade) | Cortesias |
 
-São 68 operações (método + caminho): 67 mapeadas nos controllers (`@GetMapping`, `@PostMapping`, `@PutMapping`, `@PatchMapping` ou `@DeleteMapping`) e o logout (rota 3), que vem do Spring Security (`SegurancaConfig`), sem controller. As quatro rotas de debug ficam de fora da numeração. A rota 5 (`ativar`) faz parte do contrato de autenticação, mas só é implementada na etapa 4. As rotas 37 em diante vieram com o Atlas: a coluna "Etapa" diz `Atlas 1` (plano de aplicações e dados informados), `Atlas 2` (conversa, cartão de perguntas e relatório), `Atlas M2` (o diagnóstico: rotas 49 a 53, veja "Diagnóstico do Atlas") `Atlas M3` (os documentos: rotas 54 a 58, veja "Os documentos do Atlas") `Atlas M4` (o visualizador, rotas 59 e 60, e a busca de teste, rota 61, veja "Busca nos documentos") `Atlas M5` (os prazos: rotas 62 a 64, veja "Os prazos do Atlas") `Atlas M6` (o relatório religado: a rota 65, veja "Descarte do relatório parado"; e a planilha da agência: a rota 66, veja "Dados informados pela marca") ou `Atlas M8` (o Atlas da RBS: as rotas 67 e 68, veja "O Atlas da RBS"). As rotas 54, 55, 57, 58, 61, 62, 63, 64, 67 e 68 são só do Admin RBS (o outro perfil recebe **403** antes de o corpo ser lido); a 56, a 59 e a 60 são das duas pontas, e a marca só vê o que o escopo dela permite; a 66 é da marca da parceria e da RBS. A 49 é do dono da conversa (a marca, ou a RBS na conversa do Atlas da RBS); as 50 a 53 são só do Admin RBS (o outro perfil recebe **403** antes de tudo). **As rotas 49 a 53 estão sempre mapeadas e respondem 404 com o diagnóstico desligado** (`atlas.diagnostico.ligado=false`, o padrão). Nas rotas 42, 43, 46 e 65 só o Admin Patrocinador chama (a RBS recebe **403** antes de o corpo ser lido); nas 44, 45 e 49 chama o dono da conversa: a marca na conversa da parceria dela e, com `atlas.rbs.ligado`, a RBS na conversa dela, a do Atlas da RBS (a RBS recebe **403** antes do corpo em qualquer outra conversa, e sempre com a propriedade desligada); nas 47 e 48 chamam a marca da parceria e a RBS. **O relatório do Atlas está ligado nos perfis `dev`, `demo` e `test` e desligado no padrão** (`atlas.relatorio.ligado=false`, `ATLAS_RELATORIO`). Desligado, as rotas **46, 47, 48 e 65 não existem (404)**, e as rotas 42 e 44 só aceitam conversa por texto (`atalho` e `modelo` dão 422): é o modo só chat, que continua existindo e testado. Veja "Modo só chat". O contrato do relatório, nas rotas 42 a 48 e 65, vale com `atlas.relatorio.ligado=true`.
+São 74 operações (método + caminho; as rotas 69 a 79 são de outras fases do plano final e entram na conta de quem as escreve): 73 mapeadas nos controllers (`@GetMapping`, `@PostMapping`, `@PutMapping`, `@PatchMapping` ou `@DeleteMapping`) e o logout (rota 3), que vem do Spring Security (`SegurancaConfig`), sem controller. As quatro rotas de debug ficam de fora da numeração. A rota 5 (`ativar`) faz parte do contrato de autenticação, mas só é implementada na etapa 4. As rotas 37 em diante vieram com o Atlas: a coluna "Etapa" diz `Atlas 1` (plano de aplicações e dados informados), `Atlas 2` (conversa, cartão de perguntas e relatório), `Atlas M2` (o diagnóstico: rotas 49 a 53, veja "Diagnóstico do Atlas") `Atlas M3` (os documentos: rotas 54 a 58, veja "Os documentos do Atlas") `Atlas M4` (o visualizador, rotas 59 e 60, e a busca de teste, rota 61, veja "Busca nos documentos") `Atlas M5` (os prazos: rotas 62 a 64, veja "Os prazos do Atlas") `Atlas M6` (o relatório religado: a rota 65, veja "Descarte do relatório parado"; e a planilha da agência: a rota 66, veja "Dados informados pela marca") ou `Atlas M8` (o Atlas da RBS: as rotas 67 e 68, veja "O Atlas da RBS"). As rotas 54, 55, 57, 58, 61, 62, 63, 64, 67 e 68 são só do Admin RBS (o outro perfil recebe **403** antes de o corpo ser lido); a 56, a 59 e a 60 são das duas pontas, e a marca só vê o que o escopo dela permite; a 66 é da marca da parceria e da RBS. A 49 é do dono da conversa (a marca, ou a RBS na conversa do Atlas da RBS); as 50 a 53 são só do Admin RBS (o outro perfil recebe **403** antes de tudo). **As rotas 49 a 53 estão sempre mapeadas e respondem 404 com o diagnóstico desligado** (`atlas.diagnostico.ligado=false`, o padrão). Nas rotas 42, 43, 46 e 65 só o Admin Patrocinador chama (a RBS recebe **403** antes de o corpo ser lido); nas 44, 45 e 49 chama o dono da conversa: a marca na conversa da parceria dela e, com `atlas.rbs.ligado`, a RBS na conversa dela, a do Atlas da RBS (a RBS recebe **403** antes do corpo em qualquer outra conversa, e sempre com a propriedade desligada); nas 47 e 48 chamam a marca da parceria e a RBS. **O relatório do Atlas está ligado nos perfis `dev`, `demo` e `test` e desligado no padrão** (`atlas.relatorio.ligado=false`, `ATLAS_RELATORIO`). Desligado, as rotas **46, 47, 48 e 65 não existem (404)**, e as rotas 42 e 44 só aceitam conversa por texto (`atalho` e `modelo` dão 422): é o modo só chat, que continua existindo e testado. Veja "Modo só chat". O contrato do relatório, nas rotas 42 a 48 e 65, vale com `atlas.relatorio.ligado=true`.
 
-As rotas de debug do modelo de linguagem (`/api/debug/llm`) são temporárias, só existem no perfil `dev` (o perfil `demo`, da apresentação, as deixa em 404), são só da RBS e ficam fora desta tabela e da conta das 68: veja "Rotas de debug (temporárias)", no fim.
+As rotas de debug do modelo de linguagem (`/api/debug/llm`) são temporárias, só existem no perfil `dev` (o perfil `demo`, da apresentação, as deixa em 404), são só da RBS e ficam fora desta tabela e da conta das 74: veja "Rotas de debug (temporárias)", no fim.
 
 ## Objetos que se repetem
 
@@ -1485,6 +1491,127 @@ Envia o arquivo de um campo `ARQUIVO` do catálogo. Hoje existe um só: `ativaca
 
 ---
 
+## 80. `GET /api/parcerias/{id}/cortesias`  · Cortesias
+
+**Quem chama:** patrocinador da parceria, ou Admin RBS. A marca de outra parceria recebe **404**; a marca só lê com a aba `CORTESIAS` aberta (**403** com as duas frases de "Aba" quando está fechada, oculta ou fora da cota); a RBS lê sempre.
+
+**200**
+
+```json
+{
+  "parceriaId": 4,
+  "cortesiasPrazo": "2027-01-15",
+  "prazoEncerrado": false,
+  "totais": { "cota": 8, "destinadas": 6, "disponiveis": 2, "percentual": 75.0 },
+  "cotas": [
+    {
+      "id": 11, "setor": "ARENA", "dia": "SABADO", "cota": 3, "destinadas": 2, "disponiveis": 1,
+      "acesso": "P6", "comShuttle": false,
+      "destinacoes": [
+        {
+          "id": 31, "destinatario": "Maria Souza", "quantidade": 1,
+          "registradoPor": { "id": 7, "nome": "Marketing Verde", "perfil": "ADMIN_PATROCINADOR" },
+          "registradoEm": "2026-11-03T16:00:00-03:00"
+        }
+      ]
+    }
+  ]
+}
+```
+
+- `setor` é `ARENA`, `CAMAROTE`, `PREMIUM` ou `LOUNGE`; `dia` é o tipo da cortesia: `PASSAPORTE` (contado à parte, nunca como sexta mais sábado), `SEXTA` ou `SABADO`. `cotas` traz só as células que a RBS cadastrou, na ordem Arena, Camarote, Premium, Lounge e, em cada setor, passaporte, sexta e sábado.
+- `cota` é o que a RBS deu; `destinadas` é a soma das destinações da célula; `disponiveis` é `cota - destinadas`. `acesso` é o portão (texto livre, até 80 caracteres, ou `null`) e `comShuttle` diz se a cota sai com shuttle.
+- `totais` vem da mesma visão da rota 29 (`cortesias`): `totais.cota` é o `disponiveis` dela (a soma das cotas) e `totais.destinadas` é o mesmo número; aqui `totais.disponiveis` é o que ainda se pode destinar, e `percentual` é `destinadas ÷ cota × 100` cortado na primeira casa. Sem nenhuma cota cadastrada, os quatro campos são `null` e `cotas` vem `[]`.
+- `cortesiasPrazo` é o prazo de destinação da edição (rota 82), ou `null` se não há prazo. `prazoEncerrado` é `true` quando o prazo existe e já passou (data de hoje em Brasília): a marca não destina mais, e a RBS ainda ajusta.
+- `destinacoes` traz, de cada destinação, o **nome do destinatário** (só um nome, em texto: não há e-mail, CPF nem telefone) e quem a registrou. É o único lugar em que o nome sai; veja "O nome do destinatário" abaixo.
+
+**Erros:** 401; 403 (aba fechada, só para a marca); 404 (parceria que não existe ou é de outra).
+
+## 81. `PATCH /api/parcerias/{id}/cortesias/cotas`  · Cortesias
+
+**Quem chama:** Admin RBS (exige o token CSRF). O patrocinador recebe **403** antes de o corpo ser lido, com qualquer parceria e qualquer corpo.
+
+**Corpo**
+
+```json
+{ "cotas": [ { "setor": "ARENA", "dia": "SABADO", "quantidade": 3, "comShuttle": false, "acesso": "Portão 6" } ] }
+```
+
+Cada célula é **a cota inteira** daquele setor e dia: cria a cota, muda a quantidade, o acesso ou o shuttle, ou, com `quantidade: 0` e nada destinado, retira a cota. `comShuttle` ausente vale `false`; `acesso` em branco vale `null`. De 1 a 24 células. **Tudo ou nada:** uma célula recusada não deixa gravar nenhuma. Mandar o que já está não grava nada (nem histórico).
+
+**200** com o mesmo corpo da rota 80.
+
+**422** (`campos` com a célula, por exemplo `cotas[0].quantidade`):
+
+| Campo | Frase |
+| --- | --- |
+| `cotas` | `Envie de 1 a 24 células de cota.` |
+| `cotas[i].setor` | `Setor inválido. Use ARENA, CAMAROTE, PREMIUM ou LOUNGE.` |
+| `cotas[i].dia` | `Tipo ou dia inválido. Use PASSAPORTE, SEXTA ou SABADO.` (e `Este setor e este tipo/dia aparecem mais de uma vez.` para o par repetido) |
+| `cotas[i].quantidade` | `Informe a quantidade.`, `A quantidade não pode ser negativa.`, `A quantidade máxima é 32.767.` ou `A cota de Arena · sábado não pode ficar abaixo das 2 cortesias já destinadas.` (inclui o `0` com destinação) |
+| `cotas[i].acesso` | `O acesso tem no máximo 80 caracteres.` ou `O texto tem caracteres que o portal não aceita.` (NUL, controle e inversores de direção) |
+
+**Outros erros:** 401; 403 (CSRF, ou perfil); 404 (parceria que não existe); **409** `Esta parceria está encerrada e não aceita alterações.` (parceria `ENCERRADA` recusa toda escrita desta aba). O prazo da edição não vale para a RBS.
+
+**Histórico:** uma linha por célula alterada, na entidade `cortesia_cota` (`CRIACAO`, `EDICAO` ou `EXCLUSAO`), com a quantidade anterior e a nova e o detalhe `Arena · sábado` (com ` (acesso ou shuttle)` quando só isso mudou).
+
+## 82. `PATCH /api/eventos/{id}/cortesias`  · Cortesias
+
+**Quem chama:** Admin RBS (exige o token CSRF). O patrocinador recebe **403** antes de o corpo ser lido.
+
+**Corpo:** `{ "cortesiasPrazo": "2027-01-15" }`, ou `{ "cortesiasPrazo": null }` para tirar o prazo (sem data, não há trava). O campo tem de vir: corpo sem ele dá 422, para um corpo vazio não apagar o prazo sem querer.
+
+**200:** `{ "eventoId": 2, "edicao": 2027, "cortesiasPrazo": "2027-01-15" }`.
+
+**Erros:** 401; 403; 404 (`Não encontramos esta edição.`); **422** com `campos.cortesiasPrazo` (`Informe a data (AAAA-MM-DD) ou null para tirar o prazo.` ou `Data inválida. Use o formato AAAA-MM-DD, por exemplo 2026-10-23.`). **Histórico:** `EDICAO` na entidade `evento`, com a data anterior e a nova.
+
+**O que o prazo faz.** Com `cortesiasPrazo` definido, depois dele (a partir do dia seguinte, no horário de Brasília) a **marca** recebe **422** nas rotas 83, 84 e 85, com a data na frase: `O prazo para destinar cortesias terminou em 15/01/2027. Peça o ajuste à RBS.` (também em `campos.cortesiasPrazo`). A RBS ainda destina, edita e retira. Ler (rota 80) continua valendo para os dois. Sem prazo definido, não há trava.
+
+## 83. `POST /api/parcerias/{id}/cortesias/destinacoes`  · Cortesias
+
+**Quem chama:** patrocinador da parceria (com a aba `CORTESIAS` aberta) ou Admin RBS, no lugar dele. Exige o token CSRF.
+
+**Corpo**
+
+```json
+{ "setor": "ARENA", "dia": "SABADO", "quantidade": 1, "destinatario": "Maria Souza" }
+```
+
+`quantidade` de 1 a 32.767; `destinatario` é um nome de 1 a 120 caracteres (espaços das pontas saem e os repetidos viram um). **A destinação só vale dentro do disponível:** a cota é travada (`FOR UPDATE`) antes de somar o que já foi destinado, então dois envios ao mesmo tempo não passam do `disponiveis`: um grava, o outro recebe 422.
+
+**201** com o mesmo corpo da rota 80, já com a destinação nova.
+
+**422** (`campos`; nunca repete o nome recebido):
+
+| Campo | Frase |
+| --- | --- |
+| `setor`, `dia` | as mesmas da rota 81 |
+| `quantidade` | `Informe a quantidade.`, `A quantidade não pode ser negativa.`, `A quantidade máxima é 32.767.`, `Destine pelo menos 1 cortesia.`; acima do disponível: `Só restam 1 cortesia de Arena · sábado para destinar.` (ou `Só restam N cortesias de ...`, ou `Não restam cortesias de Arena · sexta-feira para destinar.`). **Nada é gravado**: quem monta a tela mantém o que a pessoa digitou |
+| `destinatario` | `O destinatário é obrigatório.`, `O destinatário tem no máximo 120 caracteres.` ou `O texto tem caracteres que o portal não aceita.` (NUL, controle, inversores de direção) |
+| `setor` (cota que a parceria não tem) | `Esta parceria não tem cota de cortesia de Lounge · sexta-feira.` |
+| `cortesiasPrazo` | a frase do prazo vencido, só para a marca (veja a rota 82) |
+
+**Outros erros:** 401; 403 (CSRF, ou aba fechada: as duas frases de "Aba"); 404 (parceria de outra marca ou que não existe); **409** `Esta parceria está encerrada e não aceita alterações.`
+
+**Histórico:** `CRIACAO` na entidade `cortesia_destinacao`, com `1 cortesia` em `valorNovo` e `Arena · sábado` no detalhe. **Nunca o nome.**
+
+## 84. `PATCH /api/parcerias/{id}/cortesias/destinacoes/{destId}`  · Cortesias
+
+**Quem chama:** os mesmos da rota 83. A marca e a RBS editam **qualquer** destinação da parceria, também as que o outro criou.
+
+**Corpo:** `{ "destinatario": "Ana Souza", "quantidade": 2 }`. O que não vem não muda; é preciso mandar ao menos um (senão **422** `Informe o destinatário ou a quantidade.`). O setor e o dia não mudam: para trocar, retire e destine de novo. Aumentar a quantidade confere o disponível com a cota travada, descontando a própria destinação (os mesmos 422 da rota 83).
+
+**200** com o corpo da rota 80. **Erros:** os da rota 83, e **404** `Não encontramos esta destinação.` para o id de outra parceria (a consulta junta a cota e filtra pela parceria da URL: nunca 403) ou que não existe. **Histórico:** `EDICAO`, com a quantidade anterior e a nova e o detalhe `Arena · sábado (destinatário alterado)` quando o nome mudou; sem o nome.
+
+## 85. `DELETE /api/parcerias/{id}/cortesias/destinacoes/{destId}`  · Cortesias
+
+**Quem chama:** os mesmos da rota 83, em qualquer destinação da parceria. **204**, sem corpo. **Apagar é apagar de verdade:** a linha sai do banco com o nome. O histórico fica com a quantidade (`EXCLUSAO`, `valorAnterior` `1 cortesia`) e o setor, sem o nome. **Erros:** os da rota 83, e 404 para a destinação de outra parceria, que não existe ou já foi retirada.
+
+### O nome do destinatário (D8)
+
+O destinatário é só um nome, em texto. Ele fica na coluna `cortesia_destinacao.destinatario_nome` e sai em um lugar: a rota 80 (e as respostas das rotas 81, 83 e 84, que devolvem o mesmo corpo). **Fora de log** (nem o corpo lido nem a resposta escrita: os `toString` dos objetos omitem o nome), **fora do histórico, do Atlas** (`consultar_cota` só soma `destinadas` e `disponiveis`, e a fonte do turno diz "Destinadas: 3. Disponíveis para destinar: 0."), **do JEV e do relatório**. Não há índice nem regra única sobre o nome: a repetição é permitida (duas pessoas se chamam Maria). O `DadoPessoalForaDoLogTest` grava um nome canário e varre todas as colunas de texto do banco, os eventos de log e o JSON da ferramenta.
+
+
 # O Atlas: conversa, cartão de perguntas e relatório (Atlas, parte 2)
 
 O Atlas monta o relatório de **Ativação no evento** da marca. Ele monta a estrutura e redige, mas **nunca escreve um número**: todo número do relatório vem do portal (a consolidação e o plano de aplicações), de um dado informado com autor e data (rotas 40 e 41) ou de uma conta registrada, e cada um aparece em "Fontes e cálculos". O relatório é um **documento de trabalho da marca**, com o selo "Não validado pela RBS": o relatório oficial (rotas 31 a 36) não muda.
@@ -2748,8 +2875,8 @@ Ligada:
 
 | Quem | Pode |
 | --- | --- |
-| **Admin RBS** | Quase tudo: criar parcerias, autorizar e revogar e-mails, criar entregas, mudar status, mandar retorno, aprovar perguntas, subir cargas (inclusive o plano comercial), anexar as fotos de comprovação das aplicações, informar os dados da ativação, a planilha da agência inclusa, no lugar da marca, gerar e disponibilizar relatórios, ver o histórico geral e o painel. **Não** conversa com o Atlas das marcas nem descarta o relatório dele (rotas 42, 43, 46 e 65 dão 403, e as 44, 45 e 49 também numa conversa de parceria), mas conversa com o Atlas da RBS (rotas 67 e 68 e, na conversa dela, as 44, 45 e 49, com `atlas.rbs.ligado`), lê os relatórios que o Atlas montou (rotas 47 e 48) e, com o diagnóstico ligado, o traço de todos os turnos, o estado dos provedores e o teste deles (rotas 50 a 53). Envia, lista, aprova, recusa, revoga e reindexa os documentos do Atlas e vê os trechos (rotas 54 a 58); abre o arquivo e um trecho no visualizador (rotas 59 e 60) e faz a busca de teste (rota 61). Lista, cadastra e desativa os prazos que o Atlas consulta (rotas 62 a 64). Usa as rotas de debug da chave do modelo (só dela). |
-| **Admin Patrocinador** | Ver a própria parceria, as entregas das abas liberadas, enviar materiais, baixar arquivos da parceria, ver o histórico dela, enviar as perguntas da pesquisa, ver a consolidação, o plano de aplicações com as fotos e informar os dados da ativação, a planilha da agência inclusa (aba `APLICACOES` aberta), ver um documento do Atlas que o escopo dela permite (rota 56: título, tipo, versão, páginas e se foi substituído) e abri-lo no visualizador, com o arquivo e o trecho citado (rotas 59 e 60), conversar com o Atlas e montar o relatório de ativação pelo botão ou, com o modelo de linguagem ligado, pelo texto livre (rotas 42 a 46, só ela; a conversa é de quem a abriu, e a conversa da RBS é como a que não existe: 404), ver os relatórios do Atlas da parceria (rotas 47 e 48) e descartar o relatório que ela criou e que está em montagem (rota 65, só o dono do relatório: outro Admin Patrocinador da parceria recebe 404), o diagnóstico das próprias conversas (rota 49, só com `atlas.diagnostico.ligado` e `atlas.diagnostico.marca` ligados) e o relatório disponibilizado. **Nunca** vê outra parceria nem as rotas da RBS. |
+| **Admin RBS** | Quase tudo: criar parcerias, autorizar e revogar e-mails, criar entregas, mudar status, mandar retorno, aprovar perguntas, subir cargas (inclusive o plano comercial), anexar as fotos de comprovação das aplicações, informar os dados da ativação, a planilha da agência inclusa, no lugar da marca, gerar e disponibilizar relatórios, ver o histórico geral e o painel. **Não** conversa com o Atlas das marcas nem descarta o relatório dele (rotas 42, 43, 46 e 65 dão 403, e as 44, 45 e 49 também numa conversa de parceria), mas conversa com o Atlas da RBS (rotas 67 e 68 e, na conversa dela, as 44, 45 e 49, com `atlas.rbs.ligado`), lê os relatórios que o Atlas montou (rotas 47 e 48) e, com o diagnóstico ligado, o traço de todos os turnos, o estado dos provedores e o teste deles (rotas 50 a 53). Envia, lista, aprova, recusa, revoga e reindexa os documentos do Atlas e vê os trechos (rotas 54 a 58); abre o arquivo e um trecho no visualizador (rotas 59 e 60) e faz a busca de teste (rota 61). Lista, cadastra e desativa os prazos que o Atlas consulta (rotas 62 a 64). Usa as rotas de debug da chave do modelo (só dela). Grava a cota de cortesias por setor e dia, com o acesso e o shuttle, e o prazo de destinação da edição (rotas 81 e 82), e destina, edita e retira cortesias no lugar da marca, também depois do prazo (rotas 83 a 85). |
+| **Admin Patrocinador** | Ver a própria parceria, as entregas das abas liberadas, enviar materiais, baixar arquivos da parceria, ver o histórico dela, enviar as perguntas da pesquisa, ver a consolidação, o plano de aplicações com as fotos e informar os dados da ativação, a planilha da agência inclusa (aba `APLICACOES` aberta), ver um documento do Atlas que o escopo dela permite (rota 56: título, tipo, versão, páginas e se foi substituído) e abri-lo no visualizador, com o arquivo e o trecho citado (rotas 59 e 60), conversar com o Atlas e montar o relatório de ativação pelo botão ou, com o modelo de linguagem ligado, pelo texto livre (rotas 42 a 46, só ela; a conversa é de quem a abriu, e a conversa da RBS é como a que não existe: 404), ver os relatórios do Atlas da parceria (rotas 47 e 48) e descartar o relatório que ela criou e que está em montagem (rota 65, só o dono do relatório: outro Admin Patrocinador da parceria recebe 404), o diagnóstico das próprias conversas (rota 49, só com `atlas.diagnostico.ligado` e `atlas.diagnostico.marca` ligados) e o relatório disponibilizado. **Nunca** vê outra parceria nem as rotas da RBS. Ver a tabela de cortesias e destiná-las, editar e retirar qualquer destinação da parceria, dentro do disponível e até o prazo da edição, se houver (rotas 80, 83, 84 e 85; aba `CORTESIAS` aberta). |
 
 ## O que a API grava no histórico
 

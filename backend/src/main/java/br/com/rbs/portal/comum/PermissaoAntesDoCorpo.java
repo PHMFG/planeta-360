@@ -59,6 +59,10 @@ public class PermissaoAntesDoCorpo implements HandlerInterceptor, WebMvcConfigur
             "POST /api/parcerias/{id}/relatorios",
             "PATCH /api/relatorios/{id}/status",
             "POST /api/parcerias/{id}/aplicacoes/{aproveitamentoId}/comprovacoes",
+            // As cortesias (rotas 81 e 82): a RBS grava a cota por setor e dia e o prazo de destinação da edição. As rotas 80, 83, 84 e 85
+            // são das duas pontas.
+            "PATCH /api/parcerias/{id}/cortesias/cotas",
+            "PATCH /api/eventos/{id}/cortesias",
             // O diagnóstico do Atlas (rotas 50 a 53): os turnos de todas as conversas e os provedores. Sempre mapeadas; com o
             // diagnóstico desligado a RBS recebe 404 do service.
             "GET /api/atlas/diagnostico/turnos",
