@@ -150,6 +150,34 @@ public class Armazenamento {
     }
 
     /**
+     * Grava um arquivo avulso de uma parceria numa aba, com versão: a maior que a parceria já tem nessa categoria (arquivos sem
+     * entrega) mais 1. Serve ao plano comercial e ao formulário de ingressos (rotas 70 e 73). [ISOLAMENTO] Quem chama já travou a
+     * linha da parceria (FOR UPDATE), para dois envios ao mesmo tempo não pegarem a mesma versão; o índice uq_arquivo_versao_avulso
+     * é a segunda defesa. Os erros são os de {@link #gravar(byte[], String, String, long, Long)}.
+     */
+    public Arquivo gravarVersionadoNaAba(byte[] conteudo, String nomeOriginal, String categoria, long enviadoPor, long parceriaId,
+                                         String abaCodigo, String observacao) {
+        Preparado pronto = preparar(conteudo, nomeOriginal, Aceitos.COMUNS);
+        Integer abaId = jdbc.sql("SELECT id FROM aba WHERE codigo = :codigo").param("codigo", abaCodigo)
+                .query(Integer.class).optional()
+                .orElseThrow(() -> new IllegalArgumentException("A aba " + abaCodigo + " não existe."));
+        String caminho = "parcerias/" + parceriaId + "/" + pronto.nomeNoDisco();
+        escrever(caminho, conteudo);
+        return inserir("""
+                        INSERT INTO arquivo (parceria_id, aba_id, categoria, nome_original, mime_type, tamanho_bytes, caminho,
+                                             hash_sha256, versao, enviado_por, observacao)
+                        VALUES (:parceriaId, :abaId, :categoria, :nome, :mime, :tamanho, :caminho, :hash,
+                                coalesce((SELECT max(a.versao) FROM arquivo a WHERE a.parceria_id = :parceriaId
+                                          AND a.categoria = :categoria AND a.entrega_id IS NULL), 0) + 1,
+                                :enviadoPor, nullif(CAST(:observacao AS text), ''))
+                        RETURNING\s""" + COLUNAS,
+                Map.of("abaId", abaId, "categoria", categoria, "nome", pronto.nomeOriginal(), "mime", pronto.tipo().mime(),
+                        "tamanho", (long) conteudo.length, "caminho", caminho, "hash", pronto.hash(),
+                        "enviadoPor", enviadoPor, "observacao", observacao == null ? "" : observacao),
+                parceriaId, caminho);
+    }
+
+    /**
      * Grava uma nova versão de uma entrega: a parceria e a aba vêm da entrega, e a versão é a maior que ela já tem mais 1.
      * [ISOLAMENTO] Quem chama já conferiu que o usuário pode mexer nesta entrega e a travou (FOR UPDATE), para dois envios
      * ao mesmo tempo não pegarem a mesma versão.

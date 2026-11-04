@@ -16,6 +16,7 @@ public final class MateriaisDtos {
     /** Os códigos das 7 abas, na ordem do menu (tabela aba). */
     public static final String PADRAO_ABA = "PERFIL|APLICACOES|MIDIA|CORTESIAS|CREDENCIAMENTO|PESQUISA|CONTRATO";
     public static final String PADRAO_STATUS = "NAO_INICIADO|AGUARDANDO_ENVIO|ENVIADO|EM_ANALISE|AJUSTE_SOLICITADO|APROVADO|NAO_APLICAVEL";
+    public static final String PADRAO_PAPEL = "DOCUMENTO_INGRESSOS|MIV|LOGO";
     public static final String PADRAO_STATUS_INICIAL = "NAO_INICIADO|AGUARDANDO_ENVIO|NAO_APLICAVEL";
 
     private MateriaisDtos() {
@@ -43,8 +44,8 @@ public final class MateriaisDtos {
     public record ObservacaoDto(String texto, String por, OffsetDateTime em) {
     }
 
-    /** Objeto "Entrega" do contrato; os arquivos vêm da versão mais nova para a mais antiga. */
-    public record EntregaDto(Long id, Long parceriaId, String abaCodigo, String titulo, String descricao, String status,
+    /** Objeto "Entrega" do contrato ({@code papel} é nulo na entrega comum); os arquivos vêm da versão mais nova para a mais antiga. */
+    public record EntregaDto(Long id, Long parceriaId, String abaCodigo, String papel, String titulo, String descricao, String status,
                              LocalDate prazo, OffsetDateTime criadoEm, OffsetDateTime atualizadoEm, List<ArquivoDto> arquivos,
                              ObservacaoDto ultimaObservacao) {
     }
@@ -61,7 +62,9 @@ public final class MateriaisDtos {
             String descricao,
             LocalDate prazo,
             @Pattern(regexp = PADRAO_STATUS_INICIAL, message = "O status inicial deve ser NAO_INICIADO, AGUARDANDO_ENVIO ou NAO_APLICAVEL.")
-            String status) {
+            String status,
+            @Pattern(regexp = PADRAO_PAPEL, message = "Papel inválido. Use DOCUMENTO_INGRESSOS, MIV ou LOGO.")
+            String papel) {
     }
 
     /** [VALIDACAO] Corpo da rota 19. A observação obrigatória (pedir ajuste, reabrir) é conferida no EntregaService. */
@@ -78,7 +81,7 @@ public final class MateriaisDtos {
     }
 
     /** Uma linha da fila de trabalho da RBS (rota 16). */
-    public record ItemDaFilaDto(Long id, ParceriaDaFilaDto parceria, String abaCodigo, String titulo, String status,
+    public record ItemDaFilaDto(Long id, ParceriaDaFilaDto parceria, String abaCodigo, String papel, String titulo, String status,
                                 LocalDate prazo, boolean atrasada, OffsetDateTime atualizadoEm, OffsetDateTime ultimoEnvioEm) {
     }
 

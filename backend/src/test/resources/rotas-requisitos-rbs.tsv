@@ -13,3 +13,8 @@ POST	/api/parcerias/{id}/contrato/arquivo	rbs
 GET	/api/parcerias/{id}/credenciais	ambos
 PATCH	/api/parcerias/{id}/credenciais	rbs
 PATCH	/api/eventos/{id}/credenciamento	rbs
+GET	/api/parcerias/{id}/plano-comercial	ambos
+POST	/api/parcerias/{id}/plano-comercial	rbs
+GET	/api/parcerias/{id}/espacos	ambos
+POST	/api/parcerias/{id}/espacos/{papel}/arquivos	ambos
+POST	/api/parcerias/{id}/formulario-ingressos	rbs

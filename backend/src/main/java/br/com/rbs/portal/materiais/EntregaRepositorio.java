@@ -27,8 +27,9 @@ import org.springframework.stereotype.Repository;
 public class EntregaRepositorio {
 
     /** A entrega como está no banco, com o código da aba; as datas ainda em UTC (o service converte para Brasília). */
-    public record EntregaBase(Long id, Long parceriaId, Integer abaId, String abaCodigo, String titulo, String descricao,
-                              String status, LocalDate prazo, OffsetDateTime criadoEm, OffsetDateTime atualizadoEm) {
+    public record EntregaBase(Long id, Long parceriaId, Integer abaId, String abaCodigo, String papel, String titulo,
+                              String descricao, String status, LocalDate prazo, OffsetDateTime criadoEm,
+                              OffsetDateTime atualizadoEm) {
     }
 
     /** Filtros da fila da RBS (rota 16); tudo opcional. {@code status} vazio = qualquer status. */
@@ -37,7 +38,7 @@ public class EntregaRepositorio {
     }
 
     private static final String COLUNAS_DA_ENTREGA = """
-            e.id, e.parceria_id, e.aba_id, ab.codigo AS aba_codigo, e.titulo, e.descricao, e.status, e.prazo, e.criado_em,
+            e.id, e.parceria_id, e.aba_id, ab.codigo AS aba_codigo, e.papel, e.titulo, e.descricao, e.status, e.prazo, e.criado_em,
             e.atualizado_em""";
 
     private final JdbcClient jdbc;
@@ -77,6 +78,29 @@ public class EntregaRepositorio {
                 .param("prazo", prazo)
                 .query(Long.class)
                 .single();
+    }
+
+    /**
+     * Cria a entrega de um espaço com papel (rota 15). MIV e LOGO têm uma só por parceria (uq_entrega_papel): se já existe, não cria
+     * nada e devolve vazio (quem chama responde 409). O documento de ingressos não tem unicidade.
+     */
+    public Optional<Long> inserirComPapel(long parceriaId, int abaId, String papel, String titulo, String descricao, String status,
+                                          LocalDate prazo) {
+        return jdbc.sql("""
+                        INSERT INTO entrega (parceria_id, aba_id, papel, titulo, descricao, status, prazo)
+                        VALUES (:parceriaId, :abaId, :papel, :titulo, :descricao, :status, :prazo)
+                        ON CONFLICT DO NOTHING
+                        RETURNING id
+                        """)
+                .param("parceriaId", parceriaId)
+                .param("abaId", abaId)
+                .param("papel", papel)
+                .param("titulo", titulo)
+                .param("descricao", descricao)
+                .param("status", status)
+                .param("prazo", prazo)
+                .query(Long.class)
+                .optional();
     }
 
     /** Troca o status e marca a hora da mudança (a coluna atualizado_em não tem gatilho). */
@@ -184,8 +208,8 @@ public class EntregaRepositorio {
     // Rota 16: fila de trabalho da RBS
     // ---------------------------------------------------------------------
 
-    private record LinhaDaFila(Long id, Long parceriaId, String patrocinador, String cota, String abaCodigo, String titulo,
-                               String status, LocalDate prazo, Boolean atrasada, OffsetDateTime atualizadoEm,
+    private record LinhaDaFila(Long id, Long parceriaId, String patrocinador, String cota, String abaCodigo, String papel,
+                               String titulo, String status, LocalDate prazo, Boolean atrasada, OffsetDateTime atualizadoEm,
                                OffsetDateTime ultimoEnvioEm) {
     }
 
@@ -247,7 +271,7 @@ public class EntregaRepositorio {
                 """;
         List<ItemDaFilaDto> itens = jdbc.sql("""
                         SELECT e.id, pa.id AS parceria_id, pat.nome_canonico AS patrocinador, ct.codigo AS cota,
-                               ab.codigo AS aba_codigo, e.titulo, e.status, e.prazo,
+                               ab.codigo AS aba_codigo, e.papel, e.titulo, e.status, e.prazo,
                                (e.prazo < :hojeDaConta AND e.status NOT IN ('APROVADO', 'NAO_APLICAVEL')) AS atrasada,
                                e.atualizado_em, env.ultimo AS ultimo_envio_em
                         """ + de + onde + ordem)
@@ -255,7 +279,7 @@ public class EntregaRepositorio {
                 .query(LinhaDaFila.class)
                 .list().stream()
                 .map(l -> new ItemDaFilaDto(l.id(), new ParceriaDaFilaDto(l.parceriaId(), l.patrocinador(), l.cota()),
-                        l.abaCodigo(), l.titulo(), l.status(), l.prazo(), Boolean.TRUE.equals(l.atrasada()),
+                        l.abaCodigo(), l.papel(), l.titulo(), l.status(), l.prazo(), Boolean.TRUE.equals(l.atrasada()),
                         Datas.emBrasilia(l.atualizadoEm()), Datas.emBrasilia(l.ultimoEnvioEm())))
                 .toList();
         return new PaginaDto<>(itens, pagina, tamanho, total);

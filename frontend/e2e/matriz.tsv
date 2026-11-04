@@ -20,8 +20,18 @@ R4.3	e2e	requisitos-rbs.spec.ts > [R4.3] o link do post abre em aba nova, e java
 R5.0	back	parceria.AbasEDaCotaTest#euEOLoginTrazemIncluidaNaCotaEmCadaAba
 R5.1.a	back	parceria.EmailsAutorizadosTest#rbsListaOsEmailsComQuemAutorizouEOsRevogados
 R5.1.b	e2e	requisitos-rbs.spec.ts > [R5.1.b] a RBS sobe o plano comercial e a marca baixa a última versão
+R5.1.b	back	materiais.PlanoComercialDoPerfilTest#rbsEnviaDuasVersoesAMarcaVeAUltimaEBaixaAsDuas
+R5.1.b	back	materiais.PlanoComercialDoPerfilTest#oPlanoNaoEEntregaENaoContaComoPendente
+R5.1.b	back	materiais.PlanoComercialDoPerfilTest#marcaRecebe403NoEnvioAntesDeLerOCorpoComQualquerParceria
+R5.1.b	back	materiais.PlanoComercialEmParaleloTest#enviosJuntosViramVersoesSeguidasSemRepetir
 R5.1.c	e2e	requisitos-rbs.spec.ts > [R5.1.c] cada solicitação de ingressos tem a sua situação
+R5.1.c	back	materiais.SolicitacoesDeIngressosTest#duasSolicitacoesTemCadaUmaASuaSituacaoEARbsAprovaUmaSemMexerNaOutra
+R5.1.c	back	materiais.SolicitacoesDeIngressosTest#rbsPublicaOFormularioEmBrancoComVersoesEAMarcaBaixaAsDuas
 R5.2.a	e2e	requisitos-rbs.spec.ts > [R5.2.a] a marca envia a logo e o MIV pelos botões próprios
+R5.2.a	back	materiais.EspacosDaMarcaTest#marcaEnviaNovaVersaoEmQualquerStatusEAEntregaVoltaAEnviado
+R5.2.a	back	materiais.EspacosDaMarcaTest#categoriaDoCorpoEIgnoradaEPapelEAbaSaoFixos
+R5.2.a	back	materiais.EspacosDaMarcaTest#svgEAiSoltosSaoRecusadosComAFraseEDentroDeZipPassa
+R5.2.a	back	materiais.PrimeiroEnvioDeMivEmParaleloTest#doisPrimeirosEnviosDeMivJuntosViramV1EV2
 R5.2.b	back	aplicacoes.AplicacaoControllerTest#rbsAnexaAFotoELinhaSemFotoPassaAContarComoComprovada
 R5.3.a	e2e	requisitos-rbs.spec.ts > [R5.3.a] a marca envia material em texto e em link
 R5.3.b	e2e	requisitos-rbs.spec.ts > [R5.3.b] os links dos posts aparecem em Posts e links

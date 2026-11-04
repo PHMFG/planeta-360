@@ -65,6 +65,12 @@ class RotasDosRequisitosDaRbsAcessoTest {
 
     /** Uma linha por rota do arquivo. Ao acrescentar rota ao arquivo, acrescente a sua aqui. */
     private static final Map<String, Detalhe> DETALHES = Map.ofEntries(
+            // F2 · Plano comercial e espaços de documento (rotas 69 a 73). As rotas 70, 72 e 73 são multipart (corpo de teste: formulário sem partes).
+            Map.entry("GET /api/parcerias/{id}/plano-comercial", new Detalhe(null, "PERFIL", true)),
+            Map.entry("POST /api/parcerias/{id}/plano-comercial", new Detalhe("{}", "PERFIL", true)),
+            Map.entry("GET /api/parcerias/{id}/espacos", new Detalhe(null, "PERFIL", true)),
+            Map.entry("POST /api/parcerias/{id}/espacos/{papel}/arquivos", new Detalhe("{}", "PERFIL", true)),
+            Map.entry("POST /api/parcerias/{id}/formulario-ingressos", new Detalhe("{}", "PERFIL", true)),
             // F4 · Cortesias (rotas 80 a 85). O corpo da 81 repete a cota do Amarelo (25 na Arena de sexta) e o da 83 cabe na Arena de sábado.
             Map.entry("GET /api/parcerias/{id}/cortesias", new Detalhe(null, "CORTESIAS", true)),
             Map.entry("PATCH /api/parcerias/{id}/cortesias/cotas", new Detalhe(
@@ -86,7 +92,9 @@ class RotasDosRequisitosDaRbsAcessoTest {
             Map.entry("PATCH /api/eventos/{id}/credenciamento", new Detalhe("{\"inicio\":\"2027-01-05\"}", null, false)));
 
     /** As rotas que recebem multipart: no teste vão como formulário sem partes (com JSON o Spring responderia 415 antes da permissão). */
-    private static final Set<String> MULTIPART = Set.of("POST /api/parcerias/{id}/contrato/arquivo");
+    private static final Set<String> MULTIPART = Set.of("POST /api/parcerias/{id}/contrato/arquivo",
+            "POST /api/parcerias/{id}/plano-comercial", "POST /api/parcerias/{id}/espacos/{papel}/arquivos",
+            "POST /api/parcerias/{id}/formulario-ingressos");
 
     @Autowired
     MockMvcTester mvc;
@@ -187,7 +195,7 @@ class RotasDosRequisitosDaRbsAcessoTest {
     /** O caminho da rota com o {id} da parceria do Amarelo (ou da edição) e o {destId} dado. */
     private String uri(Rota rota, long destinacao) {
         long id = DETALHES.get(rota.chave()).caminhoDeParceria() ? amarelo() : eventoDoAmarelo();
-        return rota.caminho().replace("{id}", String.valueOf(id)).replace("{destId}", String.valueOf(destinacao));
+        return rota.caminho().replace("{id}", String.valueOf(id)).replace("{destId}", String.valueOf(destinacao)).replace("{papel}", "DOCUMENTO_INGRESSOS");
     }
 
     private String uri(Rota rota) {

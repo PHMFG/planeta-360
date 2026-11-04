@@ -45,6 +45,9 @@ public class PermissaoAntesDoCorpo implements HandlerInterceptor, WebMvcConfigur
             "POST /api/parcerias/{id}/emails",
             "DELETE /api/parcerias/{id}/emails/{emailId}",
             "POST /api/parcerias/{id}/entregas",
+            // O plano comercial do Perfil e o formulário em branco da compra de ingressos (rotas 70 e 73): a RBS publica, a marca baixa.
+            "POST /api/parcerias/{id}/plano-comercial",
+            "POST /api/parcerias/{id}/formulario-ingressos",
             "GET /api/entregas",
             "PATCH /api/entregas/{id}/status",
             "GET /api/historico",

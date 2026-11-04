@@ -225,6 +225,9 @@ class PermissaoAntesDoCorpoTest {
             "GET /api/auth/csrf", "POST /api/auth/login", "POST /api/auth/ativar", "GET /api/auth/eu",
             "GET /api/eventos", "GET /api/parcerias", "GET /api/parcerias/{id}", "GET /api/parcerias/{id}/entregas",
             "POST /api/entregas/{id}/arquivos", "GET /api/arquivos/{id}", "GET /api/parcerias/{id}/historico",
+            // O plano comercial (69) e os espaços de documento da marca (71 e 72): a marca da parceria e a RBS.
+            "GET /api/parcerias/{id}/plano-comercial", "GET /api/parcerias/{id}/espacos",
+            "POST /api/parcerias/{id}/espacos/{papel}/arquivos",
             "GET /api/parcerias/{id}/pesquisa", "PUT /api/parcerias/{id}/pesquisa/perguntas",
             "GET /api/parcerias/{id}/consolidacao", "GET /api/parcerias/{id}/relatorio", "GET /api/relatorios/{id}/csv",
             "GET /api/parcerias/{id}/aplicacoes", "GET /api/campos", "GET /api/parcerias/{id}/dados",
