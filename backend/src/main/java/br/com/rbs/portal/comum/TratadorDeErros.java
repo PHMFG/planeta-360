@@ -54,7 +54,14 @@ public class TratadorDeErros extends ResponseEntityExceptionHandler {
             Map.entry("fk_parceria_usuario_so_admin_patrocinador", "Só usuários do perfil Admin Patrocinador podem ser vinculados a uma parceria."),
             Map.entry("uq_documento_grupo_versao", "Já existe um documento com esta chave e esta versão neste escopo. Envie de novo."),
             Map.entry("uq_documento_arquivo", "Este arquivo já pertence a outro documento."),
-            Map.entry("fk_documento_aprovador", "Só a equipe da RBS aprova um documento."));
+            Map.entry("fk_documento_aprovador", "Só a equipe da RBS aprova um documento."),
+            // V16: as frases das restrições novas. As de formato (url e e-mail) são só rede de proteção: a API valida antes, com 422.
+            Map.entry("uq_entrega_papel", "Esta parceria já tem este espaço aberto."),
+            Map.entry("uq_arquivo_versao_avulso", "Já existe um arquivo desta categoria com esta versão nesta parceria. Envie de novo."),
+            Map.entry("uq_pesquisa_ativacao", "Esta edição já tem a pesquisa da ativação."),
+            Map.entry("uq_pesquisa", "Já existe uma pesquisa com este nome nesta edição."),
+            Map.entry("ck_evento_credenciamento_url", "O endereço do credenciamento precisa começar com https:// e não pode ter usuário@."),
+            Map.entry("ck_contrato_signatario_email", "O e-mail do signatário não é válido."));
 
     // ---------------------------------------------------------------------
     // Erros do próprio portal

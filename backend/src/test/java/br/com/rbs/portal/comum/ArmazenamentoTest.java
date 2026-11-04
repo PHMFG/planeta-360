@@ -108,7 +108,7 @@ class ArmazenamentoTest {
 
     @Test
     void gravarArquivoDeUmaParceriaSemEntregaGuardaOCaminhoDaParceria() {
-        Arquivo gravado = armazenamento.gravar("%PDF-1.4 x".getBytes(StandardCharsets.US_ASCII), "plano.pdf", "PLANO_COMERCIAL", rbs(),
+        Arquivo gravado = armazenamento.gravar("%PDF-1.4 x".getBytes(StandardCharsets.US_ASCII), "plano.pdf", "OUTRO", rbs(),
                 amarelo());
 
         assertThat(gravado.parceriaId()).isEqualTo(amarelo());
