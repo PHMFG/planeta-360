@@ -15,7 +15,9 @@ import { MinhaParceria } from './paginas/parceria/MinhaParceria'
 import { PaginaAba } from './paginas/parceria/PaginaAba'
 import { Perfil } from './paginas/parceria/Perfil'
 import { Pesquisa } from './paginas/parceria/Pesquisa'
+import { Contrato } from './paginas/parceria/Contrato'
 import { Cortesias } from './paginas/parceria/Cortesias'
+import { Credenciamento } from './paginas/parceria/Credenciamento'
 import { PaginaAtlas } from './atlas/PaginaAtlas'
 import { RelatorioAtlas } from './paginas/parceria/RelatorioAtlas'
 import { RelatorioParceria } from './paginas/parceria/RelatorioParceria'
@@ -28,7 +30,7 @@ import { Patrocinadores } from './paginas/rbs/Patrocinadores'
 import { Relatorios } from './paginas/rbs/Relatorios'
 import { RotaProtegida, TelaCarregando, telaInicial, useSessao } from './sessao/Sessao'
 
-// Cada seção do menu e a tela que a mostra; Credenciamento e Contrato ainda usam a genérica (só as entregas).
+// Cada seção do menu e a tela que a mostra. Todas as abas têm tela própria; a PaginaAba genérica fica de reserva.
 const TELAS: Partial<Record<ChaveSecao, ReactNode>> = {
   parceria: <MinhaParceria />,
   perfil: <Perfil />,
@@ -36,6 +38,8 @@ const TELAS: Partial<Record<ChaveSecao, ReactNode>> = {
   midia: <Midia />,
   pesquisa: <Pesquisa />,
   cortesias: <Cortesias />,
+  credenciamento: <Credenciamento />,
+  contrato: <Contrato />,
 }
 
 function Inicio() {
