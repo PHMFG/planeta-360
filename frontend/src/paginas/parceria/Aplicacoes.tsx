@@ -132,7 +132,7 @@ function Totais({ totais }: { totais: PlanoDeAplicacoes['totais'] }) {
   return (
     <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
       <Indicador rotulo="Previstas" valor={numero(totais.previstas)} legenda="Aplicações no plano" />
-      <Indicador rotulo="Comprovadas" valor={numero(totais.comprovadas)} legenda="Até o previsto de cada linha" />
+      <Indicador rotulo="Comprovadas" valor={numero(totais.comprovadas)} legenda="Fotos de comprovação, contando até o previsto de cada linha" />
       <Indicador rotulo="Comprovação" valor={porcentagem(totais.percentual)} legenda="Comprovadas sobre previstas" />
       <Indicador rotulo="Fotos" valor={numero(totais.fotos)} legenda="Enviadas pela RBS" />
     </div>

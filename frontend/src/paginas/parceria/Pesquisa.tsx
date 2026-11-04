@@ -223,7 +223,7 @@ export function Pesquisa() {
                 {dado.pesquisa ? (
                   <Aviso titulo={dado.pesquisa.nome}>
                     {dado.pesquisa.metodologia ?? 'Metodologia a informar pela RBS.'}
-                    {dado.pesquisa.baseRespondentes && ` Base: ${numero(dado.pesquisa.baseRespondentes)} respondentes.`}
+                    {dado.pesquisa.baseRespondentes && <span className="mt-1 block">Base: {numero(dado.pesquisa.baseRespondentes)} respondentes.</span>}
                   </Aviso>
                 ) : (
                   <Aviso tipo="ausente" titulo="A RBS ainda não abriu a pesquisa desta edição">

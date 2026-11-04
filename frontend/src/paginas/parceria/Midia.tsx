@@ -100,7 +100,7 @@ function PreparoEnvio({
               <Seletor rotulo="Entrega vinculada" value={escolhida ? String(escolhida.id) : ''} onChange={(evento) => setEntregaId(evento.target.value)}>
                 {abertas.map((entrega) => (
                   <option key={entrega.id} value={entrega.id}>
-                    {entrega.titulo} · prazo {data(entrega.prazo)}
+                    {entrega.titulo} · {entrega.prazo ? `prazo ${data(entrega.prazo)}` : 'sem prazo definido'}
                   </option>
                 ))}
               </Seletor>
@@ -120,6 +120,8 @@ function PreparoEnvio({
               Enviar material
             </Botao>
           </div>
+          {/* O botão desabilitado diz por quê (U20). */}
+          {!escolhida && <p className="text-xs font-medium text-texto-2">O envio abre quando houver uma entrega aceitando material.</p>}
         </form>
       )}
     </Modal>

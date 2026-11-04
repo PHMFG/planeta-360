@@ -142,7 +142,7 @@ function AbaTurnos({ aoAbrir }: { aoAbrir: (turno: string) => void }) {
       {turnos.erroStatus === 404 ? (
         <Aviso tipo="restrito" titulo="O diagnóstico está desligado nesta API">Ele liga com ATLAS_DIAGNOSTICO=true, e já vem ligado no perfil de desenvolvimento.</Aviso>
       ) : (
-        <Carregando dados={turnos} vazio={(dado) => dado.itens.length === 0} textoVazio="Nenhum turno com esses filtros.">
+        <Carregando dados={turnos} vazio={(dado) => dado.itens.length === 0} textoVazio={parceriaId || de || ate ? 'Nenhum turno com esses filtros.' : 'Nenhum turno ainda: cada pergunta feita ao Atlas, por uma marca ou pela RBS, aparece aqui.'}>
           {(dado) => (
             <>
               <Tabela colunas={colunas} linhas={dado.itens} chave={(turno) => turno.turno} aoClicar={(turno) => aoAbrir(turno.turno)} />

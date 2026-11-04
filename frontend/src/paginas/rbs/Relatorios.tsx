@@ -155,6 +155,11 @@ export function Relatorios() {
             />
           )}
         </Carregando>
+        {/* As duas colunas de números se explicam (U03). */}
+        <p className="mt-3 text-xs font-medium text-texto-2">
+          Indicadores: dos 17 do relatório, quantos têm dado e quantos saem como indisponíveis, com o motivo. Faltantes: o que impede
+          ou enfraquece o relatório, como mídia abaixo do previsto, aplicação sem foto ou entrega pendente.
+        </p>
       </Cartao>
     </div>
   )

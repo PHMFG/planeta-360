@@ -240,7 +240,11 @@ export function AreaDaConversa({
           </div>
         )}
         {llm && <Compositor valor={texto} aoMudar={aoMudarTexto} aoEnviar={aoEnviar} rotuloEnviar="Enviar" ocupado={pensando} habilitado compacto={compacta} />}
-        {!llm && !relatorioDisponivel && <AvisoAtlas titulo="O Atlas está sem o modelo de linguagem agora">Dá para ler a conversa, mas não enviar mensagens. Tente de novo mais tarde.</AvisoAtlas>}
+        {!llm && (
+          <AvisoAtlas titulo="O Atlas está sem o modelo de linguagem agora">
+            {relatorioDisponivel ? 'O relatório da ativação continua pelo botão acima, mas perguntas não têm resposta.' : 'Dá para ler a conversa, mas não enviar mensagens.'} Tente de novo mais tarde.
+          </AvisoAtlas>
+        )}
         <p className="pb-1 text-center text-xs text-white/55 max-sm:hidden">{parceria ? 'Só os dados desta parceria' : 'Só os documentos gerais da edição'} · todo número do Atlas vem de uma fonte</p>
       </div>
     </div>

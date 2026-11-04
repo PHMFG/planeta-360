@@ -29,7 +29,7 @@ export function AvisoAbaFechada({ parceria, estado, nome, rbs }: { parceria: Par
   }
   return estado === 'FORA_DA_COTA' ? (
     <Aviso tipo="restrito" titulo="Esta aba não faz parte da sua cota">
-      A cota {nomeCota(parceria)} não inclui {nome.toLowerCase()}. Para contratar, fale com o time B2B da RBS.
+      A cota da sua parceria ({nomeCota(parceria)}) não inclui {nome.toLowerCase()}. Para incluir, fale com o time B2B da RBS.
     </Aviso>
   ) : (
     <Aviso tipo="restrito" titulo="Esta aba está fechada no momento">
