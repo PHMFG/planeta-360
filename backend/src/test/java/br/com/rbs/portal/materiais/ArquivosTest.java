@@ -317,11 +317,11 @@ class ArquivosTest extends ApoioDeMateriais {
         long entrega = criarEntrega(entrar(RBS), amarelo(), "MIDIA", "VT");
         SessaoDeApi amarelo = entrar(AMARELO);
 
-        for (String categoria : List.of("PLANO_COMERCIAL", "RELATORIO_VEICULACAO", "COMPROVACAO", "PESQUISA", "RELATORIO_PARCERIA")) {
+        for (String categoria : List.of("PLANO_COMERCIAL", "RELATORIO_VEICULACAO", "COMPROVACAO", "PESQUISA", "RELATORIO_PARCERIA", "CONTRATO")) {
             MvcTestResult resposta = enviar(amarelo, entrega, "doc.pdf", pdf(categoria), categoria, null);
             assertThat(resposta).as(categoria).hasStatus(HttpStatus.FORBIDDEN);
         }
-        for (String categoria : List.of("MATERIAL_MARCA", "MATERIAL_MIDIA", "DOCUMENTO_INGRESSOS", "CONTRATO", "OUTRO")) {
+        for (String categoria : List.of("MATERIAL_MARCA", "MATERIAL_MIDIA", "DOCUMENTO_INGRESSOS", "OUTRO")) {
             MvcTestResult resposta = enviar(amarelo, entrega, "doc.pdf", pdf(categoria), categoria, null);
             assertThat(resposta).as(categoria).hasStatus(HttpStatus.CREATED);
         }
