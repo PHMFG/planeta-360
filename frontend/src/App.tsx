@@ -15,6 +15,7 @@ import { MinhaParceria } from './paginas/parceria/MinhaParceria'
 import { PaginaAba } from './paginas/parceria/PaginaAba'
 import { Perfil } from './paginas/parceria/Perfil'
 import { Pesquisa } from './paginas/parceria/Pesquisa'
+import { Cortesias } from './paginas/parceria/Cortesias'
 import { PaginaAtlas } from './atlas/PaginaAtlas'
 import { RelatorioAtlas } from './paginas/parceria/RelatorioAtlas'
 import { RelatorioParceria } from './paginas/parceria/RelatorioParceria'
@@ -27,13 +28,14 @@ import { Patrocinadores } from './paginas/rbs/Patrocinadores'
 import { Relatorios } from './paginas/rbs/Relatorios'
 import { RotaProtegida, TelaCarregando, telaInicial, useSessao } from './sessao/Sessao'
 
-// Cada seção do menu e a tela que a mostra; as três abas fora da prioridade (Cortesias, Credenciamento, Contrato) usam a genérica.
+// Cada seção do menu e a tela que a mostra; Credenciamento e Contrato ainda usam a genérica (só as entregas).
 const TELAS: Partial<Record<ChaveSecao, ReactNode>> = {
   parceria: <MinhaParceria />,
   perfil: <Perfil />,
   aplicacoes: <Aplicacoes />,
   midia: <Midia />,
   pesquisa: <Pesquisa />,
+  cortesias: <Cortesias />,
 }
 
 function Inicio() {
