@@ -257,11 +257,21 @@ public class TratadorDeErros extends ResponseEntityExceptionHandler {
     ResponseEntity<Object> inesperado(Exception ex, WebRequest request) {
         SQLException violacao = procurarViolacaoDeRegra(ex);
         if (violacao != null) {
-            log.info("Regra do banco recusou a operação (SQLSTATE {}): {}", violacao.getSQLState(), violacao.getMessage());
+            // A mensagem do PostgreSQL traz os VALORES da linha (nome, e-mail...): ela nunca vai ao log, só o nome da restrição.
+            log.info("Regra do banco recusou a operação (SQLSTATE {}, restrição {})", violacao.getSQLState(), nomeDaRestricao(violacao));
             return resposta(Problemas.de(HttpStatus.CONFLICT, frase(violacao)), request);
         }
         log.error("Erro inesperado ao tratar a requisição", ex);
         return resposta(Problemas.padrao(HttpStatus.INTERNAL_SERVER_ERROR), request);
+    }
+
+    /** O nome da restrição violada, sem valor nenhum; "desconhecida" quando o driver não o informa. */
+    private static String nomeDaRestricao(SQLException violacao) {
+        if (violacao instanceof PSQLException psql && psql.getServerErrorMessage() != null
+                && psql.getServerErrorMessage().getConstraint() != null) {
+            return psql.getServerErrorMessage().getConstraint();
+        }
+        return "desconhecida";
     }
 
     /** Percorre as causas do erro atrás de um SQLException cujo SQLSTATE comece com 23 (violação de integridade). */
