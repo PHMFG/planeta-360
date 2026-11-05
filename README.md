@@ -104,6 +104,8 @@ Abra <http://localhost:5173>. O Vite repassa as chamadas `/api` para a porta 808
 
 **Quem já tinha o banco `portal` criado precisa recomeçar do zero para ver a amostra nova.** A amostra só carrega num banco vazio e não roda de novo sobre um banco que já a tem. A versão atual traz: entregas Enviado, Em análise e Aprovado com o arquivo que a marca mandou, o VT do Roxo em "Ajuste solicitado" com o recado da RBS no histórico, horários sempre no passado (contados a partir do dia em que o banco é criado) e nenhum "(simulada)" no nome da pesquisa. Num banco criado antes, as migrações novas (V4 a V6) rodam sozinhas ao subir a API, mas a amostra antiga continua como estava. O mesmo vale para o alinhamento com os planos comerciais do kit de documentos do Atlas: as cortesias e as credenciais do Roxo (4 na Arena e 2 no Camarote por dia, 5 credenciais na Arena) e da Verde (4 e 2 por dia, 10 credenciais), iguais aos PDFs dos planos da RBS, e o portão do Camarote e do Lounge (Portão 4) só aparecem num banco recriado. **A amostra mudou de novo**: além desses números, a edição 2027 passou a ter o endereço do Open Staff (`https://example.com/`), o credenciamento de 01/12 a 20/12/2026 e o prazo das cortesias em 15/01/2027; as entregas de ingressos e de logo ganharam o papel; as exibições do Amarelo se espalham por três meses; e algumas exibições do Roxo nas redes trazem o link do post. As contagens não mudam (79 linhas de plano, 1.489 linhas lidas). Cada pessoa do grupo recria o próprio banco com os comandos acima.
 
+**Requisitos da RBS (V16 a V18).** As três migrações rodam sozinhas sobre o banco que já existe: a V16 (papel das entregas, formulário de ingressos, credenciamento e prazo de cortesias da edição, conteúdo em texto ou link), a V17 (páginas de um documento fora do Atlas) e a V18 (pós-venda da parceria). Mas a amostra e o kit do Atlas mudaram junto (os anexos D06 e D07, com as metragens e a montagem do Amarelo e o Roxo como Cota Apresenta): **recrie o seu banco** com os comandos de "Recomeçar do zero" para ver tudo como no roteiro abaixo.
+
 **Atlas (V7 a V15).** As migrações rodam sozinhas ao subir a API, sobre o banco que já existe, mas a V11 precisa do pgvector e do papel `atlas_ro`: rode antes o `scripts/preparar-banco-atlas.sh`, ou a subida para com a mensagem que pede isso. O kit de documentos e os prazos do Atlas não dependem de recriar o banco: entram na subida, nos perfis `dev` e `demo`, com os embeddings ligados.
 
 ## Se algo der errado
@@ -148,6 +150,13 @@ Com o banco recém-criado (amostra original):
 5. Em **Cargas**, envie `docs/exemplos/veiculacao.csv` duas vezes. Na segunda, nada é inserido: as linhas contam como duplicadas.
 6. Em **Relatórios**, gere uma nova versão do relatório do Roxo, valide e disponibilize.
 7. Volte como Roxo: o relatório aparece em **Relatório**, com as seções do modelo, e pode ser impresso ou exportado em CSV.
+
+Os pedidos da RBS de 04/11 (continua com o mesmo banco):
+
+8. Como `marketing@amarelo.example` (Master), em **Mídia e conteúdo**: o cartão **Comprovação mensal** mostra o exibido de cada mês por tipo de mídia e unidade, com a planilha `.xlsx` e o CSV; **Posts e links** traz os links dos posts, que abrem em aba nova. No detalhe de uma entrega, o material vai em arquivo, texto ou link. Como Roxo, a comprovação mensal não aparece (é só das Master).
+9. Ainda como Amarelo: no **Perfil**, o plano comercial e a compra de ingressos; em **Cortesias**, a quantidade por setor e dia e o botão **Destinar cortesias**; em **Credenciamento**, a liberação, o período e o botão do Open Staff; em **Contrato**, o contrato assinado na tela e os dados de quem assina. (Destinar e preencher gravam: para não mudar os números da amostra, faça isso numa marca nova, cadastrada pela RBS.)
+10. Como `b2b@rbs.example`: no Perfil de uma parceria, **Direitos por contrato**, as abas em três estados (liberada, fechada ou oculta) e **Trocar cota**, com a prévia do impacto; no menu, **Pesquisa** (abrir a da edição e decidir as perguntas das marcas), **Cargas** (o lote da comprovação mensal das Master) e **Relatórios** (os números da edição); na página do relatório de uma parceria, o **Pós-venda da edição**, que a marca vê depois das 6 seções.
+11. Em **Atlas** > **Documentos**, um PDF com uma página de telefones trava a aprovação e a tela diz qual página; marcada como fora do Atlas, ela não entra no índice e o PDF continua inteiro no visualizador.
 
 ### Roteiro do Atlas
 
@@ -267,31 +276,25 @@ Opções: `--split` (`ajuste`, `reserva` ou `todos`), `--categoria`, `--casos`, 
 
 ## Pendências registradas
 
-- O plano comercial de uma parceria cadastrada ao vivo entra pela carga "Plano comercial" (Cargas), e as fotos de comprovação pela aba Aplicações da marca (só a RBS anexa). Os números do festival ainda entram só pela amostra: "O festival em números" sai como indisponível nos relatórios de 2027, porque só há números de 2026.
+- O plano comercial de uma parceria cadastrada ao vivo entra pela carga "Plano comercial" (Cargas), e as fotos de comprovação pela aba Aplicações da marca (só a RBS anexa).
 - Corrigir uma linha do plano comercial: o reenvio com outra quantidade conta como duplicado (vale a primeira versão), e não há tela para editar a linha.
-- Telas próprias de Cortesias, Credenciamento e Contrato: nesta versão cada uma dessas abas mostra as próprias entregas.
-- Requisitos da RBS que esta versão não cobre (conferidos em 04/11/2026):
-  - A comprovação mensal entra só em CSV, e o portal não gera a planilha mensal por tipo de entrega.
-  - O link do post é gravado na carga, mas não aparece na tela.
-  - A marca não envia material de mídia só em texto.
-  - Aplicações não tem botões próprios para o MIV e a logo.
-  - Não há formulário de quem assina o contrato.
-  - A pesquisa da edição só pode ser aberta pela amostra.
-  - A RBS não oculta aba, não troca a cota e não edita o investimento pela tela.
-  - No pós-venda faltam texto editorial, fotos da edição, aftermovie, clipping e audiência por veículo.
-- A amostra de demonstração difere dos planos comerciais que a RBS enviou:
-  - O Roxo é a "Cota Apresenta", sem espaço físico.
-  - As cortesias e as credenciais do Roxo e do Verde não batem com os planos.
-  - As metragens e as datas de montagem do Amarelo também não.
+- Pedidos da RBS de 04/11 que ficaram em parte, com o motivo:
+  - Comprovação mensal: a planilha foi conferida pelo leitor dos testes (Apache POI); falta abri-la à mão no Excel e no LibreOffice. O previsto que aparece nela é o do plano inteiro, porque o plano não divide o previsto por mês.
+  - Pós-venda: o texto, o aftermovie, o clipping, a audiência por veículo e os links dos posts entram; as fotos da edição entram como link de um álbum, não como galeria. Parceria encerrada não recebe pós-venda (o Amarelo de 2026, na amostra).
+  - Pesquisa: a RBS abre a pesquisa pela tela, mas não há prazo para as perguntas (a tabela não tem a coluna).
+  - Arquivos: `.doc`, `.xls` e `.ppt` entram se não tiverem macro VBA. A macro antiga do Excel (XLM) não é detectável pela leitura do diretório, e a macro dentro de `.docx`, `.xlsx` e `.pptx` não é conferida.
+  - Identidade visual: o emblema de 2027 está no login e nos cabeçalhos, no sistema do Figma; as cores e fontes oficiais esperam a RBS.
+  - A cota do Roxo segue o texto da RBS (Subcota G); o PDF do plano dele diz "Cota Apresenta", e o anexo do kit (D07) segue o PDF.
 - Relatório montado pelo Atlas: ligado nos perfis `dev` e `demo` e desligado no padrão (`ATLAS_RELATORIO`). No texto do relatório o modelo não escreve número nem data (nem por extenso): os números vêm do servidor, com a origem em "Referências", no fim do documento.
 - Atlas com o modelo de linguagem: testado contra um servidor falso e com a chave de verdade do OpenCode Go. Para decidir com a equipe: os termos de uso do OpenCode, que falam em uso interno de quem assina, e o acordo de retenção zero do DeepSeek no Go, que vale até 30/11/2026 e é renovado mês a mês.
-- Dado pessoal no modelo: a consulta do Atlas leva ao modelo o nome de quem informou cada dado ("Informado por ... em ..."). Fica assim por decisão do dono do produto.
+- Retenção zero (pedida pela RBS): só o DeepSeek no Go tem acordo registrado. O JEV só tem retenção zero no plano empresarial, e o Gemini guarda registros por até 55 dias; nenhum dos dois tem acordo assinado neste projeto.
+- Dado pessoal no modelo: a consulta do Atlas leva ao modelo o nome de quem informou cada dado ("Informado por ... em ..."). Fica assim por decisão do dono do produto. Destinatários de cortesia e signatários do contrato (só nome, e-mail e cargo, sem CPF) não vão ao modelo, ao log nem ao histórico.
 - Dados informados pela marca entram sem aprovação da RBS, com o nome de quem informou e a data.
 - E-mail automático do código de ativação; recuperação de senha.
 - PDF do relatório: pela impressão do navegador.
-- A confirmar com a RBS: abas por cota (hoje todas liberadas, Pesquisa só para Master), limite de usuários por parceria, quem envia as fotos de comprovação, formato dos resultados da pesquisa, quem aprova as perguntas, quem carrega os resultados (hoje a RBS), a lista final de formatos de arquivo (o `.ai` do Illustrator, o `.doc` e o `.ppt` ficaram de fora, e o `.xls` só entra na planilha da agência), o limite de 20 MB, se o acesso total do admin inclui liberar aba fora da cota e as cores e fontes da identidade visual de 2027.
+- A confirmar com a RBS: limite de usuários por parceria, quem envia as fotos de comprovação, formato dos resultados da pesquisa, quem carrega os resultados (hoje a RBS), o `.ai` do Illustrator (hoje só dentro de `.zip`), o limite de 20 MB, CPF de convidados e signatários, se o acesso total do admin inclui liberar uma aba fora da cota (hoje a API recusa, e o caminho é trocar a cota) e as cores e fontes da identidade visual de 2027.
 - Segurança para produção: limite de tentativas de login e cookie de sessão `Secure` atrás de HTTPS.
-- Fora desta versão: n8n, Open Staff, cifra de arquivos, Docker, Swagger e a implantação pública.
+- Fora desta versão: n8n; integração com o Open Staff (o portal só leva ao site); SharePoint e Outlook (a RBS não dá acesso à API do SharePoint, e o portal guarda os arquivos num repositório próprio); cifra de arquivos, Docker, Swagger e a implantação pública.
 
 ## Pastas
 
