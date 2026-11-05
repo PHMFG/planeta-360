@@ -17,7 +17,7 @@ export type VersaoDoAnexo = {
 }
 
 /** Um link de post da parceria: os da veiculação carregada pela RBS e, se houver, os enviados como material. */
-export type LinkDePost = { url: string; veiculo?: string | null; formato?: string | null; exibidoEm?: string | null; origem?: string; titulo?: string | null }
+export type LinkDePost = { origem: 'CARGA' | 'ENVIO'; url: string; host: string; data: string | null; veiculo?: string | null; formato?: string | null; titulo?: string | null }
 
 export type PosVendaDaParceria = {
   parceriaId: number

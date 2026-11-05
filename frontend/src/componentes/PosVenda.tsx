@@ -68,7 +68,7 @@ function ConteudoDoAnexo({ anexo, linksDePosts }: { anexo: VersaoDoAnexo | null;
                 <LinkExterno href={link.url} className="font-semibold text-secao-texto hover:underline">
                   {link.titulo || [link.veiculo, link.formato].filter(Boolean).join(' · ') || 'Post'}
                 </LinkExterno>
-                {link.exibidoEm && <span className="text-texto-2"> · {data(link.exibidoEm)}</span>}
+                {link.data && <span className="text-texto-2"> · {data(link.data)}</span>}
               </li>
             ))}
           </ul>
