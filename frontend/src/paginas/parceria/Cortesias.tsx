@@ -249,7 +249,8 @@ function FormularioDeDestinacao({
           </Aviso>
         ) : (
           <>
-            <div className="grid gap-4 sm:grid-cols-2">
+            {/* No celular, setor e dia dividem a linha: o modal cabe na tela sem rolar (checklist c-01). */}
+            <div className="grid grid-cols-2 gap-3 sm:gap-4">
               <Seletor rotulo="Setor" value={setor} onChange={(evento) => setSetor(evento.target.value as Setor)}>
                 {setores.map((item) => (
                   <option key={item} value={item}>
@@ -264,8 +265,9 @@ function FormularioDeDestinacao({
                   </option>
                 ))}
               </Seletor>
-              <Campo rotulo="Quantidade" inputMode="numeric" value={quantidade} onChange={(evento) => setQuantidade(evento.target.value)} erro={erros.quantidade} />
+              <Campo className="max-sm:col-span-2" rotulo="Quantidade" inputMode="numeric" value={quantidade} onChange={(evento) => setQuantidade(evento.target.value)} erro={erros.quantidade} />
               <Campo
+                className="max-sm:col-span-2"
                 rotulo="Destino / destinatário"
                 maxLength={120}
                 value={destinatario}
@@ -279,7 +281,7 @@ function FormularioDeDestinacao({
                 Quantidade liberada: {numero(celula.cota)} · já destinada: {numero(celula.destinadas)} · disponível: {numero(celula.disponiveis)}.
               </Aviso>
             )}
-            <Aviso tipo={passa ? 'falha' : 'info'} titulo="Validação">
+            <Aviso tipo={passa ? 'falha' : 'info'} titulo="Validação" className={passa ? '' : 'max-sm:hidden'}>
               {passa
                 ? `A quantidade passa do disponível (${numero(celula!.disponiveis)}). O que você preencheu fica: ajuste a quantidade e revise de novo.`
                 : 'Se a quantidade passar do disponível, a destinação não é gravada e o que você digitou continua no formulário. Confira antes de registrar.'}
