@@ -95,6 +95,15 @@ public class RegistrosDoPortal {
                 .param("parceria", parceriaId).param("aba", aba).query(Boolean.class).single();
     }
 
+    /** A aba está oculta (fora do menu) para a parceria? O Atlas não a cita: a resposta é a de uma aba sem entregas. */
+    public boolean abaOculta(long parceriaId, String aba) {
+        return jdbc.sql("""
+                        SELECT EXISTS (SELECT 1 FROM parceria_aba pab JOIN aba a ON a.id = pab.aba_id
+                                       WHERE pab.parceria_id = :parceria AND a.codigo = :aba AND NOT pab.visivel)
+                        """)
+                .param("parceria", parceriaId).param("aba", aba).query(Boolean.class).single();
+    }
+
     // ---------------------------------------------------------------------
     // listar_entregas
     // ---------------------------------------------------------------------

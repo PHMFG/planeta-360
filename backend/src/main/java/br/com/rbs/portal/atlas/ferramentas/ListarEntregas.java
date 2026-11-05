@@ -118,6 +118,10 @@ public class ListarEntregas implements Ferramenta {
         exigirSemErros(erros);
         verificador.exigirParceria(contexto.usuario(), contexto.parceriaId());
 
+        if (aba != null && registros.abaOculta(contexto.parceriaId(), aba)) {
+            // R6.a: o Atlas não cita a aba oculta, nem para dizer que está fechada (confirmaria que ela existe).
+            return Execucao.resultado(ResultadoDeRegistros.montar(null, "Não há entregas para listar nesta aba.", null, List.of()));
+        }
         if (aba != null && !registros.abaAberta(contexto.parceriaId(), aba)) {
             return Execucao.resultado(ResultadoDeRegistros.montar(null, "A aba " + abas.get(aba)
                     + " está fechada para esta parceria: não há entregas para listar.", null, List.of()));
