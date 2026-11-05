@@ -529,6 +529,10 @@ test.describe('R6 a R8 · admin, identidade e pós-venda', () => {
     const pesquisa = page.getByLabel('Situação da aba Pesquisa')
     await expect(pesquisa.locator('option[value="LIBERADA"]')).toBeDisabled()
     await expect(page.getByText('A cota desta parceria não inclui esta aba.').first()).toBeVisible()
+    // U19: no menu da marca, a Pesquisa aparece com o motivo escrito ao lado do cadeado.
+    await page.context().clearCookies()
+    await entrarComo(page, marca.email)
+    await expect(page.getByRole('navigation').getByRole('link', { name: /Pesquisa/ })).toContainText('Fora da cota')
   })
   test('[R6.d1] a RBS edita o investimento e a base', async ({ page }) => {
     const marca = await novaMarcaDeTeste('SUBCOTA')

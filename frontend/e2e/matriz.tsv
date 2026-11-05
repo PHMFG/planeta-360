@@ -21,7 +21,8 @@ R2.1	back	documentos.PaginasForaDoAtlasTest#paginaForaDoIntervaloOuListaInvalida
 R2.1	back	documentos.PaginasForaDoAtlasTest#soSeMarcaEnquantoAguardaAprovacaoEDesmarcarTrazASuspeitaDeVolta
 R2.1	back	documentos.PaginasForaDoAtlasTest#oVisualizadorEntregaOPdfInteiroMesmoComAPaginaMarcada
 R2.1	back	banco.VerificacaoDoBancoTest#todasAsConferenciasDoBancoPassam
-R2.2	back	documentos.DocumentoGrupoTest#oMesmoPlanoEmOutraCotaNaoEOutraVersaoDoMesmoPlano
+R2.2	back	documentos.DocumentoGrupoTest#publicarUmNovoManualDe2027NaoTocaNoManualDe2026OD10NasceNaVersao1
+R2.2	back	documentos.DocumentoEnvioTest#aVersaoIncrementaDentroDoGrupoECadaGrupoComecaNa1
 R3.1	back	consolidacao.CargaControllerTest#reenviarOMesmoArquivoNaoInsereNadaEAsLinhasDeAntesViramDuplicadas
 R3.2	e2e	requisitos-rbs.spec.ts > [R3.2] a Master baixa a comprovação mensal por mês, tipo e unidade
 R3.2	back	consolidacao.ComprovacaoMensalTest#cadaLinhaDoAmareloEIgualASomaDasVeiculacoesPorMesTipoEUnidade
@@ -48,6 +49,7 @@ R4.3	back	materiais.ConteudoDaEntregaTest#linksPerigososOuMalFormadosDao422
 R4.3	back	materiais.ConteudoDaEntregaTest#marcaEnviaLinkDoTiktokComArrobaDepoisDoHost
 R5.0	back	parceria.AbasEDaCotaTest#euEOLoginTrazemIncluidaNaCotaEmCadaAba
 R5.1.a	back	parceria.EmailsAutorizadosTest#rbsListaOsEmailsComQuemAutorizouEOsRevogados
+R5.1.a	back	parceria.ParceriasControllerTest#rbsCriaParceriaComPatrocinadorNovoEDoisEmails
 R5.1.b	e2e	requisitos-rbs.spec.ts > [R5.1.b] a RBS sobe o plano comercial e a marca baixa a última versão
 R5.1.b	back	materiais.PlanoComercialDoPerfilTest#rbsEnviaDuasVersoesAMarcaVeAUltimaEBaixaAsDuas
 R5.1.b	back	materiais.PlanoComercialDoPerfilTest#oPlanoNaoEEntregaENaoContaComoPendente
@@ -99,6 +101,7 @@ R5.5.b	back	credenciamento.CredenciaisDaParceriaTest#httpJavascriptUsuarioArroba
 R5.6.a	back	pesquisa.PesquisaControllerTest#amareloEnviaTresPerguntasEElasFicamEnviadasEComHistorico
 R5.6.b	back	consolidacao.CargaControllerTest#oExemploDePesquisaEntraEOReenvioNaoDuplica
 R5.6.c	back	pesquisa.PesquisaControllerTest#amareloVeAPesquisaComAsTresPerguntasAprovadasEOsResultadosComABase
+R5.6.c	back	relatorio.RelatorioControllerTest#milharSoApareceNoTextoQuandoOsNumerosPassamDeMil
 R5.6.d	back	pesquisa.AberturaDaPesquisaTest#rbsAbreAPesquisaDaAtivacaoDeUmaEdicaoSemPesquisaELista
 R5.6.d	back	pesquisa.AberturaDaPesquisaTest#asegundaAberturaDaAtivacaoNaMesmaEdicaoDa409ComFraseClaraENadaNovoNoBanco
 R5.6.d	back	pesquisa.AberturaDaPesquisaTest#depoisDeAbertaAMasterVeAAbaProntaEAsPerguntasAntigasFicamLigadas
@@ -117,7 +120,9 @@ R5.7.b	back	contrato.ContratoDaParceriaTest#marcaRecebe403NoEnvioAntesDeLerOMult
 R5.7.b	back	materiais.CategoriaDoEnvioTest#categoriaContratoSaiuDaListaDaMarcaEContinuaNaDaRbs
 R6.a	e2e	requisitos-rbs.spec.ts > [R6.a] a aba oculta some do menu da marca
 R6.b	e2e	requisitos-rbs.spec.ts > [R6.b] a aba fora da cota aparece com o motivo, sem liberar
-R6.c	back	parceria.EmailsAutorizadosTest#autorizarExigeOTokenCsrf
+R6.c	back	parceria.EmailsAutorizadosTest#autorizarEmailNovoDevolve201ComCodigoEGravaHistorico
+R6.c	back	parceria.EmailsAutorizadosTest#revogarOEmailDoAmareloTiraOAcessoNaHoraDaSessaoAberta
+R6.c	back	parceria.EmailsAutorizadosTest#reautorizarDevolveOAcessoSemCodigo
 R6.d1	e2e	requisitos-rbs.spec.ts > [R6.d1] a RBS edita o investimento e a base
 R6.d2	e2e	requisitos-rbs.spec.ts > [R6.d2] Direitos por contrato mostra o mesmo que as abas
 R6.d3	back	parceria.TrocaDeCotaTest#previaDeMasterParaSubcotaListaOQueFechaENadaGrava
@@ -128,6 +133,7 @@ R6.d3	back	parceria.TrocaDeCotaTest#marcaRecebe403AntesDeLerOCorpoSejaQualForOCo
 R6.d3	back	parceria.TrocaDeCotaTest#aTrocaGravaAEdicaoDaCotaEUmaLiberacaoPorAbaQueFechou
 R6.d3	e2e	requisitos-rbs.spec.ts > [R6.d3] a troca de cota mostra a prévia do impacto
 R7.1	e2e	requisitos-rbs.spec.ts > [R7.1] o emblema de 2027 aparece no login e nos cabeçalhos
+R7.1	e2e	layout.spec.ts > nenhuma violação fora da linha de base
 R8.1	e2e	requisitos-rbs.spec.ts > [R8.1] a marca vê o anexo de pós-venda com o relatório disponibilizado
 R8.1	back	relatorio.PosVendaTest#rbsPublicaEAMarcaVeSoComORelatorioDisponibilizado
 R8.1	back	relatorio.PosVendaTest#relatorioDisponibilizadoSemAnexoDa404AMarcaEAnexoNuloARbs
@@ -147,15 +153,30 @@ R8.2	back	relatorio.ResultadosDaEdicaoTest#valoresInvalidosDao422ComOCampoErrado
 R8.2	back	relatorio.ResultadosDaEdicaoTest#marcaRecebe403NasDuasRotasEEdicaoQueNaoExisteDa404
 E2.1	back	banco.VerificacaoDoBancoTest
 E2.2	back	relatorio.RelatorioControllerTest#cotaSemPesquisaTrazASecaoDePesquisaIndisponivelComOMotivo
-E2.3	back	comum.PermissaoAntesDoCorpoTest#rbsContinuaRecebendoAValidacaoDoCorpo
+E2.3	back	comum.RotasDosRequisitosDaRbsAcessoTest#marcaDeOutraParceriaRecebe404EmTodoVerbo
+E2.3	back	comum.PermissaoAntesDoCorpoTest#aRota56EDasDuasPontasEAMarcaDe404NoQueNaoEDela
 E2.4	back	materiais.ArquivosTest#patrocinadorDoAmareloEnviaPdfEmEntregaDeMidiaERecebeAutorDataVersaoEHistorico
 E2.5	back	consolidacao.CargaControllerTest#reenviarOMesmoArquivoNaoInsereNadaEAsLinhasDeAntesViramDuplicadas
 E2.5	back	consolidacao.ComprovacaoMensalTest#aSomaDoMesBateComAConsolidacaoDaRota29
+E2.5	back	consolidacao.ConsolidacaoControllerTest#patrocinadorSoVeOsDoisTiposDeFaltanteQueEleResolveEARbsVeTodos
 E2.6	back	relatorio.RelatorioControllerTest#parceriaSemNenhumDadoGeraRelatorioComAsSeisSecoesEOs17IndicadoresIndisponiveis
+E2.6	back	relatorio.RelatorioControllerTest#rbsGeraORelatorioDoAmareloEOsNumerosBatemComOBanco
+E2.6	back	relatorio.PosVendaTest#oRelatorioContinuaIgualSemEComAnexoComAsSeisSecoesEOs17Indicadores
 E2.7	back	parceria.ParceriasControllerTest#patchFechaEReabreUmaAbaDaCotaDoRoxoEOEuPassaAMostrar
+E2.7	back	parceria.AbasOcultasTest#parceriaNovaNasceComAsSeteAbasVisiveis
 E2.8	back	banco.CriacaoDoBancoTest
 U01	e2e	layout.spec.ts > nenhuma violação fora da linha de base
+U01	e2e	layout.spec.ts > amarelo em projetor
+U01	e2e	layout.spec.ts > agencia em projetor
+U01	e2e	layout.spec.ts > roxo em projetor
+U01	e2e	layout.spec.ts > verde em projetor
+U01	e2e	layout.spec.ts > rbs em projetor
 U02	e2e	layout.spec.ts > nenhuma violação fora da linha de base
+U02	e2e	layout.spec.ts > amarelo em celular
+U02	e2e	layout.spec.ts > agencia em celular
+U02	e2e	layout.spec.ts > roxo em celular
+U02	e2e	layout.spec.ts > verde em celular
+U02	e2e	layout.spec.ts > rbs em celular
 U08	e2e	interface.spec.ts > [U08] a gaveta do menu recebe o foco, prende o Tab e o devolve ao botão Menu
 U16	e2e	interface.spec.ts > [U16] os botões de cada e-mail autorizado dizem de qual e-mail são
 U17	e2e	interface.spec.ts > [U17] o botão do Atlas desabilitado da RBS não parece ativo e diz por quê
@@ -166,6 +187,7 @@ U07	e2e	interface.spec.ts > [U07] arquivo que não é CSV é recusado ao escolhe
 U09	e2e	interface.spec.ts > [U09] erro no login é anunciado e o foco vai ao campo
 U09	e2e	interface.spec.ts > [U09] erro no primeiro acesso é anunciado e o foco vai ao campo
 U19	e2e	interface.spec.ts > [U05] aba fechada pela RBS aparece marcada no menu e explica ao abrir
+U19	e2e	requisitos-rbs.spec.ts > [R6.b] a aba fora da cota aparece com o motivo, sem liberar
 U03	back	relatorio.ContagemDeIndicadoresNaListaTest#listaContaIndicadoresENaoLinhasDeRecorte
 U03	e2e	interface.spec.ts > [U03] a lista de relatórios conta indicadores e explica as colunas
 U12	e2e	interface.spec.ts > [U12] a marca não chama a rota de debug do modelo
