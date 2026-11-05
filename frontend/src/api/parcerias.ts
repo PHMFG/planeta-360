@@ -124,3 +124,28 @@ export function paraResumo(detalhe: ParceriaDetalhe): ParceriaResumo {
     abas: detalhe.abas,
   }
 }
+
+// ---------- Troca de cota (rotas 102 e 104; requisito R6.d3) ----------
+export type CodigoDeCota = ParceriaResumo['cota']['codigo']
+export type MudancaDeValidade = 'DEIXA_DE_VALER' | 'PASSA_A_VALER' | 'SEM_MUDANCA'
+
+export type ImpactoDaTroca = {
+  parceriaId: number
+  cotaAtual: { codigo: CodigoDeCota; nome: string }
+  cotaNova: { codigo: CodigoDeCota; nome: string }
+  mudaACota: boolean
+  abasQueFecham: { codigo: CodigoAba; nome: string }[]
+  abasQuePassamAPoderAbrir: { codigo: CodigoAba; nome: string }[]
+  relatorioDisponibilizado: { versao: number; disponibilizadoEm: string } | null
+  exigeCiencia: boolean
+  pesquisa: MudancaDeValidade
+  comprovacaoMensal: MudancaDeValidade
+  naoMudamSozinhos: { aba: string; texto: string }[]
+  avisos: string[]
+}
+
+export const previaDaTrocaDeCota = (parceriaId: number, para: CodigoDeCota) =>
+  pedir<ImpactoDaTroca>(`/parcerias/${parceriaId}/cota/previa?para=${encodeURIComponent(para)}`)
+
+export const trocarCota = (parceriaId: number, cotaCodigo: CodigoDeCota, ciente: boolean) =>
+  pedir<{ impacto: ImpactoDaTroca; parceria: ParceriaDetalhe }>(`/parcerias/${parceriaId}/cota`, { metodo: 'PUT', corpo: { cotaCodigo, ciente } })

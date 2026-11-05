@@ -1,10 +1,8 @@
 // A matriz executável dos requisitos da RBS: um teste por requisito que tem prova na tela, com o ID no título.
 // O ID vem da matriz do plano final (seção 3); e2e/matriz.tsv liga cada ID aos testes que o provam, e o conferir-matriz
-// lê o resultado desta execução (test-results/resultado.json).
+// lê o resultado desta execução (resultados-e2e/<E2E_RESULTADO>.json).
 //
-// Enquanto a fase do requisito não chega, o teste fica como `fixme` e o corpo lança erro: tirar o `fixme` sem escrever o
-// teste deixa a execução vermelha. Nada aqui muda número do Amarelo, do Roxo ou do Verde: quem precisa escrever cria uma
-// marca de teste pela API, na pilha.
+// Nada aqui muda número do Amarelo, do Roxo ou do Verde: quem precisa escrever cria uma marca de teste pela API, na pilha.
 import fs from 'node:fs'
 import { expect, test, type Page } from '@playwright/test'
 import { capturar, entrar, entrarComo, novaMarcaDeTeste, parceriaDa, sessaoDaApi, sessaoDaApiComo } from './apoio.ts'
@@ -12,10 +10,6 @@ import { capturar, entrar, entrarComo, novaMarcaDeTeste, parceriaDa, sessaoDaApi
 const PDF_DE_EXEMPLO = '../backend/src/main/resources/dev/documentos/d13-circular-revogada.pdf'
 
 const PNG_DE_EXEMPLO = '../backend/src/main/resources/dev/exemplos/exemplo.png'
-
-const pendente = () => {
-  throw new Error('pendente: escreva o teste ao implementar o requisito')
-}
 
 test.describe('R1 · planos comerciais', () => {
   test('[R1.1] cota e investimento dos três clientes como a RBS informou', async () => {
@@ -573,7 +567,39 @@ test.describe('R6 a R8 · admin, identidade e pós-venda', () => {
     await cartao.getByRole('link', { name: /Editar Cortesias · Arena · Sábado/ }).click()
     await expect(page).toHaveURL(new RegExp(`/parceria/${verde}/cortesias$`))
   })
-  test.fixme('[R6.d3] a troca de cota mostra a prévia do impacto', pendente)
+  test('[R6.d3] a troca de cota mostra a prévia do impacto', async ({ page }) => {
+    const marca = await novaMarcaDeTeste('MASTER')
+    const { contexto, cabecalhos } = await sessaoDaApi('rbs')
+    const liberada = await contexto.patch(`/api/parcerias/${marca.parceriaId}`, { headers: cabecalhos, data: { abas: [{ codigo: 'PESQUISA', liberada: true, visivel: true }] } })
+    expect(liberada.status(), 'a RBS libera a Pesquisa da Master de teste').toBe(200)
+    await contexto.dispose()
+    await relatorioDisponibilizado(marca.parceriaId)
+
+    await entrar(page, 'rbs')
+    await page.goto(`/parceria/${marca.parceriaId}/perfil`)
+    await page.getByRole('button', { name: 'Trocar cota' }).click()
+    const dialogo = page.getByRole('dialog', { name: 'Trocar a cota' })
+    await dialogo.getByLabel(/^Cota nova/).selectOption('SUBCOTA_G')
+    // A prévia diz o que muda antes de confirmar: a Pesquisa fecha, a pesquisa e a comprovação mensal deixam de valer.
+    await expect(dialogo.getByText('De Master para Subcota G')).toBeVisible()
+    await expect(dialogo.getByText('Abas que fecham').locator('xpath=following-sibling::p[1]')).toHaveText('Pesquisa')
+    await expect(dialogo.getByText('A pesquisa da ativação deixa de valer. A comprovação mensal deixa de valer.')).toBeVisible()
+    await expect(dialogo.getByText('Não mudam sozinhos')).toBeVisible()
+    // Com o relatório já com a marca, a troca só sai com a ciência.
+    const trocar = dialogo.getByRole('button', { name: 'Trocar para Subcota G' })
+    await expect(trocar).toBeDisabled()
+    await dialogo.getByRole('checkbox', { name: /Estou ciente de que o relatório v1/ }).check()
+    await trocar.click()
+    await expect(dialogo).toHaveCount(0)
+    await expect(page.getByText('Cota trocada para Subcota G. Fecharam: Pesquisa.')).toBeVisible()
+    await expect(page.getByText('Cortesias, credenciais, plano comercial e investimento não mudaram sozinhos')).toBeVisible()
+    await expect(page.getByLabel('Situação da aba Pesquisa')).toHaveValue('FECHADA')
+    // A marca passa a ver a Pesquisa fora da cota.
+    await page.context().clearCookies()
+    await entrarComo(page, marca.email)
+    await page.goto(`/parceria/${marca.parceriaId}/pesquisa`)
+    await expect(page.getByText(/não inclui|fora da cota/i).first()).toBeVisible()
+  })
   test('[R7.1] o emblema de 2027 aparece no login e nos cabeçalhos', async ({ page }) => {
     await page.goto('/entrar')
     await expect(page.getByRole('img', { name: 'Planeta Atlântida 2027' })).toBeVisible()

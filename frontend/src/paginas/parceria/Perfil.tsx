@@ -29,6 +29,7 @@ import { Tabela } from '../../componentes/Tabela'
 import { useSessao } from '../../sessao/Sessao'
 import { dataHora, moeda } from '../../util/formatar'
 import { useParceria, useRecarregarParceria } from './ContextoParceria'
+import { nomeDaAba, TrocaDeCota } from '../../componentes/TrocaDeCota'
 import { EntregasDaAba } from './EntregasDaAba'
 
 const SITUACOES: Record<Situacao, string> = {
@@ -325,6 +326,8 @@ export function Perfil() {
   const recarregarParceria = useRecarregarParceria()
   const dados = useDados(() => obterParceria(parceria.id), [parceria.id])
   const [editando, setEditando] = useState(false)
+  const [trocandoCota, setTrocandoCota] = useState(false)
+  const [cotaTrocada, setCotaTrocada] = useState<string | null>(null)
   const [atual, setAtual] = useState<ParceriaDetalhe | null>(null)
   const detalhe = atual ?? dados.dado
   // Depois de editar, o menu (nome e cadeados das abas) também precisa ver a mudança.
@@ -366,7 +369,22 @@ export function Perfil() {
                   <Grade2>
                     <Dado rotulo="Empresa" valor={detalhe.patrocinador.nome} />
                     <Dado rotulo="Segmento" valor={detalhe.patrocinador.segmento} />
-                    <Dado rotulo="Cota" valor={detalhe.cota.nome} />
+                    <Dado
+                      rotulo="Cota"
+                      valor={
+                        rbs && detalhe.situacao !== 'ENCERRADA' ? (
+                          <span className="flex flex-wrap items-center gap-x-3">
+                            {detalhe.cota.nome}
+                            {/* R6.d3: a troca abre a prévia do impacto antes de confirmar. */}
+                            <button type="button" className="text-[13px] font-semibold text-secao-texto hover:underline" onClick={() => setTrocandoCota(true)}>
+                              Trocar cota
+                            </button>
+                          </span>
+                        ) : (
+                          detalhe.cota.nome
+                        )
+                      }
+                    />
                     <Dado rotulo="Edição" valor={`${detalhe.evento.nome} ${detalhe.evento.edicao}`} />
                     <Dado rotulo="Produto" valor={detalhe.nomeProduto} />
                     <Dado rotulo="Situação" valor={SITUACOES[detalhe.situacao]} />
@@ -378,6 +396,24 @@ export function Perfil() {
                   </Grade2>
                 )}
               </Cartao>
+              {cotaTrocada && (
+                <Aviso titulo={cotaTrocada}>
+                  Cortesias, credenciais, plano comercial e investimento não mudaram sozinhos: ajuste-os nas abas, se a cota nova pedir.
+                </Aviso>
+              )}
+              {trocandoCota && (
+                <TrocaDeCota
+                  detalhe={detalhe}
+                  aoFechar={() => setTrocandoCota(false)}
+                  aoTrocar={(nova, impacto) => {
+                    setTrocandoCota(false)
+                    setCotaTrocada(
+                      `Cota trocada para ${impacto.cotaNova.nome}.${impacto.abasQueFecham.length ? ` Fecharam: ${impacto.abasQueFecham.map(nomeDaAba).join(', ')}.` : ''}`,
+                    )
+                    salvo(nova)
+                  }}
+                />
+              )}
 
               <AbasLiberadas detalhe={detalhe} rbs={rbs} aoSalvar={salvo} />
 
