@@ -25,7 +25,7 @@ export function PostsELinks({ parceriaId }: { parceriaId: number }) {
             {itens.map((link, indice) => (
               <li key={`${link.origem}-${link.url}-${indice}`} className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm">
                 <div className="min-w-0">
-                  <LinkExterno href={link.url} className="font-semibold text-secao-texto hover:underline">
+                  <LinkExterno href={link.url} mostrarDominio={false} className="font-semibold text-secao-texto hover:underline">
                     {link.host}
                   </LinkExterno>
                   <p className="text-xs font-medium text-texto-2 [overflow-wrap:anywhere]">{descricao(link)}</p>

@@ -187,7 +187,9 @@ function AbasLiberadas({ detalhe, rbs, aoSalvar }: { detalhe: ParceriaDetalhe; r
                     <option value="FECHADA">Fechada</option>
                     <option value="OCULTA">Oculta</option>
                   </select>
-                  {foraDaCota && <span className="text-[11px] font-medium text-texto-2">A cota desta parceria não inclui esta aba.</span>}
+                  {foraDaCota && (
+                    <span className="text-[11px] font-medium text-texto-2">A cota desta parceria não inclui esta aba. Para dar acesso, use Trocar cota, em Empresa e cota.</span>
+                  )}
                 </span>
               ) : (
                 <span className={`text-xs font-bold ${aba.liberada ? 'text-secao-texto' : 'text-texto-2'}`}>
@@ -415,7 +417,8 @@ export function Perfil() {
                 />
               )}
 
-              <AbasLiberadas detalhe={detalhe} rbs={rbs} aoSalvar={salvo} />
+              {/* Remonta quando a cota muda: o aviso da última mudança de aba não pode ficar ao lado do da troca. */}
+              <AbasLiberadas key={detalhe.cota.codigo} detalhe={detalhe} rbs={rbs} aoSalvar={salvo} />
 
               {rbs && (
                 <>

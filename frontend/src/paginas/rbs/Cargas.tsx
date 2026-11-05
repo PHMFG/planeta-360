@@ -201,7 +201,7 @@ export function Cargas() {
             <input key={campoDoArquivo} type="file" accept=".csv,text/csv" className="sr-only" onChange={(campo) => escolher(campo.target.files?.[0] ?? null)} />
           </label>
           <p className="text-xs text-texto-2">
-            Colunas esperadas: <code>{COLUNAS[tipo]}</code>. Há exemplos em docs/exemplos no repositório.
+            Colunas esperadas, nesta ordem, na primeira linha da planilha: <code>{COLUNAS[tipo]}</code>.
           </p>
           {falha && <Aviso tipo="falha" titulo={falha} />}
           <div>

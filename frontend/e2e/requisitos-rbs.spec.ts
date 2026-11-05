@@ -288,6 +288,11 @@ test.describe('R5 · as abas', () => {
     await detalhe.getByRole('button', { name: 'Enviar link' }).click()
     await expect(detalhe.getByText('v2 · Link')).toBeVisible()
     await expect(detalhe.getByRole('link', { name: /tiktok\.com\/@marcateste/ })).toHaveAttribute('rel', 'noopener noreferrer')
+    // O link novo aparece em "Posts e links" sem recarregar a página, e o cartão da entrega mostra a versão 2.
+    await detalhe.getByRole('button', { name: /Fechar/ }).click()
+    const posts = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Posts e links' }) })
+    await expect(posts.getByRole('link', { name: /tiktok\.com/ })).toBeVisible()
+    await expect(page.getByText(/^v2 · Link · tiktok\.com/)).toBeVisible()
   })
   test('[R5.3.b] os links dos posts aparecem em Posts e links', async ({ page }) => {
     const marca = await novaMarcaDeTeste('SUBCOTA')

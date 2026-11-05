@@ -122,7 +122,7 @@ function ConteudoDeCortesias({ rbs }: { rbs: boolean }) {
           {/* Figma P04: as orientações são publicadas pela RBS como entregas desta aba, na lista do fim da página. */}
           <Cartao>
             <p className="text-sm font-semibold">Orientações de distribuição</p>
-            <p className="text-xs font-medium text-texto-2">Publicadas pela RBS na lista de entregas desta aba, no fim da página · somente consulta</p>
+            <p className="text-xs font-medium text-texto-2">Quando a RBS publicar as orientações, elas aparecem na lista de entregas, no fim desta página · somente consulta</p>
           </Cartao>
 
           <Aviso titulo="Liberação e destinação">
@@ -189,7 +189,9 @@ function FormularioDeDestinacao({
 }) {
   const parceria = useParceria()
   const setores = SETORES.filter((setor) => cortesias.cotas.some((celula) => celula.setor === setor))
-  const [setor, setSetor] = useState<Setor>(setores[0] ?? 'ARENA')
+  const [setorEscolhido, setSetor] = useState<Setor>(setores[0] ?? 'ARENA')
+  // As cotas podem ter mudado depois que o modal montou (a RBS gravou outra grade): vale um setor que tenha cota.
+  const setor = setores.includes(setorEscolhido) ? setorEscolhido : (setores[0] ?? setorEscolhido)
   const dias = DIAS.filter((dia) => cortesias.cotas.some((celula) => celula.setor === setor && celula.dia === dia))
   const [dia, setDia] = useState<DiaCortesia>(dias[0] ?? 'SEXTA')
   const [quantidade, setQuantidade] = useState('')
@@ -280,7 +282,7 @@ function FormularioDeDestinacao({
             <Aviso tipo={passa ? 'falha' : 'info'} titulo="Validação">
               {passa
                 ? `A quantidade passa do disponível (${numero(celula!.disponiveis)}). O que você preencheu fica: ajuste a quantidade e revise de novo.`
-                : 'Se exceder o disponível, o preenchimento fica e o saldo aparece aqui. Confira os dados antes de registrar a destinação.'}
+                : 'Se a quantidade passar do disponível, a destinação não é gravada e o que você digitou continua no formulário. Confira antes de registrar.'}
             </Aviso>
           </>
         )}

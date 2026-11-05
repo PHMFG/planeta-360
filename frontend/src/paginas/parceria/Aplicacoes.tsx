@@ -91,7 +91,7 @@ function ConteudoAplicacoes({ rbs }: { rbs: boolean }) {
           vazio={(dado) => dado.linhas.length === 0}
           textoVazio={
             rbs
-              ? 'Esta parceria ainda não tem aplicações de marca no plano. Suba a planilha do plano comercial em Cargas.'
+              ? 'Esta parceria ainda não tem aplicações de marca no plano. Suba a planilha do plano comercial em Cargas: cada aplicação ganha aqui o botão Anexar foto, para as fotos de comprovação.'
               : 'A RBS ainda não carregou o plano de aplicações da sua cota.'
           }
         >

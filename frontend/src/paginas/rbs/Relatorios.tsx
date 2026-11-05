@@ -51,20 +51,20 @@ export function Relatorios() {
     const botao = 'text-xs font-bold whitespace-nowrap hover:underline disabled:opacity-40'
     return (
       <div className="flex justify-end gap-3">
-        <button type="button" className={botao} disabled={ocupada} onClick={() => agir(linha.parceriaId, () => gerarRelatorio(linha.parceriaId))}>
+        <button type="button" className={botao} disabled={ocupada} aria-label={`${relatorio ? 'Nova versão do relatório' : 'Gerar o relatório'} de ${linha.patrocinador}`} onClick={() => agir(linha.parceriaId, () => gerarRelatorio(linha.parceriaId))}>
           {relatorio ? 'Nova versão' : 'Gerar'}
         </button>
         {relatorio?.status === 'RASCUNHO' && (
-          <button type="button" className={botao} disabled={ocupada} onClick={() => agir(linha.parceriaId, () => mudarStatusRelatorio(relatorio.id, 'VALIDADO'))}>
+          <button type="button" className={botao} disabled={ocupada} aria-label={`Validar o relatório de ${linha.patrocinador}`} onClick={() => agir(linha.parceriaId, () => mudarStatusRelatorio(relatorio.id, 'VALIDADO'))}>
             Validar
           </button>
         )}
         {relatorio?.status === 'VALIDADO' && (
-          <button type="button" className={`${botao} text-[#007a2a]`} disabled={ocupada} onClick={() => agir(linha.parceriaId, () => mudarStatusRelatorio(relatorio.id, 'DISPONIBILIZADO'))}>
+          <button type="button" className={`${botao} text-[#007a2a]`} disabled={ocupada} aria-label={`Disponibilizar o relatório de ${linha.patrocinador}`} onClick={() => agir(linha.parceriaId, () => mudarStatusRelatorio(relatorio.id, 'DISPONIBILIZADO'))}>
             Disponibilizar
           </button>
         )}
-        <Link to={`/parceria/${linha.parceriaId}/relatorio`} className={botao}>
+        <Link to={`/parceria/${linha.parceriaId}/relatorio`} className={botao} aria-label={`Abrir o relatório de ${linha.patrocinador}`}>
           Abrir →
         </Link>
       </div>
@@ -167,7 +167,7 @@ export function Relatorios() {
         </p>
       </Cartao>
 
-      {edicaoDosNumeros && <NumerosDaEdicao eventoId={edicaoDosNumeros.id} edicao={edicaoDosNumeros.edicao} />}
+      {edicaoDosNumeros && <NumerosDaEdicao key={edicaoDosNumeros.id} eventoId={edicaoDosNumeros.id} edicao={edicaoDosNumeros.edicao} />}
     </div>
   )
 }

@@ -125,6 +125,10 @@ function EnvioDeDocumento({ eventos, aoEnviar }: { eventos: Dados<Evento[]>; aoE
   async function enviar(evento: FormEvent) {
     evento.preventDefault()
     if (!arquivo) return setFalha('Escolha o documento.')
+    if (foraDoAtlas.trim() && !/^\s*\d+(\s*,\s*\d+)*\s*$/.test(foraDoAtlas)) {
+      setErros({ paginasForaDoAtlas: 'Use só os números das páginas, separados por vírgula (por exemplo: 4,7).' })
+      return
+    }
     setFalha(null)
     setErros({})
     setEnviado(null)
@@ -241,7 +245,7 @@ function EnvioDeDocumento({ eventos, aoEnviar }: { eventos: Dados<Evento[]>; aoE
             value={foraDoAtlas}
             onChange={(campo) => setForaDoAtlas(campo.target.value)}
             erro={erros.paginasForaDoAtlas}
-            ajuda="Números separados por vírgula, como 4 ou 4, 7. Essas páginas não entram no índice nem são lidas pelo Atlas; o PDF continua inteiro no visualizador."
+            ajuda="Os números das páginas, separados por vírgula (por exemplo: 4,7). Elas não entram no índice nem são lidas pelo Atlas; o PDF continua inteiro no visualizador."
             inputMode="numeric"
             maxLength={120}
           />
@@ -252,6 +256,7 @@ function EnvioDeDocumento({ eventos, aoEnviar }: { eventos: Dados<Evento[]>; aoE
           <Botao type="submit" carregando={enviando} disabled={!arquivo} icone="ri-upload-cloud-2-line" className="max-sm:w-full">
             Enviar
           </Botao>
+          {!arquivo && <p className="mt-2 text-xs font-medium text-texto-2">Escolha o documento acima para enviar.</p>}
         </div>
       </form>
     </Cartao>
@@ -323,17 +328,17 @@ function LinhaDoDocumento({ documento, aoAgir, aoVerTrechos, aoMarcarPaginas }: 
       {(documento.acoes.length > 0 || documento.trechos > 0 || aguardando) && (
         <div className="flex flex-wrap gap-2">
           {documento.acoes.map((acao) => (
-            <Botao key={acao} variante={acao === 'APROVAR' ? 'primario' : 'secundario'} className="h-10 min-w-0 px-4" onClick={() => aoAgir(acao)}>
+            <Botao key={acao} variante={acao === 'APROVAR' ? 'primario' : 'secundario'} className="h-10 min-w-0 px-4" aria-label={`${ACOES[acao].nome}: ${documento.titulo}, versão ${documento.versao}`} onClick={() => aoAgir(acao)}>
               {ACOES[acao].nome}
             </Botao>
           ))}
           {aguardando && documento.paginas !== null && (
-            <Botao variante="secundario" className="h-10 min-w-0 px-4" onClick={aoMarcarPaginas}>
+            <Botao variante="secundario" className="h-10 min-w-0 px-4" aria-label={`Páginas fora do Atlas: ${documento.titulo}, versão ${documento.versao}`} onClick={aoMarcarPaginas}>
               Páginas fora do Atlas
             </Botao>
           )}
           {documento.trechos > 0 && (
-            <Botao variante="secundario" className="h-10 min-w-0 px-4" onClick={aoVerTrechos}>
+            <Botao variante="secundario" className="h-10 min-w-0 px-4" aria-label={`Ver trechos: ${documento.titulo}, versão ${documento.versao}`} onClick={aoVerTrechos}>
               Ver trechos
             </Botao>
           )}

@@ -59,11 +59,7 @@ function Previa({ impacto }: { impacto: ImpactoDaTroca }) {
           </ul>
         </div>
       )}
-      {impacto.avisos.map((aviso) => (
-        <p key={aviso} className="text-texto-2">
-          {aviso}
-        </p>
-      ))}
+      {/* Os avisos da API repetem, em outras palavras, as listas acima: a prévia mostra cada efeito uma vez. */}
     </div>
   )
 }
@@ -76,7 +72,9 @@ export function TrocaDeCota({ detalhe, aoFechar, aoTrocar }: { detalhe: Parceria
   const [falha, setFalha] = useState<string | null>(null)
   const [enviando, setEnviando] = useState(false)
   const nomeNova = opcoes.find((cota) => cota.codigo === para)?.nome ?? ''
-  const exigeCiencia = previa.dado?.exigeCiencia ?? false
+  // Só vale a prévia da cota escolhida agora: enquanto a nova carrega (ou se falhou), não dá para confirmar.
+  const previaDaEscolha = !previa.carregando && !previa.erro && previa.dado?.cotaNova.codigo === para ? previa.dado : null
+  const exigeCiencia = previaDaEscolha?.exigeCiencia ?? false
 
   async function confirmar() {
     setFalha(null)
@@ -109,21 +107,21 @@ export function TrocaDeCota({ detalhe, aoFechar, aoTrocar }: { detalhe: Parceria
           ))}
         </Seletor>
         <Carregando dados={previa}>{(impacto) => <Previa impacto={impacto} />}</Carregando>
-        {exigeCiencia && previa.dado?.relatorioDisponibilizado && (
+        {exigeCiencia && previaDaEscolha?.relatorioDisponibilizado && (
           <label className="flex items-start gap-3 rounded-xl border border-borda p-3 text-sm">
             <input type="checkbox" className="mt-0.5 size-4" checked={ciente} onChange={(campo) => setCiente(campo.target.checked)} />
             <span>
-              Estou ciente de que o relatório v{previa.dado.relatorioDisponibilizado.versao}, disponibilizado em{' '}
-              {data(previa.dado.relatorioDisponibilizado.disponibilizadoEm)}, já está com a marca e traz a cota antiga no cabeçalho.
+              Estou ciente de que o relatório v{previaDaEscolha.relatorioDisponibilizado.versao}, disponibilizado em{' '}
+              {data(previaDaEscolha.relatorioDisponibilizado.disponibilizadoEm)}, já está com a marca e foi feito com a cota de hoje.
             </span>
           </label>
         )}
         {falha && <Aviso tipo="falha" titulo={falha} />}
-        <div className="flex flex-wrap justify-end gap-2">
-          <Botao variante="secundario" className="min-w-0 max-sm:flex-1" onClick={aoFechar}>
+        <div className="flex flex-col-reverse gap-2 pb-1 sm:flex-row sm:justify-end">
+          <Botao variante="secundario" className="min-w-0" onClick={aoFechar}>
             Cancelar
           </Botao>
-          <Botao carregando={enviando} disabled={!previa.dado || (exigeCiencia && !ciente)} className="min-w-0 max-sm:flex-1" onClick={confirmar}>
+          <Botao carregando={enviando} disabled={!previaDaEscolha || (exigeCiencia && !ciente)} className="min-w-0" onClick={confirmar}>
             Trocar para {nomeNova}
           </Botao>
         </div>

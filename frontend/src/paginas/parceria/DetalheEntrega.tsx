@@ -31,7 +31,6 @@ const CATEGORIAS_MARCA = [
   ['MATERIAL_MARCA', 'Material da marca'],
   ['MATERIAL_MIDIA', 'Material de mídia'],
   ['DOCUMENTO_INGRESSOS', 'Documento de ingressos'],
-  ['CONTRATO', 'Contrato'],
   ['OUTRO', 'Outro'],
 ] as const
 
@@ -396,7 +395,7 @@ export function DetalheEntrega({ entrega: inicial, aoFechar, aoMudar }: Props) {
   const secao = SECOES.find((item) => item.aba === entrega.abaCodigo) ?? SECOES[0]
   const podeEnviar = rbs || ACEITA_ENVIO.includes(entrega.status)
   // O recado vale enquanto o ajuste está pedido ou se é sobre a versão atual; depois do reenvio, ele fica no Histórico.
-  const ultimoEnvio = entrega.arquivos[0]?.enviadoEm
+  const ultimoEnvio = entrega.versoes?.[0]?.enviadoEm ?? entrega.arquivos[0]?.enviadoEm
   const recado =
     entrega.ultimaObservacao &&
     (entrega.status === 'AJUSTE_SOLICITADO' || !ultimoEnvio || new Date(entrega.ultimaObservacao.em) >= new Date(ultimoEnvio))

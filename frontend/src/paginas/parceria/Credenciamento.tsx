@@ -97,7 +97,6 @@ function ConteudoDoCredenciamento({ rbs }: { rbs: boolean }) {
               {enderecoSeguro(credenciais.openStaffUrl) ? (
                 <LinkExterno
                   href={credenciais.openStaffUrl!}
-                  mostrarDominio={false}
                   className="inline-flex h-12 items-center rounded-xl bg-secao px-6 text-sm font-bold tracking-[0.08em] text-white uppercase hover:brightness-110"
                 >
                   Abrir Open Staff
@@ -115,7 +114,7 @@ function ConteudoDoCredenciamento({ rbs }: { rbs: boolean }) {
 
           <Cartao>
             <p className="text-sm font-semibold">Guia de credenciamento</p>
-            <p className="text-xs font-medium text-texto-2">Publicado pela RBS na lista de entregas desta aba, no fim da página · somente consulta</p>
+            <p className="text-xs font-medium text-texto-2">Quando a RBS publicar o guia, ele aparece na lista de entregas, no fim desta página · somente consulta</p>
           </Cartao>
 
           {rbs && <GradeDeCredenciais credenciais={credenciais} aoGravar={dados.recarregar} />}
@@ -237,11 +236,13 @@ function EdicaoDaEdicao({ credenciais, aoGravar }: { credenciais: Credenciais; a
   const [fim, setFim] = useState(credenciais.credenciamentoFim ?? '')
   const [erros, setErros] = useState<Record<string, string>>({})
   const [feito, setFeito] = useState<string | null>(null)
+  const [falha, setFalha] = useState<string | null>(null)
   const [enviando, setEnviando] = useState(false)
 
   async function salvar(evento: FormEvent) {
     evento.preventDefault()
     setFeito(null)
+    setFalha(null)
     const novos: Record<string, string> = {}
     if (url.trim() && (!enderecoSeguro(url.trim()) || !url.trim().startsWith('https://'))) novos.openStaffUrl = 'Use um endereço que comece com https://.'
     if (inicio && fim && fim < inicio) novos.fim = 'O fim não pode ser antes do início.'
@@ -253,7 +254,9 @@ function EdicaoDaEdicao({ credenciais, aoGravar }: { credenciais: Credenciais; a
       setFeito(`Open Staff e período salvos para a edição ${parceria.evento.edicao}.`)
       aoGravar()
     } catch (erro) {
-      if (erro instanceof ErroApi) setErros(erro.campos)
+      // Erro de campo aparece junto do campo; o resto (sessão, conflito, rede) precisa de um aviso.
+      if (erro instanceof ErroApi && Object.keys(erro.campos).length) setErros(erro.campos)
+      else setFalha(erro instanceof ErroApi ? erro.message : 'Não foi possível salvar o Open Staff e o período.')
       setFeito(null)
     } finally {
       setEnviando(false)
@@ -275,6 +278,7 @@ function EdicaoDaEdicao({ credenciais, aoGravar }: { credenciais: Credenciais; a
           <Campo rotulo="Início do cadastro" type="date" value={inicio} onChange={(evento) => setInicio(evento.target.value)} erro={erros.inicio} />
           <Campo rotulo="Fim do cadastro" type="date" value={fim} onChange={(evento) => setFim(evento.target.value)} erro={erros.fim} />
         </div>
+        {falha && <Aviso tipo="falha" titulo={falha} />}
         {feito && (
           <p className="text-sm font-semibold text-secao-texto" role="status">
             {feito}

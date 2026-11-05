@@ -32,6 +32,10 @@ export function AvisoAbaFechada({ parceria, estado, nome, rbs }: { parceria: Par
     <Aviso tipo="restrito" titulo="Esta aba não faz parte da sua cota">
       A cota da sua parceria ({nomeCota(parceria)}) não inclui {nome.toLowerCase()}. Para incluir, fale com o time B2B da RBS.
     </Aviso>
+  ) : estado === 'OCULTA' ? (
+    <Aviso tipo="restrito" titulo="Esta página não está disponível">
+      Esta área não faz parte do que a RBS mostra para a sua parceria. Dúvidas: fale com o time B2B da RBS.
+    </Aviso>
   ) : (
     <Aviso tipo="restrito" titulo="Esta aba está fechada no momento">
       A RBS fechou {nome.toLowerCase()} para a sua parceria por enquanto. As entregas e os arquivos continuam guardados e voltam quando a

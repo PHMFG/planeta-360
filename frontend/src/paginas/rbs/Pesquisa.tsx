@@ -110,7 +110,13 @@ function ModalDaPesquisa({
             Escopo: <span className="font-semibold">{NOME_DO_ESCOPO[pesquisa.escopo]}</span>. O escopo não muda depois de aberta.
           </p>
         ) : (
-          <Seletor rotulo="Escopo" value={escopo} erro={erros.escopo} onChange={(campo) => setEscopo(campo.target.value as EscopoDaPesquisa)}>
+          <Seletor
+            rotulo="Escopo"
+            value={escopo}
+            erro={erros.escopo}
+            ajuda={ativacaoAberta ? 'A pesquisa da ativação desta edição já está aberta: edite-a na lista. Aqui você abre uma pesquisa geral.' : undefined}
+            onChange={(campo) => setEscopo(campo.target.value as EscopoDaPesquisa)}
+          >
             <option value="ATIVACAO" disabled={ativacaoAberta}>
               {NOME_DO_ESCOPO.ATIVACAO}
               {ativacaoAberta ? ' · já aberta' : ''}
@@ -176,7 +182,7 @@ function CartaoDaPesquisa({ pesquisa, aoEditar }: { pesquisa: PesquisaDaEdicao; 
           </dd>
         </div>
         <div>
-          <dt className="text-texto-2">Resultados carregados</dt>
+          <dt className="text-texto-2">Resultados carregados (todas as marcas)</dt>
           <dd className="font-semibold">{numero(pesquisa.resultados)}</dd>
         </div>
       </dl>

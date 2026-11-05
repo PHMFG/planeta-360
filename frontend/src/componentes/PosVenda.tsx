@@ -26,7 +26,16 @@ import { Modal } from './Modal'
 import { Tabela } from './Tabela'
 
 type LinhaDeLink = { tipo: TipoDeLink; titulo: string; url: string }
+
+/** "1.600.000", "1600000,5" e "1600000.5" (como a API devolve) viram número; o resto, null. */
+function lerNumero(texto: string): number | null {
+  const limpo = texto.trim()
+  const normal = limpo.includes(',') ? limpo.replace(/\./g, '').replace(',', '.') : /^\d{1,3}(\.\d{3})+$/.test(limpo) ? limpo.replace(/\./g, '') : limpo
+  return /^\d+(\.\d{1,2})?$/.test(normal) ? Number(normal) : null
+}
 type LinhaDeAudiencia = { veiculo: string; metrica: string; numero: string; unidade: string }
+
+const indiceDoLink = (lista: VersaoDoAnexo['links'], link: VersaoDoAnexo['links'][number]) => lista.indexOf(link)
 
 function ConteudoDoAnexo({ anexo, linksDePosts }: { anexo: VersaoDoAnexo | null; linksDePosts: PosVendaDaParceria['linksDePosts'] }) {
   return (
@@ -37,7 +46,7 @@ function ConteudoDoAnexo({ anexo, linksDePosts }: { anexo: VersaoDoAnexo | null;
           <p className="mb-2 text-sm font-semibold">Para ver e compartilhar</p>
           <ul className="flex flex-col gap-1 text-sm">
             {anexo.links.map((link) => (
-              <li key={`${link.tipo}-${link.url}`} className="[overflow-wrap:anywhere]">
+              <li key={`${indiceDoLink(anexo.links, link)}-${link.url}`} className="[overflow-wrap:anywhere]">
                 <span className="text-texto-2">{NOME_DO_LINK[link.tipo]}: </span>
                 <LinkExterno href={link.url} className="font-semibold text-secao-texto hover:underline">
                   {link.titulo}
@@ -64,7 +73,7 @@ function ConteudoDoAnexo({ anexo, linksDePosts }: { anexo: VersaoDoAnexo | null;
           <p className="mb-2 text-sm font-semibold">Posts da sua marca no festival</p>
           <ul className="flex flex-col gap-1 text-sm">
             {linksDePosts.map((link) => (
-              <li key={link.url} className="[overflow-wrap:anywhere]">
+              <li key={`${link.origem}-${link.url}-${link.data ?? ''}`} className="[overflow-wrap:anywhere]">
                 <LinkExterno href={link.url} className="font-semibold text-secao-texto hover:underline">
                   {link.titulo || [link.veiculo, link.formato].filter(Boolean).join(' · ') || 'Post'}
                 </LinkExterno>
@@ -82,7 +91,7 @@ function ModalDePublicar({ parceriaId, atual, aoFechar, aoConcluir }: { parceria
   const [texto, setTexto] = useState(atual?.texto ?? '')
   const [links, setLinks] = useState<LinhaDeLink[]>(atual?.links.map((link) => ({ ...link })) ?? [])
   const [audiencias, setAudiencias] = useState<LinhaDeAudiencia[]>(
-    atual?.audiencias.map((linha) => ({ ...linha, numero: String(linha.numero) })) ?? [],
+    atual?.audiencias.map((linha) => ({ ...linha, numero: String(linha.numero).replace('.', ',') })) ?? [],
   )
   const [erros, setErros] = useState<Record<string, string>>({})
   const [falha, setFalha] = useState<string | null>(null)
@@ -99,7 +108,7 @@ function ModalDePublicar({ parceriaId, atual, aoFechar, aoConcluir }: { parceria
     setFalha(null)
     const locais: Record<string, string> = {}
     audiencias.forEach((linha, indice) => {
-      if (!/^\d+([.,]\d{1,2})?$/.test(linha.numero.trim().replace(/\./g, '').replace(/^$/, 'x'))) locais[`audiencias[${indice}].numero`] = 'Use um número, como 1600000.'
+      if (lerNumero(linha.numero) === null) locais[`audiencias[${indice}].numero`] = 'Use um número, como 1.600.000 ou 1600000,5.'
     })
     if (Object.keys(locais).length) return setErros(locais)
     setEnviando(true)
@@ -110,7 +119,7 @@ function ModalDePublicar({ parceriaId, atual, aoFechar, aoConcluir }: { parceria
         audiencias: audiencias.map((linha) => ({
           veiculo: linha.veiculo.trim(),
           metrica: linha.metrica.trim(),
-          numero: Number(linha.numero.trim().replace(/\./g, '').replace(',', '.')),
+          numero: lerNumero(linha.numero) ?? 0,
           unidade: linha.unidade.trim(),
         })),
       })

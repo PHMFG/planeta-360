@@ -20,6 +20,7 @@ export default function VisualizadorDeContrato({ arquivoId, nome, cheio = false 
     let ativo = true
     setArquivo(null)
     setFalha(null)
+    setPagina(1)
     lerPdfDoContrato(arquivoId)
       .then((lido) => ativo && setArquivo(lido))
       .catch(() => ativo && setFalha('Não foi possível abrir o PDF. Use "Baixar PDF".'))

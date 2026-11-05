@@ -75,7 +75,7 @@ function ConteudoDoContrato({ rbs }: { rbs: boolean }) {
                 <p className="text-xs font-medium text-texto-2">
                   {contrato.arquivo
                     ? `Publicado pela RBS · versão ${contrato.arquivo.versao} · ${dataHora(contrato.arquivo.enviadoEm)}`
-                    : 'Publicado pela RBS · ainda não enviado'}
+                    : 'A RBS ainda não enviou o contrato assinado'}
                 </p>
                 <p className="mt-1 text-xs font-semibold text-secao-texto">Somente consulta</p>
               </Cartao>
@@ -141,6 +141,15 @@ function Signatarios({ contrato, aoSalvar }: { contrato: DadosDoContrato; aoSalv
   const [falha, setFalha] = useState<string | null>(null)
   const [feito, setFeito] = useState(false)
   const [enviando, setEnviando] = useState(false)
+  // Abrir ou cancelar a edição parte sempre do que está gravado (a RBS pode ter corrigido depois que a tela abriu).
+  function editar(aberto: boolean) {
+    setNome(atual?.nome ?? '')
+    setCargo(atual?.cargo ?? '')
+    setEmail(atual?.email ?? '')
+    setErros({})
+    setFalha(null)
+    setEditando(aberto)
+  }
 
   async function salvar(evento: FormEvent) {
     evento.preventDefault()
@@ -180,7 +189,7 @@ function Signatarios({ contrato, aoSalvar }: { contrato: DadosDoContrato; aoSalv
               Salvar signatário
             </Botao>
             {atual && (
-              <Botao variante="secundario" onClick={() => setEditando(false)}>
+              <Botao variante="secundario" onClick={() => editar(false)}>
                 Cancelar
               </Botao>
             )}
@@ -194,7 +203,7 @@ function Signatarios({ contrato, aoSalvar }: { contrato: DadosDoContrato; aoSalv
           </p>
           <p className="text-texto-2">{atual?.email}</p>
           <p>
-            <span className="font-semibold">Assinado em:</span> {contrato.assinadoEm ? data(contrato.assinadoEm) : 'a informar pela RBS'}
+            <span className="font-semibold">Assinado em:</span> {contrato.assinadoEm ? data(contrato.assinadoEm) : contrato.arquivo ? 'data não informada' : 'a informar pela RBS'}
           </p>
           {atual?.informadoEm && (
             <p className="text-xs text-texto-2">
@@ -207,7 +216,7 @@ function Signatarios({ contrato, aoSalvar }: { contrato: DadosDoContrato; aoSalv
             </p>
           )}
           <div className="mt-2">
-            <Botao variante="secundario" onClick={() => setEditando(true)}>
+            <Botao variante="secundario" onClick={() => editar(true)}>
               Alterar signatário
             </Botao>
           </div>

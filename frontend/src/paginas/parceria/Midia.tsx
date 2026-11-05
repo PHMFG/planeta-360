@@ -70,7 +70,7 @@ function PreparoEnvio({
       const enviado = await enviarArquivo(escolhida.id, arquivo, { categoria: 'MATERIAL_MIDIA', observacao: observacao.trim() || undefined })
       aoEnviar(enviado, escolhida)
     } catch (erro) {
-      setFalha(erro instanceof ErroApi ? erro.message : 'Não foi possível enviar o arquivo.')
+      setFalha(erro instanceof ErroApi ? (Object.values(erro.campos)[0] ?? erro.message) : 'Não foi possível enviar o arquivo.')
     } finally {
       setEnviando(false)
     }
@@ -190,6 +190,8 @@ function ConteudoMidia({ rbs }: { rbs: boolean }) {
   const [envios, setEnvios] = useState(0)
   const [aberta, setAberta] = useState<Entrega | null>(null)
   const [criando, setCriando] = useState(false)
+  // Cada envio pelo detalhe (arquivo, texto ou link) relê Posts e links: o link novo aparece na hora.
+  const [versaoDosLinks, setVersaoDosLinks] = useState(0)
   const [recebido, setRecebido] = useState<{ arquivo: Arquivo; entrega: Entrega } | null>(null)
   const [busca, setBusca] = useState('')
   const [origem, setOrigem] = useState<Origem>('todos')
@@ -311,7 +313,7 @@ function ConteudoMidia({ rbs }: { rbs: boolean }) {
       {parceria.cota.codigo === 'MASTER' && <ComprovacaoMensal parceriaId={parceria.id} patrocinador={parceria.patrocinador} />}
 
       {/* R4.3 e R5.3.b: os links dos posts, clicáveis, da carga da RBS e dos materiais enviados. */}
-      <PostsELinks parceriaId={parceria.id} />
+      <PostsELinks key={`links-${versaoDosLinks}`} parceriaId={parceria.id} />
 
       <Aviso titulo="A regra muda por tipo de conteúdo">
         Comercial de TV e conteúdo assinado: sem aprovação prévia. Branded content: consulte as regras específicas antes do envio.
@@ -335,6 +337,7 @@ function ConteudoMidia({ rbs }: { rbs: boolean }) {
           // O aviso "Envio recebido" do topo é do envio anterior; o novo aparece dentro do detalhe.
           setRecebido(null)
           entregas.recarregar()
+          setVersaoDosLinks((versao) => versao + 1)
         }}
       />
       {rbs && <NovaEntrega aba="MIDIA" aberto={criando} aoFechar={() => setCriando(false)} aoCriar={entregas.recarregar} />}

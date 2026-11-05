@@ -168,6 +168,7 @@ export const REGRA_ENVIO = 'PDF, PNG, JPG, Word, Excel, PowerPoint (sem macro), 
 export function problemaNoArquivo(arquivo: File): string | null {
   const extensao = arquivo.name.includes('.') ? `.${arquivo.name.split('.').pop()?.toLowerCase()}` : ''
   if (!EXTENSOES_ACEITAS.split(',').includes(extensao)) return `Este tipo de arquivo não é aceito. Envie ${REGRA_ENVIO}.`
+  if (arquivo.size === 0) return 'O arquivo está vazio. Escolha o arquivo de novo.'
   if (arquivo.size > LIMITE_BYTES) return 'O arquivo passa do limite de 20 MB. Reduza o tamanho e escolha de novo.'
   return null
 }

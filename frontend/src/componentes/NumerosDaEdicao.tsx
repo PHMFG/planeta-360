@@ -33,7 +33,12 @@ export function NumerosDaEdicao({ eventoId, edicao }: { eventoId: number; edicao
     setFalha(null)
     setFeito(null)
     const valor = form.valor.trim().replace(/\./g, '').replace(',', '.')
-    if (!/^\d+(\.\d{1,2})?$/.test(valor)) return setErros({ valor: 'Use um número maior que zero, como 80000.' })
+    const faltam: Record<string, string> = {}
+    if (!form.indicador.trim()) faltam.indicador = 'Informe o indicador.'
+    if (!/^\d+(\.\d{1,2})?$/.test(valor) || Number(valor) === 0) faltam.valor = 'Use um número maior que zero, como 80000.'
+    if (!form.unidade.trim()) faltam.unidade = 'Informe a unidade.'
+    if (!form.fonte.trim()) faltam.fonte = 'Informe a fonte.'
+    if (Object.keys(faltam).length) return setErros(faltam)
     setEnviando(true)
     try {
       const salvo = await informarNumeroDaEdicao(eventoId, {

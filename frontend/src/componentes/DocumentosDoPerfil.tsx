@@ -22,11 +22,11 @@ import { Carregando } from './Carregando'
 import { Tabela } from './Tabela'
 
 /** Escolher arquivo com um botão (sem a área de arrastar): devolve o arquivo escolhido e limpa o campo. */
-function BotaoDeArquivo({ rotulo, espaco, aceitar, aoEscolher, carregando, variante }: { rotulo: string; espaco: string; aceitar?: string; aoEscolher: (arquivo: File) => void; carregando?: boolean; variante?: 'primario' | 'secundario' }) {
+function BotaoDeArquivo({ rotulo, espaco, aceitar, aoEscolher, carregando, variante, desabilitado }: { rotulo: string; espaco: string; aceitar?: string; aoEscolher: (arquivo: File) => void; carregando?: boolean; variante?: 'primario' | 'secundario'; desabilitado?: boolean }) {
   const campo = useRef<HTMLInputElement>(null)
   return (
     <>
-      <Botao variante={variante} carregando={carregando} onClick={() => campo.current?.click()}>
+      <Botao variante={variante} carregando={carregando} disabled={desabilitado} onClick={() => campo.current?.click()}>
         {rotulo}
       </Botao>
       <input
@@ -110,7 +110,8 @@ export function PlanoComercialDoPerfil({ parceriaId, rbs }: { parceriaId: number
               )}
               {rbs && (
                 <div>
-                  <BotaoDeArquivo rotulo={vigente ? 'Enviar nova versão do plano' : 'Enviar plano comercial'} espaco="PLANO_COMERCIAL" aoEscolher={enviar} carregando={enviando} />
+                  <BotaoDeArquivo rotulo={vigente ? 'Enviar nova versão do plano' : 'Enviar plano comercial'} espaco="PLANO_COMERCIAL" aceitar=".pdf,application/pdf" aoEscolher={enviar} carregando={enviando} />
+                  <p className="mt-2 text-xs font-medium text-texto-2">PDF, até 20 MB.</p>
                 </div>
               )}
               {falha && <Aviso tipo="falha" titulo={falha} />}
@@ -189,7 +190,7 @@ export function CompraDeIngressos({ parceriaId, rbs }: { parceriaId: number; rbs
                     {
                       titulo: 'Situação',
                       celula: (solicitacao) =>
-                        rbs && solicitacao.status !== 'APROVADO' ? (
+                        rbs && (solicitacao.status === 'ENVIADO' || solicitacao.status === 'EM_ANALISE') ? (
                           <span className="flex items-center gap-2">
                             {SITUACAO_DA_SOLICITACAO[solicitacao.status] ?? solicitacao.status}
                             <button
@@ -222,6 +223,8 @@ export function CompraDeIngressos({ parceriaId, rbs }: { parceriaId: number; rbs
                     rotulo="Enviar solicitação"
                     aoEscolher={(arquivo) => acao(() => enviarAoEspaco(parceriaId, 'DOCUMENTO_INGRESSOS', arquivo), 'Solicitação enviada. A RBS confere e confirma.', 'Não foi possível enviar a solicitação.')}
                     carregando={enviando}
+                    // A solicitação é o formulário preenchido: sem o formulário publicado, não há o que enviar.
+                    desabilitado={!formulario}
                   />
                 )}
                 {rbs && (

@@ -78,16 +78,19 @@ export function ListaEntregas({ lista, aoAbrir }: { lista: Entrega[]; aoAbrir: (
   return (
     <div className="flex flex-col gap-3">
       {lista.map((entrega) => {
-        const ultimo = entrega.arquivos[0]
+        // A versão mais nova pode ser um arquivo, um texto ou um link (R5.3.a); sem a lista de versões, vale o último arquivo.
+        const versao = entrega.versoes?.[0]
+        const ultimo = versao ?? (entrega.arquivos[0] ? { ...entrega.arquivos[0], tipo: 'ARQUIVO' as const, titulo: null, host: null } : undefined)
+        const oQue = !ultimo ? '' : ultimo.tipo === 'TEXTO' ? (ultimo.titulo ?? 'Texto') : ultimo.tipo === 'LINK' ? `Link · ${ultimo.host ?? ''}` : (ultimo.nomeOriginal ?? 'Arquivo')
         return (
           <LinhaArquivo
             key={entrega.id}
             titulo={entrega.titulo}
-            icone={ultimo ? 'ri-file-text-line' : 'ri-file-add-line'}
+            icone={ultimo ? (ultimo.tipo === 'LINK' ? 'ri-link' : 'ri-file-text-line') : 'ri-file-add-line'}
             meta={
               ultimo
-                ? `v${ultimo.versao} · ${ultimo.nomeOriginal} · ${ultimo.enviadoPor?.nome ?? '—'} · ${dataHora(ultimo.enviadoEm)}`
-                : `Prazo: ${data(entrega.prazo)} · nenhum arquivo ainda`
+                ? `v${ultimo.versao} · ${oQue} · ${ultimo.enviadoPor?.nome ?? '—'} · ${dataHora(ultimo.enviadoEm)}`
+                : `Prazo: ${data(entrega.prazo)} · nenhum material ainda`
             }
             rodape={<Status codigo={entrega.status} complemento="ver detalhe e histórico" />}
             onClick={() => aoAbrir(entrega)}
