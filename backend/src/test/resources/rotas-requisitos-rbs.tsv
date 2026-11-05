@@ -24,3 +24,8 @@ GET	/api/parcerias/{id}/comprovacao-mensal	ambos
 GET	/api/parcerias/{id}/comprovacao-mensal.xlsx	ambos
 GET	/api/parcerias/{id}/comprovacao-mensal.csv	ambos
 GET	/api/eventos/{id}/comprovacao-mensal.xlsx	rbs
+# F6 · Abertura da pesquisa da edição (rotas 92 a 95)
+GET	/api/eventos/{id}/pesquisas	rbs
+POST	/api/eventos/{id}/pesquisas	rbs
+PATCH	/api/pesquisas/{id}	rbs
+GET	/api/pesquisa/perguntas	rbs

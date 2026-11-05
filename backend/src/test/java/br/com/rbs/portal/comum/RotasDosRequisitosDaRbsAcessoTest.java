@@ -97,7 +97,13 @@ class RotasDosRequisitosDaRbsAcessoTest {
             Map.entry("GET /api/parcerias/{id}/comprovacao-mensal", new Detalhe(null, "MIDIA", true)),
             Map.entry("GET /api/parcerias/{id}/comprovacao-mensal.xlsx", new Detalhe(null, "MIDIA", true)),
             Map.entry("GET /api/parcerias/{id}/comprovacao-mensal.csv", new Detalhe(null, "MIDIA", true)),
-            Map.entry("GET /api/eventos/{id}/comprovacao-mensal.xlsx", new Detalhe(null, null, false)));
+            Map.entry("GET /api/eventos/{id}/comprovacao-mensal.xlsx", new Detalhe(null, null, false)),
+            // F6 · Abertura da pesquisa da edição (rotas 92 a 95), todas só da RBS. Nenhuma tem aba nem é de uma parceria; na 94 o {id}
+            // é o da pesquisa, e o teste põe o da edição (a marca recebe 403 antes de o id ser lido, e a RBS só é chamada sem CSRF).
+            Map.entry("GET /api/eventos/{id}/pesquisas", new Detalhe(null, null, false)),
+            Map.entry("POST /api/eventos/{id}/pesquisas", new Detalhe("{\"nome\":\"Pesquisa de teste\"}", null, false)),
+            Map.entry("PATCH /api/pesquisas/{id}", new Detalhe("{\"metodologia\":\"Teste\"}", null, false)),
+            Map.entry("GET /api/pesquisa/perguntas", new Detalhe(null, null, false)));
 
     /** As rotas que recebem multipart: no teste vão como formulário sem partes (com JSON o Spring responderia 415 antes da permissão). */
     private static final Set<String> MULTIPART = Set.of("POST /api/parcerias/{id}/contrato/arquivo",

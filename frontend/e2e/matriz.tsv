@@ -78,6 +78,12 @@ R5.5.b	back	credenciamento.CredenciaisDaParceriaTest#httpJavascriptUsuarioArroba
 R5.6.a	back	pesquisa.PesquisaControllerTest#amareloEnviaTresPerguntasEElasFicamEnviadasEComHistorico
 R5.6.b	back	consolidacao.CargaControllerTest#oExemploDePesquisaEntraEOReenvioNaoDuplica
 R5.6.c	back	pesquisa.PesquisaControllerTest#amareloVeAPesquisaComAsTresPerguntasAprovadasEOsResultadosComABase
+R5.6.d	back	pesquisa.AberturaDaPesquisaTest#rbsAbreAPesquisaDaAtivacaoDeUmaEdicaoSemPesquisaELista
+R5.6.d	back	pesquisa.AberturaDaPesquisaTest#asegundaAberturaDaAtivacaoNaMesmaEdicaoDa409ComFraseClaraENadaNovoNoBanco
+R5.6.d	back	pesquisa.AberturaDaPesquisaTest#depoisDeAbertaAMasterVeAAbaProntaEAsPerguntasAntigasFicamLigadas
+R5.6.d	back	pesquisa.AberturaDaPesquisaTest#filaListaAsEnviadasDeTodasAsParceriasEAAprovacaoPelaRota25TiraDaFila
+R5.6.d	back	pesquisa.AberturaDaPesquisaTest#marcaRecebe403NasQuatroRotasAntesDoCorpoESemSessaoRecebe401
+R5.6.d	back	pesquisa.AberturaDaPesquisaEmParaleloTest#aberturasJuntasDaAtivacaoDeixamUmaSoEOsOutrosRecebem409
 R5.6.d	e2e	requisitos-rbs.spec.ts > [R5.6.d] a RBS abre a pesquisa da edição pela tela
 R5.7.a	e2e	requisitos-rbs.spec.ts > [R5.7.a] a marca informa quem assina o contrato
 R5.7.a	back	contrato.ContratoDaParceriaTest#marcaGravaOSignatarioERbsVeComNomeCargoEmailEData

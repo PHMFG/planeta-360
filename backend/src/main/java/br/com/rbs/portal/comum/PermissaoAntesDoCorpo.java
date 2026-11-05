@@ -53,6 +53,11 @@ public class PermissaoAntesDoCorpo implements HandlerInterceptor, WebMvcConfigur
             "GET /api/historico",
             "GET /api/historico.csv",
             "PATCH /api/pesquisa/perguntas/{id}/status",
+            // A abertura da pesquisa da edição (rotas 92 a 95): listar, abrir, editar e a fila das perguntas a aprovar.
+            "GET /api/eventos/{id}/pesquisas",
+            "POST /api/eventos/{id}/pesquisas",
+            "PATCH /api/pesquisas/{id}",
+            "GET /api/pesquisa/perguntas",
             "POST /api/cargas",
             "GET /api/cargas",
             "GET /api/cargas/{id}/rejeicoes",

@@ -2,7 +2,7 @@
 
 Este documento é o **contrato entre o back-end e o front-end**. Quem faz a tela lê aqui o que cada rota pede, o que devolve e quais erros esperar, sem precisar abrir o código.
 
-- Todas as 91 rotas estão implementadas e cobertas por testes de integração (`cd backend && ./mvnw test`), inclusive o isolamento entre parcerias. A coluna "Etapa" diz em que etapa do plano cada rota entrou (as do Atlas, 37 em diante, entram como `Atlas 1`, `Atlas 2`, `Atlas M2`, `Atlas M3`, `Atlas M4`, `Atlas M5`, `Atlas M6` e `Atlas M8`). Mudança de formato daqui em diante entra neste arquivo no mesmo commit do código.
+- Todas as 95 rotas estão implementadas e cobertas por testes de integração (`cd backend && ./mvnw test`), inclusive o isolamento entre parcerias. A coluna "Etapa" diz em que etapa do plano cada rota entrou (as do Atlas, 37 em diante, entram como `Atlas 1`, `Atlas 2`, `Atlas M2`, `Atlas M3`, `Atlas M4`, `Atlas M5`, `Atlas M6` e `Atlas M8`). Mudança de formato daqui em diante entra neste arquivo no mesmo commit do código.
 - O banco está descrito em [`docs/banco.md`](banco.md). Os nomes de status, cotas e abas são os mesmos do banco.
 
 ## Como falar com a API
@@ -198,8 +198,12 @@ Todas prontas e testadas. A coluna "Etapa" mostra em que etapa do plano a rota e
 | 89 | `GET /api/parcerias/{id}/comprovacao-mensal.xlsx` | Patrocinador Master da parceria (aba `MIDIA` aberta), ou Admin RBS | A mesma comprovação em planilha `.xlsx` (grava `DOWNLOAD`) | Requisitos RBS |
 | 90 | `GET /api/parcerias/{id}/comprovacao-mensal.csv` | Patrocinador Master da parceria (aba `MIDIA` aberta), ou Admin RBS | A mesma comprovação em CSV (grava `DOWNLOAD`) | Requisitos RBS |
 | 91 | `GET /api/eventos/{id}/comprovacao-mensal.xlsx` | Admin RBS | O lote da edição: um `.xlsx` com uma aba por parceria Master ativa (grava `DOWNLOAD`) | Requisitos RBS |
+| 92 | `GET /api/eventos/{id}/pesquisas` | Admin RBS | Lista as pesquisas da edição, a da ativação primeiro, com a contagem das perguntas e dos resultados | F6 |
+| 93 | `POST /api/eventos/{id}/pesquisas` | Admin RBS | Abre a pesquisa da ativação (ou uma geral) da edição; liga as perguntas que as marcas já tinham enviado | F6 |
+| 94 | `PATCH /api/pesquisas/{id}` | Admin RBS | Edita nome, metodologia, base de respondentes e nível de confiança | F6 |
+| 95 | `GET /api/pesquisa/perguntas` | Admin RBS | A fila das perguntas de todas as parcerias (padrão: as `ENVIADA`), paginada, com a marca e a edição | F6 |
 
-São 91 operações (método + caminho): 90 mapeadas nos controllers (`@GetMapping`, `@PostMapping`, `@PutMapping`, `@PatchMapping` ou `@DeleteMapping`) e o logout (rota 3), que vem do Spring Security (`SegurancaConfig`), sem controller. As quatro rotas de debug ficam de fora da numeração. A rota 5 (`ativar`) faz parte do contrato de autenticação, mas só é implementada na etapa 4. As rotas 37 em diante vieram com o Atlas: a coluna "Etapa" diz `Atlas 1` (plano de aplicações e dados informados), `Atlas 2` (conversa, cartão de perguntas e relatório), `Atlas M2` (o diagnóstico: rotas 49 a 53, veja "Diagnóstico do Atlas") `Atlas M3` (os documentos: rotas 54 a 58, veja "Os documentos do Atlas") `Atlas M4` (o visualizador, rotas 59 e 60, e a busca de teste, rota 61, veja "Busca nos documentos") `Atlas M5` (os prazos: rotas 62 a 64, veja "Os prazos do Atlas") `Atlas M6` (o relatório religado: a rota 65, veja "Descarte do relatório parado"; e a planilha da agência: a rota 66, veja "Dados informados pela marca") `Atlas M8` (o Atlas da RBS: as rotas 67 e 68, veja "O Atlas da RBS") ou `Requisitos RBS` (o plano comercial e os espaços de documento da marca: as rotas 69 a 73, veja "O plano comercial e os espaços de documento") e a comprovação mensal de mídia: as rotas 88 a 91, veja a rota 88). As rotas 88 a 90 são da marca de cota Master (com a aba `MIDIA` aberta) e da RBS; a 91 é só do Admin RBS (a marca recebe **403** antes de tudo). As rotas 70 e 73 são só do Admin RBS (o patrocinador recebe **403** antes de o corpo ser lido); a 69, a 71 e a 72 são das duas pontas. As rotas 54, 55, 57, 58, 61, 62, 63, 64, 67 e 68 são só do Admin RBS (o outro perfil recebe **403** antes de o corpo ser lido); a 56, a 59 e a 60 são das duas pontas, e a marca só vê o que o escopo dela permite; a 66 é da marca da parceria e da RBS. A 49 é do dono da conversa (a marca, ou a RBS na conversa do Atlas da RBS); as 50 a 53 são só do Admin RBS (o outro perfil recebe **403** antes de tudo). **As rotas 49 a 53 estão sempre mapeadas e respondem 404 com o diagnóstico desligado** (`atlas.diagnostico.ligado=false`, o padrão). Nas rotas 42, 43, 46 e 65 só o Admin Patrocinador chama (a RBS recebe **403** antes de o corpo ser lido); nas 44, 45 e 49 chama o dono da conversa: a marca na conversa da parceria dela e, com `atlas.rbs.ligado`, a RBS na conversa dela, a do Atlas da RBS (a RBS recebe **403** antes do corpo em qualquer outra conversa, e sempre com a propriedade desligada); nas 47 e 48 chamam a marca da parceria e a RBS. **O relatório do Atlas está ligado nos perfis `dev`, `demo` e `test` e desligado no padrão** (`atlas.relatorio.ligado=false`, `ATLAS_RELATORIO`). Desligado, as rotas **46, 47, 48 e 65 não existem (404)**, e as rotas 42 e 44 só aceitam conversa por texto (`atalho` e `modelo` dão 422): é o modo só chat, que continua existindo e testado. Veja "Modo só chat". O contrato do relatório, nas rotas 42 a 48 e 65, vale com `atlas.relatorio.ligado=true`.
+São 95 operações (método + caminho): 94 mapeadas nos controllers (`@GetMapping`, `@PostMapping`, `@PutMapping`, `@PatchMapping` ou `@DeleteMapping`) e o logout (rota 3), que vem do Spring Security (`SegurancaConfig`), sem controller. As quatro rotas de debug ficam de fora da numeração. A rota 5 (`ativar`) faz parte do contrato de autenticação, mas só é implementada na etapa 4. As rotas 37 em diante vieram com o Atlas: a coluna "Etapa" diz `Atlas 1` (plano de aplicações e dados informados), `Atlas 2` (conversa, cartão de perguntas e relatório), `Atlas M2` (o diagnóstico: rotas 49 a 53, veja "Diagnóstico do Atlas") `Atlas M3` (os documentos: rotas 54 a 58, veja "Os documentos do Atlas") `Atlas M4` (o visualizador, rotas 59 e 60, e a busca de teste, rota 61, veja "Busca nos documentos") `Atlas M5` (os prazos: rotas 62 a 64, veja "Os prazos do Atlas") `Atlas M6` (o relatório religado: a rota 65, veja "Descarte do relatório parado"; e a planilha da agência: a rota 66, veja "Dados informados pela marca") `Atlas M8` (o Atlas da RBS: as rotas 67 e 68, veja "O Atlas da RBS") ou `Requisitos RBS` (o plano comercial e os espaços de documento da marca: as rotas 69 a 73, veja "O plano comercial e os espaços de documento") e a comprovação mensal de mídia: as rotas 88 a 91, veja a rota 88). As rotas 88 a 90 são da marca de cota Master (com a aba `MIDIA` aberta) e da RBS; a 91 é só do Admin RBS (a marca recebe **403** antes de tudo). As rotas 70 e 73 são só do Admin RBS (o patrocinador recebe **403** antes de o corpo ser lido); a 69, a 71 e a 72 são das duas pontas. As rotas 54, 55, 57, 58, 61, 62, 63, 64, 67 e 68 são só do Admin RBS (o outro perfil recebe **403** antes de o corpo ser lido); a 56, a 59 e a 60 são das duas pontas, e a marca só vê o que o escopo dela permite; a 66 é da marca da parceria e da RBS. A 49 é do dono da conversa (a marca, ou a RBS na conversa do Atlas da RBS); as 50 a 53 são só do Admin RBS (o outro perfil recebe **403** antes de tudo). **As rotas 49 a 53 estão sempre mapeadas e respondem 404 com o diagnóstico desligado** (`atlas.diagnostico.ligado=false`, o padrão). Nas rotas 42, 43, 46 e 65 só o Admin Patrocinador chama (a RBS recebe **403** antes de o corpo ser lido); nas 44, 45 e 49 chama o dono da conversa: a marca na conversa da parceria dela e, com `atlas.rbs.ligado`, a RBS na conversa dela, a do Atlas da RBS (a RBS recebe **403** antes do corpo em qualquer outra conversa, e sempre com a propriedade desligada); nas 47 e 48 chamam a marca da parceria e a RBS. **O relatório do Atlas está ligado nos perfis `dev`, `demo` e `test` e desligado no padrão** (`atlas.relatorio.ligado=false`, `ATLAS_RELATORIO`). Desligado, as rotas **46, 47, 48 e 65 não existem (404)**, e as rotas 42 e 44 só aceitam conversa por texto (`atalho` e `modelo` dão 422): é o modo só chat, que continua existindo e testado. Veja "Modo só chat". O contrato do relatório, nas rotas 42 a 48 e 65, vale com `atlas.relatorio.ligado=true`.
 
 As rotas de debug do modelo de linguagem (`/api/debug/llm`) são temporárias, só existem no perfil `dev` (o perfil `demo`, da apresentação, as deixa em 404), são só da RBS e ficam fora desta tabela e da conta das 74: veja "Rotas de debug (temporárias)", no fim.
 
@@ -1701,6 +1705,80 @@ O destinatário é só um nome, em texto. Ele fica na coluna `cortesia_destinaca
 **Erros:** 401; 403 (aba `MIDIA` fechada ou oculta para a marca); 404 (parceria de outra marca).
 
 
+# Abertura da pesquisa da edição (rotas 92 a 95 · F6)
+
+Até aqui a pesquisa da ativação de uma edição só nascia na amostra. Estas quatro rotas deixam a RBS abri-la pela tela (`/rbs/pesquisa`), editá-la e acompanhar as perguntas que as marcas enviaram. **Todas são só do Admin RBS** (exigem o token CSRF quando escrevem): o patrocinador recebe **403** antes de o corpo ser lido, e sem sessão a resposta é 401. Não há migração: o banco já tinha a tabela `pesquisa` e, desde a V16, o índice `uq_pesquisa_ativacao`, que garante no máximo **uma pesquisa `ATIVACAO` por edição** (a `GERAL` pode ter várias). Hoje a pesquisa não guarda um prazo para as perguntas (não há coluna); isso depende de uma migração futura.
+
+**O objeto Pesquisa da edição** (itens das rotas 92 a 94):
+
+```json
+{
+  "id": 2, "eventoId": 2, "nome": "Pesquisa nos espaços de ativação 2027", "escopo": "ATIVACAO",
+  "metodologia": "Entrevistas nos espaços da marca (Arena e Camarote)", "baseRespondentes": 412, "nivelConfianca": 95.00,
+  "perguntas": { "rascunho": 0, "enviadas": 1, "aprovadas": 2 },
+  "resultados": 31,
+  "perguntasLigadas": null
+}
+```
+
+`perguntas` conta as perguntas ligadas à pesquisa por estado; `resultados` conta as linhas de resultado já carregadas (rota 26). `perguntasLigadas` só vem preenchido na rota 93.
+
+## 92. `GET /api/eventos/{id}/pesquisas`  · F6
+
+**Quem chama:** Admin RBS. **200:** a lista (inteira, sem página) das pesquisas da edição, a da ativação primeiro e depois as gerais, por id. Edição sem pesquisa devolve `[]`. **Erros:** 401; 403; 404 (`Não encontramos esta edição do festival.`).
+
+## 93. `POST /api/eventos/{id}/pesquisas`  · F6
+
+**Quem chama:** Admin RBS. **Corpo:**
+
+```json
+{ "nome": "Pesquisa nos espaços de ativação 2027", "escopo": "ATIVACAO", "metodologia": "Entrevistas nos espaços da marca",
+  "baseRespondentes": 412, "nivelConfianca": 95 }
+```
+
+| Campo | Regra |
+| --- | --- |
+| `nome` | Obrigatório, de 3 a 120 caracteres, sem NUL nem outro caractere de controle. Único na edição. |
+| `escopo` | `ATIVACAO` (o padrão, se faltar) ou `GERAL`. |
+| `metodologia` | Opcional, até 160 caracteres. |
+| `baseRespondentes` | Opcional, inteiro maior que 0. |
+| `nivelConfianca` | Opcional, entre 0 e 100, sem incluir os extremos, com até 2 casas decimais. |
+
+**201** (com `Location`): o objeto Pesquisa da edição, com `perguntasLigadas`. Abrir a pesquisa `ATIVACAO` **liga**, na mesma transação, as perguntas que as marcas da edição já tinham enviado e estavam sem pesquisa (a V1 deixa `pesquisa_id` nulo até a RBS abri-la); `perguntasLigadas` diz quantas. A pesquisa `GERAL` não liga nada (`perguntasLigadas: 0`). A partir daí a aba Pesquisa da Master (rota 23) mostra a pesquisa, e a carga de resultados (rota 26) deixa de dar 422 por "pesquisa não aberta".
+
+**Erros, nesta ordem:** 401; 403; 404 (edição); **422** com todos os erros de campo de uma vez (`campos.nome`, `campos.escopo`, `campos.metodologia`, `campos.baseRespondentes`, `campos.nivelConfianca`); **409** `A edição 2027 já tem a pesquisa de ativação aberta ("Nome"). Edite essa pesquisa em vez de abrir outra.` (segunda `ATIVACAO` na mesma edição; o service confere com a linha da edição travada e o índice `uq_pesquisa_ativacao` segura por baixo, então dois pedidos ao mesmo tempo dão um 201 e os outros 409) ou `Já existe uma pesquisa com este nome na edição 2027. Escolha outro nome.`
+
+**Histórico:** `CRIACAO` na entidade `pesquisa`, **sem parceria** (a marca não vê essa linha na rota 20), com o escopo e a edição em `detalhe`.
+
+## 94. `PATCH /api/pesquisas/{id}`  · F6
+
+**Quem chama:** Admin RBS. **Corpo parcial** (`nome`, `metodologia`, `baseRespondentes`, `nivelConfianca`, com as mesmas regras da rota 93): o que vier nulo ou faltar não muda; `metodologia` só com espaços limpa o campo. O escopo e a edição **não mudam** (um `escopo` no corpo é ignorado).
+
+**200:** o objeto Pesquisa da edição. **Erros:** 401; 403; 404 (`Não encontramos esta pesquisa.`); 422 (corpo sem nenhum campo, em `campos.corpo`, ou campo inválido); 409 (`Já existe uma pesquisa com este nome nesta edição. Escolha outro nome.`). **Histórico:** `EDICAO` na entidade `pesquisa`, uma linha por campo que mudou (`detalhe` com o nome do campo, mais o valor anterior e o novo).
+
+## 95. `GET /api/pesquisa/perguntas`  · F6
+
+**Quem chama:** Admin RBS. A fila das perguntas de **todas as parcerias**, para a RBS decidir sem abrir a aba Pesquisa de cada uma. **Parâmetros:** `status` (`ENVIADA`, o padrão, `RASCUNHO` ou `APROVADA`; outro valor dá 422 em `campos.status`), `eventoId` (filtra a edição; inexistente dá 404), `pagina` (começa em 0) e `tamanho` (1 a 200, padrão 50), como a rota 16.
+
+**200:**
+
+```json
+{
+  "itens": [
+    {
+      "id": 7, "parceriaId": 2, "patrocinador": "Cliente Amarelo", "eventoId": 2, "edicao": 2027, "pesquisaId": 2,
+      "ordem": 1, "texto": "Você visitou o espaço da marca na Arena ou no Camarote?", "status": "ENVIADA",
+      "enviadaPor": { "id": 3, "nome": "Marketing Amarelo", "perfil": "ADMIN_PATROCINADOR" },
+      "enviadaEm": "2026-11-20T16:00:00-03:00"
+    }
+  ],
+  "pagina": 0, "tamanho": 50, "total": 1
+}
+```
+
+A mais antiga primeiro. `pesquisaId` é `null` enquanto a pesquisa da edição não foi aberta. **A decisão (aprovar ou pedir ajuste) continua na rota 25**, com o `id` do item; a pergunta aprovada sai da fila.
+
+
 # O Atlas: conversa, cartão de perguntas e relatório (Atlas, parte 2)
 
 O Atlas monta o relatório de **Ativação no evento** da marca. Ele monta a estrutura e redige, mas **nunca escreve um número**: todo número do relatório vem do portal (a consolidação e o plano de aplicações), de um dado informado com autor e data (rotas 40 e 41) ou de uma conta registrada, e cada um aparece em "Fontes e cálculos". O relatório é um **documento de trabalho da marca**, com o selo "Não validado pela RBS": o relatório oficial (rotas 31 a 36) não muda.
@@ -3173,7 +3251,7 @@ Mesmas regras da rota 89. **200** com `Content-Type: text/csv; charset=UTF-8`, U
 
 # Rotas de debug (temporárias)
 
-Um recurso **temporário**, para a equipe ligar o modelo de linguagem do Atlas pela tela (o botão "Debug"), sem reiniciar a API e sem variável de ambiente. Não faz parte das 91 rotas do contrato e sai antes da entrega final.
+Um recurso **temporário**, para a equipe ligar o modelo de linguagem do Atlas pela tela (o botão "Debug"), sem reiniciar a API e sem variável de ambiente. Não faz parte das 95 rotas do contrato e sai antes da entrega final.
 
 - **Só existem com `atlas.debug.chaves=true`.** A propriedade vem `false` por padrão, `true` no perfil `dev` e `false` no `demo` e no `test`. Sem ela, as quatro rotas respondem **404**, como uma rota que não existe.
 - **A chave fica só na memória da API.** Nunca vai ao banco, a arquivo ou ao log, e **some quando a API reinicia**. Nenhuma resposta devolve a chave inteira: só os 4 últimos caracteres (`finalDaChave`).
@@ -3282,7 +3360,7 @@ Ligada:
 
 | Quem | Pode |
 | --- | --- |
-| **Admin RBS** | Quase tudo: criar parcerias, autorizar e revogar e-mails, criar entregas, mudar status, mandar retorno, aprovar perguntas, subir cargas (inclusive o plano comercial), anexar as fotos de comprovação das aplicações, informar os dados da ativação, a planilha da agência inclusa, no lugar da marca, gerar e disponibilizar relatórios, ver o histórico geral e o painel. **Não** conversa com o Atlas das marcas nem descarta o relatório dele (rotas 42, 43, 46 e 65 dão 403, e as 44, 45 e 49 também numa conversa de parceria), mas conversa com o Atlas da RBS (rotas 67 e 68 e, na conversa dela, as 44, 45 e 49, com `atlas.rbs.ligado`), lê os relatórios que o Atlas montou (rotas 47 e 48) e, com o diagnóstico ligado, o traço de todos os turnos, o estado dos provedores e o teste deles (rotas 50 a 53). Envia, lista, aprova, recusa, revoga e reindexa os documentos do Atlas e vê os trechos (rotas 54 a 58); abre o arquivo e um trecho no visualizador (rotas 59 e 60) e faz a busca de teste (rota 61). Lista, cadastra e desativa os prazos que o Atlas consulta (rotas 62 a 64). Usa as rotas de debug da chave do modelo (só dela). Grava a cota de cortesias por setor e dia, com o acesso e o shuttle, e o prazo de destinação da edição (rotas 81 e 82), e destina, edita e retira cortesias no lugar da marca, também depois do prazo (rotas 83 a 85). |
+| **Admin RBS** | Quase tudo: criar parcerias, autorizar e revogar e-mails, criar entregas, mudar status, mandar retorno, aprovar perguntas, subir cargas (inclusive o plano comercial), anexar as fotos de comprovação das aplicações, informar os dados da ativação, a planilha da agência inclusa, no lugar da marca, gerar e disponibilizar relatórios, ver o histórico geral e o painel. **Não** conversa com o Atlas das marcas nem descarta o relatório dele (rotas 42, 43, 46 e 65 dão 403, e as 44, 45 e 49 também numa conversa de parceria), mas conversa com o Atlas da RBS (rotas 67 e 68 e, na conversa dela, as 44, 45 e 49, com `atlas.rbs.ligado`), lê os relatórios que o Atlas montou (rotas 47 e 48) e, com o diagnóstico ligado, o traço de todos os turnos, o estado dos provedores e o teste deles (rotas 50 a 53). Envia, lista, aprova, recusa, revoga e reindexa os documentos do Atlas e vê os trechos (rotas 54 a 58); abre o arquivo e um trecho no visualizador (rotas 59 e 60) e faz a busca de teste (rota 61). Lista, cadastra e desativa os prazos que o Atlas consulta (rotas 62 a 64). Usa as rotas de debug da chave do modelo (só dela). Abre e edita a pesquisa da edição e vê a fila das perguntas a aprovar (rotas 92 a 95; a decisão continua na 25). Grava a cota de cortesias por setor e dia, com o acesso e o shuttle, e o prazo de destinação da edição (rotas 81 e 82), e destina, edita e retira cortesias no lugar da marca, também depois do prazo (rotas 83 a 85). |
 | **Admin Patrocinador** | Ver a própria parceria, as entregas das abas liberadas, enviar materiais, baixar arquivos da parceria, ver o histórico dela, enviar as perguntas da pesquisa, ver a consolidação, o plano de aplicações com as fotos e informar os dados da ativação, a planilha da agência inclusa (aba `APLICACOES` aberta), ver um documento do Atlas que o escopo dela permite (rota 56: título, tipo, versão, páginas e se foi substituído) e abri-lo no visualizador, com o arquivo e o trecho citado (rotas 59 e 60), conversar com o Atlas e montar o relatório de ativação pelo botão ou, com o modelo de linguagem ligado, pelo texto livre (rotas 42 a 46, só ela; a conversa é de quem a abriu, e a conversa da RBS é como a que não existe: 404), ver os relatórios do Atlas da parceria (rotas 47 e 48) e descartar o relatório que ela criou e que está em montagem (rota 65, só o dono do relatório: outro Admin Patrocinador da parceria recebe 404), o diagnóstico das próprias conversas (rota 49, só com `atlas.diagnostico.ligado` e `atlas.diagnostico.marca` ligados) e o relatório disponibilizado. **Nunca** vê outra parceria nem as rotas da RBS. Ver a tabela de cortesias e destiná-las, editar e retirar qualquer destinação da parceria, dentro do disponível e até o prazo da edição, se houver (rotas 80, 83, 84 e 85; aba `CORTESIAS` aberta). |
 
 ## O que a API grava no histórico
