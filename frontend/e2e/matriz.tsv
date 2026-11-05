@@ -55,6 +55,8 @@ R5.3.b	back	materiais.LinksDeMidiaTest#marcaDeOutraParceriaRecebe404EOsLinksDeUm
 R5.3.c	back	comum.RotasDosRequisitosDaRbsAcessoTest#conteudoEPlanoComercialNaoTemPatchNemDelete
 R5.3.c	back	materiais.ConteudoDaEntregaTest#oBancoRecusaUpdateEDeleteDoConteudoEAApiNaoTemPatchNemDelete
 R5.3.d	back	consolidacao.ConsolidacaoControllerTest#amareloVeOPrevistoEOExibidoDeUmaUnidadeIgualAoBanco
+R5.3.d	back	relatorio.PosVendaTest#osLinksDePostsDaParceriaAparecemNoAnexoSoComHttp
+R5.3.d	back	relatorio.PosVendaTest#osLinksDePostsDeOutraParceriaNaoVazam
 R5.4.a	e2e	requisitos-rbs.spec.ts > [R5.4.a] a RBS grava a cota de cortesias com acesso e shuttle
 R5.4.a	back	cortesias.CortesiasDaRbsTest#rbsGravaAGradeInteiraEAMarcaVeAoRecarregar
 R5.4.a	back	cortesias.CortesiasDaRbsTest#quantidadeNegativaAcimaDoLimiteOuAbaixoDoDestinadoDa422ENadaMuda
@@ -102,7 +104,22 @@ R6.d2	e2e	requisitos-rbs.spec.ts > [R6.d2] Direitos por contrato mostra o mesmo 
 R6.d3	e2e	requisitos-rbs.spec.ts > [R6.d3] a troca de cota mostra a prévia do impacto
 R7.1	e2e	requisitos-rbs.spec.ts > [R7.1] o emblema de 2027 aparece no login e nos cabeçalhos
 R8.1	e2e	requisitos-rbs.spec.ts > [R8.1] a marca vê o anexo de pós-venda com o relatório disponibilizado
+R8.1	back	relatorio.PosVendaTest#rbsPublicaEAMarcaVeSoComORelatorioDisponibilizado
+R8.1	back	relatorio.PosVendaTest#relatorioDisponibilizadoSemAnexoDa404AMarcaEAnexoNuloARbs
+R8.1	back	relatorio.PosVendaTest#umaVersaoNovaSubstituiAAnteriorERetirarNaoApaga
+R8.1	back	relatorio.PosVendaTest#oRelatorioContinuaIgualSemEComAnexoComAsSeisSecoesEOs17Indicadores
+R8.1	back	relatorio.PosVendaTest#marcaNasRotasDaRbsRecebe403AntesDoCorpo
+R8.1	back	relatorio.PosVendaTest#marcaDeOutraParceriaRecebe404NoAnexo
+R8.1	back	relatorio.PosVendaTest#oAnexoDeUmaMarcaNaoApareceNaOutra
+R8.1	back	relatorio.PosVendaTest#corposInvalidosDao422ComOCampoErrado
+R8.1	back	relatorio.PosVendaTest#oBancoRecusaDeleteNoQueFoiPublicado
+R8.1	back	comum.RotasDosRequisitosDaRbsAcessoTest#marcaEmRotaSoDaRbsRecebe403AntesDeLerOCorpo
+R8.1	back	relatorio.RelatorioControllerTest#parceriaSemNenhumDadoGeraRelatorioComAsSeisSecoesEOs17IndicadoresIndisponiveis
 R8.2	e2e	requisitos-rbs.spec.ts > [R8.2] os números da edição tiram o indicador de indisponível
+R8.2	back	relatorio.ResultadosDaEdicaoTest#oIndicadorSaiDeIndisponivelDepoisDeInformarOsNumerosENaProximaVersao
+R8.2	back	relatorio.ResultadosDaEdicaoTest#informarDeNovoOMesmoIndicadorTrocaOValorSemRepetir
+R8.2	back	relatorio.ResultadosDaEdicaoTest#valoresInvalidosDao422ComOCampoErrado
+R8.2	back	relatorio.ResultadosDaEdicaoTest#marcaRecebe403NasDuasRotasEEdicaoQueNaoExisteDa404
 E2.1	back	banco.VerificacaoDoBancoTest
 E2.2	back	relatorio.RelatorioControllerTest#cotaSemPesquisaTrazASecaoDePesquisaIndisponivelComOMotivo
 E2.3	back	comum.PermissaoAntesDoCorpoTest#rbsContinuaRecebendoAValidacaoDoCorpo

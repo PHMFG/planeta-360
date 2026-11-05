@@ -102,6 +102,13 @@ public class PermissaoAntesDoCorpo implements HandlerInterceptor, WebMvcConfigur
             "POST /api/parcerias/{id}/contrato/arquivo",
             "PATCH /api/parcerias/{id}/credenciais",
             "PATCH /api/eventos/{id}/credenciamento",
+            // O pós-venda e os números da edição (rotas 97 a 101): publicar o anexo de uma parceria, listar as versões da edição, retirar
+            // (não apaga) e os números do "festival em números". A rota 96 (ver o anexo) é das duas pontas.
+            "POST /api/parcerias/{id}/posvenda",
+            "GET /api/eventos/{id}/posvenda",
+            "DELETE /api/posvenda/{id}",
+            "GET /api/eventos/{id}/resultados",
+            "PUT /api/eventos/{id}/resultados",
             // As rotas de debug da chave do modelo (temporárias, só no perfil dev): só a RBS as usa. Só existem com
             // atlas.debug.chaves=true; o teste de classificação liga a propriedade, porque no perfil test elas não existem.
             "GET /api/debug/llm",

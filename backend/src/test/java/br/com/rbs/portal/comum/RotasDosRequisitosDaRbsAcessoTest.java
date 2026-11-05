@@ -103,7 +103,15 @@ class RotasDosRequisitosDaRbsAcessoTest {
             Map.entry("GET /api/eventos/{id}/pesquisas", new Detalhe(null, null, false)),
             Map.entry("POST /api/eventos/{id}/pesquisas", new Detalhe("{\"nome\":\"Pesquisa de teste\"}", null, false)),
             Map.entry("PATCH /api/pesquisas/{id}", new Detalhe("{\"metodologia\":\"Teste\"}", null, false)),
-            Map.entry("GET /api/pesquisa/perguntas", new Detalhe(null, null, false)));
+            Map.entry("GET /api/pesquisa/perguntas", new Detalhe(null, null, false)),
+            // F6 · Pós-venda e números da edição (rotas 96 a 101). Nenhuma é guardada por aba; a 99 tem o id do pós-venda, não o da parceria nem o da edição.
+            Map.entry("GET /api/parcerias/{id}/posvenda", new Detalhe(null, null, true)),
+            Map.entry("POST /api/parcerias/{id}/posvenda", new Detalhe("{\"texto\":\"Um texto do pós-venda.\"}", null, true)),
+            Map.entry("GET /api/eventos/{id}/posvenda", new Detalhe(null, null, false)),
+            Map.entry("DELETE /api/posvenda/{id}", new Detalhe(null, null, false)),
+            Map.entry("GET /api/eventos/{id}/resultados", new Detalhe(null, null, false)),
+            Map.entry("PUT /api/eventos/{id}/resultados", new Detalhe(
+                    "{\"indicador\":\"Público total\",\"valor\":80000,\"qualificador\":\"MAIS_DE\",\"unidade\":\"pessoas\",\"fonte\":\"RBS\"}", null, false)));
 
     /** As rotas que recebem multipart: no teste vão como formulário sem partes (com JSON o Spring responderia 415 antes da permissão). */
     private static final Set<String> MULTIPART = Set.of("POST /api/parcerias/{id}/contrato/arquivo",
@@ -287,7 +295,7 @@ class RotasDosRequisitosDaRbsAcessoTest {
         SessaoDeApi marca = SessaoDeApi.entrar(mvc, AMARELO);
 
         for (Rota rota : rotas().stream().filter(r -> "rbs".equals(r.quem())).toList()) {
-            List<String> corpos = rota.escreve() ? List.of("", "{}", "isto nao e json", DETALHES.get(rota.chave()).corpo()) : java.util.Arrays.asList((String) null);
+            List<String> corpos = rota.escreve() ? java.util.Arrays.asList("", "{}", "isto nao e json", DETALHES.get(rota.chave()).corpo()) : java.util.Arrays.asList((String) null);
             for (String corpo : corpos) {
                 MvcTestResult resposta = chamar(marca, rota, uri(rota), corpo);
                 assertThat(resposta).as(rota.chave() + " com corpo [" + corpo + "]").hasStatus(HttpStatus.FORBIDDEN);

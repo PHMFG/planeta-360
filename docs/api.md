@@ -2,7 +2,7 @@
 
 Este documento é o **contrato entre o back-end e o front-end**. Quem faz a tela lê aqui o que cada rota pede, o que devolve e quais erros esperar, sem precisar abrir o código.
 
-- Todas as 95 rotas estão implementadas e cobertas por testes de integração (`cd backend && ./mvnw test`), inclusive o isolamento entre parcerias. A coluna "Etapa" diz em que etapa do plano cada rota entrou (as do Atlas, 37 em diante, entram como `Atlas 1`, `Atlas 2`, `Atlas M2`, `Atlas M3`, `Atlas M4`, `Atlas M5`, `Atlas M6` e `Atlas M8`). Mudança de formato daqui em diante entra neste arquivo no mesmo commit do código.
+- Todas as 101 rotas estão implementadas e cobertas por testes de integração (`cd backend && ./mvnw test`), inclusive o isolamento entre parcerias. A coluna "Etapa" diz em que etapa do plano cada rota entrou (as do Atlas, 37 em diante, entram como `Atlas 1`, `Atlas 2`, `Atlas M2`, `Atlas M3`, `Atlas M4`, `Atlas M5`, `Atlas M6` e `Atlas M8`). Mudança de formato daqui em diante entra neste arquivo no mesmo commit do código.
 - O banco está descrito em [`docs/banco.md`](banco.md). Os nomes de status, cotas e abas são os mesmos do banco.
 
 ## Como falar com a API
@@ -202,8 +202,14 @@ Todas prontas e testadas. A coluna "Etapa" mostra em que etapa do plano a rota e
 | 93 | `POST /api/eventos/{id}/pesquisas` | Admin RBS | Abre a pesquisa da ativação (ou uma geral) da edição; liga as perguntas que as marcas já tinham enviado | F6 |
 | 94 | `PATCH /api/pesquisas/{id}` | Admin RBS | Edita nome, metodologia, base de respondentes e nível de confiança | F6 |
 | 95 | `GET /api/pesquisa/perguntas` | Admin RBS | A fila das perguntas de todas as parcerias (padrão: as `ENVIADA`), paginada, com a marca e a edição | F6 |
+| 96 | `GET /api/parcerias/{id}/posvenda` | Patrocinador da parceria (só com o relatório disponibilizado), ou Admin RBS | O anexo "Pós-venda da edição" em vigor (texto, links, audiência por veículo) e os links dos posts da parceria | Pós-venda |
+| 97 | `POST /api/parcerias/{id}/posvenda` | Admin RBS | Publica uma versão do anexo da parceria (a nova substitui a anterior) | Pós-venda |
+| 98 | `GET /api/eventos/{id}/posvenda` | Admin RBS | As versões do anexo de todas as parcerias da edição, retiradas inclusive | Pós-venda |
+| 99 | `DELETE /api/posvenda/{id}` | Admin RBS | Retira uma versão do anexo (não apaga) | Pós-venda |
+| 100 | `GET /api/eventos/{id}/resultados` | Admin RBS | Os números da edição ("O festival em números") | Pós-venda |
+| 101 | `PUT /api/eventos/{id}/resultados` | Admin RBS | Informa um número da edição (upsert por indicador) | Pós-venda |
 
-São 95 operações (método + caminho): 94 mapeadas nos controllers (`@GetMapping`, `@PostMapping`, `@PutMapping`, `@PatchMapping` ou `@DeleteMapping`) e o logout (rota 3), que vem do Spring Security (`SegurancaConfig`), sem controller. As quatro rotas de debug ficam de fora da numeração. A rota 5 (`ativar`) faz parte do contrato de autenticação, mas só é implementada na etapa 4. As rotas 37 em diante vieram com o Atlas: a coluna "Etapa" diz `Atlas 1` (plano de aplicações e dados informados), `Atlas 2` (conversa, cartão de perguntas e relatório), `Atlas M2` (o diagnóstico: rotas 49 a 53, veja "Diagnóstico do Atlas") `Atlas M3` (os documentos: rotas 54 a 58, veja "Os documentos do Atlas") `Atlas M4` (o visualizador, rotas 59 e 60, e a busca de teste, rota 61, veja "Busca nos documentos") `Atlas M5` (os prazos: rotas 62 a 64, veja "Os prazos do Atlas") `Atlas M6` (o relatório religado: a rota 65, veja "Descarte do relatório parado"; e a planilha da agência: a rota 66, veja "Dados informados pela marca") `Atlas M8` (o Atlas da RBS: as rotas 67 e 68, veja "O Atlas da RBS") ou `Requisitos RBS` (o plano comercial e os espaços de documento da marca: as rotas 69 a 73, veja "O plano comercial e os espaços de documento") e a comprovação mensal de mídia: as rotas 88 a 91, veja a rota 88). As rotas 88 a 90 são da marca de cota Master (com a aba `MIDIA` aberta) e da RBS; a 91 é só do Admin RBS (a marca recebe **403** antes de tudo). As rotas 70 e 73 são só do Admin RBS (o patrocinador recebe **403** antes de o corpo ser lido); a 69, a 71 e a 72 são das duas pontas. As rotas 54, 55, 57, 58, 61, 62, 63, 64, 67 e 68 são só do Admin RBS (o outro perfil recebe **403** antes de o corpo ser lido); a 56, a 59 e a 60 são das duas pontas, e a marca só vê o que o escopo dela permite; a 66 é da marca da parceria e da RBS. A 49 é do dono da conversa (a marca, ou a RBS na conversa do Atlas da RBS); as 50 a 53 são só do Admin RBS (o outro perfil recebe **403** antes de tudo). **As rotas 49 a 53 estão sempre mapeadas e respondem 404 com o diagnóstico desligado** (`atlas.diagnostico.ligado=false`, o padrão). Nas rotas 42, 43, 46 e 65 só o Admin Patrocinador chama (a RBS recebe **403** antes de o corpo ser lido); nas 44, 45 e 49 chama o dono da conversa: a marca na conversa da parceria dela e, com `atlas.rbs.ligado`, a RBS na conversa dela, a do Atlas da RBS (a RBS recebe **403** antes do corpo em qualquer outra conversa, e sempre com a propriedade desligada); nas 47 e 48 chamam a marca da parceria e a RBS. **O relatório do Atlas está ligado nos perfis `dev`, `demo` e `test` e desligado no padrão** (`atlas.relatorio.ligado=false`, `ATLAS_RELATORIO`). Desligado, as rotas **46, 47, 48 e 65 não existem (404)**, e as rotas 42 e 44 só aceitam conversa por texto (`atalho` e `modelo` dão 422): é o modo só chat, que continua existindo e testado. Veja "Modo só chat". O contrato do relatório, nas rotas 42 a 48 e 65, vale com `atlas.relatorio.ligado=true`.
+São 101 operações (método + caminho): 100 mapeadas nos controllers (`@GetMapping`, `@PostMapping`, `@PutMapping`, `@PatchMapping` ou `@DeleteMapping`) e o logout (rota 3), que vem do Spring Security (`SegurancaConfig`), sem controller. As quatro rotas de debug ficam de fora da numeração. A rota 5 (`ativar`) faz parte do contrato de autenticação, mas só é implementada na etapa 4. As rotas 37 em diante vieram com o Atlas: a coluna "Etapa" diz `Atlas 1` (plano de aplicações e dados informados), `Atlas 2` (conversa, cartão de perguntas e relatório), `Atlas M2` (o diagnóstico: rotas 49 a 53, veja "Diagnóstico do Atlas") `Atlas M3` (os documentos: rotas 54 a 58, veja "Os documentos do Atlas") `Atlas M4` (o visualizador, rotas 59 e 60, e a busca de teste, rota 61, veja "Busca nos documentos") `Atlas M5` (os prazos: rotas 62 a 64, veja "Os prazos do Atlas") `Atlas M6` (o relatório religado: a rota 65, veja "Descarte do relatório parado"; e a planilha da agência: a rota 66, veja "Dados informados pela marca") `Atlas M8` (o Atlas da RBS: as rotas 67 e 68, veja "O Atlas da RBS") ou `Requisitos RBS` (o plano comercial e os espaços de documento da marca: as rotas 69 a 73, veja "O plano comercial e os espaços de documento") e a comprovação mensal de mídia: as rotas 88 a 91, veja a rota 88). As rotas 88 a 90 são da marca de cota Master (com a aba `MIDIA` aberta) e da RBS; a 91 é só do Admin RBS (a marca recebe **403** antes de tudo). As rotas 70 e 73 são só do Admin RBS (o patrocinador recebe **403** antes de o corpo ser lido); a 69, a 71 e a 72 são das duas pontas. As rotas 54, 55, 57, 58, 61, 62, 63, 64, 67 e 68 são só do Admin RBS (o outro perfil recebe **403** antes de o corpo ser lido); a 56, a 59 e a 60 são das duas pontas, e a marca só vê o que o escopo dela permite; a 66 é da marca da parceria e da RBS. A 49 é do dono da conversa (a marca, ou a RBS na conversa do Atlas da RBS); as 50 a 53 são só do Admin RBS (o outro perfil recebe **403** antes de tudo). **As rotas 49 a 53 estão sempre mapeadas e respondem 404 com o diagnóstico desligado** (`atlas.diagnostico.ligado=false`, o padrão). Nas rotas 42, 43, 46 e 65 só o Admin Patrocinador chama (a RBS recebe **403** antes de o corpo ser lido); nas 44, 45 e 49 chama o dono da conversa: a marca na conversa da parceria dela e, com `atlas.rbs.ligado`, a RBS na conversa dela, a do Atlas da RBS (a RBS recebe **403** antes do corpo em qualquer outra conversa, e sempre com a propriedade desligada); nas 47 e 48 chamam a marca da parceria e a RBS. **O relatório do Atlas está ligado nos perfis `dev`, `demo` e `test` e desligado no padrão** (`atlas.relatorio.ligado=false`, `ATLAS_RELATORIO`). Desligado, as rotas **46, 47, 48 e 65 não existem (404)**, e as rotas 42 e 44 só aceitam conversa por texto (`atalho` e `modelo` dão 422): é o modo só chat, que continua existindo e testado. Veja "Modo só chat". O contrato do relatório, nas rotas 42 a 48 e 65, vale com `atlas.relatorio.ligado=true`.
 
 As rotas de debug do modelo de linguagem (`/api/debug/llm`) são temporárias, só existem no perfil `dev` (o perfil `demo`, da apresentação, as deixa em 404), são só da RBS e ficam fora desta tabela e da conta das 74: veja "Rotas de debug (temporárias)", no fim.
 
@@ -3247,11 +3253,152 @@ Mesmas regras da rota 89. **200** com `Content-Type: text/csv; charset=UTF-8`, U
 | 403 | Quem não é da RBS (`"Esta operação é restrita à equipe da RBS."`). |
 | 404 | Edição que não existe (`"Não encontramos esta edição do festival."`); `{id}` que não é número. |
 
+## 96. `GET /api/parcerias/{id}/posvenda`  · Pós-venda
+
+**Quem chama:** a marca da parceria e o Admin RBS. Devolve o **anexo "Pós-venda da edição"** do relatório, em vigor, e os links dos posts da parceria. Veja "O pós-venda da edição", mais abaixo, para o que o anexo é e o que ele não muda.
+
+- **A marca** só recebe **200** com o relatório da parceria **DISPONIBILIZADO** (rota 34) e com um anexo em vigor. Sem um dos dois, **404** com a mesma frase, `"O pós-venda desta edição ainda não está disponível."` (a marca não descobre se a RBS já publicou algo). Escolhemos 404, e não 403, como a rota 35 faz com o relatório que ainda não foi disponibilizado.
+- **A RBS** recebe sempre **200**, com `relatorioDisponibilizado: false` quando a marca ainda não vê o anexo, e `anexo: null` quando nada foi publicado.
+
+```json
+{
+  "parceriaId": 2, "eventoId": 2, "relatorioDisponibilizado": true,
+  "anexo": {
+    "id": 31, "versao": 2, "texto": "Trinta anos do maior festival de música do Sul.",
+    "links": [ { "tipo": "AFTERMOVIE", "titulo": "Aftermovie 2027", "url": "https://exemplo.example/aftermovie" } ],
+    "audiencias": [ { "veiculo": "ATL TV", "metrica": "pessoas alcançadas", "numero": 1600000, "unidade": "pessoas" } ],
+    "publicadoEm": "2027-02-01T10:00:00-03:00", "publicadoPor": null
+  },
+  "linksDePosts": [ { "veiculo": "atl.la", "formato": "Post no feed", "exibidoEm": "2027-01-20T12:00:00-03:00", "url": "https://www.instagram.com/p/abc/" } ]
+}
+```
+
+| Campo | O que é |
+| --- | --- |
+| `anexo` | A versão em vigor: **a mais nova da parceria, se não foi retirada**. Se a mais nova foi retirada, o anexo some (a API **não volta** para uma versão anterior). `publicadoPor` vai `null` para a marca (é dado interno da RBS) e preenchido (`id`, `nome`, `perfil`) para a RBS. |
+| `anexo.links[].tipo` | `AFTERMOVIE`, `CLIPPING` ou `OUTRO`. O `url` é **só `http` ou `https`**; o front o abre com `target="_blank"` e `rel="noopener noreferrer"`. |
+| `anexo.audiencias[]` | A audiência por veículo: `veiculo`, `metrica` (ex.: `ouvintes`), `numero` e `unidade`. |
+| `linksDePosts[]` | R5.3.d. Os links das **veiculações comprovadas** da parceria (`veiculacao.link`, rota 29), um por endereço, do mais antigo ao mais novo, com o veículo e o formato do plano. Só entram os que são `http` ou `https`, sem `usuario@` antes do host; o resto fica de fora. Os links enviados como conteúdo de uma entrega (rota 87) **ainda não entram** aqui. Vêm também sem anexo, para a RBS. |
+
+**Erros**
+
+| Status | Quando |
+| --- | --- |
+| 401 | Sem sessão. |
+| 404 | Parceria de outra marca ou que não existe (`"Não encontramos esta parceria."`); para a marca, relatório não disponibilizado ou anexo não publicado (ou retirado). |
+
+## 97. `POST /api/parcerias/{id}/posvenda`  · Pós-venda
+
+**Quem chama:** só o Admin RBS (a marca recebe **403** antes do corpo). Exige o token CSRF. Publica **uma versão** do anexo da parceria. A versão é a maior que a parceria já tem mais 1 (a primeira é a 1). A anterior **fica como estava** (o banco não deixa mudá-la) e deixa de ser a que a marca vê.
+
+**Corpo** (tudo é opcional, mas é preciso ao menos um dos três)
+
+```json
+{
+  "texto": "Trinta anos do maior festival de música do Sul.",
+  "links": [ { "tipo": "AFTERMOVIE", "titulo": "Aftermovie 2027", "url": "https://exemplo.example/aftermovie" },
+             { "tipo": "CLIPPING", "titulo": "Matéria no jornal", "url": "https://exemplo.example/clipping?id=1" } ],
+  "audiencias": [ { "veiculo": "ATL TV", "metrica": "pessoas alcançadas", "numero": 1600000, "unidade": "pessoas" } ]
+}
+```
+
+| Campo | Regra |
+| --- | --- |
+| `texto` | Até 5.000 caracteres. A quebra de linha e o tab valem; os outros caracteres de controle (inclusive NUL) dão 422. É dado, nunca instrução: não vai ao Atlas. |
+| `links` | No máximo 30. `tipo`: `AFTERMOVIE`, `CLIPPING` ou `OUTRO`. `titulo`: de 1 a 160 caracteres. `url`: até 500 caracteres, **só `http://` ou `https://`**, com um site depois; **recusado**: `javascript:` e qualquer outro esquema, `usuario@` antes do site, espaço, caractere de controle e caractere que inverte a leitura (bidi). O servidor **nunca busca** o endereço. |
+| `audiencias` | No máximo 20. `veiculo` (até 80), `metrica` (até 80), `numero` (maior que zero, no máximo 2 casas decimais) e `unidade` (até 20). |
+
+**201**, com `Location` na rota 96 e a versão publicada, no formato de um item da rota 98.
+
+**[HISTORICO]** `CRIACAO` na entidade `evento_posvenda`, **sem parceria** (a marca não vê a linha), com o detalhe `"parceria N, versão V"`. Sem texto no histórico.
+
+**Erros**
+
+| Status | Quando |
+| --- | --- |
+| 401 | Sem sessão. |
+| 403 | A marca, antes do corpo; falta o token CSRF. |
+| 404 | Parceria que não existe. |
+| 409 | Parceria `ENCERRADA` (`"Esta parceria está encerrada e não aceita alterações."`). |
+| 422 | Corpo sem texto, link nem audiência (`campos.texto`); `campos.texto`; `campos.links`, `campos["links[0].url"]`, `campos["links[0].tipo"]`, `campos["links[0].titulo"]`; `campos.audiencias`, `campos["audiencias[0].numero"]` e os outros campos da audiência. Todos os erros numa resposta. |
+
+## 98. `GET /api/eventos/{id}/posvenda`  · Pós-venda
+
+**Quem chama:** só o Admin RBS. **200**: uma lista com **todas as versões** de todas as parcerias da edição, **retiradas inclusive**, por patrocinador e, em cada parceria, da mais nova à mais antiga.
+
+```json
+[ { "id": 31, "parceriaId": 2, "patrocinador": "Cliente Amarelo", "versao": 2, "situacao": "PUBLICADO",
+    "texto": "...", "links": [], "audiencias": [], "publicadoEm": "2027-02-01T10:00:00-03:00",
+    "publicadoPor": { "id": 1, "nome": "B2B RBS", "perfil": "ADMIN_RBS" }, "retiradoEm": null, "retiradoPor": null } ]
+```
+
+`situacao` é `PUBLICADO` ou `RETIRADO`. Edição que não existe: **404** (`"Não encontramos esta edição."`). Marca: **403** antes de tudo.
+
+## 99. `DELETE /api/posvenda/{id}`  · Pós-venda
+
+**Quem chama:** só o Admin RBS. Exige o token CSRF. **Retira** a versão do anexo: **não apaga**. A linha fica com `situacao` `RETIRADO`, quem retirou e quando (o gatilho do banco só aceita essa mudança, e recusa qualquer `UPDATE` do conteúdo e qualquer `DELETE`). **204**, sem corpo; retirar de novo também responde **204** e não muda nada.
+
+A marca deixa de ver o anexo se a versão retirada era a mais nova (rota 96). Para publicar de novo, use a rota 97.
+
+**[HISTORICO]** `EXCLUSAO` na entidade `evento_posvenda`, sem parceria, na primeira retirada (`PUBLICADO` &rarr; `RETIRADO`).
+
+| Status | Quando |
+| --- | --- |
+| 401 / 403 | Sem sessão; a marca; falta o token CSRF. |
+| 404 | Versão que não existe (`"Não encontramos este pós-venda."`). |
+| 409 | A parceria da versão está `ENCERRADA`. |
+
+## 100. `GET /api/eventos/{id}/resultados`  · Pós-venda
+
+**Quem chama:** só o Admin RBS. **200**: os números da edição ("O festival em números"), por indicador. Edição que não existe: **404** (`"Não encontramos esta edição."`).
+
+```json
+[ { "id": 7, "indicador": "Público total", "valor": 80000, "qualificador": "MAIS_DE", "unidade": "pessoas", "fonte": "RBS, balanço da edição" } ]
+```
+
+## 101. `PUT /api/eventos/{id}/resultados`  · Pós-venda
+
+**Quem chama:** só o Admin RBS (a marca recebe **403** antes do corpo). Exige o token CSRF. **Informa um número da edição**: o mesmo `indicador` na mesma edição **troca** o valor (upsert), sem repetir a linha.
+
+**Corpo**
+
+```json
+{ "indicador": "Público total", "valor": 80000, "qualificador": "MAIS_DE", "unidade": "pessoas", "fonte": "RBS, balanço da edição" }
+```
+
+| Campo | Regra |
+| --- | --- |
+| `indicador` | Obrigatório, até 80 caracteres, sem caractere de controle. É o nome do número e vira o recorte do indicador no relatório. |
+| `valor` | Obrigatório, maior que zero, no máximo 2 casas decimais. |
+| `qualificador` | `EXATO` (o padrão, se faltar) ou `MAIS_DE`. |
+| `unidade` | Obrigatória, até 20 caracteres. |
+| `fonte` | Obrigatória, até 200 caracteres. |
+
+**201** (número novo, com `Location` na rota 100) ou **200** (trocou o valor de um que já existia), com `{ id, indicador, valor, qualificador, unidade, fonte }`.
+
+**[RELATORIO]** Com ao menos um número informado, o indicador `FESTIVAL_NUMERO` ("O festival em números") **deixa de sair como indisponível** na versão do relatório **gerada depois** (rota 33): uma linha por número, o `indicador` como recorte, o `qualificador` `MAIS_DE` em `baseCalculo` (`"mais de; <fonte>"`). O relatório é uma fotografia: **as versões que já existiam não mudam**. Depois de informar os números, gere uma versão nova, valide e disponibilize. O catálogo continua com 17 indicadores e o relatório com 6 seções.
+
+**[HISTORICO]** `CRIACAO` ou `EDICAO` na entidade `evento_resultado`, sem parceria, com o valor de antes e o de depois (`"mais de 80000 pessoas"`).
+
+| Status | Quando |
+| --- | --- |
+| 401 / 403 | Sem sessão; a marca, antes do corpo; falta o token CSRF. |
+| 404 | Edição que não existe. |
+| 422 | `campos.indicador`, `campos.valor`, `campos.qualificador`, `campos.unidade` ou `campos.fonte` (NUL e outros caracteres de controle inclusive). |
+
+### O pós-venda da edição
+
+O anexo "Pós-venda da edição" (R8.1) é a resposta do portal ao modelo de pós-venda da RBS (o deck ilustrado da edição de 2026): um **anexo do relatório da parceria**, depois das 6 seções, mantido pela RBS. Ele **não é uma 7ª seção** e **não mexe nos 17 indicadores**: a rota 35 devolve o mesmo corpo com ou sem anexo (E2.6), e a função que gera o relatório não o enxerga. A marca vê o anexo na rota 96, só com o relatório disponibilizado; os números da edição entram nas seções do relatório pela rota 101 e pela geração de uma versão nova.
+
+- **Versões.** Cada publicação é uma linha nova (`evento_posvenda`, V18). Corrigir é publicar de novo. A marca vê a versão mais nova, se ela não foi retirada.
+- **Retirar não apaga.** A linha fica, e a API não volta sozinha para a versão anterior.
+- **Parceria `ENCERRADA`** recusa publicar e retirar (409), como todas as rotas novas de escrita.
+
 ---
 
 # Rotas de debug (temporárias)
 
-Um recurso **temporário**, para a equipe ligar o modelo de linguagem do Atlas pela tela (o botão "Debug"), sem reiniciar a API e sem variável de ambiente. Não faz parte das 95 rotas do contrato e sai antes da entrega final.
+Um recurso **temporário**, para a equipe ligar o modelo de linguagem do Atlas pela tela (o botão "Debug"), sem reiniciar a API e sem variável de ambiente. Não faz parte das 101 rotas do contrato e sai antes da entrega final.
 
 - **Só existem com `atlas.debug.chaves=true`.** A propriedade vem `false` por padrão, `true` no perfil `dev` e `false` no `demo` e no `test`. Sem ela, as quatro rotas respondem **404**, como uma rota que não existe.
 - **A chave fica só na memória da API.** Nunca vai ao banco, a arquivo ou ao log, e **some quando a API reinicia**. Nenhuma resposta devolve a chave inteira: só os 4 últimos caracteres (`finalDaChave`).

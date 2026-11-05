@@ -29,3 +29,10 @@ GET	/api/eventos/{id}/pesquisas	rbs
 POST	/api/eventos/{id}/pesquisas	rbs
 PATCH	/api/pesquisas/{id}	rbs
 GET	/api/pesquisa/perguntas	rbs
+# Pós-venda e números da edição (rotas 96 a 101)
+GET	/api/parcerias/{id}/posvenda	ambos
+POST	/api/parcerias/{id}/posvenda	rbs
+GET	/api/eventos/{id}/posvenda	rbs
+DELETE	/api/posvenda/{id}	rbs
+GET	/api/eventos/{id}/resultados	rbs
+PUT	/api/eventos/{id}/resultados	rbs

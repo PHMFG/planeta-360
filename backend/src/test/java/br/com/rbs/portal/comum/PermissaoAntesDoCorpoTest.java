@@ -245,7 +245,9 @@ class PermissaoAntesDoCorpoTest {
             "POST /api/entregas/{id}/conteudos", "GET /api/parcerias/{id}/links-de-midia",
             // A comprovação mensal (rotas 88 a 90): a marca Master (aba MIDIA aberta) e a RBS; o lote (91) está na lista da RBS.
             "GET /api/parcerias/{id}/comprovacao-mensal", "GET /api/parcerias/{id}/comprovacao-mensal.xlsx",
-            "GET /api/parcerias/{id}/comprovacao-mensal.csv");
+            "GET /api/parcerias/{id}/comprovacao-mensal.csv",
+            // O anexo de pós-venda (rota 96): a marca com o relatório disponibilizado e a RBS; publicar, listar, retirar e os números (97 a 101) são só da RBS.
+            "GET /api/parcerias/{id}/posvenda");
 
     @Test
     void todaRotaDaApiEstaClassificadaEAListaDaRbsSoTemRotasQueExistem() {
