@@ -327,6 +327,7 @@ const TEXTO_DA_GESTAO: Record<string, string> = {
   '/rbs/patrocinadores': 'cadastro das parcerias e dos e-mails de acesso.',
   '/rbs/fila': 'materiais enviados pelas marcas, para aprovar ou pedir ajuste.',
   '/rbs/cargas': 'planilhas de veiculação, de pesquisa e do plano comercial.',
+  '/rbs/pesquisa': 'a pesquisa de cada edição e as perguntas das marcas Master.',
   '/rbs/relatorios': 'gerar, validar e disponibilizar o relatório de cada parceria.',
   '/rbs/historico': 'tudo o que aconteceu no portal, com autor e data.',
   '/rbs/atlas': 'documentos, prazos e o diagnóstico do assistente.',

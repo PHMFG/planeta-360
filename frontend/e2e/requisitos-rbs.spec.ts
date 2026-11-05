@@ -7,7 +7,7 @@
 // marca de teste pela API, na pilha.
 import fs from 'node:fs'
 import { expect, test, type Page } from '@playwright/test'
-import { entrar, entrarComo, novaMarcaDeTeste, parceriaDa, sessaoDaApi } from './apoio.ts'
+import { entrar, entrarComo, novaMarcaDeTeste, parceriaDa, sessaoDaApi, sessaoDaApiComo } from './apoio.ts'
 
 const PDF_DE_EXEMPLO = '../backend/src/main/resources/dev/documentos/d13-circular-revogada.pdf'
 
@@ -383,7 +383,67 @@ test.describe('R5 · as abas', () => {
     expect(recusa.status()).toBe(422)
     await contexto.dispose()
   })
-  test.fixme('[R5.6.d] a RBS abre a pesquisa da edição pela tela', pendente)
+  test('[R5.6.d] a RBS abre a pesquisa da edição pela tela', async ({ page }) => {
+    // Uma Master de teste envia as perguntas; a RBS decide na fila da tela, sem abrir a aba da marca.
+    const marca = await novaMarcaDeTeste('MASTER')
+    const daMarca = await sessaoDaApiComo(marca.email)
+    const envio = await daMarca.contexto.put(`/api/parcerias/${marca.parceriaId}/pesquisa/perguntas`, {
+      headers: daMarca.cabecalhos,
+      data: { perguntas: [{ ordem: 1, texto: 'Você visitou o espaço da marca de teste?' }, { ordem: 2, texto: 'Você conhecia a marca de teste antes do festival?' }] },
+    })
+    expect(envio.status(), 'a marca de teste envia as perguntas').toBe(200)
+    await daMarca.contexto.dispose()
+    const { contexto } = await sessaoDaApi('rbs')
+    const eventos: { id: number; edicao: number }[] = await (await contexto.get('/api/eventos')).json()
+    const edicao2027 = eventos.find((evento) => evento.edicao === 2027)!
+    const edicao2026 = eventos.find((evento) => evento.edicao === 2026)!
+    const pesquisas2026: { escopo: string }[] = await (await contexto.get(`/api/eventos/${edicao2026.id}/pesquisas`)).json()
+    await contexto.dispose()
+
+    await entrar(page, 'rbs')
+    await page.getByRole('navigation').getByRole('link', { name: 'Pesquisa' }).click()
+    await expect(page).toHaveURL(/\/rbs\/pesquisa$/)
+    await page.getByLabel(/^Edição/).selectOption(String(edicao2027.id))
+    await expect(page.getByRole('listitem', { name: 'Pesquisa nos espaços de ativação 2027' })).toBeVisible()
+
+    // A fila das perguntas de todas as marcas: aprovar uma e pedir ajuste na outra.
+    const fila = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Perguntas das marcas' }) })
+    await fila.getByRole('button', { name: `Aprovar a pergunta 1 de ${marca.nome}` }).click()
+    await expect(page.getByRole('status').filter({ hasText: `Pergunta 1 de ${marca.nome} aprovada.` })).toBeVisible()
+    await fila.getByRole('button', { name: `Pedir ajuste na pergunta 2 de ${marca.nome}` }).click()
+    const ajuste = page.getByRole('dialog', { name: 'Pedir ajuste na pergunta' })
+    const recado = ajuste.getByLabel('O que a marca precisa ajustar')
+    await recado.click()
+    await recado.pressSequentially('Troque "conhecia" por "já conhecia".')
+    await expect(recado).toHaveValue('Troque "conhecia" por "já conhecia".')
+    await expect(recado).toBeFocused()
+    await ajuste.getByRole('button', { name: 'Pedir ajuste' }).click()
+    await expect(page.getByRole('status').filter({ hasText: `Ajuste pedido na pergunta 2 de ${marca.nome}.` })).toBeVisible()
+    await expect(fila.getByRole('row').filter({ hasText: marca.nome })).toHaveCount(0)
+
+    // 2027 já tem a da ativação: ao abrir, ela vem desabilitada.
+    await page.getByRole('button', { name: 'Abrir pesquisa' }).click()
+    const dialogo = page.getByRole('dialog', { name: 'Abrir pesquisa' })
+    await expect(dialogo.getByRole('option', { name: /Ativação \(por marca\) · já aberta/ })).toHaveAttribute('disabled', '')
+    await dialogo.getByRole('button', { name: 'Cancelar' }).click()
+
+    // 2026 só tem a geral: a RBS abre a da ativação pela tela (numa pilha já usada, abre outra geral, com nome novo).
+    await page.getByLabel(/^Edição/).selectOption(String(edicao2026.id))
+    const semAtivacao = !pesquisas2026.some((pesquisa) => pesquisa.escopo === 'ATIVACAO')
+    if (semAtivacao) await expect(page.getByText('A pesquisa da ativação de 2026 ainda não foi aberta')).toBeVisible()
+    await page.getByRole('button', { name: 'Abrir pesquisa' }).click()
+    const nome = semAtivacao ? 'Pesquisa nos espaços de ativação 2026' : `Pesquisa geral de teste ${Date.now()}`
+    const campoNome = dialogo.getByLabel('Nome')
+    await campoNome.fill('')
+    await campoNome.pressSequentially(nome)
+    await expect(campoNome).toHaveValue(nome)
+    if (!semAtivacao) await dialogo.getByLabel(/^Escopo/).selectOption('GERAL')
+    await dialogo.getByLabel('Base de respondentes (opcional)').pressSequentially('380')
+    await dialogo.getByLabel('Nível de confiança, em % (opcional)').pressSequentially('95')
+    await dialogo.getByRole('button', { name: 'Abrir pesquisa' }).click()
+    await expect(page.getByRole('status').filter({ hasText: /^Pesquisa aberta/ })).toBeVisible()
+    await expect(page.getByRole('listitem', { name: nome })).toContainText('380')
+  })
   test('[R5.7.a] a marca informa quem assina o contrato', async ({ page }) => {
     const marca = await novaMarcaDeTeste('SUBCOTA')
     await entrarComo(page, marca.email)

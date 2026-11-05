@@ -27,6 +27,7 @@ import { Fila } from './paginas/rbs/Fila'
 import { HistoricoGeral } from './paginas/rbs/HistoricoGeral'
 import { Painel } from './paginas/rbs/Painel'
 import { Patrocinadores } from './paginas/rbs/Patrocinadores'
+import { PesquisaRbs } from './paginas/rbs/Pesquisa'
 import { Relatorios } from './paginas/rbs/Relatorios'
 import { RotaProtegida, TelaCarregando, telaInicial, useSessao } from './sessao/Sessao'
 
@@ -105,6 +106,7 @@ export function App() {
         <Route path="patrocinadores" element={<Patrocinadores />} />
         <Route path="fila" element={<Fila />} />
         <Route path="cargas" element={<Cargas />} />
+        <Route path="pesquisa" element={<PesquisaRbs />} />
         <Route path="relatorios" element={<Relatorios />} />
         <Route path="historico" element={<HistoricoGeral />} />
         <Route path="atlas" element={<AtlasRbs />} />

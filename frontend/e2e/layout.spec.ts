@@ -29,7 +29,7 @@ const TELAS: Record<Persona, string[]> = {
   agencia: ['/parceria/{p}/', '/parceria/{p}/perfil', '/parceria/{p}/aplicacoes'],
   roxo: TELAS_DA_MARCA.map((t) => `/parceria/{p}/${t}`),
   verde: TELAS_DA_MARCA.map((t) => `/parceria/{p}/${t}`),
-  rbs: ['/rbs', '/rbs/patrocinadores', '/rbs/fila', '/rbs/cargas', '/rbs/relatorios', '/rbs/historico', '/rbs/atlas', '/parceria/{amarelo}/perfil'],
+  rbs: ['/rbs', '/rbs/patrocinadores', '/rbs/fila', '/rbs/cargas', '/rbs/pesquisa', '/rbs/relatorios', '/rbs/historico', '/rbs/atlas', '/parceria/{amarelo}/perfil'],
 }
 
 /** A página chegou ao conteúdo: tem um título visível, a rede parou (tabelas que carregam depois do título) e nenhum

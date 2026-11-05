@@ -107,6 +107,7 @@ export const GESTAO_RBS: AtalhoRbs[] = [
   { nome: 'Patrocinadores', caminho: '/rbs/patrocinadores', icone: 'ri-building-2-line' },
   { nome: 'Fila de materiais', caminho: '/rbs/fila', icone: 'ri-inbox-archive-line' },
   { nome: 'Cargas', caminho: '/rbs/cargas', icone: 'ri-upload-cloud-2-line' },
+  { nome: 'Pesquisa', caminho: '/rbs/pesquisa', icone: 'ri-questionnaire-line' },
   { nome: 'Relatórios', caminho: '/rbs/relatorios', icone: 'ri-file-chart-line' },
   { nome: 'Histórico', caminho: '/rbs/historico', icone: 'ri-history-line' },
   { nome: 'Atlas', caminho: '/rbs/atlas', icone: 'ri-pulse-line' },

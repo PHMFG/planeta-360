@@ -26,13 +26,18 @@ export async function entrar(page: Page, persona: Persona) {
 
 /** Fala direto com a API, como o front: pega o CSRF, entra e devolve o token para os POST e PATCH. */
 export async function sessaoDaApi(persona: Persona) {
+  return sessaoDaApiComo(USUARIOS[persona])
+}
+
+/** A sessão da API de qualquer e-mail com a senha de sempre (a marca de teste, por exemplo). */
+export async function sessaoDaApiComo(email: string) {
   const contexto: APIRequestContext = await request.newContext({ baseURL: API })
   const csrf = await (await contexto.get('/api/auth/csrf')).json()
   const login = await contexto.post('/api/auth/login', {
     headers: { [csrf.cabecalho]: csrf.token },
-    data: { email: USUARIOS[persona], senha: SENHA },
+    data: { email, senha: SENHA },
   })
-  expect(login.status(), `login de ${persona}`).toBe(200)
+  expect(login.status(), `login de ${email}`).toBe(200)
   const usuario = await login.json()
   return { contexto, cabecalhos: { [csrf.cabecalho]: csrf.token }, usuario }
 }
@@ -83,5 +88,5 @@ export async function novaMarcaDeTeste(cotaCodigo: 'MASTER' | 'SUBCOTA_G' | 'SUB
   const ativacao = await publico.post('/api/auth/ativar', { headers: { [csrf.cabecalho]: csrf.token }, data: { email, codigo, senha: SENHA } })
   expect(ativacao.status(), 'primeiro acesso da marca de teste').toBe(204)
   await publico.dispose()
-  return { parceriaId: parceria.id as number, email }
+  return { parceriaId: parceria.id as number, email, nome: `Marca de Teste ${sufixo}` }
 }
