@@ -10,6 +10,7 @@ import { CabecalhoSecao } from '../../componentes/CabecalhoSecao'
 import { Cartao, Indicador } from '../../componentes/Cartao'
 import { Carregando } from '../../componentes/Carregando'
 import { Filtros, Seletor } from '../../componentes/Formulario'
+import { NumerosDaEdicao } from '../../componentes/NumerosDaEdicao'
 import { Status } from '../../componentes/Status'
 import { Tabela } from '../../componentes/Tabela'
 import { dataHora } from '../../util/formatar'
@@ -27,6 +28,9 @@ export function Relatorios() {
   const todas = lista.dado ?? []
   const contar = (codigo: Situacao) => todas.filter((linha) => codigo === 'TODAS' || linha.situacao === codigo).length
   const visiveis = todas.filter((linha) => situacao === 'TODAS' || linha.situacao === situacao)
+  // A edição escolhida, ou a mais nova: é dela que os números do festival são informados.
+  const edicaoDosNumeros =
+    (eventos.dado ?? []).find((item) => String(item.id) === eventoId) ?? [...(eventos.dado ?? [])].sort((a, b) => b.edicao - a.edicao)[0]
 
   async function agir(parceriaId: number, fazer: () => Promise<unknown>) {
     setFalha(null)
@@ -158,9 +162,12 @@ export function Relatorios() {
         {/* As duas colunas de números se explicam (U03). */}
         <p className="mt-3 text-xs font-medium text-texto-2">
           Indicadores: dos 17 do relatório, quantos têm dado e quantos saem como indisponíveis, com o motivo. Faltantes: o que impede
-          ou enfraquece o relatório, como mídia abaixo do previsto, aplicação sem foto ou entrega pendente.
+          ou enfraquece o relatório, como mídia abaixo do previsto, aplicação sem foto ou entrega pendente. O pós-venda de cada
+          parceria se publica em Abrir.
         </p>
       </Cartao>
+
+      {edicaoDosNumeros && <NumerosDaEdicao eventoId={edicaoDosNumeros.id} edicao={edicaoDosNumeros.edicao} />}
     </div>
   )
 }

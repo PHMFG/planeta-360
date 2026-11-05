@@ -551,8 +551,74 @@ test.describe('R6 a R8 · admin, identidade e pós-venda', () => {
   })
   test.fixme('[R6.d3] a troca de cota mostra a prévia do impacto', pendente)
   test.fixme('[R7.1] o emblema de 2027 aparece no login e nos cabeçalhos', pendente)
-  test.fixme('[R8.1] a marca vê o anexo de pós-venda com o relatório disponibilizado', pendente)
-  test.fixme('[R8.2] os números da edição tiram o indicador de indisponível', pendente)
+  test('[R8.1] a marca vê o anexo de pós-venda com o relatório disponibilizado', async ({ page }) => {
+    const marca = await novaMarcaDeTeste('SUBCOTA')
+    await relatorioDisponibilizado(marca.parceriaId)
+    // Sem anexo, a marca vê o relatório e nada de pós-venda.
+    await entrarComo(page, marca.email)
+    await page.goto(`/parceria/${marca.parceriaId}/relatorio`)
+    await expect(page.getByRole('heading', { name: 'O festival em números' }).or(page.getByText('Rascunho')).first()).toBeAttached()
+    await expect(page.getByRole('heading', { name: 'Pós-venda da edição' })).toHaveCount(0)
+
+    // A RBS publica o anexo na página do relatório da parceria.
+    await page.context().clearCookies()
+    await entrar(page, 'rbs')
+    await page.goto(`/parceria/${marca.parceriaId}/relatorio`)
+    await page.getByRole('button', { name: 'Publicar pós-venda' }).click()
+    const dialogo = page.getByRole('dialog', { name: 'Publicar o pós-venda' })
+    const texto = dialogo.getByLabel('Texto do pós-venda')
+    await texto.click()
+    await texto.pressSequentially('Trinta anos do maior festival do Sul.')
+    await expect(texto).toHaveValue('Trinta anos do maior festival do Sul.')
+    await dialogo.getByRole('button', { name: 'Adicionar link' }).click()
+    await dialogo.getByLabel('Título do link 1').pressSequentially('Aftermovie 2027')
+    const endereco = dialogo.getByLabel('Endereço do link 1')
+    await endereco.pressSequentially('javascript:alert(1)')
+    await dialogo.getByRole('button', { name: 'Adicionar audiência' }).click()
+    await dialogo.getByLabel('Veículo 1').pressSequentially('ATL TV')
+    await dialogo.getByLabel('Métrica 1').pressSequentially('pessoas alcançadas')
+    await dialogo.getByLabel('Número 1').pressSequentially('1600000')
+    await dialogo.getByLabel('Unidade 1').pressSequentially('pessoas')
+    // O link que não é http(s) volta com o erro junto do campo.
+    await dialogo.getByRole('button', { name: 'Publicar', exact: true }).click()
+    await expect(endereco).toHaveAttribute('aria-invalid', 'true')
+    await endereco.fill('https://exemplo.example/aftermovie-2027')
+    await dialogo.getByRole('button', { name: 'Publicar', exact: true }).click()
+    await expect(page.getByRole('status').filter({ hasText: 'Pós-venda publicado.' })).toBeVisible()
+
+    // A marca vê o anexo depois das 6 seções, com o link em aba nova.
+    await page.context().clearCookies()
+    await entrarComo(page, marca.email)
+    await page.goto(`/parceria/${marca.parceriaId}/relatorio`)
+    const anexo = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Pós-venda da edição' }) })
+    await expect(anexo.getByText('Trinta anos do maior festival do Sul.')).toBeVisible()
+    await expect(anexo.getByRole('link', { name: /Aftermovie 2027/ })).toHaveAttribute('target', '_blank')
+    await expect(anexo.getByRole('row').filter({ hasText: 'ATL TV' })).toContainText('1.600.000 pessoas')
+  })
+  test('[R8.2] os números da edição tiram o indicador de indisponível', async ({ page }) => {
+    const marca = await novaMarcaDeTeste('SUBCOTA')
+    const indicador = `Público de teste ${Date.now()}`
+    await entrar(page, 'rbs')
+    await page.goto('/rbs/relatorios')
+    await page.getByLabel(/^Edição/).first().selectOption({ label: 'Planeta Atlântida 2027' })
+    const numeros = page.locator('form', { has: page.getByText('Informar um número') })
+    const campo = numeros.getByLabel('Indicador')
+    await campo.click()
+    await campo.pressSequentially(indicador)
+    await expect(campo).toHaveValue(indicador)
+    await numeros.getByLabel(/^Qualificador/).selectOption('MAIS_DE')
+    await numeros.getByLabel('Valor').pressSequentially('80000')
+    await numeros.getByLabel('Unidade').pressSequentially('pessoas')
+    await numeros.getByLabel('Fonte').pressSequentially('RBS, balanço de teste')
+    await numeros.getByRole('button', { name: 'Salvar número' }).click()
+    await expect(page.getByRole('status').filter({ hasText: indicador })).toBeVisible()
+    await expect(page.getByRole('row').filter({ hasText: indicador })).toContainText('mais de 80.000 pessoas')
+
+    // O relatório gerado depois traz o número em "O festival em números", com a fonte.
+    await page.goto(`/parceria/${marca.parceriaId}/relatorio`)
+    await page.getByRole('button', { name: 'Gerar nova versão' }).click()
+    await expect(page.getByRole('row').filter({ hasText: indicador })).toContainText(/80\.000/)
+  })
 })
 
 /** Uma marca de teste com cota de cortesias (Arena · sábado 4, Portão 6) e uma destinação de 1, gravadas pela API como a RBS. */
@@ -614,4 +680,17 @@ function pdfDeTeste(paginas: string[]) {
   for (let n = 1; n < objetos.length; n++) corpo += `${String(posicoes[n]).padStart(10, '0')} 00000 n \n`
   corpo += `trailer\n<< /Size ${objetos.length} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`
   return Buffer.from(corpo, 'latin1')
+}
+
+/** O relatório da parceria gerado, validado e disponibilizado pela RBS, pela API (rotas 33 e 34). */
+async function relatorioDisponibilizado(parceriaId: number) {
+  const { contexto, cabecalhos } = await sessaoDaApi('rbs')
+  const gerado = await contexto.post(`/api/parcerias/${parceriaId}/relatorios`, { headers: cabecalhos })
+  expect(gerado.status(), 'a RBS gera o relatório').toBe(201)
+  const { id } = await gerado.json()
+  for (const status of ['VALIDADO', 'DISPONIBILIZADO']) {
+    const mudou = await contexto.patch(`/api/relatorios/${id}/status`, { headers: cabecalhos, data: { status } })
+    expect(mudou.status(), `relatório ${status}`).toBe(200)
+  }
+  await contexto.dispose()
 }
