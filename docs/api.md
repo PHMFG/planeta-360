@@ -517,7 +517,7 @@ Os e-mails são guardados em minúsculas e sem espaços nas pontas. A parceria n
 
 | Status | Quando |
 | --- | --- |
-| 400 | Corpo vazio, que não é JSON ou com um campo do tipo errado (`eventoId` ou `valorInvestimento` que não é número). |
+| 400 | Corpo vazio ou que não é JSON. Um campo do tipo errado (`eventoId` ou `valorInvestimento` que não é número) dá 422 nesse campo, como em "Números no corpo e arquivo vazio". |
 | 403 | Não é Admin RBS, ou faltou o token CSRF. |
 | 409 | O patrocinador já tem parceria nesta edição (`"Este patrocinador já tem parceria nesta edição do evento."`), ou já existe um patrocinador com este nome (`"Já existe um patrocinador com este nome. Escolha-o na lista \"Patrocinador\"."`; a comparação é feita sobre o nome normalizado, veja abaixo). |
 | 422 | Campo faltando, evento/cota/patrocinador que não existem, `id` e `nome` do patrocinador juntos (ou nenhum), valor sem base, valor negativo ou com dígitos demais, mais de 50 e-mails, e-mail inválido, repetido na lista ou de um usuário da RBS (`campos`; os da lista saem como `emails[0].email`). |
@@ -584,7 +584,7 @@ O evento **não muda** por aqui, e a cota também não: a RBS troca a cota pela 
 
 Quando o 422 vem junto com outro erro de campo, o `detail` volta a ser `"Confira os campos destacados e tente de novo."` e a frase fica só em `campos`. **Fechar** (`liberada: false`) e ocultar (`visivel`) valem para qualquer aba. Repetir `liberada: true` numa aba que já estava aberta (dado de antes da regra) é um `PATCH` sem mudança e não dá erro; depois de fechada, ela não volta a abrir.
 
-**200**: o objeto da rota 9, já com as mudanças. **Erros:** 400 (corpo que não é JSON ou campo do tipo errado, como `valorInvestimento` que não é número), 403, 404, 409 (nome de patrocinador repetido), 422 (`valorInvestimento` sem `baseValor`, negativo ou com dígitos demais, `patrocinador.nome` em branco, aba que não existe, situação inválida, aba fora da cota que se tenta liberar).
+**200**: o objeto da rota 9, já com as mudanças. **Erros:** 400 (corpo que não é JSON), 403, 404, 409 (nome de patrocinador repetido), 422 (`valorInvestimento` sem `baseValor`, negativo ou com dígitos demais, `patrocinador.nome` em branco, aba que não existe, situação inválida, aba fora da cota que se tenta liberar).
 
 **Regras:** campo ausente ou `null` = não muda; texto em branco em `nomeProduto`, `patrocinador.segmento` limpa o campo. O `patrocinador.nome` é normalizado como na rota 8 (sem espaços nas pontas nem repetidos) e comparado com os outros patrocinadores sem diferença de maiúsculas ou de espaços; repetido dá 409 (`"Já existe um patrocinador com este nome."`). Mandar o nome atual com espaços a mais não muda nada e não grava histórico. O valor e a base vão sempre juntos (no estado final), e o valor segue a regra da rota 8 (não negativo, até 12 dígitos e 2 casas). `patrocinador.nome` em branco (só espaços) dá 422 em `campos["patrocinador.nome"]`. O nome e o segmento do `patrocinador` valem para a marca inteira, em todas as edições. Mandar uma aba no estado em que ela já está não grava nada.
 
@@ -678,9 +678,9 @@ O patrocinador só enxerga as entregas das abas **liberadas** para a parceria de
 
 `papel` (opcional) cria um espaço de documento: `DOCUMENTO_INGRESSOS`, `MIV` ou `LOGO`. Ele fixa a aba (ingressos no `PERFIL`; MIV e logo em `APLICACOES`), e `abaCodigo` de outra aba dá 422 em `campos.papel` (`"Este espaço é da aba Perfil."`). MIV e logo existem **uma vez por parceria**: pedir de novo dá **409** (`"Esta parceria já tem o espaço MIV."`), e o primeiro envio da rota 72 aproveita a entrega criada aqui. O documento de ingressos não tem limite (cada solicitação é uma entrega). `papel` que não existe dá 422.
 
-`abaCodigo` e `titulo` (até 160 caracteres) são obrigatórios; `descricao` tem até 2000 caracteres e `prazo` é uma data (`AAAA-MM-DD`; um texto que não é data, como `"amanhã"`, dá 400, não 422). `status` inicial é opcional: `NAO_INICIADO`, `AGUARDANDO_ENVIO` (padrão) ou `NAO_APLICAVEL`.
+`abaCodigo` e `titulo` (até 160 caracteres) são obrigatórios; `descricao` tem até 2000 caracteres e `prazo` é uma data (`AAAA-MM-DD`; um texto que não é data, como `"amanhã"`, dá 422 em `campos.prazo`, com `"Valor inválido."`). `status` inicial é opcional: `NAO_INICIADO`, `AGUARDANDO_ENVIO` (padrão) ou `NAO_APLICAVEL`.
 
-**201**: a **Entrega** criada (com `papel`). **Erros:** 400 (corpo que não é JSON ou `prazo` que não é uma data), 403, 404 (parceria), 409 (espaço MIV ou logo que já existe), 422 (`campos`). **Histórico:** `CRIACAO`.
+**201**: a **Entrega** criada (com `papel`). **Erros:** 400 (corpo que não é JSON), 403, 404 (parceria), 409 (espaço MIV ou logo que já existe), 422 (`campos`). **Histórico:** `CRIACAO`.
 
 ## 16. `GET /api/entregas`  · etapa 5
 
