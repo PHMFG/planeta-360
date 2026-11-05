@@ -219,11 +219,13 @@ public class PermissaoAntesDoCorpo implements HandlerInterceptor, WebMvcConfigur
             if (parceriaId != null) {
                 verificador.exigirParceria(usuario, parceriaId);
                 String aba = requisicao.getParameter("aba");
-                // aba=APLICACOES só precisa de Aplicações, aba=PERFIL só do Perfil; sem aba (ou com valor inválido) vale a regra das duas.
-                if (!"APLICACOES".equals(aba)) {
+                // aba=APLICACOES só precisa de Aplicações, aba=PERFIL só do Perfil e sem aba vale a regra das duas. Valor inválido: só o
+                // 404 vem antes; o 422 do filtro sai igual para quem tem acesso à parceria, qualquer que seja a aba aberta.
+                boolean valida = aba == null || "PERFIL".equals(aba) || "APLICACOES".equals(aba);
+                if (valida && !"APLICACOES".equals(aba)) {
                     verificador.exigirAbaLiberada(usuario, parceriaId, "PERFIL");
                 }
-                if (!"PERFIL".equals(aba)) {
+                if (valida && !"PERFIL".equals(aba)) {
                     verificador.exigirAbaLiberada(usuario, parceriaId, "APLICACOES");
                 }
             }

@@ -87,7 +87,9 @@ class BordasDaAuditoriaTest extends ApoioDeEspacos {
 
         fecharAba(amarelo, "PERFIL", false, true);
         fecharAba(amarelo, "APLICACOES", false, true);
-        assertThat(entrar(AMARELO).get("/api/parcerias/" + amarelo + "/espacos?aba=lixo")).hasStatus(HttpStatus.FORBIDDEN);
+        assertThat(entrar(AMARELO).get("/api/parcerias/" + amarelo + "/espacos?aba=PERFIL")).hasStatus(HttpStatus.FORBIDDEN);
+        assertThat(entrar(AMARELO).get("/api/parcerias/" + amarelo + "/espacos?aba=lixo")).as("filtro inválido: só o 404 vem antes")
+                .hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(entrar(RBS).get("/api/parcerias/" + amarelo + "/espacos?aba=lixo")).as("a RBS vê o erro do filtro")
                 .hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
     }
