@@ -154,7 +154,12 @@ function usarMaisAbaixo(nav: RefObject<HTMLElement | null>) {
   useEffect(() => {
     const elemento = nav.current
     if (!elemento) return
-    const medir = () => setMais(elemento.scrollHeight - elemento.scrollTop - elemento.clientHeight > 4)
+    // Só há "mais abaixo" quando um item clicável fica fora da vista; o texto de ajuda no fim do menu não conta (checklist c-03).
+    const medir = () => {
+      const itens = elemento.querySelectorAll('a, button')
+      const ultimo = itens[itens.length - 1]
+      setMais(!!ultimo && ultimo.getBoundingClientRect().bottom > elemento.getBoundingClientRect().bottom + 4)
+    }
     medir()
     elemento.addEventListener('scroll', medir, { passive: true })
     const observador = new ResizeObserver(medir)
