@@ -355,7 +355,8 @@ class ArquivosTest extends ApoioDeMateriais {
         assertThat(semArquivo).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(lerJson(semArquivo, "$.campos.arquivo")).isNotNull();
         assertThat(vazio).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
-        assertThat(lerJson(vazio, "$.campos.arquivo")).isNotNull();
+        assertThat(lerJson(vazio, "$.campos.arquivo")).isEqualTo("O arquivo está vazio.");
+        assertThat(lerJson(semArquivo, "$.campos.arquivo")).isEqualTo("Envie o arquivo na parte \"arquivo\" do formulário.");
         assertThat(categoria).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(lerJson(categoria, "$.campos.categoria")).isNotNull();
         assertThat(observacao).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);

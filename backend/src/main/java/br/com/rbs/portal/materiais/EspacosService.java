@@ -242,8 +242,10 @@ public class EspacosService {
     /** [VALIDACAO] Junta os erros de campo (arquivo ausente ou vazio, observação longa) numa resposta só; devolve a observação limpa. */
     private static String conferirCampos(MultipartFile arquivo, String observacaoInformada) {
         Map<String, String> campos = new LinkedHashMap<>();
-        if (arquivo == null || arquivo.isEmpty()) {
+        if (arquivo == null || (arquivo.isEmpty() && (arquivo.getOriginalFilename() == null || arquivo.getOriginalFilename().isBlank()))) {
             campos.put("arquivo", "Envie o arquivo na parte \"arquivo\" do formulário.");
+        } else if (arquivo.isEmpty()) {
+            campos.put("arquivo", "O arquivo está vazio.");
         }
         String observacao = observacaoInformada == null || observacaoInformada.isBlank() ? null : observacaoInformada.trim();
         if (observacao != null && observacao.length() > LIMITE_OBSERVACAO) {

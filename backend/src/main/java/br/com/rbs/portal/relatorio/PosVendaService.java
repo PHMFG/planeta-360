@@ -59,6 +59,8 @@ public class PosVendaService {
     static final int UNIDADE_DO_NUMERO_MAXIMA = 20;
     static final int FONTE_MAXIMA = 200;
     private static final BigDecimal LIMITE_DO_NUMERO = new BigDecimal("100000000000000");
+    private static final String FRASE_DO_MAXIMO_VALOR = "O valor passa do máximo: use menos de 100.000.000.000.000.";
+    private static final String FRASE_DO_MAXIMO_NUMERO = "O número passa do máximo: use menos de 100.000.000.000.000.";
     private static final List<String> TIPOS_DE_LINK = List.of("AFTERMOVIE", "CLIPPING", "OUTRO");
     private static final List<String> QUALIFICADORES = List.of("EXATO", "MAIS_DE");
     /**
@@ -208,8 +210,10 @@ public class PosVendaService {
         BigDecimal valor = c.valor();
         if (valor == null) {
             campos.put("valor", "Informe o valor.");
-        } else if (valor.signum() <= 0 || valor.compareTo(LIMITE_DO_NUMERO) >= 0) {
+        } else if (valor.signum() <= 0) {
             campos.put("valor", "O valor tem de ser maior que zero.");
+        } else if (valor.compareTo(LIMITE_DO_NUMERO) >= 0) {
+            campos.put("valor", FRASE_DO_MAXIMO_VALOR);
         } else if (valor.stripTrailingZeros().scale() > 2) {
             campos.put("valor", "O valor tem no máximo 2 casas decimais.");
         }
@@ -304,8 +308,10 @@ public class PosVendaService {
             BigDecimal numero = a.numero();
             if (numero == null) {
                 campos.put(campo + ".numero", "Informe o número.");
-            } else if (numero.signum() <= 0 || numero.compareTo(LIMITE_DO_NUMERO) >= 0) {
+            } else if (numero.signum() <= 0) {
                 campos.put(campo + ".numero", "O número tem de ser maior que zero.");
+            } else if (numero.compareTo(LIMITE_DO_NUMERO) >= 0) {
+                campos.put(campo + ".numero", FRASE_DO_MAXIMO_NUMERO);
             } else if (numero.stripTrailingZeros().scale() > 2) {
                 campos.put(campo + ".numero", "O número tem no máximo 2 casas decimais.");
             }

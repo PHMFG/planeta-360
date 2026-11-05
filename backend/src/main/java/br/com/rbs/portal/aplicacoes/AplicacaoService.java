@@ -115,8 +115,10 @@ public class AplicacaoService {
         }
 
         Map<String, String> campos = new LinkedHashMap<>();
-        if (arquivo == null || arquivo.isEmpty()) {
+        if (arquivo == null || (arquivo.isEmpty() && (arquivo.getOriginalFilename() == null || arquivo.getOriginalFilename().isBlank()))) {
             campos.put("arquivo", "Envie a foto na parte \"arquivo\" do formulário.");
+        } else if (arquivo.isEmpty()) {
+            campos.put("arquivo", "O arquivo está vazio.");
         }
         String descricao = descricaoInformada == null || descricaoInformada.isBlank() ? null : descricaoInformada.trim();
         if (descricao != null && descricao.length() > LIMITE_DESCRICAO) {

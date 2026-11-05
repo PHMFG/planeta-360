@@ -58,7 +58,7 @@ Todo erro, sem exceção, vem como `application/problem+json` no formato `Proble
 
 | Status | Título | Quando acontece |
 | --- | --- | --- |
-| 400 | Requisição inválida | Corpo vazio, que não é JSON ou com um campo do tipo errado (`"eventoId": "abc"` na rota 8, `"prazo": "amanhã"` na rota 15): o `detail` é `"O corpo da requisição está vazio ou não é um JSON válido."`. Também o filtro da URL com o tipo errado (`?pagina=abc`, `?eventoId=abc`, `?atrasadas=talvez`): o `detail` diz qual, por exemplo `"O parâmetro pagina precisa ser um número inteiro."` ou `"O parâmetro atrasadas precisa ser true ou false."`. |
+| 400 | Requisição inválida | Corpo vazio ou que não é JSON (JSON quebrado, ou que não é um objeto): o `detail` é `"O corpo da requisição está vazio ou não é um JSON válido."`. Também o filtro da URL com o tipo errado (`?pagina=abc`, `?eventoId=abc`, `?atrasadas=talvez`): o `detail` diz qual, por exemplo `"O parâmetro pagina precisa ser um número inteiro."` ou `"O parâmetro atrasadas precisa ser true ou false."`. |
 | 401 | Não autenticado | Sem sessão (ou sessão vencida), e-mail/senha incorretos no login, ou sessão de uma conta que perdeu o acesso (veja "Sessão e CSRF"). |
 | 403 | Acesso negado | Logado, mas o perfil não pode fazer a operação (rota só da RBS), a aba está fechada para a parceria (duas frases diferentes, veja "Aba"), ou falta o token CSRF. |
 | 404 | Não encontrado | O recurso **não existe ou é de outra parceria**. Os dois casos têm a mesma resposta, de propósito. Vale também para rota inexistente e para **id na URL que não é número** (`GET /api/parcerias/abc`): um id que não pode existir é um id que não existe, e o `detail` é a frase de "não encontrado" do recurso da rota (`"Não encontramos esta parceria."`, `"... esta entrega."`, `"... este arquivo."`, `"... esta pergunta."`, `"... este relatório."` (também o do Atlas), `"... esta carga."`, `"... esta aplicação."` (rota 38), `"... esta conversa."`, `"... esta solicitação."`, `"... este turno."` (rota 51), `"... este provedor."` (rota 53), `"... este documento."` (rotas 56 a 60), `"Não encontramos este e-mail nesta parceria."`), igual à de um id numérico sem registro. Nas rotas dos prazos e do Atlas da RBS (62 a 64, 67 e 68), cujo caminho é `/eventos/...` ou `/prazos/...`, a frase do id que não é número é a genérica, `"Não encontramos o que você pediu."`. |
@@ -67,7 +67,7 @@ Todo erro, sem exceção, vem como `application/problem+json` no formato `Proble
 | 409 | Conflito | Uma regra do negócio recusou: regra do banco (SQLSTATE da classe 23, com a frase do gatilho), transição de status que não é permitida, registro duplicado. |
 | 413 | Arquivo grande demais | Envio acima de 20 MB. |
 | 415 | Tipo de conteúdo não aceito | Extensão ou tipo de arquivo fora da lista permitida (a rota 54 aceita só `pdf` e `txt`), conteúdo que não bate com a extensão, ou `Content-Type` errado. |
-| 422 | Dados inválidos | Campo faltando ou fora do formato. Vem com `campos`. Campo do JSON com o tipo errado (um texto onde se espera um número ou uma data) não vem para cá: é 400. |
+| 422 | Dados inválidos | Campo faltando ou fora do formato. Vem com `campos`. O campo de um JSON válido que não vira o tipo esperado também vem para cá, com o caminho dele em `campos` (veja "Números no corpo e arquivo vazio"). |
 | 429 | Limite de uso atingido | Um limite de uso foi atingido. Hoje as rotas 44 (o teto diário de mensagens do Atlas, por parceria ou, na conversa da RBS, por pessoa, e o limite de mensagens por hora de cada usuário), 59 (aberturas de documento por hora) e 61 (buscas de teste por hora). O `detail` diz o que fazer no lugar e, nos limites por hora, quanto falta. |
 | 500 | Erro interno | Falha inesperada. O `detail` é sempre genérico. |
 | 503 | Serviço indisponível | Uma parte de que a rota depende está fora do ar. Hoje só a rota 44: mensagem de texto no Atlas sem o modelo de linguagem. O `detail` diz o que fazer no lugar. |
@@ -3344,7 +3344,7 @@ Mesmas regras da rota 89. **200** com `Content-Type: text/csv; charset=UTF-8`, U
 | --- | --- |
 | `texto` | Até 5.000 caracteres. A quebra de linha e o tab valem; os outros caracteres de controle (inclusive NUL) dão 422. É dado, nunca instrução: não vai ao Atlas. |
 | `links` | No máximo 30. `tipo`: `AFTERMOVIE`, `CLIPPING` ou `OUTRO`. `titulo`: de 1 a 160 caracteres. `url`: até 500 caracteres, **só `http://` ou `https://`**, com um site depois; **recusado**: `javascript:` e qualquer outro esquema, `usuario@` antes do site, espaço, caractere de controle e caractere que inverte a leitura (bidi). O servidor **nunca busca** o endereço. |
-| `audiencias` | No máximo 20. `veiculo` (até 80), `metrica` (até 80), `numero` (maior que zero, no máximo 2 casas decimais) e `unidade` (até 20). |
+| `audiencias` | No máximo 20. `veiculo` (até 80), `metrica` (até 80), `numero` (maior que zero e **menor que 100.000.000.000.000**, no máximo 2 casas decimais) e `unidade` (até 20). Acima do máximo: `campos["audiencias[0].numero"]` = `O número passa do máximo: use menos de 100.000.000.000.000.` |
 
 **201**, com `Location` na rota 96 e a versão publicada, no formato de um item da rota 98.
 
@@ -3407,7 +3407,7 @@ A marca deixa de ver o anexo se a versão retirada era a mais nova (rota 96). Pa
 | Campo | Regra |
 | --- | --- |
 | `indicador` | Obrigatório, até 80 caracteres, sem caractere de controle. É o nome do número e vira o recorte do indicador no relatório. |
-| `valor` | Obrigatório, maior que zero, no máximo 2 casas decimais. |
+| `valor` | Obrigatório, maior que zero e **menor que 100.000.000.000.000**, no máximo 2 casas decimais. Acima do máximo: `campos.valor` = `O valor passa do máximo: use menos de 100.000.000.000.000.` |
 | `qualificador` | `EXATO` (o padrão, se faltar) ou `MAIS_DE`. |
 | `unidade` | Obrigatória, até 20 caracteres. |
 | `fonte` | Obrigatória, até 200 caracteres. |
@@ -3608,6 +3608,22 @@ Ligada:
 ---
 
 # Regras que valem para todas as rotas
+
+## Números no corpo e arquivo vazio
+
+[VALIDACAO] Um campo do corpo JSON com o valor errado é erro **do campo**: **422** com o caminho dele em `campos` (em lista, `audiencias[0].numero`), e nada é gravado. JSON quebrado de verdade (sintaxe, corpo vazio) segue **400**. A regra vale para todo campo de todas as rotas com corpo JSON:
+
+| O que veio | `campos.<campo>` |
+| --- | --- |
+| Decimal num campo inteiro (`"quantidade": 1.5`; antes o portal cortava para 1 em silêncio) ou texto num campo inteiro (`"abc"`) | `Use um número inteiro.` |
+| Texto num campo decimal (`"valor": "abc"`) | `Use um número válido.` |
+| Inteiro que não cabe em 64 bits (`99999999999999999999`) | `O número é grande demais.` |
+| Número acima do máximo do banco num campo decimal (`numero` do pós-venda e `valor` dos resultados da edição: menos de 100.000.000.000.000) | `O número passa do máximo: use menos de 100.000.000.000.000.` (no `valor`: `O valor passa do máximo: ...`); zero ou negativo segue `... tem de ser maior que zero.` |
+| Outro tipo errado (texto onde se espera lista, objeto, booleano ou data) | `Valor inválido.` |
+
+A ordem não muda: 401 sem sessão, depois o 403 das rotas só da RBS e das abas fechadas, depois o corpo. Nas rotas da parceria o 404 de outra marca vem do service, **depois** de o corpo ser lido (como já era com o 400): o tipo errado sai 422 antes do 404.
+
+**Arquivo vazio.** Em toda rota de envio de arquivo (materiais da entrega, espaços, dados da ativação, foto de comprovação, contrato e documentos do Atlas; a carga já dizia `A planilha está vazia.`), a parte `arquivo` com nome e 0 bytes dá 422 com `campos.arquivo` = `O arquivo está vazio.`. A parte ausente continua com `Envie o arquivo na parte "arquivo" do formulário.` (ou a variante da rota: foto, contrato, documento).
 
 ## Isolamento entre parcerias
 

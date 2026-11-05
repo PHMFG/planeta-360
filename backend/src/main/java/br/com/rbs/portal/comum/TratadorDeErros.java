@@ -5,6 +5,9 @@ import java.sql.SQLException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.postgresql.util.PSQLException;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.exc.InputCoercionException;
+import tools.jackson.databind.exc.MismatchedInputException;
 import org.postgresql.util.ServerErrorMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -221,9 +224,68 @@ public class TratadorDeErros extends ResponseEntityExceptionHandler {
     @Override
     protected ResponseEntity<Object> handleHttpMessageNotReadable(HttpMessageNotReadableException ex, HttpHeaders headers,
                                                                   HttpStatusCode status, WebRequest request) {
+        // O JSON é válido, mas um campo tem o tipo ou o tamanho errado (1.5 num inteiro, "abc" num número, 99999999999999999999):
+        // o erro é do campo, então 422 com o caminho dele em "campos". JSON quebrado de verdade segue 400.
+        Map<String, String> campos = erroDeCampo(ex);
+        if (campos != null) {
+            return createResponseEntity(Problemas.validacao(campos), headers, HttpStatus.UNPROCESSABLE_CONTENT, request);
+        }
         return createResponseEntity(
                 Problemas.de(HttpStatus.BAD_REQUEST, "O corpo da requisição está vazio ou não é um JSON válido."),
                 headers, HttpStatus.BAD_REQUEST, request);
+    }
+
+    /** O campo (com o caminho, como {@code audiencias[0].numero}) e a frase, quando o Jackson recusou o VALOR de um campo; senão nulo. */
+    private static Map<String, String> erroDeCampo(HttpMessageNotReadableException ex) {
+        MismatchedInputException recusa = null;
+        InputCoercionException grande = null;
+        for (Throwable atual = ex.getCause(); atual != null; atual = atual.getCause() == atual ? null : atual.getCause()) {
+            if (atual instanceof InputCoercionException g && grande == null) {
+                grande = g;
+            }
+            if (recusa == null && atual instanceof MismatchedInputException d && !d.getPath().isEmpty()) {
+                recusa = d;
+            }
+        }
+        StringBuilder caminho = new StringBuilder();
+        if (recusa != null) {
+            for (JacksonException.Reference trecho : recusa.getPath()) {
+                if (trecho.getPropertyName() != null) {
+                    caminho.append(caminho.isEmpty() ? "" : ".").append(trecho.getPropertyName());
+                } else if (trecho.getIndex() >= 0) {
+                    caminho.append('[').append(trecho.getIndex()).append(']');
+                }
+            }
+        } else if (grande != null && grande.processor() != null) {
+            // O número que não cabe em long sai do parser sem caminho: o contexto do parser sabe em que campo ele parou.
+            for (String trecho : grande.processor().streamReadContext().pathAsPointer().toString().split("/")) {
+                if (trecho.isEmpty()) {
+                    continue;
+                }
+                if (trecho.chars().allMatch(Character::isDigit)) {
+                    caminho.append('[').append(trecho).append(']');
+                } else {
+                    caminho.append(caminho.isEmpty() ? "" : ".").append(trecho);
+                }
+            }
+        }
+        if (caminho.isEmpty()) {
+            return null;
+        }
+        Class<?> tipo = recusa != null ? recusa.getTargetType() : null;
+        String frase;
+        if (grande != null) {
+            frase = "O número é grande demais.";
+        } else if (tipo != null && (Number.class.isAssignableFrom(tipo) || tipo.isPrimitive() && tipo != boolean.class && tipo != char.class)) {
+            boolean inteiro = tipo == Long.class || tipo == Integer.class || tipo == Short.class || tipo == Byte.class
+                    || tipo == long.class || tipo == int.class || tipo == short.class || tipo == byte.class;
+            frase = inteiro ? "Use um número inteiro." : "Use um número válido.";
+        } else {
+            frase = "Valor inválido.";
+        }
+        Map<String, String> campos = new LinkedHashMap<>();
+        campos.put(caminho.toString(), frase);
+        return campos;
     }
 
     @Override

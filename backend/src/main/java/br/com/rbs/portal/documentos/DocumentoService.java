@@ -168,8 +168,10 @@ public class DocumentoService {
     /** [VALIDACAO] Junta os erros de campo numa resposta só (422). */
     private Entrada validar(String nomeDoArquivo, byte[] conteudo, DadosDoEnvio dados) {
         Map<String, String> campos = new LinkedHashMap<>();
-        if (conteudo == null || conteudo.length == 0 || nomeDoArquivo == null || nomeDoArquivo.isBlank()) {
+        if (conteudo == null || nomeDoArquivo == null || nomeDoArquivo.isBlank()) {
             campos.put("arquivo", "Envie o documento (PDF ou TXT) na parte \"arquivo\" do formulário.");
+        } else if (conteudo.length == 0) {
+            campos.put("arquivo", "O arquivo está vazio.");
         }
         String titulo = limpo(dados.titulo());
         if (titulo == null) {

@@ -90,8 +90,10 @@ public class ArquivoService {
 
         // [VALIDACAO] Junta os erros de campo numa resposta só.
         Map<String, String> campos = new LinkedHashMap<>();
-        if (arquivo == null || arquivo.isEmpty()) {
+        if (arquivo == null || (arquivo.isEmpty() && (arquivo.getOriginalFilename() == null || arquivo.getOriginalFilename().isBlank()))) {
             campos.put("arquivo", "Envie o arquivo na parte \"arquivo\" do formulário.");
+        } else if (arquivo.isEmpty()) {
+            campos.put("arquivo", "O arquivo está vazio.");
         }
         String categoria = categoriaInformada == null || categoriaInformada.isBlank()
                 ? (usuario.ehRbs() ? "OUTRO" : "MATERIAL_MARCA") : categoriaInformada.trim();

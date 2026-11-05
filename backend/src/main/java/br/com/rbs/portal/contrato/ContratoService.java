@@ -127,8 +127,10 @@ public class ContratoService {
         exigirNaoEncerrada(parceriaId);
 
         Map<String, String> campos = new LinkedHashMap<>();
-        if (arquivo == null || arquivo.isEmpty()) {
+        if (arquivo == null || (arquivo.isEmpty() && (arquivo.getOriginalFilename() == null || arquivo.getOriginalFilename().isBlank()))) {
             campos.put("arquivo", "Envie o contrato na parte \"arquivo\" do formulário.");
+        } else if (arquivo.isEmpty()) {
+            campos.put("arquivo", "O arquivo está vazio.");
         }
         LocalDate assinadoEm = data(assinadoEmInformado, campos);
         String observacao = limpo(observacaoInformada);
