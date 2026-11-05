@@ -35,3 +35,4 @@ backend/config/segredos.local.properties
 frontend/e2e/capturas/
 frontend/test-results/
 frontend/playwright-report/
+frontend/resultados-e2e/

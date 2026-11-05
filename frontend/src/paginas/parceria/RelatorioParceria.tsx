@@ -14,6 +14,7 @@ import { useSessao } from '../../sessao/Sessao'
 import { dataHora, numero } from '../../util/formatar'
 import { useParceria } from './ContextoParceria'
 import { RelatoriosDoAtlas } from './RelatorioAtlas'
+import { PosVendaDaMarca, PosVendaDaRbs } from '../../componentes/PosVenda'
 
 // Partes do recorte que chegam como código do banco e o nome que a marca lê.
 const CODIGOS: Record<string, string> = {
@@ -214,6 +215,8 @@ export function RelatorioParceria() {
                 </a>
               </div>
               <Documento relatorio={dado} />
+              {/* R8.1: o anexo de pós-venda vem depois das 6 seções, que não mudam. */}
+              {!rbs && <PosVendaDaMarca parceriaId={parceria.id} />}
             </>
           ) : (
             <Aviso tipo="ausente" titulo={rbs ? 'Esta parceria ainda não tem relatório' : 'O relatório desta parceria ainda não está disponível'}>
@@ -224,6 +227,8 @@ export function RelatorioParceria() {
           )
         }
       </Carregando>
+
+      {rbs && <PosVendaDaRbs parceriaId={parceria.id} />}
 
       <RelatoriosDoAtlas />
     </div>

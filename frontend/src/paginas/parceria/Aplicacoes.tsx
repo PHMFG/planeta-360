@@ -24,6 +24,7 @@ import { Campo } from '../../componentes/Campo'
 import { Cartao, Indicador } from '../../componentes/Cartao'
 import { Carregando } from '../../componentes/Carregando'
 import { FormularioDadosInformados } from '../../componentes/FormularioDadosInformados'
+import { MateriaisDaMarca } from '../../componentes/MateriaisDaMarca'
 import { Modal } from '../../componentes/Modal'
 import { useSessao } from '../../sessao/Sessao'
 import { dataHora, numero, porcentagem, tamanho } from '../../util/formatar'
@@ -71,6 +72,9 @@ function ConteudoAplicacoes({ rbs }: { rbs: boolean }) {
         }
       />
 
+      {/* Figma P02: os botões próprios da logo e do MIV (R5.2.a). */}
+      <MateriaisDaMarca parceriaId={parceria.id} rbs={rbs} />
+
       {rbs && <AvisoAbaFechada parceria={parceria} estado={estado} nome={NOME} rbs />}
 
       {anexada && (
@@ -87,7 +91,7 @@ function ConteudoAplicacoes({ rbs }: { rbs: boolean }) {
           vazio={(dado) => dado.linhas.length === 0}
           textoVazio={
             rbs
-              ? 'Esta parceria ainda não tem aplicações de marca no plano. Suba a planilha do plano comercial em Cargas.'
+              ? 'Esta parceria ainda não tem aplicações de marca no plano. Suba a planilha do plano comercial em Cargas: cada aplicação ganha aqui o botão Anexar foto, para as fotos de comprovação.'
               : 'A RBS ainda não carregou o plano de aplicações da sua cota.'
           }
         >
@@ -112,7 +116,7 @@ function ConteudoAplicacoes({ rbs }: { rbs: boolean }) {
 
       <DadosDaAtivacao rbs={rbs} />
 
-      <EntregasDaAba aba="APLICACOES" titulo="Entregas da aba" />
+      <EntregasDaAba aba="APLICACOES" titulo="Entregas da aba" semPapel />
 
       <AnexarFoto
         key={anexos}
@@ -132,7 +136,7 @@ function Totais({ totais }: { totais: PlanoDeAplicacoes['totais'] }) {
   return (
     <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
       <Indicador rotulo="Previstas" valor={numero(totais.previstas)} legenda="Aplicações no plano" />
-      <Indicador rotulo="Comprovadas" valor={numero(totais.comprovadas)} legenda="Até o previsto de cada linha" />
+      <Indicador rotulo="Comprovadas" valor={numero(totais.comprovadas)} legenda="Fotos de comprovação, contando até o previsto de cada linha" />
       <Indicador rotulo="Comprovação" valor={porcentagem(totais.percentual)} legenda="Comprovadas sobre previstas" />
       <Indicador rotulo="Fotos" valor={numero(totais.fotos)} legenda="Enviadas pela RBS" />
     </div>
@@ -284,8 +288,8 @@ function DadosDaAtivacao({ rbs }: { rbs: boolean }) {
             campos={dado.campos.filter((campo) => campo.tipo !== 'ARQUIVO')}
             somenteMudados
             textoEnviar="Salvar números"
+            aoTentar={() => setSalvo(false)}
             aoEnviar={async (valores) => {
-              setSalvo(false)
               await informarDados(parceria.id, valores)
               setSalvo(true)
               dados.recarregar()

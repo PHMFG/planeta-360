@@ -2,7 +2,7 @@
 
 Este documento é o **contrato entre o back-end e o front-end**. Quem faz a tela lê aqui o que cada rota pede, o que devolve e quais erros esperar, sem precisar abrir o código.
 
-- Todas as 68 rotas estão implementadas e cobertas por testes de integração (`cd backend && ./mvnw test`), inclusive o isolamento entre parcerias. A coluna "Etapa" diz em que etapa do plano cada rota entrou (as do Atlas, 37 em diante, entram como `Atlas 1`, `Atlas 2`, `Atlas M2`, `Atlas M3`, `Atlas M4`, `Atlas M5`, `Atlas M6` e `Atlas M8`). Mudança de formato daqui em diante entra neste arquivo no mesmo commit do código.
+- Todas as 104 rotas estão implementadas e cobertas por testes de integração (`cd backend && ./mvnw test`), inclusive o isolamento entre parcerias. A coluna "Etapa" diz em que etapa do plano cada rota entrou (as do Atlas, 37 em diante, entram como `Atlas 1`, `Atlas 2`, `Atlas M2`, `Atlas M3`, `Atlas M4`, `Atlas M5`, `Atlas M6` e `Atlas M8`). Mudança de formato daqui em diante entra neste arquivo no mesmo commit do código.
 - O banco está descrito em [`docs/banco.md`](banco.md). Os nomes de status, cotas e abas são os mesmos do banco.
 
 ## Como falar com a API
@@ -15,7 +15,7 @@ Este documento é o **contrato entre o back-end e o front-end**. Quem faz a tela
 | Números | Números JSON. Dinheiro e quantidades têm até 2 casas decimais (`1000000.00`). Percentuais têm 1 casa (`98.3`) e **todos** são **cortados** na primeira casa, nunca arredondados, na tela, no CSV e na consolidação: 459.900 de 460.000 é `99.9` (nunca `100`) e 17 de 19 é `89.4` (não `89.5`). Só chega a `100` quem está completo. O percentual de **entrega de mídia** pode passar de 100 quando o exibido supera o previsto (907.300 de 460.000 é `197.2`): é informação válida, e nada na API corta o número em 100; quem desenha uma barra limita a largura, não o valor. Os demais percentuais calculados pela API (entregas concluídas, aplicações comprovadas, cortesias destinadas) não passam de 100 por construção. O percentual de **resultado de pesquisa** (`unidade: PERCENTUAL`, que vem da planilha da pesquisa) é outra coisa, a fatia dos respondentes, e continua de 0 a 100. Nos textos (`baseCalculo`, `detalhe`) os números saem no padrão brasileiro: `459.900 de 460.000`. |
 | Campos vazios | Um campo sem valor vem como `null`. As listas vêm sempre como `[]`, nunca `null`. |
 | Códigos | Cotas: `MASTER`, `SUBCOTA_G`, `SUBCOTA`. Abas: `PERFIL`, `APLICACOES`, `MIDIA`, `CORTESIAS`, `CREDENCIAMENTO`, `PESQUISA`, `CONTRATO`. Perfis: `ADMIN_RBS`, `ADMIN_PATROCINADOR`. |
-| Listas longas | Histórico, fila de entregas, cargas e rejeições são paginadas: `?pagina=0&tamanho=50` (pagina começa em 0; tamanho padrão 50, máximo 200; `pagina` negativa ou `tamanho` fora de 1 a 200 devolve 422). A resposta é `{"itens": [...], "pagina": 0, "tamanho": 50, "total": 137}`. As outras listas vêm inteiras, em array. |
+| Listas longas | Histórico, fila de entregas, cargas, rejeições, turnos do diagnóstico, documentos e trechos são paginadas: `?pagina=0&tamanho=50` (pagina começa em 0; tamanho padrão 50, máximo 200; `pagina` negativa ou `tamanho` fora de 1 a 200 devolve 422). A resposta é `{"itens": [...], "pagina": 0, "tamanho": 50, "total": 137}`. As outras listas vêm inteiras, em array. |
 | Filtros de data | `de=2026-10-01&ate=2026-10-31` (datas, inclusive, no horário de Brasília). Vale o que o formato `AAAA-MM-DD` escreve: do ano 0001 ao 9999. Data que não existe (`2026-02-30`), em outro formato ou com ano fora disso (`+300000-01-01`) dá 422 em `campos.de` ou `campos.ate` (`"Data inválida. Use o formato AAAA-MM-DD, por exemplo 2026-10-23."`). |
 
 **Quem pode chamar.** Cada rota abaixo diz um destes:
@@ -58,7 +58,7 @@ Todo erro, sem exceção, vem como `application/problem+json` no formato `Proble
 
 | Status | Título | Quando acontece |
 | --- | --- | --- |
-| 400 | Requisição inválida | Corpo vazio, que não é JSON ou com um campo do tipo errado (`"eventoId": "abc"` na rota 8, `"prazo": "amanhã"` na rota 15): o `detail` é `"O corpo da requisição está vazio ou não é um JSON válido."`. Também o filtro da URL com o tipo errado (`?pagina=abc`, `?eventoId=abc`, `?atrasadas=talvez`): o `detail` diz qual, por exemplo `"O parâmetro pagina precisa ser um número inteiro."` ou `"O parâmetro atrasadas precisa ser true ou false."`. |
+| 400 | Requisição inválida | Corpo vazio ou que não é JSON (JSON quebrado, ou que não é um objeto): o `detail` é `"O corpo da requisição está vazio ou não é um JSON válido."`. Também o filtro da URL com o tipo errado (`?pagina=abc`, `?eventoId=abc`, `?atrasadas=talvez`): o `detail` diz qual, por exemplo `"O parâmetro pagina precisa ser um número inteiro."` ou `"O parâmetro atrasadas precisa ser true ou false."`. |
 | 401 | Não autenticado | Sem sessão (ou sessão vencida), e-mail/senha incorretos no login, ou sessão de uma conta que perdeu o acesso (veja "Sessão e CSRF"). |
 | 403 | Acesso negado | Logado, mas o perfil não pode fazer a operação (rota só da RBS), a aba está fechada para a parceria (duas frases diferentes, veja "Aba"), ou falta o token CSRF. |
 | 404 | Não encontrado | O recurso **não existe ou é de outra parceria**. Os dois casos têm a mesma resposta, de propósito. Vale também para rota inexistente e para **id na URL que não é número** (`GET /api/parcerias/abc`): um id que não pode existir é um id que não existe, e o `detail` é a frase de "não encontrado" do recurso da rota (`"Não encontramos esta parceria."`, `"... esta entrega."`, `"... este arquivo."`, `"... esta pergunta."`, `"... este relatório."` (também o do Atlas), `"... esta carga."`, `"... esta aplicação."` (rota 38), `"... esta conversa."`, `"... esta solicitação."`, `"... este turno."` (rota 51), `"... este provedor."` (rota 53), `"... este documento."` (rotas 56 a 60), `"Não encontramos este e-mail nesta parceria."`), igual à de um id numérico sem registro. Nas rotas dos prazos e do Atlas da RBS (62 a 64, 67 e 68), cujo caminho é `/eventos/...` ou `/prazos/...`, a frase do id que não é número é a genérica, `"Não encontramos o que você pediu."`. |
@@ -67,12 +67,12 @@ Todo erro, sem exceção, vem como `application/problem+json` no formato `Proble
 | 409 | Conflito | Uma regra do negócio recusou: regra do banco (SQLSTATE da classe 23, com a frase do gatilho), transição de status que não é permitida, registro duplicado. |
 | 413 | Arquivo grande demais | Envio acima de 20 MB. |
 | 415 | Tipo de conteúdo não aceito | Extensão ou tipo de arquivo fora da lista permitida (a rota 54 aceita só `pdf` e `txt`), conteúdo que não bate com a extensão, ou `Content-Type` errado. |
-| 422 | Dados inválidos | Campo faltando ou fora do formato. Vem com `campos`. Campo do JSON com o tipo errado (um texto onde se espera um número ou uma data) não vem para cá: é 400. |
+| 422 | Dados inválidos | Campo faltando ou fora do formato. Vem com `campos`. O campo de um JSON válido que não vira o tipo esperado também vem para cá, com o caminho dele em `campos` (veja "Números no corpo e arquivo vazio"). |
 | 429 | Limite de uso atingido | Um limite de uso foi atingido. Hoje as rotas 44 (o teto diário de mensagens do Atlas, por parceria ou, na conversa da RBS, por pessoa, e o limite de mensagens por hora de cada usuário), 59 (aberturas de documento por hora) e 61 (buscas de teste por hora). O `detail` diz o que fazer no lugar e, nos limites por hora, quanto falta. |
 | 500 | Erro interno | Falha inesperada. O `detail` é sempre genérico. |
 | 503 | Serviço indisponível | Uma parte de que a rota depende está fora do ar. Hoje só a rota 44: mensagem de texto no Atlas sem o modelo de linguagem. O `detail` diz o que fazer no lugar. |
 
-**Ordem das conferências.** Quando uma chamada tem mais de um problema, a API responde, em geral, pelo primeiro destes: 403 de CSRF (só nas chamadas que alteram dados, sem o token; vem antes do 401: um `POST`, `PUT`, `PATCH` ou `DELETE` sem sessão e sem token responde 403, e com o token e sem sessão, 401) → 401 (sem sessão, ou conta que perdeu o acesso) → 403 por perfil (rota só da RBS) → 404 (não existe ou não é do usuário) → 403 por aba não liberada → 400 e 422 (formato do corpo, das partes ou dos filtros) → 409 (o estado atual não permite). O 403 por perfil vem antes da validação do corpo: nas rotas só da RBS, e no `PUT` das perguntas (rota 24, que confere também a parceria e a aba), um interceptor (`PermissaoAntesDoCorpo`) responde antes de o corpo ser lido, e quem não pode usar essas rotas nunca recebe um erro de campo. **Exceção:** o Spring valida o corpo com `@Valid` e os filtros com limite (`@Pattern`, `@Min`, `@Max`) antes de o service procurar o recurso, e nesses casos o 422 vem antes do 404 e do 403 de aba. Vale para o corpo das rotas 10, 12, 15, 19, 25, 34 e 57 (todas só da RBS: o 403 por perfil continua na frente) e para os filtros das rotas 14, 20, 27, 28, 31, 32, 35, 39, 40 e 58; a rota 41 faz o mesmo de propósito, porque confere o formato do corpo primeiro. Campo do JSON com o tipo errado não chega ao 422: é 400. O `HEAD` de uma rota `GET` segue as mesmas conferências, na mesma ordem (a resposta não traz corpo): a marca que faz `HEAD /api/historico?tamanho=999` recebe 403, como no `GET`, e não 422. Regras de campo que dependem do estado atual (por exemplo, a observação obrigatória da rota 19) vêm depois do 409; cada rota diz. A observação obrigatória do `PEDIR_AJUSTE` da rota 25 é a exceção: é conferida antes de procurar a pergunta, e o 422 dela vem antes do 404 e do 409. O **429** dos limites por hora das rotas 59 e 61 vem depois das permissões e da validação (o 403, o 404 e o 422 nunca gastam ficha).
+**Ordem das conferências.** Quando uma chamada tem mais de um problema, a API responde, em geral, pelo primeiro destes: 403 de CSRF (só nas chamadas que alteram dados, sem o token; vem antes do 401: um `POST`, `PUT`, `PATCH` ou `DELETE` sem sessão e sem token responde 403, e com o token e sem sessão, 401) → 401 (sem sessão, ou conta que perdeu o acesso) → 403 por perfil (rota só da RBS) → 404 (não existe ou não é do usuário) → 403 por aba não liberada → 400 e 422 (formato do corpo, das partes ou dos filtros) → 409 (o estado atual não permite). O 403 por perfil vem antes da validação do corpo: nas rotas só da RBS, e no `PUT` das perguntas (rota 24) e no `PUT` do signatário (rota 75), que conferem também a parceria e a aba, um interceptor (`PermissaoAntesDoCorpo`) responde antes de o corpo ser lido, e quem não pode usar essas rotas nunca recebe um erro de campo. **Exceção:** o Spring valida o corpo com `@Valid` e os filtros com limite (`@Pattern`, `@Min`, `@Max`, `@Size`) antes de o service procurar o recurso, e nesses casos o 422 vem antes do 404 e do 403 de aba. Vale para o corpo das rotas 10, 12, 15, 19, 25, 34 e 57 (todas só da RBS: o 403 por perfil continua na frente) e para os filtros das rotas 7, 14, 16, 20, 21, 22, 27, 28, 31, 32, 35, 39, 40, 50, 55 e 58; a rota 41 faz o mesmo de propósito, porque confere o formato do corpo primeiro. Campo do JSON com o tipo errado também é 422, nesse campo (veja "Números no corpo e arquivo vazio"); só o corpo vazio ou que não é JSON é 400. O `HEAD` de uma rota `GET` segue as mesmas conferências, na mesma ordem (a resposta não traz corpo): a marca que faz `HEAD /api/historico?tamanho=999` recebe 403, como no `GET`, e não 422. Regras de campo que dependem do estado atual (por exemplo, a observação obrigatória da rota 19) vêm depois do 409; cada rota diz. A observação obrigatória do `PEDIR_AJUSTE` da rota 25 é a exceção: é conferida antes de procurar a pergunta, e o 422 dela vem antes do 404 e do 409. O **429** dos limites por hora das rotas 59 e 61 vem depois das permissões e da validação (o 403, o 404 e o 422 nunca gastam ficha).
 
 ## Sessão e CSRF
 
@@ -97,13 +97,13 @@ Roteiro de uso:
 
 No `fetch`, use sempre `credentials: "same-origin"` (ou `"include"`, se front e API estiverem em origens diferentes). Se uma chamada voltar **401** no meio do uso, a sessão terminou (venceu, foi encerrada ou a conta perdeu o acesso): leve o usuário à tela de login.
 
-**A conta é conferida em toda chamada com sessão.** A cada requisição a API confere, no banco, se a conta ainda vale: ativa e, para o patrocinador, com pelo menos um vínculo com parceria. Se a RBS revogou o e-mail ou desativou a conta depois do login, **qualquer rota** responde 401 com `detail` `"Sua sessão terminou. Entre de novo."` e a sessão é encerrada na hora (o `JSESSIONID` deixa de valer). Não existe 404 nem 403 "de transição": o front só precisa tratar o 401 em um lugar. O login, o `GET /api/auth/csrf`, a ativação e o logout continuam funcionando com uma sessão assim, para a pessoa entrar de novo com outra conta.
+**A conta é conferida em toda chamada com sessão.** A cada requisição a API confere, no banco, se a conta ainda vale: ativa, com senha definida e, para o patrocinador, com pelo menos um vínculo com parceria. Se a RBS revogou o e-mail ou desativou a conta depois do login, **qualquer rota** responde 401 com `detail` `"Sua sessão terminou. Entre de novo."` e a sessão é encerrada na hora (o `JSESSIONID` deixa de valer). Não existe 404 nem 403 "de transição": o front só precisa tratar o 401 em um lugar. O login, o `GET /api/auth/csrf`, a ativação e o logout continuam funcionando com uma sessão assim, para a pessoa entrar de novo com outra conta.
 
 O login mantém o cookie `XSRF-TOKEN`; o **logout o apaga** (junto com o `JSESSIONID`). Depois de sair, chame `GET /api/auth/csrf` de novo antes do próximo POST.
 
 ## As rotas em uma tabela
 
-Todas prontas e testadas. A coluna "Etapa" mostra em que etapa do plano a rota entrou (3 a 7).
+Todas prontas e testadas. A coluna "Etapa" mostra em que etapa do plano a rota entrou: as etapas 3 a 7 da Entrega 2, os marcos do Atlas e, nas rotas 69 a 104, as fases do plano dos requisitos da RBS (F3, F5, F6, Cortesias, Pós-venda e "Requisitos RBS").
 
 | # | Rota | Quem chama | O que faz | Etapa |
 | --- | --- | --- | --- | --- |
@@ -175,10 +175,46 @@ Todas prontas e testadas. A coluna "Etapa" mostra em que etapa do plano a rota e
 | 66 | `POST /api/parcerias/{id}/dados-informados/{chave}/arquivo` | Patrocinador da parceria, ou Admin RBS | Envia o arquivo de um campo de arquivo do catálogo (a planilha da agência: xlsx, xls ou csv); devolve o valor vigente | Atlas M6 |
 | 67 | `POST /api/eventos/{eventoId}/atlas/conversas` | Admin RBS (com `atlas.rbs.ligado`) | Abre uma conversa da RBS com o Atlas nesta edição, sem parceria | Atlas M8 |
 | 68 | `GET /api/eventos/{eventoId}/atlas/conversas` | Admin RBS (com `atlas.rbs.ligado`) | As conversas de quem pede nesta edição | Atlas M8 |
+| 69 | `GET /api/parcerias/{id}/plano-comercial` | Patrocinador da parceria, ou Admin RBS | As versões do plano comercial do Perfil, a mais nova primeiro | Requisitos RBS |
+| 70 | `POST /api/parcerias/{id}/plano-comercial` | Admin RBS | Envia uma versão nova do plano comercial (arquivo avulso, não é entrega) | Requisitos RBS |
+| 71 | `GET /api/parcerias/{id}/espacos` | Patrocinador da parceria, ou Admin RBS | O formulário de ingressos, as solicitações de ingressos, o MIV e a logo, com as versões | Requisitos RBS |
+| 72 | `POST /api/parcerias/{id}/espacos/{papel}/arquivos` | Patrocinador da parceria, ou Admin RBS | Envia um arquivo para o espaço `DOCUMENTO_INGRESSOS` (uma solicitação nova), `MIV` ou `LOGO` (o primeiro envio cria o espaço) | Requisitos RBS |
+| 73 | `POST /api/parcerias/{id}/formulario-ingressos` | Admin RBS | Publica o formulário em branco da compra de ingressos (versionado como o plano) | Requisitos RBS |
+| 74 | `GET /api/parcerias/{id}/contrato` | Patrocinador da parceria, ou Admin RBS | O signatário (nome, cargo, e-mail e quando foi informado) e as versões do contrato assinado | F3 |
+| 75 | `PUT /api/parcerias/{id}/contrato/signatario` | Patrocinador da parceria, ou Admin RBS | Informa ou troca quem assina pelo patrocinador | F3 |
+| 76 | `POST /api/parcerias/{id}/contrato/arquivo` | Admin RBS | Envia o contrato assinado (PDF), uma nova versão a cada envio | F3 |
+| 77 | `GET /api/parcerias/{id}/credenciais` | Patrocinador da parceria, ou Admin RBS | As credenciais por setor, beneficiário e dia, o total por dia, o período de cadastro e o endereço do Open Staff da edição | F3 |
+| 78 | `PATCH /api/parcerias/{id}/credenciais` | Admin RBS | Grava a grade de credenciais (upsert por setor e beneficiário; 0 retira a linha) | F3 |
+| 79 | `PATCH /api/eventos/{id}/credenciamento` | Admin RBS | O endereço do Open Staff (só `https`) e o período de cadastro da edição | F3 |
+| 80 | `GET /api/parcerias/{id}/cortesias` | Patrocinador da parceria (aba `CORTESIAS` aberta), ou Admin RBS | A tabela "Destinação de ingressos": por setor e tipo/dia, a cota, as destinadas, as disponíveis, o acesso e o shuttle; as destinações e o prazo da edição | Cortesias |
+| 81 | `PATCH /api/parcerias/{id}/cortesias/cotas` | Admin RBS | Grava a cota por setor e dia, com o acesso e o shuttle | Cortesias |
+| 82 | `PATCH /api/eventos/{id}/cortesias` | Admin RBS | Define (ou tira) o prazo de destinação das cortesias da edição | Cortesias |
+| 83 | `POST /api/parcerias/{id}/cortesias/destinacoes` | Patrocinador da parceria (aba aberta), ou Admin RBS | Destina cortesias a um destinatário, dentro do disponível | Cortesias |
+| 84 | `PATCH /api/parcerias/{id}/cortesias/destinacoes/{destId}` | Patrocinador da parceria (aba aberta), ou Admin RBS | Muda o destinatário ou a quantidade de uma destinação | Cortesias |
+| 85 | `DELETE /api/parcerias/{id}/cortesias/destinacoes/{destId}` | Patrocinador da parceria (aba aberta), ou Admin RBS | Retira uma destinação (apaga de verdade) | Cortesias |
+| 86 | `POST /api/entregas/{id}/conteudos` | Patrocinador da parceria (aba da entrega aberta), ou Admin RBS | Envia um texto ou um link como versão nova da entrega (não há editar nem apagar) | F5 |
+| 87 | `GET /api/parcerias/{id}/links-de-midia` | Patrocinador da parceria (aba `MIDIA` aberta), ou Admin RBS | Os links de posts: os da veiculação carregada pela RBS e os enviados como conteúdo | F5 |
+| 88 | `GET /api/parcerias/{id}/comprovacao-mensal` | Patrocinador Master da parceria (aba `MIDIA` aberta), ou Admin RBS | A comprovação mensal da mídia: mês x tipo de mídia x unidade, com o exibido, o previsto do plano e os totais por mês e unidade | Requisitos RBS |
+| 89 | `GET /api/parcerias/{id}/comprovacao-mensal.xlsx` | Patrocinador Master da parceria (aba `MIDIA` aberta), ou Admin RBS | A mesma comprovação em planilha `.xlsx` (grava `DOWNLOAD`) | Requisitos RBS |
+| 90 | `GET /api/parcerias/{id}/comprovacao-mensal.csv` | Patrocinador Master da parceria (aba `MIDIA` aberta), ou Admin RBS | A mesma comprovação em CSV (grava `DOWNLOAD`) | Requisitos RBS |
+| 91 | `GET /api/eventos/{id}/comprovacao-mensal.xlsx` | Admin RBS | O lote da edição: um `.xlsx` com uma aba por parceria Master ativa (grava `DOWNLOAD`) | Requisitos RBS |
+| 92 | `GET /api/eventos/{id}/pesquisas` | Admin RBS | Lista as pesquisas da edição, a da ativação primeiro, com a contagem das perguntas e dos resultados | F6 |
+| 93 | `POST /api/eventos/{id}/pesquisas` | Admin RBS | Abre a pesquisa da ativação (ou uma geral) da edição; liga as perguntas que as marcas já tinham enviado | F6 |
+| 94 | `PATCH /api/pesquisas/{id}` | Admin RBS | Edita nome, metodologia, base de respondentes e nível de confiança | F6 |
+| 95 | `GET /api/pesquisa/perguntas` | Admin RBS | A fila das perguntas de todas as parcerias (padrão: as `ENVIADA`), paginada, com a marca e a edição | F6 |
+| 96 | `GET /api/parcerias/{id}/posvenda` | Patrocinador da parceria (só com o relatório disponibilizado), ou Admin RBS | O anexo "Pós-venda da edição" em vigor (texto, links, audiência por veículo) e os links dos posts da parceria | Pós-venda |
+| 97 | `POST /api/parcerias/{id}/posvenda` | Admin RBS | Publica uma versão do anexo da parceria (a nova substitui a anterior) | Pós-venda |
+| 98 | `GET /api/eventos/{id}/posvenda` | Admin RBS | As versões do anexo de todas as parcerias da edição, retiradas inclusive | Pós-venda |
+| 99 | `DELETE /api/posvenda/{id}` | Admin RBS | Retira uma versão do anexo (não apaga) | Pós-venda |
+| 100 | `GET /api/eventos/{id}/resultados` | Admin RBS | Os números da edição ("O festival em números") | Pós-venda |
+| 101 | `PUT /api/eventos/{id}/resultados` | Admin RBS | Informa um número da edição (upsert por indicador) | Pós-venda |
+| 102 | `PUT /api/parcerias/{id}/cota` | Admin RBS | Troca a cota da parceria depois do cadastro (fecha as abas que a cota nova não inclui) | Requisitos RBS (R6.d3) |
+| 103 | `PATCH /api/documentos/{id}/paginas-fora-do-atlas` | Admin RBS | Marca (ou desmarca) as páginas de um documento que ficam fora do índice do Atlas, enquanto ele aguarda aprovação | Requisitos RBS |
+| 104 | `GET /api/parcerias/{id}/cota/previa?para=COTA` | Admin RBS | A prévia do impacto de trocar a cota (não grava nada) | Requisitos RBS (R6.d3) |
 
-São 68 operações (método + caminho): 67 mapeadas nos controllers (`@GetMapping`, `@PostMapping`, `@PutMapping`, `@PatchMapping` ou `@DeleteMapping`) e o logout (rota 3), que vem do Spring Security (`SegurancaConfig`), sem controller. As quatro rotas de debug ficam de fora da numeração. A rota 5 (`ativar`) faz parte do contrato de autenticação, mas só é implementada na etapa 4. As rotas 37 em diante vieram com o Atlas: a coluna "Etapa" diz `Atlas 1` (plano de aplicações e dados informados), `Atlas 2` (conversa, cartão de perguntas e relatório), `Atlas M2` (o diagnóstico: rotas 49 a 53, veja "Diagnóstico do Atlas") `Atlas M3` (os documentos: rotas 54 a 58, veja "Os documentos do Atlas") `Atlas M4` (o visualizador, rotas 59 e 60, e a busca de teste, rota 61, veja "Busca nos documentos") `Atlas M5` (os prazos: rotas 62 a 64, veja "Os prazos do Atlas") `Atlas M6` (o relatório religado: a rota 65, veja "Descarte do relatório parado"; e a planilha da agência: a rota 66, veja "Dados informados pela marca") ou `Atlas M8` (o Atlas da RBS: as rotas 67 e 68, veja "O Atlas da RBS"). As rotas 54, 55, 57, 58, 61, 62, 63, 64, 67 e 68 são só do Admin RBS (o outro perfil recebe **403** antes de o corpo ser lido); a 56, a 59 e a 60 são das duas pontas, e a marca só vê o que o escopo dela permite; a 66 é da marca da parceria e da RBS. A 49 é do dono da conversa (a marca, ou a RBS na conversa do Atlas da RBS); as 50 a 53 são só do Admin RBS (o outro perfil recebe **403** antes de tudo). **As rotas 49 a 53 estão sempre mapeadas e respondem 404 com o diagnóstico desligado** (`atlas.diagnostico.ligado=false`, o padrão). Nas rotas 42, 43, 46 e 65 só o Admin Patrocinador chama (a RBS recebe **403** antes de o corpo ser lido); nas 44, 45 e 49 chama o dono da conversa: a marca na conversa da parceria dela e, com `atlas.rbs.ligado`, a RBS na conversa dela, a do Atlas da RBS (a RBS recebe **403** antes do corpo em qualquer outra conversa, e sempre com a propriedade desligada); nas 47 e 48 chamam a marca da parceria e a RBS. **O relatório do Atlas está ligado nos perfis `dev`, `demo` e `test` e desligado no padrão** (`atlas.relatorio.ligado=false`, `ATLAS_RELATORIO`). Desligado, as rotas **46, 47, 48 e 65 não existem (404)**, e as rotas 42 e 44 só aceitam conversa por texto (`atalho` e `modelo` dão 422): é o modo só chat, que continua existindo e testado. Veja "Modo só chat". O contrato do relatório, nas rotas 42 a 48 e 65, vale com `atlas.relatorio.ligado=true`.
+São 104 operações (método + caminho): 103 mapeadas nos controllers (`@GetMapping`, `@PostMapping`, `@PutMapping`, `@PatchMapping` ou `@DeleteMapping`) e o logout (rota 3), que vem do Spring Security (`SegurancaConfig`), sem controller. As quatro rotas de debug ficam de fora da numeração. A rota 5 (`ativar`) faz parte do contrato de autenticação, mas só é implementada na etapa 4. As rotas 37 em diante vieram com o Atlas: a coluna "Etapa" diz `Atlas 1` (plano de aplicações e dados informados), `Atlas 2` (conversa, cartão de perguntas e relatório), `Atlas M2` (o diagnóstico: rotas 49 a 53, veja "Diagnóstico do Atlas") `Atlas M3` (os documentos: rotas 54 a 58, veja "Os documentos do Atlas") `Atlas M4` (o visualizador, rotas 59 e 60, e a busca de teste, rota 61, veja "Busca nos documentos") `Atlas M5` (os prazos: rotas 62 a 64, veja "Os prazos do Atlas") `Atlas M6` (o relatório religado: a rota 65, veja "Descarte do relatório parado"; e a planilha da agência: a rota 66, veja "Dados informados pela marca") `Atlas M8` (o Atlas da RBS: as rotas 67 e 68, veja "O Atlas da RBS") ou `Requisitos RBS` (o plano comercial e os espaços de documento da marca: as rotas 69 a 73, veja "O plano comercial e os espaços de documento") e a comprovação mensal de mídia: as rotas 88 a 91, veja a rota 88). As rotas 88 a 90 são da marca de cota Master (com a aba `MIDIA` aberta) e da RBS; a 91 é só do Admin RBS (a marca recebe **403** antes de tudo). As rotas 70 e 73 são só do Admin RBS (o patrocinador recebe **403** antes de o corpo ser lido); a 69, a 71 e a 72 são das duas pontas. As rotas 54, 55, 57, 58, 61, 62, 63, 64, 67 e 68 são só do Admin RBS (o outro perfil recebe **403** antes de o corpo ser lido); a 56, a 59 e a 60 são das duas pontas, e a marca só vê o que o escopo dela permite; a 66 é da marca da parceria e da RBS. A 49 é do dono da conversa (a marca, ou a RBS na conversa do Atlas da RBS); as 50 a 53 são só do Admin RBS (o outro perfil recebe **403** antes de tudo). **As rotas 49 a 53 estão sempre mapeadas e respondem 404 com o diagnóstico desligado** (`atlas.diagnostico.ligado=false`, o padrão). Nas rotas 42, 43, 46 e 65 só o Admin Patrocinador chama (a RBS recebe **403** antes de o corpo ser lido); nas 44, 45 e 49 chama o dono da conversa: a marca na conversa da parceria dela e, com `atlas.rbs.ligado`, a RBS na conversa dela, a do Atlas da RBS (a RBS recebe **403** antes do corpo em qualquer outra conversa, e sempre com a propriedade desligada); nas 47 e 48 chamam a marca da parceria e a RBS. **O relatório do Atlas está ligado nos perfis `dev`, `demo` e `test` e desligado no padrão** (`atlas.relatorio.ligado=false`, `ATLAS_RELATORIO`). Desligado, as rotas **46, 47, 48 e 65 não existem (404)**, e as rotas 42 e 44 só aceitam conversa por texto (`atalho` e `modelo` dão 422): é o modo só chat, que continua existindo e testado. Veja "Modo só chat". O contrato do relatório, nas rotas 42 a 48 e 65, vale com `atlas.relatorio.ligado=true`.
 
-As rotas de debug do modelo de linguagem (`/api/debug/llm`) são temporárias, só existem no perfil `dev` (o perfil `demo`, da apresentação, as deixa em 404), são só da RBS e ficam fora desta tabela e da conta das 68: veja "Rotas de debug (temporárias)", no fim.
+As rotas de debug do modelo de linguagem (`/api/debug/llm`) são temporárias, só existem no perfil `dev` (o perfil `demo`, da apresentação, as deixa em 404), são só da RBS e ficam fora desta tabela e da conta das 104: veja "Rotas de debug (temporárias)", no fim.
 
 ## Objetos que se repetem
 
@@ -190,9 +226,10 @@ Estes formatos aparecem em várias rotas.
 
 **Evento**: `{ "id": 2, "nome": "Planeta Atlântida", "edicao": 2027 }`
 
-**Aba**: `{ "codigo": "PESQUISA", "nome": "Pesquisa da ativação", "ordem": 6, "liberada": true, "incluidaNaCota": true }`. Sempre as 7 abas, em ordem. Dois booleanos dizem coisas diferentes:
+**Aba**: `{ "codigo": "PESQUISA", "nome": "Pesquisa da ativação", "ordem": 6, "liberada": true, "incluidaNaCota": true, "visivel": true }`. Sempre as 7 abas, em ordem (rotas 2, 4, 8, 9 e 10). Três booleanos dizem coisas diferentes:
 
-- `liberada: false` = a aba está **fechada** para esta parceria (a RBS ainda não abriu, fechou ou escondeu do menu); o front mostra o cadeado. Uma aba só conta como liberada se estiver liberada **e** visível no banco.
+- `liberada: false` = a aba está **fechada** para esta parceria (a RBS ainda não abriu, fechou ou ocultou); o front mostra o cadeado. Uma aba só conta como liberada se estiver liberada **e** visível no banco.
+- `visivel: false` = a RBS **ocultou** a aba (estado "Oculta" do Perfil: `liberada: false` e `visivel: false`). A marca não vê o item no menu; quem chega pela URL ou pela API recebe o mesmo 403 de aba fechada, e o Atlas não a cita. `visivel: true` com `liberada: false` é a aba **fechada** (cadeado). Parceria nova nasce com as 7 abas visíveis.
 - `incluidaNaCota: false` = a aba **não faz parte da cota** da parceria (vem de `cota_tipo_aba`; hoje a Pesquisa só está na cota Master). Aba fora da cota nunca abre: a RBS não consegue liberá-la (rota 10 devolve 422). Use este campo para mostrar "fora da sua cota" em vez de "aguardando liberação".
 
 **As duas frases do 403 de aba.** Toda rota que o patrocinador não pode usar por causa de uma aba fechada responde **403** com o mesmo `title` ("Acesso negado") e uma de duas frases em `detail`, escolhida pelo `incluidaNaCota` da aba:
@@ -226,16 +263,30 @@ A regra é uma só em toda a API (lista de entregas, envio de arquivo, download 
 
 ```json
 {
-  "id": 31, "parceriaId": 2, "abaCodigo": "APLICACOES",
+  "id": 31, "parceriaId": 2, "abaCodigo": "APLICACOES", "papel": null,
   "titulo": "Logo final para aplicações no evento", "descricao": null,
   "status": "APROVADO", "prazo": "2026-10-20",
   "criadoEm": "2026-09-28T10:00:00-03:00", "atualizadoEm": "2026-10-18T10:15:00-03:00",
   "arquivos": [ /* Arquivo, da versão mais nova para a mais antiga */ ],
+  "versoes": [ /* Versao: arquivos, textos e links juntos, da versão mais nova para a mais antiga */ ],
   "ultimaObservacao": { "texto": "Enviar o logo em vetor.", "por": "Equipe B2B RBS", "em": "2026-10-16T09:42:00-03:00" }
 }
 ```
 
-Status da entrega: `NAO_INICIADO`, `AGUARDANDO_ENVIO`, `ENVIADO`, `EM_ANALISE`, `AJUSTE_SOLICITADO`, `APROVADO`, `NAO_APLICAVEL`. `ultimaObservacao` é o texto que a RBS escreveu na última mudança de status (ou `null`).
+**Versao** (um item de `versoes`, a lista única que o front mostra no histórico da entrega; vem nas rotas 14, 15, 19 e 71, e a resposta da rota 17 traz só o **Arquivo** criado):
+
+```json
+{ "tipo": "LINK", "id": 5, "versao": 4, "enviadoPor": { "id": 1, "nome": "Equipe B2B RBS", "perfil": "ADMIN_RBS" },
+  "enviadoEm": "2026-11-04T10:20:00-03:00", "observacao": null,
+  "nomeOriginal": null, "mimeType": null, "tamanhoBytes": null, "categoria": null,
+  "titulo": "Abertura", "texto": null, "url": "https://www.tiktok.com/@planetaatlantida/video/7300000000000000001", "host": "tiktok.com" }
+```
+
+`tipo` é `ARQUIVO`, `TEXTO` ou `LINK`. Os campos que não valem para o tipo vão `null`: `nomeOriginal`, `mimeType`, `tamanhoBytes` e `categoria` são do `ARQUIVO` (os mesmos do **Arquivo**; o `id` de um `ARQUIVO` é o da rota 18); `titulo`, `texto`, `url` e `host` são do `TEXTO` e do `LINK` (o `host` é o domínio do link, em minúsculas e sem o `www.`). A `versao` segue **uma sequência só por entrega**, contando arquivos, textos e links na ordem em que chegaram: um arquivo enviado depois de um texto continua a numeração. `arquivos` continua trazendo só os arquivos, com a versão deles na mesma sequência (podem faltar números, os dos textos e links). `texto` e `url` são dado, nunca instrução: o front os mostra como texto e o link só abre com `rel="noopener noreferrer"`.
+
+`papel` é `null` na entrega comum. Vale `DOCUMENTO_INGRESSOS` (uma solicitação de compra de ingressos, no Perfil), `MIV` ou `LOGO` (o espaço único da marca em Aplicações) quando a entrega é um espaço de documento (rotas 15 e 71 a 73). A rota 16 também traz `papel` em cada item da fila.
+
+Status da entrega: `NAO_INICIADO`, `AGUARDANDO_ENVIO`, `ENVIADO`, `EM_ANALISE`, `AJUSTE_SOLICITADO`, `APROVADO`, `NAO_APLICAVEL`. `ultimaObservacao` é o texto que a RBS escreveu na última mudança de status que tinha recado, porque uma mudança sem texto não apaga o recado anterior (ou `null` se nenhuma tinha).
 
 ---
 
@@ -257,16 +308,17 @@ Devolvido por `POST /api/auth/login` e `GET /api/auth/eu`:
     {
       "id": 2,
       "patrocinador": "Cliente Amarelo",
+      "vinculo": "MARCA",
       "cota": { "codigo": "MASTER", "nome": "Master" },
       "evento": { "id": 2, "nome": "Planeta Atlântida", "edicao": 2027 },
       "abas": [
-        { "codigo": "PERFIL", "nome": "Perfil do cliente", "ordem": 1, "liberada": true, "incluidaNaCota": true },
-        { "codigo": "APLICACOES", "nome": "Aplicações de marca no evento", "ordem": 2, "liberada": true, "incluidaNaCota": true },
-        { "codigo": "MIDIA", "nome": "Mídia e conteúdo", "ordem": 3, "liberada": true, "incluidaNaCota": true },
-        { "codigo": "CORTESIAS", "nome": "Cortesias", "ordem": 4, "liberada": true, "incluidaNaCota": true },
-        { "codigo": "CREDENCIAMENTO", "nome": "Credenciamento", "ordem": 5, "liberada": true, "incluidaNaCota": true },
-        { "codigo": "PESQUISA", "nome": "Pesquisa da ativação", "ordem": 6, "liberada": true, "incluidaNaCota": true },
-        { "codigo": "CONTRATO", "nome": "Contrato", "ordem": 7, "liberada": true, "incluidaNaCota": true }
+        { "codigo": "PERFIL", "nome": "Perfil do cliente", "ordem": 1, "liberada": true, "incluidaNaCota": true, "visivel": true },
+        { "codigo": "APLICACOES", "nome": "Aplicações de marca no evento", "ordem": 2, "liberada": true, "incluidaNaCota": true, "visivel": true },
+        { "codigo": "MIDIA", "nome": "Mídia e conteúdo", "ordem": 3, "liberada": true, "incluidaNaCota": true, "visivel": true },
+        { "codigo": "CORTESIAS", "nome": "Cortesias", "ordem": 4, "liberada": true, "incluidaNaCota": true, "visivel": true },
+        { "codigo": "CREDENCIAMENTO", "nome": "Credenciamento", "ordem": 5, "liberada": true, "incluidaNaCota": true, "visivel": true },
+        { "codigo": "PESQUISA", "nome": "Pesquisa da ativação", "ordem": 6, "liberada": true, "incluidaNaCota": true, "visivel": true },
+        { "codigo": "CONTRATO", "nome": "Contrato", "ordem": 7, "liberada": true, "incluidaNaCota": true, "visivel": true }
       ]
     }
   ]
@@ -276,6 +328,8 @@ Devolvido por `POST /api/auth/login` e `GET /api/auth/eu`:
 - `perfil` é `ADMIN_PATROCINADOR` ou `ADMIN_RBS`.
 - `parcerias` lista as parcerias a que o usuário tem vínculo, da edição mais nova para a mais antiga. Para o `ADMIN_RBS` vem **vazia**, porque a RBS enxerga todas (use `GET /api/parcerias`).
 - `abas` traz sempre as 7 abas, em ordem; `liberada` é `false` quando a aba está fechada para a parceria e `incluidaNaCota` é `false` quando a cota nem inclui a aba (por exemplo, a Pesquisa em cota que não é Master). Veja "Aba" em "Objetos que se repetem".
+- `vinculo` (em cada parceria) é como **quem está logado** entra naquela parceria: `MARCA` ou `AGENCIA`, lido de `parceria_usuario`. O front usa para dizer "Agência" no cabeçalho. Não existe para o `ADMIN_RBS` (sem parcerias).
+- `visivel` (em cada aba) é `false` quando a RBS ocultou a aba; a marca não mostra o item no menu.
 - A resposta **nunca** traz senha nem hash.
 
 ## 1. `GET /api/auth/csrf`  · etapa 3
@@ -386,12 +440,14 @@ Detalhes que o front pode contar com (etapa 4):
 
 ```json
 [
-  { "id": 2, "nome": "Planeta Atlântida", "edicao": 2027, "dataInicio": null, "dataFim": null, "local": "Saba, Atlântida (RS)" },
-  { "id": 1, "nome": "Planeta Atlântida", "edicao": 2026, "dataInicio": "2026-01-30", "dataFim": "2026-01-31", "local": "Saba, Atlântida (RS)" }
+  { "id": 2, "nome": "Planeta Atlântida", "edicao": 2027, "dataInicio": null, "dataFim": null, "local": "Saba, Atlântida (RS)",
+    "credenciamentoUrl": "https://example.com/", "credenciamentoInicio": "2027-01-05", "credenciamentoFim": "2027-01-20", "cortesiasPrazo": null },
+  { "id": 1, "nome": "Planeta Atlântida", "edicao": 2026, "dataInicio": "2026-01-30", "dataFim": "2026-01-31", "local": "Saba, Atlântida (RS)",
+    "credenciamentoUrl": null, "credenciamentoInicio": null, "credenciamentoFim": null, "cortesiasPrazo": null }
 ]
 ```
 
-As datas de 2027 ainda estão em branco (aguardando a RBS).
+As datas de 2027 ainda estão em branco (aguardando a RBS). `credenciamentoUrl`, `credenciamentoInicio` e `credenciamentoFim` são o endereço do Open Staff (sempre `https`) e o período de cadastro da edição, que a RBS informa pela rota 79; `null` até lá. `cortesiasPrazo` é o prazo de destinação das cortesias (rota 82).
 
 ## 7. `GET /api/parcerias`  · etapa 4
 
@@ -455,13 +511,13 @@ As datas de 2027 ainda estão em branco (aguardando a RBS).
 
 **Nome do patrocinador.** O nome novo é guardado **normalizado**: sem espaços nas pontas e com qualquer sequência de espaços, tabulações ou espaços não quebráveis juntada num espaço só (`"  Marca   Nova "` vira `"Marca Nova"`). Para saber se o nome já existe, a API compara o nome normalizado com os já cadastrados, também normalizados, sem diferença de maiúsculas: `"Cliente  Verde"` e `"  cliente  ROXO "` batem com `"Cliente Verde"` e `"Cliente Roxo"` e dão 409, em vez de criar um segundo patrocinador. A mesma regra vale no `nome` do `PATCH` da rota 10.
 
-Os e-mails são guardados em minúsculas e sem espaços nas pontas. A parceria nasce `ATIVA`, com as 7 abas abertas conforme a cota (o banco copia `cota_tipo_aba`). Tudo vai numa transação só: com qualquer erro, nada é gravado.
+Os e-mails são guardados em minúsculas e sem espaços nas pontas. A parceria nasce `ATIVA`, com as 7 abas visíveis, abertas só as da cota (a Pesquisa, só na Master; o banco lê `cota_tipo_aba` para dizer quais abas nascem liberadas). Tudo vai numa transação só: com qualquer erro, nada é gravado.
 
 **Erros**
 
 | Status | Quando |
 | --- | --- |
-| 400 | Corpo vazio, que não é JSON ou com um campo do tipo errado (`eventoId` ou `valorInvestimento` que não é número). |
+| 400 | Corpo vazio ou que não é JSON. Um campo do tipo errado (`eventoId` ou `valorInvestimento` que não é número) dá 422 nesse campo, como em "Números no corpo e arquivo vazio". |
 | 403 | Não é Admin RBS, ou faltou o token CSRF. |
 | 409 | O patrocinador já tem parceria nesta edição (`"Este patrocinador já tem parceria nesta edição do evento."`), ou já existe um patrocinador com este nome (`"Já existe um patrocinador com este nome. Escolha-o na lista \"Patrocinador\"."`; a comparação é feita sobre o nome normalizado, veja abaixo). |
 | 422 | Campo faltando, evento/cota/patrocinador que não existem, `id` e `nome` do patrocinador juntos (ou nenhum), valor sem base, valor negativo ou com dígitos demais, mais de 50 e-mails, e-mail inválido, repetido na lista ou de um usuário da RBS (`campos`; os da lista saem como `emails[0].email`). |
@@ -513,22 +569,22 @@ Os e-mails são guardados em minúsculas e sem espaços nas pontas. A parceria n
 }
 ```
 
-A cota e o evento **não mudam** por aqui (mudar a cota refaria as abas). `abas` liberam (`liberada: true`) ou fecham uma aba só nesta parceria; cada aba pode levar também `visivel`.
+O evento **não muda** por aqui, e a cota também não: a RBS troca a cota pela rota 102, depois de ver a prévia na 104. `abas` liberam (`liberada: true`) ou fecham uma aba só nesta parceria; cada aba pode levar também `visivel`. Os três estados do Perfil: **Liberada** (`liberada: true, visivel: true`), **Fechada** (`liberada: false, visivel: true`, a marca vê o cadeado) e **Oculta** (`liberada: false, visivel: false`, a marca não vê o item). A resposta (e as rotas 2, 4, 8 e 9) devolve `visivel` em cada aba. `valorInvestimento` e `baseValor` vão juntos (R6.d1) e o histórico guarda o antes e o depois de cada um; a marca recebe 403.
 
 **Só se libera aba que a cota inclui.** A aba precisa estar em `cota_tipo_aba` para a cota da parceria (`incluidaNaCota: true`; a decisão do projeto é a Pesquisa só para a cota Master). Mandar `liberada: true` para uma aba fora da cota, que está fechada, devolve **422** e nada do `PATCH` é gravado (todo o corpo é recusado, como em qualquer outro 422). O `detail` traz a frase, e `campos` a repete na chave `abas[i].liberada` (`i` = posição da aba na lista enviada):
 
 ```json
 {
   "type": "about:blank", "title": "Dados inválidos", "status": 422,
-  "detail": "A cota Subcota G não inclui a aba Pesquisa da ativação.",
+  "detail": "Esta cota não inclui a aba Pesquisa da ativação. Para dar acesso, troque a cota da parceria.",
   "instance": "/api/parcerias/3",
-  "campos": { "abas[0].liberada": "A cota Subcota G não inclui a aba Pesquisa da ativação." }
+  "campos": { "abas[0].liberada": "Esta cota não inclui a aba Pesquisa da ativação. Para dar acesso, troque a cota da parceria." }
 }
 ```
 
 Quando o 422 vem junto com outro erro de campo, o `detail` volta a ser `"Confira os campos destacados e tente de novo."` e a frase fica só em `campos`. **Fechar** (`liberada: false`) e ocultar (`visivel`) valem para qualquer aba. Repetir `liberada: true` numa aba que já estava aberta (dado de antes da regra) é um `PATCH` sem mudança e não dá erro; depois de fechada, ela não volta a abrir.
 
-**200**: o objeto da rota 9, já com as mudanças. **Erros:** 400 (corpo que não é JSON ou campo do tipo errado, como `valorInvestimento` que não é número), 403, 404, 409 (nome de patrocinador repetido), 422 (`valorInvestimento` sem `baseValor`, negativo ou com dígitos demais, `patrocinador.nome` em branco, aba que não existe, situação inválida, aba fora da cota que se tenta liberar).
+**200**: o objeto da rota 9, já com as mudanças. **Erros:** 400 (corpo que não é JSON), 403, 404, 409 (nome de patrocinador repetido), 422 (`valorInvestimento` sem `baseValor`, negativo ou com dígitos demais, `patrocinador.nome` em branco, aba que não existe, situação inválida, aba fora da cota que se tenta liberar).
 
 **Regras:** campo ausente ou `null` = não muda; texto em branco em `nomeProduto`, `patrocinador.segmento` limpa o campo. O `patrocinador.nome` é normalizado como na rota 8 (sem espaços nas pontas nem repetidos) e comparado com os outros patrocinadores sem diferença de maiúsculas ou de espaços; repetido dá 409 (`"Já existe um patrocinador com este nome."`). Mandar o nome atual com espaços a mais não muda nada e não grava histórico. O valor e a base vão sempre juntos (no estado final), e o valor segue a regra da rota 8 (não negativo, até 12 dígitos e 2 casas). `patrocinador.nome` em branco (só espaços) dá 422 em `campos["patrocinador.nome"]`. O nome e o segmento do `patrocinador` valem para a marca inteira, em todas as edições. Mandar uma aba no estado em que ela já está não grava nada.
 
@@ -600,7 +656,7 @@ Na chamada seguinte da pessoa revogada, **qualquer rota** (`GET /api/auth/eu`, `
 
 O patrocinador só enxerga as entregas das abas **liberadas** para a parceria dele. Pedir `aba=` de uma aba fechada devolve **403**: `"Esta aba não faz parte da cota da sua parceria."` se a cota não inclui a aba, ou `"Esta aba ainda não foi liberada para a sua parceria."` se a cota inclui e a RBS ainda não a abriu (veja "Aba"). Sem `aba=`, vêm as de todas as abas liberadas. A RBS vê todas.
 
-**200**: array de **Entrega** (formato em "Objetos que se repetem").
+**200**: array de **Entrega** (formato em "Objetos que se repetem"). Cada uma traz `arquivos` (só os arquivos) e `versoes` (arquivos, textos e links enviados pela rota 86, numa lista só).
 
 **Erros:** 403 (aba fechada), 404 (parceria), 422 (`aba` ou `status` com valor que não existe).
 
@@ -620,9 +676,11 @@ O patrocinador só enxerga as entregas das abas **liberadas** para a parceria de
 }
 ```
 
-`abaCodigo` e `titulo` (até 160 caracteres) são obrigatórios; `descricao` tem até 2000 caracteres e `prazo` é uma data (`AAAA-MM-DD`; um texto que não é data, como `"amanhã"`, dá 400, não 422). `status` inicial é opcional: `NAO_INICIADO`, `AGUARDANDO_ENVIO` (padrão) ou `NAO_APLICAVEL`.
+`papel` (opcional) cria um espaço de documento: `DOCUMENTO_INGRESSOS`, `MIV` ou `LOGO`. Ele fixa a aba (ingressos no `PERFIL`; MIV e logo em `APLICACOES`), e `abaCodigo` de outra aba dá 422 em `campos.papel` (`"Este espaço é da aba Perfil."`). MIV e logo existem **uma vez por parceria**: pedir de novo dá **409** (`"Esta parceria já tem o espaço MIV."`), e o primeiro envio da rota 72 aproveita a entrega criada aqui. O documento de ingressos não tem limite (cada solicitação é uma entrega). `papel` que não existe dá 422.
 
-**201**: a **Entrega** criada. **Erros:** 400 (corpo que não é JSON ou `prazo` que não é uma data), 403, 404 (parceria), 422 (`campos`). **Histórico:** `CRIACAO`.
+`abaCodigo` e `titulo` (até 160 caracteres) são obrigatórios; `descricao` tem até 2000 caracteres e `prazo` é uma data (`AAAA-MM-DD`; um texto que não é data, como `"amanhã"`, dá 422 em `campos.prazo`, com `"Valor inválido."`). `status` inicial é opcional: `NAO_INICIADO`, `AGUARDANDO_ENVIO` (padrão) ou `NAO_APLICAVEL`.
+
+**201**: a **Entrega** criada (com `papel`). **Erros:** 400 (corpo que não é JSON), 403, 404 (parceria), 409 (espaço MIV ou logo que já existe), 422 (`campos`). **Histórico:** `CRIACAO`.
 
 ## 16. `GET /api/entregas`  · etapa 5
 
@@ -632,7 +690,7 @@ O patrocinador só enxerga as entregas das abas **liberadas** para a parceria de
 
 **Ordem:** primeiro as que esperam análise (`ENVIADO` e `EM_ANALISE`), das que esperam há mais tempo para as mais novas (conta o último envio do patrocinador; sem envio, a última atualização); depois as demais, pelo prazo mais próximo (sem prazo por último).
 
-`atrasada` é verdadeira quando o prazo é anterior a hoje (no horário de Brasília) e a entrega ainda está pendente, isto é, não está `APROVADO` nem `NAO_APLICAVEL`. `ultimoEnvioEm` é a data do último arquivo enviado pelo patrocinador (`null` se ele ainda não enviou). Valor de filtro que não existe (`status`, `abaCodigo`) devolve 422.
+`atrasada` é verdadeira quando o prazo é anterior a hoje (no horário de Brasília) e a entrega ainda está pendente, isto é, não está `APROVADO` nem `NAO_APLICAVEL`. `ultimoEnvioEm` é a data do último arquivo, texto ou link enviado pelo patrocinador (`null` se ele ainda não enviou). Os itens da fila não trazem a lista de versões. Valor de filtro que não existe (`status`, `abaCodigo`) devolve 422.
 
 **200**: uma página.
 
@@ -642,7 +700,7 @@ O patrocinador só enxerga as entregas das abas **liberadas** para a parceria de
     {
       "id": 33,
       "parceria": { "id": 2, "patrocinador": "Cliente Amarelo", "cota": "MASTER" },
-      "abaCodigo": "MIDIA", "titulo": "Peça de 30\" para mídia própria",
+      "abaCodigo": "MIDIA", "papel": null, "titulo": "Peça de 30\" para mídia própria",
       "status": "EM_ANALISE", "prazo": null, "atrasada": false,
       "atualizadoEm": "2026-10-20T09:00:00-03:00", "ultimoEnvioEm": "2026-10-19T17:30:00-03:00"
     }
@@ -663,13 +721,17 @@ O patrocinador só enxerga as entregas das abas **liberadas** para a parceria de
 | `categoria` | Não | Tipo do material. Padrão: `MATERIAL_MARCA` (patrocinador) ou `OUTRO` (RBS). |
 | `observacao` | Não | Recado de até 500 caracteres. Fica ligado à versão (campo `observacao` do Arquivo) e também no histórico. |
 
+A `versao` do arquivo segue a sequência única da entrega, que também conta os textos e links enviados pela rota 86.
+
 **[UPLOAD] Regras do arquivo**
 
-- Extensões aceitas: `pdf`, `png`, `jpg`, `jpeg`, `docx`, `xlsx`, `pptx`, `csv`, `mp4`, `mp3`, `zip` (`mp4`, `mp3` e `zip` vieram da reunião com a RBS; a lista completa e o limite seguem em [PENDENTE] no fim deste arquivo). Sem diferenciar maiúsculas de minúsculas; só vale o que vem depois do último ponto.
-- O servidor também confere o **conteúdo**, pelos primeiros bytes (a "assinatura" do formato), e não só o nome: `pdf` começa com `%PDF`; `png` e `jpg`/`jpeg` com a assinatura de imagem; `zip`, `docx`, `xlsx` e `pptx` com `PK`; `mp4` tem `ftyp` logo no começo; `mp3` começa com `ID3` ou com um quadro de áudio; `csv` precisa ser texto UTF-8 válido, sem bytes nulos. Planilha que é texto mas não está em UTF-8 (o Excel grava em ANSI/Latin-1 quando não se escolhe "CSV UTF-8") recebe 415 com a instrução de salvar de novo como "CSV UTF-8 (separado por vírgulas)"; arquivo que não parece texto (um PNG renomeado para `.csv`) recebe 415 com a frase de arquivo renomeado. A exceção é a planilha da agência (rota 66), cujo `csv` aceita qualquer codificação sem byte nulo. Um executável renomeado para `.pdf` é recusado (415). SVG e executáveis ficam de fora, porque podem carregar script. O tipo (`mimeType`) gravado vem da extensão conferida, nunca do que o navegador informou.
+- Extensões aceitas: `pdf`, `png`, `jpg`, `jpeg`, `doc`, `docx`, `xls`, `xlsx`, `ppt`, `pptx`, `csv`, `mp4`, `mp3`, `zip` (`mp4`, `mp3` e `zip` vieram da reunião com a RBS; a lista completa e o limite seguem em [PENDENTE] no fim deste arquivo). Sem diferenciar maiúsculas de minúsculas; só vale o que vem depois do último ponto.
+- O servidor também confere o **conteúdo**, pelos primeiros bytes (a "assinatura" do formato), e não só o nome: `pdf` começa com `%PDF`; `png` e `jpg`/`jpeg` com a assinatura de imagem; `zip`, `docx`, `xlsx` e `pptx` com `PK`; `doc`, `xls` e `ppt` (Office antigo) com a assinatura OLE2 (`D0 CF 11 E0 A1 B1 1A E1`); `mp4` tem `ftyp` logo no começo; `mp3` começa com `ID3` ou com um quadro de áudio; `csv` precisa ser texto UTF-8 válido, sem bytes nulos. Planilha que é texto mas não está em UTF-8 (o Excel grava em ANSI/Latin-1 quando não se escolhe "CSV UTF-8") recebe 415 com a instrução de salvar de novo como "CSV UTF-8 (separado por vírgulas)"; arquivo que não parece texto (um PNG renomeado para `.csv`) recebe 415 com a frase de arquivo renomeado. A exceção é a planilha da agência (rota 66), cujo `csv` aceita qualquer codificação sem byte nulo. Um executável renomeado para `.pdf` é recusado (415). SVG e executáveis ficam de fora, porque podem carregar script. O tipo (`mimeType`) gravado vem da extensão conferida, nunca do que o navegador informou.
+- **[R4.1] Office antigo (`doc`, `xls`, `ppt`).** Além da assinatura OLE2, o servidor lê **só o diretório** do contêiner (os nomes dos storages e streams); não abre o documento, a planilha nem os slides, e não descompacta nada. A leitura tem limites (até 2.048 setores de tabela de alocação, 64 de DIFAT, 1.024 setores e 4.096 entradas de diretório) e não segue laço: um diretório circular, um cabeçalho que declara setores demais, um setor fora do arquivo ou um diretório gigante são recusados na hora, sem travar e sem alocar memória pelo que o cabeçalho diz. O que não é um contêiner íntegro (um PNG renomeado para `.doc`, por exemplo) recebe **415** com a frase de formato (`"O conteúdo do arquivo não é um DOC de verdade. Confira se o arquivo não foi renomeado."`, com `XLS` ou `PPT` no lugar). Projeto **VBA** no diretório (storage ou stream `_VBA_PROJECT_CUR`, `_VBA_PROJECT`, `VBA` ou `Macros`, sem diferenciar maiúsculas) recebe **415** com a frase de macro: `"Este arquivo contém macros (VBA), que o portal não aceita. Salve uma cópia sem macros e envie de novo."`. A mesma conferência vale na rota 66 (`xls`) e na rota 72 (`DOCUMENTO_INGRESSOS`); MIV e logo seguem só com PNG, JPG, PDF e ZIP.
+- **Risco registrado do Office antigo:** o **XLM** (macro "Excel 4.0", que vive em folha de planilha dentro do fluxo `Workbook`) e a macro do PowerPoint (dentro do fluxo `PowerPoint Document`) **não aparecem no diretório** e, por isso, **não são detectados**; a varredura do diretório só enxerga o VBA. O portal não executa nem converte arquivo nenhum. Os formatos novos de Office (`docx`, `xlsx`, `pptx`) continuam conferidos só pela assinatura `PK`.
 - O nome original perde o caminho da pasta e os caracteres de controle (`C:\fotos\logo.png` vira `logo.png`) e tem no máximo 255 caracteres.
 - O servidor guarda o arquivo com um nome que ele mesmo gera. O nome original só aparece na resposta e no download.
-- Categorias que o **patrocinador** pode usar: `MATERIAL_MARCA`, `MATERIAL_MIDIA`, `DOCUMENTO_INGRESSOS`, `CONTRATO`, `OUTRO`. As demais (`PLANO_COMERCIAL`, `RELATORIO_VEICULACAO`, `COMPROVACAO`, `PESQUISA`, `RELATORIO_PARCERIA`) são só da RBS. A categoria `DOCUMENTO` existe no banco, mas é só dos documentos do Atlas (rota 54): aqui ela é recusada como categoria inexistente (422), para as duas pontas.
+- Categorias que o **patrocinador** pode usar: `MATERIAL_MARCA`, `MATERIAL_MIDIA`, `DOCUMENTO_INGRESSOS`, `OUTRO`. As demais (`PLANO_COMERCIAL`, `RELATORIO_VEICULACAO`, `COMPROVACAO`, `PESQUISA`, `RELATORIO_PARCERIA`, `CONTRATO`) são só da RBS; o contrato assinado entra pela rota 76. A categoria `DOCUMENTO` existe no banco, mas é só dos documentos do Atlas (rota 54): aqui ela é recusada como categoria inexistente (422), para as duas pontas.
 - **`.txt` não vale aqui**: o texto simples é aceito só na rota 54. Um `.txt` enviado a esta rota recebe 415 com a lista de sempre.
 - Cada envio vira uma **nova versão** da entrega (1, 2, 3...). As versões antigas continuam disponíveis.
 - O patrocinador só envia em entrega de aba **liberada**, e só quando a entrega está em `NAO_INICIADO`, `AGUARDANDO_ENVIO`, `AJUSTE_SOLICITADO` ou `ENVIADO`. Depois de `EM_ANALISE`, `APROVADO` ou `NAO_APLICAVEL`, o envio é recusado com 409.
@@ -697,7 +759,7 @@ O patrocinador só enxerga as entregas das abas **liberadas** para a parceria de
 | 409 | A entrega não aceita mais envio no status em que está. |
 | 413 | Arquivo acima de 20 MB (20.971.520 bytes; exatamente 20 MB ainda passa). |
 | 415 | Extensão ou conteúdo fora da lista, ou requisição que não é `multipart/form-data`. |
-| 422 | Parte `arquivo` ausente ou vazia, categoria que não existe, ou observação com mais de 500 caracteres (`campos.arquivo`, `campos.categoria`, `campos.observacao`). A frase de `campos.categoria` lista só as categorias que o **perfil de quem enviou** pode usar: para a marca, `"Categoria inválida. Use uma destas: CONTRATO, DOCUMENTO_INGRESSOS, MATERIAL_MARCA, MATERIAL_MIDIA, OUTRO."`; para a RBS, as 10. |
+| 422 | Parte `arquivo` ausente ou vazia, categoria que não existe, ou observação com mais de 500 caracteres (`campos.arquivo`, `campos.categoria`, `campos.observacao`). A frase de `campos.categoria` lista só as categorias que o **perfil de quem enviou** pode usar: para a marca, `"Categoria inválida. Use uma destas: DOCUMENTO_INGRESSOS, MATERIAL_MARCA, MATERIAL_MIDIA, OUTRO."`; para a RBS, as 10. |
 
 **Histórico:** `ENVIO_ARQUIVO` no primeiro envio e `NOVA_VERSAO` nos seguintes, e `ALTERACAO_STATUS` quando o status muda.
 
@@ -719,7 +781,7 @@ O `filename*` leva o nome original em UTF-8 (com acentos e espaços codificados)
 
 **Arquivo de documento do Atlas.** O arquivo de qualquer documento (rota 54) **não sai por aqui para a marca**: ela recebe 404 (`"Não encontramos este arquivo."`) mesmo no anexo da própria parceria, e mesmo com o documento aprovado. Um documento de escopo `PARCERIA` é gravado com a parceria, e sem esta regra sairia por esta rota recusado, não aprovado ou revogado (como o D11, com CPFs). A marca só lê documento pelo visualizador (rotas 59 e 60, no M4), que confere o status e o escopo. A RBS baixa. O `DOWNLOAD` de um arquivo de documento fica na entidade `documento` (a marca não vê essas linhas).
 
-**Erros:** 403 (aba fechada); 404 (não existe, é de outra parceria, é de um documento do Atlas e quem pede é a marca, ou o arquivo sumiu do armazenamento). **Histórico:** `DOWNLOAD`, com quem baixou, de que IP e navegador.
+**Erros:** 403 (aba fechada); 404 (não existe, é de outra parceria, é de um documento do Atlas e quem pede é a marca, ou o arquivo sumiu do armazenamento: `"Este arquivo não está mais disponível. Avise a equipe da RBS."`). **Histórico:** `DOWNLOAD`, com quem baixou, de que IP e navegador.
 
 ## 19. `PATCH /api/entregas/{id}/status`  · etapa 5
 
@@ -747,7 +809,7 @@ O `filename*` leva o nome original em UTF-8 (com acentos e espaços codificados)
 | `APROVADO` | `EM_ANALISE` (reabrir, com observação) |
 | `NAO_APLICAVEL` | `NAO_INICIADO` |
 
-**200**: a **Entrega** com o novo status. **Erros:** 403; 404; 409 (`"Esta entrega não pode ir de EM_ANALISE para NAO_INICIADO."`); 422 (status que não existe, ou observação que falta).
+**200**: a **Entrega** com o novo status, com `arquivos` e `versoes`. **Erros:** 403; 404; 409 (`"Esta entrega não pode ir de EM_ANALISE para NAO_INICIADO."`); 422 (status que não existe, ou observação que falta).
 
 **Histórico:** `ALTERACAO_STATUS`, com o status anterior, o novo e a observação em `detalhe`.
 
@@ -966,7 +1028,7 @@ Linhas lidas = inseridas + duplicadas + rejeitadas. As rejeitadas, com o motivo,
 
 `linha`, nas rejeições, é o número da linha no arquivo (o cabeçalho é a linha 1; linha em branco conta no número, mas não é lida).
 
-**Erros:** 403 (conferido antes de qualquer outra coisa); 413 (acima de 20 MB); 415 (não é CSV: extensão diferente de `.csv`, texto que não está em UTF-8, com a instrução de salvar como CSV UTF-8, ou conteúdo que não parece texto, com a frase de arquivo renomeado); 422 com `campos`: parte ausente (`campos.arquivo` = `Envie a planilha CSV na parte "arquivo" do formulário.`), planilha de 0 bytes (`campos.arquivo` = `A planilha está vazia.`), parte inválida (`tipo`, `eventoId`, `escopo`), evento que não existe (`campos.eventoId`), edição sem a pesquisa pedida cadastrada (`campos.escopo`), e problemas do arquivo em `campos.arquivo`: cabeçalho com coluna faltando (lista as que faltam), texto maior que a coluna do banco (diz a linha e a coluna), CSV mal formado (aspas abertas) e planilha sem nenhuma linha de dados. Nesses casos nada é gravado.
+**Erros:** 403 (conferido antes de qualquer outra coisa); 413 (acima de 20 MB); 415 (não é CSV: extensão diferente de `.csv`, texto que não está em UTF-8, com a instrução de salvar como CSV UTF-8, ou conteúdo que não parece texto, com a frase de arquivo renomeado); 422 com `campos`: parte ausente (`campos.arquivo` = `Envie a planilha CSV na parte "arquivo" do formulário.`), planilha de 0 bytes (`campos.arquivo` = `A planilha está vazia.`), parte inválida (`tipo`, `eventoId`, `escopo`), evento que não existe (`campos.eventoId`), edição sem a pesquisa pedida aberta (`campos.escopo` = `A edição 2027 ainda não tem a pesquisa de ativação aberta. Abra-a em Pesquisa, no menu da RBS.`, ou "de festival (geral)"; a RBS abre pela rota 93), e problemas do arquivo em `campos.arquivo`: cabeçalho com coluna faltando (lista as que faltam), texto maior que a coluna do banco (diz a linha e a coluna), CSV mal formado (aspas abertas) e planilha sem nenhuma linha de dados. Nesses casos nada é gravado.
 
 Texto maior que a coluna derruba o arquivo inteiro (422), como nas outras cargas. No plano, os limites são: `patrocinador` 120, `categoria` 20, `bloco` 80, `veiculo` 80, `formato` 160, `espaco_programa` 160, `janela` 80, `tipo_midia` 20, `unidade` 15.
 
@@ -1057,7 +1119,7 @@ Texto maior que a coluna derruba o arquivo inteiro (422), como nas outras cargas
   },
   "aplicacoes": { "previstas": 12.00, "comprovadas": 10.00, "fotos": 14, "percentual": 83.3 },
   "entregas": { "total": 11, "aprovadas": 10, "pendentes": 1, "naoAplicaveis": 0, "percentualConcluido": 90.9 },
-  "cortesias": { "disponiveis": 120, "destinadas": 80, "percentual": 66.7 },
+  "cortesias": { "disponiveis": 120, "destinadas": 80, "percentual": 66.6 },
   "faltantes": [
     { "tipo": "ENTREGA_PENDENTE", "detalhe": "Peça de 30\" para mídia própria (em analise)" }
   ]
@@ -1066,7 +1128,7 @@ Texto maior que a coluna derruba o arquivo inteiro (422), como nas outras cargas
 
 - `percentual` é exibido ÷ previsto × 100 e **pode passar de 100** quando o exibido supera o previsto (no exemplo, o CPM: 5.200 de 5.000 é `104.0`; 907.300 de 460.000 é `197.2`). Todo percentual desta rota (mídia, aplicações, entregas, cortesias) é **cortado** na primeira casa decimal, não arredondado: 459.900 de 460.000 vale `99.9`, porque `100` diria "completo" quando faltam exibições, e 17 de 19 aplicações vale `89.4`. Seções sem plano comercial (`midia` sem linhas, por exemplo) vêm com listas vazias e `null` nos totais: `aplicacoes`, `entregas` e `cortesias` continuam como objeto, com todos os campos `null` quando a parceria não tem dado naquela seção.
 - **Aba fechada para o patrocinador.** A parte de cada aba só sai se a aba estiver aberta (liberada **e** visível) para a parceria dele. Com a aba `MIDIA` fechada, `midia` vem com as três listas **vazias** (`"porUnidade": []`, `"porVeiculo": []`, `"linhas": []`), a mesma forma de "sem plano comercial": o campo `midia` continua no corpo (nunca `null` nem omitido), mas não sai nenhuma linha de previsto nem de exibido. Com a aba `APLICACOES` fechada, `aplicacoes` vem com todos os campos `null`; com `CORTESIAS` fechada, `cortesias` vem com todos os campos `null`. `entregas` não pertence a uma aba só: o resumo do patrocinador conta só as entregas de aba aberta (as mesmas da rota 14) e, sem nenhuma, vem com todos os campos `null`. `faltantes` segue como está. A resposta é 200 (a rota não nega a consolidação inteira). A RBS recebe tudo, de aba aberta ou fechada.
-- `porUnidade` e `porVeiculo` vêm em ordem de unidade (`INSERCAO`, `CPM`, `APLICACAO`); `porVeiculo` e `linhas`, por veículo e formato. Linha do plano ainda sem exibição traz `exibido` 0 e `percentual` 0, nunca `null`.
+- `porUnidade` vem em ordem de unidade (`INSERCAO`, `CPM`, `APLICACAO`); `porVeiculo`, por veículo e, dentro de cada veículo, em ordem de unidade; `linhas`, por veículo e formato. Linha do plano ainda sem exibição traz `exibido` 0 e `percentual` 0, nunca `null`.
 - `faltantes` é o que impede ou enfraquece o relatório. Tipos: `MIDIA_SEM_EXIBICAO`, `MIDIA_ABAIXO_DO_PREVISTO`, `APLICACAO_SEM_COMPROVACAO`, `PESQUISA_SEM_PERGUNTAS`, `PERGUNTA_SEM_RESULTADO`, `ENTREGA_PENDENTE`, `PARCERIA_SEM_USUARIO`, `FESTIVAL_SEM_NUMEROS`.
 - Os `faltantes` vêm do mais para o menos importante, na ordem dos tipos listada acima. [PENDENTE] A RBS ainda não definiu uma ordem de importância; vale a ordem desta lista.
 - **Filtrado para o patrocinador:** ele vê só os faltantes que **ele** pode resolver (`ENTREGA_PENDENTE` e `PESQUISA_SEM_PERGUNTAS`). Os demais são de trabalho interno da RBS e só ela recebe. [PENDENTE] A RBS ainda vai confirmar se a marca vê o previsto x exibido antes de o relatório ser validado.
@@ -1102,7 +1164,7 @@ Como cada número é contado:
 - `parcerias.ativas`: parcerias com situação `ATIVA`; `semUsuario`: parcerias sem nenhum vínculo de usuário (o faltante `PARCERIA_SEM_USUARIO`).
 - `entregas.porStatus` traz sempre os 7 status, com 0 nos que não têm entrega. `esperandoAnalise` = `ENVIADO` + `EM_ANALISE` (a bola está com a RBS).
 - `entregas.atrasadas`: prazo já vencido (data de Brasília; vencer hoje ainda não é atraso) e entrega ainda com a marca: `NAO_INICIADO`, `AGUARDANDO_ENVIO` ou `AJUSTE_SOLICITADO`. Entrega já enviada não conta como atraso da marca. [PENDENTE] A RBS pode preferir outra definição.
-- `relatorios` conta a situação da **versão mais nova** de cada parceria da edição; `semRelatorio` é quem não tem versão. `marcaVe` é outra conta: quantas parcerias da edição têm **pelo menos uma versão disponibilizada**, mesmo que a mais nova seja rascunho ou validada (a marca continua vendo a disponibilizada anterior). Uma parceria com a v2 disponibilizada e a v3 em rascunho conta em `rascunho` e em `marcaVe`. O card "Relatórios disponibilizados" do Painel deve mostrar `marcaVe`.
+- `relatorios` conta a situação da **versão mais nova** de cada parceria da edição; `semRelatorio` é quem não tem versão. `marcaVe` é outra conta: quantas parcerias da edição têm **pelo menos uma versão disponibilizada**, mesmo que a mais nova seja rascunho ou validada (a marca continua vendo a disponibilizada anterior). Uma parceria com a v2 disponibilizada e a v3 em rascunho conta em `rascunho` e em `marcaVe`. O card "Relatórios com a marca" do Painel mostra `marcaVe`.
 - `ultimaCarga` é a carga mais nova **da edição, de veiculação ou de pesquisa**; o `tipo` usa o nome da API (`VEICULACAO`, e não `MIDIA` do banco). A carga do plano comercial (`PLANO`) não entra nessa conta: ela enche o previsto e não ocupa o card.
 - `eventoId` que não existe: 404; que não é número: 400. O patrocinador recebe 403 antes de qualquer conferência.
 
@@ -1131,7 +1193,7 @@ O relatório de uma parceria é uma **fotografia** dos números do momento em qu
     "relatorio": {
       "id": 1, "versao": 1, "status": "RASCUNHO", "geradoEm": "2026-11-22T10:00:00-03:00",
       "validadoEm": null, "disponibilizadoEm": null,
-      "indicadoresDisponiveis": 35, "indicadoresIndisponiveis": 2
+      "indicadoresDisponiveis": 15, "indicadoresIndisponiveis": 2
     },
     "disponibilizada": { "id": 1, "versao": 1, "disponibilizadoEm": "2026-11-23T11:00:00-03:00" },
     "faltantes": 4
@@ -1139,7 +1201,7 @@ O relatório de uma parceria é uma **fotografia** dos números do momento em qu
 ]
 ```
 
-`relatorio` é a **versão mais nova** (ou `null`, com `situacao: "SEM_RELATORIO"`). `indicadoresDisponiveis` e `indicadoresIndisponiveis` contam linhas de números do relatório (um indicador por recorte conta uma vez por recorte); o indicador do catálogo sem linha na versão conta como indisponível, como na leitura (rota 35). `faltantes` é quantos itens a consolidação (rota 29) ainda aponta para a parceria.
+`relatorio` é a **versão mais nova** (ou `null`, com `situacao: "SEM_RELATORIO"`). `indicadoresDisponiveis` e `indicadoresIndisponiveis` contam **indicadores** do catálogo, não linhas de recorte: é disponível o indicador com ao menos uma linha disponível; os outros, inclusive os sem linha na versão, são indisponíveis, como na leitura (rota 35). A soma dos dois é sempre o total do catálogo (17). `faltantes` é quantos itens a consolidação (rota 29) ainda aponta para a parceria.
 
 `disponibilizada` é a **versão que a marca vê**: a disponibilizada mais nova, com o `id`, a `versao` e quando ela foi liberada (`disponibilizadoEm`). Fica `null` se nenhuma versão foi disponibilizada. Ela pode ser mais antiga que `relatorio`: com a v3 em rascunho e a v2 disponibilizada, a linha traz `relatorio.versao` 3 (`situacao` `RASCUNHO`) e `disponibilizada.versao` 2, e a tela da RBS deve mostrar as duas ("Rascunho · v3, a marca vê a v2"). Quando a versão mais nova é a própria disponibilizada, `disponibilizada` repete o mesmo `id` e `versao`.
 
@@ -1181,7 +1243,7 @@ Gera uma **nova versão** do relatório da parceria, em `RASCUNHO`, copiando os 
 **Quem chama:** patrocinador da parceria, ou Admin RBS.
 
 - **Patrocinador:** recebe a versão **disponibilizada** mais nova. Se a RBS ainda não disponibilizou nenhuma, **404** (`"O relatório desta parceria ainda não está disponível."`).
-- **RBS:** recebe a versão mais nova de qualquer status, ou a pedida em `?versao=2` (404 se a versão não existe; 422 se for menor que 1).
+- **RBS:** recebe a versão mais nova de qualquer status, ou a pedida em `?versao=2` (404 sem `?versao` se a parceria ainda não tem relatório, `"Esta parceria ainda não tem relatório."`, e com `?versao` se a versão não existe, `"Não encontramos esta versão do relatório."`; 422 se for menor que 1).
 - `?versao=` não vale para o patrocinador: ele sempre recebe a disponibilizada mais nova.
 
 **200**
@@ -1448,7 +1510,7 @@ Envia o arquivo de um campo `ARQUIVO` do catálogo. Hoje existe um só: `ativaca
 
 **Quem chama:** patrocinador da parceria, ou Admin RBS (exige o token CSRF). Marca de outra parceria recebe **404**; a marca só envia com a aba do campo (`APLICACOES`) aberta (**403**, com as duas frases de "Aba"); a RBS envia sempre.
 
-**Corpo:** `multipart/form-data` com a parte `arquivo`. Só `.xlsx`, `.xls` e `.csv` (a extensão não diferencia maiúsculas), conferidos pelo conteúdo (`xlsx` é um zip, `xls` começa com a assinatura de 8 bytes do Excel antigo, `csv` é qualquer texto **sem byte nulo**, em qualquer codificação: o Latin-1 e o windows-1252 que o Excel em português grava por padrão entram, porque ninguém lê essa planilha no servidor; o UTF-16 tem byte nulo e é recusado. As outras rotas de CSV continuam exigindo UTF-8), até **20 MB** (o limite de todos os envios; exatamente 20 MB ainda passa). O servidor guarda o arquivo na parceria e na aba `APLICACOES`, na categoria `OUTRO`, com o nome original e o hash SHA-256, como no envio da rota 17.
+**Corpo:** `multipart/form-data` com a parte `arquivo`. Só `.xlsx`, `.xls` e `.csv` (a extensão não diferencia maiúsculas), conferidos pelo conteúdo (`xlsx` é um zip, `xls` começa com a assinatura de 8 bytes do Excel antigo e passa pela mesma conferência do diretório OLE2 da rota 17 (contêiner íntegro e sem macro VBA; o XLM não é detectável, como lá), `csv` é qualquer texto **sem byte nulo**, em qualquer codificação: o Latin-1 e o windows-1252 que o Excel em português grava por padrão entram, porque ninguém lê essa planilha no servidor; o UTF-16 tem byte nulo e é recusado. As outras rotas de CSV continuam exigindo UTF-8), até **20 MB** (o limite de todos os envios; exatamente 20 MB ainda passa). O servidor guarda o arquivo na parceria e na aba `APLICACOES`, na categoria `OUTRO`, com o nome original e o hash SHA-256, como no envio da rota 17.
 
 **201** (com `Location: /api/arquivos/{id}`): o **valor vigente** que acabou de entrar, no formato do `vigente` da rota 40.
 
@@ -1481,6 +1543,253 @@ Envia o arquivo de um campo `ARQUIVO` do catálogo. Hoje existe um só: `ativaca
 
 ---
 
+## 80. `GET /api/parcerias/{id}/cortesias`  · Cortesias
+
+**Quem chama:** patrocinador da parceria, ou Admin RBS. A marca de outra parceria recebe **404**; a marca só lê com a aba `CORTESIAS` aberta (**403** com as duas frases de "Aba" quando está fechada, oculta ou fora da cota); a RBS lê sempre.
+
+**200**
+
+```json
+{
+  "parceriaId": 4,
+  "cortesiasPrazo": "2027-01-15",
+  "prazoEncerrado": false,
+  "totais": { "cota": 8, "destinadas": 6, "disponiveis": 2, "percentual": 75.0 },
+  "cotas": [
+    {
+      "id": 11, "setor": "ARENA", "dia": "SABADO", "cota": 3, "destinadas": 2, "disponiveis": 1,
+      "acesso": "P6", "comShuttle": false,
+      "destinacoes": [
+        {
+          "id": 31, "destinatario": "Maria Souza", "quantidade": 1,
+          "registradoPor": { "id": 7, "nome": "Marketing Verde", "perfil": "ADMIN_PATROCINADOR" },
+          "registradoEm": "2026-11-03T16:00:00-03:00"
+        }
+      ]
+    }
+  ]
+}
+```
+
+- `setor` é `ARENA`, `CAMAROTE`, `PREMIUM` ou `LOUNGE`; `dia` é o tipo da cortesia: `PASSAPORTE` (contado à parte, nunca como sexta mais sábado), `SEXTA` ou `SABADO`. `cotas` traz só as células que a RBS cadastrou, na ordem Arena, Camarote, Premium, Lounge e, em cada setor, passaporte, sexta e sábado.
+- `cota` é o que a RBS deu; `destinadas` é a soma das destinações da célula; `disponiveis` é `cota - destinadas`. `acesso` é o portão (texto livre, até 80 caracteres, ou `null`) e `comShuttle` diz se a cota sai com shuttle.
+- `totais` vem da mesma visão da rota 29 (`cortesias`): `totais.cota` é o `disponiveis` dela (a soma das cotas) e `totais.destinadas` é o mesmo número; aqui `totais.disponiveis` é o que ainda se pode destinar, e `percentual` é `destinadas ÷ cota × 100` cortado na primeira casa. Sem nenhuma cota cadastrada, os quatro campos são `null` e `cotas` vem `[]`.
+- `cortesiasPrazo` é o prazo de destinação da edição (rota 82), ou `null` se não há prazo. `prazoEncerrado` é `true` quando o prazo existe e já passou (data de hoje em Brasília): a marca não destina mais, e a RBS ainda ajusta.
+- `destinacoes` traz, de cada destinação, o **nome do destinatário** (só um nome, em texto: não há e-mail, CPF nem telefone) e quem a registrou. É o único lugar em que o nome sai; veja "O nome do destinatário" abaixo.
+
+**Erros:** 401; 403 (aba fechada, só para a marca); 404 (parceria que não existe ou é de outra).
+
+## 81. `PATCH /api/parcerias/{id}/cortesias/cotas`  · Cortesias
+
+**Quem chama:** Admin RBS (exige o token CSRF). O patrocinador recebe **403** antes de o corpo ser lido, com qualquer parceria e qualquer corpo.
+
+**Corpo**
+
+```json
+{ "cotas": [ { "setor": "ARENA", "dia": "SABADO", "quantidade": 3, "comShuttle": false, "acesso": "Portão 6" } ] }
+```
+
+Cada célula é **a cota inteira** daquele setor e dia: cria a cota, muda a quantidade, o acesso ou o shuttle, ou, com `quantidade: 0` e nada destinado, retira a cota. `comShuttle` ausente vale `false`; `acesso` em branco vale `null`. De 1 a 24 células. **Tudo ou nada:** uma célula recusada não deixa gravar nenhuma. Mandar o que já está não grava nada (nem histórico).
+
+**200** com o mesmo corpo da rota 80.
+
+**422** (`campos` com a célula, por exemplo `cotas[0].quantidade`):
+
+| Campo | Frase |
+| --- | --- |
+| `cotas` | `Envie de 1 a 24 células de cota.` |
+| `cotas[i].setor` | `Setor inválido. Use ARENA, CAMAROTE, PREMIUM ou LOUNGE.` |
+| `cotas[i].dia` | `Tipo ou dia inválido. Use PASSAPORTE, SEXTA ou SABADO.` (e `Este setor e este tipo/dia aparecem mais de uma vez.` para o par repetido) |
+| `cotas[i].quantidade` | `Informe a quantidade.`, `A quantidade não pode ser negativa.`, `A quantidade máxima é 32.767.` ou `A cota de Arena · sábado não pode ficar abaixo das 2 cortesias já destinadas.` (inclui o `0` com destinação) |
+| `cotas[i].acesso` | `O acesso tem no máximo 80 caracteres.` ou `O texto tem caracteres que o portal não aceita.` (NUL, controle e inversores de direção) |
+
+**Outros erros:** 401; 403 (CSRF, ou perfil); 404 (parceria que não existe); **409** `Esta parceria está encerrada e não aceita alterações.` (parceria `ENCERRADA` recusa toda escrita desta aba). O prazo da edição não vale para a RBS.
+
+**Histórico:** uma linha por célula alterada, na entidade `cortesia_cota` (`CRIACAO`, `EDICAO` ou `EXCLUSAO`), com a quantidade anterior e a nova e o detalhe `Arena · sábado` (com ` (acesso ou shuttle)` quando só isso mudou).
+
+## 82. `PATCH /api/eventos/{id}/cortesias`  · Cortesias
+
+**Quem chama:** Admin RBS (exige o token CSRF). O patrocinador recebe **403** antes de o corpo ser lido.
+
+**Corpo:** `{ "cortesiasPrazo": "2027-01-15" }`, ou `{ "cortesiasPrazo": null }` para tirar o prazo (sem data, não há trava). O campo tem de vir: corpo sem ele dá 422, para um corpo vazio não apagar o prazo sem querer.
+
+**200:** `{ "eventoId": 2, "edicao": 2027, "cortesiasPrazo": "2027-01-15" }`.
+
+**Erros:** 401; 403; 404 (`Não encontramos esta edição.`); **422** com `campos.cortesiasPrazo` (`Informe a data (AAAA-MM-DD) ou null para tirar o prazo.` ou `Data inválida. Use o formato AAAA-MM-DD, por exemplo 2026-10-23.`). **Histórico:** `EDICAO` na entidade `evento`, com a data anterior e a nova.
+
+**O que o prazo faz.** Com `cortesiasPrazo` definido, depois dele (a partir do dia seguinte, no horário de Brasília) a **marca** recebe **422** nas rotas 83, 84 e 85, com a data na frase: `O prazo para destinar cortesias terminou em 15/01/2027. Peça o ajuste à RBS.` (também em `campos.cortesiasPrazo`). A RBS ainda destina, edita e retira. Ler (rota 80) continua valendo para os dois. Sem prazo definido, não há trava.
+
+## 83. `POST /api/parcerias/{id}/cortesias/destinacoes`  · Cortesias
+
+**Quem chama:** patrocinador da parceria (com a aba `CORTESIAS` aberta) ou Admin RBS, no lugar dele. Exige o token CSRF.
+
+**Corpo**
+
+```json
+{ "setor": "ARENA", "dia": "SABADO", "quantidade": 1, "destinatario": "Maria Souza" }
+```
+
+`quantidade` de 1 a 32.767; `destinatario` é um nome de 1 a 120 caracteres (espaços das pontas saem e os repetidos viram um). **A destinação só vale dentro do disponível:** a cota é travada (`FOR UPDATE`) antes de somar o que já foi destinado, então dois envios ao mesmo tempo não passam do `disponiveis`: um grava, o outro recebe 422.
+
+**201** com o mesmo corpo da rota 80, já com a destinação nova.
+
+**422** (`campos`; nunca repete o nome recebido):
+
+| Campo | Frase |
+| --- | --- |
+| `setor`, `dia` | as mesmas da rota 81 |
+| `quantidade` | `Informe a quantidade.`, `A quantidade não pode ser negativa.`, `A quantidade máxima é 32.767.`, `Destine pelo menos 1 cortesia.`; acima do disponível: `Só restam 1 cortesia de Arena · sábado para destinar.` (ou `Só restam N cortesias de ...`, ou `Não restam cortesias de Arena · sexta-feira para destinar.`). **Nada é gravado**: quem monta a tela mantém o que a pessoa digitou |
+| `destinatario` | `O destinatário é obrigatório.`, `O destinatário tem no máximo 120 caracteres.` ou `O texto tem caracteres que o portal não aceita.` (NUL, controle, inversores de direção) |
+| `setor` (cota que a parceria não tem) | `Esta parceria não tem cota de cortesia de Lounge · sexta-feira.` |
+| `cortesiasPrazo` | a frase do prazo vencido, só para a marca (veja a rota 82) |
+
+**Outros erros:** 401; 403 (CSRF, ou aba fechada: as duas frases de "Aba"); 404 (parceria de outra marca ou que não existe); **409** `Esta parceria está encerrada e não aceita alterações.`
+
+**Histórico:** `CRIACAO` na entidade `cortesia_destinacao`, com `1 cortesia` em `valorNovo` e `Arena · sábado` no detalhe. **Nunca o nome.**
+
+## 84. `PATCH /api/parcerias/{id}/cortesias/destinacoes/{destId}`  · Cortesias
+
+**Quem chama:** os mesmos da rota 83. A marca e a RBS editam **qualquer** destinação da parceria, também as que o outro criou.
+
+**Corpo:** `{ "destinatario": "Ana Souza", "quantidade": 2 }`. O que não vem não muda; é preciso mandar ao menos um (senão **422** `Informe o destinatário ou a quantidade.`). O setor e o dia não mudam: para trocar, retire e destine de novo. Aumentar a quantidade confere o disponível com a cota travada, descontando a própria destinação (os mesmos 422 da rota 83).
+
+**200** com o corpo da rota 80. **Erros:** os da rota 83, e **404** `Não encontramos esta destinação.` para o id de outra parceria (a consulta junta a cota e filtra pela parceria da URL: nunca 403) ou que não existe. **Histórico:** `EDICAO`, com a quantidade anterior e a nova e o detalhe `Arena · sábado (destinatário alterado)` quando o nome mudou; sem o nome.
+
+## 85. `DELETE /api/parcerias/{id}/cortesias/destinacoes/{destId}`  · Cortesias
+
+**Quem chama:** os mesmos da rota 83, em qualquer destinação da parceria. **204**, sem corpo. **Apagar é apagar de verdade:** a linha sai do banco com o nome. O histórico fica com a quantidade (`EXCLUSAO`, `valorAnterior` `1 cortesia`) e o setor, sem o nome. **Erros:** os da rota 83, e 404 para a destinação de outra parceria, que não existe ou já foi retirada.
+
+### O nome do destinatário (D8)
+
+O destinatário é só um nome, em texto. Ele fica na coluna `cortesia_destinacao.destinatario_nome` e sai em um lugar: a rota 80 (e as respostas das rotas 81, 83 e 84, que devolvem o mesmo corpo). **Fora de log** (nem o corpo lido nem a resposta escrita: os `toString` dos objetos omitem o nome), **fora do histórico, do Atlas** (`consultar_cota` só soma `destinadas` e `disponiveis`, e a fonte do turno diz "Destinadas: 3. Disponíveis para destinar: 0."), **do JEV e do relatório**. Não há índice nem regra única sobre o nome: a repetição é permitida (duas pessoas se chamam Maria). O `DadoPessoalForaDoLogTest` grava um nome canário e varre todas as colunas de texto do banco, os eventos de log e o JSON da ferramenta.
+
+## 86. `POST /api/entregas/{id}/conteudos`  · F5
+
+**Quem chama:** patrocinador da parceria da entrega ou Admin RBS (exige o token CSRF). As regras de quem pode enviar são as da rota 17: a marca só com a aba da entrega aberta (liberada e visível) e só enquanto a entrega espera material (`NAO_INICIADO`, `AGUARDANDO_ENVIO`, `AJUSTE_SOLICITADO` ou `ENVIADO`); a RBS envia em qualquer status.
+
+**Corpo** (JSON)
+
+```json
+{ "tipo": "TEXTO", "texto": "Briefing completo...", "titulo": "Briefing", "observacao": "Versão para análise." }
+{ "tipo": "LINK", "url": "https://www.tiktok.com/@planetaatlantida/video/7300000000000000001" }
+```
+
+- `tipo` (obrigatório): `TEXTO` ou `LINK`.
+- `texto` (só no `TEXTO`): de 1 a 5.000 caracteres (conta caractere, não unidade UTF-16: um emoji vale 1), normalizado em NFC e sem os espaços das pontas. Aceita quebra de linha e tab. Vazio, só espaços ou com caractere de controle (**NUL** incluso) dá 422.
+- `url` (só no `LINK`): `http` ou `https` com host, até 500 caracteres, **sem** `usuario@` antes do host, sem espaço, sem caractere de controle e sem caractere bidi. O `@` depois do host vale (`https://www.tiktok.com/@usuario/video/1`). `javascript:`, `data:`, `ftp:`, endereço sem host e endereço com usuário e senha dão 422. A regra é a do CHECK `ck_conteudo_url` do banco, conferida antes de gravar.
+- `titulo` (opcional, até 160 caracteres) e `observacao` (opcional, até 500), sem caractere de controle.
+- Mandar `url` junto com `texto`, ou o campo do outro tipo, dá 422.
+
+**Cada envio é uma versão nova da entrega**, como um arquivo: a numeração é a mesma sequência dos arquivos (veja **Versao**), com autor, data e histórico. O envio da marca põe a entrega em `ENVIADO`; o da RBS é o retorno dela e não muda o status. **Não há `PATCH` nem `DELETE` de conteúdo** (R5.3.c): corrigir é enviar de novo, e o banco recusa `UPDATE` e `DELETE` na tabela. O texto e o link ficam só na `entrega_conteudo`: o texto não vai ao Atlas, ao histórico nem ao relatório.
+
+**201:**
+
+```json
+{ "id": 7, "entregaId": 31, "tipo": "TEXTO", "versao": 3, "titulo": "Briefing", "texto": "Briefing completo...", "url": null, "host": null,
+  "observacao": "Versão para análise.",
+  "enviadoPor": { "id": 3, "nome": "Marketing Amarelo", "perfil": "ADMIN_PATROCINADOR" },
+  "enviadoEm": "2026-11-04T10:20:00-03:00", "statusDaEntrega": "ENVIADO" }
+```
+
+**Erros**, nesta ordem: 401; 404 (entrega que não existe ou de outra parceria, com a mesma frase); 403 (aba fechada ou oculta para a marca); 409 (parceria `ENCERRADA`: `"Esta parceria está encerrada e não aceita novos envios."`); 422 (`campos.tipo`, `campos.texto`, `campos.url`, `campos.titulo`, `campos.observacao`); 409 (status que não aceita envio da marca). **Histórico:** `ENVIO_ARQUIVO` (versão 1) ou `NOVA_VERSAO` na entidade `entrega`, com `valor_novo` `"Texto (versão N)"` ou `"Link: <domínio> (versão N)"` (nunca o texto), e `ALTERACAO_STATUS` quando o status muda.
+
+## 87. `GET /api/parcerias/{id}/links-de-midia`  · F5
+
+**Quem chama:** patrocinador da parceria, com a aba `MIDIA` aberta, ou Admin RBS. **Corpo:** nenhum. Alimenta o cartão "Posts e links" da Mídia: junta os links da veiculação (a coluna `link` do CSV que a RBS carrega, rota 26) e os links enviados como conteúdo (rota 86) nas entregas da aba Mídia, do mais recente para o mais antigo. Só leitura.
+
+**200:**
+
+```json
+{ "parceriaId": 2, "itens": [
+  { "origem": "ENVIO", "url": "https://www.tiktok.com/@planetaatlantida/video/7300000000000000001", "host": "tiktok.com",
+    "data": "2026-11-04T10:20:00-03:00", "veiculo": null, "formato": null, "espacoPrograma": null,
+    "entregaId": 31, "entregaTitulo": "Post de abertura", "titulo": "Abertura", "observacao": null,
+    "enviadoPor": { "id": 1, "nome": "Equipe B2B RBS", "perfil": "ADMIN_RBS" } },
+  { "origem": "CARGA", "url": "https://www.instagram.com/p/AMOSTRA000011/", "host": "instagram.com",
+    "data": "2027-01-15T20:30:00-03:00", "veiculo": "Rede Atlântida RS", "formato": "Instagram", "espacoPrograma": "Feed",
+    "entregaId": null, "entregaTitulo": null, "titulo": null, "observacao": null, "enviadoPor": null }
+] }
+```
+
+`origem` é `CARGA` (rótulo "carga da RBS": `veiculo`, `formato` e `espacoPrograma` vêm do plano e `data` é a data de exibição) ou `ENVIO` (`entregaId`, `entregaTitulo`, `titulo`, `observacao` e `enviadoPor` vêm do envio e `data` é a do envio). **Só sai `http(s)` válido** (a mesma regra da rota 86): um link inválido que esteja no banco, como o `javascript:` de uma linha de CSV, não é devolvido. Devolve no máximo os 1.000 mais recentes de cada origem. Os links enviados em entregas de outras abas não entram.
+
+**Erros:** 401; 403 (aba `MIDIA` fechada ou oculta para a marca); 404 (parceria de outra marca).
+
+
+# Abertura da pesquisa da edição (rotas 92 a 95 · F6)
+
+Até aqui a pesquisa da ativação de uma edição só nascia na amostra. Estas quatro rotas deixam a RBS abri-la pela tela (`/rbs/pesquisa`), editá-la e acompanhar as perguntas que as marcas enviaram. **Todas são só do Admin RBS** (exigem o token CSRF quando escrevem): o patrocinador recebe **403** antes de o corpo ser lido, e sem sessão a resposta é 401. Não há migração: o banco já tinha a tabela `pesquisa` e, desde a V16, o índice `uq_pesquisa_ativacao`, que garante no máximo **uma pesquisa `ATIVACAO` por edição** (a `GERAL` pode ter várias). Hoje a pesquisa não guarda um prazo para as perguntas (não há coluna); isso depende de uma migração futura.
+
+**O objeto Pesquisa da edição** (itens das rotas 92 a 94):
+
+```json
+{
+  "id": 2, "eventoId": 2, "nome": "Pesquisa nos espaços de ativação 2027", "escopo": "ATIVACAO",
+  "metodologia": "Entrevistas nos espaços da marca (Arena e Camarote)", "baseRespondentes": 412, "nivelConfianca": 95.00,
+  "perguntas": { "rascunho": 0, "enviadas": 1, "aprovadas": 2 },
+  "resultados": 31,
+  "perguntasLigadas": null
+}
+```
+
+`perguntas` conta as perguntas ligadas à pesquisa por estado; `resultados` conta as linhas de resultado já carregadas (rota 26). `perguntasLigadas` só vem preenchido na rota 93.
+
+## 92. `GET /api/eventos/{id}/pesquisas`  · F6
+
+**Quem chama:** Admin RBS. **200:** a lista (inteira, sem página) das pesquisas da edição, a da ativação primeiro e depois as gerais, por id. Edição sem pesquisa devolve `[]`. **Erros:** 401; 403; 404 (`Não encontramos esta edição do festival.`).
+
+## 93. `POST /api/eventos/{id}/pesquisas`  · F6
+
+**Quem chama:** Admin RBS. **Corpo:**
+
+```json
+{ "nome": "Pesquisa nos espaços de ativação 2027", "escopo": "ATIVACAO", "metodologia": "Entrevistas nos espaços da marca",
+  "baseRespondentes": 412, "nivelConfianca": 95 }
+```
+
+| Campo | Regra |
+| --- | --- |
+| `nome` | Obrigatório, de 3 a 120 caracteres, sem NUL nem outro caractere de controle. Único na edição. |
+| `escopo` | `ATIVACAO` (o padrão, se faltar) ou `GERAL`. |
+| `metodologia` | Opcional, até 160 caracteres. |
+| `baseRespondentes` | Opcional, inteiro maior que 0. |
+| `nivelConfianca` | Opcional, entre 0 e 100, sem incluir os extremos, com até 2 casas decimais. |
+
+**201** (com `Location`): o objeto Pesquisa da edição, com `perguntasLigadas`. Abrir a pesquisa `ATIVACAO` **liga**, na mesma transação, as perguntas que as marcas da edição já tinham enviado e estavam sem pesquisa (a V1 deixa `pesquisa_id` nulo até a RBS abri-la); `perguntasLigadas` diz quantas. A pesquisa `GERAL` não liga nada (`perguntasLigadas: 0`). A partir daí a aba Pesquisa da Master (rota 23) mostra a pesquisa, e a carga de resultados (rota 26) deixa de dar 422 por "pesquisa não aberta".
+
+**Erros, nesta ordem:** 401; 403; 404 (edição); **422** com todos os erros de campo de uma vez (`campos.nome`, `campos.escopo`, `campos.metodologia`, `campos.baseRespondentes`, `campos.nivelConfianca`); **409** `A edição 2027 já tem a pesquisa de ativação aberta ("Nome"). Edite essa pesquisa em vez de abrir outra.` (segunda `ATIVACAO` na mesma edição; o service confere com a linha da edição travada e o índice `uq_pesquisa_ativacao` segura por baixo, então dois pedidos ao mesmo tempo dão um 201 e os outros 409) ou `Já existe uma pesquisa com este nome na edição 2027. Escolha outro nome.`
+
+**Histórico:** `CRIACAO` na entidade `pesquisa`, **sem parceria** (a marca não vê essa linha na rota 20), com o escopo e a edição em `detalhe`.
+
+## 94. `PATCH /api/pesquisas/{id}`  · F6
+
+**Quem chama:** Admin RBS. **Corpo parcial** (`nome`, `metodologia`, `baseRespondentes`, `nivelConfianca`, com as mesmas regras da rota 93): o que vier nulo ou faltar não muda; `metodologia` só com espaços limpa o campo. O escopo e a edição **não mudam** (um `escopo` no corpo é ignorado).
+
+**200:** o objeto Pesquisa da edição. **Erros:** 401; 403; 404 (`Não encontramos esta pesquisa.`); 422 (corpo sem nenhum campo, em `campos.corpo`, ou campo inválido); 409 (`Já existe uma pesquisa com este nome nesta edição. Escolha outro nome.`). **Histórico:** `EDICAO` na entidade `pesquisa`, uma linha por campo que mudou (`detalhe` com o nome do campo, mais o valor anterior e o novo).
+
+## 95. `GET /api/pesquisa/perguntas`  · F6
+
+**Quem chama:** Admin RBS. A fila das perguntas de **todas as parcerias**, para a RBS decidir sem abrir a aba Pesquisa de cada uma. **Parâmetros:** `status` (`ENVIADA`, o padrão, `RASCUNHO` ou `APROVADA`; outro valor dá 422 em `campos.status`), `eventoId` (filtra a edição; inexistente dá 404), `pagina` (começa em 0) e `tamanho` (1 a 200, padrão 50), como a rota 16.
+
+**200:**
+
+```json
+{
+  "itens": [
+    {
+      "id": 7, "parceriaId": 2, "patrocinador": "Cliente Amarelo", "eventoId": 2, "edicao": 2027, "pesquisaId": 2,
+      "ordem": 1, "texto": "Você visitou o espaço da marca na Arena ou no Camarote?", "status": "ENVIADA",
+      "enviadaPor": { "id": 3, "nome": "Marketing Amarelo", "perfil": "ADMIN_PATROCINADOR" },
+      "enviadaEm": "2026-11-20T16:00:00-03:00"
+    }
+  ],
+  "pagina": 0, "tamanho": 50, "total": 1
+}
+```
+
+A mais antiga primeiro. `pesquisaId` é `null` enquanto a pesquisa da edição não foi aberta. **A decisão (aprovar ou pedir ajuste) continua na rota 25**, com o `id` do item; a pergunta aprovada sai da fila.
+
+
 # O Atlas: conversa, cartão de perguntas e relatório (Atlas, parte 2)
 
 O Atlas monta o relatório de **Ativação no evento** da marca. Ele monta a estrutura e redige, mas **nunca escreve um número**: todo número do relatório vem do portal (a consolidação e o plano de aplicações), de um dado informado com autor e data (rotas 40 e 41) ou de uma conta registrada, e cada um aparece em "Fontes e cálculos". O relatório é um **documento de trabalho da marca**, com o selo "Não validado pela RBS": o relatório oficial (rotas 31 a 36) não muda.
@@ -1497,7 +1806,7 @@ O relatório sai de dois jeitos, pelas mesmas rotas. Pelo **botão "Montar relat
 
 Com `atlas.relatorio.ligado=false`:
 
-- **Ferramentas.** O modelo recebe só `parceria_consultar` (a consulta de leitura de sempre, com os marcadores `{{ref}}`, a mesma checagem do texto, o filtro, o resumo do raciocínio e o teto diário) `buscar_documentos` (veja "Busca nos documentos"), `contar_dias` e `calcular` (veja "Contas e datas"), `pedido_de_relatorio` e `gerar_modelo` (veja "Respostas diretas"). Se ele chamar uma `relatorio_*` mesmo assim (uma conversa antiga pode induzi-lo), a resposta da ferramenta é um erro (`{"erro": "Não existe a ferramenta relatorio_iniciar. Use só as ferramentas oferecidas."}`) e nada é criado.
+- **Ferramentas.** O modelo recebe só `parceria_consultar` (a consulta de leitura de sempre, com os marcadores `{{ref}}`, a mesma checagem do texto, o filtro, o resumo do raciocínio e o teto diário), `buscar_documentos` (veja "Busca nos documentos"), `listar_entregas`, `consultar_cota` e `consultar_prazos` (veja "Consulta ao portal"), `contar_dias` e `calcular` (veja "Contas e datas"), `pedido_de_relatorio` e `gerar_modelo` (veja "Respostas diretas"). Se ele chamar uma `relatorio_*` mesmo assim (uma conversa antiga pode induzi-lo), a resposta da ferramenta é um erro (`{"erro": "Não existe a ferramenta relatorio_iniciar. Use só as ferramentas oferecidas."}`) e nada é criado.
 - **Prompt.** O modelo recebe `atlas/prompts/chat.txt` (a base dos dois modos: regras de fontes, registros, contas, números, marcadores, isolamento e de tratar o retorno das ferramentas como dado) com a linha `@PEDIDOS_DE_RELATORIO@` trocada pelo conteúdo de `relatorio-desligado.txt`: todo pedido de relatório vai para `pedido_de_relatorio`, e a conversa pode ter mensagens antigas sobre um relatório. Sem o fluxo do relatório e sem oferecer montar relatório. Fica abaixo de 10.000 caracteres. **Com a propriedade ligada**, a linha é trocada por `relatorio-ligado.txt` (dois caminhos: o relatório da ativação monta aqui, com `relatorio_iniciar` e o modelo `ATIVACAO_EVENTO`; qualquer outro relatório, `pedido_de_relatorio`; modelo em branco, `gerar_modelo`) e `relatorio.txt` entra no fim: o fluxo do relatório (iniciar, cartão, `relatorio_editar`, `relatorio_finalizar`) e a regra do número do texto dele. No passo do cartão, o prompt manda o modelo pedir os números com uma mensagem curta, sem número, link nem chave, e, se a mesma mensagem da pessoa perguntar outra coisa ("monta o relatório e me diz até quando informo os geradores"), buscar antes, sem pedir o cartão na mesma rodada, e responder essa parte por escrito, com a citação, na mesma resposta em que pede o cartão: o texto dessa ida passa pela mesma checagem do chat e sai antes do `cartao` nos itens do turno. Como o cartão pausa o turno, um texto escrito na mesma rodada de uma busca, antes de o modelo ver o resultado dela, não tem fonte para citar e é descartado. As duas regras de número ficam separadas: **no texto do chat**, o número de documento vai copiado da fonte, com a citação na mesma frase, e o dado da parceria vai pelo marcador `{{ref}}`; **no texto do relatório** (`relatorio_editar`), nenhum número nem data, nem por extenso, só o marcador. Fica abaixo de 13.000 caracteres. O servidor confere o texto do chat da mesma forma nos dois modos (a checagem de fontes e números não depende do modo).
 - **Rota 42.** Sem corpo ou `{}` abre a conversa vazia. Com `atalho` ou `modelo`: **422** com `campos.atalho` = `"O relatório não está disponível nesta versão."` (depois das conferências de 403 e 404; nenhuma conversa é aberta).
 - **Rota 44.** Só `{"texto": "..."}`. Com `atalho` ou `modelo` (também junto de `texto`): **422** com a mesma frase em `campos.atalho`. Sem `texto` nem atalho, o 422 de `campos.texto` é `"Escreva a mensagem."`.
@@ -1521,13 +1830,13 @@ Com `atlas.relatorio.ligado=false`:
 
   O item `texto` com qualquer uma das frases acima (as dos dois modos) sai com `porModelo` `false`.
 - **Sem modelo de linguagem** não há plano B nem botão: a conversa abre (`llmDisponivel` `false`) e a mensagem de texto responde 503.
-- **Banco.** As tabelas do relatório (`atlas_relatorio`, `atlas_solicitacao`, `atlas_calculo`, `atlas_decisao`) ficam sem uso; nenhuma migração muda.
+- **Banco.** As tabelas do relatório (`atlas_relatorio`, `atlas_solicitacao` e `atlas_calculo`) ficam sem uso, e `atlas_decisao` segue em uso pelo JEV, que grava as decisões nos dois modos; nenhuma migração muda.
 
 **Debug das ferramentas** (`atlas.debug.ferramentas`): veja "Debug das ferramentas", em "Rotas de debug (temporárias)".
 
 **Regras que valem nas rotas 42 a 48**
 
-- **Perfil.** 42, 43 e 46 são só do Admin Patrocinador; a RBS recebe **403** (`"Só o Admin Patrocinador da parceria conversa com o Atlas."`) antes de qualquer outra conferência e do corpo, com qualquer id e qualquer corpo. 44 e 45 são do dono da conversa: a marca, na conversa da parceria dela, e a RBS, só na conversa do Atlas da RBS (com `atlas.rbs.ligado`; veja "O Atlas da RBS"); em qualquer outra conversa, ou com a propriedade desligada, a RBS recebe o mesmo 403, antes do corpo e sem dizer se a conversa existe. 47 e 48 são da marca da parceria e da RBS.
+- **Perfil.** 42, 43 e 46 são só do Admin Patrocinador; a RBS recebe **403** (`"Só o Admin Patrocinador da parceria conversa com o Atlas."`) antes de qualquer outra conferência e do corpo, com qualquer id e qualquer corpo. 44 e 45 são do dono da conversa: a marca, na conversa da parceria dela, e a RBS, só na conversa do Atlas da RBS (com `atlas.rbs.ligado`; veja "O Atlas da RBS"); em conversa de parceria, ou com `atlas.rbs.ligado` desligado, a RBS recebe o mesmo 403, antes do corpo; com `atlas.rbs.ligado` ligado, um id de conversa que não existe ou que é de outra pessoa da RBS responde 404. 47 e 48 são da marca da parceria e da RBS.
 - **Isolamento.** Recurso de outra parceria dá **404** com a mesma frase de um id que não existe (`"Não encontramos esta parceria."`, `"... esta conversa."`, `"... esta solicitação."`, `"... este relatório."`). A **conversa é de quem a abriu**: a conversa e o cartão de outro usuário da mesma parceria também dão 404. O **relatório é da parceria**: qualquer usuário dela (e a RBS) o vê nas rotas 47 e 48. A parceria é conferida a cada chamada (vínculo revogado vale na chamada seguinte).
 - **Aba.** A aba do modelo, `APLICACOES`, tem de estar aberta para a marca: fechada, todas as rotas 42 a 48 respondem **403** com as duas frases de "Aba". Vale **também para o relatório pronto**: fechar a aba esconde o documento da marca (rotas 47 e 48). A RBS lê o relatório sempre.
 - **POST** exige o token CSRF. Erros em `ProblemDetail`.
@@ -1538,7 +1847,7 @@ Com `atlas.relatorio.ligado=false`:
 
 Com o modelo ligado (pelas variáveis de ambiente ou, no perfil `dev`, pela chave posta nas rotas de debug do fim deste arquivo), a mensagem de texto da rota 44 e a resposta do cartão da rota 46 rodam o **loop do agente**. O contrato para quem usa a API:
 
-- **Um turno** começa na mensagem da pessoa (ou na resposta do cartão). O modelo responde com texto, ou pede ferramentas; o servidor as executa **uma a uma, na ordem**, grava a resposta de cada uma e devolve o resultado ao modelo, até ele responder com texto. As ferramentas são `relatorio_iniciar`, `relatorio_solicitar_campos`, `relatorio_editar` (operação `definir_texto`) e `relatorio_finalizar`, as mesmas operações do botão, a consulta `parceria_consultar`, a busca `buscar_documentos` (veja "Busca nos documentos") e as contas `contar_dias` e `calcular` (veja "Contas e datas"). O modelo só recebe as ferramentas do estado do relatório (sem relatório, `parceria_consultar`, `buscar_documentos`, `contar_dias`, `calcular`, `pedido_de_relatorio`, `gerar_modelo` e `relatorio_iniciar`; em montagem, as seis primeiras e as outras três do relatório, menos `relatorio_solicitar_campos` depois de três cartões no mesmo relatório; com o cartão aberto, nenhuma: o turno para). **Com `atlas.relatorio.ligado=false`, só `parceria_consultar`, `buscar_documentos`, `contar_dias`, `calcular`, `pedido_de_relatorio` e `gerar_modelo`** (veja "Modo só chat"). O turno acaba no texto do modelo, no cartão, no relatório pronto ou numa **resposta direta** (veja "Respostas diretas"; com outra ferramenta na mesma rodada, o turno segue até o texto).
+- **Um turno** começa na mensagem da pessoa (ou na resposta do cartão). O modelo responde com texto, ou pede ferramentas; o servidor as executa **uma a uma, na ordem**, grava a resposta de cada uma e devolve o resultado ao modelo, até ele responder com texto. As ferramentas são `relatorio_iniciar`, `relatorio_solicitar_campos`, `relatorio_editar` (operação `definir_texto`) e `relatorio_finalizar`, as mesmas operações do botão, a consulta `parceria_consultar`, a busca `buscar_documentos` (veja "Busca nos documentos"), as consultas `listar_entregas`, `consultar_cota` e `consultar_prazos` (veja "Consulta ao portal"), as contas `contar_dias` e `calcular` (veja "Contas e datas") e as respostas diretas `pedido_de_relatorio` e `gerar_modelo` (veja "Respostas diretas"). O modelo só recebe as ferramentas do estado do relatório (sem relatório, `parceria_consultar`, `buscar_documentos`, `listar_entregas`, `consultar_cota`, `consultar_prazos`, `contar_dias`, `calcular`, `pedido_de_relatorio`, `gerar_modelo` e `relatorio_iniciar`; em montagem, as nove primeiras e as outras três do relatório, menos `relatorio_solicitar_campos` depois de três cartões no mesmo relatório; com o cartão aberto, nenhuma: o turno para). **Com `atlas.relatorio.ligado=false`, só `parceria_consultar`, `buscar_documentos`, `listar_entregas`, `consultar_cota`, `consultar_prazos`, `contar_dias`, `calcular`, `pedido_de_relatorio` e `gerar_modelo`** (veja "Modo só chat"). O turno acaba no texto do modelo, no cartão, no relatório pronto ou numa **resposta direta** (veja "Respostas diretas"; com outra ferramenta na mesma rodada, o turno segue até o texto).
 - **Pergunta sobre os números sem relatório.** `parceria_consultar` (sem argumento) é **só de leitura**: não cria relatório e não grava nada além da trilha da chamada. Devolve as referências do modelo-base para a parceria da conversa, resolvidas com o perfil de quem pede (o filtro de aba da rota 29): `{abaFechada, aviso, dados:[{ref, rotulo, valor, unidade, origem}], indisponiveis:[{ref, rotulo, motivo}]}`, em que `dados` é o mesmo que `relatorio_iniciar` devolve em dados disponíveis mais os cálculos fixos (`calc:`) que já dá para resolver, e `indisponiveis` traz os que estão sem valor (dado não informado, conta sem a entrada). Com a aba `APLICACOES` fechada para a marca (conferida no banco na hora da chamada), vem `abaFechada: true`, o `aviso` (`"A aba Aplicações de marca no evento está fechada para esta parceria. Não há dados para consultar; diga isso à pessoa sem citar número."`) e as listas vazias. O modelo responde citando o dado com o marcador (`"Aplicações de marca previstas: {{cons:aplicacoes.previstas}}; comprovadas no evento: {{cons:aplicacoes.comprovadas}}."`) e o item `texto` sai com os números (`"... previstas: 19; comprovadas no evento: 17."`). Os marcadores do chat, `calc:` incluído, resolvem contra a parceria da conversa com as fórmulas fixas do modelo-base, com ou sem relatório aberto.
 - **Nenhuma ferramenta recebe parceria.** A parceria, o usuário e a conversa vêm da sessão; um argumento que cite outra parceria (ou qualquer argumento fora do esquema) é recusado e volta ao modelo como erro. A marca só chega aos dados da própria parceria, por qualquer caminho.
 - **Até 8 chamadas de ferramenta por turno.** Erro de ferramenta (argumento inválido, relatório no estado errado, texto recusado) volta ao modelo como mensagem de ferramenta e nunca vira 500. Passado o limite, o turno termina com um texto fixo (`"Parei por aqui: ..."`).
@@ -1619,7 +1928,7 @@ O modelo não faz conta nem conta dias de cabeça: chama `contar_dias` ou `calcu
 **`contar_dias(inicio, fim | dias, uteis?, sentido?)`**
 
 - **A contagem não tem marcador `{{calc:...}}`** (isso é só do `calcular`): a resposta escreve o resultado, a data ou a quantidade, copiado como está, com a citação `[C#]` na mesma frase. A definição da ferramenta diz isso ao modelo.
-- `inicio` (obrigatório, `AAAA-MM-DD`) e **exatamente um** de `fim` (`AAAA-MM-DD`) ou `dias` (inteiro de 1 a 400). `uteis` (booleano, padrão `false`) e `sentido` (`depois`, o padrão, ou `antes`; só vale com `dias`). Argumento desconhecido, data que não existe ou fora do formato, `fim` antes de `inicio` e ano fora de 2000 a 2100 (do início, do fim ou do resultado) voltam ao modelo como erro; o intervalo de `inicio` a `fim` vai até **800 dias** (sem o limite, 01/01/2000 a 31/12/2100 devolvia 819 feriados e 41 KB numa chamada), e `feriadosConsiderados` lista todos os feriados do intervalo (sem teto: em 800 dias não chegam a 40, então o limite que havia nunca valia).
+- `inicio` (obrigatório, `AAAA-MM-DD`) e **exatamente um** de `fim` (`AAAA-MM-DD`) ou `dias` (inteiro de 1 a 400). `uteis` (booleano, padrão `false`) e `sentido` (`depois`, o padrão, ou `antes`; só vale com `dias`). Argumento desconhecido, data que não existe ou fora do formato, `fim` antes de `inicio` e ano fora de 2000 a 2100 (do início, do fim ou do resultado) voltam ao modelo como erro; o intervalo de `inicio` a `fim` vai até **800 dias** (sem o limite, 01/01/2000 a 31/12/2100 devolvia 819 feriados e 41 KB numa chamada), e `feriadosConsiderados` lista os feriados pulados do intervalo, só os que caem em dia de semana e só com `uteis` (sem teto: em 800 dias não chegam a 40, então o limite que havia nunca valia).
 - **Os números e as datas têm origem** (a contagem não fabrica número: `{"inicio": "2026-01-01", "dias": 312}` faria "R$ 312,00 [C1]" valer, e `{"inicio": "2026-01-01", "fim": "2026-11-09"}`, o resultado 312 em qualquer frase). **`dias` de 1 a 31 vale sem fonte** ("duas semanas depois de 03/11" são 14, "uma semana depois de 20/11", 7, "um dia útil depois de 03/11", 1: a pessoa não escreveu o número). **Acima de 31**, tem de estar no **que a pessoa escreveu nesta conversa** ou num **trecho de documento ou registro deste turno** (`T#`, `R#`), comparado por valor como o literal do `calcular` (título e página da fonte não contam); o texto de uma conta do `calcular` (`C#`) **não** vale como origem de `dias` (o modelo escolhe os valores que entram nela, e `dias: 212` passava a partir do texto de `C1`). `inicio` e `fim` valem sem fonte **de 31 dias antes de hoje a 90 dias depois** ("ontem", "dia 20", "fim do mês", "segunda passada", "amanhã"); fora disso têm de ser **uma data de uma fonte deste turno ou do que a pessoa escreveu** (data sem ano só vale nos anos da edição, do anterior a ela e de hoje, como na checagem da resposta; de um trecho de documento valem também as datas em pedaços, mas **só dentro do mesmo trecho**, e com o dia solto depois de dia da semana ou de `dia` (`sexta-feira, 14` num `T1` e `10/05/2027` num `T2` não fazem 14/05/2027, e `R$ 20,00` não faz 20/05/2027 em trecho nenhum); e de um registro, só por inteiro). O resultado de outra contagem do turno (`C#` do `contar_dias`) é uma fonte, e serve de `inicio`; o texto de uma conta do `calcular` não. Sem origem, o erro (campos `dias`, `inicio` ou `fim`) diz o que a pessoa ou a fonte precisam ter trazido.
 - **O dia de `inicio` não conta e o `fim` conta.** 18 dias úteis depois de 03/11/2026 dá 30/11/2026, 20 dá 02/12/2026, e 10 úteis depois de 16/11/2026 dá 01/12/2026. Com `uteis`, sábado, domingo e feriado ficam de fora, e um `fim` que não é dia útil não é contado.
 - **Feriados:** 01/01, 21/04, 01/05, 07/09, 12/10, 02/11, 15/11, 20/11 (Lei 14.759/2023), 25/12, a Sexta-feira Santa (Páscoa menos 2, algoritmo de Meeus) e o 20/09 (Revolução Farroupilha, RS). Carnaval (Páscoa menos 48 e 47) e Corpus Christi (Páscoa mais 60) são pontos facultativos e só contam com `atlas.feriados.pontos-facultativos=true` (padrão `false`).
@@ -1655,7 +1964,7 @@ O modelo consulta os dados da própria parceria com três ferramentas só de lei
 **`listar_entregas(status?, aba?)`**
 
 - `status` (opcional): `NAO_INICIADO`, `AGUARDANDO_ENVIO`, `ENVIADO`, `EM_ANALISE`, `AJUSTE_SOLICITADO`, `APROVADO` ou `NAO_APLICAVEL`. Mais o atalho **`PENDENTE`**: tudo o que não está `APROVADO` nem `NAO_APLICAVEL` (o modelo pedia "as pendentes" e levava erro). A ferramenta o descreve no esquema, e a contagem e o limite de 30 valem como em qualquer filtro. `aba` (opcional): `PERFIL`, `APLICACOES`, `MIDIA`, `CORTESIAS`, `CREDENCIAMENTO`, `PESQUISA` ou `CONTRATO`. Valor fora da lista (ou em minúsculas) volta como erro que lista os válidos. Em branco vale como não informado.
-- **Só as abas abertas**, até **30** linhas: as pendentes (nem `APROVADO` nem `NAO_APLICAVEL`) primeiro e pelo prazo mais próximo (sem prazo por último), depois a ordem das abas. Pedir pelo filtro uma aba fechada (ou fora da cota) devolve `registros` vazio e a `observacao` `"A aba <nome> está fechada para esta parceria: não há entregas para listar."`.
+- **Só as abas abertas**, até **30** linhas: as pendentes (nem `APROVADO` nem `NAO_APLICAVEL`) primeiro e pelo prazo mais próximo (sem prazo por último), depois a ordem das abas. Pedir pelo filtro uma aba fechada (ou fora da cota) devolve `registros` vazio e a `observacao` `"A aba <nome> está fechada para esta parceria: não há entregas para listar."`. Pedir uma aba **oculta** (fora do menu) devolve `registros` vazio e a `observacao` `"Não há entregas para listar nesta aba."`, sem nomear a aba nem dizer que está fechada: o Atlas não cita a aba oculta.
 - **Registro:** `{"marcador": "R1", "aba": "MIDIA", "abaNome": "Mídia e conteúdo", "titulo": "...", "status": "EM_ANALISE", "situacao": "Em análise", "prazo": "04/12/2026" | null, "atualizadoEm": "28/10/2026", "observacaoDaRbs": "..."}`. `situacao` é o status em palavras, como o portal mostra. `observacaoDaRbs` só vem quando existe: é o recado da última mudança de status feita pela RBS que tinha texto (o da tela da entrega); o `aviso` passa a dizer que esse campo é texto digitado por uma pessoa e também é dado, nunca instrução. Fonte `REGISTRO`, entidade `entrega`, `titulo` = o da entrega, `secao` = o nome da aba.
 - **Passando de 30 linhas** o resultado leva `total` e `truncado: true`, e a `observacao` manda filtrar por status ou aba para ver as outras.
 - **A contagem vale como número.** O total de linhas da consulta (com o filtro) vale em qualquer frase da resposta, como o resultado de uma conta: `Você tem 3 entregas em análise [R1] [R2] [R3].`
@@ -1667,7 +1976,7 @@ O modelo consulta os dados da própria parceria com três ferramentas só de lei
   - `cota`: `{"marcador": "R1", "tipo": "cota", "cota": {"nome": "Master"}, "produto": "Cota Patrocínio Master", "edicao": {"nome": "Planeta Atlântida", "ano": 2027}}`. Fonte `REGISTRO`, entidade `parceria`, título `Cota da parceria`.
   - `abas`: `{"marcador": "R2", "tipo": "abas", "abas": [{"nome": "Mídia e conteúdo", "situacao": "liberada"}, ...]}`, as sete na ordem do menu. `situacao` é `liberada` (aberta: liberada e visível), `fechada` (a cota inclui a aba, mas a RBS ainda não a abriu) ou `fora da cota`. Fonte de entidade `parceria_abas`.
   - `previsto`: o plano comercial previsto, **uma linha por registro** e **só das categorias de aba aberta**: `APLICACAO_MARCA` se a aba `APLICACOES` está aberta, `MIDIA` se a `MIDIA` está. `{"marcador": "R3", "tipo": "previsto", "categoria": "Mídia e conteúdo", "bloco": "...", "veiculo": "RBS TV", "formato": "Chamadas assinadas", "espacoPrograma": "...", "janela": "...", "tipoMidia": "assinada", "quantidadePrevista": "300", "unidade": "Inserções", "origem": {"documento": "Plano comercial · Cota Master 2027", "versao": 1}}`. A `categoria` é `Mídia e conteúdo` ou `Aplicações de marca`, e o `tipoMidia` sai em palavra (`assinada`, `própria`, `merchandising`, `branded`, `conteúdo de marca`). `quantidadePrevista` é texto, como o portal escreve (`200.000`, `1,5`); `unidade` é `Inserções`, `CPM` ou `Aplicações` (como a tela escreve), e o **código** (`INSERCAO`, `CPM` ou `APLICACAO`) vai em `dados.unidade` da fonte, que o `calcular` lê (ele **não mistura** unidades). Até **60** linhas; passando disso a `observacao` diz. Fonte de entidade `aproveitamento_previsto`, `titulo` = `<veículo> · <formato>`.
-  - `cortesia` (só com a aba `CORTESIAS` aberta e havendo linha): `{"tipo": "cortesia", "setor": "Camarote", "dia": "sexta-feira", "quantidade": 40, "comShuttle": true, "acesso": "..."}` (o `setor` é `Arena`, `Camarote`, `Lounge`, `Premium`, `Baixo camarote`, `Sala de imprensa` ou `Sala de conteúdo`, e o `dia`, `sexta-feira`, `sábado` ou `passaporte (os dois dias)`). `credencial` (só com a aba `CREDENCIAMENTO` aberta e havendo linha): `{"tipo": "credencial", "setor": "Arena", "beneficiario": "Agência", "quantidadePorDia": 60}`. Entidades `cortesia_cota` e `credencial_cota`. **Nada de código cru do cadastro** em `acesso` e `beneficiario`: o `acesso` abreviado vira palavra (`P6` é `Portão 6`; `P6 ou P4; shuttle via P4` é `Portão 6 ou Portão 4; shuttle via Portão 4`; o resto do texto fica como o cadastro o escreveu, sem inventar portão), e o `beneficiario` sai como a tela o escreve (`Marca`, `Agência`, `Equipe de conteúdo`). O beneficiário `GERAL` não tem palavra na tela, e então o campo não vem (o texto da fonte diz só a quantidade e o setor).
+  - `cortesia` (só com a aba `CORTESIAS` aberta e havendo linha): `{"tipo": "cortesia", "setor": "Camarote", "dia": "sexta-feira", "quantidade": 40, "destinadas": 38, "disponiveis": 2, "comShuttle": true, "acesso": "..."}` (`destinadas` é a soma do que a marca já destinou naquele setor e dia pela rota 83 e `disponiveis`, o que ainda pode destinar; a fonte diz "Destinadas: 38. Disponíveis para destinar: 2."; **só números, nunca o nome de quem recebeu**, D8) (o `setor` é `Arena`, `Camarote`, `Lounge`, `Premium`, `Baixo camarote`, `Sala de imprensa` ou `Sala de conteúdo`, e o `dia`, `sexta-feira`, `sábado` ou `passaporte (os dois dias)`). `credencial` (só com a aba `CREDENCIAMENTO` aberta e havendo linha): `{"tipo": "credencial", "setor": "Arena", "beneficiario": "Agência", "quantidadePorDia": 60}`. Entidades `cortesia_cota` e `credencial_cota`. **Nada de código cru do cadastro** em `acesso` e `beneficiario`: o `acesso` abreviado vira palavra (`P6` é `Portão 6`; `P6 ou P4; shuttle via P4` é `Portão 6 ou Portão 4; shuttle via Portão 4`; o resto do texto fica como o cadastro o escreveu, sem inventar portão), e o `beneficiario` sai como a tela o escreve (`Marca`, `Agência`, `Equipe de conteúdo`). O beneficiário `GERAL` não tem palavra na tela, e então o campo não vem (o texto da fonte diz só a quantidade e o setor).
 - **A origem do previsto.** Havendo um documento `PLANO_COMERCIAL` **indexado e visível para a parceria** (o da parceria, senão o da cota dela, senão o da edição; a versão mais nova), cada linha do previsto leva `origem: {documento, versao}` e, em `dados` da fonte, `documentoId`, `versao` e `pagina`. A `pagina` é a `fonte_pagina` da linha do previsto (o cadastro a guarda), **se ela é no máximo o número de páginas do documento**; sem `fonte_pagina`, ou com uma além do fim do documento (a linha diz página 6 e o plano tem 5), a `pagina` **não vai** em `dados`, em vez de dizer 1: a tela abre o documento na primeira página, sem afirmar nada. Sem plano indexado (revogado, substituído, sem aprovação ou de outra cota), a linha vem sem `origem`. Na releitura (rota 45) a fonte abre o documento nessa página.
 - **Não entra, nunca:** o valor do investimento e a base dele (`valorInvestimento`, `valor_investimento`, `base_valor`). Valor sem linha também não aparece: sem cortesia cadastrada não há registro de cortesia, e nenhum campo vem como zero.
 
@@ -1808,7 +2117,7 @@ event:resumo
 data:{"texto":"Conferi o que veio da consulta e montei a resposta."}
 
 event:fim
-data:{"conversaId":12,"llmDisponivel":true,"relatorioDisponivel":false,"debugDeFerramentas":false,"itens":[{"tipo":"usuario","texto":"Como estou?"},{"tipo":"raciocinio","resumo":"Conferi os números da parceria."},{"tipo":"raciocinio","resumo":"Conferi o que veio da consulta e montei a resposta."},{"tipo":"texto","texto":"Os números de Cliente Amarelo estão no portal.","porModelo":true}]}
+data:{"conversaId":12,"llmDisponivel":true,"relatorioDisponivel":false,"debugDeFerramentas":false,"diagnosticoDisponivel":false,"itens":[{"tipo":"usuario","texto":"Como estou?"},{"tipo":"raciocinio","resumo":"Conferi os números da parceria."},{"tipo":"raciocinio","resumo":"Conferi o que veio da consulta e montei a resposta."},{"tipo":"texto","texto":"Os números de Cliente Amarelo estão no portal.","porModelo":true}]}
 ```
 
 O `fim` é a referência: o que a tela montou com os pedaços dá lugar aos itens dele. No exemplo, o primeiro `resumo` chega durante a ida seguinte e o segundo depois do texto dela; o que não chegou antes do `fim` não aparece nele.
@@ -2025,7 +2334,7 @@ Cada item de `campos` do cartão é um campo do catálogo (rota 39) mais `obriga
 
 ## Descarte do relatório parado
 
-Um relatório `MONTANDO` ou `AGUARDANDO_RESPOSTA` sem nenhuma mensagem nova na conversa há **mais de 7 dias** vira `DESCARTADO` quando a pessoa **lista** (rota 43) ou **abre** (rota 45) as conversas. O cartão pendente dele vira `CANCELADA` e a chamada que ele deixou aberta é fechada com `cancel` no histórico (a conversa mostra o `aviso` de descarte, veja a rota 65). O botão, depois disso, começa um relatório novo. Relatório pronto nunca é descartado. A pessoa também descarta quando quiser, pela rota 65 (abaixo).
+Um relatório `MONTANDO` ou `AGUARDANDO_RESPOSTA` sem nenhuma mensagem nova na conversa que vá ao modelo (a resposta fixa de um cartão aberto não conta) há **mais de 7 dias** vira `DESCARTADO` quando a pessoa **lista** (rota 43) ou **abre** (rota 45) as conversas. O cartão pendente dele vira `CANCELADA` e a chamada que ele deixou aberta é fechada com `cancel` no histórico (a conversa mostra o `aviso` de descarte, veja a rota 65). O botão, depois disso, começa um relatório novo. Relatório pronto nunca é descartado. A pessoa também descarta quando quiser, pela rota 65 (abaixo).
 
 **Histórico (rotas 42 a 46):** `CRIACAO` com a entidade `atlas_relatorio` quando o relatório nasce (`valorNovo` = `MONTANDO`), `EDICAO` quando fica pronto (`valorAnterior` = `MONTANDO`, `valorNovo` = `PRONTO`), `ALTERACAO_STATUS` quando a pessoa o descarta pela tela (rota 65), e `CRIACAO` na entidade `dado_informado` por valor que o cartão gravou. Aparecem no histórico da parceria (rota 20) como as demais ações da marca.
 
@@ -2095,7 +2404,7 @@ Cada turno do Atlas (uma mensagem de texto da pessoa ou a resposta do cartão, a
 - **Um turno, um `turno`**: todas as etapas dele levam o mesmo UUID e uma `ordem` de 1 em diante (a ordem em que começaram). O traço é guardado na memória enquanto o turno anda e **gravado de uma vez no fim** (também quando o turno dá erro): nenhuma conexão com o banco fica presa durante a chamada ao modelo.
 - **Etapas sequenciais** nunca se sobrepõem: cada uma começa depois de a anterior terminar, e a soma das durações delas não passa do tempo do turno (do começo da primeira ao fim da última). Seis ficam fora dessa soma: o `RESUMO` do raciocínio, que corre em paralelo e pode terminar depois do turno (o traço o grava como **pendente**, `resultado` `PULADO`, `dados.pendente` `true`, e, se ele ficar pronto, atualiza a mesma linha), e a `BUSCA`, a `R3_FONTES`, a `V2_COERENCIA` e a `LACUNAS`, que acontecem **dentro** da etapa `FERRAMENTA` da ferramenta que as chama (são o detalhe dela; contá-las dobraria o tempo), e o `DISJUNTOR`, um aviso instantâneo que pode cair dentro de uma ferramenta.
 - **`resultado`** de uma etapa: `OK`, `RECUSADO` (uma regra disse não), `ERRO`, `SOMBRA` (o JEV decidiu sem agir: o ponto em modo `SOMBRA`) ou `PULADO` (a etapa não rodou, ou ainda não terminou). O `resultado` do **turno** é o da etapa `SAIDA`, sempre a última etapa sequencial.
-- **Todo turno de texto deixa traço**, também o que nem começou: o teto diário atingido (429), o limite de mensagens por hora do usuário (429) e a conversa ocupada (409) deixam `G1_LIMITES` e `SAIDA` com `RECUSADO`. O botão "Montar relatório" (plano B, sem modelo) não deixa traço.
+- **Todo turno de texto que passa da validação e tem modelo de linguagem deixa traço**, também o que nem começou: o teto diário atingido (429), o limite de mensagens por hora do usuário (429) e a conversa ocupada (409) deixam `G1_LIMITES` e `SAIDA` com `RECUSADO`. O botão "Montar relatório" e a resposta de cartão que segue o plano B (sem modelo, ou com o teto diário ou o limite por hora atingido) não deixam traço.
 - **Nada sensível**: o `dados` de uma etapa **nunca** leva o raciocínio cru do modelo (`reasoning_content`), nem o resumo dele no `RESUMO`, nem chave de provedor, nem o prompt de sistema, nem as mensagens do histórico. Todo texto vai cortado em 20.000 caracteres, sem o caractere nulo e sem as chaves de provedor que a API conhece. Um teste procura um raciocínio, uma chave e uma frase do prompt falsos em todo JSON gravado e devolvido.
 
 | Etapa | Quando | O que vem em `dados` |
@@ -2277,9 +2586,9 @@ No turno de uma conversa sem parceria (o Atlas da RBS), `parceriaId` e `parceria
 
 ---
 
-# Os documentos do Atlas (rotas 54 a 61)
+# Os documentos do Atlas (rotas 54 a 61 e 103)
 
-A RBS sobe os documentos de que o Atlas se alimenta: manuais de operação, planos comerciais de cada cota, anexos de parceria, FAQ e comunicados. O documento vira **trechos com embeddings** (vetores de 768 dimensões), com versão, escopo e uma regra do banco (RLS) que só deixa a busca ver o que a marca pode ver. **Só a RBS envia, aprova, recusa, revoga e reindexa**; o documento nasce `AGUARDANDO_APROVACAO` e só a RBS o aprova. A busca nos documentos, o visualizador e a busca de teste da RBS (rotas 59 a 61) estão em "Busca nos documentos".
+A RBS sobe os documentos de que o Atlas se alimenta: manuais de operação, planos comerciais de cada cota, anexos de parceria, FAQ e comunicados. O documento vira **trechos com embeddings** (vetores de 768 dimensões), com versão, escopo e uma regra do banco (RLS) que só deixa a busca ver o que a marca pode ver. **Só a RBS envia, aprova, recusa, revoga e reindexa**; o documento nasce `AGUARDANDO_APROVACAO` e só a RBS o aprova. A busca do modelo nos documentos está em "Busca nos documentos" (`buscar_documentos`); o visualizador e a busca de teste da RBS (rotas 59 a 61) estão nesta seção, logo abaixo.
 
 ## O ciclo de um documento
 
@@ -2321,7 +2630,11 @@ envio de PDF sem texto, com senha ou corrompido -> nasce ERRO (sem aprovado_por)
 | `COTA` | As parcerias dessa cota na edição | `eventoId` e `cota` (`MASTER`, `SUBCOTA_G` ou `SUBCOTA`) |
 | `PARCERIA` | Só a parceria dada | `parceriaId` (a edição vem da parceria) |
 
-**Dados pessoais.** Na hora do envio um detector lê o texto de cada página, antes normalizado (dígito de largura total e qualquer caractere invisível de formato, como espaço de largura zero, hífen condicional e marcas de direção, não escondem nada; o traço longo vira hífen). **CPF** no formato completo (`123.456.789-09`) marca sempre e só deixa de marcar com dígito colado antes ou depois (`1529.982.247-25`); vírgula, barra ou hífen vizinhos não impedem (`Joao 529.982.247-25,30,Porto` marca). Com espaços em volta dos separadores (`529. 982. 247-25`) e nas formas sem espaço (`12345678909`, `123456789-09`) marca se os dígitos verificadores baterem **ou** se a palavra `CPF` vier logo antes (até 20 caracteres). Os grupos separados por espaço, barra ou ponto fora do formato (`123 456 789 09`, `123.456.789/09`) só marcam com a palavra `CPF` antes, nunca pelo dígito verificador: uma linha de tabela como `Setor 100 200 400 40` não trava o documento, e um número de 11 dígitos sem a palavra e sem dígito verificador certo é código. **RG** marca no formato `12.345.678-9` ou com a palavra `RG` (`R.G.` e `R. G.` também) seguida, até 25 caracteres sem dígito depois (a quebra de linha entra), de um número de 7 a 10 dígitos com ponto, espaço ou hífen entre eles (`X` aceito no fim); não marcam `RG 2027`, `Unidade RG: R$ 1.500.000` (valor ou `%` entre a palavra e o número) nem `Unidade RG 2027-2028` (dois anos). **Telefone** (`(51) 3333-4444`, `(051) 3333-4444`, `(51) 9 9999-8888`, `51-3333-4444`, `51 3333-4444`, `51999998888`, `+55 51 99999-8888`; o DDD tem 2 dígitos, sem zero fora dos parênteses) conta como contato, **menos o que só tem espaços** (`51 3333 4444`, `Público 25 1500 2500`: sem parênteses, hífen ou +55 é uma linha de tabela); faixa de anos como `2026-2027` nunca é telefone, exceto com o DDD entre parênteses (`(11) 2050-2060` conta). **E-mail** e telefone só marcam se houver **3 ou mais contatos diferentes na mesma página** (um contato institucional não trava um manual). Valor em reais e data nunca marcam. Com a suspeita, `contemDadosPessoais` é `true` e o documento não pode ser aprovado nem reindexado. Um falso positivo não tem saída pela tela: corrige-se o documento e envia-se de novo.
+**Dados pessoais.** Na hora do envio um detector lê o texto de cada página, antes normalizado (dígito de largura total e qualquer caractere invisível de formato, como espaço de largura zero, hífen condicional e marcas de direção, não escondem nada; o traço longo vira hífen). **CPF** no formato completo (`123.456.789-09`) marca sempre e só deixa de marcar com dígito colado antes ou depois (`1529.982.247-25`); vírgula, barra ou hífen vizinhos não impedem (`Joao 529.982.247-25,30,Porto` marca). Com espaços em volta dos separadores (`529. 982. 247-25`) e nas formas sem espaço (`12345678909`, `123456789-09`) marca se os dígitos verificadores baterem **ou** se a palavra `CPF` vier logo antes (até 20 caracteres). Os grupos separados por espaço, barra ou ponto fora do formato (`123 456 789 09`, `123.456.789/09`) só marcam com a palavra `CPF` antes, nunca pelo dígito verificador: uma linha de tabela como `Setor 100 200 400 40` não trava o documento, e um número de 11 dígitos sem a palavra e sem dígito verificador certo é código. **RG** marca no formato `12.345.678-9` ou com a palavra `RG` (`R.G.` e `R. G.` também) seguida, até 25 caracteres sem dígito depois (a quebra de linha entra), de um número de 7 a 10 dígitos com ponto, espaço ou hífen entre eles (`X` aceito no fim); não marcam `RG 2027`, `Unidade RG: R$ 1.500.000` (valor ou `%` entre a palavra e o número) nem `Unidade RG 2027-2028` (dois anos). **Telefone** (`(51) 3333-4444`, `(051) 3333-4444`, `(51) 9 9999-8888`, `51-3333-4444`, `51 3333-4444`, `51999998888`, `+55 51 99999-8888`; o DDD tem 2 dígitos, sem zero fora dos parênteses) conta como contato, **menos o que só tem espaços** (`51 3333 4444`, `Público 25 1500 2500`: sem parênteses, hífen ou +55 é uma linha de tabela); faixa de anos como `2026-2027` nunca é telefone, exceto com o DDD entre parênteses (`(11) 2050-2060` conta). **E-mail** e telefone só marcam se houver **3 ou mais contatos diferentes na mesma página** (um contato institucional não trava um manual). Valor em reais e data nunca marcam. Com a suspeita, `contemDadosPessoais` é `true` e o documento não pode ser aprovado nem reindexado. Um falso positivo não tem saída pela tela: corrige-se o documento e envia-se de novo, **ou a RBS marca as páginas que ficam fora do Atlas** (veja abaixo).
+
+**Qual página travou** (R2.1). O Documento diz onde o detector achou dado pessoal, **sem nunca repetir o valor achado**: `paginasSuspeitas` (os números das páginas, em ordem, sem repetir) e `suspeitas` (uma linha por página e tipo: `{ "pagina": 4, "tipo": "CONTATOS" }`, com `tipo` `CPF`, `RG` ou `CONTATOS`, a lista de telefones e e-mails). Sem suspeita, as duas são `[]`. O mesmo vale nas rotas 54, 55, 56 e 57 (a marca, na 56, nunca recebe nenhuma das duas). Um documento enviado antes da V17 e já marcado com `contemDadosPessoais` tem `paginasSuspeitas: []` (a V17 não relê o arquivo); a lista passa a vir quando o documento é enviado de novo ou tem as páginas marcadas pela rota 103.
+
+**Páginas fora do Atlas** (R2.1). A RBS marca páginas que não entram no índice, no envio (rota 54, parte `paginasForaDoAtlas`) ou depois (rota 103), sempre **enquanto o documento aguarda aprovação**. Com elas marcadas: (1) o detector não lê essas páginas, então elas não travam a aprovação; (2) na indexação, o texto delas é descartado **antes** de dividir em trechos e de gerar os embeddings, então nenhum trecho, vetor ou texto delas chega ao índice, ao Gemini ou ao modelo; (3) a numeração e a contagem de `paginas` seguem as do PDF (a fonte "p. 13" continua batendo com o original); (4) o PDF continua **inteiro** no visualizador (rotas 59 e 60), para a RBS e para a marca. Quem marcou e o que mudou ficam no histórico (`EDICAO`, entidade `documento`, só os números das páginas). A lista tem de ser de números de 1 até o total de páginas, sem repetir, no máximo 20, e ao menos uma página precisa ficar no Atlas. Depois da aprovação a lista não muda mais: para mudar, envie o documento de novo.
 
 **O que o Documento mostra à RBS** (rotas 54, 55, 56 e 57):
 
@@ -2338,11 +2651,14 @@ envio de PDF sem texto, com senha ou corrompido -> nasce ERRO (sem aprovado_por)
   "enviadoPor": { "id": 1, "nome": "Equipe B2B RBS", "perfil": "ADMIN_RBS" }, "enviadoEm": "2026-10-31T10:02:00-03:00",
   "aprovadoPor": { "id": 1, "nome": "Equipe B2B RBS", "perfil": "ADMIN_RBS" }, "aprovadoEm": "2026-10-31T10:03:00-03:00",
   "revogadoPor": null, "revogadoEm": null,
-  "acoes": ["REVOGAR"]
+  "acoes": ["REVOGAR"],
+  "paginasSuspeitas": [], "suspeitas": [], "paginasForaDoAtlas": []
 }
 ```
 
-`cota` (`{ "codigo": "MASTER", "nome": "Master" }`) vem só nos de escopo `COTA`, e `parceria` (`{ "id": 2, "patrocinador": "Cliente Amarelo" }`) só nos de escopo `PARCERIA`. `paginas` é `1` num TXT. `trechos`, `modelo`, `dimensoes`, `extracaoMs` e `embeddingsMs` ficam `0`/`null` até a indexação terminar. `modeloDiferente` é `true` quando o documento está indexado com um modelo de embeddings que **não é o de agora** (a variável `ATLAS_EMBEDDINGS` mudou): a busca o ignora, a API registra o erro no log e a aba mostra o aviso; esta entrega não reindexa sozinha (recriar o banco, ou subir o documento de novo). `acoes` diz o que a RBS pode fazer agora, no vocabulário da rota 57: `AGUARDANDO_APROVACAO` dá `["APROVAR", "RECUSAR"]` (só `["RECUSAR"]` com dado pessoal); `ERRO` dá `["REINDEXAR", "RECUSAR"]` (só `["RECUSAR"]` se nunca foi aprovado ou tem dado pessoal); `INDEXADO` e `SUBSTITUIDO` dão `["REVOGAR"]`; os demais, `[]`.
+`paginasSuspeitas`, `suspeitas` e `paginasForaDoAtlas` (R2.1) são listas, sempre presentes: as páginas que travaram a aprovação, onde e por quê (só página e tipo, nunca o valor achado), e as páginas que a RBS deixou fora do Atlas. Veja "Dados pessoais" acima.
+
+`cota` (`{ "codigo": "MASTER", "nome": "Master" }`) vem só nos de escopo `COTA`, e `parceria` (`{ "id": 2, "patrocinador": "Cliente Amarelo" }`) só nos de escopo `PARCERIA`. `paginas` é `1` num TXT. `trechos`, `modelo`, `dimensoes` e `embeddingsMs` ficam `0`/`null` até a indexação terminar, e `extracaoMs` já vem do envio, com o tempo da leitura do arquivo. `modeloDiferente` é `true` quando o documento está indexado com um modelo de embeddings que **não é o de agora** (a variável `ATLAS_EMBEDDINGS` mudou): a busca o ignora, a API registra o erro no log e a aba mostra o aviso; esta entrega não reindexa sozinha (recriar o banco, ou subir o documento de novo). `acoes` diz o que a RBS pode fazer agora, no vocabulário da rota 57: `AGUARDANDO_APROVACAO` dá `["APROVAR", "RECUSAR"]` (só `["RECUSAR"]` com dado pessoal); `ERRO` dá `["REINDEXAR", "RECUSAR"]` (só `["RECUSAR"]` se nunca foi aprovado ou tem dado pessoal); `INDEXADO` e `SUBSTITUIDO` dão `["REVOGAR"]`; os demais, `[]`.
 
 ## 54. `POST /api/documentos`  · Atlas M3
 
@@ -2360,6 +2676,7 @@ envio de PDF sem texto, com senha ou corrompido -> nasce ERRO (sem aprovado_por)
 | `eventoId` | `GLOBAL` e `COTA` | A edição (rota 6). No `PARCERIA` é opcional; se vier, tem de ser a da parceria. |
 | `cota` | `COTA` | `MASTER`, `SUBCOTA_G` ou `SUBCOTA` (o `codigo` da cota, como na rota 7). |
 | `parceriaId` | `PARCERIA` | A parceria (rota 7: `GET /api/parcerias?eventoId=`). |
+| `paginasForaDoAtlas` | Não | Páginas que **não entram no índice do Atlas**, separadas por vírgula (`4` ou `4,7`; espaços são aceitos). Números de 1 até o total de páginas do arquivo, sem repetir, no máximo 20, e ao menos uma página precisa ficar. O detector de dados pessoais não lê essas páginas. Vazio ou ausente: nenhuma. |
 
 Para montar o formulário: as edições vêm da rota 6, as parcerias (com a `cota.codigo`) da rota 7, e as cotas são os três códigos acima (`Master`, `Subcota G`, `Subcota`). `cota` só vale no `COTA` e `parceriaId` só no `PARCERIA`; enviá-los em outro escopo dá 422.
 
@@ -2367,7 +2684,7 @@ Para montar o formulário: as edições vêm da rota 6, as parcerias (com a `cot
 
 **A leitura roda na hora**, antes de gravar: o texto é extraído (uma página por vez, no máximo 300 páginas) e o detector de dados pessoais roda. O documento nasce:
 
-- `AGUARDANDO_APROVACAO`, com `paginas` e `contemDadosPessoais`; ou
+- `AGUARDANDO_APROVACAO`, com `paginas`, `contemDadosPessoais` e, se houver suspeita, `paginasSuspeitas` e `suspeitas` (as páginas e o tipo, nunca o valor); ou
 - `ERRO`, **sem `aprovado_por`**, se não houver texto (`"Sem texto extraível; OCR fora do escopo."`, um PDF só de imagem), se o PDF tiver senha (`"O PDF está protegido por senha."`), estiver corrompido (`"O PDF está corrompido ou não pôde ser lido."`, o que vale também para um PDF sem nenhuma página; `paginas` fica `null`) ou passar de 300 páginas (`"O PDF tem N páginas e o limite é 300."`). Esse caso se corrige com um **novo envio**, e não reindexando.
 
 **201**: o **Documento** criado (veja acima). O cabeçalho `Location` aponta para `/api/documentos/{id}`.
@@ -2380,9 +2697,9 @@ Para montar o formulário: as edições vêm da rota 6, as parcerias (com a `cot
 | 403 | Não é Admin RBS, ou falta o token CSRF. |
 | 413 | Arquivo acima de 20 MB (exatamente 20 MB ainda passa). |
 | 415 | Extensão fora de `pdf`/`txt`, ou conteúdo que não bate com ela. |
-| 422 | Campo faltando ou inválido, em `campos`: `arquivo` (`"Envie o documento (PDF ou TXT) na parte \"arquivo\" do formulário."`), `titulo` (falta, passa de 200 caracteres ou tem o caractere nulo: `"O título tem caracteres inválidos."`), `chave`, `tipo`, `escopo`, `eventoId` (falta, não é número ou a edição não existe), `cota` (falta no `COTA`, não existe, ou veio em outro escopo) e `parceriaId` (falta no `PARCERIA`, a parceria não existe, ou veio em outro escopo). |
+| 422 | Campo faltando ou inválido, em `campos`: `arquivo` (`"Envie o documento (PDF ou TXT) na parte \"arquivo\" do formulário."`), `titulo` (falta, passa de 200 caracteres ou tem o caractere nulo: `"O título tem caracteres inválidos."`), `chave`, `tipo`, `escopo`, `eventoId` (falta, não é número ou a edição não existe), `cota` (falta no `COTA`, não existe, ou veio em outro escopo) e `parceriaId` (falta no `PARCERIA`, a parceria não existe, ou veio em outro escopo) e `paginasForaDoAtlas` (não é uma lista de números separados por vírgula, tem repetição, passa de 20, tem página 0 ou além do total de páginas do arquivo, deixa o documento sem nenhuma página no Atlas, ou o arquivo não pôde ser lido: nesse caso nada é gravado). |
 
-**Histórico:** `CRIACAO` na entidade `documento` (a marca não vê).
+**Histórico:** `CRIACAO` na entidade `documento` (a marca não vê); com páginas fora do Atlas, o detalhe traz `páginas fora do Atlas: 4`.
 
 ## 55. `GET /api/documentos`  · Atlas M3
 
@@ -2488,6 +2805,30 @@ O trecho inteiro de um documento, para o visualizador abrir na página certa e d
 
 **Erros:** 401; 404 (`"Não encontramos este documento."` para todos os casos, para o erro não dizer qual dos dois ids falhou: documento ou trecho que não existe, documento que a marca não pode ver, trecho de outro documento, id que não é número).
 
+## 103. `PATCH /api/documentos/{id}/paginas-fora-do-atlas`  · Requisitos RBS
+
+**Quem chama:** Admin RBS (exige o token CSRF). O patrocinador recebe **403** antes de o corpo ser lido.
+
+Troca a lista de páginas do documento que **não entram no índice do Atlas** (R2.1). Serve para o caso do manual de operações de 2026: o PDF tem 54 páginas, a p. 4 (contatos, com 12 telefones) trava a aprovação, e a RBS marca só a p. 4 em vez de cortar o PDF. O que muda está em "Dados pessoais", na seção dos documentos.
+
+**Corpo (JSON):** `{ "paginasForaDoAtlas": [4] }`. É a lista inteira, não um acréscimo: `[4, 7]` troca o que havia, e `[]` limpa a marcação (a suspeita volta, se as páginas liberadas a tinham). A lista é de números de 1 até o total de páginas, sem repetir, no máximo 20, e ao menos uma página precisa ficar no Atlas.
+
+**O que acontece.** O arquivo é lido de novo, o detector roda **sem** as páginas marcadas e `contemDadosPessoais`, `paginasSuspeitas` e `suspeitas` passam a refletir só as páginas que ficam. Se nenhuma delas levanta suspeita, `acoes` passa a incluir `APROVAR`. O texto das páginas marcadas nunca é guardado nem enviado a ninguém. Só vale com o documento em `AGUARDANDO_APROVACAO`.
+
+**200**: o **Documento** como ficou, com `paginasForaDoAtlas`, `paginasSuspeitas` e `suspeitas` atualizados.
+
+**Erros**
+
+| Status | Quando |
+| --- | --- |
+| 401 | Sem sessão. |
+| 403 | Não é Admin RBS, ou falta o token CSRF. |
+| 404 | O documento não existe (`"Não encontramos este documento."`), ou o arquivo dele não está mais no armazenamento (`"Este documento não está mais disponível. Avise a equipe da RBS."`). |
+| 409 | O documento não está aguardando aprovação (`"As páginas fora do Atlas só mudam enquanto o documento aguarda aprovação. Este documento está indexado."`), ou o arquivo existe mas não pôde ser lido (tipo não indexado ou sem texto). Nada muda. |
+| 422 | `paginasForaDoAtlas` ausente ou nula, com página menor que 1, repetida, mais de 20, além do total de páginas (`"O documento tem 3 páginas: as páginas fora do Atlas vão de 1 a 3."`) ou que deixam o documento sem nenhuma página (`"Ao menos uma página precisa ficar no Atlas."`), em `campos.paginasForaDoAtlas`. |
+
+**Histórico:** `EDICAO` na entidade `documento`, com `páginas fora do Atlas: nenhuma` (ou a lista de antes) no valor anterior e a nova lista no valor novo, e quem marcou. Só números de página, nunca o conteúdo; se ainda sobra suspeita, o detalhe diz em que páginas.
+
 ## 61. `POST /api/atlas/busca-teste`  · Atlas M4
 
 A busca de teste da RBS: ela escolhe uma parceria e uma consulta e vê o que a busca nos documentos faria por essa parceria, **sem o modelo**. É a aba "Busca de teste" de `/rbs/atlas`. **Quem chama:** Admin RBS (exige o token CSRF); o patrocinador recebe **403** (`"Esta operação é restrita à equipe da RBS."`) com qualquer corpo. [ISOLAMENTO] Passa pelo mesmo caminho do modelo (o embedding fora da transação e a busca como o papel `atlas_ro`, com a RLS e o filtro de escopo): o que aparece é o que a marca veria. Não grava nada (nem histórico), não chama o modelo de linguagem e gasta, no máximo, um embedding. Por isso cada usuário tem **60 buscas por hora** (`atlas.limites.buscas-de-teste-por-hora`, `ATLAS_LIMITE_BUSCAS_DE_TESTE_POR_HORA`; uma ficha volta a cada minuto, com o padrão): acima disso, **429**, antes do embedding.
@@ -2551,7 +2892,7 @@ Os prazos da edição `{id}` (o `id` do evento, rota 6), **por data, hora e tít
 
 **Query:** `incluirInativos` (`true` ou `false`, o padrão): por padrão só os ativos.
 
-**200**: uma lista de Prazo (vazia se não há nenhum). **Erros:** 401 sem sessão; 403 não é Admin RBS; 404 edição que não existe (`"Não encontramos esta edição do festival."`) ou id que não é número (`"Não encontramos o que você pediu."`); 400 `incluirInativos` que não é `true` nem `false`.
+**200**: uma lista de Prazo (vazia se não há nenhum). **Erros:** 401 sem sessão; 403 não é Admin RBS; 404 edição que não existe (`"Não encontramos esta edição do festival."`) ou id que não é número (`"Não encontramos o que você pediu."`); 400 `incluirInativos` que o Spring não lê como booleano (valem `true`, `false`, `on`, `off`, `yes`, `no`, `1` e `0`).
 
 ## 63. `POST /api/eventos/{id}/prazos`  · Atlas M5
 
@@ -2565,11 +2906,11 @@ Cadastra um prazo na edição `{id}`. **Quem chama:** Admin RBS (exige o token C
 
 | Status | Quando |
 | --- | --- |
-| 400 | Corpo ausente ou que não é JSON, ou um campo de tipo errado (`parceriaId` que não é número). |
+| 400 | Corpo ausente ou que não é JSON. Um campo de tipo errado (`parceriaId` que não é número) dá 422 nesse campo. |
 | 401 | Sem sessão. |
 | 403 | Não é Admin RBS (antes de o corpo ser lido), ou falta o token CSRF. |
 | 404 | A edição `{id}` não existe (`"Não encontramos esta edição do festival."`), ou `{id}` não é um número (`"Não encontramos o que você pediu."`). |
-| 422 | Os erros de campo vêm **todos juntos** em `campos`: `escopo` (ausente ou fora de `GLOBAL`, `COTA`, `PARCERIA`); `cota` (obrigatória só no escopo `COTA`: `"Informe a cota: MASTER, SUBCOTA_G ou SUBCOTA."`; fora dele: `"Só o prazo de escopo COTA leva cota."`); `parceriaId` (obrigatório só no escopo `PARCERIA`; que não existe; de outra edição: `"Esta parceria não é da edição do prazo."`; fora do escopo: `"Só o prazo de escopo PARCERIA leva parceria."`); `titulo` (em branco, com mais de **200** caracteres ou com o caractere nulo); `data` (ausente, que não existe, fora de `AAAA-MM-DD`, ou com o ano fora de **2000 a 2100**); `hora` (fora de `HH:mm`, de `00:00` a `23:59`, sem segundos); `descricao` (mais de **1.000** caracteres; em branco vale como sem descrição); `documentoId` (que não existe, que é de outra edição, ou que dá ao prazo **mais alcance que o do documento**, veja abaixo); `pagina` (sem `documentoId`, menor que 1 ou maior que as páginas do documento). |
+| 422 | Os erros de campo vêm **todos juntos** em `campos`: `escopo` (ausente ou fora de `GLOBAL`, `COTA`, `PARCERIA`); `cota` (obrigatória só no escopo `COTA`: `"Informe a cota: MASTER, SUBCOTA_G ou SUBCOTA."`; fora dele: `"Só o prazo de escopo COTA leva cota."`); `parceriaId` (obrigatório só no escopo `PARCERIA`; que não existe; de outra edição: `"Esta parceria não é da edição do prazo."`; fora do escopo: `"Só o prazo de escopo PARCERIA leva parceria."`); `titulo` (em branco, com mais de **200** caracteres ou com o caractere nulo); `data` (ausente, que não existe, fora de `AAAA-MM-DD`, ou com o ano fora de **2000 a 2100**); `hora` (fora de `HH:mm`, de `00:00` a `23:59`, sem segundos); `descricao` (mais de **1.000** caracteres ou com o caractere nulo; em branco vale como sem descrição); `documentoId` (que não existe, que é de outra edição, ou que dá ao prazo **mais alcance que o do documento**, veja abaixo); `pagina` (sem `documentoId`, menor que 1 ou maior que as páginas do documento). |
 
 **Um prazo não pode ter alcance maior que o do documento de origem** (`campos.documentoId`, `"Um prazo não vale para mais gente que o documento de onde saiu. ..."`): documento `GLOBAL` aceita prazo de qualquer escopo; documento `COTA` só aceita prazo `COTA` **dessa cota** ou `PARCERIA` de uma parceria dela; documento `PARCERIA` só aceita prazo `PARCERIA` **dessa parceria**. Sem isso, o título de um documento restrito (o plano da Master, o anexo do Amarelo) chegaria a uma marca que não pode vê-lo. O banco repete a regra (`rn_prazo_coerente`, 409).
 
@@ -2633,9 +2974,547 @@ A equipe da RBS também conversa com o Atlas: uma conversa **por edição, sem p
 
 ---
 
+# O plano comercial e os espaços de documento (Requisitos RBS)
+
+Rotas 69 a 73. O **plano comercial** é um arquivo avulso da parceria (categoria `PLANO_COMERCIAL`, aba `PERFIL`) que a RBS envia, com versões: não é entrega e **não conta como pendente**. Os **espaços de documento** são o que a marca preenche e envia: a compra de ingressos com valor de patrocinador (o formulário em branco é da RBS, avulso, categoria `FORMULARIO_INGRESSOS`; cada envio da marca é uma **solicitação**, uma entrega com `papel` `DOCUMENTO_INGRESSOS`) e o **MIV** e a **logo** (uma entrega por parceria, com `papel` `MIV` ou `LOGO`, criada no primeiro envio).
+
+Regras comuns às cinco rotas:
+
+- **Acesso.** Parceria de outra marca: **404**. Aba fechada ou oculta para a marca: **403** com as duas frases de "Aba" (o plano, o formulário e as solicitações são do `PERFIL`; o MIV e a logo, de `APLICACOES`). A RBS passa em qualquer aba. Sem sessão: 401. Sem o token CSRF nos envios: 403.
+- **Parceria `ENCERRADA` recusa toda escrita** (rotas 70, 72 e 73), para a marca e para a RBS: **409**, `"Esta parceria está encerrada e não aceita novos envios."`. A leitura continua.
+- **Envios (70, 72 e 73).** `multipart/form-data` com a parte `arquivo` (até 20 MB) e a parte opcional `observacao` (até 500 caracteres, fica ligada à versão e no histórico). Estas rotas **não** exigem o tipo `multipart` na requisição (diferente da rota 17): o 403 e o 404 vêm antes de qualquer conferência do corpo, e uma requisição sem a parte `arquivo` (ou que não é multipart) dá **422** em `campos.arquivo`. Observação com mais de 500 caracteres ou com caractere de controle (o NUL inclusive): 422 em `campos.observacao`.
+- **Arquivo.** Extensão fora da lista, ou conteúdo que não bate com ela: **415**. Acima de 20 MB: 413. Arquivo vazio: 422. A lista de extensões é a da rota 17; o MIV e a logo têm uma lista própria (veja a rota 72).
+- **Histórico.** Cada envio grava `ENVIO_ARQUIVO` (a primeira versão) ou `NOVA_VERSAO`, e a criação do espaço grava `CRIACAO`, na mesma transação do arquivo. Nada disso leva dado pessoal.
+- **Só leitura para a marca.** Não existe `PATCH` nem `DELETE` destas rotas: ninguém edita nem apaga uma versão enviada, só envia outra.
+
+## 69. `GET /api/parcerias/{id}/plano-comercial`  · Requisitos RBS
+
+**Quem chama:** patrocinador da parceria (com o Perfil aberto) ou Admin RBS.
+
+**200**
+
+```json
+{
+  "parceriaId": 2,
+  "versoes": [
+    { "id": 91, "entregaId": null, "nomeOriginal": "plano_amarelo_v2.pdf", "mimeType": "application/pdf", "tamanhoBytes": 482113,
+      "versao": 2, "categoria": "PLANO_COMERCIAL",
+      "enviadoPor": { "id": 1, "nome": "Equipe B2B RBS", "perfil": "ADMIN_RBS" },
+      "enviadoEm": "2026-11-04T10:00:00-03:00", "observacao": "Ajuste do investimento." }
+  ]
+}
+```
+
+`versoes` vem da mais nova para a mais antiga (lista vazia se a RBS ainda não enviou). Cada versão se baixa pela rota 18. **Erros:** 401, 403 (Perfil fechado), 404.
+
+## 70. `POST /api/parcerias/{id}/plano-comercial`  · Requisitos RBS
+
+**Quem chama:** Admin RBS (exige o token CSRF). O patrocinador recebe **403** antes de o corpo ser lido, com qualquer parceria.
+
+**Corpo:** `multipart/form-data` com `arquivo` e, opcional, `observacao`. **201** com `Location: /api/arquivos/{id}` e o **Arquivo** criado (formato de cada item de `versoes` da rota 69). A `versao` é a maior da parceria mais 1, calculada com a linha da parceria travada (`FOR UPDATE`): dois envios ao mesmo tempo viram versões seguidas, nunca repetidas.
+
+**Erros:** 403, 404, 409 (parceria encerrada), 413, 415, 422 (`campos.arquivo`, `campos.observacao`). **Histórico:** `ENVIO_ARQUIVO` (v1) ou `NOVA_VERSAO`, entidade `arquivo`, `detalhe` `"Plano comercial"`.
+
+## 71. `GET /api/parcerias/{id}/espacos`  · Requisitos RBS
+
+**Quem chama:** patrocinador da parceria ou Admin RBS. **Filtro opcional:** `aba=PERFIL` (só o formulário e as solicitações) ou `aba=APLICACOES` (só o MIV e a logo); outro valor dá 422. Sem `aba`, a marca precisa ter o Perfil **e** Aplicações abertos (senão 403); com `aba`, só aquela, e a parte da outra vem vazia ou `null`. A RBS vê tudo.
+
+**200**
+
+```json
+{
+  "parceriaId": 2,
+  "formularioIngressos": { "versoes": [ /* Arquivo, da versão mais nova para a mais antiga */ ] },
+  "solicitacoesIngressos": [ /* Entrega com papel DOCUMENTO_INGRESSOS, da primeira para a última, cada uma com status e arquivos */ ],
+  "miv":  null,
+  "logo": { /* Entrega com papel LOGO, com status e as versões em arquivos */ }
+}
+```
+
+`miv` e `logo` são `null` enquanto ninguém enviou o primeiro arquivo. Os títulos das solicitações são `"Solicitação de ingressos 1"`, `"... 2"` e assim por diante. **Erros:** 401, 403, 404, 422 (`aba`).
+
+## 72. `POST /api/parcerias/{id}/espacos/{papel}/arquivos`  · Requisitos RBS
+
+**Quem chama:** patrocinador da parceria ou Admin RBS (exige o token CSRF). `{papel}` é `DOCUMENTO_INGRESSOS`, `MIV` ou `LOGO`; outro valor dá 404 (`"Não encontramos este espaço."`).
+
+**Papel, aba e categoria são fixos** e a categoria enviada no corpo é **ignorada**:
+
+| Papel | Aba | Categoria do arquivo |
+| --- | --- | --- |
+| `DOCUMENTO_INGRESSOS` | `PERFIL` | `DOCUMENTO_INGRESSOS` |
+| `MIV` | `APLICACOES` | `MATERIAL_MARCA` |
+| `LOGO` | `APLICACOES` | `MATERIAL_MARCA` |
+
+- **`DOCUMENTO_INGRESSOS`:** cada envio cria uma **entrega nova**, `"Solicitação de ingressos N"`, em `ENVIADO`, com o arquivo como versão 1. Cada solicitação tem a sua situação: a RBS aprova ou pede ajuste pela rota 19 sem mexer nas outras, e a marca pode enviar outra depois de uma aprovada. As extensões e a conferência do conteúdo são as da rota 17, inclusive `doc`, `xls` e `ppt` sem macro VBA.
+- **`MIV` e `LOGO`:** o primeiro envio cria a entrega (`"Manual de identidade visual da marca (MIV)"` ou `"Logo da marca"`), e os seguintes são versões da mesma entrega. Dois primeiros envios ao mesmo tempo viram v1 e v2, nunca 409. **A marca envia nova versão em qualquer status** (inclusive depois de aprovado), e a entrega volta a `ENVIADO`. O envio da RBS é o retorno dela e não muda o status. Formatos: **PNG, JPG, PDF e ZIP**. `.svg` e `.ai` só dentro de um `.zip`: soltos dão 415 com `"Para o MIV e a logo, envie PNG, JPG, PDF ou ZIP. Arquivos .svg e .ai só dentro de um .zip."`.
+
+**201** com `Location: /api/arquivos/{id}`: o **Arquivo** criado, com `entregaId` (a solicitação, o MIV ou a logo) e `statusDaEntrega`.
+
+**Erros:** 401; 403 (aba fechada ou oculta para a marca); 404 (parceria de outra marca ou papel que não existe); 409 (parceria encerrada); 413; 415; 422 (`campos.arquivo`, `campos.observacao`). **Histórico:** `CRIACAO` (ao criar a entrega), `ENVIO_ARQUIVO` ou `NOVA_VERSAO` e, quando o status muda, `ALTERACAO_STATUS`, todos na entidade `entrega`.
+
+## 73. `POST /api/parcerias/{id}/formulario-ingressos`  · Requisitos RBS
+
+**Quem chama:** Admin RBS (exige o token CSRF); o patrocinador recebe **403** antes do corpo. Publica o modelo em branco da compra de ingressos: arquivo avulso da parceria (categoria `FORMULARIO_INGRESSOS`, aba `PERFIL`), versionado como o plano comercial (rota 70), com as mesmas partes, erros e histórico (`detalhe` `"Formulário de ingressos"`). Aparece em `formularioIngressos.versoes` da rota 71 e se baixa pela rota 18.
+
+---
+
+## 74. `GET /api/parcerias/{id}/contrato`  · F3
+
+**Quem chama:** patrocinador da parceria ou Admin RBS. **Corpo:** nenhum. O patrocinador precisa da aba `CONTRATO` aberta (liberada e visível).
+
+**200**
+
+```json
+{
+  "parceriaId": 2,
+  "signatario": {
+    "nome": "Fulana de Tal", "cargo": "Diretora de Marketing", "email": "fulana@marca.com.br",
+    "informadoPor": { "id": 3, "nome": "Marketing Amarelo", "perfil": "ADMIN_PATROCINADOR" },
+    "informadoEm": "2026-11-04T10:00:00-03:00"
+  },
+  "assinadoEm": "2026-10-20",
+  "arquivo": { "id": 81, "versao": 2, "nomeOriginal": "contrato_v2.pdf", "mimeType": "application/pdf", "tamanhoBytes": 482113,
+               "enviadoPor": { "id": 1, "nome": "Equipe B2B RBS", "perfil": "ADMIN_RBS" }, "enviadoEm": "2026-11-04T11:00:00-03:00", "observacao": null },
+  "versoes": [ { "id": 81, "versao": 2, "...": "..." }, { "id": 77, "versao": 1, "...": "..." } ]
+}
+```
+
+- `signatario` é `null` enquanto ninguém informou. `informadoEm` é `null` nos contratos da amostra, que são anteriores à V16.
+- `arquivo` é a versão em vigor (a que o contrato aponta); `null` sem contrato enviado. `versoes` são **todas** as versões, da mais nova para a mais antiga: os arquivos da categoria `CONTRATO` da parceria na aba `CONTRATO`, inclusive o que veio por uma entrega da aba. O número da versão continua do maior que já existe. Para baixar uma versão, a rota 18 (a marca baixa só com a aba aberta).
+- **Dado pessoal.** O nome, o cargo e o e-mail do signatário são dado pessoal de terceiro: só estas rotas (74 e 75) os devolvem. Não vão ao histórico, aos logs, ao Atlas, ao JEV nem ao relatório, e o `toString` dos objetos que os carregam não os mostra (o Spring escreve o corpo no log em `DEBUG`).
+
+**Erros**
+
+| Status | Quando |
+| --- | --- |
+| 401 | Sem sessão. |
+| 403 | Aba `CONTRATO` fechada, fora da cota ou oculta para a marca (as duas frases de "Aba"). |
+| 404 | Parceria que não existe ou é de outra marca; `{id}` que não é número. |
+
+## 75. `PUT /api/parcerias/{id}/contrato/signatario`  · F3
+
+**Quem chama:** patrocinador da parceria (aba `CONTRATO` aberta) ou Admin RBS, no lugar da marca. Exige o token CSRF. Cria o signatário na primeira vez e o troca nas seguintes (uma pessoa por contrato).
+
+**Corpo**
+
+```json
+{ "nome": "Fulana de Tal", "email": "fulana@marca.com.br", "cargo": "Diretora de Marketing" }
+```
+
+| Campo | Regra |
+| --- | --- |
+| `nome` | Obrigatório, de 3 a 120 caracteres. |
+| `email` | Obrigatório, até 254 caracteres, no formato `algo@dominio.ext` (sem espaço). |
+| `cargo` | Opcional, até 80 caracteres. |
+
+Texto com NUL ou outro caractere de controle em qualquer campo dá 422 (`"... tem caracteres inválidos."`).
+
+**200**: o mesmo objeto da rota 74.
+
+**[HISTORICO]** `CRIACAO` na primeira vez e `EDICAO` nas seguintes, na entidade `contrato`, com o detalhe `"Signatário informado"` ou `"Signatário alterado"` e **sem** valor anterior nem novo: o histórico diz que mudou, nunca o quê.
+
+**Erros**
+
+| Status | Quando |
+| --- | --- |
+| 401 | Sem sessão. |
+| 403 | Aba `CONTRATO` fechada ou oculta para a marca (antes do corpo, com qualquer corpo); falta o token CSRF. |
+| 404 | Parceria que não existe ou é de outra marca (antes do corpo). |
+| 409 | Parceria `ENCERRADA` (`"Esta parceria está encerrada e não aceita alterações."`). |
+| 422 | `campos.nome`, `campos.email` ou `campos.cargo` (todos de uma vez). |
+
+## 76. `POST /api/parcerias/{id}/contrato/arquivo`  · F3
+
+**Quem chama:** só o Admin RBS (a marca recebe **403** antes de o formulário ser lido). Exige o token CSRF. Envia o contrato final, já assinado, para histórico.
+
+**Corpo:** `multipart/form-data`
+
+| Parte | Obrigatória | O que é |
+| --- | --- | --- |
+| `arquivo` | Sim | O PDF do contrato, até **20 MB**. Só `.pdf`, e o conteúdo precisa ser um PDF de verdade. |
+| `assinadoEm` | Não | A data da assinatura, `AAAA-MM-DD`, de 2000 até hoje (não pode estar no futuro). Sem ela, a data anterior é mantida. |
+| `observacao` | Não | Recado de até 500 caracteres, ligado à versão. |
+
+Cada envio é uma **nova versão** (a maior que o contrato já tem, mais 1; dois envios juntos viram versões diferentes, porque a parceria fica travada durante o envio), na categoria `CONTRATO` e na aba `CONTRATO`, e o contrato passa a apontar para ela, na mesma transação. As versões antigas ficam guardadas e listadas.
+
+**201**: o mesmo objeto da rota 74. O cabeçalho `Location` aponta para `/api/parcerias/{id}/contrato`.
+
+**[HISTORICO]** `ENVIO_ARQUIVO` na v1 e `NOVA_VERSAO` nas seguintes, na entidade `contrato`, com `"nome (versão n)"`.
+
+**Erros**
+
+| Status | Quando |
+| --- | --- |
+| 401 | Sem sessão. |
+| 403 | A marca (`"Esta operação é restrita à equipe da RBS."`), antes do formulário; falta o token CSRF. |
+| 404 | Parceria que não existe. |
+| 409 | Parceria `ENCERRADA`. |
+| 413 | Arquivo acima de 20 MB. |
+| 415 | Não é `.pdf` (`"O contrato assinado precisa ser um PDF."`) ou o conteúdo não é um PDF. |
+| 422 | Parte `arquivo` ausente ou vazia, `assinadoEm` inválida ou no futuro, observação longa ou com caractere de controle (`campos.arquivo`, `campos.assinadoEm`, `campos.observacao`). |
+
+## 77. `GET /api/parcerias/{id}/credenciais`  · F3
+
+**Quem chama:** patrocinador da parceria (aba `CREDENCIAMENTO` aberta) ou Admin RBS. **Corpo:** nenhum.
+
+**200**
+
+```json
+{
+  "parceriaId": 2, "eventoId": 2, "totalPorDia": 115,
+  "credenciais": [ { "id": 7, "setor": "ARENA", "beneficiario": "MARCA", "quantidadePorDia": 20 } ],
+  "openStaffUrl": "https://example.com/",
+  "credenciamentoInicio": "2027-01-05", "credenciamentoFim": "2027-01-20"
+}
+```
+
+- `setor`: `ARENA`, `CAMAROTE`, `BAIXO_CAMAROTE`, `PREMIUM`, `SALA_IMPRENSA` ou `SALA_CONTEUDO`. `beneficiario`: `MARCA`, `AGENCIA`, `EQUIPE_CONTEUDO` ou `GERAL`. As linhas vêm na ordem destas listas. `totalPorDia` é a soma de `quantidadePorDia`.
+- `openStaffUrl`, `credenciamentoInicio` e `credenciamentoFim` são **da edição** (a mesma para todas as marcas) e vêm `null` até a RBS informar (rota 79). O front mostra "A RBS ainda não informou o endereço" quando `openStaffUrl` é `null`. O cadastro das pessoas é feito no Open Staff, fora do portal: aqui não há dado pessoal.
+- `eventoId` é a edição, para a RBS chamar a rota 79.
+
+**Erros:** 401; 403 (aba `CREDENCIAMENTO` fechada, fora da cota ou oculta para a marca); 404 (parceria que não existe ou é de outra marca).
+
+## 78. `PATCH /api/parcerias/{id}/credenciais`  · F3
+
+**Quem chama:** só o Admin RBS (a marca recebe **403** antes do corpo). Exige o token CSRF. Grava a grade da parceria, **tudo ou nada**.
+
+**Corpo**
+
+```json
+{ "credenciais": [ { "setor": "ARENA", "beneficiario": "MARCA", "quantidadePorDia": 20 },
+                   { "setor": "CAMAROTE", "beneficiario": "AGENCIA", "quantidadePorDia": 0 } ] }
+```
+
+- De 1 a 24 itens. Cada um cria ou troca a linha daquele setor e beneficiário (**upsert**); `quantidadePorDia` **0 retira** a linha; as linhas que não estão no corpo ficam como estão.
+- `quantidadePorDia` é um inteiro de **0 a 32.767** (o limite do banco). Negativo, acima disso ou com casa decimal dá 422, nunca 500.
+- O mesmo par de setor e beneficiário duas vezes no corpo dá 422.
+
+**200**: o mesmo objeto da rota 77.
+
+**[HISTORICO]** `EDICAO` na entidade `credencial_cota`, uma linha por credencial que mudou, com a quantidade antes e depois e o detalhe `"Arena · marca"`. Quantidade igual à atual não grava nada.
+
+**Erros**
+
+| Status | Quando |
+| --- | --- |
+| 401 | Sem sessão. |
+| 403 | A marca (`"Esta operação é restrita à equipe da RBS."`), antes do corpo; falta o token CSRF. |
+| 404 | Parceria que não existe. |
+| 409 | Parceria `ENCERRADA`. |
+| 422 | Sem itens ou mais de 24 (`campos.credenciais`); setor, beneficiário ou quantidade inválidos, ou par repetido (`campos["credenciais[0].setor"]`, `campos["credenciais[0].beneficiario"]`, `campos["credenciais[0].quantidadePorDia"]`). |
+
+## 79. `PATCH /api/eventos/{id}/credenciamento`  · F3
+
+**Quem chama:** só o Admin RBS (a marca recebe **403** antes do corpo). Exige o token CSRF. Informa o endereço do Open Staff e o período de cadastro **da edição**.
+
+**Corpo** (parcial: o que não vier fica como está; `null` ou `""` limpa o campo)
+
+```json
+{ "openStaffUrl": "https://example.com/", "inicio": "2027-01-05", "fim": "2027-01-20" }
+```
+
+| Campo | Regra |
+| --- | --- |
+| `openStaffUrl` | Só `https://`, até 500 caracteres, com um site depois. **Recusado** (422): `http`, `javascript:`, qualquer outro esquema, `usuario@` ou `usuario:senha@` antes do site (que esconderia o destino), espaço, caractere de controle (inclusive NUL), caractere que inverte a leitura (bidi) e endereço que o Java não leria como o navegador. O `@` depois do site vale (`https://example.com/@perfil`). |
+| `inicio`, `fim` | `AAAA-MM-DD`, de 2000 a 2100. O `fim` não pode ser antes do `inicio` (conferido também contra o valor que já estava gravado). |
+
+O servidor **nunca redireciona** para este endereço: o front abre o link em aba nova (`target="_blank"`, `rel="noopener noreferrer"`).
+
+**200**: a edição, como na rota 6 (`id`, `nome`, `edicao`, `dataInicio`, `dataFim`, `local`, `credenciamentoUrl`, `credenciamentoInicio`, `credenciamentoFim`).
+
+**[HISTORICO]** `EDICAO` na entidade `evento`, sem parceria (a marca não vê a linha), com o endereço antes e depois (não é dado pessoal) e o detalhe `"endereço do credenciamento"` e/ou `"período do credenciamento"`. Sem mudança, não grava.
+
+**Erros**
+
+| Status | Quando |
+| --- | --- |
+| 401 | Sem sessão. |
+| 403 | A marca, antes do corpo; falta o token CSRF. |
+| 404 | Edição que não existe (`"Não encontramos esta edição do festival."`). |
+| 422 | `campos.openStaffUrl`, `campos.inicio` ou `campos.fim`; corpo que não é um objeto (`campos.corpo`). |
+
+## 88. `GET /api/parcerias/{id}/comprovacao-mensal`  · Requisitos RBS (R3.2, R3.3)
+
+**Quem chama:** o Admin Patrocinador da parceria **de cota Master**, com a aba `MIDIA` aberta, ou o Admin RBS (qualquer parceria). **Corpo:** nenhum. As rotas 89 e 90 têm as mesmas regras e devolvem os mesmos números em arquivo.
+
+**200**
+
+```json
+{
+  "parceriaId": 2,
+  "patrocinador": "Cliente Amarelo",
+  "linhas": [
+    { "mes": "2026-09", "tipoMidia": "ASSINADA", "tipoMidiaNome": "Assinada", "unidade": "INSERCAO", "unidadeNome": "Inserções",
+      "exibido": 306, "previsto": 958 }
+  ],
+  "totais": [ { "mes": "2026-09", "unidade": "INSERCAO", "unidadeNome": "Inserções", "exibido": 358 } ]
+}
+```
+
+- **Uma linha por mês x tipo de mídia x unidade.** `exibido` é a soma de `veiculacao.quantidade` das exibições daquele mês, no **horário de Brasília** (uma exibição às 23h30 do último dia conta nesse mês). `mes` é `AAAA-MM`. Mês sem exibição não tem linha. **Unidades diferentes (`INSERCAO`, `CPM`) nunca são somadas**: cada uma tem a sua linha e o seu total.
+- `tipoMidia` é `ASSINADA`, `PROPRIA`, `MERCHANDISING`, `BRANDED` ou `CONTEUDO_DE_MARCA` (o tipo de mídia do plano comercial). `previsto` é o previsto do plano **inteiro** para aquele tipo e unidade (o plano não tem previsto por mês), repetido em cada mês.
+- `totais` soma as linhas do mês **por unidade**; a soma dos meses de uma unidade é igual ao `exibido` dessa unidade na consolidação (rota 29). Ordem: mês, tipo (`ASSINADA`, `PROPRIA`, `MERCHANDISING`, `BRANDED`, `CONTEUDO_DE_MARCA`), unidade (`INSERCAO`, `CPM`).
+- Sem exibição nenhuma, `linhas` e `totais` vêm vazios (200).
+- Calculada na hora, a cada chamada: não há "mês fechado".
+
+**Erros**
+
+| Status | Quando |
+| --- | --- |
+| 401 | Sem sessão. |
+| 403 | Aba `MIDIA` fechada, fora da cota ou oculta para a marca (as duas frases de "Aba"); **cota que não é Master** (Subcota G e Subcota): `"A comprovação mensal é das cotas Master."`. A aba é conferida antes da cota. |
+| 404 | Parceria que não existe ou é de outra marca; `{id}` que não é número. |
+
+## 89. `GET /api/parcerias/{id}/comprovacao-mensal.xlsx`  · Requisitos RBS (R3.2, R3.3)
+
+Mesmas regras de quem chama e de erros da rota 88. **200** com `Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` e `Content-Disposition: attachment; filename="comprovacao-mensal-<marca>.xlsx"` (o nome só tem letras minúsculas, números e hífen). Duas abas:
+
+- **"Comprovação mensal":** `Marca`, `Mês`, `Tipo de mídia`, `Unidade`, `Exibido no mês`, `Previsto no plano`, uma linha por linha da rota 88. Números saem como número, não como texto.
+- **"Totais por mês":** `Marca`, `Mês`, `Unidade`, `Exibido no mês`, uma linha por total da rota 88.
+
+A planilha é gravada pelo próprio servidor (OOXML mínimo, sem dependência nova), **nunca tem fórmula** e abre no Excel, no LibreOffice e no Numbers. Todo texto que começa com `=`, `+`, `-`, `@`, tabulação ou retorno de carro ganha um apóstrofo na frente (o nome da marca, por exemplo), para a planilha não virar vetor se alguém a salvar de novo em CSV. Cada download grava `DOWNLOAD` na entidade `comprovacao_mensal` (detalhe `xlsx`), na parceria.
+
+## 90. `GET /api/parcerias/{id}/comprovacao-mensal.csv`  · Requisitos RBS (R3.2, R3.3)
+
+Mesmas regras da rota 89. **200** com `Content-Type: text/csv; charset=UTF-8`, UTF-8 **com BOM**, separado por **ponto e vírgula**, decimais com vírgula e as mesmas seis colunas da primeira aba do `.xlsx`, com a mesma neutralização de fórmula. Grava `DOWNLOAD` (detalhe `csv`).
+
+## 91. `GET /api/eventos/{id}/comprovacao-mensal.xlsx`  · Requisitos RBS (R3.3)
+
+**Quem chama:** só o Admin RBS (a marca recebe **403** antes de qualquer outra conferência). **Corpo:** nenhum. O `{id}` é o da **edição** (evento).
+
+**200** com o `.xlsx` do lote: **uma aba por parceria Master ATIVA** da edição, na ordem do nome da marca, cada uma com a tabela da aba "Comprovação mensal" da rota 89. O nome da aba é o da marca, sem `[ ] : * ? / \`, com até 31 caracteres e único na planilha (repetido ganha ` (2)`). Edição sem parceria Master ativa devolve uma aba só, chamada `Sem cota Master`, com uma única célula, `Marca` (não traz as colunas da tabela). Arquivo `comprovacao-mensal-edicao-<ano>.xlsx`. Grava `DOWNLOAD` na entidade `comprovacao_mensal` (sem parceria; `entidade_id` é a edição).
+
+| Status | Quando |
+| --- | --- |
+| 401 | Sem sessão. |
+| 403 | Quem não é da RBS (`"Esta operação é restrita à equipe da RBS."`). |
+| 404 | Edição que não existe (`"Não encontramos esta edição do festival."`); `{id}` que não é número. |
+
+## 96. `GET /api/parcerias/{id}/posvenda`  · Pós-venda
+
+**Quem chama:** a marca da parceria e o Admin RBS. Devolve o **anexo "Pós-venda da edição"** do relatório, em vigor, e os links dos posts da parceria. Veja "O pós-venda da edição", mais abaixo, para o que o anexo é e o que ele não muda.
+
+- **A marca** só recebe **200** com o relatório da parceria **DISPONIBILIZADO** (rota 34) e com um anexo em vigor. Sem um dos dois, **404** com a mesma frase, `"O pós-venda desta edição ainda não está disponível."` (a marca não descobre se a RBS já publicou algo). Escolhemos 404, e não 403, como a rota 35 faz com o relatório que ainda não foi disponibilizado.
+- **A RBS** recebe sempre **200**, com `relatorioDisponibilizado: false` quando a marca ainda não vê o anexo, e `anexo: null` quando nada foi publicado.
+
+```json
+{
+  "parceriaId": 2, "eventoId": 2, "relatorioDisponibilizado": true,
+  "anexo": {
+    "id": 31, "versao": 2, "texto": "Trinta anos do maior festival de música do Sul.",
+    "links": [ { "tipo": "AFTERMOVIE", "titulo": "Aftermovie 2027", "url": "https://exemplo.example/aftermovie" } ],
+    "audiencias": [ { "veiculo": "ATL TV", "metrica": "pessoas alcançadas", "numero": 1600000, "unidade": "pessoas" } ],
+    "publicadoEm": "2027-02-01T10:00:00-03:00", "publicadoPor": null
+  },
+  "linksDePosts": [ { "origem": "CARGA", "url": "https://www.instagram.com/p/abc/", "host": "instagram.com", "data": "2027-01-20T12:00:00-03:00", "veiculo": "atl.la", "formato": "Post no feed", "titulo": null },
+                    { "origem": "ENVIO", "url": "https://www.tiktok.com/@planeta/video/1", "host": "tiktok.com", "data": "2027-01-22T09:00:00-03:00", "veiculo": null, "formato": null, "titulo": "Vídeo da marca" } ]
+}
+```
+
+| Campo | O que é |
+| --- | --- |
+| `anexo` | A versão em vigor: **a mais nova da parceria, se não foi retirada**. Se a mais nova foi retirada, o anexo some (a API **não volta** para uma versão anterior). `publicadoPor` vai `null` para a marca (é dado interno da RBS) e preenchido (`id`, `nome`, `perfil`) para a RBS. |
+| `anexo.links[].tipo` | `AFTERMOVIE`, `CLIPPING` ou `OUTRO`. O `url` é **só `http` ou `https`**; o front o abre com `target="_blank"` e `rel="noopener noreferrer"`. |
+| `anexo.audiencias[]` | A audiência por veículo: `veiculo`, `metrica` (ex.: `ouvintes`), `numero` e `unidade`. |
+| `linksDePosts[]` | R5.3.d. Os mesmos links da rota 87, do mais recente ao mais antigo: `origem` `CARGA` (a veiculação comprovada, `veiculacao.link`: vêm `veiculo` e `formato`) ou `ENVIO` (o link enviado como conteúdo numa entrega da aba Mídia, rota 86: vem `titulo`). `data` é a da exibição (CARGA) ou a do envio (ENVIO). Vale a regra de link da rota 87: só `http` ou `https` com host, sem `usuario@` antes do host, sem espaço, controle nem bidi, até 500 caracteres; o que está no banco e não cumpre a regra fica de fora. Quem enviou não aparece. Sai mesmo com a aba Mídia fechada (o anexo já confere a parceria e o relatório disponibilizado). Vêm também sem anexo, para a RBS. |
+
+**Erros**
+
+| Status | Quando |
+| --- | --- |
+| 401 | Sem sessão. |
+| 404 | Parceria de outra marca ou que não existe (`"Não encontramos esta parceria."`); para a marca, relatório não disponibilizado ou anexo não publicado (ou retirado). |
+
+## 97. `POST /api/parcerias/{id}/posvenda`  · Pós-venda
+
+**Quem chama:** só o Admin RBS (a marca recebe **403** antes do corpo). Exige o token CSRF. Publica **uma versão** do anexo da parceria. A versão é a maior que a parceria já tem mais 1 (a primeira é a 1). A anterior **fica como estava** (o banco não deixa mudá-la) e deixa de ser a que a marca vê.
+
+**Corpo** (tudo é opcional, mas é preciso ao menos um dos três)
+
+```json
+{
+  "texto": "Trinta anos do maior festival de música do Sul.",
+  "links": [ { "tipo": "AFTERMOVIE", "titulo": "Aftermovie 2027", "url": "https://exemplo.example/aftermovie" },
+             { "tipo": "CLIPPING", "titulo": "Matéria no jornal", "url": "https://exemplo.example/clipping?id=1" } ],
+  "audiencias": [ { "veiculo": "ATL TV", "metrica": "pessoas alcançadas", "numero": 1600000, "unidade": "pessoas" } ]
+}
+```
+
+| Campo | Regra |
+| --- | --- |
+| `texto` | Até 5.000 caracteres. A quebra de linha e o tab valem; os outros caracteres de controle (inclusive NUL) dão 422. É dado, nunca instrução: não vai ao Atlas. |
+| `links` | No máximo 30. `tipo`: `AFTERMOVIE`, `CLIPPING` ou `OUTRO`. `titulo`: de 1 a 160 caracteres. `url`: até 500 caracteres, **só `http://` ou `https://`**, com um site depois; **recusado**: `javascript:` e qualquer outro esquema, `usuario@` antes do site, espaço, caractere de controle e caractere que inverte a leitura (bidi). O servidor **nunca busca** o endereço. |
+| `audiencias` | No máximo 20. `veiculo` (até 80), `metrica` (até 80), `numero` (maior que zero e **menor que 100.000.000.000.000**, no máximo 2 casas decimais) e `unidade` (até 20). Acima do máximo: `campos["audiencias[0].numero"]` = `O número passa do máximo: use menos de 100.000.000.000.000.` |
+
+**201**, com `Location` na rota 96 e a versão publicada, no formato de um item da rota 98.
+
+**[HISTORICO]** `CRIACAO` na entidade `evento_posvenda`, **sem parceria** (a marca não vê a linha), com o detalhe `"parceria N, versão V"`. Sem texto no histórico.
+
+**Erros**
+
+| Status | Quando |
+| --- | --- |
+| 401 | Sem sessão. |
+| 403 | A marca, antes do corpo; falta o token CSRF. |
+| 404 | Parceria que não existe. |
+| 409 | Parceria `ENCERRADA` (`"Esta parceria está encerrada e não aceita alterações."`). |
+| 422 | Corpo sem texto, link nem audiência (`campos.texto`); `campos.texto`; `campos.links`, `campos["links[0].url"]`, `campos["links[0].tipo"]`, `campos["links[0].titulo"]`; `campos.audiencias`, `campos["audiencias[0].numero"]` e os outros campos da audiência. Todos os erros numa resposta. |
+
+## 98. `GET /api/eventos/{id}/posvenda`  · Pós-venda
+
+**Quem chama:** só o Admin RBS. **200**: uma lista com **todas as versões** de todas as parcerias da edição, **retiradas inclusive**, por patrocinador e, em cada parceria, da mais nova à mais antiga.
+
+```json
+[ { "id": 31, "parceriaId": 2, "patrocinador": "Cliente Amarelo", "versao": 2, "situacao": "PUBLICADO",
+    "texto": "...", "links": [], "audiencias": [], "publicadoEm": "2027-02-01T10:00:00-03:00",
+    "publicadoPor": { "id": 1, "nome": "B2B RBS", "perfil": "ADMIN_RBS" }, "retiradoEm": null, "retiradoPor": null } ]
+```
+
+`situacao` é `PUBLICADO` ou `RETIRADO`. Edição que não existe: **404** (`"Não encontramos esta edição."`). Marca: **403** antes de tudo.
+
+## 99. `DELETE /api/posvenda/{id}`  · Pós-venda
+
+**Quem chama:** só o Admin RBS. Exige o token CSRF. **Retira** a versão do anexo: **não apaga**. A linha fica com `situacao` `RETIRADO`, quem retirou e quando (o gatilho do banco só aceita essa mudança, e recusa qualquer `UPDATE` do conteúdo e qualquer `DELETE`). **204**, sem corpo; retirar de novo também responde **204** e não muda nada.
+
+A marca deixa de ver o anexo se a versão retirada era a mais nova (rota 96). Para publicar de novo, use a rota 97.
+
+**[HISTORICO]** `EXCLUSAO` na entidade `evento_posvenda`, sem parceria, na primeira retirada (`PUBLICADO` &rarr; `RETIRADO`).
+
+| Status | Quando |
+| --- | --- |
+| 401 / 403 | Sem sessão; a marca; falta o token CSRF. |
+| 404 | Versão que não existe (`"Não encontramos este pós-venda."`). |
+| 409 | A parceria da versão está `ENCERRADA`. |
+
+## 100. `GET /api/eventos/{id}/resultados`  · Pós-venda
+
+**Quem chama:** só o Admin RBS. **200**: os números da edição ("O festival em números"), por indicador. Edição que não existe: **404** (`"Não encontramos esta edição."`).
+
+```json
+[ { "id": 7, "indicador": "Público total", "valor": 80000, "qualificador": "MAIS_DE", "unidade": "pessoas", "fonte": "RBS, balanço da edição" } ]
+```
+
+## 101. `PUT /api/eventos/{id}/resultados`  · Pós-venda
+
+**Quem chama:** só o Admin RBS (a marca recebe **403** antes do corpo). Exige o token CSRF. **Informa um número da edição**: o mesmo `indicador` na mesma edição **troca** o valor (upsert), sem repetir a linha.
+
+**Corpo**
+
+```json
+{ "indicador": "Público total", "valor": 80000, "qualificador": "MAIS_DE", "unidade": "pessoas", "fonte": "RBS, balanço da edição" }
+```
+
+| Campo | Regra |
+| --- | --- |
+| `indicador` | Obrigatório, até 80 caracteres, sem caractere de controle. É o nome do número e vira o recorte do indicador no relatório. |
+| `valor` | Obrigatório, maior que zero e **menor que 100.000.000.000.000**, no máximo 2 casas decimais. Acima do máximo: `campos.valor` = `O valor passa do máximo: use menos de 100.000.000.000.000.` |
+| `qualificador` | `EXATO` (o padrão, se faltar) ou `MAIS_DE`. |
+| `unidade` | Obrigatória, até 20 caracteres. |
+| `fonte` | Obrigatória, até 200 caracteres. |
+
+**201** (número novo, com `Location` na rota 100) ou **200** (trocou o valor de um que já existia), com `{ id, indicador, valor, qualificador, unidade, fonte }`.
+
+**[RELATORIO]** Com ao menos um número informado, o indicador `FESTIVAL_NUMERO` ("O festival em números") **deixa de sair como indisponível** na versão do relatório **gerada depois** (rota 33): uma linha por número, o `indicador` como recorte, o `qualificador` `MAIS_DE` em `baseCalculo` (`"mais de; <fonte>"`). O relatório é uma fotografia: **as versões que já existiam não mudam**. Depois de informar os números, gere uma versão nova, valide e disponibilize. O catálogo continua com 17 indicadores e o relatório com 6 seções.
+
+**[HISTORICO]** `CRIACAO` ou `EDICAO` na entidade `evento_resultado`, sem parceria, com o valor de antes e o de depois (`"mais de 80000 pessoas"`).
+
+| Status | Quando |
+| --- | --- |
+| 401 / 403 | Sem sessão; a marca, antes do corpo; falta o token CSRF. |
+| 404 | Edição que não existe. |
+| 422 | `campos.indicador`, `campos.valor`, `campos.qualificador`, `campos.unidade` ou `campos.fonte` (NUL e outros caracteres de controle inclusive). |
+
+### O pós-venda da edição
+
+O anexo "Pós-venda da edição" (R8.1) é a resposta do portal ao modelo de pós-venda da RBS (o deck ilustrado da edição de 2026): um **anexo do relatório da parceria**, depois das 6 seções, mantido pela RBS. Ele **não é uma 7ª seção** e **não mexe nos 17 indicadores**: a rota 35 devolve o mesmo corpo com ou sem anexo (E2.6), e a função que gera o relatório não o enxerga. A marca vê o anexo na rota 96, só com o relatório disponibilizado; os números da edição entram nas seções do relatório pela rota 101 e pela geração de uma versão nova.
+
+- **Versões.** Cada publicação é uma linha nova (`evento_posvenda`, V18). Corrigir é publicar de novo. A marca vê a versão mais nova, se ela não foi retirada.
+- **Retirar não apaga.** A linha fica, e a API não volta sozinha para a versão anterior.
+- **Parceria `ENCERRADA`** recusa publicar e retirar (409), como todas as rotas novas de escrita.
+
+
+## 104. `GET /api/parcerias/{id}/cota/previa?para=COTA`  · Requisitos RBS (R6.d3)
+
+**Quem chama:** só o Admin RBS (a marca recebe **403** antes de tudo). Não grava nada, nem histórico. Mostra o que a troca da rota 102 vai fazer, e a 102 faz exatamente isso. `para` é o código da cota nova (`MASTER`, `SUBCOTA_G` ou `SUBCOTA`).
+
+**200**
+
+```json
+{
+  "parceriaId": 12,
+  "cotaAtual": { "codigo": "MASTER", "nome": "Master" },
+  "cotaNova": { "codigo": "SUBCOTA", "nome": "Subcota" },
+  "mudaACota": true,
+  "abasQueFecham": [ { "codigo": "PESQUISA", "nome": "Pesquisa da ativação" } ],
+  "abasQuePassamAPoderAbrir": [],
+  "relatorioDisponibilizado": { "versao": 2, "disponibilizadoEm": "2026-11-03T10:15:30-03:00" },
+  "exigeCiencia": true,
+  "pesquisa": "DEIXA_DE_VALER",
+  "comprovacaoMensal": "DEIXA_DE_VALER",
+  "naoMudamSozinhos": [
+    { "aba": "CORTESIAS", "texto": "As cortesias não mudam com a cota: ajuste a cota por setor e dia na aba Cortesias." },
+    { "aba": "CREDENCIAMENTO", "texto": "As credenciais não mudam com a cota: ajuste-as na aba Credenciamento." },
+    { "aba": "PERFIL", "texto": "O plano comercial e o investimento não mudam com a cota: revise-os no Perfil." }
+  ],
+  "avisos": [ "Vão fechar: Pesquisa da ativação. A marca deixa de ver essas abas e a RBS não consegue abri-las enquanto a cota não as incluir." ]
+}
+```
+
+| Campo | O que é |
+| --- | --- |
+| `abasQueFecham` | As abas hoje **liberadas** que a cota nova não inclui (`cota_tipo_aba`). Hoje só a Pesquisa é exclusiva da Master. Aba já fechada ou fora da cota não entra. |
+| `abasQuePassamAPoderAbrir` | As abas que a cota nova inclui e a atual não. A troca **não as abre**: a RBS abre pelo Perfil (rota 10). |
+| `relatorioDisponibilizado` | A versão disponibilizada mais nova (`versao`, `disponibilizadoEm`), ou `null`. |
+| `exigeCiencia` | `true` quando há relatório disponibilizado: a rota 102 só troca com `ciente: true`. |
+| `pesquisa`, `comprovacaoMensal` | `DEIXA_DE_VALER`, `PASSA_A_VALER` ou `SEM_MUDANCA`. A pesquisa é da cota que inclui a aba `PESQUISA`; a comprovação mensal, das cotas Master. Ao deixar de valer, as perguntas e os resultados ficam guardados, mas saem do relatório novo e dos faltantes, e a marca recebe 403 na comprovação mensal. |
+| `naoMudamSozinhos` | O que a troca **não** muda: cortesias, credenciais, plano comercial e investimento. A RBS ajusta nas abas indicadas. A tela avisa. |
+| `avisos` | As mesmas informações em frases prontas para a tela. |
+
+Para a mesma cota que a parceria já tem, devolve **200** com `mudaACota: false`, listas vazias e `exigeCiencia: false`.
+
+| Status | Quando |
+| --- | --- |
+| 401 / 403 | Sem sessão; a marca (antes de qualquer outra conferência). |
+| 404 | Parceria que não existe (ou id que não é número). |
+| 422 | `para` ausente, em branco ou de uma cota que não existe: `campos.para`. |
+
+## 102. `PUT /api/parcerias/{id}/cota`  · Requisitos RBS (R6.d3)
+
+**Quem chama:** só o Admin RBS (exige o token CSRF; a marca recebe **403** antes de o corpo ser lido). Troca a cota da parceria depois do cadastro.
+
+**Corpo**
+
+```json
+{ "cotaCodigo": "SUBCOTA", "ciente": true }
+```
+
+`ciente` só pesa quando a parceria tem relatório **disponibilizado** (rascunho e validado passam sem ele). Veja a prévia na rota 104.
+
+**200**: `{ "impacto": { ... }, "parceria": { ... } }`. O `impacto` tem o formato da rota 104, com o que a troca fez; a `parceria` é o objeto da rota 9, já com a cota e as abas novas.
+
+**O que a troca faz, tudo numa transação, com a linha da parceria travada:**
+
+- grava a cota nova em `parceria.cota_tipo_id`;
+- **fecha** (`liberada: false`) as abas liberadas que a cota nova não inclui. Aba oculta continua oculta. Isso mantém a regra de que a RBS não libera aba fora da cota (rota 10, 422);
+- **não abre** aba nenhuma, nem as que a cota nova passa a incluir (a RBS abre pelo Perfil);
+- **não mexe** nas entregas, nas cortesias, nas credenciais, no plano comercial, no investimento, nas perguntas e resultados da pesquisa, nos e-mails nem no evento.
+
+Nada guarda a cota antiga: o Atlas (busca, documentos e prazos do escopo `COTA`, `consultar_cota`), o relatório novo, os faltantes e a verificação de aba leem a cota da parceria a cada chamada, então a troca vale na leitura seguinte (no Atlas, no turno seguinte). Um relatório já disponibilizado guarda os números, mas a tela dele mostra a cota viva: por isso a ciência, e a recomendação de gerar o relatório de novo.
+
+**[HISTORICO]** Uma linha `EDICAO` (`entidade` `parceria`, `detalhe` `cota`, `valorAnterior` e `valorNovo` com os nomes da cota, como `Master` e `Subcota G`) e uma `LIBERACAO_ABA` por aba que fechou (`liberada` para `fechada`, ou `oculta` para `oculta`; o `detalhe` diz de que cota para qual). Quem trocou é o usuário da linha.
+
+| Status | Quando |
+| --- | --- |
+| 401 / 403 | Sem sessão; a marca (antes do corpo); falta o token CSRF. |
+| 404 | Parceria que não existe (ou id que não é número). A RBS vê as parcerias de todas as edições. |
+| 409 | Parceria `ENCERRADA` (`"Esta parceria está encerrada e não aceita alterações."`); ou relatório disponibilizado sem `ciente: true` (`"Esta parceria tem o relatório v2 disponibilizado. Trocar a cota muda o cabeçalho dele e os indicadores que a cota nova considera; confirme com ciente = true para continuar."`). |
+| 422 | `campos.cotaCodigo`: ausente, em branco, de uma cota que não existe, ou igual à que a parceria já tem (`"A parceria já está na cota Master."`). Nada é gravado. |
+
+---
+
 # Rotas de debug (temporárias)
 
-Um recurso **temporário**, para a equipe ligar o modelo de linguagem do Atlas pela tela (o botão "Debug"), sem reiniciar a API e sem variável de ambiente. Não faz parte das 68 rotas do contrato e sai antes da entrega final.
+Um recurso **temporário**, para a equipe ligar o modelo de linguagem do Atlas pela tela (o botão "Debug"), sem reiniciar a API e sem variável de ambiente. Não faz parte das 104 rotas do contrato e só existe no perfil `dev`.
 
 - **Só existem com `atlas.debug.chaves=true`.** A propriedade vem `false` por padrão, `true` no perfil `dev` e `false` no `demo` e no `test`. Sem ela, as quatro rotas respondem **404**, como uma rota que não existe.
 - **A chave fica só na memória da API.** Nunca vai ao banco, a arquivo ou ao log, e **some quando a API reinicia**. Nenhuma resposta devolve a chave inteira: só os 4 últimos caracteres (`finalDaChave`).
@@ -2730,6 +3609,22 @@ Ligada:
 
 # Regras que valem para todas as rotas
 
+## Números no corpo e arquivo vazio
+
+[VALIDACAO] Um campo do corpo JSON com o valor errado é erro **do campo**: **422** com o caminho dele em `campos` (em lista, `audiencias[0].numero`), e nada é gravado. JSON quebrado de verdade (sintaxe, corpo vazio) segue **400**. A regra vale para todo campo de todas as rotas com corpo JSON:
+
+| O que veio | `campos.<campo>` |
+| --- | --- |
+| Decimal num campo inteiro (`"quantidade": 1.5`; antes o portal cortava para 1 em silêncio) ou texto num campo inteiro (`"abc"`) | `Use um número inteiro.` |
+| Texto num campo decimal (`"valor": "abc"`) | `Use um número válido.` |
+| Inteiro que não cabe em 64 bits (`99999999999999999999`) | `O número é grande demais.` |
+| Número acima do máximo do banco num campo decimal (`numero` do pós-venda e `valor` dos resultados da edição: menos de 100.000.000.000.000) | `O número passa do máximo: use menos de 100.000.000.000.000.` (no `valor`: `O valor passa do máximo: ...`); zero ou negativo segue `... tem de ser maior que zero.` |
+| Outro tipo errado (texto onde se espera lista, objeto, booleano ou data) | `Valor inválido.` |
+
+A ordem não muda: 401 sem sessão, depois o 403 das rotas só da RBS e das abas fechadas, depois o corpo. O 404 (parceria ou entrega de outra marca) e o 403 (aba fechada) também vêm antes do corpo nas rotas 75, 83, 84 e 86 e no `?aba=` da 71, então um corpo quebrado ou com tipo errado vindo de quem não tem acesso é 404 ou 403, e não 400 ou 422. Nas demais rotas da parceria o 404 vem do service, depois de o corpo ser lido.
+
+**Arquivo vazio.** Em toda rota de envio de arquivo (materiais da entrega, espaços, dados da ativação, foto de comprovação, contrato e documentos do Atlas; a carga já dizia `A planilha está vazia.`), a parte `arquivo` com nome e 0 bytes dá 422 com `campos.arquivo` = `O arquivo está vazio.`. A parte ausente continua com `Envie o arquivo na parte "arquivo" do formulário.` (ou a variante da rota: foto, contrato, documento).
+
 ## Isolamento entre parcerias
 
 [ISOLAMENTO] A parceria é a unidade de isolamento: tudo o que um patrocinador vê pende dela.
@@ -2742,10 +3637,12 @@ Ligada:
 
 ## Permissões por perfil
 
+Um resumo. Para as rotas 69 a 104 (os requisitos da RBS), quem chama cada uma está na coluna "Quem chama" da tabela de rotas, e a matriz de acesso que os testes conferem fica em `backend/src/test/resources/rotas-requisitos-rbs.tsv`.
+
 | Quem | Pode |
 | --- | --- |
-| **Admin RBS** | Quase tudo: criar parcerias, autorizar e revogar e-mails, criar entregas, mudar status, mandar retorno, aprovar perguntas, subir cargas (inclusive o plano comercial), anexar as fotos de comprovação das aplicações, informar os dados da ativação, a planilha da agência inclusa, no lugar da marca, gerar e disponibilizar relatórios, ver o histórico geral e o painel. **Não** conversa com o Atlas das marcas nem descarta o relatório dele (rotas 42, 43, 46 e 65 dão 403, e as 44, 45 e 49 também numa conversa de parceria), mas conversa com o Atlas da RBS (rotas 67 e 68 e, na conversa dela, as 44, 45 e 49, com `atlas.rbs.ligado`), lê os relatórios que o Atlas montou (rotas 47 e 48) e, com o diagnóstico ligado, o traço de todos os turnos, o estado dos provedores e o teste deles (rotas 50 a 53). Envia, lista, aprova, recusa, revoga e reindexa os documentos do Atlas e vê os trechos (rotas 54 a 58); abre o arquivo e um trecho no visualizador (rotas 59 e 60) e faz a busca de teste (rota 61). Lista, cadastra e desativa os prazos que o Atlas consulta (rotas 62 a 64). Usa as rotas de debug da chave do modelo (só dela). |
-| **Admin Patrocinador** | Ver a própria parceria, as entregas das abas liberadas, enviar materiais, baixar arquivos da parceria, ver o histórico dela, enviar as perguntas da pesquisa, ver a consolidação, o plano de aplicações com as fotos e informar os dados da ativação, a planilha da agência inclusa (aba `APLICACOES` aberta), ver um documento do Atlas que o escopo dela permite (rota 56: título, tipo, versão, páginas e se foi substituído) e abri-lo no visualizador, com o arquivo e o trecho citado (rotas 59 e 60), conversar com o Atlas e montar o relatório de ativação pelo botão ou, com o modelo de linguagem ligado, pelo texto livre (rotas 42 a 46, só ela; a conversa é de quem a abriu, e a conversa da RBS é como a que não existe: 404), ver os relatórios do Atlas da parceria (rotas 47 e 48) e descartar o relatório que ela criou e que está em montagem (rota 65, só o dono do relatório: outro Admin Patrocinador da parceria recebe 404), o diagnóstico das próprias conversas (rota 49, só com `atlas.diagnostico.marca` ligado) e o relatório disponibilizado. **Nunca** vê outra parceria nem as rotas da RBS. |
+| **Admin RBS** | Quase tudo: criar parcerias, autorizar e revogar e-mails, criar entregas, mudar status, mandar retorno, aprovar perguntas, subir cargas (inclusive o plano comercial), anexar as fotos de comprovação das aplicações, informar os dados da ativação, a planilha da agência inclusa, no lugar da marca, gerar e disponibilizar relatórios, ver o histórico geral e o painel. **Não** conversa com o Atlas das marcas nem descarta o relatório dele (rotas 42, 43, 46 e 65 dão 403, e as 44, 45 e 49 também numa conversa de parceria), mas conversa com o Atlas da RBS (rotas 67 e 68 e, na conversa dela, as 44, 45 e 49, com `atlas.rbs.ligado`), lê os relatórios que o Atlas montou (rotas 47 e 48) e, com o diagnóstico ligado, o traço de todos os turnos, o estado dos provedores e o teste deles (rotas 50 a 53). Envia, lista, aprova, recusa, revoga e reindexa os documentos do Atlas e vê os trechos (rotas 54 a 58); abre o arquivo e um trecho no visualizador (rotas 59 e 60) e faz a busca de teste (rota 61). Lista, cadastra e desativa os prazos que o Atlas consulta (rotas 62 a 64). Usa as rotas de debug da chave do modelo (só dela). Abre e edita a pesquisa da edição e vê a fila das perguntas a aprovar (rotas 92 a 95; a decisão continua na 25). Grava a cota de cortesias por setor e dia, com o acesso e o shuttle, e o prazo de destinação da edição (rotas 81 e 82), e destina, edita e retira cortesias no lugar da marca, também depois do prazo (rotas 83 a 85). |
+| **Admin Patrocinador** | Ver a própria parceria, as entregas das abas liberadas, enviar materiais, baixar arquivos da parceria, ver o histórico dela, enviar as perguntas da pesquisa, ver a consolidação, o plano de aplicações com as fotos e informar os dados da ativação, a planilha da agência inclusa (aba `APLICACOES` aberta), ver um documento do Atlas que o escopo dela permite (rota 56: título, tipo, versão, páginas e se foi substituído) e abri-lo no visualizador, com o arquivo e o trecho citado (rotas 59 e 60), conversar com o Atlas e montar o relatório de ativação pelo botão ou, com o modelo de linguagem ligado, pelo texto livre (rotas 42 a 46, só ela; a conversa é de quem a abriu, e a conversa da RBS é como a que não existe: 404), ver os relatórios do Atlas da parceria (rotas 47 e 48) e descartar o relatório que ela criou e que está em montagem (rota 65, só o dono do relatório: outro Admin Patrocinador da parceria recebe 404), o diagnóstico das próprias conversas (rota 49, só com `atlas.diagnostico.ligado` e `atlas.diagnostico.marca` ligados) e o relatório disponibilizado. **Nunca** vê outra parceria nem as rotas da RBS. Ver a tabela de cortesias e destiná-las, editar e retirar qualquer destinação da parceria, dentro do disponível e até o prazo da edição, se houver (rotas 80, 83, 84 e 85; aba `CORTESIAS` aberta). |
 
 ## O que a API grava no histórico
 
@@ -2768,5 +3665,6 @@ Nenhuma nas rotas de autenticação. Três observações:
 - **[PENDENTE]** Se os dados que a marca informa (rota 41) precisam de aprovação da RBS antes de aparecer. Hoje entram direto, com autor, data e origem à vista.
 - **[PENDENTE]** Limite de tentativas de login por IP e por e-mail. Hoje a falha só fica registrada no histórico.
 - **[PENDENTE]** Em produção (HTTPS): marcar o cookie de sessão como `Secure` e enviar o token CSRF só por conexão segura.
-- **[PENDENTE]** O modelo de linguagem do Atlas (OpenCode Go) é para o ambiente de testes, com dados fictícios: os termos de uso do serviço (uso interno, não em benefício de terceiros) e a retenção de dados do modelo escolhido precisam ser confirmados antes de qualquer uso além do teste. Os testes da suíte nunca chamam o provedor; o teste com a chave de verdade é manual.
+- **[PENDENTE]** O modelo de linguagem do Atlas (OpenCode Go) é para o ambiente de testes, com dados fictícios: os termos de uso do serviço (uso interno, não em benefício de terceiros) e o acordo de retenção zero do DeepSeek no Go, que vale até 30/11/2026 e é renovado mês a mês, precisam ser confirmados antes de qualquer uso além do teste. Os testes da suíte nunca chamam o provedor; o teste com a chave de verdade é manual.
 - **[PENDENTE]** Se a RBS precisa aprovar o relatório do Atlas antes de a marca usá-lo (hoje é documento de trabalho da marca, com o selo "Não validado pela RBS") e se a RBS conversa também com o Atlas das marcas (hoje ela só lê o relatório; o Atlas da RBS, rotas 67 e 68, é uma conversa à parte, sem marca).
+- **[PENDENTE]** Se a RBS exigir outro algoritmo para a senha (Argon2id). Hoje é BCrypt; a troca fica no `SegurancaConfig`, com rehash no próximo login.

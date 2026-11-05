@@ -221,3 +221,16 @@ export async function baixar(caminho: string, nomeDoArquivo: string) {
   link.click()
   setTimeout(() => URL.revokeObjectURL(endereco), 1000)
 }
+
+/** O arquivo inteiro, como Blob, para mostrar na tela (o visualizador do contrato), com o mesmo tratamento de erro. */
+export async function lerArquivo(caminho: string): Promise<Blob> {
+  let resposta: Response
+  try {
+    resposta = await fetch(`${BASE}${caminho}`, { credentials: 'same-origin' })
+  } catch {
+    throw new ErroApi(0, SEM_API)
+  }
+  if (resposta.status === 401) aoPerderSessao?.()
+  if (!resposta.ok) throw await lerErro(resposta)
+  return resposta.blob()
+}

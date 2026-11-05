@@ -21,9 +21,9 @@ import tools.jackson.databind.json.JsonMapper;
  * [ATLAS] A amostra de cortesias e credenciais segue o plano comercial de cada cota, o mesmo que o kit de documentos do Atlas traz
  * (o Manual de Operações diz que o plano comercial prevalece quando os dois divergem). Os números vêm do {@code gabarito.json} do
  * kit, que o {@code GabaritoDosDocumentosTest} confere contra o texto dos PDFs: Master (D03, o Amarelo), Subcota G (D04, o Roxo) e
- * Subcota (D05, o Verde). Antes, o portal dizia 4 cortesias na Arena e 2 no Camarote para o Roxo e para o Verde, 5 e 10 credenciais
- * na Arena, e o Camarote "pelo Portão 6 ou 4", contra 6, 3 e 8 (Roxo), 3, 1 e 12 (Verde) e o Portão 4 nos planos. A soma das
- * destinações nunca passa da cota (o gatilho {@code rn_cortesia_limite} confere) e nenhuma destinação se perde.
+ * Subcota (D05, o Verde). Desde a F1b os números do kit são os dos PDFs da RBS (o {@code AmostraBateComOsPdfsDaRbsTest} fixa
+ * os PDFs): Roxo 4 e 2 cortesias e 5 credenciais, Verde 4 e 2 e 10. O Camarote "pelo Portão 6 ou 4" dos PDFs continua como Portão 4,
+ * como no manual. A soma das destinações nunca passa da cota (o gatilho {@code rn_cortesia_limite} confere) e nenhuma se perde.
  */
 @TesteDeIntegracao
 class AmostraAlinhadaAosPlanosComerciaisTest {
@@ -80,8 +80,8 @@ class AmostraAlinhadaAosPlanosComerciaisTest {
                     .containsEntry("CAMAROTE", cortesias[1]).hasSize(2);
         }
         assertThat(credenciaisPorDia("Cliente Roxo")).containsEntry("ARENA/GERAL", credenciais[0]).hasSize(1);
-        assertThat(cortesias).containsExactly(6, 3);
-        assertThat(credenciais).containsExactly(8);
+        assertThat(cortesias).containsExactly(4, 2);
+        assertThat(credenciais).containsExactly(5);
     }
 
     @Test
@@ -94,8 +94,8 @@ class AmostraAlinhadaAosPlanosComerciaisTest {
                     .containsEntry("CAMAROTE", cortesias[1]).hasSize(2);
         }
         assertThat(credenciaisPorDia("Cliente Verde")).containsEntry("ARENA/GERAL", credenciais[0]).hasSize(1);
-        assertThat(cortesias).containsExactly(3, 1);
-        assertThat(credenciais).containsExactly(12);
+        assertThat(cortesias).containsExactly(4, 2);
+        assertThat(credenciais).containsExactly(10);
     }
 
     @Test
@@ -143,7 +143,7 @@ class AmostraAlinhadaAosPlanosComerciaisTest {
         assertThat(jdbc.sql("""
                 SELECT sum(d.quantidade) FROM cortesia_destinacao d JOIN cortesia_cota c ON c.id = d.cortesia_cota_id
                 WHERE c.parceria_id = :p AND c.setor = 'ARENA' AND c.dia = 'SEXTA'
-                """).param("p", SessaoDeApi.parceriaDe2027(jdbc, "Cliente Verde")).query(Long.class).single()).as("a Verde usa 3 de 3 na Arena de sexta")
+                """).param("p", SessaoDeApi.parceriaDe2027(jdbc, "Cliente Verde")).query(Long.class).single()).as("a Verde usa 3 de 4 na Arena de sexta")
                 .isEqualTo(3L);
         assertThat(jdbc.sql("SELECT sum(quantidade) FROM cortesia_cota WHERE parceria_id = :p").param("p", SessaoDeApi.parceriaDe2027(jdbc, "Cliente Amarelo"))
                 .query(Long.class).single()).as("o Amarelo, que não mudou: 150 disponíveis").isEqualTo(150L);

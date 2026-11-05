@@ -14,6 +14,8 @@ type Props = {
   campos: CampoDoFormulario[]
   textoEnviar: string
   aoEnviar: (valores: ValorInformado[]) => Promise<void>
+  /** Chamado no começo de cada tentativa de enviar, antes da conferência dos campos. */
+  aoTentar?: () => void
   /** Na aba, só vai o que mudou em relação ao valor atual; no cartão, vai tudo o que foi preenchido. */
   somenteMudados?: boolean
   /** Botões ao lado do enviar (ex.: "Agora não" no cartão do Atlas). */
@@ -66,6 +68,7 @@ export function FormularioDadosInformados({
   campos,
   textoEnviar,
   aoEnviar,
+  aoTentar,
   somenteMudados = false,
   extra,
   desabilitado = false,
@@ -108,6 +111,8 @@ export function FormularioDadosInformados({
 
   async function enviar(evento: FormEvent) {
     evento.preventDefault()
+    // Avisa quem usa o formulário que uma tentativa começou: um "salvo" de antes não pode ficar junto do erro desta (U06).
+    aoTentar?.()
     const { valores, problemas } = conferir()
     setErros(problemas)
     setFalha(null)
@@ -133,10 +138,11 @@ export function FormularioDadosInformados({
       <div className={escuro ? 'grid gap-3 @md:grid-cols-2' : 'grid gap-4 md:grid-cols-2'}>
         {campos.map((campo) => {
           const propriedades = {
-            rotulo: campo.unidade ? `${campo.rotulo} (${campo.unidade})` : campo.rotulo,
+            rotulo: campo.unidade ? `${campo.rotulo}, em ${campo.unidade}` : campo.rotulo,
             inputMode: 'numeric' as const,
             autoComplete: 'off',
-            placeholder: campo.vigente ? numero(campo.vigente.valor) : 'Não informado',
+            // O valor atual fica escrito na ajuda (seloDoValor), com contraste; o placeholder cinza só convida a digitar (U21).
+            placeholder: campo.vigente ? 'Valor novo' : 'Não informado',
             value: textos[campo.chave] ?? '',
             onChange: (evento: { target: { value: string } }) => setTextos((atuais) => ({ ...atuais, [campo.chave]: evento.target.value })),
             erro: erros[campo.chave],

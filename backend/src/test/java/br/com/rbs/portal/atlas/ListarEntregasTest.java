@@ -154,7 +154,11 @@ class ListarEntregasTest extends ApoioDasConsultas {
         for (String filtro : List.of("{\"aba\":\"MIDIA\"}", "{\"aba\":\"CORTESIAS\"}", "{\"aba\":\"MIDIA\",\"status\":\"AGUARDANDO_ENVIO\"}")) {
             Map<String, Object> filtrado = resultado(contexto, turno(), LISTAR, filtro);
             assertThat(registros(filtrado)).as(filtro).isEmpty();
-            assertThat((String) filtrado.get("observacao")).as(filtro).contains("fechada");
+            if (filtro.contains("CORTESIAS")) {   // aba oculta: o Atlas não diz "fechada" nem a nomeia
+                assertThat((String) filtrado.get("observacao")).as(filtro).doesNotContain("fechada", "Cortesias").contains("Não há entregas");
+            } else {
+                assertThat((String) filtrado.get("observacao")).as(filtro).contains("fechada");
+            }
             assertThat(AtlasJson.escrever(filtrado)).as(filtro).doesNotContain("ENTREGA-SECRETA");
         }
     }

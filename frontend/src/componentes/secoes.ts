@@ -20,7 +20,7 @@ export type Secao = {
   /** Aba da modelagem que libera a seção; Minha parceria não depende de aba. */
   aba: CodigoAba | null
   subtitulo: string
-  /** As abas fora da prioridade (Cortesias, Credenciamento, Contrato) mostram só as entregas da aba. */
+  /** Herdado: as abas que só listavam as entregas. Desde os requisitos da RBS (04/11) todas têm tela própria. */
   desejavel: boolean
 }
 
@@ -67,8 +67,8 @@ export const SECOES: Secao[] = [
     caminho: 'cortesias',
     icone: 'ri-ticket-2-line',
     aba: 'CORTESIAS',
-    subtitulo: 'Regras e destinação das cortesias da sua cota.',
-    desejavel: true,
+    subtitulo: 'Cota de cortesias por setor e dia, e a destinação aos convidados.',
+    desejavel: false,
   },
   {
     chave: 'credenciamento',
@@ -76,8 +76,8 @@ export const SECOES: Secao[] = [
     caminho: 'credenciamento',
     icone: 'ri-profile-line',
     aba: 'CREDENCIAMENTO',
-    subtitulo: 'Credenciais da equipe da marca no festival.',
-    desejavel: true,
+    subtitulo: 'Credenciais por setor, período de cadastro e o link do Open Staff.',
+    desejavel: false,
   },
   {
     chave: 'pesquisa',
@@ -94,8 +94,8 @@ export const SECOES: Secao[] = [
     caminho: 'contrato',
     icone: 'ri-file-shield-2-line',
     aba: 'CONTRATO',
-    subtitulo: 'Contrato assinado e signatários da parceria.',
-    desejavel: true,
+    subtitulo: 'Contrato final assinado e os dados de quem assina.',
+    desejavel: false,
   },
 ]
 
@@ -107,6 +107,7 @@ export const GESTAO_RBS: AtalhoRbs[] = [
   { nome: 'Patrocinadores', caminho: '/rbs/patrocinadores', icone: 'ri-building-2-line' },
   { nome: 'Fila de materiais', caminho: '/rbs/fila', icone: 'ri-inbox-archive-line' },
   { nome: 'Cargas', caminho: '/rbs/cargas', icone: 'ri-upload-cloud-2-line' },
+  { nome: 'Pesquisa', caminho: '/rbs/pesquisa', icone: 'ri-questionnaire-line' },
   { nome: 'Relatórios', caminho: '/rbs/relatorios', icone: 'ri-file-chart-line' },
   { nome: 'Histórico', caminho: '/rbs/historico', icone: 'ri-history-line' },
   { nome: 'Atlas', caminho: '/rbs/atlas', icone: 'ri-pulse-line' },

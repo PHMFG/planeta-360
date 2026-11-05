@@ -50,6 +50,49 @@ export const decidirPergunta = (perguntaId: number, decisao: 'APROVAR' | 'PEDIR_
     corpo: { decisao, observacao: observacao || undefined },
   })
 
+// ---------- Pesquisa da edição (rotas 92 a 95; R5.6.d) ----------
+export type EscopoDaPesquisa = 'ATIVACAO' | 'GERAL'
+
+export type PesquisaDaEdicao = {
+  id: number
+  eventoId: number
+  nome: string
+  escopo: EscopoDaPesquisa
+  metodologia: string | null
+  baseRespondentes: number | null
+  nivelConfianca: number | null
+  perguntas: { rascunho: number; enviadas: number; aprovadas: number }
+  resultados: number
+  perguntasLigadas: number | null
+}
+
+export type DadosDaPesquisa = { nome?: string; escopo?: EscopoDaPesquisa; metodologia?: string; baseRespondentes?: number; nivelConfianca?: number }
+
+export type PerguntaDaFila = {
+  id: number
+  parceriaId: number
+  patrocinador: string
+  eventoId: number
+  edicao: number
+  pesquisaId: number | null
+  ordem: number
+  texto: string
+  status: Pergunta['status']
+  enviadaPor: UsuarioResumo | null
+  enviadaEm: string | null
+}
+
+export const listarPesquisasDaEdicao = (eventoId: number) => pedir<PesquisaDaEdicao[]>(`/eventos/${eventoId}/pesquisas`)
+
+export const abrirPesquisa = (eventoId: number, dados: DadosDaPesquisa) =>
+  pedir<PesquisaDaEdicao>(`/eventos/${eventoId}/pesquisas`, { metodo: 'POST', corpo: dados })
+
+export const editarPesquisa = (pesquisaId: number, dados: DadosDaPesquisa) =>
+  pedir<PesquisaDaEdicao>(`/pesquisas/${pesquisaId}`, { metodo: 'PATCH', corpo: dados })
+
+export const listarPerguntasDaFila = (filtros: { status?: Pergunta['status']; eventoId?: number; pagina?: number }) =>
+  pedir<Pagina<PerguntaDaFila>>(`/pesquisa/perguntas${consulta({ ...filtros, tamanho: 50 })}`)
+
 // ---------- Cargas ----------
 export type Carga = {
   id: number

@@ -32,7 +32,51 @@ export type Entrega = {
   /** Da versão mais nova para a mais antiga. */
   arquivos: Arquivo[]
   ultimaObservacao: { texto: string; por: string; em: string } | null
+  /** O espaço próprio da entrega: as solicitações de ingressos no Perfil, o MIV e a logo em Aplicações (D5 do plano). */
+  papel?: 'DOCUMENTO_INGRESSOS' | 'MIV' | 'LOGO' | null
+  /** Todas as versões, de arquivo, texto ou link, da mais nova para a mais antiga (rota 86). */
+  versoes?: VersaoDaEntrega[]
 }
+
+/** Uma versão da entrega: um arquivo, ou um material em texto ou em link (R5.3.a). Os campos do outro tipo vêm nulos. */
+export type VersaoDaEntrega = {
+  tipo: 'ARQUIVO' | 'TEXTO' | 'LINK'
+  id: number
+  versao: number
+  enviadoPor: UsuarioResumo | null
+  enviadoEm: string
+  observacao: string | null
+  nomeOriginal: string | null
+  mimeType: string | null
+  tamanhoBytes: number | null
+  categoria: string | null
+  titulo: string | null
+  texto: string | null
+  url: string | null
+  host: string | null
+}
+
+export const enviarConteudo = (
+  entregaId: number,
+  conteudo: { tipo: 'TEXTO' | 'LINK'; texto?: string; url?: string; titulo?: string; observacao?: string },
+) => pedir<VersaoDaEntrega & { entregaId: number; statusDaEntrega: StatusEntrega }>(`/entregas/${entregaId}/conteudos`, { metodo: 'POST', corpo: conteudo })
+
+/** Um link de post da parceria (rota 87): da carga de veiculação da RBS ou enviado como conteúdo numa entrega de Mídia. */
+export type LinkDeMidia = {
+  origem: 'CARGA' | 'ENVIO'
+  url: string
+  host: string
+  data: string
+  veiculo?: string | null
+  formato?: string | null
+  espacoPrograma?: string | null
+  entregaTitulo?: string | null
+  titulo?: string | null
+  enviadoPor?: UsuarioResumo | null
+}
+
+export const listarLinksDeMidia = (parceriaId: number) =>
+  pedir<{ parceriaId: number; itens: LinkDeMidia[] }>(`/parcerias/${parceriaId}/links-de-midia`)
 
 export type ItemFila = {
   id: number
@@ -113,9 +157,9 @@ export const TRANSICOES: Record<StatusEntrega, StatusEntrega[]> = {
 export const ACEITA_ENVIO: StatusEntrega[] = ['NAO_INICIADO', 'AGUARDANDO_ENVIO', 'AJUSTE_SOLICITADO', 'ENVIADO']
 
 /** Extensões aceitas no envio; a API confere de novo, inclusive o conteúdo do arquivo. */
-export const EXTENSOES_ACEITAS = '.pdf,.png,.jpg,.jpeg,.docx,.xlsx,.pptx,.csv,.mp4,.mp3,.zip'
+export const EXTENSOES_ACEITAS = '.pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.mp4,.mp3,.zip'
 export const LIMITE_BYTES = 20 * 1024 * 1024
-export const REGRA_ENVIO = 'PDF, PNG, JPG, DOCX, XLSX, PPTX, CSV, MP4, MP3 ou ZIP, até 20 MB'
+export const REGRA_ENVIO = 'PDF, PNG, JPG, Word, Excel, PowerPoint (sem macro), CSV, MP4, MP3 ou ZIP, até 20 MB'
 
 /**
  * Confere no navegador o que a API vai recusar de qualquer jeito (tipo e tamanho), para avisar antes do envio. [UPLOAD]
@@ -124,6 +168,7 @@ export const REGRA_ENVIO = 'PDF, PNG, JPG, DOCX, XLSX, PPTX, CSV, MP4, MP3 ou ZI
 export function problemaNoArquivo(arquivo: File): string | null {
   const extensao = arquivo.name.includes('.') ? `.${arquivo.name.split('.').pop()?.toLowerCase()}` : ''
   if (!EXTENSOES_ACEITAS.split(',').includes(extensao)) return `Este tipo de arquivo não é aceito. Envie ${REGRA_ENVIO}.`
+  if (arquivo.size === 0) return 'O arquivo está vazio. Escolha o arquivo de novo.'
   if (arquivo.size > LIMITE_BYTES) return 'O arquivo passa do limite de 20 MB. Reduza o tamanho e escolha de novo.'
   return null
 }

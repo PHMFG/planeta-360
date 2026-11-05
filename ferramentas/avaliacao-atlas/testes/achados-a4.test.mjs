@@ -11,7 +11,7 @@ const T = (marcador, documento, conteudo, extra = {}) => ({ marcador, documento,
 const semOrigem = (...turnos) => numerosSemOrigem(turnos)
 
 test('vazamento: documento de outra parceria sem canário, pelo título', () => {
-  const r = resumirTurnos([turno('qual a área?', trechos(T('T1', 'Anexo da parceria · Cliente Amarelo', 'O espaço tem 120 metros quadrados.')), texto('Sim.'))])
+  const r = resumirTurnos([turno('qual a área?', trechos(T('T1', 'Anexo da parceria · Cliente Amarelo', 'O espaço da Arena tem 150 metros quadrados.')), texto('Sim.'))])
   assert.equal(vazamentos('roxo', r).length, 1)
   assert.deepEqual(vazamentos('amarelo', r), [])
 })

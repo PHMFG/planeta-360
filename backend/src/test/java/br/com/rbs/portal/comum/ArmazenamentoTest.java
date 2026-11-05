@@ -103,12 +103,12 @@ class ArmazenamentoTest {
         assertThatThrownBy(() -> armazenamento.gravar("texto".getBytes(StandardCharsets.UTF_8), "nota.txt", "OUTRO", rbs(), null))
                 .isInstanceOf(ArquivoRecusadoException.class)
                 .satisfies(erro -> assertThat(((ArquivoRecusadoException) erro).status()).isEqualTo(HttpStatus.UNSUPPORTED_MEDIA_TYPE))
-                .hasMessage("Este tipo de arquivo não é aceito. Envie um destes: pdf, png, jpg, jpeg, docx, xlsx, pptx, csv, mp4, mp3, zip.");
+                .hasMessage("Este tipo de arquivo não é aceito. Envie um destes: pdf, png, jpg, jpeg, doc, docx, xls, xlsx, ppt, pptx, csv, mp4, mp3, zip.");
     }
 
     @Test
     void gravarArquivoDeUmaParceriaSemEntregaGuardaOCaminhoDaParceria() {
-        Arquivo gravado = armazenamento.gravar("%PDF-1.4 x".getBytes(StandardCharsets.US_ASCII), "plano.pdf", "PLANO_COMERCIAL", rbs(),
+        Arquivo gravado = armazenamento.gravar("%PDF-1.4 x".getBytes(StandardCharsets.US_ASCII), "plano.pdf", "OUTRO", rbs(),
                 amarelo());
 
         assertThat(gravado.parceriaId()).isEqualTo(amarelo());

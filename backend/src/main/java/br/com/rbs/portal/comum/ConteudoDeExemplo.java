@@ -35,7 +35,7 @@ final class ConteudoDeExemplo {
             case PPTX -> pronto("exemplo.pptx");
             case ZIP -> pronto("exemplo.zip");
             case TXT -> txt(nomeOriginal);
-            case XLS -> null;   // só a planilha da agência (rota 66) aceita .xls; a amostra não tem arquivo desse tipo
+            case DOC, XLS, PPT -> null;   // a amostra não tem arquivo de Office antigo
         });
     }
 

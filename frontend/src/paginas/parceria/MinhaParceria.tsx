@@ -91,7 +91,7 @@ export function MinhaParceria() {
                 />
               </Grade3>
 
-              <Cartao titulo="Sua próxima ação">
+              <Cartao titulo={rbs ? 'Próxima ação da marca' : 'Sua próxima ação'}>
                 {pesquisaPrimeiro ? (
                   <div className="flex flex-wrap items-center justify-between gap-4" data-secao="pesquisa">
                     <div>
@@ -109,7 +109,7 @@ export function MinhaParceria() {
                   <div className="flex flex-wrap items-center justify-between gap-4">
                     <div>
                       <p className="text-sm">
-                        <span className="font-semibold">{proxima.titulo}</span> · {secaoDa(proxima).nome} · prazo {data(proxima.prazo)}
+                        <span className="font-semibold">{proxima.titulo}</span> · {secaoDa(proxima).nome} · {proxima.prazo ? `prazo ${data(proxima.prazo)}` : 'sem prazo definido'}
                       </p>
                       <div className="mt-1">
                         <Status codigo={proxima.status} />

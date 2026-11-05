@@ -225,6 +225,9 @@ class PermissaoAntesDoCorpoTest {
             "GET /api/auth/csrf", "POST /api/auth/login", "POST /api/auth/ativar", "GET /api/auth/eu",
             "GET /api/eventos", "GET /api/parcerias", "GET /api/parcerias/{id}", "GET /api/parcerias/{id}/entregas",
             "POST /api/entregas/{id}/arquivos", "GET /api/arquivos/{id}", "GET /api/parcerias/{id}/historico",
+            // O plano comercial (69) e os espaços de documento da marca (71 e 72): a marca da parceria e a RBS.
+            "GET /api/parcerias/{id}/plano-comercial", "GET /api/parcerias/{id}/espacos",
+            "POST /api/parcerias/{id}/espacos/{papel}/arquivos",
             "GET /api/parcerias/{id}/pesquisa", "PUT /api/parcerias/{id}/pesquisa/perguntas",
             "GET /api/parcerias/{id}/consolidacao", "GET /api/parcerias/{id}/relatorio", "GET /api/relatorios/{id}/csv",
             "GET /api/parcerias/{id}/aplicacoes", "GET /api/campos", "GET /api/parcerias/{id}/dados",
@@ -232,7 +235,19 @@ class PermissaoAntesDoCorpoTest {
             "GET /api/atlas/relatorios/{id}", "GET /api/parcerias/{id}/atlas/relatorios",
             // Rota 56: a RBS vê o documento inteiro; a marca, pelo escopo dela, só o que a rota mostra. Rotas 59 e 60: o visualizador
             // (o arquivo e um trecho inteiro), com a mesma regra de acesso.
-            "GET /api/documentos/{id}", "GET /api/documentos/{id}/conteudo", "GET /api/documentos/{id}/trechos/{trechoId}");
+            "GET /api/documentos/{id}", "GET /api/documentos/{id}/conteudo", "GET /api/documentos/{id}/trechos/{trechoId}",
+            // As cortesias (rotas 80, 83, 84 e 85): a marca da parceria (com a aba aberta) e a RBS; a cota e o prazo (81 e 82) são só da RBS.
+            "GET /api/parcerias/{id}/cortesias", "POST /api/parcerias/{id}/cortesias/destinacoes",
+            "PATCH /api/parcerias/{id}/cortesias/destinacoes/{destId}", "DELETE /api/parcerias/{id}/cortesias/destinacoes/{destId}",
+            // O contrato e as credenciais (rotas 74, 75 e 77): a marca e a RBS; a escrita da RBS (76, 78 e 79) está na lista dela.
+            "GET /api/parcerias/{id}/contrato", "PUT /api/parcerias/{id}/contrato/signatario", "GET /api/parcerias/{id}/credenciais",
+            // Texto ou link na entrega (86) e os links de mídia (87): a marca da parceria (aba Mídia aberta) e a RBS.
+            "POST /api/entregas/{id}/conteudos", "GET /api/parcerias/{id}/links-de-midia",
+            // A comprovação mensal (rotas 88 a 90): a marca Master (aba MIDIA aberta) e a RBS; o lote (91) está na lista da RBS.
+            "GET /api/parcerias/{id}/comprovacao-mensal", "GET /api/parcerias/{id}/comprovacao-mensal.xlsx",
+            "GET /api/parcerias/{id}/comprovacao-mensal.csv",
+            // O anexo de pós-venda (rota 96): a marca com o relatório disponibilizado e a RBS; publicar, listar, retirar e os números (97 a 101) são só da RBS.
+            "GET /api/parcerias/{id}/posvenda");
 
     @Test
     void todaRotaDaApiEstaClassificadaEAListaDaRbsSoTemRotasQueExistem() {

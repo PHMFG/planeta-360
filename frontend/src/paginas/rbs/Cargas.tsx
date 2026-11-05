@@ -3,6 +3,7 @@
 // [DUPLICIDADE] Reenviar a mesma planilha não muda a contagem: as linhas repetidas entram como duplicadas.
 import { useState, type FormEvent } from 'react'
 import { ErroApi } from '../../api/cliente'
+import { baixarLoteDaComprovacao } from '../../api/comprovacao'
 import { listarEventos } from '../../api/parcerias'
 import { enviarCarga, listarCargas, listarRejeicoes, type Carga, type Rejeicao } from '../../api/resultados'
 import { useDados } from '../../api/useDados'
@@ -66,6 +67,52 @@ function Rejeicoes({ carga }: { carga: Carga }) {
   )
 }
 
+/** R3.3: a RBS baixa a comprovação mensal de todas as Master ativas da edição, uma aba por parceria. */
+function LoteDaComprovacao() {
+  const eventos = useDados(listarEventos, [])
+  const [eventoId, setEventoId] = useState('')
+  const [baixando, setBaixando] = useState(false)
+  const [falha, setFalha] = useState<string | null>(null)
+  const escolhido = (eventos.dado ?? []).find((item) => String(item.id) === eventoId) ?? eventos.dado?.[0]
+
+  async function baixar() {
+    if (!escolhido) return
+    setBaixando(true)
+    setFalha(null)
+    try {
+      await baixarLoteDaComprovacao(escolhido.id, escolhido.edicao)
+    } catch (erro) {
+      setFalha(erro instanceof ErroApi ? erro.message : 'Não foi possível baixar a comprovação.')
+    } finally {
+      setBaixando(false)
+    }
+  }
+
+  return (
+    <Cartao titulo="Comprovação mensal das Master">
+      <p className="mb-4 text-sm font-medium text-texto-2">
+        Uma planilha .xlsx com uma aba por parceria Master ativa da edição: o exibido de cada mês, por tipo de mídia e unidade. Cada
+        marca Master baixa a sua na aba Mídia.
+      </p>
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="w-full sm:w-64">
+          <Seletor rotulo="Edição da comprovação" value={escolhido ? String(escolhido.id) : ''} onChange={(campo) => setEventoId(campo.target.value)}>
+            {(eventos.dado ?? []).map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.nome} {item.edicao}
+              </option>
+            ))}
+          </Seletor>
+        </div>
+        <Botao icone="ri-file-excel-2-line" carregando={baixando} disabled={!escolhido} onClick={baixar}>
+          Baixar comprovação das Master
+        </Botao>
+      </div>
+      {falha && <Aviso tipo="falha" titulo={falha} className="mt-4" />}
+    </Cartao>
+  )
+}
+
 export function Cargas() {
   const eventos = useDados(listarEventos, [])
   const [pagina, setPagina] = useState(0)
@@ -82,8 +129,21 @@ export function Cargas() {
   const [selecionada, setSelecionada] = useState<Carga | null>(null)
   const evento = eventoId || String(eventos.dado?.[0]?.id ?? '')
 
+  /** Ao escolher outro arquivo, o resultado da carga anterior sai da tela, e um arquivo que não é CSV é recusado na hora (U07). */
+  function escolher(escolhido: File | null) {
+    setUltima(null)
+    if (escolhido && !escolhido.name.toLowerCase().endsWith('.csv')) {
+      setArquivo(null)
+      setCampoDoArquivo((atual) => atual + 1)
+      return setFalha(`${escolhido.name} não é CSV. A carga aceita só planilha em CSV (UTF-8, vírgula como separador); no Excel, use Salvar como › CSV UTF-8.`)
+    }
+    setFalha(null)
+    setArquivo(escolhido)
+  }
+
   async function enviar(evento_: FormEvent) {
     evento_.preventDefault()
+    setUltima(null)
     if (!arquivo) return setFalha('Escolha a planilha CSV.')
     if (!evento) return setFalha('Escolha a edição.')
     setFalha(null)
@@ -110,7 +170,7 @@ export function Cargas() {
       <CabecalhoSecao
         trilha="Planeta Atlântida / RBS · Gestão"
         titulo="Cargas"
-        subtitulo="Envie as planilhas de veiculação, de pesquisa e do plano comercial e veja o resultado de cada carga."
+        subtitulo="Envie as planilhas de veiculação, de pesquisa e do plano comercial, veja o resultado de cada carga e baixe a comprovação mensal das Master."
       />
 
       <Cartao titulo="Enviar planilha">
@@ -138,10 +198,10 @@ export function Cargas() {
           <label className="flex cursor-pointer items-center gap-3 rounded-xl border-[1.5px] border-dashed border-tinta bg-cinza-100 px-4 py-4 text-sm">
             <i className="ri-file-excel-2-line text-2xl" aria-hidden="true" />
             <span className="flex-1 font-semibold">{arquivo ? `${arquivo.name} · ${tamanho(arquivo.size)}` : 'Escolher a planilha CSV (UTF-8, vírgula como separador)'}</span>
-            <input key={campoDoArquivo} type="file" accept=".csv,text/csv" className="sr-only" onChange={(campo) => setArquivo(campo.target.files?.[0] ?? null)} />
+            <input key={campoDoArquivo} type="file" accept=".csv,text/csv" className="sr-only" onChange={(campo) => escolher(campo.target.files?.[0] ?? null)} />
           </label>
           <p className="text-xs text-texto-2">
-            Colunas esperadas: <code>{COLUNAS[tipo]}</code>. Há exemplos em docs/exemplos no repositório.
+            Colunas esperadas, nesta ordem, na primeira linha da planilha: <code>{COLUNAS[tipo]}</code>.
           </p>
           {falha && <Aviso tipo="falha" titulo={falha} />}
           <div>
@@ -160,6 +220,8 @@ export function Cargas() {
           <Resultado carga={ultima} />
         </>
       )}
+
+      <LoteDaComprovacao />
 
       <Cartao titulo="Cargas feitas">
         <Carregando dados={cargas} vazio={(dado) => dado.itens.length === 0} textoVazio="Nenhuma carga ainda.">

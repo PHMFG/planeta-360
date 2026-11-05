@@ -21,6 +21,8 @@ import { useSessao } from '../../sessao/Sessao'
 import { data, dataHora, numero, tamanho } from '../../util/formatar'
 import { useParceria, useRecarregarSeAbaFechou } from './ContextoParceria'
 import { DetalheEntrega } from './DetalheEntrega'
+import { PostsELinks } from '../../componentes/PostsELinks'
+import { ComprovacaoMensal } from '../../componentes/ComprovacaoMensal'
 import { ListaEntregas, NovaEntrega } from './EntregasDaAba'
 
 type Origem = 'todos' | 'marca' | 'rbs'
@@ -68,7 +70,7 @@ function PreparoEnvio({
       const enviado = await enviarArquivo(escolhida.id, arquivo, { categoria: 'MATERIAL_MIDIA', observacao: observacao.trim() || undefined })
       aoEnviar(enviado, escolhida)
     } catch (erro) {
-      setFalha(erro instanceof ErroApi ? erro.message : 'Não foi possível enviar o arquivo.')
+      setFalha(erro instanceof ErroApi ? (Object.values(erro.campos)[0] ?? erro.message) : 'Não foi possível enviar o arquivo.')
     } finally {
       setEnviando(false)
     }
@@ -100,7 +102,7 @@ function PreparoEnvio({
               <Seletor rotulo="Entrega vinculada" value={escolhida ? String(escolhida.id) : ''} onChange={(evento) => setEntregaId(evento.target.value)}>
                 {abertas.map((entrega) => (
                   <option key={entrega.id} value={entrega.id}>
-                    {entrega.titulo} · prazo {data(entrega.prazo)}
+                    {entrega.titulo} · {entrega.prazo ? `prazo ${data(entrega.prazo)}` : 'sem prazo definido'}
                   </option>
                 ))}
               </Seletor>
@@ -120,6 +122,8 @@ function PreparoEnvio({
               Enviar material
             </Botao>
           </div>
+          {/* O botão desabilitado diz por quê (U20). */}
+          {!escolhida && <p className="text-xs font-medium text-texto-2">O envio abre quando houver uma entrega aceitando material.</p>}
         </form>
       )}
     </Modal>
@@ -179,12 +183,15 @@ function ConteudoMidia({ rbs }: { rbs: boolean }) {
   const parceria = useParceria()
   const estado = estadoAbaNaParceria(parceria, 'MIDIA')
   const entregas = useDados(() => listarEntregas(parceria.id, 'MIDIA'), [parceria.id])
+  const semEntregaAberta = Boolean(entregas.dado) && !entregas.dado?.some((entrega) => ACEITA_ENVIO.includes(entrega.status))
   useRecarregarSeAbaFechou(entregas)
   const [selecionado, setSelecionado] = useState<File | null>(null)
   // Cada arquivo escolhido abre um "Preparar envio" novo: a observação e o erro do envio anterior não passam para o próximo.
   const [envios, setEnvios] = useState(0)
   const [aberta, setAberta] = useState<Entrega | null>(null)
   const [criando, setCriando] = useState(false)
+  // Cada envio pelo detalhe (arquivo, texto ou link) relê Posts e links: o link novo aparece na hora.
+  const [versaoDosLinks, setVersaoDosLinks] = useState(0)
   const [recebido, setRecebido] = useState<{ arquivo: Arquivo; entrega: Entrega } | null>(null)
   const [busca, setBusca] = useState('')
   const [origem, setOrigem] = useState<Origem>('todos')
@@ -222,6 +229,13 @@ function ConteudoMidia({ rbs }: { rbs: boolean }) {
         </Aviso>
       )}
 
+      {/* Sem nenhuma entrega aberta, a marca sabe antes de escolher o arquivo, e não depois (U04). */}
+      {!rbs && semEntregaAberta && (
+        <Aviso tipo="restrito" titulo="Nenhuma entrega de mídia aceita envio agora">
+          A RBS abre cada entrega (ou pede um ajuste) quando é a hora de enviar. As entregas desta aba estão em análise, aprovadas ou
+          ainda não foram abertas. Dúvidas sobre prazos: fale com o time B2B da RBS.
+        </Aviso>
+      )}
       {!rbs && (
         <AreaEnvio
           texto={`ou selecione no computador · ${REGRA_ENVIO} · a entrega é escolhida na hora do envio`}
@@ -231,7 +245,7 @@ function ConteudoMidia({ rbs }: { rbs: boolean }) {
             setEnvios((total) => total + 1)
             setSelecionado(arquivo)
           }}
-          desabilitado={!entregas.dado}
+          desabilitado={!entregas.dado || semEntregaAberta}
         />
       )}
 
@@ -295,6 +309,12 @@ function ConteudoMidia({ rbs }: { rbs: boolean }) {
 
       <PrevistoExibido />
 
+      {/* R3.2 e R3.3: só a cota Master (e a RBS, na parceria Master); as outras cotas não veem o cartão. */}
+      {parceria.cota.codigo === 'MASTER' && <ComprovacaoMensal parceriaId={parceria.id} patrocinador={parceria.patrocinador} />}
+
+      {/* R4.3 e R5.3.b: os links dos posts, clicáveis, da carga da RBS e dos materiais enviados. */}
+      <PostsELinks key={`links-${versaoDosLinks}`} parceriaId={parceria.id} />
+
       <Aviso titulo="A regra muda por tipo de conteúdo">
         Comercial de TV e conteúdo assinado: sem aprovação prévia. Branded content: consulte as regras específicas antes do envio.
       </Aviso>
@@ -317,6 +337,7 @@ function ConteudoMidia({ rbs }: { rbs: boolean }) {
           // O aviso "Envio recebido" do topo é do envio anterior; o novo aparece dentro do detalhe.
           setRecebido(null)
           entregas.recarregar()
+          setVersaoDosLinks((versao) => versao + 1)
         }}
       />
       {rbs && <NovaEntrega aba="MIDIA" aberto={criando} aoFechar={() => setCriando(false)} aoCriar={entregas.recarregar} />}

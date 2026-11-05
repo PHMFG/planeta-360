@@ -91,7 +91,7 @@ public class ParceriaEdicaoService {
                 // [PERMISSAO] Só se libera aba que a cota inclui (cota_tipo_aba: por exemplo, Pesquisa só para a Master). Fechar
                 // sempre pode; e repetir "liberada" numa aba que já estava aberta é um PATCH sem mudança, não uma liberação.
                 foraDaCota.put("abas[" + i + "].liberada",
-                        "A cota " + antes.cotaNome() + " não inclui a aba " + aba.nome() + ".");
+                        "Esta cota não inclui a aba " + aba.nome() + ". Para dar acesso, troque a cota da parceria.");
             }
         }
         if (!campos.isEmpty() || !foraDaCota.isEmpty()) {

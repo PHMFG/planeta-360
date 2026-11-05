@@ -3,6 +3,7 @@ package br.com.rbs.portal.atlas;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import br.com.rbs.portal.acesso.SessaoDeApi;
 import br.com.rbs.portal.atlas.checagem.FontesDoTurno;
 import br.com.rbs.portal.atlas.checagem.FontesDoTurno.Fonte;
 import br.com.rbs.portal.atlas.contexto.AtlasContexto;
@@ -12,7 +13,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.web.servlet.assertj.MockMvcTester;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -28,6 +32,9 @@ class ConsultarCotaTest extends ApoioDasConsultas {
 
     private static final String COTA = "consultar_cota";
     private static final String PLANO_DA_MASTER = "Plano comercial · Cota Master 2027";
+
+    @Autowired
+    MockMvcTester mvc;
 
     List<Map<String, Object>> registrosDoTipo(Map<String, Object> resultado, String tipo) {
         return registros(resultado).stream().filter(r -> tipo.equals(r.get("tipo"))).toList();
@@ -51,6 +58,29 @@ class ConsultarCotaTest extends ApoioDasConsultas {
         assertThat(fonte.registroEntidade()).isEqualTo("parceria");
         assertThat(fonte.registroId()).isEqualTo(contexto.parceriaId());
         assertThat(fonte.texto()).contains("Master", "Cota Patrocínio Master", "Planeta Atlântida", "2027");
+    }
+
+    @Test
+    void cortesiaTrazADestinadaEODisponivelCertosDepoisDeUmaDestinacaoPelaRota83() {
+        long verde = parceria("Cliente Verde");
+        SessaoDeApi marca = SessaoDeApi.entrar(mvc, VERDE);
+        Map<String, Object> antes = registrosDoTipo(resultado(contexto(VERDE, "Cliente Verde"), turno(), COTA, "{}"), "cortesia").stream()
+                .filter(c -> "Arena".equals(c.get("setor")) && "sábado".equals(c.get("dia"))).findFirst().orElseThrow();
+        // Arena de sábado da Verde: cota 4, 2 destinadas na amostra
+        assertThat(antes).containsEntry("quantidade", 4).containsEntry("destinadas", 2).containsEntry("disponiveis", 2);
+
+        assertThat(marca.post("/api/parcerias/" + verde + "/cortesias/destinacoes",
+                "{\"setor\":\"ARENA\",\"dia\":\"SABADO\",\"quantidade\":1,\"destinatario\":\"Convidada da Verde\"}")).hasStatus(HttpStatus.CREATED);
+
+        FontesDoTurno turno = turno();
+        Map<String, Object> resultado = resultado(contexto(VERDE, "Cliente Verde"), turno, COTA, "{}");
+        Map<String, Object> depois = registrosDoTipo(resultado, "cortesia").stream()
+                .filter(c -> "Arena".equals(c.get("setor")) && "sábado".equals(c.get("dia"))).findFirst().orElseThrow();
+        assertThat(depois).containsEntry("quantidade", 4).containsEntry("destinadas", 3).containsEntry("disponiveis", 1);
+        assertThat(turno.fonte((String) depois.get("marcador")).orElseThrow().texto()).contains("Destinadas: 3", "Disponíveis para destinar: 1");
+        // só números: o nome de quem recebeu não chega ao modelo
+        assertThat(turno.fontes().toString()).doesNotContain("Convidada");
+        assertThat(resultado.toString()).doesNotContain("Convidada");
     }
 
     @Test
@@ -78,6 +108,24 @@ class ConsultarCotaTest extends ApoioDasConsultas {
         assertThat(doRoxoAbas).filteredOn(a -> "Pesquisa da ativação".equals(a.get("nome"))).singleElement()
                 .satisfies(a -> assertThat(a.get("situacao")).as("a Subcota G não tem a aba Pesquisa na cota").isEqualTo("fora da cota"));
         assertThat(roxo).isNotEqualTo(amarelo);
+    }
+
+    @Test
+    void abaOcultaPelaRbsNaoApareceNemComoFechadaParaAMarca() {
+        long amarelo = parceria("Cliente Amarelo");
+        fecharAba(amarelo, "MIDIA");
+        esconderAba(amarelo, "CORTESIAS");
+        AtlasContexto contexto = contexto(AMARELO, "Cliente Amarelo");
+        FontesDoTurno turno = turno();
+
+        Map<String, Object> abas = registrosDoTipo(resultado(contexto, turno, COTA, "{}"), "abas").get(0);
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> itens = (List<Map<String, Object>>) abas.get("abas");
+        assertThat(itens).extracting(a -> a.get("nome")).hasSize(6).doesNotContain("Cortesias").contains("Mídia e conteúdo");
+        assertThat(itens).filteredOn(a -> "Mídia e conteúdo".equals(a.get("nome"))).singleElement()
+                .satisfies(a -> assertThat(a).containsEntry("situacao", "fechada"));
+        assertThat(turno.fonte((String) abas.get("marcador")).orElseThrow().texto()).doesNotContain("Cortesias");
     }
 
     @Test
@@ -158,9 +206,9 @@ class ConsultarCotaTest extends ApoioDasConsultas {
                 .doesNotContain("P6", "P4");
         // a Roxo tem credencial GERAL na Arena: não há palavra certa na tela, e o campo sai
         Map<String, Object> geral = registrosDoTipo(resultado, "credencial").stream().filter(c -> "Arena".equals(c.get("setor"))).findFirst().orElseThrow();
-        assertThat(geral).containsEntry("quantidadePorDia", 8).doesNotContainKey("beneficiario");   // o plano da Subcota G: 8 por dia na Arena
+        assertThat(geral).containsEntry("quantidadePorDia", 5).doesNotContainKey("beneficiario");   // o plano da Subcota G: 5 por dia na Arena
         String texto = turno.fonte((String) geral.get("marcador")).orElseThrow().texto();
-        assertThat(texto).contains("8", "Arena").doesNotContain("GERAL", "geral");
+        assertThat(texto).contains("5", "Arena").doesNotContain("GERAL", "geral");
         // o JSON todo não leva o código cru
         String json = AtlasJson.escrever(resultado);
         assertThat(json).doesNotContain("\"P6\"", "\"P4\"", "\"GERAL\"", "\"AGENCIA\"", "\"MARCA\"", "EQUIPE_CONTEUDO");

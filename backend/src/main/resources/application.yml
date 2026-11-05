@@ -34,6 +34,9 @@ spring:
     mapper:
       # Mantém a ordem dos campos como escrita nos records (id, nome, email...), sem ordenar por letra.
       sort-properties-alphabetically: false
+    deserialization:
+      # 1.5 num campo inteiro vira 422 (antes era cortado para 1 em silêncio). O TratadorDeErros monta a frase.
+      accept-float-as-int: false
   ai:
     model:
       # [ATLAS] none: não cria nenhum modelo, e o Atlas só oferece o botão (plano B). openai: liga o OpenCode Go (compatível com OpenAI).

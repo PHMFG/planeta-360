@@ -19,7 +19,7 @@ const ROTULOS: Record<string, { nome: string; cor: string }> = {
   EM_ANALISE: { nome: 'Em análise', cor: '#8a6a00' },
   AJUSTE_SOLICITADO: { nome: 'Ajuste solicitado', cor: '#c8203f' },
   APROVADO: { nome: 'Aprovado', cor: '#007a2a' },
-  NAO_APLICAVEL: { nome: 'Não aplicável', cor: '#9e9e9e' },
+  NAO_APLICAVEL: { nome: 'Não aplicável', cor: '#6e6e6e' }, // contraste de 5,1:1 no branco (U22)
   RASCUNHO: { nome: 'Rascunho', cor: '#572781' },
   VALIDADO: { nome: 'Validado', cor: '#0a6e80' },
   DISPONIBILIZADO: { nome: 'Disponibilizado', cor: '#007a2a' },

@@ -1,5 +1,6 @@
 package br.com.rbs.portal.documentos;
 
+import br.com.rbs.portal.documentos.DetectorDeDadosPessoais.Suspeita;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -25,7 +26,8 @@ public class DocumentoRepositorio {
                         Long arquivoId, String arquivoNome, String arquivoMime, Long arquivoTamanho, Long enviadoPor,
                         String enviadoPorNome, String enviadoPorPerfil, OffsetDateTime enviadoEm, Long aprovadoPor,
                         String aprovadoPorNome, String aprovadoPorPerfil, OffsetDateTime aprovadoEm, Long revogadoPor,
-                        String revogadoPorNome, String revogadoPorPerfil, OffsetDateTime revogadoEm) {
+                        String revogadoPorNome, String revogadoPorPerfil, OffsetDateTime revogadoEm, String paginasIgnoradas,
+                        String suspeitas) {
     }
 
     /** O que a rota 56 mostra à marca. */
@@ -39,7 +41,7 @@ public class DocumentoRepositorio {
 
     /** O que a ingestão precisa saber do documento. */
     public record ParaIngestao(Long id, String titulo, Integer versao, String status, Long parceriaId, Long aprovadoPor,
-                               String arquivoNome, String arquivoCaminho) {
+                               String arquivoNome, String arquivoCaminho, String paginasIgnoradas) {
     }
 
     /** Um trecho na lista da RBS. */
@@ -67,7 +69,10 @@ public class DocumentoRepositorio {
                    d.erro, a.id AS arquivo_id, a.nome_original AS arquivo_nome, a.mime_type AS arquivo_mime,
                    a.tamanho_bytes AS arquivo_tamanho, d.enviado_por, ue.nome AS enviado_por_nome, ue.perfil AS enviado_por_perfil,
                    d.enviado_em, d.aprovado_por, ua.nome AS aprovado_por_nome, ua.perfil AS aprovado_por_perfil, d.aprovado_em,
-                   d.revogado_por, ur.nome AS revogado_por_nome, ur.perfil AS revogado_por_perfil, d.revogado_em
+                   d.revogado_por, ur.nome AS revogado_por_nome, ur.perfil AS revogado_por_perfil, d.revogado_em,
+                   array_to_string(d.paginas_ignoradas, ',') AS paginas_ignoradas,
+                   (SELECT string_agg((e.item ->> 'pagina') || ':' || (e.item ->> 'tipo'), ',' ORDER BY e.ordem)
+                      FROM jsonb_array_elements(d.suspeitas) WITH ORDINALITY AS e(item, ordem)) AS suspeitas
             """;
 
     private static final String DE = """
@@ -281,22 +286,47 @@ public class DocumentoRepositorio {
     // Envio
     // ---------------------------------------------------------------------
 
-    /** Grava o documento. {@code erro} preenchido faz o documento nascer em ERRO (sem aprovado_por); nulo, aguardando aprovação. */
+    /** O envio sem páginas fora do Atlas e sem suspeita registrada (os testes de ingestão montam documentos assim). */
     public long inserir(String titulo, String chave, int versao, String tipo, String escopo, long eventoId, Integer cotaId,
                         Long parceriaId, long arquivoId, boolean contemDadosPessoais, Integer paginas, Integer extracaoMs,
                         String erro, long enviadoPor) {
+        return inserir(titulo, chave, versao, tipo, escopo, eventoId, cotaId, parceriaId, arquivoId, contemDadosPessoais, paginas,
+                extracaoMs, erro, enviadoPor, List.of(), List.of());
+    }
+
+    /** Grava o documento. {@code erro} preenchido faz o documento nascer em ERRO (sem aprovado_por); nulo, aguardando aprovação. */
+    public long inserir(String titulo, String chave, int versao, String tipo, String escopo, long eventoId, Integer cotaId,
+                        Long parceriaId, long arquivoId, boolean contemDadosPessoais, Integer paginas, Integer extracaoMs,
+                        String erro, long enviadoPor, List<Integer> paginasForaDoAtlas, List<Suspeita> suspeitas) {
         return jdbc.sql("""
                         INSERT INTO documento (titulo, chave, versao, tipo, escopo, evento_id, cota_tipo_id, parceria_id, arquivo_id,
-                                               status, contem_dados_pessoais, paginas, extracao_ms, erro, enviado_por)
+                                               status, contem_dados_pessoais, paginas, extracao_ms, erro, enviado_por,
+                                               paginas_ignoradas, suspeitas)
                         VALUES (:titulo, :chave, :versao, :tipo, :escopo, :evento, CAST(:cota AS smallint), :parceria, :arquivo,
                                 CASE WHEN CAST(:erro AS text) IS NULL THEN 'AGUARDANDO_APROVACAO' ELSE 'ERRO' END,
-                                :dados, :paginas, :extracaoMs, CAST(:erro AS text), :enviadoPor)
+                                :dados, :paginas, :extracaoMs, CAST(:erro AS text), :enviadoPor,
+                                CAST(:ignoradas AS smallint[]), CAST(:suspeitas AS jsonb))
                         RETURNING id
                         """)
                 .param("titulo", titulo).param("chave", chave).param("versao", versao).param("tipo", tipo).param("escopo", escopo)
                 .param("evento", eventoId).param("cota", cotaId).param("parceria", parceriaId).param("arquivo", arquivoId)
                 .param("dados", contemDadosPessoais).param("paginas", paginas).param("extracaoMs", extracaoMs).param("erro", erro)
-                .param("enviadoPor", enviadoPor).query(Long.class).single();
+                .param("enviadoPor", enviadoPor).param("ignoradas", PaginasForaDoAtlas.paraArray(paginasForaDoAtlas))
+                .param("suspeitas", PaginasForaDoAtlas.suspeitasParaJson(suspeitas)).query(Long.class).single();
+    }
+
+    /**
+     * Grava as páginas fora do Atlas e a suspeita recalculada sem elas (rota 103), no documento travado. O gatilho confere a lista e só
+     * deixa mudar enquanto o documento aguarda aprovação.
+     */
+    public void gravarPaginasForaDoAtlas(long id, List<Integer> paginas, boolean contemDadosPessoais, List<Suspeita> suspeitas) {
+        jdbc.sql("""
+                        UPDATE documento SET paginas_ignoradas = CAST(:ignoradas AS smallint[]), contem_dados_pessoais = :dados,
+                                             suspeitas = CAST(:suspeitas AS jsonb)
+                        WHERE id = :id
+                        """)
+                .param("id", id).param("ignoradas", PaginasForaDoAtlas.paraArray(paginas)).param("dados", contemDadosPessoais)
+                .param("suspeitas", PaginasForaDoAtlas.suspeitasParaJson(suspeitas)).update();
     }
 
     // ---------------------------------------------------------------------
@@ -344,7 +374,8 @@ public class DocumentoRepositorio {
     public Optional<ParaIngestao> paraIngestao(long id) {
         return jdbc.sql("""
                         SELECT d.id, d.titulo, d.versao, d.status, d.parceria_id, d.aprovado_por, a.nome_original AS arquivo_nome,
-                               a.caminho AS arquivo_caminho
+                               a.caminho AS arquivo_caminho,
+                               array_to_string(d.paginas_ignoradas, ',') AS paginas_ignoradas
                         FROM documento d JOIN arquivo a ON a.id = d.arquivo_id WHERE d.id = :id
                         """)
                 .param("id", id).query(ParaIngestao.class).optional();

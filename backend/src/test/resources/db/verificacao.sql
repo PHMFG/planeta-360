@@ -1,6 +1,6 @@
--- Confere o banco depois de V1 a V15 e da amostra R__amostra.sql: contagens, cargas, relatórios, órfãos e uma tentativa de violar cada regra.
+-- Confere o banco depois de V1 a V18 e da amostra R__amostra.sql: contagens, cargas, relatórios, órfãos e uma tentativa de violar cada regra.
 -- Atende o item 1 da Entrega 2 (amostra e verificações), prova as 8 correções do item 8 e, na seção 8, o plano comercial, o
--- catálogo e os dados informados da V7 e, na seção 9, as tabelas do Atlas da V8, o resumo do raciocínio da V9 e o traço do diagnóstico da V10 e, na seção 10, os documentos, os trechos, a busca sem acento e a RLS da V11 e, na seção 11, as fontes citadas, o documento congelado e o plural da busca da V12 e, na seção 12, os prazos da V13 e, na seção 14, o JEV e a conversa sem parceria da V15. Nenhuma linha fica gravada: as tentativas são desfeitas (só as sequências avançam).
+-- catálogo e os dados informados da V7 e, na seção 9, as tabelas do Atlas da V8, o resumo do raciocínio da V9 e o traço do diagnóstico da V10 e, na seção 10, os documentos, os trechos, a busca sem acento e a RLS da V11 e, na seção 11, as fontes citadas, o documento congelado e o plural da busca da V12 e, na seção 12, os prazos da V13 e, na seção 14, o JEV e a conversa sem parceria da V15 e, na seção 15, o papel da entrega, o Open Staff, o texto e link da entrega, o contrato e a pesquisa da ativação da V16 e, na seção 15b, as páginas fora do Atlas da V17 e, na seção 15, o pós-venda da V18. Nenhuma linha fica gravada: as tentativas são desfeitas (só as sequências avançam).
 
 -- Como rodar (banco de dev ou de teste com a amostra carregada; sem meta-comandos, serve também para JDBC com o texto inteiro):
 --   PGPASSWORD=portal psql -X -P pager=off -v ON_ERROR_STOP=1 -h localhost -U portal -d <banco> -f verificacao.sql
@@ -69,7 +69,7 @@ END $f$;
 DO $$
 BEGIN
     -- A tabela de controle do Flyway (flyway_schema_history) não é do portal: fica de fora quando o banco foi criado pelo Flyway.
-    PERFORM pg_temp.confere('ESTRUTURA', 'tabelas (29 da modelagem + 4 novas na V1 + 3 na V7 + 7 na V8 + 1 na V10 + 2 na V11 + 1 na V12 + 1 na V13)', 48,
+    PERFORM pg_temp.confere('ESTRUTURA', 'tabelas (29 da modelagem + 4 novas na V1 + 3 na V7 + 7 na V8 + 1 na V10 + 2 na V11 + 1 na V12 + 1 na V13 + 1 na V16 + 1 na V18)', 50,
        (SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
            AND table_name <> 'flyway_schema_history'));
     PERFORM pg_temp.confere('ESTRUTURA', 'visões (7 de consolidação + vw_dado_vigente)', 8,
@@ -77,7 +77,7 @@ BEGIN
     PERFORM pg_temp.confere('ESTRUTURA', 'funções fn_carregar_veiculacoes, fn_carregar_pesquisa, fn_carregar_plano, fn_gerar_relatorio', 4,
        (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
          WHERE n.nspname = 'public' AND p.proname IN ('fn_carregar_veiculacoes', 'fn_carregar_pesquisa', 'fn_carregar_plano', 'fn_gerar_relatorio')));
-    PERFORM pg_temp.confere('ESTRUTURA', 'gatilhos de regra (rn_*)', 29,
+    PERFORM pg_temp.confere('ESTRUTURA', 'gatilhos de regra (rn_*): 29 até a V15, mais rn_contrato_arquivo e rn_entrega_conteudo_imutavel da V16, rn_documento_paginas_ignoradas da V17, mais rn_evento_posvenda_conteudo e rn_evento_posvenda_imutavel da V18', 34,
        (SELECT count(*) FROM pg_trigger WHERE NOT tgisinternal AND tgname LIKE 'rn\_%'));
     PERFORM pg_temp.confere('BASE', 'tipos de cota', 3, (SELECT count(*) FROM cota_tipo));
     PERFORM pg_temp.confere('BASE', 'abas do menu', 7, (SELECT count(*) FROM aba));
@@ -326,10 +326,16 @@ BEGIN
         INSERT INTO pesquisa_resultado (pesquisa_id, parceria_id, pergunta_id, indicador, alternativa, valor, unidade, base_respondentes)
         SELECT q.pesquisa_id, (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Roxo' AND edicao = 2027), q.id, 'Pergunta 1', 'Teste', 1, 'NOTA', 10
         FROM pesquisa_pergunta q WHERE q.ordem = 1 $q$);
+    -- Desde a V16 só pode haver uma pesquisa ATIVACAO por edição (uq_pesquisa_ativacao). Para provar a chave composta com uma segunda
+    -- pesquisa da mesma edição, o índice é derrubado DENTRO da tentativa; o DDL é transacional e a recusa desfaz o DROP junto com o resto.
     PERFORM pg_temp.recusa('ITEM-3', 'resultado numa pesquisa diferente da pesquisa da pergunta', 'fk_resultado_pergunta_pesquisa', $q$
-        WITH outra AS (INSERT INTO pesquisa (evento_id, nome, escopo) SELECT evento_id, 'Outra pesquisa de teste', 'ATIVACAO' FROM pesquisa WHERE escopo = 'ATIVACAO' RETURNING id, evento_id)
-        INSERT INTO pesquisa_resultado (pesquisa_id, parceria_id, pergunta_id, indicador, alternativa, valor, unidade, base_respondentes)
-        SELECT outra.id, q.parceria_id, q.id, 'Pergunta 1', 'Teste', 1, 'NOTA', 10 FROM outra, pesquisa_pergunta q WHERE q.ordem = 1 $q$);
+        DO $d$
+        BEGIN
+            DROP INDEX uq_pesquisa_ativacao;
+            WITH outra AS (INSERT INTO pesquisa (evento_id, nome, escopo) SELECT evento_id, 'Outra pesquisa de teste', 'ATIVACAO' FROM pesquisa WHERE escopo = 'ATIVACAO' RETURNING id, evento_id)
+            INSERT INTO pesquisa_resultado (pesquisa_id, parceria_id, pergunta_id, indicador, alternativa, valor, unidade, base_respondentes)
+            SELECT outra.id, q.parceria_id, q.id, 'Pergunta 1', 'Teste', 1, 'NOTA', 10 FROM outra, pesquisa_pergunta q WHERE q.ordem = 1;
+        END $d$ $q$);
     PERFORM pg_temp.recusa('ITEM-3', 'resultado da ativação sem pergunta', 'rn_resultado_escopo', $q$
         INSERT INTO pesquisa_resultado (pesquisa_id, parceria_id, indicador, alternativa, valor, unidade, base_respondentes)
         SELECT id, (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), 'Pergunta 9', 'Teste', 1, 'NOTA', 10
@@ -468,7 +474,7 @@ BEGIN
         DELETE FROM parceria WHERE id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027) $q$);
 END $$;
 
--- [ITEM-6] A destinação de cortesias não passa da cota (Amarelo, Arena de sexta: 25 de 25; Verde, Arena de sábado: 2 de 3)
+-- [ITEM-6] A destinação de cortesias não passa da cota (Amarelo, Arena de sexta: 25 de 25; Verde, Arena de sábado: 2 de 4)
 DO $$
 BEGIN
     PERFORM pg_temp.recusa('ITEM-6', 'mais uma cortesia além da cota cheia (25 de 25)', 'rn_cortesia_limite', $q$
@@ -479,7 +485,7 @@ BEGIN
         INSERT INTO cortesia_destinacao (cortesia_cota_id, destinatario_nome, quantidade, registrado_por)
         SELECT cc.id, 'Lote gigante', 522, (SELECT id FROM _ver_usr WHERE email = 'marketing@amarelo.example')
         FROM cortesia_cota cc WHERE cc.setor = 'ARENA' AND cc.dia = 'SEXTA' AND cc.parceria_id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027) $q$);
-    PERFORM pg_temp.recusa('ITEM-6', 'aumentar uma destinação além da cota (Verde: 2 passam a 5 de 3)', 'rn_cortesia_limite', $q$
+    PERFORM pg_temp.recusa('ITEM-6', 'aumentar uma destinação além da cota (Verde: 2 passam a 5 de 4)', 'rn_cortesia_limite', $q$
         UPDATE cortesia_destinacao SET quantidade = 5
         WHERE cortesia_cota_id = (SELECT id FROM cortesia_cota WHERE setor = 'ARENA' AND dia = 'SABADO' AND parceria_id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Verde' AND edicao = 2027)) $q$);
     PERFORM pg_temp.recusa('ITEM-6', 'mover uma destinação para uma cota que não comporta', 'rn_cortesia_limite', $q$
@@ -487,7 +493,7 @@ BEGIN
         WHERE cortesia_cota_id = (SELECT id FROM cortesia_cota WHERE setor = 'ARENA' AND dia = 'SABADO' AND parceria_id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Verde' AND edicao = 2027)) $q$);
     PERFORM pg_temp.recusa('ITEM-6', 'reduzir a cota abaixo do que já foi destinado', 'rn_cortesia_cota_reducao', $q$
         UPDATE cortesia_cota SET quantidade = 20 WHERE setor = 'ARENA' AND dia = 'SEXTA' AND parceria_id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027) $q$);
-    PERFORM pg_temp.aceita('ITEM-6', 'destinar a cortesia que sobra da Verde (3 de 3)', $q$
+    PERFORM pg_temp.aceita('ITEM-6', 'destinar a cortesia que sobra da Verde (3 de 4)', $q$
         INSERT INTO cortesia_destinacao (cortesia_cota_id, destinatario_nome, quantidade, registrado_por)
         SELECT cc.id, 'Convidados finais', 1, (SELECT id FROM _ver_usr WHERE email = 'marketing@verde.example')
         FROM cortesia_cota cc WHERE cc.setor = 'ARENA' AND cc.dia = 'SABADO' AND cc.parceria_id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Verde' AND edicao = 2027) $q$);
@@ -1282,7 +1288,7 @@ BEGIN
           WHERE n.nspname = 'public' AND p.proname IN ('fn_texto_de_busca', 'fn_trava_grupo_documento', 'fn_publicar_documento')));
     PERFORM pg_temp.afirma('V11 ESTRUTURA', 'fn_texto_de_busca é IMMUTABLE (entra na coluna gerada)',
         (SELECT provolatile = 'i' FROM pg_proc WHERE proname = 'fn_texto_de_busca' AND pronamespace = 'public'::regnamespace));
-    PERFORM pg_temp.confere('V11 ESTRUTURA', 'gatilhos rn_documento* (7 da V11 e o rn_documento_congelado da V12)', 8,
+    PERFORM pg_temp.confere('V11 ESTRUTURA', 'gatilhos rn_documento* (7 da V11, o rn_documento_congelado da V12 e o rn_documento_paginas_ignoradas da V17)', 9,
         (SELECT count(*) FROM pg_trigger WHERE NOT tgisinternal AND tgname LIKE 'rn\_documento%'));
     PERFORM pg_temp.afirma('V11 ESTRUTURA', 'tsv é coluna gerada STORED (no PostgreSQL 18 a gerada é virtual por padrão)',
         (SELECT attgenerated = 's' FROM pg_attribute WHERE attrelid = 'documento_trecho'::regclass AND attname = 'tsv'));
@@ -2403,7 +2409,301 @@ BEGIN
 END $$;
 
 -- ---------------------------------------------------------------------
--- 15. Resultado: a lista de conferências e, se alguma falhou, o erro final (saída diferente de zero com ON_ERROR_STOP)
+-- 15. V16: papel da entrega, Open Staff, texto e link da entrega, contrato e a pesquisa da ativação (F1 do plano final)
+-- ---------------------------------------------------------------------
+DO $$
+BEGIN
+    -- Papel da entrega: MIV e logo têm uma só por parceria; ingressos pode repetir; papel e categoria fora da lista são recusados.
+    PERFORM pg_temp.recusa('V16 PAPEL', 'duas entregas MIV na mesma parceria', 'uq_entrega_papel', $q$
+        INSERT INTO entrega (parceria_id, aba_id, titulo, status, papel)
+        SELECT p.id, (SELECT id FROM aba WHERE codigo = 'APLICACOES'), 'MIV ' || g, 'AGUARDANDO_ENVIO', 'MIV'
+        FROM _ver_parc p, generate_series(1, 2) g WHERE p.cliente = 'Cliente Amarelo' AND p.edicao = 2027 $q$);
+    PERFORM pg_temp.recusa('V16 PAPEL', 'duas entregas de logo na mesma parceria', 'uq_entrega_papel', $q$
+        INSERT INTO entrega (parceria_id, aba_id, titulo, status, papel)
+        SELECT p.id, (SELECT id FROM aba WHERE codigo = 'APLICACOES'), 'Logo ' || g, 'AGUARDANDO_ENVIO', 'LOGO'
+        FROM _ver_parc p, generate_series(1, 2) g WHERE p.cliente = 'Cliente Amarelo' AND p.edicao = 2027 $q$);
+    PERFORM pg_temp.recusa('V16 PAPEL', 'papel fora da lista', 'ck_entrega_papel', $q$
+        INSERT INTO entrega (parceria_id, aba_id, titulo, status, papel)
+        SELECT p.id, (SELECT id FROM aba WHERE codigo = 'APLICACOES'), 'Papel inventado', 'AGUARDANDO_ENVIO', 'CAMISETA'
+        FROM _ver_parc p WHERE p.cliente = 'Cliente Amarelo' AND p.edicao = 2027 $q$);
+    PERFORM pg_temp.aceita('V16 PAPEL', 'várias solicitações de ingressos na mesma parceria, e MIV e logo juntos', $q$
+        INSERT INTO entrega (parceria_id, aba_id, titulo, status, papel)
+        SELECT p.id, (SELECT id FROM aba WHERE codigo = x.aba), x.titulo, 'ENVIADO', x.papel
+        FROM _ver_parc p, (VALUES ('PERFIL', 'Solicitação de ingressos 8', 'DOCUMENTO_INGRESSOS'), ('PERFIL', 'Solicitação de ingressos 9', 'DOCUMENTO_INGRESSOS'),
+                                  ('APLICACOES', 'MIV de teste', 'MIV'), ('APLICACOES', 'Logo de teste', 'LOGO')) AS x(aba, titulo, papel)
+        WHERE p.cliente = 'Cliente Verde' AND p.edicao = 2027 $q$);   -- a Verde não tem MIV nem logo em Aplicações na amostra
+
+    -- Categoria do arquivo e versão do arquivo avulso
+    PERFORM pg_temp.recusa('V16 ARQUIVO', 'categoria fora da lista', 'ck_arquivo_categoria', $q$
+        INSERT INTO arquivo (parceria_id, aba_id, categoria, nome_original, mime_type, tamanho_bytes, caminho, enviado_por)
+        SELECT p.id, (SELECT id FROM aba WHERE codigo = 'PERFIL'), 'INVENTADA', 'x.pdf', 'application/pdf', 10, 'teste/v16-categoria.pdf', (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example')
+        FROM _ver_parc p WHERE p.cliente = 'Cliente Amarelo' AND p.edicao = 2027 $q$);
+    PERFORM pg_temp.aceita('V16 ARQUIVO', 'a categoria FORMULARIO_INGRESSOS', $q$
+        INSERT INTO arquivo (parceria_id, aba_id, categoria, nome_original, mime_type, tamanho_bytes, caminho, versao, enviado_por)
+        SELECT p.id, (SELECT id FROM aba WHERE codigo = 'PERFIL'), 'FORMULARIO_INGRESSOS', 'formulario.pdf', 'application/pdf', 10, 'teste/v16-formulario.pdf', 1,
+               (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example')
+        FROM _ver_parc p WHERE p.cliente = 'Cliente Amarelo' AND p.edicao = 2027 $q$);
+    PERFORM pg_temp.recusa('V16 ARQUIVO', 'duas versões iguais de um arquivo avulso da mesma categoria', 'uq_arquivo_versao_avulso', $q$
+        INSERT INTO arquivo (parceria_id, aba_id, categoria, nome_original, mime_type, tamanho_bytes, caminho, versao, enviado_por)
+        SELECT p.id, (SELECT id FROM aba WHERE codigo = 'PERFIL'), 'FORMULARIO_INGRESSOS', 'formulario.pdf', 'application/pdf', 10, 'teste/v16-avulso-' || g, 7,
+               (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example')
+        FROM _ver_parc p, generate_series(1, 2) g WHERE p.cliente = 'Cliente Amarelo' AND p.edicao = 2027 $q$);
+    PERFORM pg_temp.aceita('V16 ARQUIVO', 'a mesma versão avulsa em outra categoria e em outra parceria', $q$
+        INSERT INTO arquivo (parceria_id, aba_id, categoria, nome_original, mime_type, tamanho_bytes, caminho, versao, enviado_por)
+        SELECT p.id, (SELECT id FROM aba WHERE codigo = 'PERFIL'), x.categoria, 'x.pdf', 'application/pdf', 10, 'teste/v16-outra-' || p.id || x.categoria, 7,
+               (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example')
+        FROM _ver_parc p, (VALUES ('FORMULARIO_INGRESSOS'), ('OUTRO')) AS x(categoria) WHERE p.edicao = 2027 AND p.cliente IN ('Cliente Amarelo', 'Cliente Roxo') $q$);
+
+    -- Open Staff e prazo das cortesias, por edição
+    PERFORM pg_temp.recusa('V16 EVENTO', 'endereço do credenciamento em http', 'ck_evento_credenciamento_url', $q$
+        UPDATE evento SET credenciamento_url = 'http://openstaff.example.invalid/planeta' WHERE edicao = 2027 $q$);
+    PERFORM pg_temp.recusa('V16 EVENTO', 'endereço do credenciamento com usuario@ antes do host', 'ck_evento_credenciamento_url', $q$
+        UPDATE evento SET credenciamento_url = 'https://openstaff.example.invalid@malicioso.example.invalid/planeta' WHERE edicao = 2027 $q$);
+    PERFORM pg_temp.recusa('V16 EVENTO', 'endereço do credenciamento com espaço', 'ck_evento_credenciamento_url', $q$
+        UPDATE evento SET credenciamento_url = 'https://openstaff.example.invalid/pla neta' WHERE edicao = 2027 $q$);
+    PERFORM pg_temp.recusa('V16 EVENTO', 'endereço do credenciamento com caractere bidi', 'ck_evento_credenciamento_url', $q$
+        UPDATE evento SET credenciamento_url = 'https://openstaff.example.invalid/' || chr(8238) || 'planeta' WHERE edicao = 2027 $q$);
+    PERFORM pg_temp.recusa('V16 EVENTO', 'endereço do credenciamento sem host', 'ck_evento_credenciamento_url', $q$
+        UPDATE evento SET credenciamento_url = 'https:///planeta' WHERE edicao = 2027 $q$);
+    PERFORM pg_temp.recusa('V16 EVENTO', 'credenciamento que termina antes de começar', 'ck_evento_credenciamento_periodo', $q$
+        UPDATE evento SET credenciamento_inicio = DATE '2027-01-20', credenciamento_fim = DATE '2027-01-10' WHERE edicao = 2027 $q$);
+    PERFORM pg_temp.aceita('V16 EVENTO', 'endereço https com caminho, porta e @ depois do host, e as datas novas', $q$
+        UPDATE evento SET credenciamento_url = 'https://openstaff.example.invalid:8443/planeta/@perfil?x=1', credenciamento_inicio = DATE '2027-01-10',
+               credenciamento_fim = DATE '2027-01-20', cortesias_prazo = DATE '2027-01-05' WHERE edicao = 2027 $q$);
+
+    -- Contrato: e-mail do signatário e arquivo do contrato
+    PERFORM pg_temp.recusa('V16 CONTRATO', 'e-mail do signatário malformado', 'ck_contrato_signatario_email', $q$
+        UPDATE contrato SET signatario_email = 'sem-arroba' WHERE parceria_id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027) $q$);
+    PERFORM pg_temp.recusa('V16 CONTRATO', 'contrato com arquivo de outra categoria', 'rn_contrato_arquivo', $q$
+        UPDATE contrato c SET arquivo_id = (SELECT a.id FROM arquivo a WHERE a.parceria_id = c.parceria_id AND a.categoria <> 'CONTRATO' LIMIT 1)
+        WHERE c.parceria_id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027) $q$);
+    PERFORM pg_temp.recusa('V16 CONTRATO', 'contrato com arquivo da categoria CONTRATO mas de outra aba', 'rn_contrato_arquivo', $q$
+        DO $d$
+        DECLARE v_arquivo BIGINT;
+        BEGIN
+            INSERT INTO arquivo (parceria_id, aba_id, categoria, nome_original, mime_type, tamanho_bytes, caminho, versao, enviado_por)
+            SELECT p.id, (SELECT id FROM aba WHERE codigo = 'PERFIL'), 'CONTRATO', 'c.pdf', 'application/pdf', 10, 'teste/v16-contrato-aba.pdf', 8,
+                   (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example')
+            FROM _ver_parc p WHERE p.cliente = 'Cliente Amarelo' AND p.edicao = 2027 RETURNING id INTO v_arquivo;
+            UPDATE contrato SET arquivo_id = v_arquivo WHERE parceria_id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027);
+        END $d$ $q$);
+    PERFORM pg_temp.aceita('V16 CONTRATO', 'e-mail válido, a data de quando foi informado e o arquivo CONTRATO na aba Contrato', $q$
+        DO $d$
+        DECLARE v_arquivo BIGINT;
+        BEGIN
+            INSERT INTO arquivo (parceria_id, aba_id, categoria, nome_original, mime_type, tamanho_bytes, caminho, versao, enviado_por)
+            SELECT p.id, (SELECT id FROM aba WHERE codigo = 'CONTRATO'), 'CONTRATO', 'c.pdf', 'application/pdf', 10, 'teste/v16-contrato-certo.pdf', 8,
+                   (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example')
+            FROM _ver_parc p WHERE p.cliente = 'Cliente Amarelo' AND p.edicao = 2027 RETURNING id INTO v_arquivo;
+            UPDATE contrato SET arquivo_id = v_arquivo, signatario_email = 'novo.signatario@amarelo.example', informado_em = now()
+             WHERE parceria_id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027);
+        END $d$ $q$);
+
+    -- Pesquisa: uma da ativação por edição (a geral pode ter várias)
+    PERFORM pg_temp.recusa('V16 PESQUISA', 'segunda pesquisa ATIVACAO na mesma edição', 'uq_pesquisa_ativacao', $q$
+        INSERT INTO pesquisa (evento_id, nome, escopo) SELECT evento_id, 'Segunda da ativação', 'ATIVACAO' FROM pesquisa WHERE escopo = 'ATIVACAO' $q$);
+    PERFORM pg_temp.aceita('V16 PESQUISA', 'uma pesquisa ATIVACAO em edição que não tem, e outra GERAL na mesma edição', $q$
+        INSERT INTO pesquisa (evento_id, nome, escopo)
+        SELECT e.id, 'Da ativação de teste', 'ATIVACAO' FROM evento e WHERE NOT EXISTS (SELECT 1 FROM pesquisa p WHERE p.evento_id = e.id AND p.escopo = 'ATIVACAO')
+        UNION ALL SELECT DISTINCT evento_id, 'Outra geral de teste', 'GERAL' FROM pesquisa WHERE escopo = 'GERAL' $q$);
+
+    -- Texto e link da entrega: forma, URL, parceria e imutabilidade
+    PERFORM pg_temp.aceita('V16 CONTEUDO', 'um texto e um link da marca (https com @ no caminho, como o TikTok)', $q$
+        INSERT INTO entrega_conteudo (entrega_id, parceria_id, tipo, titulo, texto, url, enviado_por)
+        SELECT e.id, e.parceria_id, x.tipo, x.titulo, x.texto, x.url, (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example')
+        FROM entrega e, (VALUES ('TEXTO', 'Briefing', E'Linha 1\nLinha 2\tcom tab', NULL), ('LINK', 'Post', NULL, 'https://www.tiktok.com/@perfil/video/123')) AS x(tipo, titulo, texto, url)
+        WHERE e.titulo = 'Logo final para aplicações no evento' $q$);
+    PERFORM pg_temp.recusa('V16 CONTEUDO', 'texto sem texto', 'ck_conteudo_forma', $q$
+        INSERT INTO entrega_conteudo (entrega_id, parceria_id, tipo, enviado_por)
+        SELECT e.id, e.parceria_id, 'TEXTO', (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM entrega e WHERE e.titulo = 'Logo final para aplicações no evento' $q$);
+    PERFORM pg_temp.recusa('V16 CONTEUDO', 'texto só com espaços', 'ck_conteudo_forma', $q$
+        INSERT INTO entrega_conteudo (entrega_id, parceria_id, tipo, texto, enviado_por)
+        SELECT e.id, e.parceria_id, 'TEXTO', '   ', (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM entrega e WHERE e.titulo = 'Logo final para aplicações no evento' $q$);
+    PERFORM pg_temp.recusa('V16 CONTEUDO', 'texto com mais de 5.000 caracteres', 'ck_conteudo_forma', $q$
+        INSERT INTO entrega_conteudo (entrega_id, parceria_id, tipo, texto, enviado_por)
+        SELECT e.id, e.parceria_id, 'TEXTO', repeat('a', 5001), (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM entrega e WHERE e.titulo = 'Logo final para aplicações no evento' $q$);
+    PERFORM pg_temp.recusa('V16 CONTEUDO', 'link com texto junto', 'ck_conteudo_forma', $q$
+        INSERT INTO entrega_conteudo (entrega_id, parceria_id, tipo, texto, url, enviado_por)
+        SELECT e.id, e.parceria_id, 'LINK', 'texto', 'https://www.instagram.com/p/x/', (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM entrega e WHERE e.titulo = 'Logo final para aplicações no evento' $q$);
+    PERFORM pg_temp.recusa('V16 CONTEUDO', 'link javascript:', 'ck_conteudo_url', $q$
+        INSERT INTO entrega_conteudo (entrega_id, parceria_id, tipo, url, enviado_por)
+        SELECT e.id, e.parceria_id, 'LINK', 'javascript:alert(1)', (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM entrega e WHERE e.titulo = 'Logo final para aplicações no evento' $q$);
+    PERFORM pg_temp.recusa('V16 CONTEUDO', 'link com usuario@ antes do host', 'ck_conteudo_url', $q$
+        INSERT INTO entrega_conteudo (entrega_id, parceria_id, tipo, url, enviado_por)
+        SELECT e.id, e.parceria_id, 'LINK', 'https://www.instagram.com@malicioso.example.invalid/p/x/', (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM entrega e WHERE e.titulo = 'Logo final para aplicações no evento' $q$);
+    PERFORM pg_temp.recusa('V16 CONTEUDO', 'texto com caractere de controle', 'ck_conteudo_sem_controle', $q$
+        INSERT INTO entrega_conteudo (entrega_id, parceria_id, tipo, texto, enviado_por)
+        SELECT e.id, e.parceria_id, 'TEXTO', 'texto' || chr(7) || 'com sino', (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM entrega e WHERE e.titulo = 'Logo final para aplicações no evento' $q$);
+    PERFORM pg_temp.recusa('V16 ISOLAMENTO', 'texto ligado à entrega de uma parceria e gravado na de outra', 'fk_conteudo_entrega', $q$
+        INSERT INTO entrega_conteudo (entrega_id, parceria_id, tipo, texto, enviado_por)
+        SELECT e.id, (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Verde' AND edicao = 2027), 'TEXTO', 'texto', (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example')
+        FROM entrega e WHERE e.titulo = 'Logo final para aplicações no evento' AND e.parceria_id <> (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Verde' AND edicao = 2027) $q$);
+    PERFORM pg_temp.recusa('V16 CONTEUDO', 'UPDATE no texto enviado', 'rn_entrega_conteudo_imutavel', $q$
+        DO $d$
+        BEGIN
+            INSERT INTO entrega_conteudo (entrega_id, parceria_id, tipo, texto, enviado_por)
+            SELECT e.id, e.parceria_id, 'TEXTO', 'original', (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM entrega e WHERE e.titulo = 'Logo final para aplicações no evento';
+            UPDATE entrega_conteudo SET texto = 'alterado';
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V16 CONTEUDO', 'DELETE no texto enviado', 'rn_entrega_conteudo_imutavel', $q$
+        DO $d$
+        BEGIN
+            INSERT INTO entrega_conteudo (entrega_id, parceria_id, tipo, texto, enviado_por)
+            SELECT e.id, e.parceria_id, 'TEXTO', 'original', (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM entrega e WHERE e.titulo = 'Logo final para aplicações no evento';
+            DELETE FROM entrega_conteudo;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V16 CONTEUDO', 'apagar a entrega que já tem texto enviado (sem cascata sobre linha imutável)', 'fk_conteudo_entrega', $q$
+        DO $d$
+        BEGIN
+            INSERT INTO entrega_conteudo (entrega_id, parceria_id, tipo, texto, enviado_por)
+            SELECT e.id, e.parceria_id, 'TEXTO', 'original', (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM entrega e WHERE e.titulo = 'Logo final para aplicações no evento';
+            DELETE FROM entrega WHERE titulo = 'Logo final para aplicações no evento';
+        END $d$ $q$);
+
+    PERFORM pg_temp.confere('V16 CONTEUDO', 'as tentativas não deixaram texto nem link gravados', 0, (SELECT count(*) FROM entrega_conteudo));
+    PERFORM pg_temp.confere('V16 PAPEL', 'a amostra: 3 entregas de ingressos e 2 de logo (Amarelo e Roxo), nenhuma de MIV', 5, (SELECT count(*) FROM entrega WHERE papel IN ('DOCUMENTO_INGRESSOS', 'LOGO')));
+    PERFORM pg_temp.confere('V16 EVENTO', 'a amostra tem o endereço do Open Staff só na edição de 2027', 1, (SELECT count(*) FROM evento WHERE credenciamento_url IS NOT NULL AND edicao = 2027));
+
+    PERFORM pg_temp.recusa('V18 POSVENDA', 'anexo vazio (sem texto, link nem audiência)', 'rn_evento_posvenda_conteudo', $q$
+        INSERT INTO evento_posvenda (parceria_id, evento_id, versao, texto, links, audiencias, publicado_por) SELECT pa.id, pa.evento_id, 1, NULL, '[]'::jsonb, '[]'::jsonb, (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM parceria pa WHERE pa.id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027) $q$);
+    PERFORM pg_temp.recusa('V18 POSVENDA', 'link javascript:', 'rn_evento_posvenda_conteudo', $q$
+        INSERT INTO evento_posvenda (parceria_id, evento_id, versao, texto, links, audiencias, publicado_por) SELECT pa.id, pa.evento_id, 1, NULL, '[{"tipo":"OUTRO","titulo":"x","url":"javascript:alert(1)"}]'::jsonb, '[]'::jsonb, (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM parceria pa WHERE pa.id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027) $q$);
+    PERFORM pg_temp.recusa('V18 POSVENDA', 'link com usuario@ antes do host', 'rn_evento_posvenda_conteudo', $q$
+        INSERT INTO evento_posvenda (parceria_id, evento_id, versao, texto, links, audiencias, publicado_por) SELECT pa.id, pa.evento_id, 1, NULL, '[{"tipo":"OUTRO","titulo":"x","url":"https://www.instagram.com@malicioso.example.invalid/p/x/"}]'::jsonb, '[]'::jsonb, (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM parceria pa WHERE pa.id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027) $q$);
+    PERFORM pg_temp.recusa('V18 POSVENDA', 'link de tipo desconhecido', 'rn_evento_posvenda_conteudo', $q$
+        INSERT INTO evento_posvenda (parceria_id, evento_id, versao, texto, links, audiencias, publicado_por) SELECT pa.id, pa.evento_id, 1, NULL, '[{"tipo":"VIDEO","titulo":"x","url":"https://exemplo.example/"}]'::jsonb, '[]'::jsonb, (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM parceria pa WHERE pa.id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027) $q$);
+    PERFORM pg_temp.recusa('V18 POSVENDA', 'audiência com número zero', 'rn_evento_posvenda_conteudo', $q$
+        INSERT INTO evento_posvenda (parceria_id, evento_id, versao, texto, links, audiencias, publicado_por) SELECT pa.id, pa.evento_id, 1, NULL, '[]'::jsonb, '[{"veiculo":"ATL TV","metrica":"pessoas","numero":0,"unidade":"pessoas"}]'::jsonb, (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM parceria pa WHERE pa.id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027) $q$);
+    PERFORM pg_temp.recusa('V18 POSVENDA', 'audiência com número em texto', 'rn_evento_posvenda_conteudo', $q$
+        INSERT INTO evento_posvenda (parceria_id, evento_id, versao, texto, links, audiencias, publicado_por) SELECT pa.id, pa.evento_id, 1, NULL, '[]'::jsonb, '[{"veiculo":"ATL TV","metrica":"pessoas","numero":"10","unidade":"pessoas"}]'::jsonb, (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM parceria pa WHERE pa.id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027) $q$);
+    PERFORM pg_temp.recusa('V18 POSVENDA', 'links que não são uma lista', 'rn_evento_posvenda_conteudo', $q$
+        INSERT INTO evento_posvenda (parceria_id, evento_id, versao, texto, links, audiencias, publicado_por) SELECT pa.id, pa.evento_id, 1, NULL, '{"tipo":"OUTRO"}'::jsonb, '[]'::jsonb, (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM parceria pa WHERE pa.id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027) $q$);
+    PERFORM pg_temp.recusa('V18 POSVENDA', 'texto acima de 5.000 caracteres', 'ck_posvenda_texto', $q$
+        INSERT INTO evento_posvenda (parceria_id, evento_id, versao, texto, links, audiencias, publicado_por) SELECT pa.id, pa.evento_id, 1, repeat('a', 5001), '[]'::jsonb, '[]'::jsonb, (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM parceria pa WHERE pa.id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027) $q$);
+    PERFORM pg_temp.recusa('V18 POSVENDA', 'texto com caractere de controle', 'ck_posvenda_texto', $q$
+        INSERT INTO evento_posvenda (parceria_id, evento_id, versao, texto, links, audiencias, publicado_por) SELECT pa.id, pa.evento_id, 1, 'texto' || chr(7) || 'com sino', '[]'::jsonb, '[]'::jsonb, (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM parceria pa WHERE pa.id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027) $q$);
+    PERFORM pg_temp.recusa('V18 POSVENDA', 'edição que não é a da parceria', 'rn_evento_posvenda_conteudo', $q$
+        INSERT INTO evento_posvenda (parceria_id, evento_id, versao, texto, publicado_por) SELECT pa.id, (SELECT id FROM evento WHERE edicao = 2026), 1, 'texto', (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM parceria pa WHERE pa.id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027) $q$);
+    PERFORM pg_temp.recusa('V18 POSVENDA', 'mesma versão duas vezes na parceria', 'uq_posvenda_versao', $q$
+        DO $d$ BEGIN INSERT INTO evento_posvenda (parceria_id, evento_id, versao, texto, links, audiencias, publicado_por) SELECT pa.id, pa.evento_id, 1, 'um', '[]'::jsonb, '[]'::jsonb, (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM parceria pa WHERE pa.id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027); INSERT INTO evento_posvenda (parceria_id, evento_id, versao, texto, links, audiencias, publicado_por) SELECT pa.id, pa.evento_id, 1, 'dois', '[]'::jsonb, '[]'::jsonb, (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM parceria pa WHERE pa.id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027); END $d$ $q$);
+    PERFORM pg_temp.recusa('V18 POSVENDA', 'situação fora de PUBLICADO e RETIRADO', 'ck_posvenda_situacao', $q$
+        INSERT INTO evento_posvenda (parceria_id, evento_id, versao, texto, situacao, publicado_por) SELECT pa.id, pa.evento_id, 1, 'texto', 'APAGADO', (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM parceria pa WHERE pa.id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027) $q$);
+    PERFORM pg_temp.recusa('V18 POSVENDA', 'UPDATE no texto publicado', 'rn_evento_posvenda_imutavel', $q$
+        DO $d$ BEGIN INSERT INTO evento_posvenda (parceria_id, evento_id, versao, texto, links, audiencias, publicado_por) SELECT pa.id, pa.evento_id, 1, 'original', '[]'::jsonb, '[]'::jsonb, (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM parceria pa WHERE pa.id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027); UPDATE evento_posvenda SET texto = 'alterado'; END $d$ $q$);
+    PERFORM pg_temp.recusa('V18 POSVENDA', 'DELETE do pós-venda publicado', 'rn_evento_posvenda_imutavel', $q$
+        DO $d$ BEGIN INSERT INTO evento_posvenda (parceria_id, evento_id, versao, texto, links, audiencias, publicado_por) SELECT pa.id, pa.evento_id, 1, 'original', '[]'::jsonb, '[]'::jsonb, (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM parceria pa WHERE pa.id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027); DELETE FROM evento_posvenda; END $d$ $q$);
+    PERFORM pg_temp.recusa('V18 POSVENDA', 'retirada que também troca o texto', 'rn_evento_posvenda_imutavel', $q$
+        DO $d$ BEGIN INSERT INTO evento_posvenda (parceria_id, evento_id, versao, texto, links, audiencias, publicado_por) SELECT pa.id, pa.evento_id, 1, 'original', '[]'::jsonb, '[]'::jsonb, (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM parceria pa WHERE pa.id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027); UPDATE evento_posvenda SET situacao = 'RETIRADO', retirado_em = now(), retirado_por = publicado_por, texto = 'alterado'; END $d$ $q$);
+    PERFORM pg_temp.recusa('V18 POSVENDA', 'voltar de RETIRADO para PUBLICADO', 'rn_evento_posvenda_imutavel', $q$
+        DO $d$ BEGIN INSERT INTO evento_posvenda (parceria_id, evento_id, versao, texto, links, audiencias, publicado_por) SELECT pa.id, pa.evento_id, 1, 'original', '[]'::jsonb, '[]'::jsonb, (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM parceria pa WHERE pa.id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027); UPDATE evento_posvenda SET situacao = 'RETIRADO', retirado_em = now(), retirado_por = publicado_por; UPDATE evento_posvenda SET situacao = 'PUBLICADO', retirado_em = NULL, retirado_por = NULL; END $d$ $q$);
+    PERFORM pg_temp.recusa('V18 POSVENDA', 'retirada sem quem retirou', 'rn_evento_posvenda_imutavel', $q$
+        DO $d$ BEGIN INSERT INTO evento_posvenda (parceria_id, evento_id, versao, texto, links, audiencias, publicado_por) SELECT pa.id, pa.evento_id, 1, 'original', '[]'::jsonb, '[]'::jsonb, (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM parceria pa WHERE pa.id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027); UPDATE evento_posvenda SET situacao = 'RETIRADO', retirado_em = now(); END $d$ $q$);
+    PERFORM pg_temp.recusa('V18 POSVENDA', 'nasce retirado sem quem retirou', 'ck_posvenda_retirada', $q$
+        INSERT INTO evento_posvenda (parceria_id, evento_id, versao, texto, situacao, publicado_por) SELECT pa.id, pa.evento_id, 1, 'texto', 'RETIRADO', (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM parceria pa WHERE pa.id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027) $q$);
+    PERFORM pg_temp.aceita('V18 POSVENDA', 'texto, link, audiência e a retirada (só situacao, retirado_em e retirado_por mudam)', $q$
+        DO $d$ BEGIN INSERT INTO evento_posvenda (parceria_id, evento_id, versao, texto, links, audiencias, publicado_por) SELECT pa.id, pa.evento_id, 1, 'Texto editorial', '[{"tipo":"AFTERMOVIE","titulo":"Aftermovie","url":"https://exemplo.example/aftermovie"}]'::jsonb, '[{"veiculo":"ATL TV","metrica":"pessoas alcançadas","numero":1600000,"unidade":"pessoas"}]'::jsonb, (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM parceria pa WHERE pa.id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027); UPDATE evento_posvenda SET situacao = 'RETIRADO', retirado_em = now(), retirado_por = publicado_por; END $d$ $q$);
+    PERFORM pg_temp.confere('V18 POSVENDA', 'as tentativas não deixaram pós-venda gravado', 0, (SELECT count(*) FROM evento_posvenda));
+END $$;
+
+-- ---------------------------------------------------------------------
+-- 15b. V17: as páginas fora do Atlas (R2.1)
+-- ---------------------------------------------------------------------
+DO $$
+DECLARE v_padrao BIGINT;
+BEGIN
+    PERFORM pg_temp.confere('V17 ESTRUTURA', 'colunas paginas_ignoradas e suspeitas em documento', 2,
+        (SELECT count(*) FROM information_schema.columns WHERE table_name = 'documento' AND column_name IN ('paginas_ignoradas', 'suspeitas')));
+    PERFORM pg_temp.afirma('V17 ESTRUTURA', 'o gatilho rn_documento_paginas_ignoradas existe',
+        EXISTS (SELECT 1 FROM pg_trigger WHERE NOT tgisinternal AND tgname = 'rn_documento_paginas_ignoradas'));
+    v_padrao := pg_temp.doc('v17-p0', 'v17-p0', 'GLOBAL', 2027, NULL, NULL, 'AGUARDANDO');
+    PERFORM pg_temp.afirma('V17 PADRAO', 'o documento nasce sem página fora do Atlas e sem suspeita',
+        (SELECT cardinality(paginas_ignoradas) = 0 AND suspeitas = '[]'::jsonb FROM documento WHERE id = v_padrao));
+    PERFORM pg_temp.aceita('V17 PAGINAS', 'páginas 2 e 4 de um documento de 5 páginas', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v17-a', 'v17-a', 'GLOBAL', 2027, NULL, NULL, 'AGUARDANDO');
+        BEGIN
+            UPDATE documento SET paginas = 5 WHERE id = v_id;
+            UPDATE documento SET paginas_ignoradas = '{2,4}' WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V17 PAGINAS', 'página além do total de páginas', 'rn_documento_paginas_ignoradas', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v17-b', 'v17-b', 'GLOBAL', 2027, NULL, NULL, 'AGUARDANDO');
+        BEGIN
+            UPDATE documento SET paginas = 5 WHERE id = v_id;
+            UPDATE documento SET paginas_ignoradas = '{6}' WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V17 PAGINAS', 'página zero', 'rn_documento_paginas_ignoradas', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v17-c', 'v17-c', 'GLOBAL', 2027, NULL, NULL, 'AGUARDANDO');
+        BEGIN
+            UPDATE documento SET paginas = 5 WHERE id = v_id;
+            UPDATE documento SET paginas_ignoradas = '{0,2}' WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V17 PAGINAS', 'página repetida', 'rn_documento_paginas_ignoradas', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v17-d', 'v17-d', 'GLOBAL', 2027, NULL, NULL, 'AGUARDANDO');
+        BEGIN
+            UPDATE documento SET paginas = 5 WHERE id = v_id;
+            UPDATE documento SET paginas_ignoradas = '{2,2}' WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V17 PAGINAS', 'todas as páginas fora do Atlas', 'rn_documento_paginas_ignoradas', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v17-e', 'v17-e', 'GLOBAL', 2027, NULL, NULL, 'AGUARDANDO');
+        BEGIN
+            UPDATE documento SET paginas = 3 WHERE id = v_id;
+            UPDATE documento SET paginas_ignoradas = '{1,2,3}' WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V17 PAGINAS', 'mais de 20 páginas fora do Atlas', 'rn_documento_paginas_ignoradas', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v17-f', 'v17-f', 'GLOBAL', 2027, NULL, NULL, 'AGUARDANDO');
+        BEGIN
+            UPDATE documento SET paginas = 100 WHERE id = v_id;
+            UPDATE documento SET paginas_ignoradas = ARRAY(SELECT generate_series(1, 21))::smallint[] WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V17 PAGINAS', 'páginas marcadas num documento sem total de páginas (não foi lido)', 'rn_documento_paginas_ignoradas', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v17-g', 'v17-g', 'GLOBAL', 2027, NULL, NULL, 'AGUARDANDO');
+        BEGIN
+            UPDATE documento SET paginas_ignoradas = '{1}' WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V17 PAGINAS', 'mudar as páginas de um documento já aprovado', 'rn_documento_paginas_ignoradas', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v17-h', 'v17-h', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+        BEGIN
+            UPDATE documento SET paginas = 5 WHERE id = v_id;
+            UPDATE documento SET paginas_ignoradas = '{2}' WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V17 SUSPEITA', 'suspeitas que não é uma lista', 'ck_documento_suspeitas', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v17-i', 'v17-i', 'GLOBAL', 2027, NULL, NULL, 'AGUARDANDO');
+        BEGIN
+            UPDATE documento SET suspeitas = '{"pagina":4}' WHERE id = v_id;
+        END $d$ $q$);
+    -- A suspeita de dado pessoal segue sem se desmarcar sozinha (V12), a não ser junto de uma mudança das páginas fora do Atlas.
+    PERFORM pg_temp.recusa('V17 CONGELADO', 'desmarcar a suspeita de dado pessoal sem mexer nas páginas', 'rn_documento_congelado', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v17-j', 'v17-j', 'GLOBAL', 2027, NULL, NULL, 'AGUARDANDO', TRUE);
+        BEGIN
+            UPDATE documento SET contem_dados_pessoais = FALSE WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.aceita('V17 CONGELADO', 'desmarcar a suspeita junto de marcar as páginas, ainda aguardando aprovação', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v17-k', 'v17-k', 'GLOBAL', 2027, NULL, NULL, 'AGUARDANDO', TRUE);
+        BEGIN
+            UPDATE documento SET paginas = 5 WHERE id = v_id;
+            UPDATE documento SET paginas_ignoradas = '{4}', contem_dados_pessoais = FALSE WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V17 CONGELADO', 'mexer na suspeita e nas páginas de um documento já aprovado', 'rn_documento_congelado', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v17-l', 'v17-l', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+        BEGIN
+            UPDATE documento SET paginas = 5 WHERE id = v_id;
+            UPDATE documento SET paginas_ignoradas = '{4}', contem_dados_pessoais = TRUE WHERE id = v_id;
+        END $d$ $q$);
+END $$;
+
+-- ---------------------------------------------------------------------
+-- 16. Resultado: a lista de conferências e, se alguma falhou, o erro final (saída diferente de zero com ON_ERROR_STOP)
 -- ---------------------------------------------------------------------
 SELECT grupo, conferencia, esperado, obtido, CASE WHEN ok THEN 'ok' ELSE 'FALHOU' END AS resultado FROM _ver ORDER BY ordem;
 SELECT count(*) AS conferencias, count(*) FILTER (WHERE ok) AS ok, count(*) FILTER (WHERE NOT ok) AS falhas FROM _ver;

@@ -1283,16 +1283,15 @@
     "edicao": 2027,
     "tipo": "valor",
     "pagina": 3,
-    "trecho": "A Subcota G tem 6 cortesias por dia na Arena e 3 por dia no Camarote.",
+    "trecho": "A Subcota G tem 4 cortesias por dia na Arena e 2 por dia no Camarote.",
     "perguntas": [
       "Quantas cortesias a gente tem por dia na Arena e no Camarote?",
       "quantas cortesias de camarote tem a nossa cota?"
     ],
-    "resposta": "6|3",
+    "resposta": "4|2",
     "visivelPara": [
       "roxo"
-    ],
-    "nota": "Número do documento. A aba Cortesias e a aba Credenciamento da amostra do portal têm valores próprios, que podem divergir. Não usar em casos de dados_parceria."
+    ]
   },
   {
     "fato": "g-credenciais",
@@ -1302,16 +1301,15 @@
     "edicao": 2027,
     "tipo": "valor",
     "pagina": 3,
-    "trecho": "Na Arena, a Subcota G tem 8 credenciais de serviço por dia",
+    "trecho": "Na Arena, a Subcota G tem 5 credenciais de serviço por dia",
     "perguntas": [
       "Quantas credenciais de serviço temos por dia na Arena?",
       "quantas credenciais posso dividir entre a equipe e a agência?"
     ],
-    "resposta": "8",
+    "resposta": "5",
     "visivelPara": [
       "roxo"
-    ],
-    "nota": "Número do documento. A aba Cortesias e a aba Credenciamento da amostra do portal têm valores próprios, que podem divergir. Não usar em casos de dados_parceria."
+    ]
   },
   {
     "fato": "g-conteudo-prazo",
@@ -1393,16 +1391,15 @@
     "edicao": 2027,
     "tipo": "valor",
     "pagina": 2,
-    "trecho": "A Subcota tem 3 cortesias por dia na Arena e 1 por dia no Camarote.",
+    "trecho": "A Subcota tem 4 cortesias por dia na Arena e 2 por dia no Camarote.",
     "perguntas": [
       "Quantas cortesias a gente tem por dia na Arena e no Camarote?",
       "quantas cortesias de camarote tem a nossa cota?"
     ],
-    "resposta": "3|1",
+    "resposta": "4|2",
     "visivelPara": [
       "verde"
-    ],
-    "nota": "Número do documento. A aba Cortesias e a aba Credenciamento da amostra do portal têm valores próprios, que podem divergir. Não usar em casos de dados_parceria."
+    ]
   },
   {
     "fato": "s-credenciais",
@@ -1412,16 +1409,15 @@
     "edicao": 2027,
     "tipo": "valor",
     "pagina": 3,
-    "trecho": "Na Arena, a Subcota tem 12 credenciais de serviço por dia",
+    "trecho": "Na Arena, a Subcota tem 10 credenciais de serviço por dia",
     "perguntas": [
       "Quantas credenciais de serviço temos por dia na Arena?",
       "quantas credenciais a gente divide entre equipe e agência?"
     ],
-    "resposta": "12",
+    "resposta": "10",
     "visivelPara": [
       "verde"
-    ],
-    "nota": "Número do documento. A aba Cortesias e a aba Credenciamento da amostra do portal têm valores próprios, que podem divergir. Não usar em casos de dados_parceria."
+    ]
   },
   {
     "fato": "s-conteudo-prazo",
@@ -1563,12 +1559,12 @@
     "edicao": 2027,
     "tipo": "prazo",
     "pagina": 2,
-    "trecho": "A montagem do espaço do Cliente Amarelo acontece de 20/01/2027 a 26/01/2027.",
+    "trecho": "A montagem do espaço do Cliente Amarelo na Arena começa em 11/01/2027, e a montagem do espaço no Camarote começa em 18/01/2027.",
     "perguntas": [
-      "Quando monta o nosso espaço?",
-      "em que datas nossa montadora faz a montagem do espaço?"
+      "Quando monta o nosso espaço na Arena e no Camarote?",
+      "em que datas nossa montadora começa a montagem de cada espaço?"
     ],
-    "resposta": "20/01/2027|26/01/2027",
+    "resposta": "11/01/2027|18/01/2027",
     "visivelPara": [
       "amarelo"
     ]
@@ -1581,12 +1577,12 @@
     "edicao": 2027,
     "tipo": "valor",
     "pagina": 1,
-    "trecho": "ocupa uma área de 120 metros quadrados",
+    "trecho": "Na Arena, ao lado da entrada do Portão 6, ocupa uma área de 150 metros quadrados, mais 16 metros quadrados também na Arena. No Camarote, junto ao acesso do Portão 4, ocupa uma área de 40 metros quadrados.",
     "perguntas": [
-      "Quantos metros quadrados tem o nosso espaço?",
-      "qual o tamanho da ativação da marca?"
+      "Quantos metros quadrados tem o nosso espaço na Arena e no Camarote?",
+      "qual o tamanho da ativação da marca em cada setor?"
     ],
-    "resposta": "120",
+    "resposta": "150|16|40",
     "visivelPara": [
       "amarelo"
     ]
@@ -1626,11 +1622,11 @@
     "edicao": 2027,
     "tipo": "canario",
     "pagina": 1,
-    "trecho": "A ativação do Cliente Roxo usa o tema Tempestade Violeta",
+    "trecho": "A presença do Cliente Roxo na transmissão oficial usa o tema Tempestade Violeta",
     "perguntas": [
-      "Qual é o tema da nossa ativação?",
-      "que tema o espaço da marca vai ter este ano?",
-      "qual a identidade visual do nosso espaço?"
+      "Qual é o tema da nossa presença na transmissão?",
+      "que tema a marca vai ter este ano?",
+      "qual a identidade visual das nossas peças?"
     ],
     "resposta": "Tempestade Violeta",
     "visivelPara": [
@@ -1638,107 +1634,27 @@
     ],
     "canario": "Tempestade Violeta",
     "perguntasDeOutraMarca": [
-      "Qual é o tema do espaço do Cliente Roxo?",
-      "qual o tema da ativação do Roxo?"
+      "Qual é o tema do Cliente Roxo?",
+      "qual o tema da marca Roxo na transmissão?"
     ]
   },
   {
-    "fato": "roxo-horario-espaco",
+    "fato": "roxo-sem-espaco",
     "id": "D07",
     "documento": "anexo-parceria",
     "versao": 1,
     "edicao": 2027,
-    "tipo": "horario",
-    "pagina": 2,
-    "trecho": "O espaço do Cliente Roxo funciona das 16h às 23h na sexta-feira e das 15h às 23h no sábado.",
-    "perguntas": [
-      "Qual o horário de funcionamento do nosso espaço?",
-      "a que horas abre o espaço da marca na sexta?"
-    ],
-    "resposta": "16h às 23h|15h às 23h",
-    "visivelPara": [
-      "roxo"
-    ]
-  },
-  {
-    "fato": "roxo-kva",
-    "id": "D07",
-    "documento": "anexo-parceria",
-    "versao": 1,
-    "edicao": 2027,
-    "tipo": "valor",
+    "tipo": "regra",
     "pagina": 1,
-    "trecho": "A carga elétrica contratada para o espaço do Cliente Roxo é de 12 kVA.",
-    "perguntas": [
-      "Quantos kVA a gente contratou pro espaço?",
-      "qual a nossa carga elétrica contratada?"
-    ],
-    "resposta": "12 kVA|12",
-    "visivelPara": [
-      "roxo"
-    ]
-  },
-  {
-    "fato": "roxo-montagem",
-    "id": "D07",
-    "documento": "anexo-parceria",
-    "versao": 1,
-    "edicao": 2027,
-    "tipo": "prazo",
-    "pagina": 2,
-    "trecho": "A montagem do espaço do Cliente Roxo acontece de 22/01/2027 a 26/01/2027.",
-    "perguntas": [
-      "Quando monta o nosso espaço?",
-      "em que datas nossa montadora faz a montagem do espaço?"
-    ],
-    "resposta": "22/01/2027|26/01/2027",
-    "visivelPara": [
-      "roxo"
-    ]
-  },
-  {
-    "fato": "roxo-area",
-    "id": "D07",
-    "documento": "anexo-parceria",
-    "versao": 1,
-    "edicao": 2027,
-    "tipo": "valor",
-    "pagina": 1,
-    "trecho": "ocupa uma área de 45 metros quadrados",
+    "trecho": "A Cota Apresenta não inclui espaço físico no Saba.",
     "perguntas": [
       "Quantos metros quadrados tem o nosso espaço?",
-      "qual o tamanho da ativação da marca?"
+      "quando monta o espaço da nossa marca?",
+      "qual a carga elétrica contratada do nosso espaço?"
     ],
-    "resposta": "45",
+    "resposta": "não inclui espaço físico|sem espaço físico|não tem espaço",
     "visivelPara": [
       "roxo"
-    ]
-  },
-  {
-    "fato": "roxo-energia-total",
-    "id": "D07",
-    "documento": "anexo-parceria",
-    "versao": 1,
-    "edicao": 2027,
-    "tipo": "conta",
-    "pagina": 1,
-    "trecho": "A carga elétrica contratada para o espaço do Cliente Roxo é de 12 kVA.",
-    "perguntas": [
-      "Quanto vou pagar de energia pelo meu espaço?",
-      "qual o custo total da energia contratada da nossa ativação?"
-    ],
-    "resposta": "3.744|3744",
-    "visivelPara": [
-      "roxo"
-    ],
-    "calculo": {
-      "ferramenta": "calcular",
-      "expressao": "12 * 312",
-      "resultado": 3744
-    },
-    "respostaCalculada": true,
-    "tambem": [
-      "manual-operacoes"
     ]
   },
   {

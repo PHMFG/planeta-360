@@ -17,7 +17,9 @@ import { useDados } from '../../api/useDados'
 import { Aviso } from '../../componentes/Aviso'
 import { Botao } from '../../componentes/Botao'
 import { CabecalhoSecao } from '../../componentes/CabecalhoSecao'
-import { Campo } from '../../componentes/Campo'
+import { Campo, focarPrimeiroErro } from '../../componentes/Campo'
+import { CompraDeIngressos, PlanoComercialDoPerfil } from '../../componentes/DocumentosDoPerfil'
+import { DireitosPorContrato } from '../../componentes/DireitosPorContrato'
 import { CodigoAtivacao } from '../../componentes/CodigoAtivacao'
 import { Cartao, Grade2 } from '../../componentes/Cartao'
 import { Carregando } from '../../componentes/Carregando'
@@ -27,6 +29,7 @@ import { Tabela } from '../../componentes/Tabela'
 import { useSessao } from '../../sessao/Sessao'
 import { dataHora, moeda } from '../../util/formatar'
 import { useParceria, useRecarregarParceria } from './ContextoParceria'
+import { nomeDaAba, TrocaDeCota } from '../../componentes/TrocaDeCota'
 import { EntregasDaAba } from './EntregasDaAba'
 
 const SITUACOES: Record<Situacao, string> = {
@@ -52,20 +55,33 @@ function EdicaoEmpresa({ detalhe, aoSalvar }: { detalhe: ParceriaDetalhe; aoSalv
   const [segmento, setSegmento] = useState(detalhe.patrocinador.segmento ?? '')
   const [produto, setProduto] = useState(detalhe.nomeProduto ?? '')
   const [situacao, setSituacao] = useState<Situacao>(detalhe.situacao)
+  // O investimento e a base andam juntos (a API recusa um sem o outro) e a RBS edita os dois aqui (R6.d1).
+  const [investimento, setInvestimento] = useState(detalhe.valorInvestimento === null ? '' : String(detalhe.valorInvestimento).replace('.', ','))
+  const [base, setBase] = useState<'BRUTO_TABELA' | 'LIQUIDO'>(detalhe.baseValor ?? 'LIQUIDO')
   const [falha, setFalha] = useState<string | null>(null)
   const [erros, setErros] = useState<Record<string, string>>({})
   const [salvando, setSalvando] = useState(false)
 
   async function salvar(evento: FormEvent) {
     evento.preventDefault()
+    // "1.000.000,00" e "1000000" valem 1000000; o resto é número inválido, conferido antes de chamar a API.
+    const texto = investimento.trim().replace(/\./g, '').replace(',', '.')
+    const valor = texto ? Number(texto) : null
+    if (texto && (!/^\d+(\.\d{1,2})?$/.test(texto) || Number.isNaN(valor))) {
+      setErros({ valorInvestimento: 'Use só números, com até 2 casas decimais (ex.: 500.000,00).' })
+      focarPrimeiroErro()
+      return
+    }
     setSalvando(true)
     setFalha(null)
+    setErros({})
     try {
       aoSalvar(
         await alterarParceria(detalhe.id, {
           patrocinador: { nome: nome.trim(), segmento: segmento.trim() || null },
           nomeProduto: produto.trim() || null,
           situacao,
+          ...(valor !== null ? { valorInvestimento: valor, baseValor: base } : {}),
         }),
       )
     } catch (erro) {
@@ -82,6 +98,18 @@ function EdicaoEmpresa({ detalhe, aoSalvar }: { detalhe: ParceriaDetalhe; aoSalv
         <Campo rotulo="Empresa" value={nome} onChange={(evento) => setNome(evento.target.value)} erro={erros['patrocinador.nome']} />
         <Campo rotulo="Segmento" value={segmento} onChange={(evento) => setSegmento(evento.target.value)} />
         <Campo rotulo="Produto" value={produto} onChange={(evento) => setProduto(evento.target.value)} erro={erros.nomeProduto} />
+        <Campo
+          rotulo="Investimento (R$)"
+          inputMode="decimal"
+          value={investimento}
+          onChange={(evento) => setInvestimento(evento.target.value)}
+          erro={erros.valorInvestimento}
+          ajuda="O valor do contrato da cota, com a base ao lado."
+        />
+        <Seletor rotulo="Base do valor" value={base} onChange={(evento) => setBase(evento.target.value as 'BRUTO_TABELA' | 'LIQUIDO')} erro={erros.baseValor}>
+          <option value="LIQUIDO">Líquido</option>
+          <option value="BRUTO_TABELA">Bruto de tabela</option>
+        </Seletor>
         <Seletor rotulo="Situação" value={situacao} onChange={(evento) => setSituacao(evento.target.value as Situacao)}>
           {Object.entries(SITUACOES).map(([codigo, nomeSituacao]) => (
             <option key={codigo} value={codigo}>
@@ -100,19 +128,29 @@ function EdicaoEmpresa({ detalhe, aoSalvar }: { detalhe: ParceriaDetalhe; aoSalv
   )
 }
 
+type EstadoNaTela = 'LIBERADA' | 'FECHADA' | 'OCULTA'
+
 function AbasLiberadas({ detalhe, rbs, aoSalvar }: { detalhe: ParceriaDetalhe; rbs: boolean; aoSalvar: (novo: ParceriaDetalhe) => void }) {
   const [mudando, setMudando] = useState<string | null>(null)
   const [falha, setFalha] = useState<string | null>(null)
   const [feito, setFeito] = useState<string | null>(null)
 
-  async function alternar(codigo: ParceriaDetalhe['abas'][number]['codigo'], liberada: boolean) {
+  async function mudar(codigo: ParceriaDetalhe['abas'][number]['codigo'], estado: EstadoNaTela) {
     setMudando(codigo)
     setFalha(null)
     setFeito(null)
     try {
-      aoSalvar(await alterarParceria(detalhe.id, { abas: [{ codigo, liberada }] }))
+      const mudanca =
+        estado === 'LIBERADA' ? { codigo, liberada: true, visivel: true } : estado === 'FECHADA' ? { codigo, liberada: false, visivel: true } : { codigo, visivel: false }
+      aoSalvar(await alterarParceria(detalhe.id, { abas: [mudanca] }))
       const nome = SECOES.find((item) => item.aba === codigo)?.nome ?? codigo
-      setFeito(liberada ? `A aba ${nome} foi liberada para a marca.` : `A aba ${nome} foi fechada para a marca. As entregas e os arquivos ficam guardados.`)
+      setFeito(
+        estado === 'LIBERADA'
+          ? `A aba ${nome} foi liberada para a marca.`
+          : estado === 'FECHADA'
+            ? `A aba ${nome} foi fechada: a marca a vê no menu, com o aviso. As entregas e os arquivos ficam guardados.`
+            : `A aba ${nome} foi ocultada: ela some do menu da marca. As entregas e os arquivos ficam guardados.`,
+      )
     } catch (erro) {
       setFalha(erro instanceof ErroApi ? erro.message : 'Não foi possível mudar a aba.')
     } finally {
@@ -123,29 +161,39 @@ function AbasLiberadas({ detalhe, rbs, aoSalvar }: { detalhe: ParceriaDetalhe; r
   return (
     <Cartao titulo="Abas da parceria">
       <ul className="grid gap-2 md:grid-cols-2">
-        {detalhe.abas.map((aba) => {
+        {/* A marca não vê a aba oculta nem aqui. */}
+        {detalhe.abas.filter((aba) => rbs || aba.visivel !== false).map((aba) => {
           const secao = SECOES.find((item) => item.aba === aba.codigo)
           const foraDaCota = aba.incluidaNaCota === false
+          const atual: EstadoNaTela = aba.visivel === false ? 'OCULTA' : aba.liberada ? 'LIBERADA' : 'FECHADA'
           return (
             <li key={aba.codigo} data-secao={secao?.chave} className="flex items-center gap-3 rounded-xl border border-borda px-4 py-3">
               <i className={`${secao?.icone ?? 'ri-folder-line'} text-xl text-secao`} aria-hidden="true" />
               <span className="flex-1 text-sm font-semibold">{secao?.nome ?? aba.nome}</span>
               {rbs ? (
-                <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold">
-                  <input
-                    type="checkbox"
-                    aria-label={`Liberar a aba ${secao?.nome ?? aba.nome}`}
-                    className="size-4 accent-[var(--secao-cor)]"
-                    checked={aba.liberada}
-                    // [PERMISSAO] Aba fora da cota não pode ser liberada (a API recusa); dá para fechar se estiver aberta.
-                    disabled={mudando !== null || (foraDaCota && !aba.liberada)}
-                    onChange={(evento) => alternar(aba.codigo, evento.target.checked)}
-                  />
-                  {aba.liberada ? 'Liberada' : foraDaCota ? 'Fora da cota' : 'Fechada'}
-                </label>
+                <span className="flex flex-col items-end gap-1">
+                  {/* Três estados (R6.a): liberada, fechada (a marca vê o aviso) e oculta (some do menu da marca). */}
+                  <select
+                    aria-label={`Situação da aba ${secao?.nome ?? aba.nome}`}
+                    className="rounded-lg border border-borda bg-white px-2 py-1.5 text-xs font-semibold"
+                    value={atual}
+                    disabled={mudando !== null}
+                    onChange={(evento) => mudar(aba.codigo, evento.target.value as EstadoNaTela)}
+                  >
+                    {/* [PERMISSAO] Aba fora da cota não pode ser liberada (a API recusa, saída A do plano): a opção fica desabilitada. */}
+                    <option value="LIBERADA" disabled={foraDaCota && atual !== 'LIBERADA'}>
+                      Liberada
+                    </option>
+                    <option value="FECHADA">Fechada</option>
+                    <option value="OCULTA">Oculta</option>
+                  </select>
+                  {foraDaCota && (
+                    <span className="text-[11px] font-medium text-texto-2">A cota desta parceria não inclui esta aba. Para dar acesso, use Trocar cota, em Empresa e cota.</span>
+                  )}
+                </span>
               ) : (
                 <span className={`text-xs font-bold ${aba.liberada ? 'text-secao-texto' : 'text-texto-2'}`}>
-                  {aba.liberada ? 'Liberada' : foraDaCota ? 'Não incluída na cota' : 'Fechada pela RBS'}
+                  {aba.liberada ? 'Liberada' : foraDaCota ? 'Não incluída na cota' : atual === 'OCULTA' ? 'Oculta pela RBS' : 'Fechada pela RBS'}
                 </span>
               )}
             </li>
@@ -249,11 +297,17 @@ function AcessosRbs({ parceriaId }: { parceriaId: number }) {
                   ) : (
                     <div className="flex justify-end gap-3 text-xs font-bold">
                       {item.situacao === 'PENDENTE' && (
-                        <button type="button" className="hover:underline" onClick={() => autorizarEmail(parceriaId, item.email, item.vinculo).then(setCodigo).catch(() => setFalha('Não foi possível gerar outro código.'))}>
+                        <button
+                          type="button"
+                          className="hover:underline"
+                          aria-label={`Novo código para ${item.email}`}
+                          onClick={() => autorizarEmail(parceriaId, item.email, item.vinculo).then(setCodigo).catch(() => setFalha('Não foi possível gerar outro código.'))}
+                        >
                           Novo código
                         </button>
                       )}
-                      <button type="button" className="text-[#c8203f] hover:underline" onClick={() => revogar(item)}>
+                      {/* Cada linha repete os botões: o nome acessível diz de qual e-mail é (U16). */}
+                      <button type="button" className="text-[#c8203f] hover:underline" aria-label={`Revogar ${item.email}`} onClick={() => revogar(item)}>
                         Revogar
                       </button>
                     </div>
@@ -274,6 +328,8 @@ export function Perfil() {
   const recarregarParceria = useRecarregarParceria()
   const dados = useDados(() => obterParceria(parceria.id), [parceria.id])
   const [editando, setEditando] = useState(false)
+  const [trocandoCota, setTrocandoCota] = useState(false)
+  const [cotaTrocada, setCotaTrocada] = useState<string | null>(null)
   const [atual, setAtual] = useState<ParceriaDetalhe | null>(null)
   const detalhe = atual ?? dados.dado
   // Depois de editar, o menu (nome e cadeados das abas) também precisa ver a mudança.
@@ -315,7 +371,22 @@ export function Perfil() {
                   <Grade2>
                     <Dado rotulo="Empresa" valor={detalhe.patrocinador.nome} />
                     <Dado rotulo="Segmento" valor={detalhe.patrocinador.segmento} />
-                    <Dado rotulo="Cota" valor={detalhe.cota.nome} />
+                    <Dado
+                      rotulo="Cota"
+                      valor={
+                        rbs && detalhe.situacao !== 'ENCERRADA' ? (
+                          <span className="flex flex-wrap items-center gap-x-3">
+                            {detalhe.cota.nome}
+                            {/* R6.d3: a troca abre a prévia do impacto antes de confirmar. */}
+                            <button type="button" className="text-[13px] font-semibold text-secao-texto hover:underline" onClick={() => setTrocandoCota(true)}>
+                              Trocar cota
+                            </button>
+                          </span>
+                        ) : (
+                          detalhe.cota.nome
+                        )
+                      }
+                    />
                     <Dado rotulo="Edição" valor={`${detalhe.evento.nome} ${detalhe.evento.edicao}`} />
                     <Dado rotulo="Produto" valor={detalhe.nomeProduto} />
                     <Dado rotulo="Situação" valor={SITUACOES[detalhe.situacao]} />
@@ -327,8 +398,42 @@ export function Perfil() {
                   </Grade2>
                 )}
               </Cartao>
+              {cotaTrocada && (
+                <Aviso titulo={cotaTrocada}>
+                  Cortesias, credenciais, plano comercial e investimento não mudaram sozinhos: ajuste-os nas abas, se a cota nova pedir.
+                </Aviso>
+              )}
+              {trocandoCota && (
+                <TrocaDeCota
+                  detalhe={detalhe}
+                  aoFechar={() => setTrocandoCota(false)}
+                  aoTrocar={(nova, impacto) => {
+                    setTrocandoCota(false)
+                    setCotaTrocada(
+                      `Cota trocada para ${impacto.cotaNova.nome}.${impacto.abasQueFecham.length ? ` Fecharam: ${impacto.abasQueFecham.map(nomeDaAba).join(', ')}.` : ''}`,
+                    )
+                    salvo(nova)
+                  }}
+                />
+              )}
 
-              <AbasLiberadas detalhe={detalhe} rbs={rbs} aoSalvar={salvo} />
+              {/* Remonta quando a cota muda: o aviso da última mudança de aba não pode ficar ao lado do da troca. */}
+              <AbasLiberadas key={detalhe.cota.codigo} detalhe={detalhe} rbs={rbs} aoSalvar={salvo} />
+
+              {rbs && (
+                <>
+                  <DireitosPorContrato parceria={parceria} />
+                  {/* Figma R02: os dois avisos da configuração administrativa. */}
+                  <Aviso titulo="Isolamento por patrocinador">
+                    Arquivos, resultados e relatórios pertencem à empresa selecionada. Confira a parceria aberta antes de publicar ou de mudar
+                    acessos.
+                  </Aviso>
+                  <Aviso titulo="Visibilidade das 7 abas · controle da RBS">
+                    Perfil, Aplicações, Mídia, Cortesias, Credenciamento, Pesquisa e Contrato: liberar, fechar ou ocultar conforme o contrato. A
+                    Pesquisa é só da cota Master.
+                  </Aviso>
+                </>
+              )}
 
               {rbs ? (
                 <AcessosRbs parceriaId={detalhe.id} />
@@ -347,7 +452,10 @@ export function Perfil() {
                 </Cartao>
               )}
 
-              <EntregasDaAba aba="PERFIL" titulo="Documentos da parceria" />
+              {/* Figma P01: o plano comercial e a compra de ingressos têm cartões próprios (R5.1); as outras entregas ficam abaixo. */}
+              <PlanoComercialDoPerfil parceriaId={detalhe.id} rbs={rbs} />
+              <CompraDeIngressos parceriaId={detalhe.id} rbs={rbs} />
+              <EntregasDaAba aba="PERFIL" titulo="Outros documentos da parceria" semPapel />
 
               {!rbs && (
                 <Aviso titulo="Cadastro divergente?">

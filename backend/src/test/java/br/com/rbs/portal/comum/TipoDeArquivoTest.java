@@ -22,7 +22,7 @@ class TipoDeArquivoTest {
 
     @Test
     void listaAceitaExatamenteAsExtensoesCombinadasComARbs() {
-        assertThat(TipoDeArquivo.listaDeExtensoes()).isEqualTo("pdf, png, jpg, jpeg, docx, xlsx, pptx, csv, mp4, mp3, zip");
+        assertThat(TipoDeArquivo.listaDeExtensoes()).isEqualTo("pdf, png, jpg, jpeg, doc, docx, xls, xlsx, ppt, pptx, csv, mp4, mp3, zip");
         for (String nome : new String[] {"a.exe", "a.svg", "a.html", "a.js", "a.sh", "a.bat", "a.docm", "a.xlsm", "a.ai", "a", "a."}) {
             assertThat(TipoDeArquivo.daExtensao(nome)).as(nome).isEmpty();
         }
@@ -90,11 +90,13 @@ class TipoDeArquivoTest {
     }
 
     @Test
-    void xlsEOTipoDaPlanilhaDaAgenciaEFicaForaDaListaDosEnviosComuns() {
+    void xlsEOfficeAntigoComAssinaturaOle2() {
         assertThat(TipoDeArquivo.XLS.mime()).isEqualTo("application/vnd.ms-excel");
         assertThat(TipoDeArquivo.daExtensao("contagem.XLS")).contains(TipoDeArquivo.XLS);
-        assertThat(TipoDeArquivo.listaDeExtensoes()).as("a frase do 415 dos envios comuns não cita o xls").doesNotContain("xls,")
-                .endsWith("zip");
+        assertThat(TipoDeArquivo.listaDeExtensoes()).as("o Office antigo entra nos envios comuns").contains("doc, docx, xls, xlsx, ppt, pptx");
+        assertThat(TipoDeArquivo.DOC.mime()).isEqualTo("application/msword");
+        assertThat(TipoDeArquivo.PPT.mime()).isEqualTo("application/vnd.ms-powerpoint");
+        assertThat(TipoDeArquivo.DOC.conteudoConfere(bytes(0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A))).as("PNG renomeado").isFalse();
         byte[] ole2 = bytes(0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1, 0, 0);
         assertThat(TipoDeArquivo.XLS.conteudoConfere(ole2)).isTrue();
         assertThat(TipoDeArquivo.XLS.conteudoConfere(bytes(0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A))).as("assinatura incompleta").isFalse();

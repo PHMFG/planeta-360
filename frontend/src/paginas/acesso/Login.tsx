@@ -1,4 +1,5 @@
 // Tela de login (Figma A01): e-mail corporativo e senha; o perfil vem da conta, não de uma escolha. [ITEM-3]
+import { focarPrimeiroErro } from '../../componentes/Campo'
 import { useState, type FormEvent } from 'react'
 import { Navigate, useLocation } from 'react-router'
 import { ErroApi } from '../../api/cliente'
@@ -33,6 +34,7 @@ export function Login() {
     else if (!EMAIL_VALIDO.test(email.trim())) novos.email = 'Confira o formato do e-mail.'
     if (!senha) novos.senha = 'Informe a senha.'
     setErros(novos)
+    focarPrimeiroErro()
     setFalha(null)
     if (Object.keys(novos).length > 0) return
 

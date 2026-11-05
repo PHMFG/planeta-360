@@ -102,7 +102,9 @@ Abra <http://localhost:5173>. O Vite repassa as chamadas `/api` para a porta 808
 
 **Recomeçar do zero.** Para voltar à amostra original, pare a API, rode no `psql` o `DROP DATABASE portal;` e o `CREATE DATABASE portal OWNER portal;`, rode o `scripts/preparar-banco-atlas.sh` e suba a API de novo. Os arquivos enviados ficam em `backend/armazenamento/`, que pode ser apagada junto (a API recria os arquivos de exemplo da amostra na subida).
 
-**Quem já tinha o banco `portal` criado precisa recomeçar do zero para ver a amostra nova.** A amostra só carrega num banco vazio e não roda de novo sobre um banco que já a tem. A versão atual traz: entregas Enviado, Em análise e Aprovado com o arquivo que a marca mandou, o VT do Roxo em "Ajuste solicitado" com o recado da RBS no histórico, horários sempre no passado (contados a partir do dia em que o banco é criado) e nenhum "(simulada)" no nome da pesquisa. Num banco criado antes, as migrações novas (V4 a V6) rodam sozinhas ao subir a API, mas a amostra antiga continua como estava. O mesmo vale para o alinhamento com os planos comerciais do kit de documentos do Atlas: as cortesias e as credenciais do Roxo (Subcota G: 6 e 3 por dia, 8 credenciais) e da Verde (Subcota: 3 e 1 por dia, 12 credenciais) e o portão do Camarote e do Lounge (Portão 4) só aparecem num banco recriado.
+**Quem já tinha o banco `portal` criado precisa recomeçar do zero para ver a amostra nova.** A amostra só carrega num banco vazio e não roda de novo sobre um banco que já a tem. A versão atual traz: entregas Enviado, Em análise e Aprovado com o arquivo que a marca mandou, o VT do Roxo em "Ajuste solicitado" com o recado da RBS no histórico, horários sempre no passado (contados a partir do dia em que o banco é criado) e nenhum "(simulada)" no nome da pesquisa. Num banco criado antes, as migrações novas (V4 a V6) rodam sozinhas ao subir a API, mas a amostra antiga continua como estava. O mesmo vale para o alinhamento com os planos comerciais do kit de documentos do Atlas: as cortesias e as credenciais do Roxo (4 na Arena e 2 no Camarote por dia, 5 credenciais na Arena) e da Verde (4 e 2 por dia, 10 credenciais), iguais aos PDFs dos planos da RBS, e o portão do Camarote e do Lounge (Portão 4) só aparecem num banco recriado. **A amostra mudou de novo**: além desses números, a edição 2027 passou a ter o endereço do Open Staff (`https://example.com/`), o credenciamento de 01/12 a 20/12/2026 e o prazo das cortesias em 15/01/2027; as entregas de ingressos e de logo ganharam o papel; as exibições do Amarelo se espalham por três meses; e algumas exibições do Roxo nas redes trazem o link do post. As contagens não mudam (79 linhas de plano, 1.489 linhas lidas). Cada pessoa do grupo recria o próprio banco com os comandos acima.
+
+**Requisitos da RBS (V16 a V18).** As três migrações rodam sozinhas sobre o banco que já existe: a V16 (papel das entregas, formulário de ingressos, credenciamento e prazo de cortesias da edição, conteúdo em texto ou link), a V17 (páginas de um documento fora do Atlas) e a V18 (pós-venda da parceria). Mas a amostra e o kit do Atlas mudaram junto (os anexos D06 e D07, com as metragens e a montagem do Amarelo e o Roxo como Cota Apresenta): **recrie o seu banco** com os comandos de "Recomeçar do zero" para ver tudo como no roteiro abaixo.
 
 **Atlas (V7 a V15).** As migrações rodam sozinhas ao subir a API, sobre o banco que já existe, mas a V11 precisa do pgvector e do papel `atlas_ro`: rode antes o `scripts/preparar-banco-atlas.sh`, ou a subida para com a mensagem que pede isso. O kit de documentos e os prazos do Atlas não dependem de recriar o banco: entram na subida, nos perfis `dev` e `demo`, com os embeddings ligados.
 
@@ -149,11 +151,18 @@ Com o banco recém-criado (amostra original):
 6. Em **Relatórios**, gere uma nova versão do relatório do Roxo, valide e disponibilize.
 7. Volte como Roxo: o relatório aparece em **Relatório**, com as seções do modelo, e pode ser impresso ou exportado em CSV.
 
+Os pedidos da RBS de 04/11 (continua com o mesmo banco):
+
+8. Como `marketing@amarelo.example` (Master), em **Mídia e conteúdo**: o cartão **Comprovação mensal** mostra o exibido de cada mês por tipo de mídia e unidade, com a planilha `.xlsx` e o CSV; **Posts e links** traz os links dos posts, que abrem em aba nova. No detalhe de uma entrega, o material vai em arquivo, texto ou link. Como Roxo, a comprovação mensal não aparece (é só das Master).
+9. Ainda como Amarelo: no **Perfil**, o plano comercial e a compra de ingressos; em **Cortesias**, a quantidade por setor e dia e o botão **Destinar cortesias**; em **Credenciamento**, a liberação, o período e o botão do Open Staff; em **Contrato**, o contrato assinado na tela e os dados de quem assina. (Destinar e preencher gravam: para não mudar os números da amostra, faça isso numa marca nova, cadastrada pela RBS.)
+10. Como `b2b@rbs.example`: no Perfil de uma parceria, **Direitos por contrato**, as abas em três estados (liberada, fechada ou oculta) e **Trocar cota**, com a prévia do impacto; no menu, **Pesquisa** (abrir a da edição e decidir as perguntas das marcas), **Cargas** (o lote da comprovação mensal das Master) e **Relatórios** (os números da edição); na página do relatório de uma parceria, o **Pós-venda da edição**, que a marca vê depois das 6 seções.
+11. Em **Atlas** > **Documentos**, um PDF com uma página de telefones trava a aprovação e a tela diz qual página; marcada como fora do Atlas, ela não entra no índice e o PDF continua inteiro no visualizador.
+
 ### Roteiro do Atlas
 
 O Atlas é o chat: a marca pergunta sobre os números da própria parceria e sobre os documentos do evento, e o que vem de documento cita a fonte. Nos perfis `dev` e `demo` o relatório da ativação também funciona, na mesma conversa (o modo só chat, sem o relatório, continua existindo: `ATLAS_RELATORIO=false`). Ele precisa do modelo de linguagem ligado (veja abaixo); sem o modelo, o botão "Montar relatório" monta o relatório sem ele.
 
-1. Como `b2b@rbs.example`, em **Patrocinadores**, cadastre a parceria "Cliente Teste" na edição 2027. Em **Cargas**, escolha "Plano comercial" e envie `docs/exemplos/plano.csv`: 8 linhas entram, 1 é duplicada e 2 são rejeitadas, com o motivo (mídia sem tipo e uma marca sem parceria).
+1. Como `b2b@rbs.example`, em **Patrocinadores**, cadastre a parceria "Cliente Teste" na edição 2027. Em **Cargas**, escolha "Plano comercial" e envie `docs/exemplos/plano.csv`: 8 linhas entram, 1 é duplicada e 2 são rejeitadas, com o motivo (mídia sem tipo e uma marca sem parceria). Para ver o plano do Amarelo crescer, envie também `docs/exemplos/plano-amarelo-p07-p10.csv` (as páginas 7 a 10 do plano dele, 36 linhas, todas entram; a unidade das impressões de display é pergunta aberta à RBS).
 2. Abra a parceria do Cliente Amarelo, em **Aplicações da marca**: o plano linha a linha, com as fotos de comprovação. Use "Anexar foto" numa linha sem foto, e o total de comprovadas sobe.
 3. Entre como `marketing@amarelo.example` e, em **Aplicações da marca**, informe os números que só a marca sabe (visitantes, cadastros e brindes): eles ficam com o seu nome e a data. A planilha de contagem da agência (xlsx, xls ou csv, até 20 MB) também fica ali, como um valor com autor e data (API: `POST /api/parcerias/{id}/dados-informados/ativacao.planilha_agencia/arquivo`, rota 66, e o download é a rota 18); ela não entra no relatório do Atlas.
 4. Toque em **atlas**, no menu (ou use a caixa "atlas · como posso ajudar?" em Minha parceria). O Atlas abre numa janela própria, com o menu à vista. Pergunte "quantas aplicações já foram comprovadas?": a resposta chega enquanto o modelo escreve, e os números vêm do portal.
@@ -209,7 +218,7 @@ No Windows (PowerShell): `$env:ATLAS_LLM="openai"; $env:OPENCODE_API_KEY="sua-ch
 
 Todo número do chat tem origem: vem da base do portal, do que a marca informou ou de um documento citado na mesma frase. O servidor confere isso antes de a frase chegar à tela. Use só dados fictícios enquanto o provedor estiver em teste.
 
-**Regras de envio.** Arquivos de até 20 MB nos formatos PDF, PNG, JPG (e JPEG), DOCX, XLSX, PPTX, CSV, MP4, MP3 e ZIP. A API confere o conteúdo, e não só o nome. O download sai sempre como anexo. Cada envio aceita uma observação (até 500 caracteres), que fica na versão e no histórico. As planilhas de carga são CSV em UTF-8 com vírgula como separador (no Excel, "Salvar como" e "CSV UTF-8"); as colunas estão em `docs/banco.md` e há exemplos em `docs/exemplos/`. Linha com data ou quantidade ilegível é rejeitada com o motivo e o formato esperado, e o resto do arquivo entra.
+**Regras de envio.** Arquivos de até 20 MB nos formatos PDF, PNG, JPG (e JPEG), DOC, DOCX, XLS, XLSX, PPT, PPTX, CSV, MP4, MP3 e ZIP (os do Office antigo só sem macro VBA). A API confere o conteúdo, e não só o nome. O download sai sempre como anexo. Cada envio aceita uma observação (até 500 caracteres), que fica na versão e no histórico. As planilhas de carga são CSV em UTF-8 com vírgula como separador (no Excel, "Salvar como" e "CSV UTF-8"); as colunas estão em `docs/banco.md` e há exemplos em `docs/exemplos/`. Linha com data ou quantidade ilegível é rejeitada com o motivo e o formato esperado, e o resto do arquivo entra.
 
 ## Testes
 
@@ -222,7 +231,12 @@ No Windows: `.\mvnw.cmd test`. Os testes usam o banco `portal_teste`, que é apa
 
 No front, `npm run build` confere os tipos e gera a versão de produção; `npm run lint` roda o Oxlint.
 
-**No navegador.** Na primeira vez, `npx playwright install chromium`, em `frontend/`. Com a API no ar (`scripts/atlas-dev.sh start`), `npm run e2e` roda os testes de `frontend/e2e/`, e as capturas ficam em `frontend/e2e/capturas/`. Os testes marcados `@vivo` usam o modelo de verdade; sem chave, rode `npm run e2e -- --grep-invert @vivo`. O kit de documentos precisa estar indexado (`ATLAS_EMBEDDINGS` em `gemini` ou `teste`), porque os testes das fontes dependem dele. Com a API em outra porta (`ATLAS_DEV_PORTA=8090 scripts/atlas-dev.sh start`), informe `PORTAL_API_URL=http://localhost:8090`. O front do teste sobe na porta 5190, ou na de `E2E_PORTA_FRONT`.
+**No navegador.** Na primeira vez, `npx playwright install chromium`, em `frontend/`. Os testes escrevem no banco, então dizer onde eles rodam é obrigatório, e a preparação recusa o banco `portal`:
+
+- `PORTAL_E2E_PILHA=N npm run e2e` (N de 1 a 9) usa a pilha N do `.claude/pilhas-de-teste.sh` (um script local, fora do Git): front na 518N, API na 808N, banco `portal_qaN`.
+- `PORTAL_E2E_PILHA=dev npm run e2e` sobe o front na porta 5190 (ou na de `E2E_PORTA_FRONT`) e fala com a API do `scripts/atlas-dev.sh`, na 8080 (ou na de `ATLAS_DEV_PORTA`). Essa API precisa subir com `PORTAL_BD_URL` apontando para um banco de teste.
+
+As capturas ficam em `frontend/e2e/capturas/`, e o resultado de cada teste em `frontend/resultados-e2e/resultado.json` (ou no nome dado em `E2E_RESULTADO`). Os testes marcados `@vivo` usam o modelo de verdade; sem chave, rode `npm run e2e -- --grep-invert @vivo`. O kit de documentos precisa estar indexado (`ATLAS_EMBEDDINGS` em `gemini` ou `teste`), porque os testes das fontes dependem dele.
 
 **Ensaio da demonstração.** `frontend/e2e/demo.spec.ts` percorre o roteiro inteiro com o modelo e o Gemini de verdade: os documentos da RBS e o envio do FAQ, o prazo com o PDF aberto na página citada, a conta com "Como calculei", os dias úteis, o relatório até o PDF, o pedido do pós-evento e o modelo em branco, o ataque como Cliente Roxo e o diagnóstico. Ele precisa do perfil `demo` num banco recém-criado, e cada turno tem até 30 s:
 
@@ -230,7 +244,7 @@ No front, `npm run build` confere os tipos e gera a versão de produção; `npm 
 scripts/preparar-banco-atlas.sh portal_demo
 ATLAS_DEV_PORTA=8099 ATLAS_PERFIL=demo PORTAL_BD_URL=jdbc:postgresql://localhost:5432/portal_demo scripts/atlas-dev.sh start
 cd frontend
-E2E_DEMO=1 PORTAL_API_URL=http://localhost:8099 npx playwright test e2e/demo.spec.ts
+E2E_DEMO=1 PORTAL_E2E_PILHA=dev ATLAS_DEV_PORTA=8099 npx playwright test e2e/demo.spec.ts
 ```
 
 As capturas de cada passo e os tempos (`demo-tempos.json`) ficam em `frontend/e2e/capturas/`. Sem `E2E_DEMO`, o teste é pulado. Para repetir, recrie o banco: o envio do FAQ muda a versão dele.
@@ -262,24 +276,31 @@ Opções: `--split` (`ajuste`, `reserva` ou `todos`), `--categoria`, `--casos`, 
 
 ## Pendências registradas
 
-- O plano comercial de uma parceria cadastrada ao vivo entra pela carga "Plano comercial" (Cargas), e as fotos de comprovação pela aba Aplicações da marca (só a RBS anexa). Os números do festival ainda entram só pela amostra: "O festival em números" sai como indisponível nos relatórios de 2027, porque só há números de 2026.
+- O plano comercial de uma parceria cadastrada ao vivo entra pela carga "Plano comercial" (Cargas), e as fotos de comprovação pela aba Aplicações da marca (só a RBS anexa).
 - Corrigir uma linha do plano comercial: o reenvio com outra quantidade conta como duplicado (vale a primeira versão), e não há tela para editar a linha.
-- Telas próprias de Cortesias, Credenciamento e Contrato: nesta versão cada uma dessas abas mostra as próprias entregas.
+- Pedidos da RBS de 04/11 que ficaram em parte, com o motivo:
+  - Comprovação mensal: a planilha foi conferida pelo leitor dos testes (Apache POI); falta abri-la à mão no Excel e no LibreOffice. O previsto que aparece nela é o do plano inteiro, porque o plano não divide o previsto por mês.
+  - Pós-venda: o texto, o aftermovie, o clipping, a audiência por veículo e os links dos posts entram; as fotos da edição entram como link de um álbum, não como galeria. Parceria encerrada não recebe pós-venda (o Amarelo de 2026, na amostra).
+  - Pesquisa: a RBS abre a pesquisa pela tela, mas não há prazo para as perguntas (a tabela não tem a coluna).
+  - Arquivos: `.doc`, `.xls` e `.ppt` entram se não tiverem macro VBA. A macro antiga do Excel (XLM) não é detectável pela leitura do diretório, e a macro dentro de `.docx`, `.xlsx` e `.pptx` não é conferida.
+  - Identidade visual: o emblema de 2027 está no login e nos cabeçalhos, no sistema do Figma; as cores e fontes oficiais esperam a RBS.
+  - A cota do Roxo segue o texto da RBS (Subcota G); o PDF do plano dele diz "Cota Apresenta", e o anexo do kit (D07) segue o PDF.
 - Relatório montado pelo Atlas: ligado nos perfis `dev` e `demo` e desligado no padrão (`ATLAS_RELATORIO`). No texto do relatório o modelo não escreve número nem data (nem por extenso): os números vêm do servidor, com a origem em "Referências", no fim do documento.
 - Atlas com o modelo de linguagem: testado contra um servidor falso e com a chave de verdade do OpenCode Go. Para decidir com a equipe: os termos de uso do OpenCode, que falam em uso interno de quem assina, e o acordo de retenção zero do DeepSeek no Go, que vale até 30/11/2026 e é renovado mês a mês.
-- Dado pessoal no modelo: a consulta do Atlas leva ao modelo o nome de quem informou cada dado ("Informado por ... em ..."). Fica assim por decisão do dono do produto.
+- Retenção zero (pedida pela RBS): só o DeepSeek no Go tem acordo registrado. O JEV só tem retenção zero no plano empresarial, e o Gemini guarda registros por até 55 dias; nenhum dos dois tem acordo assinado neste projeto.
+- Dado pessoal no modelo: a consulta do Atlas leva ao modelo o nome de quem informou cada dado ("Informado por ... em ..."). Fica assim por decisão do dono do produto. Destinatários de cortesia e signatários do contrato (só nome, e-mail e cargo, sem CPF) não vão ao modelo, ao log nem ao histórico.
 - Dados informados pela marca entram sem aprovação da RBS, com o nome de quem informou e a data.
 - E-mail automático do código de ativação; recuperação de senha.
 - PDF do relatório: pela impressão do navegador.
-- A confirmar com a RBS: abas por cota (hoje todas liberadas, Pesquisa só para Master), limite de usuários por parceria, quem envia as fotos de comprovação, formato dos resultados da pesquisa, quem aprova as perguntas, a lista final de formatos de arquivo (o `.ai` do Illustrator ficou de fora) e o limite de 20 MB.
+- A confirmar com a RBS: limite de usuários por parceria, quem envia as fotos de comprovação, formato dos resultados da pesquisa, quem carrega os resultados (hoje a RBS), o `.ai` do Illustrator (hoje só dentro de `.zip`), o limite de 20 MB, CPF de convidados e signatários, se o acesso total do admin inclui liberar uma aba fora da cota (hoje a API recusa, e o caminho é trocar a cota) e as cores e fontes da identidade visual de 2027.
 - Segurança para produção: limite de tentativas de login e cookie de sessão `Secure` atrás de HTTPS.
-- Fora desta versão: n8n, Open Staff, cifra de arquivos, Docker, Swagger e a implantação pública.
+- Fora desta versão: n8n; integração com o Open Staff (o portal só leva ao site); SharePoint e Outlook (a RBS não dá acesso à API do SharePoint, e o portal guarda os arquivos num repositório próprio); cifra de arquivos, Docker, Swagger e a implantação pública.
 
 ## Pastas
 
 ```text
 backend/      API Spring Boot (pacotes comum, acesso, parceria, materiais, pesquisa, consolidacao, relatorio,
-              aplicacoes, dados, documentos, prazos, atlas)
+              aplicacoes, dados, documentos, prazos, cortesias, credenciamento, contrato, atlas)
               src/main/resources/db/migration  estrutura, regras e dados base (Flyway)
               src/main/resources/db/dev        amostra de demonstração
               src/main/resources/atlas         prompts, modelos do relatório, modelos em branco e as perguntas do JEV

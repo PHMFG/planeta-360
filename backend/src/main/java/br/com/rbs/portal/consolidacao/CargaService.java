@@ -128,11 +128,11 @@ public class CargaService {
         }
         Long pesquisaId = null;
         if (campos.isEmpty() && PESQUISA.equals(tipo)) {
-            // A função do banco liga os resultados a uma pesquisa já cadastrada para a edição; não há rota para abri-la.
+            // A função do banco liga os resultados a uma pesquisa já aberta para a edição (a RBS a abre pela rota 93).
             pesquisaId = repositorio.pesquisaDaEdicao(eventoId, escopo).orElse(null);
             if (pesquisaId == null) {
                 campos.put("escopo", "A edição " + edicao + " ainda não tem a pesquisa de "
-                        + ("ATIVACAO".equals(escopo) ? "ativação" : "festival (geral)") + " aberta. Peça à equipe técnica para cadastrá-la.");
+                        + ("ATIVACAO".equals(escopo) ? "ativação" : "festival (geral)") + " aberta. Abra-a em Pesquisa, no menu da RBS.");
             }
         }
         if (!campos.isEmpty()) {

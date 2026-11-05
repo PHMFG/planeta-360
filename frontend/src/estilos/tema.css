@@ -3,6 +3,9 @@
    O atributo data-secao troca as três juntas, como o modo "P360 · Seção" do Figma. */
 @import "tailwindcss";
 
+/* Telas baixas, como um projetor em 1280×720: o menu fica mais compacto para as oito seções caberem sem rolar (U01). */
+@custom-variant baixa (@media (max-height: 820px));
+
 @theme {
   --font-sans: "Montserrat", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Bebas Neue", "Montserrat", sans-serif;

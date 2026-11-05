@@ -6,7 +6,7 @@ const MOLDURA = 'flex flex-col gap-1 rounded-xl border-[1.5px] bg-white px-4 py-
 function Mensagem({ id, erro, ajuda }: { id: string; erro?: string; ajuda?: string }) {
   if (!erro && !ajuda) return null
   return (
-    <p id={id} className={`mt-1.5 px-1 text-xs font-medium ${erro ? 'text-[#c8203f]' : 'text-texto-2'}`}>
+    <p id={id} role={erro ? 'alert' : undefined} className={`mt-1.5 px-1 text-xs font-medium ${erro ? 'text-[#c8203f]' : 'text-texto-2'}`}>
       {erro ?? ajuda}
     </p>
   )

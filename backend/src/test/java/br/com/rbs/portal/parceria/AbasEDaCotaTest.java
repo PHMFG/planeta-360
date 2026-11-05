@@ -28,7 +28,7 @@ class AbasEDaCotaTest {
     private static final String RBS = "b2b@rbs.example";
     private static final String ROXO = "marketing@roxo.example";
     private static final String AMARELO = "marketing@amarelo.example";
-    private static final String FORA_DA_COTA = "A cota Subcota G não inclui a aba Pesquisa da ativação.";
+    private static final String FORA_DA_COTA = "Esta cota não inclui a aba Pesquisa da ativação. Para dar acesso, troque a cota da parceria.";
 
     @Autowired
     MockMvcTester mvc;

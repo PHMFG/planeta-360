@@ -8,15 +8,19 @@ import {
   TRANSICOES,
   baixarArquivo,
   enviarArquivo,
+  enviarConteudo,
   listarEntregas,
   mudarStatusEntrega,
   problemaNoArquivo,
   type Arquivo,
   type Entrega,
+  type VersaoDaEntrega,
 } from '../../api/materiais'
 import { Aviso } from '../../componentes/Aviso'
 import { Botao } from '../../componentes/Botao'
+import { Campo, focarPrimeiroErro } from '../../componentes/Campo'
 import { AreaTexto, Seletor } from '../../componentes/Formulario'
+import { enderecoSeguro, LinkExterno } from '../../componentes/LinkExterno'
 import { Modal } from '../../componentes/Modal'
 import { Status, nomeStatus, type StatusEntrega } from '../../componentes/Status'
 import { SECOES } from '../../componentes/secoes'
@@ -27,7 +31,6 @@ const CATEGORIAS_MARCA = [
   ['MATERIAL_MARCA', 'Material da marca'],
   ['MATERIAL_MIDIA', 'Material de mídia'],
   ['DOCUMENTO_INGRESSOS', 'Documento de ingressos'],
-  ['CONTRATO', 'Contrato'],
   ['OUTRO', 'Outro'],
 ] as const
 
@@ -113,7 +116,94 @@ function Versao({ arquivo }: { arquivo: Arquivo }) {
   )
 }
 
-function FormularioEnvio({ entrega, rbs, aoEnviar }: { entrega: Entrega; rbs: boolean; aoEnviar: (arquivo: Arquivo) => void }) {
+/** Uma versão em texto ou em link (R5.3.a): o texto aparece inteiro, e o link abre em aba nova, só se for http(s). */
+function VersaoDeConteudo({ versao }: { versao: VersaoDaEntrega }) {
+  return (
+    <li className="flex flex-wrap items-start gap-3 border-b border-borda py-3 last:border-b-0">
+      <span className="grid size-9 shrink-0 place-items-center rounded-[10px] bg-secao-tinta text-secao-texto">
+        <i className={`${versao.tipo === 'LINK' ? 'ri-link' : 'ri-text'} text-lg`} aria-hidden="true" />
+      </span>
+      <div className="min-w-0 flex-1 text-sm">
+        <p className="font-semibold">
+          v{versao.versao} · {versao.tipo === 'LINK' ? 'Link' : 'Texto'}
+          {versao.titulo && ` · ${versao.titulo}`}
+        </p>
+        <p className="text-xs font-medium text-texto-2">
+          {versao.enviadoPor?.nome ?? '—'} · {dataHora(versao.enviadoEm)}
+        </p>
+        {versao.tipo === 'LINK' && versao.url ? (
+          <LinkExterno href={versao.url} className="mt-1 inline-flex text-sm font-semibold text-secao-texto hover:underline [overflow-wrap:anywhere]">
+            {versao.url}
+          </LinkExterno>
+        ) : (
+          <p className="mt-1 text-sm whitespace-pre-wrap [overflow-wrap:anywhere]">{versao.texto}</p>
+        )}
+        {versao.observacao && <p className="mt-1 text-xs">“{versao.observacao}”</p>}
+      </div>
+    </li>
+  )
+}
+
+type Forma = 'ARQUIVO' | 'TEXTO' | 'LINK'
+
+/** Texto ou link como material (rota 86). O texto não vai ao histórico; o link precisa ser http(s). */
+function EnvioDeConteudo({ entrega, forma, aoEnviar }: { entrega: Entrega; forma: 'TEXTO' | 'LINK'; aoEnviar: () => void }) {
+  const [titulo, setTitulo] = useState('')
+  const [texto, setTexto] = useState('')
+  const [url, setUrl] = useState('')
+  const [erros, setErros] = useState<Record<string, string>>({})
+  const [falha, setFalha] = useState<string | null>(null)
+  const [enviando, setEnviando] = useState(false)
+
+  async function enviar(evento: FormEvent) {
+    evento.preventDefault()
+    const novos: Record<string, string> = {}
+    if (forma === 'TEXTO' && !texto.trim()) novos.texto = 'Escreva o material.'
+    if (forma === 'LINK' && !enderecoSeguro(url.trim())) novos.url = 'Use um endereço que comece com https:// (ou http://).'
+    setErros(novos)
+    if (Object.keys(novos).length) return focarPrimeiroErro()
+    setEnviando(true)
+    setFalha(null)
+    try {
+      await enviarConteudo(entrega.id, {
+        tipo: forma,
+        ...(forma === 'TEXTO' ? { texto: texto.trim() } : { url: url.trim() }),
+        titulo: titulo.trim() || undefined,
+      })
+      setTitulo('')
+      setTexto('')
+      setUrl('')
+      aoEnviar()
+    } catch (erro) {
+      if (erro instanceof ErroApi) {
+        setErros(erro.campos)
+        setFalha(erro.message)
+      } else setFalha('Não foi possível enviar.')
+    } finally {
+      setEnviando(false)
+    }
+  }
+
+  return (
+    <form onSubmit={enviar} className="flex flex-col gap-4" noValidate>
+      <Campo rotulo="Título (opcional)" maxLength={160} value={titulo} onChange={(evento) => setTitulo(evento.target.value)} erro={erros.titulo} />
+      {forma === 'TEXTO' ? (
+        <AreaTexto rotulo="Texto do material" rows={5} maxLength={5000} value={texto} onChange={(evento) => setTexto(evento.target.value)} erro={erros.texto} />
+      ) : (
+        <Campo rotulo="Endereço do post ou do material" type="url" value={url} onChange={(evento) => setUrl(evento.target.value)} erro={erros.url} ajuda="Instagram, TikTok, YouTube ou outro endereço com https://." />
+      )}
+      {falha && <Aviso tipo="falha" titulo={falha} />}
+      <div>
+        <Botao type="submit" carregando={enviando} icone={forma === 'LINK' ? 'ri-link' : 'ri-text'}>
+          {forma === 'LINK' ? 'Enviar link' : 'Enviar texto'}
+        </Botao>
+      </div>
+    </form>
+  )
+}
+
+function FormularioEnvio({ entrega, rbs, aoEnviar, aoEnviarConteudo }: { entrega: Entrega; rbs: boolean; aoEnviar: (arquivo: Arquivo) => void; aoEnviarConteudo: () => void }) {
+  const [forma, setForma] = useState<Forma>('ARQUIVO')
   const categorias = rbs ? CATEGORIAS_RBS : CATEGORIAS_MARCA
   const [arquivo, setArquivo] = useState<File | null>(null)
   const [categoria, setCategoria] = useState<string>(rbs ? 'RELATORIO_VEICULACAO' : entrega.abaCodigo === 'MIDIA' ? 'MATERIAL_MIDIA' : 'MATERIAL_MARCA')
@@ -149,8 +239,27 @@ function FormularioEnvio({ entrega, rbs, aoEnviar }: { entrega: Entrega; rbs: bo
   }
 
   return (
-    <form onSubmit={enviar} className="flex flex-col gap-4 rounded-2xl border border-borda p-4">
+    <div className="flex flex-col gap-4 rounded-2xl border border-borda p-4">
       <p className="text-sm font-bold">{rbs ? 'Publicar retorno da RBS' : entrega.arquivos.length ? 'Enviar nova versão' : 'Enviar material'}</p>
+      {/* R5.3.a: o material vai em arquivo, em texto ou em link. */}
+      <div role="radiogroup" aria-label="Forma do material" className="flex gap-2">
+        {(['ARQUIVO', 'TEXTO', 'LINK'] as Forma[]).map((opcao) => (
+          <button
+            key={opcao}
+            type="button"
+            role="radio"
+            aria-checked={forma === opcao}
+            onClick={() => setForma(opcao)}
+            className={`rounded-full border px-3 py-1.5 text-xs font-bold ${forma === opcao ? 'border-secao bg-secao text-white' : 'border-borda text-tinta hover:bg-cinza-100'}`}
+          >
+            {opcao === 'ARQUIVO' ? 'Arquivo' : opcao === 'TEXTO' ? 'Texto' : 'Link'}
+          </button>
+        ))}
+      </div>
+      {forma !== 'ARQUIVO' ? (
+        <EnvioDeConteudo entrega={entrega} forma={forma} aoEnviar={aoEnviarConteudo} />
+      ) : (
+        <form onSubmit={enviar} className="flex flex-col gap-4" noValidate>
       <label className="flex cursor-pointer items-center gap-3 rounded-xl border-[1.5px] border-dashed border-secao bg-secao-tinta px-4 py-3 text-sm focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-secao">
         <i className="ri-attachment-2 text-xl text-secao" aria-hidden="true" />
         <span className="flex-1 truncate font-semibold">{arquivo ? `${arquivo.name} · ${tamanho(arquivo.size)}` : 'Escolher arquivo (até 20 MB)'}</span>
@@ -177,7 +286,9 @@ function FormularioEnvio({ entrega, rbs, aoEnviar }: { entrega: Entrega; rbs: bo
           {rbs ? 'Publicar retorno' : 'Enviar material'}
         </Botao>
       </div>
-    </form>
+        </form>
+      )}
+    </div>
   )
 }
 
@@ -284,7 +395,7 @@ export function DetalheEntrega({ entrega: inicial, aoFechar, aoMudar }: Props) {
   const secao = SECOES.find((item) => item.aba === entrega.abaCodigo) ?? SECOES[0]
   const podeEnviar = rbs || ACEITA_ENVIO.includes(entrega.status)
   // O recado vale enquanto o ajuste está pedido ou se é sobre a versão atual; depois do reenvio, ele fica no Histórico.
-  const ultimoEnvio = entrega.arquivos[0]?.enviadoEm
+  const ultimoEnvio = entrega.versoes?.[0]?.enviadoEm ?? entrega.arquivos[0]?.enviadoEm
   const recado =
     entrega.ultimaObservacao &&
     (entrega.status === 'AJUSTE_SOLICITADO' || !ultimoEnvio || new Date(entrega.ultimaObservacao.em) >= new Date(ultimoEnvio))
@@ -312,14 +423,22 @@ export function DetalheEntrega({ entrega: inicial, aoFechar, aoMudar }: Props) {
 
         <div>
           <p className="texto-sobretitulo mb-1 text-texto-2">Histórico de versões</p>
-          {entrega.arquivos.length ? (
+          {entrega.versoes?.length ? (
+            // Arquivos, textos e links numa lista só, da versão mais nova para a mais antiga.
+            <ul>
+              {entrega.versoes.map((versao) => {
+                const arquivo = versao.tipo === 'ARQUIVO' ? entrega.arquivos.find((item) => item.id === versao.id) : undefined
+                return arquivo ? <Versao key={`a${versao.id}`} arquivo={arquivo} /> : <VersaoDeConteudo key={`${versao.tipo}${versao.id}`} versao={versao} />
+              })}
+            </ul>
+          ) : entrega.arquivos.length ? (
             <ul>
               {entrega.arquivos.map((arquivo) => (
                 <Versao key={arquivo.id} arquivo={arquivo} />
               ))}
             </ul>
           ) : (
-            <Aviso tipo="vazio" titulo="Nenhum arquivo enviado ainda" />
+            <Aviso tipo="vazio" titulo="Nenhum material enviado ainda" />
           )}
         </div>
 
@@ -333,8 +452,26 @@ export function DetalheEntrega({ entrega: inicial, aoFechar, aoMudar }: Props) {
                 ...entrega,
                 status: arquivo.statusDaEntrega ?? entrega.status,
                 arquivos: [arquivo, ...entrega.arquivos],
+                // A lista de versões (arquivos, textos e links) vem de novo da API logo abaixo.
+                versoes: undefined,
                 atualizadoEm: arquivo.enviadoEm,
               })
+              listarEntregas(entrega.parceriaId, entrega.abaCodigo)
+                .then((lista) => {
+                  const atual = lista.find((item) => item.id === entrega.id)
+                  if (atual) setEntrega(atual)
+                })
+                .catch(() => {})
+              aoMudar()
+            }}
+            aoEnviarConteudo={() => {
+              setRecebido(null)
+              listarEntregas(entrega.parceriaId, entrega.abaCodigo)
+                .then((lista) => {
+                  const atual = lista.find((item) => item.id === entrega.id)
+                  if (atual) setEntrega(atual)
+                })
+                .catch(() => {})
               aoMudar()
             }}
           />

@@ -16,6 +16,7 @@ import br.com.rbs.portal.materiais.MateriaisDtos.ItemDaFilaDto;
 import br.com.rbs.portal.materiais.MateriaisDtos.MudarStatusRequisicao;
 import br.com.rbs.portal.materiais.MateriaisDtos.ObservacaoDto;
 import br.com.rbs.portal.materiais.MateriaisDtos.PaginaDto;
+import br.com.rbs.portal.materiais.MateriaisDtos.VersaoDto;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.ArrayList;
 import java.util.List;
@@ -87,7 +88,19 @@ public class EntregaService {
         String status = corpo.status() == null ? "AGUARDANDO_ENVIO" : corpo.status();
         String descricao = textoOuNulo(corpo.descricao());
 
-        long entregaId = repositorio.inserir(parceriaId, abaId, corpo.titulo().trim(), descricao, status, corpo.prazo());
+        String papel = corpo.papel() == null || corpo.papel().isBlank() ? null : corpo.papel();
+        long entregaId;
+        if (papel == null) {
+            entregaId = repositorio.inserir(parceriaId, abaId, corpo.titulo().trim(), descricao, status, corpo.prazo());
+        } else {
+            // [VALIDACAO] O papel fixa a aba (seção 5.5 do plano): o espaço do documento de ingressos é do Perfil; o MIV e a logo, de Aplicações.
+            String abaDoPapel = EspacosDaMarca.abaDoPapel(papel);
+            if (!abaDoPapel.equals(corpo.abaCodigo())) {
+                throw new DadosInvalidosException(Map.of("papel", "Este espaço é da aba " + EspacosDaMarca.nomeDaAba(abaDoPapel) + "."));
+            }
+            entregaId = repositorio.inserirComPapel(parceriaId, abaId, papel, corpo.titulo().trim(), descricao, status, corpo.prazo())
+                    .orElseThrow(() -> new ConflitoException("Esta parceria já tem o espaço " + papel + "."));
+        }
         historico.registrar(AcaoHistorico.CRIACAO, usuario, parceriaId, "entrega", entregaId, null, status,
                 corpo.titulo().trim() + " (aba " + corpo.abaCodigo() + ")", requisicao);
         return montar(List.of(repositorio.buscar(entregaId, false).orElseThrow())).getFirst();
@@ -150,14 +163,15 @@ public class EntregaService {
     // Montagem da Entrega do contrato
     // ---------------------------------------------------------------------
 
-    /** Junta as entregas com os arquivos (versão mais nova primeiro) e a última observação, em 2 consultas para todas. */
-    private List<EntregaDto> montar(List<EntregaBase> bases) {
+    /** Junta as entregas com os arquivos, as versões (arquivo, texto e link; a mais nova primeiro) e a última observação, em 3 consultas para todas. */
+    List<EntregaDto> montar(List<EntregaBase> bases) {
         List<Long> ids = bases.stream().map(EntregaBase::id).toList();
         Map<Long, List<ArquivoDto>> arquivos = repositorio.arquivosDas(ids);
+        Map<Long, List<VersaoDto>> versoes = repositorio.versoesDas(ids, arquivos);
         Map<Long, ObservacaoDto> observacoes = repositorio.ultimasObservacoes(ids);
-        return bases.stream().map(b -> new EntregaDto(b.id(), b.parceriaId(), b.abaCodigo(), b.titulo(), b.descricao(),
+        return bases.stream().map(b -> new EntregaDto(b.id(), b.parceriaId(), b.abaCodigo(), b.papel(), b.titulo(), b.descricao(),
                 b.status(), b.prazo(), Datas.emBrasilia(b.criadoEm()), Datas.emBrasilia(b.atualizadoEm()),
-                arquivos.getOrDefault(b.id(), List.of()), observacoes.get(b.id()))).toList();
+                arquivos.getOrDefault(b.id(), List.of()), versoes.getOrDefault(b.id(), List.of()), observacoes.get(b.id()))).toList();
     }
 
     private static String textoOuNulo(String texto) {

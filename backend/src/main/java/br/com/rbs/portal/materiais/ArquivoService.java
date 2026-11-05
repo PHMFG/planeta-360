@@ -35,9 +35,11 @@ import org.springframework.web.multipart.MultipartFile;
 @Service
 public class ArquivoService {
 
-    /** Categorias que o patrocinador pode usar (as demais do banco são só da RBS). */
-    static final Set<String> CATEGORIAS_DO_PATROCINADOR = Set.of("MATERIAL_MARCA", "MATERIAL_MIDIA", "DOCUMENTO_INGRESSOS",
-            "CONTRATO", "OUTRO");
+    /**
+     * Categorias que o patrocinador pode usar (as demais do banco são só da RBS). O CONTRATO saiu da lista (R5.7.b): o contrato
+     * assinado é da RBS e entra pela rota 76, que também aponta o contrato da parceria para ele.
+     */
+    static final Set<String> CATEGORIAS_DO_PATROCINADOR = Set.of("MATERIAL_MARCA", "MATERIAL_MIDIA", "DOCUMENTO_INGRESSOS", "OUTRO");
 
     /**
      * As categorias que a rota 17 aceita: as do patrocinador e as só da RBS. O CHECK ck_arquivo_categoria tem mais uma, a DOCUMENTO,
@@ -88,8 +90,10 @@ public class ArquivoService {
 
         // [VALIDACAO] Junta os erros de campo numa resposta só.
         Map<String, String> campos = new LinkedHashMap<>();
-        if (arquivo == null || arquivo.isEmpty()) {
+        if (arquivo == null || (arquivo.isEmpty() && (arquivo.getOriginalFilename() == null || arquivo.getOriginalFilename().isBlank()))) {
             campos.put("arquivo", "Envie o arquivo na parte \"arquivo\" do formulário.");
+        } else if (arquivo.isEmpty()) {
+            campos.put("arquivo", "O arquivo está vazio.");
         }
         String categoria = categoriaInformada == null || categoriaInformada.isBlank()
                 ? (usuario.ehRbs() ? "OUTRO" : "MATERIAL_MARCA") : categoriaInformada.trim();

@@ -152,7 +152,7 @@ class DebugDoLlmTest {
         assertThat(JsonPath.<Object>read(SERVIDOR.ultima().corpo(), "$.thinking")).isEqualTo(Map.of("type", "enabled"));
 
         // um valor que não é verdadeiro nem falso não passa; sem a chave do debug, volta o padrão
-        assertThat(rbs.put("/api/debug/llm", "{\"chave\":\"" + CHAVE + "\",\"raciocinio\":\"talvez\"}")).hasStatus(HttpStatus.BAD_REQUEST);
+        assertThat(rbs.put("/api/debug/llm", "{\"chave\":\"" + CHAVE + "\",\"raciocinio\":\"talvez\"}")).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
         rbs.put("/api/debug/llm", "{\"chave\":\"" + CHAVE + "\",\"raciocinio\":false}");
         assertThat(rbs.delete("/api/debug/llm")).hasStatus(HttpStatus.NO_CONTENT);
         assertThat(lerJson(rbs.get("/api/debug/llm"), "$.raciocinio")).isEqualTo(true);

@@ -77,10 +77,11 @@ public final class AcessoDtos {
      * incluidaNaCota = a cota da parceria inclui a aba (cota_tipo_aba): false quer dizer "fora da sua cota" (a RBS nem
      * consegue liberar), diferente de uma aba da cota que a RBS ainda não abriu.
      */
-    public record AbaDto(String codigo, String nome, int ordem, boolean liberada, boolean incluidaNaCota) {
+    public record AbaDto(String codigo, String nome, int ordem, boolean liberada, boolean incluidaNaCota, boolean visivel) {
     }
 
-    public record ParceriaDoUsuarioDto(Long id, String patrocinador, CotaDto cota, EventoDto evento, List<AbaDto> abas) {
+    public record ParceriaDoUsuarioDto(Long id, String patrocinador, CotaDto cota, EventoDto evento, List<AbaDto> abas,
+                                       String vinculo) {
     }
 
     /** Quem está logado e a que parcerias tem acesso (lista vazia para o Admin RBS, que enxerga todas). */

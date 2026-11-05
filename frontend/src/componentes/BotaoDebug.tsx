@@ -11,6 +11,7 @@ import {
   type EstadoDoLlm,
   type TesteDoLlm,
 } from '../api/debug'
+import { useSessao } from '../sessao/Sessao'
 import { dataHora } from '../util/formatar'
 import { Aviso } from './Aviso'
 import { Botao } from './Botao'
@@ -50,9 +51,14 @@ export function BotaoDebug() {
   const [teste, setTeste] = useState<TesteDoLlm | null>(null)
   const [ocupado, setOcupado] = useState<'salvar' | 'testar' | 'remover' | null>(null)
 
+  const { usuario } = useSessao()
+  const rbs = usuario?.perfil === 'ADMIN_RBS'
+
   useEffect(() => {
     let ativo = true
-    // Fora do perfil dev a rota não existe (404), a marca não a usa (403) e o botão some; qualquer outra falha também o esconde.
+    // Só a RBS usa o debug: para a marca a chamada nem sai, e o console fica sem o 403 em toda tela (U12).
+    // Fora do perfil dev a rota não existe (404) e o botão some; qualquer outra falha também o esconde.
+    if (!rbs) return
     obterEstadoDoLlm()
       .then((lido) => {
         if (!ativo) return
@@ -66,7 +72,7 @@ export function BotaoDebug() {
     return () => {
       ativo = false
     }
-  }, [])
+  }, [rbs])
 
   if (!estado) return null
 

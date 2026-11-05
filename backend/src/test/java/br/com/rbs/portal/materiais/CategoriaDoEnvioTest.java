@@ -27,7 +27,7 @@ class CategoriaDoEnvioTest extends ApoioDeMateriais {
 
         assertThat(resposta).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(lerJson(resposta, "$.campos.categoria"))
-                .isEqualTo("Categoria inválida. Use uma destas: CONTRATO, DOCUMENTO_INGRESSOS, MATERIAL_MARCA, MATERIAL_MIDIA, OUTRO.");
+                .isEqualTo("Categoria inválida. Use uma destas: DOCUMENTO_INGRESSOS, MATERIAL_MARCA, MATERIAL_MIDIA, OUTRO.");
         for (String soDaRbs : new String[] {"COMPROVACAO", "PESQUISA", "PLANO_COMERCIAL", "RELATORIO_PARCERIA", "RELATORIO_VEICULACAO"}) {
             assertThat((String) lerJson(resposta, "$.campos.categoria")).as(soDaRbs).doesNotContain(soDaRbs);
         }
@@ -72,7 +72,7 @@ class CategoriaDoEnvioTest extends ApoioDeMateriais {
 
             assertThat(resposta).hasStatus(HttpStatus.UNSUPPORTED_MEDIA_TYPE);
             assertThat(lerJson(resposta, "$.detail"))
-                    .isEqualTo("Este tipo de arquivo não é aceito. Envie um destes: pdf, png, jpg, jpeg, docx, xlsx, pptx, csv, mp4, mp3, zip.");
+                    .isEqualTo("Este tipo de arquivo não é aceito. Envie um destes: pdf, png, jpg, jpeg, doc, docx, xls, xlsx, ppt, pptx, csv, mp4, mp3, zip.");
         }
     }
 
@@ -83,7 +83,21 @@ class CategoriaDoEnvioTest extends ApoioDeMateriais {
         MvcTestResult resposta = enviar(entrar(AMARELO), entrega, "doc.pdf", pdf("x"), "COMPROVACAO", null);
 
         assertThat(resposta).hasStatus(HttpStatus.FORBIDDEN);
-        assertThat(lerJson(resposta, "$.detail")).isEqualTo("A categoria COMPROVACAO é só da RBS. Use CONTRATO, "
-                + "DOCUMENTO_INGRESSOS, MATERIAL_MARCA, MATERIAL_MIDIA, OUTRO.");
+        assertThat(lerJson(resposta, "$.detail")).isEqualTo("A categoria COMPROVACAO é só da RBS. Use DOCUMENTO_INGRESSOS, "
+                + "MATERIAL_MARCA, MATERIAL_MIDIA, OUTRO.");
+    }
+
+    /** R5.7.b: o contrato assinado é da RBS. A marca não o vê entre as categorias do envio e recebe 403 se o pedir. */
+    @Test
+    void categoriaContratoSaiuDaListaDaMarcaEContinuaNaDaRbs() {
+        long entrega = criarEntrega(entrar(RBS), amarelo(), "MIDIA", "VT");
+
+        MvcTestResult daMarca = enviar(entrar(AMARELO), entrega, "doc.pdf", pdf("x"), "CONTRATO", null);
+
+        assertThat(daMarca).hasStatus(HttpStatus.FORBIDDEN);
+        assertThat(lerJson(daMarca, "$.detail")).isEqualTo("A categoria CONTRATO é só da RBS. Use DOCUMENTO_INGRESSOS, "
+                + "MATERIAL_MARCA, MATERIAL_MIDIA, OUTRO.");
+        assertThat(lerJson(enviar(entrar(AMARELO), entrega, "doc.pdf", pdf("x"), "INVENTADA", null), "$.campos.categoria").toString())
+                .doesNotContain("CONTRATO");
     }
 }

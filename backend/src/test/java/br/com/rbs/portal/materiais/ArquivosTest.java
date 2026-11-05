@@ -317,11 +317,11 @@ class ArquivosTest extends ApoioDeMateriais {
         long entrega = criarEntrega(entrar(RBS), amarelo(), "MIDIA", "VT");
         SessaoDeApi amarelo = entrar(AMARELO);
 
-        for (String categoria : List.of("PLANO_COMERCIAL", "RELATORIO_VEICULACAO", "COMPROVACAO", "PESQUISA", "RELATORIO_PARCERIA")) {
+        for (String categoria : List.of("PLANO_COMERCIAL", "RELATORIO_VEICULACAO", "COMPROVACAO", "PESQUISA", "RELATORIO_PARCERIA", "CONTRATO")) {
             MvcTestResult resposta = enviar(amarelo, entrega, "doc.pdf", pdf(categoria), categoria, null);
             assertThat(resposta).as(categoria).hasStatus(HttpStatus.FORBIDDEN);
         }
-        for (String categoria : List.of("MATERIAL_MARCA", "MATERIAL_MIDIA", "DOCUMENTO_INGRESSOS", "CONTRATO", "OUTRO")) {
+        for (String categoria : List.of("MATERIAL_MARCA", "MATERIAL_MIDIA", "DOCUMENTO_INGRESSOS", "OUTRO")) {
             MvcTestResult resposta = enviar(amarelo, entrega, "doc.pdf", pdf(categoria), categoria, null);
             assertThat(resposta).as(categoria).hasStatus(HttpStatus.CREATED);
         }
@@ -355,7 +355,8 @@ class ArquivosTest extends ApoioDeMateriais {
         assertThat(semArquivo).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(lerJson(semArquivo, "$.campos.arquivo")).isNotNull();
         assertThat(vazio).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
-        assertThat(lerJson(vazio, "$.campos.arquivo")).isNotNull();
+        assertThat(lerJson(vazio, "$.campos.arquivo")).isEqualTo("O arquivo está vazio.");
+        assertThat(lerJson(semArquivo, "$.campos.arquivo")).isEqualTo("Envie o arquivo na parte \"arquivo\" do formulário.");
         assertThat(categoria).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(lerJson(categoria, "$.campos.categoria")).isNotNull();
         assertThat(observacao).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);

@@ -178,7 +178,11 @@ function Perguntas({ dados, rbs, aoEnviar, aoDecidir }: PropsPerguntas) {
             <Botao carregando={enviando} disabled={!podeEnviar} onClick={enviar} icone="ri-send-plane-line">
               Enviar perguntas
             </Botao>
-            {!podeEnviar && <span className="text-xs font-medium text-texto-2">Nada mudou desde o último envio.</span>}
+            {!podeEnviar && (
+              <span className="text-xs font-medium text-texto-2">
+                {dados.perguntas.some((pergunta) => pergunta.enviadaEm) ? 'Nada mudou desde o último envio.' : 'Escreva ao menos uma pergunta para enviar.'}
+              </span>
+            )}
           </div>
         </div>
       )}
@@ -223,7 +227,7 @@ export function Pesquisa() {
                 {dado.pesquisa ? (
                   <Aviso titulo={dado.pesquisa.nome}>
                     {dado.pesquisa.metodologia ?? 'Metodologia a informar pela RBS.'}
-                    {dado.pesquisa.baseRespondentes && ` Base: ${numero(dado.pesquisa.baseRespondentes)} respondentes.`}
+                    {dado.pesquisa.baseRespondentes && <span className="mt-1 block">Base da pesquisa da edição: {numero(dado.pesquisa.baseRespondentes)} respondentes.</span>}
                   </Aviso>
                 ) : (
                   <Aviso tipo="ausente" titulo="A RBS ainda não abriu a pesquisa desta edição">

@@ -68,9 +68,9 @@ public class RelatorioRepositorio {
     }
 
     /**
-     * Uma linha por parceria da edição, com a versão MAIS NOVA do relatório (LATERAL com ORDER BY versao DESC), quantos números
-     * dela estão disponíveis e indisponíveis (o indicador do catálogo sem linha na versão conta como indisponível, como na
-     * leitura do relatório), a versão que a marca vê (a disponibilizada mais nova, que pode ser anterior à
+     * Uma linha por parceria da edição, com a versão MAIS NOVA do relatório (LATERAL com ORDER BY versao DESC), quantos indicadores
+     * dela estão disponíveis (ao menos uma linha de recorte disponível) e indisponíveis (todos os outros do catálogo, inclusive
+     * os sem linha na versão, como na leitura do relatório), a versão que a marca vê (a disponibilizada mais nova, que pode ser anterior à
      * mais nova) e quantos itens a visão vw_faltantes aponta. [RELATORIO] "Sem relatório" é a situação de quem não tem
      * nenhuma versão.
      */
@@ -94,11 +94,12 @@ public class RelatorioRepositorio {
                                            WHERE parceria_id = pa.id AND status = 'DISPONIBILIZADO'
                                            ORDER BY versao DESC LIMIT 1) d ON TRUE
                         LEFT JOIN LATERAL (
-                               SELECT (SELECT count(*) FROM relatorio_indicador WHERE relatorio_id = r.id AND disponivel) AS disponiveis,
-                                      (SELECT count(*) FROM relatorio_indicador WHERE relatorio_id = r.id AND NOT disponivel)
-                                      + (SELECT count(*) FROM indicador i WHERE NOT EXISTS (
+                               SELECT (SELECT count(DISTINCT indicador_codigo) FROM relatorio_indicador
+                                       WHERE relatorio_id = r.id AND disponivel) AS disponiveis,
+                                      (SELECT count(*) FROM indicador i WHERE NOT EXISTS (
                                              SELECT 1 FROM relatorio_indicador x
-                                             WHERE x.relatorio_id = r.id AND x.indicador_codigo = i.codigo)) AS indisponiveis
+                                             WHERE x.relatorio_id = r.id AND x.indicador_codigo = i.codigo
+                                               AND x.disponivel)) AS indisponiveis
                                WHERE r.id IS NOT NULL) ri ON TRUE
                         LEFT JOIN (SELECT parceria_id, count(*) AS itens FROM vw_faltantes GROUP BY parceria_id) f
                                ON f.parceria_id = pa.id

@@ -50,7 +50,8 @@ public class RegistrosDoPortal {
                            String tipoMidia, BigDecimal quantidadePrevista, String unidade, Integer fontePagina) {
     }
 
-    public record Cortesia(Long id, String setor, String dia, Integer quantidade, boolean comShuttle, String acesso) {
+    /** A cota de cortesias de um setor e dia e o que a marca já destinou dela (só a soma; o nome de quem recebeu nunca é lido aqui). */
+    public record Cortesia(Long id, String setor, String dia, Integer quantidade, boolean comShuttle, String acesso, Long destinadas) {
     }
 
     public record Credencial(Long id, String setor, String beneficiario, Integer quantidadePorDia) {
@@ -90,6 +91,15 @@ public class RegistrosDoPortal {
         return jdbc.sql("""
                         SELECT EXISTS (SELECT 1 FROM parceria_aba pab JOIN aba a ON a.id = pab.aba_id
                                        WHERE pab.parceria_id = :parceria AND a.codigo = :aba AND pab.liberada AND pab.visivel)
+                        """)
+                .param("parceria", parceriaId).param("aba", aba).query(Boolean.class).single();
+    }
+
+    /** A aba está oculta (fora do menu) para a parceria? O Atlas não a cita: a resposta é a de uma aba sem entregas. */
+    public boolean abaOculta(long parceriaId, String aba) {
+        return jdbc.sql("""
+                        SELECT EXISTS (SELECT 1 FROM parceria_aba pab JOIN aba a ON a.id = pab.aba_id
+                                       WHERE pab.parceria_id = :parceria AND a.codigo = :aba AND NOT pab.visivel)
                         """)
                 .param("parceria", parceriaId).param("aba", aba).query(Boolean.class).single();
     }
@@ -147,14 +157,15 @@ public class RegistrosDoPortal {
                 .param("parceria", parceriaId).query(DadosDaCota.class).optional();
     }
 
-    /** As sete abas na ordem do menu, com o estado de cada uma para a parceria. */
+    /** As abas na ordem do menu, com o estado de cada uma para a parceria. A aba oculta pela RBS fica de fora. */
     public List<AbaDaCota> abasDaCota(long parceriaId) {
         return jdbc.sql("""
                         SELECT a.codigo, a.nome, coalesce(pab.liberada AND pab.visivel, FALSE) AS aberta,
                                EXISTS (SELECT 1 FROM cota_tipo_aba cta WHERE cta.cota_tipo_id = p.cota_tipo_id AND cta.aba_id = a.id) AS na_cota
                         FROM parceria p CROSS JOIN aba a
                         LEFT JOIN parceria_aba pab ON pab.parceria_id = p.id AND pab.aba_id = a.id
-                        WHERE p.id = :parceria ORDER BY a.ordem
+                        WHERE p.id = :parceria AND coalesce(pab.visivel, TRUE)   -- aba oculta nem é citada à marca
+                        ORDER BY a.ordem
                         """)
                 .param("parceria", parceriaId).query(AbaDaCota.class).list();
     }
@@ -176,7 +187,12 @@ public class RegistrosDoPortal {
     }
 
     public List<Cortesia> cortesias(long parceriaId) {
-        return jdbc.sql("SELECT id, setor, dia, quantidade, com_shuttle, acesso FROM cortesia_cota WHERE parceria_id = :parceria ORDER BY id")
+        return jdbc.sql("""
+                        SELECT cc.id, cc.setor, cc.dia, cc.quantidade, cc.com_shuttle, cc.acesso,
+                               CAST(coalesce((SELECT sum(d.quantidade) FROM cortesia_destinacao d WHERE d.cortesia_cota_id = cc.id), 0) AS bigint)
+                                   AS destinadas
+                        FROM cortesia_cota cc WHERE cc.parceria_id = :parceria ORDER BY cc.id
+                        """)
                 .param("parceria", parceriaId).query(Cortesia.class).list();
     }
 

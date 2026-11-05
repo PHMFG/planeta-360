@@ -2,7 +2,7 @@
 
 Este documento explica o banco da Entrega 2. É para quem vai ler, testar ou mexer nele.
 O banco é o PostgreSQL (rodamos na versão 18; a mínima é a 15). As tabelas são criadas pelo Flyway.
-Os números: **48 tabelas de negócio (mais a `flyway_schema_history`, do Flyway), 8 visões, 9 funções e 29 gatilhos de regra**. As funções são as 4 de carga e de relatório (`fn_carregar_veiculacoes`, `fn_carregar_pesquisa`, `fn_carregar_plano`, da V7, e `fn_gerar_relatorio`), as 2 que formatam números (`fn_numero_br` e `fn_pct_truncado`, da V4; a `fn_pct_arredondado` da V4 saiu na V6) e as 3 dos documentos do Atlas (`fn_texto_de_busca`, `fn_trava_grupo_documento` e `fn_publicar_documento`, da V11; a V12 troca o corpo da primeira). Não contam aqui as funções `tg_*`, uma por gatilho.
+Os números: **50 tabelas de negócio (mais a `flyway_schema_history`, do Flyway), 8 visões, 9 funções e 34 gatilhos de regra**. As funções são as 4 de carga e de relatório (`fn_carregar_veiculacoes`, `fn_carregar_pesquisa`, `fn_carregar_plano`, da V7, e `fn_gerar_relatorio`), as 2 que formatam números (`fn_numero_br` e `fn_pct_truncado`, da V4; a `fn_pct_arredondado` da V4 saiu na V6) e as 3 dos documentos do Atlas (`fn_texto_de_busca`, `fn_trava_grupo_documento` e `fn_publicar_documento`, da V11; a V12 troca o corpo da primeira). Não contam aqui as funções `tg_*`, uma por gatilho. A V16 acrescentou 1 tabela (`entrega_conteudo`) e 2 gatilhos (`rn_contrato_arquivo` e `rn_entrega_conteudo_imutavel`). A V18 acrescentou 1 tabela (`evento_posvenda`) e 2 gatilhos (`rn_evento_posvenda_conteudo` e `rn_evento_posvenda_imutavel`). A V17 acrescentou 1 gatilho (`rn_documento_paginas_ignoradas`) e 2 colunas em `documento`.
 
 **A V11 pede o pgvector.** O banco precisa da extensão `vector` e do papel `atlas_ro` antes de subir a API: rode `scripts/preparar-banco-atlas.sh` (um superusuário instala; a migração só confere e, sem eles, recusa subir com a frase "Rode scripts/preparar-banco-atlas.sh").
 
@@ -25,15 +25,19 @@ Os números: **48 tabelas de negócio (mais a `flyway_schema_history`, do Flyway
 | `backend/src/main/resources/db/migration/V13__prazo.sql` | A tabela `prazo`: os prazos da edição, da cota e da parceria, com o documento e a página de origem, e os 2 gatilhos que cuidam dela (veja "O que a V13 mudou") | Todos os ambientes |
 | `backend/src/main/resources/db/migration/V14__campo_planilha_agencia.sql` | Uma linha em `campo_catalogo`: `ativacao.planilha_agencia`, o campo de arquivo da planilha da agência na aba Aplicações (veja "O que a V14 mudou") | Todos os ambientes |
 | `backend/src/main/resources/db/migration/V15__jev_e_conversa_sem_parceria.sql` | O JEV nos pontos de decisão (as colunas de `atlas_decisao`, e `fora_do_modelo` e `sem_modelo` em `atlas_mensagem`) e a conversa sem parceria, reservada ao Atlas da RBS (veja "O que a V15 mudou") | Todos os ambientes |
+| `backend/src/main/resources/db/migration/V16__requisitos_da_rbs.sql` | O banco dos requisitos da RBS: o papel da entrega (documento de ingressos, MIV e logo), a categoria `FORMULARIO_INGRESSOS`, a versão única do arquivo avulso, o endereço e as datas do credenciamento e o prazo das cortesias na edição, o e-mail e a data do signatário do contrato, uma pesquisa da ativação por edição, a tabela `entrega_conteudo` (texto ou link enviado numa entrega) e os gatilhos `rn_contrato_arquivo` e `rn_entrega_conteudo_imutavel` (veja "O que a V16 mudou") | Todos os ambientes |
+| `backend/src/main/resources/db/migration/V17__documento_paginas_fora_do_atlas.sql` | As páginas de um documento que ficam fora do Atlas (R2.1): `documento.paginas_ignoradas` e `documento.suspeitas`, o gatilho `rn_documento_paginas_ignoradas` e o corpo novo do `rn_documento_congelado` (veja "O que a V17 mudou") | Todos os ambientes |
+| `backend/src/main/resources/db/migration/V18__posvenda_da_parceria.sql` | O anexo "Pós-venda da edição" do relatório: a tabela `evento_posvenda` (uma linha por versão publicada, por parceria) e os gatilhos `rn_evento_posvenda_conteudo` e `rn_evento_posvenda_imutavel` (veja "O que a V18 mudou") | Todos os ambientes |
 | `backend/src/main/resources/db/dev/R__amostra.sql` | A amostra: Amarelo, Roxo e Verde, usuários, planos, entregas com arquivos, cargas, relatórios | Só dev, demo e test |
 | `backend/src/main/resources/dev/documentos/` | O kit de 13 documentos fictícios do Atlas (12 PDFs e 1 TXT) e o `gabarito.json`, que diz o que cada página contém | Só dev, demo e test (o `DocumentosDaAmostra` e o fixture dos testes os sobem) |
 | `backend/src/main/resources/dev/exemplos/` | Arquivos de exemplo (png, jpg, mp4, mp3, docx, xlsx, pptx, zip) que a API copia para o armazenamento nos perfis dev e demo | Só dev e demo |
 | `backend/src/test/resources/db/verificacao.sql` | As conferências (contagens, órfãos, uma tentativa de violar cada regra) | Quando se quiser conferir |
 | `docs/exemplos/veiculacao.csv`, `pesquisa.csv` e `plano.csv` | Exemplos de planilha para as três cargas | Teste manual |
+| `docs/exemplos/plano-amarelo-p07-p10.csv` | As 36 linhas das páginas 7 a 10 do plano do Amarelo (mídia e conteúdo, redes sociais, display, conteúdo integrado e transmissão), para a RBS carregar ao vivo; ficam fora da amostra para não mudar as contagens. As impressões de display entram na unidade `CPM` como número de impressões (1,9MM é `1900000`), como a amostra já faz | `PlanoDoAmareloP07aP10Test` |
 
 Três regras de convivência:
 
-- Migração já aplicada não se edita. Mudança vira uma migração nova (V16, V17...).
+- Migração já aplicada não se edita. Mudança vira uma migração nova (a próxima é a V19).
 - A amostra é repetível (`R__`) e tem uma trava: se os dados de exemplo já estão no banco, ela não faz nada. Para recarregar, recrie o banco de dev. Quem criou o banco com uma versão antiga da amostra precisa recriá-lo para ver a nova (veja "Recomeçar do zero" no README).
 - Os horários da amostra não são datas fixas: são contados para trás a partir do dia em que o banco foi criado (veja "A amostra e as datas").
 
@@ -54,7 +58,7 @@ Tabelas novas:
 
 | Tabela | Para que serve |
 | --- | --- |
-| `cota_tipo_aba` | Diz quais abas abrem por padrão para cada tipo de cota. Quando uma parceria nasce, um gatilho copia estas linhas para `parceria_aba`. A API também a usa depois: devolve `incluidaNaCota` em cada aba e não deixa a RBS liberar uma aba que a cota não inclui (o banco, por si só, não impede) |
+| `cota_tipo_aba` | Diz quais abas abrem por padrão para cada tipo de cota. Quando uma parceria nasce, um gatilho cria as 7 linhas de `parceria_aba` e marca como liberadas as abas que estas linhas incluem para o tipo de cota. A API também a usa depois: devolve `incluidaNaCota` em cada aba e não deixa a RBS liberar uma aba que a cota não inclui (o banco, por si só, não impede) |
 | `codigo_ativacao` | Código de primeiro acesso, que a RBS repassa ao patrocinador (na V1 não há e-mail automático). Guarda só o hash, a validade e o uso único |
 | `stg_pesquisa` | Área de carga dos resultados da pesquisa, como `stg_veiculacao` é para a mídia |
 
@@ -129,7 +133,7 @@ A V8 abre a segunda parte do MVP do Atlas: o relatório de ativação que a marc
 | Isolamento | Chaves compostas com a parceria: o relatório só se liga a uma conversa da própria parceria (`fk_atlas_relatorio_conversa`) e o cartão só a um relatório da própria parceria (`fk_atlas_solicitacao_relatorio`) |
 | Relatório pronto não muda | O gatilho `rn_atlas_relatorio_congelado` (função `tg_atlas_relatorio_congelado`) recusa `UPDATE` de `especificacao`, `snapshot` e `status` quando o relatório está `PRONTO` ou `DESCARTADO` (os dois são finais) e o `DELETE` de um relatório `PRONTO`. O que está montando muda à vontade e sai por `PRONTO` (com o snapshot, na mesma operação) ou `DESCARTADO` |
 | Histórico | Não muda: `CRIACAO` e `EDICAO` já existem e `historico.entidade` não tem `CHECK`, então o relatório do Atlas grava essas ações com a entidade `atlas_relatorio` |
-| Relatório desligado | Com `atlas.relatorio.ligado=false` (o padrão; os perfis `dev` e `demo` e o `test` ligam a propriedade; veja `docs/api.md`, "Modo só chat"), `atlas_relatorio`, `atlas_solicitacao` e `atlas_calculo` **ficam sem uso**: nada as escreve nem as lê, e nenhuma migração muda (o relatório volta com a propriedade ligada). `atlas_conversa`, `atlas_mensagem` e `atlas_tool_call` seguem em uso pelo chat e pelo debug das ferramentas |
+| Relatório desligado | Com `atlas.relatorio.ligado=false` (o padrão; os perfis `dev` e `demo` e o `test` ligam a propriedade; veja `docs/api.md`, "Modo só chat"), `atlas_relatorio`, `atlas_solicitacao` e `atlas_calculo` **ficam sem uso**: nada as escreve (a lista de conversas e os itens ainda leem `atlas_relatorio` e `atlas_solicitacao`, sem nada para mostrar), e nenhuma migração muda (o relatório volta com a propriedade ligada). `atlas_conversa`, `atlas_mensagem` e `atlas_tool_call` seguem em uso pelo chat e pelo debug das ferramentas |
 
 O que a V8 acrescentou além do desenho do plano: os nomes explícitos das chaves compostas e dos limites (para a conferência e a API se referirem a eles), os dois índices parciais acima e os índices de apoio das consultas por parceria, conversa e relatório.
 
@@ -166,7 +170,7 @@ A V11 entrega os documentos do Atlas (marco M3 do plano): a RBS sobe um PDF ou T
 | Assunto | O que a V11 faz |
 | --- | --- |
 | Pré-requisitos | Recusa subir sem a extensão `vector` ou sem o papel `atlas_ro` (frase: "Rode scripts/preparar-banco-atlas.sh"). O `vector` mora em `extensoes` (o script) e o tipo é usado **sem prefixo de schema**, pelo `search_path` do banco. Cria o `unaccent` em `public` (extensão "trusted": o dono do banco a cria) e dá `USAGE` em `public` ao `atlas_ro` |
-| Busca sem acento | `pt_sem_acento` (cópia da configuração `portuguese`, com `unaccent` antes do stemmer) e `fn_texto_de_busca(t)` (`IMMUTABLE`): leva "-ões" e "-ais" para o singular (`regexp_replace`), porque só o stemmer não casa "informação" com "informações", "inserção" com "inserções", nem "credencial" com "credenciais". A coluna `tsv` e a consulta usam **a mesma função** |
+| Busca sem acento | `pt_sem_acento` (cópia da configuração `portuguese`, com `unaccent` antes do stemmer) e `fn_texto_de_busca(t)` (`IMMUTABLE`): leva "-ões", "-iais" e "-erais" para o singular (`regexp_replace`), porque só o stemmer não casa "informação" com "informações", "inserção" com "inserções", nem "credencial" com "credenciais". A coluna `tsv` e a consulta usam **a mesma função** |
 | `arquivo` | `ck_arquivo_categoria` passa a aceitar `DOCUMENTO` (era `arquivo_categoria_check`). Só a rota 54 grava essa categoria; a rota 17 continua recusando. O anexo de uma parceria é um arquivo da parceria **sem aba**, e a conferência "materiais de parceria sem aba" do `verificacao.sql` o exclui |
 | `documento` | O documento lógico (`chave`, como `manual-operacoes`), a `versao` dentro do grupo, o `tipo` (`MANUAL_OPERACOES`, `PLANO_COMERCIAL`, `ANEXO_PARCERIA`, `FAQ`, `COMUNICADO`, `OUTRO`) e o escopo: `escopo` (`GLOBAL`, `COTA` ou `PARCERIA`), `evento_id` (a edição), `cota_tipo_id` e `parceria_id`. `ck_documento_escopo`: GLOBAL sem cota nem parceria, COTA com cota e sem parceria, PARCERIA com parceria e sem cota. O **grupo** é (edição, escopo, cota, parceria, chave): `uq_documento_grupo_versao` é `NULLS NOT DISTINCT`, senão dois GLOBAL iguais passariam (cota e parceria nulas) |
 | Status | `AGUARDANDO_APROVACAO`, `RECUSADO`, `PROCESSANDO`, `INDEXADO`, `ERRO`, `SUBSTITUIDO` e `REVOGADO`. Aprovar é preencher `aprovado_por` (com `aprovado_por_perfil = 'ADMIN_RBS'`, chave composta com `usuario(id, perfil)`) e passar a `PROCESSANDO`: não há estado parado entre os dois. Nasce `AGUARDANDO_APROVACAO`, ou `ERRO` (PDF sem texto, com senha, corrompido), sem `aprovado_por` |
@@ -226,7 +230,7 @@ A V14 fecha o corte 2 do M6 do plano do Atlas completo: o campo de arquivo da ab
 
 ## O que a V15 mudou
 
-A V15 é o banco do M7 (o JEV nos pontos de decisão) e, junto, a reserva do que o Atlas da RBS (M8) vai precisar, para não passar da faixa V10 a V15 que é desta entrega. Só acrescenta colunas e regras e relaxa duas colunas: nenhuma tabela, visão ou função nova, e a amostra fica como está. Acrescenta 1 gatilho (`rn_atlas_traco_parceria`, e por isso são 29 `rn_*`).
+A V15 é o banco do M7 (o JEV nos pontos de decisão) e, junto, o que o Atlas da RBS (M8) usa, para não passar da faixa V10 a V15 que é desta entrega. Só acrescenta colunas e regras e relaxa duas colunas: nenhuma tabela ou visão nova, e a amostra fica como está. Acrescenta 1 gatilho (`rn_atlas_traco_parceria`, com a função `tg_atlas_traco_parceria`, e por isso são 29 `rn_*`).
 
 | Assunto | O que a V15 faz |
 | --- | --- |
@@ -240,9 +244,59 @@ A V15 é o banco do M7 (o JEV nos pontos de decisão) e, junto, a reserva do que
 | Amostra | A `R__amostra.sql` não cria decisão nem conversa sem parceria |
 | Limpeza nos testes | Nenhuma tabela nova: os mapas de `LoopSemTransacaoTest` e `ApoioDoFluxo` já têm `atlas_decisao` |
 
+## O que a V16 mudou
+
+A V16 é o banco da fase F1 do plano dos requisitos da RBS. Só acrescenta (colunas, regras, uma tabela e 2 gatilhos) e nenhuma V antiga é editada: são **49 tabelas** (+ `entrega_conteudo`) e **31 gatilhos `rn_*`** (+ `rn_contrato_arquivo` e `rn_entrega_conteudo_imutavel`, cada um com a função `tg_*`). A amostra (`R__amostra.sql`) não muda nesta etapa: nenhuma entrega tem papel e nenhum evento tem endereço de credenciamento até a fase da amostra.
+
+| Assunto | O que a V16 faz |
+| --- | --- |
+| `entrega.papel` | O "espaço" de um envio: `DOCUMENTO_INGRESSOS`, `MIV` ou `LOGO` (`ck_entrega_papel`); nulo é a entrega comum. O índice único parcial `uq_entrega_papel` vale só para `MIV` e `LOGO`: uma entrega de cada por parceria, o que deixa o primeiro envio ser um `INSERT ... ON CONFLICT DO NOTHING` seguido de `SELECT ... FOR UPDATE`. O documento de ingressos pode repetir (cada solicitação é uma entrega) |
+| `arquivo.categoria` | `ck_arquivo_categoria` refeito com `FORMULARIO_INGRESSOS` (o formulário em branco que a RBS publica); as outras 11 categorias ficam como na V11 |
+| Versão do arquivo avulso | `uq_arquivo_versao_avulso`: `(parceria_id, categoria, versao)` onde `entrega_id` é nulo, **só para `PLANO_COMERCIAL` e `FORMULARIO_INGRESSOS`**, as duas categorias avulsas que têm versões. As outras categorias avulsas (fotos de comprovação, relatórios de carga, planilha da agência, documentos) ficam todas na versão 1 e a amostra tem 17 fotos assim numa parceria só, então um índice sobre todas as categorias quebraria a migração num banco que já tem a amostra. Arquivo geral da RBS (parceria nula) fica fora |
+| `evento.credenciamento_url` | O endereço do Open Staff, por edição, até 500 caracteres. `ck_evento_credenciamento_url`: só `https://`, com host, **sem `usuario@` antes do host**, sem espaço, caractere de controle nem caractere bidi (`U+200E`, `U+200F`, `U+202A` a `U+202E`, `U+2066` a `U+2069`). `@`, `?` e `#` depois do host valem (`/@perfil`, `?x=1`) |
+| `evento.credenciamento_inicio`, `credenciamento_fim`, `cortesias_prazo` | Três datas opcionais. `ck_evento_credenciamento_periodo`: o fim não vem antes do início |
+| `contrato.informado_em` | Quando o signatário foi informado |
+| `contrato.signatario_email` | `ck_contrato_signatario_email`: o mesmo formato do e-mail do usuário |
+| `rn_contrato_arquivo` | O arquivo do contrato (`contrato.arquivo_id`) precisa ser da categoria `CONTRATO` e estar na aba Contrato. A chave composta da V1 só provava que o arquivo é da mesma parceria |
+| `uq_pesquisa_ativacao` | No máximo uma pesquisa `ATIVACAO` por edição. A `GERAL` pode ter várias |
+| `entrega_conteudo` | O texto ou o link enviado numa entrega (veja a tabela em "3. Abas, entregas, arquivos e histórico"). **Só aceita INSERT**: `rn_entrega_conteudo_imutavel` recusa UPDATE e DELETE, como o histórico. Pela mesma razão a chave para a entrega **não tem `ON DELETE CASCADE`**: a entrega que já tem conteúdo não pode ser apagada (23503), senão a cascata tentaria apagar linhas imutáveis |
+| O que o banco não faz | Não há `CHECK` de caractere nulo no texto: o PostgreSQL já recusa o NUL em texto (SQLSTATE 22021, classe 22), e a API responde 422 antes. Não há índice único sobre nome ou e-mail de pessoa: a repetição é conferida no service, sob `FOR UPDATE`, porque o PostgreSQL copia os valores da linha para a mensagem da violação |
+| Log | O `TratadorDeErros` registra uma violação de restrição só com o SQLSTATE e o nome da restrição, nunca a mensagem do PostgreSQL (que cita os valores da linha). Frases novas para o usuário: `uq_entrega_papel`, `uq_arquivo_versao_avulso`, `uq_pesquisa_ativacao` e, como rede de proteção, `ck_evento_credenciamento_url` e `ck_contrato_signatario_email` |
+
+Para a V16 subir num banco que já tem a amostra: no máximo uma pesquisa `ATIVACAO` por edição, nenhum plano comercial ou formulário de ingressos avulso repetindo `(parceria, categoria, versão)`, nenhum e-mail de signatário malformado e nenhum contrato com arquivo de outra categoria ou de outra aba. Conferido sobre uma cópia da pilha de teste (`portal_conferencia`).
+
+## O que a V17 mudou
+
+A V17 é o R2.1 do plano dos requisitos da RBS: o manual de operações de 2026 tem 54 páginas e só a p. 4 (contatos, com 12 telefones) trava a aprovação. Em vez de cortar o PDF, a RBS marca as páginas que não entram no índice do Atlas. Só acrescenta (2 colunas e 1 gatilho) e troca o corpo de uma função de gatilho; nenhuma V antiga é editada. A amostra não muda.
+
+| Assunto | O que a V17 faz |
+| --- | --- |
+| `documento.paginas_ignoradas` | `SMALLINT[] NOT NULL DEFAULT '{}'`: os números das páginas (base 1) fora do Atlas. A ingestão **relê o arquivo na aprovação** e lê esta coluna: o texto dessas páginas vira vazio antes do divisor de trechos, dos embeddings e do modelo, e a contagem de páginas e a numeração seguem as do PDF. O PDF continua inteiro no visualizador |
+| `documento.suspeitas` | `JSONB NOT NULL DEFAULT '[]'` (`ck_documento_suspeitas`: precisa ser uma lista): onde o detector achou dado pessoal, `[{"pagina": 4, "tipo": "CONTATOS"}]`. **Só página e tipo, nunca o valor achado.** `contem_dados_pessoais` continua sendo o que o gatilho `rn_documento_dados_pessoais` lê. Os documentos enviados antes da V17 ficam com `[]` (a migração não relê arquivos) |
+| `rn_documento_paginas_ignoradas` | Em todo `INSERT` e em todo `UPDATE` de `paginas_ignoradas` ou `paginas`: números de 1 até `paginas`, sem repetir, no máximo 20, ao menos uma página fica no Atlas, e a lista só tem página se o documento foi lido (`paginas` não nulo). A lista só muda enquanto o status é `AGUARDANDO_APROVACAO` |
+| `rn_documento_congelado` (corpo novo) | A suspeita de dado pessoal continua sem se desmarcar, **a não ser junto de uma mudança das `paginas_ignoradas`, com o documento ainda aguardando aprovação** (a rota 103 relê o arquivo e recalcula a suspeita sem as páginas marcadas). Escopo, edição, cota, parceria, chave e versão seguem congelados |
+| Histórico | Sem ação nova: `EDICAO` na entidade `documento` (quem marcou, a lista de antes e a de depois, só números) e o `CRIACAO` do envio, com `páginas fora do Atlas: 4` no detalhe |
+| Limpeza nos testes | Nenhuma tabela nova |
+
+## O que a V18 mudou
+
+A V18 é o banco da fase F6 (pós-venda). Só acrescenta uma tabela e 2 gatilhos: nenhuma V antiga é editada, **o catálogo de 17 indicadores e as 6 seções do relatório não mudam**, e a função `fn_gerar_relatorio` nem enxerga o anexo (ele vem depois das 6 seções). Com a V17, são **50 tabelas** e **34 gatilhos `rn_*`**. A tabela `evento_resultado` (os números da edição, V1) não muda: a API de números (rotas 100 e 101) só passou a gravar nela, e a visão `vw_indicadores_parceria` já a lia. A tabela nasce vazia, então a V18 sobe sobre um banco que já tem a amostra sem pré-condição.
+
+| Assunto | O que a V18 faz |
+| --- | --- |
+| `evento_posvenda` | Uma linha por **versão publicada** do anexo "Pós-venda da edição" de uma parceria: `parceria_id`, `evento_id` (a edição da parceria), `versao` (1, 2...; `uq_posvenda_versao` por parceria), `texto` (até 5.000 caracteres, sem controle), `links` e `audiencias` (listas em JSONB), `situacao` (`PUBLICADO` ou `RETIRADO`), quem publicou e quando, e quem retirou e quando. **Sem `ON DELETE CASCADE`** na chave para a parceria: a linha publicada nunca é apagada |
+| `links` | `[{"tipo": "AFTERMOVIE" \| "CLIPPING" \| "OUTRO", "titulo": 1 a 160, "url": http(s), até 500}]`, no máximo 30. O `url` segue a regra do link de conteúdo da V16: `http` ou `https`, com site, **sem `usuario@` antes do site**, sem espaço, controle nem bidi |
+| `audiencias` | `[{"veiculo": 1 a 80, "metrica": 1 a 80, "numero": maior que zero e menor que 1e14, "unidade": 1 a 20}]`, no máximo 20 |
+| `rn_evento_posvenda_conteudo` | `BEFORE INSERT`: a edição é a da parceria, as duas colunas são listas, o anexo não está vazio (texto, link ou audiência) e **cada item** tem a forma acima. As listas ficam em JSONB porque são pequenas, sempre se gravam e se mostram juntas e nunca se consultam por item |
+| `rn_evento_posvenda_imutavel` | `BEFORE UPDATE OR DELETE`: o que foi publicado **não muda e não se apaga**. A única mudança aceita é a **retirada**: `PUBLICADO` vira `RETIRADO`, com `retirado_em` e `retirado_por`, e **nenhuma outra coluna muda**. Voltar de `RETIRADO` para `PUBLICADO` é recusado. Uma versão nova substitui: é um `INSERT` com `versao + 1`. A versão em vigor é a mais nova da parceria, se está `PUBLICADO` |
+| `ck_posvenda_retirada` | `situacao = 'RETIRADO'` se e só se há `retirado_em`, e `retirado_em` e `retirado_por` vêm juntos |
+| `ck_posvenda_texto`, `ck_posvenda_situacao`, `ck_posvenda_versao` | O texto de 1 a 5.000 caracteres e sem controle (o NUL o PostgreSQL já recusa); a situação na lista; a versão de 1 em diante |
+| Histórico | `CRIACAO` (publicar) e `EXCLUSAO` (retirar) na entidade `evento_posvenda`, e `CRIACAO` e `EDICAO` na entidade `evento_resultado`, **todos sem parceria**: a marca não vê essas linhas |
+
+
 ## Tabelas por área
 
-Negrito marca a coluna acrescentada depois da Sprint 1 numa tabela que já existia nela; as tabelas novas (`cota_tipo_aba`, `codigo_ativacao`, `stg_pesquisa`, `stg_plano`, `campo_catalogo`, `dado_informado` e as do Atlas) não usam negrito, exceto nas colunas que uma migração seguinte acrescentou a elas (as do Atlas, nas V9 e V15). `id` é sempre a chave primária. Colunas com sufixo `_id` apontam para outra tabela.
+Negrito marca a coluna acrescentada depois da Sprint 1 numa tabela que já existia nela; as tabelas novas (`cota_tipo_aba`, `codigo_ativacao`, `stg_pesquisa`, `stg_plano`, `campo_catalogo`, `dado_informado`, `prazo` e as do Atlas) não usam negrito, exceto nas colunas que uma migração seguinte acrescentou a elas (as do Atlas, nas V9 e V15). `id` é sempre a chave primária. Colunas com sufixo `_id` apontam para outra tabela, com estas exceções: `tool_call_id` é o texto do código da chamada de ferramenta; `evento_id`, `cota_tipo_id` e `parceria_id` de `documento_trecho` são cópias sem chave estrangeira; e `entidade_id` do histórico e `registro_id` das fontes do Atlas dependem da coluna `entidade` ou `registro_entidade`.
 
 ### 1. Núcleo da parceria
 
@@ -250,8 +304,9 @@ A **parceria** é a unidade de isolamento: tudo o que um patrocinador vê pende 
 
 | Tabela | Para que serve | Colunas |
 | --- | --- | --- |
-| `evento` | Uma edição do festival (Planeta Atlântida 2026, 2027) | id, nome, edicao, data_inicio, data_fim, local |
-| `evento_resultado` | Números gerais da edição (público, marcas, alcance). "Mais de" é piso, não número exato | id, evento_id, indicador, valor, qualificador, unidade, fonte |
+| `evento` | Uma edição do festival (Planeta Atlântida 2026, 2027) | id, nome, edicao, data_inicio, data_fim, local, credenciamento_url, credenciamento_inicio, credenciamento_fim, cortesias_prazo (V16) |
+| `evento_resultado` | Números gerais da edição (público, marcas, alcance). "Mais de" é piso, não número exato. A RBS os informa pelas rotas 100 e 101 (upsert por `indicador`); eles entram no indicador `FESTIVAL_NUMERO` da próxima versão do relatório | id, evento_id, indicador, valor, qualificador, unidade, fonte |
+| `evento_posvenda` | O anexo "Pós-venda da edição" (V18): uma linha por versão publicada, por parceria, com o texto, os links e a audiência por veículo. **Só aceita INSERT e a retirada** (`rn_evento_posvenda_imutavel`) | id, parceria_id, evento_id, versao, texto, links, audiencias, situacao, publicado_por, publicado_em, retirado_por, retirado_em |
 | `patrocinador` | A marca, com o nome canônico | id, nome_canonico, segmento, criado_em |
 | `patrocinador_alias` | Outras grafias da marca ("Amarelo" para "Cliente Amarelo") | id, patrocinador_id, alias |
 | `cota_tipo` | Master, Subcota G e Subcota | id, codigo, nome, nivel |
@@ -261,7 +316,7 @@ A **parceria** é a unidade de isolamento: tudo o que um patrocinador vê pende 
 
 | Tabela | Para que serve | Colunas |
 | --- | --- | --- |
-| `usuario` | Quem entra no portal. Perfil `ADMIN_RBS` ou `ADMIN_PATROCINADOR`. A senha fica em hash BCrypt (vazia até o primeiro acesso) | id, nome, email, senha_hash, perfil, ativo, criado_em |
+| `usuario` | Quem entra no portal. Perfil `ADMIN_RBS` ou `ADMIN_PATROCINADOR`. A senha fica em hash BCrypt (nula até o primeiro acesso) | id, nome, email, senha_hash, perfil, ativo, criado_em |
 | `email_autorizado` | O cadastro prévio: só e-mail autorizado cria acesso. O vínculo é `MARCA` ou `AGENCIA` | id, parceria_id, email, vinculo, autorizado_por, autorizado_em, **revogado_por**, **revogado_em** |
 | `parceria_usuario` | Quem tem acesso a qual parceria | parceria_id, usuario_id, **perfil**, vinculo, criado_em |
 | `codigo_ativacao` | Código de primeiro acesso. Só o hash (SHA-256), com validade e uso único | id, email_autorizado_id, codigo_hash, criado_em, expira_em, usado_em, invalidado_em, tentativas |
@@ -273,9 +328,10 @@ A **parceria** é a unidade de isolamento: tudo o que um patrocinador vê pende 
 | `aba` | As 7 abas do menu | id, codigo, nome, ordem, prioridade |
 | `cota_tipo_aba` | Abas que abrem por padrão em cada tipo de cota | cota_tipo_id, aba_id |
 | `parceria_aba` | Aba visível e liberada, parceria a parceria. Nasce sozinha com a parceria | parceria_id, aba_id, visivel, liberada |
-| `entrega` | Cada item que a marca ou a RBS precisa cumprir, com o status | id, parceria_id, aba_id, titulo, descricao, status, prazo, criado_em, atualizado_em |
+| `entrega` | Cada item que a marca ou a RBS precisa cumprir, com o status. O `papel` (V16) marca o espaço de documento de ingressos, MIV ou logo | id, parceria_id, aba_id, titulo, descricao, status, prazo, criado_em, atualizado_em, **papel** (V16) |
 | `arquivo` | Repositório de arquivos. Sem `parceria_id` é arquivo geral da RBS. Cada versão é uma linha | id, parceria_id, aba_id, entrega_id, categoria, nome_original, mime_type, tamanho_bytes, caminho, hash_sha256, versao, enviado_por, enviado_em, **observacao** |
 | `historico` | Trilha de auditoria: quem fez o quê, quando e de onde. **Só aceita INSERT** | id, parceria_id, entidade, entidade_id, acao, valor_anterior, valor_novo, **detalhe**, usuario_id, ocorrido_em, ip, **user_agent** |
+| `entrega_conteudo` | Texto ou link enviado numa entrega (V16). Cada envio é uma linha e **só aceita INSERT**. `tipo` é `TEXTO` (1 a 5.000 caracteres) ou `LINK` (http ou https, sem `usuario@`); a chave composta mantém a linha na parceria da entrega | id, entrega_id, parceria_id, tipo, titulo, texto, url, observacao, enviado_por, enviado_em |
 
 Status de entrega: `NAO_INICIADO`, `AGUARDANDO_ENVIO`, `ENVIADO`, `EM_ANALISE`, `AJUSTE_SOLICITADO`, `APROVADO`, `NAO_APLICAVEL`.
 O banco não limita as transições de status da entrega. Essa regra fica na API.
@@ -287,7 +343,7 @@ O banco não limita as transições de status da entrega. Essa regra fica na API
 | `aproveitamento_previsto` | O plano comercial: o que a cota comprou (mídia ou aplicação de marca) | id, parceria_id, categoria, bloco, veiculo, formato, espaco_programa, janela, tipo_midia, quantidade_prevista, unidade, fonte_arquivo_id, fonte_pagina |
 | `veiculacao` | Cada exibição comprovada. Única por linha do plano e data/hora | id, aproveitamento_id, exibido_em, quantidade, link, comprovante_arquivo_id, carga_id |
 | `comprovacao_marca` | Fotos das aplicações de marca no evento | id, aproveitamento_id, **parceria_id**, arquivo_id, descricao, registrado_por, registrado_em |
-| `carga` | Cada planilha processada (mídia, pesquisa, comprovação, plano) e seus totais | id, tipo, arquivo_id, **evento_id**, executada_por, executada_em, **processada_em**, linhas_lidas, linhas_inseridas, linhas_duplicadas, linhas_rejeitadas |
+| `carga` | Cada planilha processada (mídia, pesquisa e plano comercial) e seus totais. O tipo `COMPROVACAO` existe no CHECK, mas nenhuma carga o usa | id, tipo, arquivo_id, **evento_id**, executada_por, executada_em, **processada_em**, linhas_lidas, linhas_inseridas, linhas_duplicadas, linhas_rejeitadas |
 | `carga_rejeicao` | Linhas que não entraram, com o motivo | id, carga_id, linha, campo, motivo, conteudo |
 | `stg_veiculacao` | Área de carga: as linhas da planilha de veiculação como chegam | carga_id, linha, patrocinador, veiculo, formato, espaco_programa, exibido_em, quantidade, link, **exibido_em_texto**, **quantidade_texto** |
 | `stg_pesquisa` | Área de carga: as linhas do CSV de resultados da pesquisa | carga_id, linha, patrocinador, pergunta, indicador, alternativa, valor, unidade, base_respondentes, pergunta_texto, valor_texto, base_respondentes_texto |
@@ -302,7 +358,7 @@ Unidades de mídia: `INSERCAO`, `CPM` e `APLICACAO`. Elas nunca são somadas ent
 | `cortesia_cota` | Quantas cortesias a cota dá, por setor e dia | id, parceria_id, setor, dia, quantidade, com_shuttle, acesso |
 | `cortesia_destinacao` | Para quem a marca destinou. A soma não passa da cota | id, cortesia_cota_id, destinatario_nome, destinatario_email, quantidade, registrado_por, registrado_em |
 | `credencial_cota` | Credenciais de serviço por dia | id, parceria_id, setor, beneficiario, quantidade_por_dia |
-| `contrato` | Um contrato por parceria, com um signatário | id, parceria_id, signatario_nome, signatario_email, signatario_cargo, informado_por, arquivo_id, assinado_em |
+| `contrato` | Um contrato por parceria, com um signatário | id, parceria_id, signatario_nome, signatario_email, signatario_cargo, informado_por, arquivo_id, assinado_em, **informado_em** (V16) |
 
 ### 6. Pesquisa
 
@@ -347,7 +403,7 @@ Na pesquisa geral o resultado não tem parceria nem pergunta. Na pesquisa da ati
 
 | Tabela | Para que serve | Colunas |
 | --- | --- | --- |
-| `documento` | O documento que a RBS sobe, com versão, escopo e ciclo de aprovação e indexação (veja "O que a V11 mudou") | id, titulo, chave, versao, tipo, escopo, evento_id, cota_tipo_id, parceria_id, arquivo_id, status, contem_dados_pessoais, paginas, modelo_embedding, dimensoes, extracao_ms, embeddings_ms, trechos, erro, enviado_por, enviado_em, aprovado_por, aprovado_por_perfil, aprovado_em, revogado_por, revogado_em |
+| `documento` | O documento que a RBS sobe, com versão, escopo e ciclo de aprovação e indexação (veja "O que a V11 mudou") | id, titulo, chave, versao, tipo, escopo, evento_id, cota_tipo_id, parceria_id, arquivo_id, status, contem_dados_pessoais, paginas, modelo_embedding, dimensoes, extracao_ms, embeddings_ms, trechos, erro, enviado_por, enviado_em, aprovado_por, aprovado_por_perfil, aprovado_em, revogado_por, revogado_em, paginas_ignoradas, suspeitas (V17) |
 | `documento_trecho` | Os trechos do documento, com o vetor e o `tsvector`; só o trecho ativo (de documento indexado) entra na busca | id, documento_id, escopo, evento_id, cota_tipo_id, parceria_id, versao, ordem, pagina_inicio, pagina_fim, secao_caminho, texto, tokens, embedding, tsv, ativo |
 
 ### 11. Prazos (V13)
@@ -361,7 +417,7 @@ As **7 visões de número** somam sem misturar unidades: `vw_midia_veiculo`, `vw
 
 ## Regras do banco
 
-Toda regra de negócio recusada sai com um erro da **classe 23** do PostgreSQL (`check_violation` ou `foreign_key_violation`) e uma mensagem em português.
+Toda regra de negócio recusada sai com um erro da **classe 23** do PostgreSQL (`check_violation` ou `foreign_key_violation`) e uma mensagem em português. A exceção é a `fn_publicar_documento`: documento inexistente ou fora de processamento sai com um erro comum (`P0001`), que é falha interna e não vem de uma tela.
 O nome da regra vem junto (por exemplo `rn_cortesia_limite`). A API traduz a classe 23 em erro 409, com a frase da regra (ou uma frase genérica, em restrição sem frase própria). O 422 é a validação de campos feita pela própria API. A lista abaixo traz as regras principais; não é exaustiva.
 
 ### Como as cargas funcionam
@@ -413,12 +469,14 @@ Os itens 1, 2 e 4 não são "recusas": a conferência mostra o comportamento esp
 | Regra | Nome | Em linguagem simples |
 | --- | --- | --- |
 | Histórico imutável | `rn_historico_imutavel` | Não se altera nem se apaga uma linha do histórico. Parceria com histórico não se apaga |
+| Texto ou link da entrega imutável | `rn_entrega_conteudo_imutavel` | Não se altera nem se apaga um texto ou link enviado. Para corrigir, envia-se de novo. A entrega que tem conteúdo não se apaga |
+| Arquivo do contrato | `rn_contrato_arquivo` | O arquivo do contrato é da categoria `CONTRATO` e da aba Contrato |
 | Dado informado imutável | `rn_dado_informado_imutavel` | Não se altera nem se apaga um dado informado. Para corrigir, grava-se um valor novo (a visão `vw_dado_vigente` mostra o mais recente) |
 | Isolamento | chaves compostas e `rn_*` | Tudo o que uma marca vê é da parceria dela |
 | Vínculo exige autorização | `rn_vinculo_exige_autorizacao` | Ninguém é vinculado sem e-mail autorizado e não revogado |
 | Autorização não muda de dono | `rn_email_autorizado_imutavel` | Não se troca a parceria nem o e-mail de uma autorização |
 | Revogação | `rn_email_revogado` | Revogar remove o vínculo dessa parceria e invalida os códigos pendentes |
-| Comprovante de veiculação | `rn_veiculacao_comprovante` | O comprovante é um arquivo da mesma parceria da linha do plano |
+| Comprovante de veiculação | `rn_veiculacao_comprovante` (o erro traz `rn_veiculacao_comprovante_parceria`) | O comprovante é um arquivo da mesma parceria da linha do plano |
 | Abas padrão | `rn_parceria_abas_padrao` | A parceria nasce com as 7 abas, abertas conforme `cota_tipo_aba` |
 | Comprovação | `rn_comprovacao_*` | Foto só vale para aplicação de marca, e o arquivo precisa ser da categoria `COMPROVACAO` |
 | Fonte da pesquisa | `rn_pesquisa_fonte_geral` | O arquivo-fonte da pesquisa é geral da RBS, nunca de uma marca |
@@ -470,7 +528,7 @@ erDiagram
     parceria ||--o{ cortesia_cota : "ganha"
     cortesia_cota ||--o{ cortesia_destinacao : "e_destinada"
     parceria ||--o{ credencial_cota : "ganha"
-    parceria ||--|| contrato : "assina"
+    parceria ||--o| contrato : "assina"
     pesquisa |o--o{ pesquisa_pergunta : "reune"
     parceria ||--o{ pesquisa_pergunta : "propoe"
     pesquisa ||--o{ pesquisa_resultado : "tem"
@@ -497,7 +555,7 @@ erDiagram
     atlas_mensagem ||--o{ atlas_tool_call : "chama"
     atlas_mensagem ||--o{ atlas_decisao : "decide"
     atlas_conversa ||--o{ atlas_traco : "diagnostico"
-    atlas_mensagem ||--o{ atlas_traco : "etapa"
+    atlas_mensagem |o--o{ atlas_traco : "etapa"
     atlas_mensagem ||--o{ atlas_fonte : "cita"
     documento_trecho |o--o{ atlas_fonte : "e_citado"
     documento |o--o{ atlas_fonte : "e_citado"
@@ -512,6 +570,10 @@ erDiagram
     parceria |o--o{ prazo : "da_parceria"
     documento |o--o{ prazo : "origem"
     usuario ||--o{ prazo : "cadastrou"
+    entrega ||--o{ entrega_conteudo : "texto_ou_link"
+    usuario ||--o{ entrega_conteudo : "enviou"
+    parceria ||--o{ evento_posvenda : "anexo"
+    evento ||--o{ evento_posvenda : "da_edicao"
 ```
 
 ## Formatos dos CSV
@@ -553,7 +615,7 @@ As colunas são as mesmas de `stg_veiculacao`, como prevê o plano.
 O exemplo tem 11 linhas: 9 entram, 1 é repetida com o apelido "Amarelo" (duplicada) e 1 tem percentual de 140 (rejeitada).
 Reenviar o mesmo arquivo não insere nada.
 
-**`plano.csv`** (vai para `stg_plano`). É o plano comercial: uma linha por item que a cota comprou, de mídia ou de aplicação de marca. O limite de texto de cada coluna é o da coluna de `aproveitamento_previsto`; acima dele a API recusa o arquivo inteiro (422).
+**`plano.csv`** (vai para `stg_plano`). É o plano comercial: uma linha por item que a cota comprou, de mídia ou de aplicação de marca. O limite de texto de cada coluna é o da coluna do banco, com uma exceção: `quantidade_prevista` e `fonte_pagina` têm 40 caracteres, porque são lidas como número. Acima do limite a API recusa o arquivo inteiro (422).
 
 | Coluna | Obrigatória | O que é |
 | --- | --- | --- |
@@ -593,6 +655,9 @@ for f in backend/src/main/resources/db/migration/V1__estrutura.sql \
          backend/src/main/resources/db/migration/V13__prazo.sql \
          backend/src/main/resources/db/migration/V14__campo_planilha_agencia.sql \
          backend/src/main/resources/db/migration/V15__jev_e_conversa_sem_parceria.sql \
+         backend/src/main/resources/db/migration/V16__requisitos_da_rbs.sql \
+         backend/src/main/resources/db/migration/V17__documento_paginas_fora_do_atlas.sql \
+         backend/src/main/resources/db/migration/V18__posvenda_da_parceria.sql \
          backend/src/main/resources/db/dev/R__amostra.sql; do
   psql -X -h localhost -U portal -d portal_verificacao -v ON_ERROR_STOP=1 -1 -f "$f"
 done
@@ -600,7 +665,10 @@ psql -X -P pager=off -h localhost -U portal -d portal_verificacao -v ON_ERROR_ST
 psql -X -h localhost -U portal -d postgres -c "DROP DATABASE portal_verificacao"
 ```
 
-O `verificacao.sql` imprime uma tabela com cada conferência e termina com erro se alguma falhar. Hoje são **482 conferências, todas ok**. As 164 de antes seguem iguais (as contagens de estrutura passaram a 48 tabelas, 8 visões, 4 funções de carga e relatório e 29 gatilhos, com o `rn_atlas_traco_parceria` da V15). As 43 seguintes são da V7: o catálogo, a carga do plano (15 linhas numa parceria criada só para a conferência, com cada motivo de rejeição, o reenvio e o `btrim`), o `CHECK` de um valor só, a chave composta do anexo, a imutabilidade, o valor vigente depois de uma correção e 5 verificações de órfãos. As 32 da V8 (a contagem das tabelas do Atlas passou a 9 com a V12): as 7 tabelas do Atlas, as chaves compostas por parceria, a conversa no formato de chat (papel, ordem, um relatório em montagem e um cartão aberto por vez, nome de cálculo único), o relatório que congela (cada coluna protegida, o descartado, o apagar, e o que ainda pode mudar) e 6 verificações de órfãos. As 3 da V9: o resumo do raciocínio numa mensagem que não é do assistente, o resumo em branco e o resumo numa mensagem do assistente. As 10 da V10: a lista das 15 etapas no `CHECK`, a amostra sem traço, um traço aceito, etapa e resultado fora da lista, duração negativa, o traço de uma parceria numa conversa de outra, duas etapas com a mesma ordem no turno, dados que não são um objeto e 1 verificação de órfãos (traço ligado a uma mensagem de outra conversa). As 87 da V11: a estrutura (a extensão e a configuração de busca, as 3 funções, o `IMMUTABLE` da `fn_texto_de_busca`, os 7 gatilhos, a coluna `tsv` `STORED`, o vetor de 768 dimensões, os índices HNSW e GIN, o `NULLS NOT DISTINCT`, a categoria `DOCUMENTO`, a RLS ligada e sem `FORCE`, as duas políticas e o que o `atlas_ro` pode ler); a busca textual (11 pares de singular e plural, com e sem acento, e o `tsv` gerado); as regras do documento (escopo, arquivo, edição, chave, dois GLOBAL iguais, anexos de duas parcerias, a mesma chave em outra edição, o mesmo plano em três cotas); o ciclo de status (cada transição proibida, a aprovação sem quem aprovou, com um Admin Patrocinador e com dado pessoal, a reindexação, indexar sem trecho, revogar sem autor); o trecho (a cópia do documento, o que não muda, só ativo em documento indexado) e `fn_publicar_documento` (a v2 desativa a v1 na mesma transação, o anexo de outra parceria e a edição de 2026 ficam como estão, a revogação desliga os trechos); e a RLS como `atlas_ro` (sem contexto não vê nada, com o contexto vazio também, o contexto do Amarelo em 2027, o do Roxo, o de 2026, e o `42501` ao ler `parceria`, `arquivo`, `usuario` e `dado_informado` ou ao gravar). As 64 da V12: a estrutura (a tabela, os 2 gatilhos, a coluna `tsv` refeita, o kit ainda achável, o `atlas_ro` sem acesso a `atlas_fonte`); as regras da fonte (3 aceitas, e a recusa de fonte em mensagem da pessoa ou de ferramenta, marcador repetido, marcador fora do formato, tipo fora da lista, letra do marcador que não é a do tipo, trecho sem o trecho, conta com trecho colado, registro sem id, `dados` que não é um objeto, trecho que não é do documento, página e versão que o trecho não tem); o documento congelado (as 7 colunas, os dois contornos de antes e o que continua mudando); e a busca (24 pares de singular e plural, as palavras que não mudam e o `tsv` gravado). As 44 da V13: a estrutura (a tabela, os 2 gatilhos, o `atlas_ro` sem acesso, `hora` e `data` com o tipo certo); as regras do prazo (3 aceitos, e a recusa de cada combinação errada de escopo, escopo fora da lista, título e descrição em branco, data fora de 2000 a 2100, hora com segundos, página sem documento ou 0, criado por um Admin Patrocinador ou com outro perfil); a coerência (parceria e documento de outra edição, página acima das páginas do documento, e o alcance: documento GLOBAL aceita qualquer prazo, o de cota só aceita a cota ou uma parceria dela, o de parceria só aceita a própria parceria); e a imutabilidade (cada coluna que não pode mudar, a reativação, mudar junto com a desativação, e desativar duas vezes, que passa). As 10 da V14 (e a da V7 que afirmava que não havia campo de arquivo saiu, por isso o total subiu 9): o catálogo (cinco campos na aba Aplicações, um só de arquivo, a linha da planilha com tudo o que ela deve ter, a ordem depois dos inteiros, ninguém a tem como limite) e o valor de arquivo (a planilha do Amarelo com um arquivo dele passa, com um arquivo da Verde é recusada, com o arquivo e um número ao mesmo tempo também, o vigente é o arquivo mais recente com o anterior guardado, e nada disso fica na amostra). As 25 da V15: a estrutura (as 6 colunas de `atlas_decisao`, `fora_do_modelo` e `sem_modelo` obrigatórias e falsas por padrão, `parceria_id` opcional nas duas tabelas, o `evento_id` com a chave para `evento`, o gatilho, a amostra sem decisão e sem conversa sem parceria); a decisão (uma em sombra e uma ativa aceitas, e a recusa de ponto fora da lista, do modo `DESLIGADO` e de limiar acima de 1); a mensagem (a da pessoa e a do assistente fora do modelo aceitas, e a recusa de `fora_do_modelo` numa mensagem de ferramenta e de `sem_modelo` na da pessoa e na de ferramenta); e a conversa sem parceria (a de um evento aceita, e a recusa sem parceria e sem evento e com evento que não existe; o traço sem parceria aceito numa conversa sem parceria e recusado numa conversa de parceria; o traço com parceria numa conversa sem parceria; o relatório do Atlas numa conversa sem parceria). O banco de teste traz o kit de documentos confirmado, e as conferências só olham para os documentos que elas mesmas montam.
+O `verificacao.sql` imprime uma tabela com cada conferência e termina com erro se alguma falhar. Hoje são **553 conferências, todas ok**. As 164 de antes seguem iguais (as contagens de estrutura passaram a 50 tabelas, 8 visões, 4 funções de carga e relatório e 34 gatilhos, com o `rn_atlas_traco_parceria` da V15, os 2 da V16, o `rn_documento_paginas_ignoradas` da V17 e os 2 da V18). As 43 seguintes são da V7: o catálogo, a carga do plano (15 linhas numa parceria criada só para a conferência, com cada motivo de rejeição, o reenvio e o `btrim`), o `CHECK` de um valor só, a chave composta do anexo, a imutabilidade, o valor vigente depois de uma correção e 5 verificações de órfãos. As 32 da V8 (a contagem das tabelas do Atlas passou a 9 com a V12): as 7 tabelas do Atlas, as chaves compostas por parceria, a conversa no formato de chat (papel, ordem, um relatório em montagem e um cartão aberto por vez, nome de cálculo único), o relatório que congela (cada coluna protegida, o descartado, o apagar, e o que ainda pode mudar) e 6 verificações de órfãos. As 3 da V9: o resumo do raciocínio numa mensagem que não é do assistente, o resumo em branco e o resumo numa mensagem do assistente. As 10 da V10: a lista das 15 etapas no `CHECK`, a amostra sem traço, um traço aceito, etapa e resultado fora da lista, duração negativa, o traço de uma parceria numa conversa de outra, duas etapas com a mesma ordem no turno, dados que não são um objeto e 1 verificação de órfãos (traço ligado a uma mensagem de outra conversa). As 87 da V11: a estrutura (a extensão e a configuração de busca, as 3 funções, o `IMMUTABLE` da `fn_texto_de_busca`, os 7 gatilhos, a coluna `tsv` `STORED`, o vetor de 768 dimensões, os índices HNSW e GIN, o `NULLS NOT DISTINCT`, a categoria `DOCUMENTO`, a RLS ligada e sem `FORCE`, as duas políticas e o que o `atlas_ro` pode ler); a busca textual (11 pares de singular e plural, com e sem acento, e o `tsv` gerado); as regras do documento (escopo, arquivo, edição, chave, dois GLOBAL iguais, anexos de duas parcerias, a mesma chave em outra edição, o mesmo plano em três cotas); o ciclo de status (cada transição proibida, a aprovação sem quem aprovou, com um Admin Patrocinador e com dado pessoal, a reindexação, indexar sem trecho, revogar sem autor); o trecho (a cópia do documento, o que não muda, só ativo em documento indexado) e `fn_publicar_documento` (a v2 desativa a v1 na mesma transação, o anexo de outra parceria e a edição de 2026 ficam como estão, a revogação desliga os trechos); e a RLS como `atlas_ro` (sem contexto não vê nada, com o contexto vazio também, o contexto do Amarelo em 2027, o do Roxo, o de 2026, e o `42501` ao ler `parceria`, `arquivo`, `usuario` e `dado_informado` ou ao gravar). As 64 da V12: a estrutura (a tabela, os 2 gatilhos, a coluna `tsv` refeita, o kit ainda achável, o `atlas_ro` sem acesso a `atlas_fonte`); as regras da fonte (3 aceitas, e a recusa de fonte em mensagem da pessoa ou de ferramenta, marcador repetido, marcador fora do formato, tipo fora da lista, letra do marcador que não é a do tipo, trecho sem o trecho, conta com trecho colado, registro sem id, `dados` que não é um objeto, trecho que não é do documento, página e versão que o trecho não tem); o documento congelado (as 7 colunas, os dois contornos de antes e o que continua mudando); e a busca (24 pares de singular e plural, as palavras que não mudam e o `tsv` gravado). As 44 da V13: a estrutura (a tabela, os 2 gatilhos, o `atlas_ro` sem acesso, `hora` e `data` com o tipo certo); as regras do prazo (3 aceitos, e a recusa de cada combinação errada de escopo, escopo fora da lista, título e descrição em branco, data fora de 2000 a 2100, hora com segundos, página sem documento ou 0, criado por um Admin Patrocinador ou com outro perfil); a coerência (parceria e documento de outra edição, página acima das páginas do documento, e o alcance: documento GLOBAL aceita qualquer prazo, o de cota só aceita a cota ou uma parceria dela, o de parceria só aceita a própria parceria); e a imutabilidade (cada coluna que não pode mudar, a reativação, mudar junto com a desativação, e desativar duas vezes, que passa). As 10 da V14 (e a da V7 que afirmava que não havia campo de arquivo saiu, por isso o total subiu 9): o catálogo (cinco campos na aba Aplicações, um só de arquivo, a linha da planilha com tudo o que ela deve ter, a ordem depois dos inteiros, ninguém a tem como limite) e o valor de arquivo (a planilha do Amarelo com um arquivo dele passa, com um arquivo da Verde é recusada, com o arquivo e um número ao mesmo tempo também, o vigente é o arquivo mais recente com o anterior guardado, e nada disso fica na amostra). As 25 da V15: a estrutura (as 6 colunas de `atlas_decisao`, `fora_do_modelo` e `sem_modelo` obrigatórias e falsas por padrão, `parceria_id` opcional nas duas tabelas, o `evento_id` com a chave para `evento`, o gatilho, a amostra sem decisão e sem conversa sem parceria); a decisão (uma em sombra e uma ativa aceitas, e a recusa de ponto fora da lista, do modo `DESLIGADO` e de limiar acima de 1); a mensagem (a da pessoa e a do assistente fora do modelo aceitas, e a recusa de `fora_do_modelo` numa mensagem de ferramenta e de `sem_modelo` na da pessoa e na de ferramenta); e a conversa sem parceria (a de um evento aceita, e a recusa sem parceria e sem evento e com evento que não existe; o traço sem parceria aceito numa conversa sem parceria e recusado numa conversa de parceria; o traço com parceria numa conversa sem parceria; o relatório do Atlas numa conversa sem parceria). O banco de teste traz o kit de documentos confirmado, e as conferências só olham para os documentos que elas mesmas montam.
+As 36 da V16 (seção 15 do `verificacao.sql`): papel repetido para MIV e logo, papel fora da lista, vários ingressos juntos, categoria fora da lista e a nova, versão avulsa repetida, endereço do credenciamento em `http`, com `usuario@`, com espaço, com bidi e sem host, o credenciamento que termina antes de começar, o e-mail do signatário, o contrato com arquivo de outra categoria ou de outra aba, a segunda pesquisa da ativação, o texto e o link (forma, tamanho, `javascript:`, controle, parceria trocada) e o UPDATE, o DELETE e o apagar da entrega com conteúdo. A prova de `fk_resultado_pergunta_pesquisa` ganhou um `DROP INDEX uq_pesquisa_ativacao` dentro da tentativa, desfeito com ela.
+As 15 da V17 (seção 15b: as colunas e o gatilho, o padrão vazio, página aceita, além do total, zero, repetida, todas, mais de 20, sem total de páginas, depois da aprovação, suspeita que não é lista, a suspeita que só se desmarca junto das páginas e a que não se mexe depois de aprovado).
+As 20 da V18 (também na seção 15): anexo vazio, link `javascript:`, link com `usuario@`, tipo de link fora da lista, audiência com número zero e com número em texto, links que não são uma lista, texto de 5.001 caracteres e com controle, edição que não é a da parceria, a mesma versão duas vezes, situação fora da lista, o UPDATE e o DELETE no que foi publicado, a retirada que também troca o texto, a volta de `RETIRADO` para `PUBLICADO`, a retirada sem quem retirou e o nascer retirado sem quem retirou, e uma publicação seguida de retirada que o banco aceita (só `situacao`, `retirado_em` e `retirado_por` mudam) e que nada deixa gravado.
 Nada fica gravado: as tentativas de violar regras são desfeitas.
 Rodar o `R__amostra.sql` uma segunda vez não muda nada: a trava avisa "Amostra já carregada".
 
@@ -662,5 +730,5 @@ Estas três não são mais "decisões em aberto": o banco já impede o contrári
 | Regra | Como o banco garante | O que significa na prática |
 | --- | --- | --- |
 | Uma cota por marca por edição | Único em `(evento_id, patrocinador_id)` na `parceria` (`uq_parceria`) | Uma marca não tem Master e Subcota na mesma edição |
-| Um signatário por contrato | Único em `contrato.parceria_id` | Cada parceria tem um contrato e uma pessoa que assina. Dois signatários não cabem |
+| Um signatário por contrato | Único em `contrato.parceria_id` | Cada parceria tem no máximo um contrato, com uma pessoa que assina. Dois signatários não cabem |
 | Chave da veiculação sem janela | Único em `(aproveitamento_id, exibido_em)` (`uq_veiculacao`). A janela também fica fora da chave do plano (`uq_aprov_chave_natural`) | Duas exibições iguais, no mesmo instante e na mesma linha do plano, são uma só, mesmo com janelas diferentes |

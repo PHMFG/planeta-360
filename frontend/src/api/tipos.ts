@@ -18,6 +18,8 @@ export type AbaLiberada = {
   liberada: boolean
   /** Falso quando a cota não inclui a aba (aí ela não pode ser liberada); verdadeiro quando a RBS só fechou por enquanto. */
   incluidaNaCota?: boolean
+  /** Falso quando a RBS ocultou a aba: ela some do menu da marca (R6.a). Com ela oculta, `liberada` vem falso. */
+  visivel?: boolean
 }
 
 export type ParceriaResumo = {
@@ -26,6 +28,8 @@ export type ParceriaResumo = {
   cota: { codigo: 'MASTER' | 'SUBCOTA_G' | 'SUBCOTA'; nome: string }
   evento: { id: number; nome: string; edicao: number }
   abas: AbaLiberada[]
+  /** Como quem está logado entra nesta parceria: pela marca ou pela agência dela (U10). */
+  vinculo?: 'MARCA' | 'AGENCIA'
 }
 
 export type UsuarioLogado = {

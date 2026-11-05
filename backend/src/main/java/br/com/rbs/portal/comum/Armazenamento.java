@@ -150,6 +150,34 @@ public class Armazenamento {
     }
 
     /**
+     * Grava um arquivo avulso de uma parceria numa aba, com versão: a maior que a parceria já tem nessa categoria (arquivos sem
+     * entrega) mais 1. Serve ao plano comercial e ao formulário de ingressos (rotas 70 e 73). [ISOLAMENTO] Quem chama já travou a
+     * linha da parceria (FOR UPDATE), para dois envios ao mesmo tempo não pegarem a mesma versão; o índice uq_arquivo_versao_avulso
+     * é a segunda defesa. Os erros são os de {@link #gravar(byte[], String, String, long, Long)}.
+     */
+    public Arquivo gravarVersionadoNaAba(byte[] conteudo, String nomeOriginal, String categoria, long enviadoPor, long parceriaId,
+                                         String abaCodigo, String observacao) {
+        Preparado pronto = preparar(conteudo, nomeOriginal, Aceitos.COMUNS);
+        Integer abaId = jdbc.sql("SELECT id FROM aba WHERE codigo = :codigo").param("codigo", abaCodigo)
+                .query(Integer.class).optional()
+                .orElseThrow(() -> new IllegalArgumentException("A aba " + abaCodigo + " não existe."));
+        String caminho = "parcerias/" + parceriaId + "/" + pronto.nomeNoDisco();
+        escrever(caminho, conteudo);
+        return inserir("""
+                        INSERT INTO arquivo (parceria_id, aba_id, categoria, nome_original, mime_type, tamanho_bytes, caminho,
+                                             hash_sha256, versao, enviado_por, observacao)
+                        VALUES (:parceriaId, :abaId, :categoria, :nome, :mime, :tamanho, :caminho, :hash,
+                                coalesce((SELECT max(a.versao) FROM arquivo a WHERE a.parceria_id = :parceriaId
+                                          AND a.categoria = :categoria AND a.entrega_id IS NULL), 0) + 1,
+                                :enviadoPor, nullif(CAST(:observacao AS text), ''))
+                        RETURNING\s""" + COLUNAS,
+                Map.of("abaId", abaId, "categoria", categoria, "nome", pronto.nomeOriginal(), "mime", pronto.tipo().mime(),
+                        "tamanho", (long) conteudo.length, "caminho", caminho, "hash", pronto.hash(),
+                        "enviadoPor", enviadoPor, "observacao", observacao == null ? "" : observacao),
+                parceriaId, caminho);
+    }
+
+    /**
      * Grava uma nova versão de uma entrega: a parceria e a aba vêm da entrega, e a versão é a maior que ela já tem mais 1.
      * [ISOLAMENTO] Quem chama já conferiu que o usuário pode mexer nesta entrega e a travou (FOR UPDATE), para dois envios
      * ao mesmo tempo não pegarem a mesma versão.
@@ -171,10 +199,12 @@ public class Armazenamento {
         escrever(caminho, conteudo);
         return inserir("""
                         INSERT INTO arquivo (parceria_id, aba_id, entrega_id, categoria, nome_original, mime_type,
-                                             tamanho_bytes, caminho, hash_sha256, versao, enviado_por, observacao)
+                                             tamanho_bytes, caminho, hash_sha256, versao, enviado_por, observacao, enviado_em)
                         SELECT e.parceria_id, e.aba_id, e.id, :categoria, :nome, :mime, :tamanho, :caminho, :hash,
-                               coalesce((SELECT max(a.versao) FROM arquivo a WHERE a.entrega_id = e.id), 0) + 1, :enviadoPor,
-                               nullif(CAST(:observacao AS text), '')
+                               greatest(coalesce((SELECT max(a.versao) FROM arquivo a WHERE a.entrega_id = e.id), 0),
+                                        (SELECT count(*) FROM arquivo a WHERE a.entrega_id = e.id)
+                                        + (SELECT count(*) FROM entrega_conteudo c WHERE c.entrega_id = e.id)) + 1, :enviadoPor,
+                               nullif(CAST(:observacao AS text), ''), clock_timestamp()
                         FROM entrega e WHERE e.id = :entregaId
                         RETURNING\s""" + COLUNAS,
                 Map.of("categoria", categoria, "nome", pronto.nomeOriginal(), "mime", pronto.tipo().mime(),
@@ -246,7 +276,7 @@ public class Armazenamento {
 
         boolean aceita(TipoDeArquivo tipo) {
             return switch (this) {
-                case COMUNS -> tipo != TipoDeArquivo.TXT && tipo != TipoDeArquivo.XLS;
+                case COMUNS -> tipo != TipoDeArquivo.TXT;
                 case DOCUMENTOS -> tipo == TipoDeArquivo.PDF || tipo == TipoDeArquivo.TXT;
                 case PLANILHAS -> tipo == TipoDeArquivo.XLSX || tipo == TipoDeArquivo.XLS || tipo == TipoDeArquivo.CSV;
             };
@@ -259,7 +289,7 @@ public class Armazenamento {
     }
 
     /**
-     * O mesmo, para cada lista de tipos: a comum (a de {@link TipoDeArquivo#listaDeExtensoes()}, sem o TXT nem o XLS), a do documento
+     * O mesmo, para cada lista de tipos: a comum (a de {@link TipoDeArquivo#listaDeExtensoes()}, sem o TXT), a do documento
      * do Atlas (só PDF e TXT) e a da planilha da agência (XLSX, XLS e CSV). [ATLAS] O .txt só existe na rota 54, e o .xls só na rota
      * 66: a rota 17 continua recusando os dois.
      */
@@ -281,6 +311,14 @@ public class Armazenamento {
         boolean csvDaPlanilha = aceitos == Aceitos.PLANILHAS && tipo == TipoDeArquivo.CSV;
         if (csvDaPlanilha ? !TipoDeArquivo.semBytesNulos(conteudo) : !tipo.conteudoConfere(conteudo)) {
             throw new ArquivoRecusadoException(HttpStatus.UNSUPPORTED_MEDIA_TYPE, frasePorConteudo(tipo, conteudo, csvDaPlanilha));
+        }
+        if (Ole2Diretorio.ehOfficeAntigo(tipo)) {
+            switch (Ole2Diretorio.inspecionar(conteudo)) {
+                case MALFORMADO -> throw new ArquivoRecusadoException(HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+                        frasePorConteudo(tipo, conteudo, false));
+                case COM_MACRO -> throw new ArquivoRecusadoException(HttpStatus.UNSUPPORTED_MEDIA_TYPE, Ole2Diretorio.FRASE_DE_MACRO);
+                case SEM_MACRO -> { }
+            }
         }
         return new Preparado(nome, tipo, sha256(conteudo), UUID.randomUUID() + "." + tipo.extensao());
     }

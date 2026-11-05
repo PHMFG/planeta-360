@@ -15,7 +15,9 @@ import br.com.rbs.portal.comum.VerificadorDeAcesso;
 import br.com.rbs.portal.documentos.DocumentoDtos.ArquivoDoDocumentoDto;
 import br.com.rbs.portal.documentos.DocumentoDtos.DocumentoDaMarcaDto;
 import br.com.rbs.portal.documentos.DocumentoDtos.DocumentoDto;
+import br.com.rbs.portal.documentos.DetectorDeDadosPessoais.Suspeita;
 import br.com.rbs.portal.documentos.DocumentoDtos.ParceriaDoDocumentoDto;
+import br.com.rbs.portal.documentos.DocumentoDtos.SuspeitaDto;
 import br.com.rbs.portal.documentos.DocumentoDtos.TrechoDoDocumentoDto;
 import br.com.rbs.portal.documentos.DocumentoDtos.TrechoDoVisualizadorDto;
 import br.com.rbs.portal.documentos.DocumentoRepositorio.Filtro;
@@ -59,7 +61,13 @@ public class DocumentoService {
     private static final int LIMITE_OBSERVACAO = 500;
 
     /** Os campos do envio como chegam (texto): a validação e a conversão são daqui. */
-    public record DadosDoEnvio(String titulo, String chave, String tipo, String escopo, String eventoId, String cota, String parceriaId) {
+    public record DadosDoEnvio(String titulo, String chave, String tipo, String escopo, String eventoId, String cota, String parceriaId,
+                              String paginasForaDoAtlas) {
+
+        /** O envio sem páginas fora do Atlas (o kit, a amostra e os testes antigos). */
+        public DadosDoEnvio(String titulo, String chave, String tipo, String escopo, String eventoId, String cota, String parceriaId) {
+            this(titulo, chave, tipo, escopo, eventoId, cota, parceriaId, null);
+        }
     }
 
     private final DocumentoRepositorio repositorio;
@@ -118,38 +126,52 @@ public class DocumentoService {
             erro = semTexto.getMessage();
             paginas = semTexto.paginas() != null && semTexto.paginas() >= 1 ? semTexto.paginas() : null;   // o CHECK do banco pede 1 ou mais
         }
-        boolean dadosPessoais = extracao != null && detector.contemDadosPessoais(extracao.paginas());
+        List<Integer> foraDoAtlas = entrada.paginasForaDoAtlas();
+        if (!foraDoAtlas.isEmpty()) {
+            String problema = extracao == null ? "O documento não pôde ser lido, então não há páginas para deixar fora do Atlas."
+                    : PaginasForaDoAtlas.foraDoIntervalo(foraDoAtlas, extracao.totalDePaginas());
+            if (problema != null) {
+                throw new DadosInvalidosException(Map.of("paginasForaDoAtlas", problema));
+            }
+        }
+        // [ATLAS] O detector só lê as páginas que entram no Atlas: as marcadas como fora do índice não travam a aprovação (R2.1).
+        List<Suspeita> suspeitas = extracao == null ? List.of() : detector.analisar(extracao.semPaginas(foraDoAtlas).paginas());
+        boolean dadosPessoais = !suspeitas.isEmpty();
         Integer extracaoMs = extracao == null ? null : (int) extracao.milissegundos();
         Integer totalDePaginas = paginas;
         String motivoDoErro = erro;
 
-        long id = transacao.execute(estado -> gravar(usuario, nomeDoArquivo, conteudo, entrada, dadosPessoais, totalDePaginas, extracaoMs,
-                motivoDoErro, requisicao));
+        long id = transacao.execute(estado -> gravar(usuario, nomeDoArquivo, conteudo, entrada, dadosPessoais, suspeitas, totalDePaginas,
+                extracaoMs, motivoDoErro, requisicao));
         return paraDto(repositorio.buscar(id).orElseThrow());
     }
 
-    private long gravar(UsuarioAutenticado usuario, String nomeDoArquivo, byte[] conteudo, Entrada e, boolean dadosPessoais, Integer paginas,
-                        Integer extracaoMs, String erro, HttpServletRequest requisicao) {
+    private long gravar(UsuarioAutenticado usuario, String nomeDoArquivo, byte[] conteudo, Entrada e, boolean dadosPessoais,
+                        List<Suspeita> suspeitas, Integer paginas, Integer extracaoMs, String erro, HttpServletRequest requisicao) {
         repositorio.travarGrupo(e.eventoId(), e.escopo(), e.cotaId(), e.parceriaId(), e.chave());
         int versao = repositorio.proximaVersao(e.eventoId(), e.escopo(), e.cotaId(), e.parceriaId(), e.chave());
         var arquivo = armazenamento.gravarDocumento(conteudo, nomeDoArquivo, usuario.id(), e.parceriaId());
         long id = repositorio.inserir(e.titulo(), e.chave(), versao, e.tipo(), e.escopo(), e.eventoId(), e.cotaId(), e.parceriaId(),
-                arquivo.id(), dadosPessoais, paginas, extracaoMs, erro, usuario.id());
+                arquivo.id(), dadosPessoais, paginas, extracaoMs, erro, usuario.id(), e.paginasForaDoAtlas(), suspeitas);
         historico.registrar(AcaoHistorico.CRIACAO, usuario, e.parceriaId(), "documento", id, null, e.titulo() + " (versão " + versao + ")",
-                e.escopo() + " · " + e.chave() + (erro == null ? "" : " · " + erro) + (dadosPessoais ? " · suspeita de dados pessoais" : ""),
+                e.escopo() + " · " + e.chave() + (erro == null ? "" : " · " + erro) + (dadosPessoais ? " · suspeita de dados pessoais" : "")
+                        + (e.paginasForaDoAtlas().isEmpty() ? "" : " · páginas fora do Atlas: " + textoDasPaginas(e.paginasForaDoAtlas())),
                 requisicao);
         return id;
     }
 
     /** Os campos do envio, já conferidos e convertidos. */
-    private record Entrada(String titulo, String chave, String tipo, String escopo, long eventoId, Integer cotaId, Long parceriaId) {
+    private record Entrada(String titulo, String chave, String tipo, String escopo, long eventoId, Integer cotaId, Long parceriaId,
+                           List<Integer> paginasForaDoAtlas) {
     }
 
     /** [VALIDACAO] Junta os erros de campo numa resposta só (422). */
     private Entrada validar(String nomeDoArquivo, byte[] conteudo, DadosDoEnvio dados) {
         Map<String, String> campos = new LinkedHashMap<>();
-        if (conteudo == null || conteudo.length == 0 || nomeDoArquivo == null || nomeDoArquivo.isBlank()) {
+        if (conteudo == null || nomeDoArquivo == null || nomeDoArquivo.isBlank()) {
             campos.put("arquivo", "Envie o documento (PDF ou TXT) na parte \"arquivo\" do formulário.");
+        } else if (conteudo.length == 0) {
+            campos.put("arquivo", "O arquivo está vazio.");
         }
         String titulo = limpo(dados.titulo());
         if (titulo == null) {
@@ -226,10 +248,14 @@ public class DocumentoService {
                 }
             }
         }
+        var leitura = PaginasForaDoAtlas.ler(dados.paginasForaDoAtlas());
+        if (leitura.erro() != null) {
+            campos.put("paginasForaDoAtlas", leitura.erro());
+        }
         if (!campos.isEmpty()) {
             throw new DadosInvalidosException(campos);
         }
-        return new Entrada(titulo, chave, tipo, escopo, eventoId, cotaId, parceriaId);
+        return new Entrada(titulo, chave, tipo, escopo, eventoId, cotaId, parceriaId, leitura.paginas());
     }
 
     // ---------------------------------------------------------------------
@@ -275,6 +301,71 @@ public class DocumentoService {
         }
         var linha = repositorio.paraAMarca(id, usuario.id()).orElseThrow(DocumentoService::naoEncontrado);
         return new DocumentoDaMarcaDto(linha.id(), linha.titulo(), linha.tipo(), linha.versao(), linha.paginas(), linha.substituido());
+    }
+
+    // ---------------------------------------------------------------------
+    // Rota 103: páginas fora do Atlas
+    // ---------------------------------------------------------------------
+
+    /**
+     * Rota 103 (R2.1). [PERMISSAO] Só a RBS. Troca a lista de páginas que não entram no índice do Atlas (a lista inteira; vazia limpa a
+     * marcação), enquanto o documento aguarda aprovação. O arquivo é lido de novo, sem transação, e a suspeita de dado pessoal é
+     * recalculada sem as páginas marcadas: se nenhuma página que sobra levanta suspeita, o documento passa a poder ser aprovado. O PDF
+     * continua inteiro no visualizador (rotas 59 e 60). [HISTORICO] Grava EDICAO na entidade {@code documento}, com o antes e o depois
+     * (só números de página, nunca o conteúdo). Ordem: 403, 422 (formato), 404, 409 (o documento já saiu de "aguardando aprovação"),
+     * 422 (além do fim do documento, ou todas as páginas).
+     */
+    public DocumentoDto marcarPaginasForaDoAtlas(UsuarioAutenticado usuario, long id, List<Integer> informadas, HttpServletRequest requisicao) {
+        verificador.exigirRbs(usuario);
+        var leitura = PaginasForaDoAtlas.ler(informadas);
+        if (leitura.erro() != null) {
+            throw new DadosInvalidosException(Map.of("paginasForaDoAtlas", leitura.erro()));
+        }
+        List<Integer> foraDoAtlas = leitura.paginas();
+        var documento = repositorio.paraIngestao(id).orElseThrow(DocumentoService::naoEncontrado);
+        exigirAguardando(documento.status());
+
+        // Ler o arquivo e rodar o detector, sem transação.
+        Extracao extracao;
+        try {
+            Path caminho = armazenamento.localizar(documento.arquivoCaminho())
+                    .orElseThrow(() -> new NaoEncontradoException("Este documento não está mais disponível. Avise a equipe da RBS."));
+            var tipo = TipoDeArquivo.daExtensao(documento.arquivoNome())
+                    .orElseThrow(() -> new ExtracaoFalhouException("Este tipo de arquivo não é indexado.", null));
+            extracao = extrator.extrair(tipo, java.nio.file.Files.readAllBytes(caminho));
+        } catch (ExtracaoFalhouException semTexto) {
+            throw new ConflitoException("Não consegui ler o documento: " + semTexto.getMessage());
+        } catch (java.io.IOException ilegivel) {
+            throw new ConflitoException("Não consegui ler o arquivo do documento no armazenamento.");
+        }
+        String problema = PaginasForaDoAtlas.foraDoIntervalo(foraDoAtlas, extracao.totalDePaginas());
+        if (problema != null) {
+            throw new DadosInvalidosException(Map.of("paginasForaDoAtlas", problema));
+        }
+        List<Suspeita> suspeitas = detector.analisar(extracao.semPaginas(foraDoAtlas).paginas());
+
+        transacao.executeWithoutResult(estado -> {
+            Travado atual = repositorio.travar(id).orElseThrow(DocumentoService::naoEncontrado);
+            exigirAguardando(atual.status());
+            List<Integer> antes = PaginasForaDoAtlas.daColuna(repositorio.buscar(id).orElseThrow().paginasIgnoradas());
+            repositorio.gravarPaginasForaDoAtlas(id, foraDoAtlas, !suspeitas.isEmpty(), suspeitas);
+            historico.registrar(AcaoHistorico.EDICAO, usuario, atual.parceriaId(), "documento", id,
+                    "páginas fora do Atlas: " + textoDasPaginas(antes), "páginas fora do Atlas: " + textoDasPaginas(foraDoAtlas),
+                    suspeitas.isEmpty() ? null : "ainda há suspeita de dados pessoais nas páginas " + textoDasPaginas(
+                            suspeitas.stream().map(Suspeita::pagina).distinct().toList()), requisicao);
+        });
+        return paraDto(repositorio.buscar(id).orElseThrow());
+    }
+
+    private static void exigirAguardando(String status) {
+        if (!"AGUARDANDO_APROVACAO".equals(status)) {
+            throw new ConflitoException("As páginas fora do Atlas só mudam enquanto o documento aguarda aprovação. Este documento está "
+                    + fraseDoStatus(status) + ".");
+        }
+    }
+
+    private static String textoDasPaginas(List<Integer> paginas) {
+        return paginas.isEmpty() ? "nenhuma" : paginas.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(", "));
     }
 
     // ---------------------------------------------------------------------
@@ -424,6 +515,7 @@ public class DocumentoService {
         EventoDto evento = new EventoDto(l.eventoId(), l.eventoNome(), l.eventoEdicao());
         CotaDto cota = l.cotaCodigo() == null ? null : new CotaDto(l.cotaCodigo(), l.cotaNome());
         ParceriaDoDocumentoDto parceria = l.parceriaId() == null ? null : new ParceriaDoDocumentoDto(l.parceriaId(), l.patrocinador());
+        List<Suspeita> suspeitas = PaginasForaDoAtlas.suspeitasDaColuna(l.suspeitas());
         boolean modeloDiferente = "INDEXADO".equals(l.status()) && l.modeloEmbedding() != null && embeddings.ligado()
                 && !l.modeloEmbedding().equals(embeddings.modelo());
         return new DocumentoDto(l.id(), l.titulo(), l.chave(), l.versao(), l.tipo(), l.escopo(), evento, cota, parceria, l.status(),
@@ -431,7 +523,9 @@ public class DocumentoService {
                 l.embeddingsMs(), l.erro(), new ArquivoDoDocumentoDto(l.arquivoId(), l.arquivoNome(), l.arquivoMime(), l.arquivoTamanho()),
                 pessoa(l.enviadoPor(), l.enviadoPorNome(), l.enviadoPorPerfil()), Datas.emBrasilia(l.enviadoEm()),
                 pessoa(l.aprovadoPor(), l.aprovadoPorNome(), l.aprovadoPorPerfil()), Datas.emBrasilia(l.aprovadoEm()),
-                pessoa(l.revogadoPor(), l.revogadoPorNome(), l.revogadoPorPerfil()), Datas.emBrasilia(l.revogadoEm()), acoes(l));
+                pessoa(l.revogadoPor(), l.revogadoPorNome(), l.revogadoPorPerfil()), Datas.emBrasilia(l.revogadoEm()), acoes(l),
+                suspeitas.stream().map(Suspeita::pagina).distinct().toList(),
+                suspeitas.stream().map(s -> new SuspeitaDto(s.pagina(), s.tipo())).toList(), PaginasForaDoAtlas.daColuna(l.paginasIgnoradas()));
     }
 
     /** O que a RBS pode fazer agora (as ações da rota 57). Aprovar some quando há suspeita de dado pessoal; reindexar, quando o documento nunca foi aprovado. */

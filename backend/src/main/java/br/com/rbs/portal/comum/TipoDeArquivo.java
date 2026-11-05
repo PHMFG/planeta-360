@@ -16,23 +16,25 @@ import java.util.Optional;
  *
  * <p>[ATLAS] {@link #TXT} existe só para os documentos do Atlas (rota 54, que aceita PDF e TXT): as outras rotas de envio (a 17 das
  * entregas, a 26 das cargas, a 38 das fotos) não o aceitam, e o Armazenamento o recusa quando o envio não é de documento.
- * [DADOS] {@link #XLS} (a planilha do Excel antigo) existe só para a planilha da agência (rota 66, que aceita XLSX, XLS e CSV): as
- * outras rotas não o aceitam. O CSV dessa rota é conferido só por {@link #semBytesNulos} (qualquer codificação); nas outras, é UTF-8.
+ * [R4.1] {@link #DOC}, {@link #XLS} e {@link #PPT} (o Office antigo, contêiner OLE2) entram nos envios comuns, mas só depois de
+ * {@link Ole2Diretorio} ler o diretório do contêiner e não achar macro VBA. A planilha da agência (rota 66) também aceita XLS. O CSV dessa rota é conferido só por {@link #semBytesNulos} (qualquer codificação); nas outras, é UTF-8.
  */
 public enum TipoDeArquivo {
     PDF("application/pdf"),
     PNG("image/png"),
     JPG("image/jpeg"),
     JPEG("image/jpeg"),
+    DOC("application/msword"),
     DOCX("application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+    XLS("application/vnd.ms-excel"),
     XLSX("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+    PPT("application/vnd.ms-powerpoint"),
     PPTX("application/vnd.openxmlformats-officedocument.presentationml.presentation"),
     CSV("text/csv"),
     MP4("video/mp4"),
     MP3("audio/mpeg"),
     ZIP("application/zip"),
-    TXT("text/plain"),
-    XLS("application/vnd.ms-excel");
+    TXT("text/plain");
 
     private final String mime;
 
@@ -66,13 +68,12 @@ public enum TipoDeArquivo {
     }
 
     /**
-     * As extensões aceitas nos envios comuns, para a frase de erro: "pdf, png, jpg...". O {@link #TXT} é só dos documentos, e o
-     * {@link #XLS} só da planilha da agência.
+     * As extensões aceitas nos envios comuns, para a frase de erro: "pdf, png, jpg...". O {@link #TXT} é só dos documentos.
      */
     public static String listaDeExtensoes() {
         StringBuilder lista = new StringBuilder();
         for (TipoDeArquivo tipo : values()) {
-            if (tipo != TXT && tipo != XLS) {
+            if (tipo != TXT) {
                 lista.append(lista.isEmpty() ? "" : ", ").append(tipo.extensao());
             }
         }
@@ -82,8 +83,8 @@ public enum TipoDeArquivo {
     /**
      * [UPLOAD] O conteúdo é mesmo deste tipo? pdf começa com %PDF; png com a assinatura de 8 bytes; jpeg com FF D8 FF;
      * zip, docx, xlsx e pptx (que são zip por dentro) com PK; mp4 tem "ftyp" a partir do 5º byte; mp3 começa com ID3 ou com
-     * um quadro de áudio (FF e os 3 bits mais altos do byte seguinte ligados); csv e txt são texto UTF-8 válido, sem bytes nulos; xls
-     * começa com a assinatura de 8 bytes do contêiner OLE2 (D0 CF 11 E0 A1 B1 1A E1).
+     * um quadro de áudio (FF e os 3 bits mais altos do byte seguinte ligados); csv e txt são texto UTF-8 válido, sem bytes nulos; doc, xls e ppt
+     * começam com a assinatura de 8 bytes do contêiner OLE2 (D0 CF 11 E0 A1 B1 1A E1).
      */
     public boolean conteudoConfere(byte[] b) {
         return switch (this) {
@@ -94,7 +95,7 @@ public enum TipoDeArquivo {
             case MP4 -> b.length >= 12 && b[4] == 'f' && b[5] == 't' && b[6] == 'y' && b[7] == 'p';
             case MP3 -> comecaCom(b, 'I', 'D', '3') || (b.length >= 2 && (b[0] & 0xFF) == 0xFF && (b[1] & 0xE0) == 0xE0);
             case CSV, TXT -> ehTextoUtf8SemNulos(b);
-            case XLS -> comecaCom(b, 0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1);
+            case DOC, XLS, PPT -> comecaCom(b, 0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1);
         };
     }
 

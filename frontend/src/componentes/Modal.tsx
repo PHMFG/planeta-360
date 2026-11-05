@@ -17,7 +17,7 @@ export function Modal({ titulo, legenda, aberto, aoFechar, children, largura = '
   if (!aberto) return null
   return (
     <div
-      className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-tinta/45 p-6"
+      className="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-tinta/45 p-6 max-sm:p-3"
       onMouseDown={(evento) => evento.target === evento.currentTarget && aoFechar()}
     >
       <div
@@ -26,7 +26,7 @@ export function Modal({ titulo, legenda, aberto, aoFechar, children, largura = '
         aria-modal="true"
         aria-label={titulo}
         tabIndex={-1}
-        className={`flex w-full ${largura} flex-col gap-4 rounded-3xl bg-white p-7 shadow-modal outline-none`}
+        className={`flex w-full ${largura} flex-col gap-4 rounded-3xl bg-white p-7 shadow-modal outline-none max-sm:gap-3 max-sm:p-5`}
       >
         <div className="flex items-start justify-between gap-4">
           <div>

@@ -5,6 +5,9 @@ import java.sql.SQLException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.postgresql.util.PSQLException;
+import tools.jackson.core.JacksonException;
+import tools.jackson.core.exc.InputCoercionException;
+import tools.jackson.databind.exc.MismatchedInputException;
 import org.postgresql.util.ServerErrorMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -54,7 +57,14 @@ public class TratadorDeErros extends ResponseEntityExceptionHandler {
             Map.entry("fk_parceria_usuario_so_admin_patrocinador", "Só usuários do perfil Admin Patrocinador podem ser vinculados a uma parceria."),
             Map.entry("uq_documento_grupo_versao", "Já existe um documento com esta chave e esta versão neste escopo. Envie de novo."),
             Map.entry("uq_documento_arquivo", "Este arquivo já pertence a outro documento."),
-            Map.entry("fk_documento_aprovador", "Só a equipe da RBS aprova um documento."));
+            Map.entry("fk_documento_aprovador", "Só a equipe da RBS aprova um documento."),
+            // V16: as frases das restrições novas. As de formato (url e e-mail) são só rede de proteção: a API valida antes, com 422.
+            Map.entry("uq_entrega_papel", "Esta parceria já tem este espaço aberto."),
+            Map.entry("uq_arquivo_versao_avulso", "Já existe um arquivo desta categoria com esta versão nesta parceria. Envie de novo."),
+            Map.entry("uq_pesquisa_ativacao", "Esta edição já tem a pesquisa da ativação."),
+            Map.entry("uq_pesquisa", "Já existe uma pesquisa com este nome nesta edição."),
+            Map.entry("ck_evento_credenciamento_url", "O endereço do credenciamento precisa começar com https:// e não pode ter usuário@."),
+            Map.entry("ck_contrato_signatario_email", "O e-mail do signatário não é válido."));
 
     // ---------------------------------------------------------------------
     // Erros do próprio portal
@@ -214,9 +224,68 @@ public class TratadorDeErros extends ResponseEntityExceptionHandler {
     @Override
     protected ResponseEntity<Object> handleHttpMessageNotReadable(HttpMessageNotReadableException ex, HttpHeaders headers,
                                                                   HttpStatusCode status, WebRequest request) {
+        // O JSON é válido, mas um campo tem o tipo ou o tamanho errado (1.5 num inteiro, "abc" num número, 99999999999999999999):
+        // o erro é do campo, então 422 com o caminho dele em "campos". JSON quebrado de verdade segue 400.
+        Map<String, String> campos = erroDeCampo(ex);
+        if (campos != null) {
+            return createResponseEntity(Problemas.validacao(campos), headers, HttpStatus.UNPROCESSABLE_CONTENT, request);
+        }
         return createResponseEntity(
                 Problemas.de(HttpStatus.BAD_REQUEST, "O corpo da requisição está vazio ou não é um JSON válido."),
                 headers, HttpStatus.BAD_REQUEST, request);
+    }
+
+    /** O campo (com o caminho, como {@code audiencias[0].numero}) e a frase, quando o Jackson recusou o VALOR de um campo; senão nulo. */
+    private static Map<String, String> erroDeCampo(HttpMessageNotReadableException ex) {
+        MismatchedInputException recusa = null;
+        InputCoercionException grande = null;
+        for (Throwable atual = ex.getCause(); atual != null; atual = atual.getCause() == atual ? null : atual.getCause()) {
+            if (atual instanceof InputCoercionException g && grande == null) {
+                grande = g;
+            }
+            if (recusa == null && atual instanceof MismatchedInputException d && !d.getPath().isEmpty()) {
+                recusa = d;
+            }
+        }
+        StringBuilder caminho = new StringBuilder();
+        if (recusa != null) {
+            for (JacksonException.Reference trecho : recusa.getPath()) {
+                if (trecho.getPropertyName() != null) {
+                    caminho.append(caminho.isEmpty() ? "" : ".").append(trecho.getPropertyName());
+                } else if (trecho.getIndex() >= 0) {
+                    caminho.append('[').append(trecho.getIndex()).append(']');
+                }
+            }
+        } else if (grande != null && grande.processor() != null) {
+            // O número que não cabe em long sai do parser sem caminho: o contexto do parser sabe em que campo ele parou.
+            for (String trecho : grande.processor().streamReadContext().pathAsPointer().toString().split("/")) {
+                if (trecho.isEmpty()) {
+                    continue;
+                }
+                if (trecho.chars().allMatch(Character::isDigit)) {
+                    caminho.append('[').append(trecho).append(']');
+                } else {
+                    caminho.append(caminho.isEmpty() ? "" : ".").append(trecho);
+                }
+            }
+        }
+        if (caminho.isEmpty()) {
+            return null;
+        }
+        Class<?> tipo = recusa != null ? recusa.getTargetType() : null;
+        String frase;
+        if (grande != null) {
+            frase = "O número é grande demais.";
+        } else if (tipo != null && (Number.class.isAssignableFrom(tipo) || tipo.isPrimitive() && tipo != boolean.class && tipo != char.class)) {
+            boolean inteiro = tipo == Long.class || tipo == Integer.class || tipo == Short.class || tipo == Byte.class
+                    || tipo == long.class || tipo == int.class || tipo == short.class || tipo == byte.class;
+            frase = inteiro ? "Use um número inteiro." : "Use um número válido.";
+        } else {
+            frase = "Valor inválido.";
+        }
+        Map<String, String> campos = new LinkedHashMap<>();
+        campos.put(caminho.toString(), frase);
+        return campos;
     }
 
     @Override
@@ -257,11 +326,21 @@ public class TratadorDeErros extends ResponseEntityExceptionHandler {
     ResponseEntity<Object> inesperado(Exception ex, WebRequest request) {
         SQLException violacao = procurarViolacaoDeRegra(ex);
         if (violacao != null) {
-            log.info("Regra do banco recusou a operação (SQLSTATE {}): {}", violacao.getSQLState(), violacao.getMessage());
+            // A mensagem do PostgreSQL traz os VALORES da linha (nome, e-mail...): ela nunca vai ao log, só o nome da restrição.
+            log.info("Regra do banco recusou a operação (SQLSTATE {}, restrição {})", violacao.getSQLState(), nomeDaRestricao(violacao));
             return resposta(Problemas.de(HttpStatus.CONFLICT, frase(violacao)), request);
         }
         log.error("Erro inesperado ao tratar a requisição", ex);
         return resposta(Problemas.padrao(HttpStatus.INTERNAL_SERVER_ERROR), request);
+    }
+
+    /** O nome da restrição violada, sem valor nenhum; "desconhecida" quando o driver não o informa. */
+    private static String nomeDaRestricao(SQLException violacao) {
+        if (violacao instanceof PSQLException psql && psql.getServerErrorMessage() != null
+                && psql.getServerErrorMessage().getConstraint() != null) {
+            return psql.getServerErrorMessage().getConstraint();
+        }
+        return "desconhecida";
     }
 
     /** Percorre as causas do erro atrás de um SQLException cujo SQLSTATE comece com 23 (violação de integridade). */

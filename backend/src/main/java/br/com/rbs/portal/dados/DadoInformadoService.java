@@ -193,8 +193,11 @@ public class DadoInformadoService {
         if (!"ARQUIVO".equals(campo.tipo())) {
             throw new DadosInvalidosException(Map.of(chave, "Este campo não recebe arquivo. Informe o número pelo formulário."));
         }
-        if (arquivo == null || arquivo.isEmpty()) {
+        if (arquivo == null || (arquivo.isEmpty() && (arquivo.getOriginalFilename() == null || arquivo.getOriginalFilename().isBlank()))) {
             throw new DadosInvalidosException(Map.of("arquivo", "Envie o arquivo na parte \"arquivo\" do formulário."));
+        }
+        if (arquivo.isEmpty()) {
+            throw new DadosInvalidosException(Map.of("arquivo", "O arquivo está vazio."));
         }
 
         repositorio.travarParceria(parceriaId);

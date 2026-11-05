@@ -16,6 +16,7 @@ public final class MateriaisDtos {
     /** Os códigos das 7 abas, na ordem do menu (tabela aba). */
     public static final String PADRAO_ABA = "PERFIL|APLICACOES|MIDIA|CORTESIAS|CREDENCIAMENTO|PESQUISA|CONTRATO";
     public static final String PADRAO_STATUS = "NAO_INICIADO|AGUARDANDO_ENVIO|ENVIADO|EM_ANALISE|AJUSTE_SOLICITADO|APROVADO|NAO_APLICAVEL";
+    public static final String PADRAO_PAPEL = "DOCUMENTO_INGRESSOS|MIV|LOGO";
     public static final String PADRAO_STATUS_INICIAL = "NAO_INICIADO|AGUARDANDO_ENVIO|NAO_APLICAVEL";
 
     private MateriaisDtos() {
@@ -33,6 +34,40 @@ public final class MateriaisDtos {
                              String categoria, UsuarioResumoDto enviadoPor, OffsetDateTime enviadoEm, String observacao) {
     }
 
+    /**
+     * Uma versão da entrega, de arquivo ou de conteúdo (R5.3), na lista única {@code versoes}: {@code tipo} é ARQUIVO, TEXTO ou LINK.
+     * Os campos que não valem para o tipo vão nulos: nomeOriginal, mimeType, tamanhoBytes e categoria são do arquivo; titulo, texto, url
+     * e host, do conteúdo ({@code host} é o domínio do link, sem o "www."). {@code versao} segue uma sequência só por entrega.
+     */
+    public record VersaoDto(String tipo, Long id, Integer versao, UsuarioResumoDto enviadoPor, OffsetDateTime enviadoEm,
+                            String observacao, String nomeOriginal, String mimeType, Long tamanhoBytes, String categoria,
+                            String titulo, String texto, String url, String host) {
+    }
+
+    /** Corpo da rota 86. Os campos são conferidos no ConteudoDaEntregaService, para juntar todos os erros numa resposta só. */
+    public record ConteudoRequisicao(String tipo, String titulo, String texto, String url, String observacao) {
+    }
+
+    /** A resposta da rota 86: a versão de conteúdo gravada e o status em que a entrega ficou. */
+    public record ConteudoEnviadoDto(Long id, Long entregaId, String tipo, Integer versao, String titulo, String texto, String url,
+                                     String host, String observacao, UsuarioResumoDto enviadoPor, OffsetDateTime enviadoEm,
+                                     String statusDaEntrega) {
+    }
+
+    /**
+     * Um link da rota 87. {@code origem} é CARGA (a veiculação carregada pela RBS) ou ENVIO (link enviado como conteúdo de uma
+     * entrega de Mídia). Da carga vêm veiculo, formato, espacoPrograma e exibidoEm; do envio, entregaId, entregaTitulo, titulo,
+     * observacao e enviadoPor. {@code data} é a data de exibição (CARGA) ou do envio (ENVIO), e ordena a lista.
+     */
+    public record LinkDeMidiaDto(String origem, String url, String host, OffsetDateTime data, String veiculo, String formato,
+                                 String espacoPrograma, Long entregaId, String entregaTitulo, String titulo, String observacao,
+                                 UsuarioResumoDto enviadoPor) {
+    }
+
+    /** A resposta da rota 87. */
+    public record LinksDeMidiaDto(Long parceriaId, List<LinkDeMidiaDto> itens) {
+    }
+
     /** A resposta da rota 17: o Arquivo mais o status em que a entrega ficou depois do envio. */
     public record ArquivoEnviadoDto(Long id, Long entregaId, String nomeOriginal, String mimeType, Long tamanhoBytes,
                                     Integer versao, String categoria, UsuarioResumoDto enviadoPor, OffsetDateTime enviadoEm,
@@ -43,10 +78,13 @@ public final class MateriaisDtos {
     public record ObservacaoDto(String texto, String por, OffsetDateTime em) {
     }
 
-    /** Objeto "Entrega" do contrato; os arquivos vêm da versão mais nova para a mais antiga. */
-    public record EntregaDto(Long id, Long parceriaId, String abaCodigo, String titulo, String descricao, String status,
+    /**
+     * Objeto "Entrega" do contrato ({@code papel} é nulo na entrega comum). Os {@code arquivos} são só os arquivos; as {@code versoes}
+     * juntam arquivos, textos e links numa lista única. As duas vêm da versão mais nova para a mais antiga.
+     */
+    public record EntregaDto(Long id, Long parceriaId, String abaCodigo, String papel, String titulo, String descricao, String status,
                              LocalDate prazo, OffsetDateTime criadoEm, OffsetDateTime atualizadoEm, List<ArquivoDto> arquivos,
-                             ObservacaoDto ultimaObservacao) {
+                             List<VersaoDto> versoes, ObservacaoDto ultimaObservacao) {
     }
 
     /** [VALIDACAO] Corpo da rota 15. A aba e o status inicial só valem se forem códigos que existem. */
@@ -61,7 +99,9 @@ public final class MateriaisDtos {
             String descricao,
             LocalDate prazo,
             @Pattern(regexp = PADRAO_STATUS_INICIAL, message = "O status inicial deve ser NAO_INICIADO, AGUARDANDO_ENVIO ou NAO_APLICAVEL.")
-            String status) {
+            String status,
+            @Pattern(regexp = PADRAO_PAPEL, message = "Papel inválido. Use DOCUMENTO_INGRESSOS, MIV ou LOGO.")
+            String papel) {
     }
 
     /** [VALIDACAO] Corpo da rota 19. A observação obrigatória (pedir ajuste, reabrir) é conferida no EntregaService. */
@@ -78,7 +118,7 @@ public final class MateriaisDtos {
     }
 
     /** Uma linha da fila de trabalho da RBS (rota 16). */
-    public record ItemDaFilaDto(Long id, ParceriaDaFilaDto parceria, String abaCodigo, String titulo, String status,
+    public record ItemDaFilaDto(Long id, ParceriaDaFilaDto parceria, String abaCodigo, String papel, String titulo, String status,
                                 LocalDate prazo, boolean atrasada, OffsetDateTime atualizadoEm, OffsetDateTime ultimoEnvioEm) {
     }
 

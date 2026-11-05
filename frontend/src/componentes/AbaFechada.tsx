@@ -4,9 +4,10 @@ import type { AbaLiberada, CodigoAba, ParceriaResumo } from '../api/tipos'
 import { Aviso } from './Aviso'
 import { nomeCota } from './Menu'
 
-export type EstadoAba = 'LIBERADA' | 'FORA_DA_COTA' | 'FECHADA'
+export type EstadoAba = 'LIBERADA' | 'FORA_DA_COTA' | 'FECHADA' | 'OCULTA'
 
 export function estadoDaAba(aba: AbaLiberada | undefined): EstadoAba {
+  if (aba?.visivel === false) return 'OCULTA'
   if (!aba || aba.liberada) return 'LIBERADA'
   return aba.incluidaNaCota === false ? 'FORA_DA_COTA' : 'FECHADA'
 }
@@ -29,7 +30,11 @@ export function AvisoAbaFechada({ parceria, estado, nome, rbs }: { parceria: Par
   }
   return estado === 'FORA_DA_COTA' ? (
     <Aviso tipo="restrito" titulo="Esta aba não faz parte da sua cota">
-      A cota {nomeCota(parceria)} não inclui {nome.toLowerCase()}. Para contratar, fale com o time B2B da RBS.
+      A cota da sua parceria ({nomeCota(parceria)}) não inclui {nome.toLowerCase()}. Para incluir, fale com o time B2B da RBS.
+    </Aviso>
+  ) : estado === 'OCULTA' ? (
+    <Aviso tipo="restrito" titulo="Esta página não está disponível">
+      Esta área não faz parte do que a RBS mostra para a sua parceria. Dúvidas: fale com o time B2B da RBS.
     </Aviso>
   ) : (
     <Aviso tipo="restrito" titulo="Esta aba está fechada no momento">

@@ -356,7 +356,8 @@ class BuscaDeTesteRotaTest {
 
         assertThat(rbs.post(ROTA, "isto nao e json")).hasStatus(HttpStatus.BAD_REQUEST);
         assertThat(rbs.post(ROTA, "")).hasStatus(HttpStatus.BAD_REQUEST);
-        assertThat(rbs.post(ROTA, "{\"parceriaId\":\"abc\",\"consulta\":\"x\"}")).hasStatus(HttpStatus.BAD_REQUEST);
+        // JSON válido com texto num campo numérico é erro do campo: 422 com o caminho dele
+        assertThat(rbs.post(ROTA, "{\"parceriaId\":\"abc\",\"consulta\":\"x\"}")).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
     }
 
     @Test

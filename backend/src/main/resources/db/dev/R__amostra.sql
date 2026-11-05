@@ -109,6 +109,13 @@ BEGIN
     JOIN evento e ON e.nome = 'Planeta Atlântida' AND e.edicao = v.ed
     JOIN patrocinador p ON p.nome_canonico = v.pat;
 
+    -- Credenciamento e cortesias da edição de 2027: o Open Staff aponta para example.com, domínio reservado que abre uma página de
+    -- verdade na demonstração; o texto da RBS diz "Credenciamento (dezembro)"; o prazo das cortesias é o do D03 do kit.
+    UPDATE evento
+       SET credenciamento_url = 'https://example.com/', credenciamento_inicio = DATE '2026-12-01',
+           credenciamento_fim = DATE '2026-12-20', cortesias_prazo = DATE '2027-01-15'
+     WHERE nome = 'Planeta Atlântida' AND edicao = 2027;
+
     -- Atalho para o resto do script: as três parcerias de 2027 pelo nome do cliente
     DROP TABLE IF EXISTS pg_temp._amostra_parc;
     CREATE TEMP TABLE _amostra_parc AS
@@ -308,6 +315,20 @@ BEGIN
     ) AS v(cli, aba, titulo, status, prazo)
     JOIN _amostra_parc pp ON pp.cliente = v.cli;
 
+    -- [PAPEL] As entregas que já são o "espaço" de um envio da aba ganham o papel, para o primeiro envio novo não criar uma segunda:
+    -- o documento de ingressos (aba Perfil) e a logo (aba Aplicações). A amostra não tem entrega de MIV, e o papel não se inventa.
+    -- A logo do Verde fica na aba Mídia (conteúdos assinados no Instagram), então não é a logo da aba Aplicações.
+    UPDATE entrega e SET papel = 'DOCUMENTO_INGRESSOS'
+    FROM aba a
+    WHERE a.id = e.aba_id AND a.codigo = 'PERFIL'
+      AND e.titulo = 'Documento para compra de ingressos com valor de patrocinador'
+      AND e.parceria_id IN (SELECT id FROM _amostra_parc);
+    UPDATE entrega e SET papel = 'LOGO'
+    FROM aba a
+    WHERE a.id = e.aba_id AND a.codigo = 'APLICACOES'
+      AND e.titulo IN ('Logo final para aplicações no evento', 'Logo para vinhetas e assinatura da transmissão')
+      AND e.parceria_id IN (SELECT id FROM _amostra_parc);
+
     -- [UPLOAD] Arquivo com versões (exemplo do documento do grupo): a mesma entrega, parceria e aba nas duas versões.
     -- Cada versão guarda a observação que a marca escreveu ao enviar (aparece na lista de versões da entrega).
     INSERT INTO arquivo (parceria_id, aba_id, entrega_id, categoria, nome_original, mime_type, tamanho_bytes, caminho, versao, enviado_por, enviado_em, observacao)
@@ -370,7 +391,7 @@ BEGIN
      ('Cliente Verde', 'Fotos de comprovação da ativação', 'fotos_ativacao_arena.zip', 'OUTRO', 6291456, 28, '15:00', 'Fotos da ativação durante o evento.', 'APROVADO', 27, '10:00', NULL, '200.0.2.30'),
      ('Cliente Verde', 'Logo para conteúdos assinados no Instagram', 'logo_instagram_assinado.png', 'MATERIAL_MARCA', 187392, 70, '12:15', NULL, 'APROVADO', 69, '09:20', NULL, '200.0.2.30'),
      ('Cliente Verde', 'VT de 30" para o telão', 'vt_30s_telao.mp4', 'MATERIAL_MIDIA', 16252928, 65, '16:40', NULL, 'APROVADO', 63, '11:05', NULL, '200.0.2.30'),
-     ('Cliente Verde', 'Destinação das cortesias', 'destinacao_cortesias.xlsx', 'OUTRO', 39936, 2, '09:40', 'Destinamos 8 das 12 cortesias; as demais saem na semana do evento.', NULL, NULL, NULL, NULL, '200.0.2.30'),
+     ('Cliente Verde', 'Destinação das cortesias', 'destinacao_cortesias.xlsx', 'OUTRO', 39936, 2, '09:40', 'Destinamos 6 das 12 cortesias; as demais saem na semana do evento.', NULL, NULL, NULL, NULL, '200.0.2.30'),
      ('Cliente Verde', 'Cadastro dos profissionais no Open Staff', 'profissionais_open_staff.csv', 'OUTRO', 2540, 52, '14:10', NULL, 'APROVADO', 51, '10:50', NULL, '200.0.2.30'),
      ('Cliente Verde', 'Dados do signatário', 'ficha_do_signatario.pdf', 'OUTRO', 119808, 36, '11:00', NULL, 'APROVADO', 35, '16:00', NULL, '200.0.2.30');
 
@@ -448,18 +469,19 @@ BEGIN
     IF (SELECT pular FROM _amostra_ctl) THEN RETURN; END IF;
 
     -- Os números e o portão de cada cota são os do plano comercial dela (o Manual diz que o plano prevalece), os mesmos do kit de
-    -- documentos do Atlas: Master (D03) 25 na Arena, 40 no Camarote e 10 no Lounge; Subcota G (D04, o Roxo) 6 e 3; Subcota (D05, o
-    -- Verde) 3 e 1, tudo por dia. A Arena entra pelo Portão 6; o Camarote e o Lounge, pelo Portão 4, onde também sai o shuttle (D02).
+    -- documentos do Atlas, e batem com os PDFs da RBS: Master (D03, p. 11) 25 na Arena, 40 no Camarote e 10 no Lounge; Roxo (D04,
+    -- p. 8 do plano) 4 e 2; Verde (D05, p. 2) 4 e 2, tudo por dia. A Arena entra pelo Portão 6; o Camarote e o Lounge, pelo Portão 4,
+    -- onde também sai o shuttle (D02).
     INSERT INTO cortesia_cota (parceria_id, setor, dia, quantidade, com_shuttle, acesso)
     SELECT pp.id, v.setor, d.dia, v.qtd, v.shuttle, v.acesso
     FROM _amostra_parc pp
     JOIN (VALUES ('Cliente Amarelo', 'ARENA',    25, FALSE, 'Portão 6'),
                  ('Cliente Amarelo', 'CAMAROTE', 40, TRUE,  'Portão 4; shuttle via portão 4'),
                  ('Cliente Amarelo', 'LOUNGE',   10, TRUE,  'Portão 4; shuttle via portão 4'),
-                 ('Cliente Roxo',    'ARENA',     6, FALSE, 'P6'),
-                 ('Cliente Roxo',    'CAMAROTE',  3, TRUE,  'P4; shuttle via P4'),
-                 ('Cliente Verde',   'ARENA',     3, FALSE, 'P6'),
-                 ('Cliente Verde',   'CAMAROTE',  1, TRUE,  'P4; shuttle via P4')) AS v(cli, setor, qtd, shuttle, acesso)
+                 ('Cliente Roxo',    'ARENA',     4, FALSE, 'P6'),
+                 ('Cliente Roxo',    'CAMAROTE',  2, TRUE,  'P4; shuttle via P4'),
+                 ('Cliente Verde',   'ARENA',     4, FALSE, 'P6'),
+                 ('Cliente Verde',   'CAMAROTE',  2, TRUE,  'P4; shuttle via P4')) AS v(cli, setor, qtd, shuttle, acesso)
       ON v.cli = pp.cliente
     CROSS JOIN (VALUES ('SEXTA'), ('SABADO')) AS d(dia);
 
@@ -469,11 +491,11 @@ BEGIN
      ('Cliente Amarelo', 'ARENA',         'MARCA',           20), ('Cliente Amarelo', 'ARENA',    'AGENCIA', 60),
      ('Cliente Amarelo', 'CAMAROTE',      'MARCA',           10), ('Cliente Amarelo', 'CAMAROTE', 'AGENCIA', 20),
      ('Cliente Amarelo', 'SALA_IMPRENSA', 'MARCA',            2), ('Cliente Amarelo', 'SALA_CONTEUDO', 'EQUIPE_CONTEUDO', 3),
-     ('Cliente Roxo',    'ARENA',         'GERAL',            8),
-     ('Cliente Verde',   'ARENA',         'GERAL',           12)) AS v(cli, setor, benef, qtd) ON v.cli = pp.cliente;
+     ('Cliente Roxo',    'ARENA',         'GERAL',            5),
+     ('Cliente Verde',   'ARENA',         'GERAL',           10)) AS v(cli, setor, benef, qtd) ON v.cli = pp.cliente;
 
     -- [ITEM-6] As destinações respeitam a cota de cada setor e dia (o gatilho rn_cortesia_limite confere): a Amarelo usa 25 de 25
-    -- na Arena de sexta, a Verde usa 3 de 3 na de sexta e só 2 de 3 na de sábado, e o Roxo usa 4 de 6 na Arena e 2 de 3 no Camarote.
+    -- na Arena de sexta, a Verde usa 3 de 4 na de sexta e 2 de 4 na de sábado, e o Roxo usa 4 de 4 na Arena e 2 de 2 no Camarote.
     INSERT INTO cortesia_destinacao (cortesia_cota_id, destinatario_nome, quantidade, registrado_por, registrado_em)
     SELECT cc.id, 'Convidados da marca (lote)', v.qtd,
            (SELECT u.id FROM parceria_usuario pu JOIN usuario u ON u.id = pu.usuario_id
@@ -628,17 +650,27 @@ BEGIN
     JOIN parceria pa ON pa.id = ap.parceria_id JOIN patrocinador p ON p.id = pa.patrocinador_id
     WHERE ap.categoria = 'MIDIA';
 
+    -- [MESES] As exibições do Amarelo se espalham por três faixas de 31 dias (a planilha mensal da comprovação mostra três meses);
+    -- as dos outros dois seguem juntas, como antes. Tudo passado: a última faixa termina 28 dias atrás, no máximo.
+    -- [LINKS] As três primeiras exibições de cada linha de Instagram ou TikTok do Roxo trazem o endereço do post (fictício, https).
     -- Inserções: uma linha por exibição; CPM: 10 totais diários. Dois problemas reais de arquivo já entram aqui:
     --  (a) a emissora usa o perfil correto "@rede_atlantida" e o plano do Roxo traz "@prede_atlantida": essas linhas
     --      não casam com o plano e serão rejeitadas;
     --  (b) grafia alternativa da marca: a Rádio 92 escreve "Amarelo", e a tabela patrocinador_alias resolve.
-    INSERT INTO stg_veiculacao (carga_id, linha, patrocinador, veiculo, formato, espaco_programa, exibido_em, quantidade)
+    INSERT INTO stg_veiculacao (carga_id, linha, patrocinador, veiculo, formato, espaco_programa, exibido_em, quantidade, link)
     SELECT v_c1, row_number() OVER (ORDER BY a.id, g),
            CASE WHEN a.nome_canonico = 'Cliente Amarelo' AND a.veiculo = 'Rádio 92' THEN 'Amarelo' ELSE a.nome_canonico END,
            a.veiculo, a.formato,
            CASE WHEN a.espaco_programa = 'IG @prede_atlantida' THEN 'IG @rede_atlantida' ELSE a.espaco_programa END,
-           pg_temp.quando(60, '06:00') + g * interval '97 minutes' + a.id * interval '1 minute',
-           CASE WHEN a.unidade = 'CPM' THEN a.exibir / 10 ELSE 1 END
+           CASE WHEN a.nome_canonico = 'Cliente Amarelo' THEN pg_temp.quando(110, '06:00') + (g % 3) * interval '31 days'
+                ELSE pg_temp.quando(60, '06:00') END
+             + g * interval '97 minutes' + a.id * interval '1 minute',
+           CASE WHEN a.unidade = 'CPM' THEN a.exibir / 10 ELSE 1 END,
+           CASE WHEN a.nome_canonico = 'Cliente Roxo' AND g <= 3 AND a.espaco_programa ILIKE '%tik%tok%'
+                THEN 'https://www.tiktok.com/@planetaatlantida/video/' || lpad((a.id * 10 + g)::text, 10, '0')
+                WHEN a.nome_canonico = 'Cliente Roxo' AND g <= 3 AND (a.espaco_programa ILIKE 'IG %' OR a.espaco_programa ILIKE 'Instagram%')
+                THEN 'https://www.instagram.com/p/AMOSTRA' || lpad((a.id * 10 + g)::text, 6, '0') || '/'
+           END
     FROM _amostra_alvo a
     CROSS JOIN LATERAL generate_series(1, CASE WHEN a.unidade = 'CPM' THEN 10 ELSE a.exibir::int END) AS g;
 
@@ -651,13 +683,13 @@ BEGIN
     FROM (SELECT max(linha) AS m FROM stg_veiculacao WHERE carga_id = v_c1) x;
 
     -- (e) linhas repetidas dentro do próprio arquivo (as 2 exibições do VT de telão da Verde, com número de linha novo)
-    INSERT INTO stg_veiculacao (carga_id, linha, patrocinador, veiculo, formato, espaco_programa, exibido_em, quantidade)
-    SELECT carga_id, linha + 100000, patrocinador, veiculo, formato, espaco_programa, exibido_em, quantidade
+    INSERT INTO stg_veiculacao (carga_id, linha, patrocinador, veiculo, formato, espaco_programa, exibido_em, quantidade, link)
+    SELECT carga_id, linha + 100000, patrocinador, veiculo, formato, espaco_programa, exibido_em, quantidade, link
     FROM stg_veiculacao WHERE carga_id = v_c1 AND patrocinador = 'Cliente Verde' AND formato = 'VT telão 30"';
 
     -- Carga 2: o mesmo arquivo reenviado (as mesmas 1.489 linhas, com os mesmos problemas)
-    INSERT INTO stg_veiculacao (carga_id, linha, patrocinador, veiculo, formato, espaco_programa, exibido_em, quantidade)
-    SELECT v_c2, linha, patrocinador, veiculo, formato, espaco_programa, exibido_em, quantidade
+    INSERT INTO stg_veiculacao (carga_id, linha, patrocinador, veiculo, formato, espaco_programa, exibido_em, quantidade, link)
+    SELECT v_c2, linha, patrocinador, veiculo, formato, espaco_programa, exibido_em, quantidade, link
     FROM stg_veiculacao WHERE carga_id = v_c1;
 END $$;
 

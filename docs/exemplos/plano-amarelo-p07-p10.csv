@@ -1,0 +1,37 @@
+patrocinador,categoria,bloco,veiculo,formato,espaco_programa,janela,tipo_midia,quantidade_prevista,unidade,fonte_pagina
+Cliente Amarelo,MIDIA,Ação de conteúdo especial,RBS TV,Ação de conteúdo especial no Baita Sábado,Baita Sábado,Ao longo do projeto,CONTEUDO_DE_MARCA,1,INSERCAO,7
+Cliente Amarelo,MIDIA,Ação de conteúdo especial,RBS TV,Post no Instagram em collab com o perfil do anunciante,Instagram da RBS TV,Ao longo do projeto,CONTEUDO_DE_MARCA,1,INSERCAO,7
+Cliente Amarelo,MIDIA,Ação de conteúdo especial,RBS TV,Matéria publicitária no site da RBS TV,Site da RBS TV,Ao longo do projeto,CONTEUDO_DE_MARCA,1,INSERCAO,7
+Cliente Amarelo,MIDIA,Ação de conteúdo especial,RBS TV,"Minuto no Break (inserção de 60"")",Baita Sábado e programas da grade,Ao longo do projeto,CONTEUDO_DE_MARCA,15,INSERCAO,7
+Cliente Amarelo,MIDIA,Ação de conteúdo especial,ATL TV,Minuto no Break on demand,Fogo no Parquinho e playlist do Planeta,Ao longo do projeto,CONTEUDO_DE_MARCA,1,INSERCAO,7
+Cliente Amarelo,MIDIA,Redes sociais,X,Posts de serviço antes do evento,X @planetaatlantida,Antes do evento,ASSINADA,2,INSERCAO,8
+Cliente Amarelo,MIDIA,Redes sociais,Instagram,Stories de serviço durante o evento,IG @planetaatlantida,Durante o evento,ASSINADA,4,INSERCAO,8
+Cliente Amarelo,MIDIA,Redes sociais,Instagram,Post de serviço durante o evento,IG @planetaatlantida,Durante o evento,CONTEUDO_DE_MARCA,1,INSERCAO,8
+Cliente Amarelo,MIDIA,Redes sociais,Instagram,Short vídeo durante o evento,IG @planetaatlantida,Durante o evento,CONTEUDO_DE_MARCA,1,INSERCAO,8
+Cliente Amarelo,MIDIA,Redes sociais,atl.la,Matéria de conteúdo de marca,Site Atlântida,Antes do evento,CONTEUDO_DE_MARCA,1,INSERCAO,8
+Cliente Amarelo,MIDIA,Mídia display,atl.la,Aplicação de marca no site oficial do Planeta Atlântida,Site oficial do Planeta Atlântida,,ASSINADA,1,INSERCAO,8
+Cliente Amarelo,MIDIA,Mídia display,G1 e GE,Retângulo médio e billboard (local e nacional geolocalizado),G1 e GE,,ASSINADA,1900000,CPM,8
+Cliente Amarelo,MIDIA,Mídia display,G1 e GE,Oferta da Hora (local e nacional geolocalizado),G1 e GE,,ASSINADA,1000000,CPM,8
+Cliente Amarelo,MIDIA,Mídia display,Globoplay,Globo DAI,Globoplay,,PROPRIA,1300000,CPM,8
+Cliente Amarelo,MIDIA,Mídia display,G1 RS,Patrocínio da página do Planeta (DGlobo multiformatos),G1 RS,,PROPRIA,1,INSERCAO,8
+Cliente Amarelo,MIDIA,Mídia display,DGlobo,"Impressões multiformatos (G1 e GE, local e nacional)",G1 e GE,,PROPRIA,5600000,CPM,8
+Cliente Amarelo,MIDIA,Mídia display,GaúchaZH,Impressões multiformatos,GZH,,PROPRIA,2000000,CPM,8
+Cliente Amarelo,MIDIA,Mídia display,atl.la,Impressões no site da ATL,Site Atlântida,,PROPRIA,200000,CPM,8
+Cliente Amarelo,MIDIA,Ação de conteúdo integrado,Rádio Atlântida,"Inserções indeterminadas com citação de 5"" de cada marca",Rádio ATL,Ao longo do projeto,ASSINADA,60,INSERCAO,9
+Cliente Amarelo,MIDIA,Ação de conteúdo integrado,Instagram,Posts feed com marcação e assinatura das marcas,Instagram do evento,Ao longo do projeto,ASSINADA,3,INSERCAO,9
+Cliente Amarelo,MIDIA,Ação de conteúdo integrado,Instagram,"Vídeos de até 60"" com assinatura das marcas",IG e TikTok do festival,Ao longo do projeto,ASSINADA,6,INSERCAO,9
+Cliente Amarelo,MIDIA,Ação de conteúdo integrado,Rádio Atlântida,Inserções indeterminadas (conteúdo exclusivo da marca),Rádio ATL RS,Ao longo do projeto,CONTEUDO_DE_MARCA,40,INSERCAO,9
+Cliente Amarelo,MIDIA,Ação de conteúdo integrado,Instagram,Post feed no Instagram do evento,Instagram do evento,Ao longo do projeto,CONTEUDO_DE_MARCA,1,INSERCAO,9
+Cliente Amarelo,MIDIA,Ação de conteúdo integrado,Instagram,"Vídeo de até 60"" no Instagram do festival",Instagram do festival,Ao longo do projeto,CONTEUDO_DE_MARCA,1,INSERCAO,9
+Cliente Amarelo,MIDIA,Ação de conteúdo integrado,TikTok,"Vídeo de até 60"" no TikTok do festival",TikTok do festival,Ao longo do projeto,CONTEUDO_DE_MARCA,1,INSERCAO,9
+Cliente Amarelo,MIDIA,Transmissão oficial,ATL TV,Vinhetas de abertura e encerramento (logo),Transmissão ATL TV,Durante a transmissão,ASSINADA,4,INSERCAO,10
+Cliente Amarelo,MIDIA,Transmissão oficial,ATL TV,Logo em rodízio durante a transmissão,Transmissão ATL TV,Durante a transmissão,ASSINADA,2,INSERCAO,10
+Cliente Amarelo,MIDIA,Transmissão oficial,ATL TV,"Vídeos de entrevistas com artistas, com corte no IG e no TikTok (logo)",Transmissão ATL TV,Durante a transmissão,ASSINADA,16,INSERCAO,10
+Cliente Amarelo,MIDIA,Transmissão oficial,Rádio Atlântida,Citações de marca durante a transmissão (vaza na ATL TV),Transmissão Rádio Atlântida,Durante a transmissão,ASSINADA,8,INSERCAO,10
+Cliente Amarelo,MIDIA,Transmissão oficial,RBS TV,"Vinhetas de abertura com assinatura de 5""",Transmissão RBS TV a partir das 23h,Durante a transmissão,ASSINADA,2,INSERCAO,10
+Cliente Amarelo,MIDIA,Transmissão oficial,RBS TV,"Vinhetas de encerramento com assinatura de 5""",Transmissão RBS TV a partir das 23h,Durante a transmissão,ASSINADA,2,INSERCAO,10
+Cliente Amarelo,MIDIA,Transmissão oficial,RBS TV,Insert de marca em rodízio em 3 blocos (logo),Transmissão RBS TV a partir das 23h,Durante a transmissão,ASSINADA,3,INSERCAO,10
+Cliente Amarelo,MIDIA,Transmissão oficial,Rádio Atlântida,"Comerciais de 30"" no break da transmissão",Transmissão Rádio Atlântida,Durante a transmissão,PROPRIA,10,INSERCAO,10
+Cliente Amarelo,MIDIA,Transmissão oficial,RBS TV,"Inserts de squeeze de 20"" (formato em L)",Transmissão RBS TV a partir das 23h,Durante a transmissão,PROPRIA,2,INSERCAO,10
+Cliente Amarelo,MIDIA,Transmissão oficial,RBS TV,"Comerciais de 30"" no break da transmissão",Transmissão RBS TV a partir das 23h,Durante a transmissão,PROPRIA,4,INSERCAO,10
+Cliente Amarelo,MIDIA,Transmissão oficial,RBS TV,Ação de conteúdo plena direto da ativação no evento,Transmissão RBS TV a partir das 23h,Durante a transmissão,CONTEUDO_DE_MARCA,1,INSERCAO,10

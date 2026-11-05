@@ -10,6 +10,7 @@ import { CabecalhoSecao } from '../../componentes/CabecalhoSecao'
 import { Cartao, Indicador } from '../../componentes/Cartao'
 import { Carregando } from '../../componentes/Carregando'
 import { Filtros, Seletor } from '../../componentes/Formulario'
+import { NumerosDaEdicao } from '../../componentes/NumerosDaEdicao'
 import { Status } from '../../componentes/Status'
 import { Tabela } from '../../componentes/Tabela'
 import { dataHora } from '../../util/formatar'
@@ -27,6 +28,9 @@ export function Relatorios() {
   const todas = lista.dado ?? []
   const contar = (codigo: Situacao) => todas.filter((linha) => codigo === 'TODAS' || linha.situacao === codigo).length
   const visiveis = todas.filter((linha) => situacao === 'TODAS' || linha.situacao === situacao)
+  // A edição escolhida, ou a mais nova: é dela que os números do festival são informados.
+  const edicaoDosNumeros =
+    (eventos.dado ?? []).find((item) => String(item.id) === eventoId) ?? [...(eventos.dado ?? [])].sort((a, b) => b.edicao - a.edicao)[0]
 
   async function agir(parceriaId: number, fazer: () => Promise<unknown>) {
     setFalha(null)
@@ -47,20 +51,20 @@ export function Relatorios() {
     const botao = 'text-xs font-bold whitespace-nowrap hover:underline disabled:opacity-40'
     return (
       <div className="flex justify-end gap-3">
-        <button type="button" className={botao} disabled={ocupada} onClick={() => agir(linha.parceriaId, () => gerarRelatorio(linha.parceriaId))}>
+        <button type="button" className={botao} disabled={ocupada} aria-label={`${relatorio ? 'Nova versão do relatório' : 'Gerar o relatório'} de ${linha.patrocinador}`} onClick={() => agir(linha.parceriaId, () => gerarRelatorio(linha.parceriaId))}>
           {relatorio ? 'Nova versão' : 'Gerar'}
         </button>
         {relatorio?.status === 'RASCUNHO' && (
-          <button type="button" className={botao} disabled={ocupada} onClick={() => agir(linha.parceriaId, () => mudarStatusRelatorio(relatorio.id, 'VALIDADO'))}>
+          <button type="button" className={botao} disabled={ocupada} aria-label={`Validar o relatório de ${linha.patrocinador}`} onClick={() => agir(linha.parceriaId, () => mudarStatusRelatorio(relatorio.id, 'VALIDADO'))}>
             Validar
           </button>
         )}
         {relatorio?.status === 'VALIDADO' && (
-          <button type="button" className={`${botao} text-[#007a2a]`} disabled={ocupada} onClick={() => agir(linha.parceriaId, () => mudarStatusRelatorio(relatorio.id, 'DISPONIBILIZADO'))}>
+          <button type="button" className={`${botao} text-[#007a2a]`} disabled={ocupada} aria-label={`Disponibilizar o relatório de ${linha.patrocinador}`} onClick={() => agir(linha.parceriaId, () => mudarStatusRelatorio(relatorio.id, 'DISPONIBILIZADO'))}>
             Disponibilizar
           </button>
         )}
-        <Link to={`/parceria/${linha.parceriaId}/relatorio`} className={botao}>
+        <Link to={`/parceria/${linha.parceriaId}/relatorio`} className={botao} aria-label={`Abrir o relatório de ${linha.patrocinador}`}>
           Abrir →
         </Link>
       </div>
@@ -155,7 +159,15 @@ export function Relatorios() {
             />
           )}
         </Carregando>
+        {/* As duas colunas de números se explicam (U03). */}
+        <p className="mt-3 text-xs font-medium text-texto-2">
+          Indicadores: dos 17 do relatório, quantos têm dado e quantos saem como indisponíveis, com o motivo. Faltantes: o que impede
+          ou enfraquece o relatório, como mídia abaixo do previsto, aplicação sem foto ou entrega pendente. O pós-venda de cada
+          parceria se publica em Abrir.
+        </p>
       </Cartao>
+
+      {edicaoDosNumeros && <NumerosDaEdicao key={edicaoDosNumeros.id} eventoId={edicaoDosNumeros.id} edicao={edicaoDosNumeros.edicao} />}
     </div>
   )
 }

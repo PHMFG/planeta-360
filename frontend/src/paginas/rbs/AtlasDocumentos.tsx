@@ -6,12 +6,14 @@ import {
   enviarDocumento,
   listarDocumentos,
   listarTrechos,
+  marcarPaginasForaDoAtlas,
   mudarStatusDoDocumento,
   type AcaoDoDocumento,
   type CodigoDaCota,
   type Documento,
   type EscopoDoDocumento,
   type StatusDoDocumento,
+  type TipoDeSuspeita,
   type TipoDoDocumento,
 } from '../../api/documentos'
 import { listarEventos, listarParcerias, type Evento } from '../../api/parcerias'
@@ -80,6 +82,20 @@ const ACOES: Record<AcaoDoDocumento, { nome: string; titulo: string; texto: (doc
   },
 }
 
+const NOME_DA_SUSPEITA: Record<TipoDeSuspeita, string> = { CPF: 'CPF', RG: 'RG', CONTATOS: 'lista de telefones ou e-mails' }
+
+/** "p. 4 (lista de telefones ou e-mails)": onde o detector travou, sem nunca repetir o valor achado. [R2.1] */
+function ondeTravou(documento: Documento) {
+  const suspeitas = documento.suspeitas ?? []
+  if (suspeitas.length === 0) return null
+  const porPagina = new Map<number, string[]>()
+  for (const { pagina, tipo } of suspeitas) porPagina.set(pagina, [...(porPagina.get(pagina) ?? []), NOME_DA_SUSPEITA[tipo]])
+  return [...porPagina.entries()].map(([pagina, tipos]) => `p. ${pagina} (${tipos.join(', ')})`).join('; ')
+}
+
+/** "4, 7" a partir da lista; "" se vazia. */
+const listaDePaginas = (paginas: number[] | undefined) => (paginas ?? []).join(', ')
+
 function alcance(documento: Documento) {
   const edicao = documento.evento.edicao
   if (documento.escopo === 'COTA') return `Cota ${documento.cota?.nome ?? ''} · ${edicao}`
@@ -98,6 +114,7 @@ function EnvioDeDocumento({ eventos, aoEnviar }: { eventos: Dados<Evento[]>; aoE
   const [eventoId, setEventoId] = useState('')
   const [cota, setCota] = useState<CodigoDaCota>('MASTER')
   const [parceriaId, setParceriaId] = useState('')
+  const [foraDoAtlas, setForaDoAtlas] = useState('')
   const [erros, setErros] = useState<Record<string, string>>({})
   const [falha, setFalha] = useState<string | null>(null)
   const [enviando, setEnviando] = useState(false)
@@ -108,6 +125,10 @@ function EnvioDeDocumento({ eventos, aoEnviar }: { eventos: Dados<Evento[]>; aoE
   async function enviar(evento: FormEvent) {
     evento.preventDefault()
     if (!arquivo) return setFalha('Escolha o documento.')
+    if (foraDoAtlas.trim() && !/^\s*\d+(\s*,\s*\d+)*\s*$/.test(foraDoAtlas)) {
+      setErros({ paginasForaDoAtlas: 'Use só os números das páginas, separados por vírgula (por exemplo: 4,7).' })
+      return
+    }
     setFalha(null)
     setErros({})
     setEnviado(null)
@@ -122,12 +143,14 @@ function EnvioDeDocumento({ eventos, aoEnviar }: { eventos: Dados<Evento[]>; aoE
         eventoId: escopo !== 'PARCERIA' && edicao ? Number(edicao) : undefined,
         cota: escopo === 'COTA' ? cota : undefined,
         parceriaId: escopo === 'PARCERIA' && parceriaId ? Number(parceriaId) : undefined,
+        paginasForaDoAtlas: foraDoAtlas.trim() || undefined,
       })
       setEnviado(criado)
       setArquivo(null)
       setCampoDoArquivo((atual) => atual + 1)
       setTitulo('')
       setChave('')
+      setForaDoAtlas('')
       aoEnviar()
     } catch (erro) {
       if (erro instanceof ErroApi) {
@@ -217,6 +240,15 @@ function EnvioDeDocumento({ eventos, aoEnviar }: { eventos: Dados<Evento[]>; aoE
               ))}
             </Seletor>
           )}
+          <Campo
+            rotulo="Páginas fora do Atlas (opcional)"
+            value={foraDoAtlas}
+            onChange={(campo) => setForaDoAtlas(campo.target.value)}
+            erro={erros.paginasForaDoAtlas}
+            ajuda="Os números das páginas, separados por vírgula (por exemplo: 4,7). Elas não entram no índice nem são lidas pelo Atlas; o PDF continua inteiro no visualizador."
+            inputMode="numeric"
+            maxLength={120}
+          />
         </div>
         {falha && <Aviso tipo="falha" titulo={falha} />}
         {enviado && <ResultadoDoEnvio documento={enviado} />}
@@ -224,6 +256,7 @@ function EnvioDeDocumento({ eventos, aoEnviar }: { eventos: Dados<Evento[]>; aoE
           <Botao type="submit" carregando={enviando} disabled={!arquivo} icone="ri-upload-cloud-2-line" className="max-sm:w-full">
             Enviar
           </Botao>
+          {!arquivo && <p className="mt-2 text-xs font-medium text-texto-2">Escolha o documento acima para enviar.</p>}
         </div>
       </form>
     </Cartao>
@@ -241,7 +274,8 @@ function ResultadoDoEnvio({ documento }: { documento: Documento }) {
   if (documento.contemDadosPessoais) {
     return (
       <Aviso tipo="restrito" titulo={`${documento.titulo}: parece ter dados pessoais`}>
-        Ele não pode ser aprovado. Tire os dados pessoais e envie de novo.
+        {ondeTravou(documento) ? `Onde: ${ondeTravou(documento)}. ` : ''}Ele não pode ser aprovado assim. Tire os dados e envie de novo, ou
+        deixe a página fora do Atlas, no botão "Páginas fora do Atlas" da lista abaixo.
       </Aviso>
     )
   }
@@ -257,7 +291,8 @@ function Dado({ rotulo, children }: { rotulo: string; children: ReactNode }) {
   )
 }
 
-function LinhaDoDocumento({ documento, aoAgir, aoVerTrechos }: { documento: Documento; aoAgir: (acao: AcaoDoDocumento) => void; aoVerTrechos: () => void }) {
+function LinhaDoDocumento({ documento, aoAgir, aoVerTrechos, aoMarcarPaginas }: { documento: Documento; aoAgir: (acao: AcaoDoDocumento) => void; aoVerTrechos: () => void; aoMarcarPaginas: () => void }) {
+  const aguardando = documento.status === 'AGUARDANDO_APROVACAO'
   return (
     <li className="flex flex-col gap-3 border-b border-borda py-4 first:pt-0 last:border-b-0 last:pb-0" aria-label={`${documento.titulo}, versão ${documento.versao}`}>
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
@@ -270,7 +305,17 @@ function LinhaDoDocumento({ documento, aoAgir, aoVerTrechos }: { documento: Docu
         <Status codigo={documento.status} />
       </div>
       {documento.erro && <p className="text-xs font-semibold text-[#c8203f]">{documento.erro}</p>}
-      {documento.contemDadosPessoais && <p className="text-xs font-semibold text-[#c8203f]">Parece ter dados pessoais: não pode ser aprovado. Tire os dados e envie de novo.</p>}
+      {documento.contemDadosPessoais && (
+        <p className="text-xs font-semibold text-[#c8203f]">
+          Parece ter dados pessoais{ondeTravou(documento) ? ` na ${ondeTravou(documento)}` : ''}: não pode ser aprovado assim. Tire os dados e envie de
+          novo{aguardando ? ', ou deixe a página fora do Atlas' : ''}.
+        </p>
+      )}
+      {(documento.paginasForaDoAtlas?.length ?? 0) > 0 && (
+        <p className="text-xs font-semibold">
+          Fora do Atlas: p. {listaDePaginas(documento.paginasForaDoAtlas)}. O PDF continua inteiro no visualizador.
+        </p>
+      )}
       {documento.modeloDiferente && <p className="text-xs font-semibold text-[#8a6a00]">Indexado com outro modelo de embeddings: a busca o ignora.</p>}
       <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:grid-cols-3 lg:grid-cols-6">
         <Dado rotulo="Páginas">{documento.paginas === null ? '—' : numero(documento.paginas)}</Dado>
@@ -280,15 +325,20 @@ function LinhaDoDocumento({ documento, aoAgir, aoVerTrechos }: { documento: Docu
         <Dado rotulo="Embeddings">{documento.embeddingsMs === null ? '—' : duracao(documento.embeddingsMs)}</Dado>
         <Dado rotulo="Enviado em">{dataHora(documento.enviadoEm)}</Dado>
       </dl>
-      {(documento.acoes.length > 0 || documento.trechos > 0) && (
+      {(documento.acoes.length > 0 || documento.trechos > 0 || aguardando) && (
         <div className="flex flex-wrap gap-2">
           {documento.acoes.map((acao) => (
-            <Botao key={acao} variante={acao === 'APROVAR' ? 'primario' : 'secundario'} className="h-10 min-w-0 px-4" onClick={() => aoAgir(acao)}>
+            <Botao key={acao} variante={acao === 'APROVAR' ? 'primario' : 'secundario'} className="h-10 min-w-0 px-4" aria-label={`${ACOES[acao].nome}: ${documento.titulo}, versão ${documento.versao}`} onClick={() => aoAgir(acao)}>
               {ACOES[acao].nome}
             </Botao>
           ))}
+          {aguardando && documento.paginas !== null && (
+            <Botao variante="secundario" className="h-10 min-w-0 px-4" aria-label={`Páginas fora do Atlas: ${documento.titulo}, versão ${documento.versao}`} onClick={aoMarcarPaginas}>
+              Páginas fora do Atlas
+            </Botao>
+          )}
           {documento.trechos > 0 && (
-            <Botao variante="secundario" className="h-10 min-w-0 px-4" onClick={aoVerTrechos}>
+            <Botao variante="secundario" className="h-10 min-w-0 px-4" aria-label={`Ver trechos: ${documento.titulo}, versão ${documento.versao}`} onClick={aoVerTrechos}>
               Ver trechos
             </Botao>
           )}
@@ -339,6 +389,55 @@ function ModalDaAcao({ documento, acao, aoFechar, aoConcluir }: { documento: Doc
   )
 }
 
+/** R2.1 (rota 103): a RBS marca as páginas que não entram no índice, enquanto o documento aguarda aprovação. */
+function ModalDasPaginas({ documento, aoFechar, aoConcluir }: { documento: Documento; aoFechar: () => void; aoConcluir: () => void }) {
+  const sugeridas = documento.paginasForaDoAtlas?.length ? documento.paginasForaDoAtlas : (documento.paginasSuspeitas ?? [])
+  const [texto, setTexto] = useState(listaDePaginas(sugeridas))
+  const [erro, setErro] = useState<string | undefined>()
+  const [falha, setFalha] = useState<string | null>(null)
+  const [enviando, setEnviando] = useState(false)
+
+  async function salvar(evento: FormEvent) {
+    evento.preventDefault()
+    setErro(undefined)
+    setFalha(null)
+    const partes = texto.split(',').map((parte) => parte.trim()).filter(Boolean)
+    if (partes.some((parte) => !/^\d+$/.test(parte))) return setErro('Use só números separados por vírgula, como 4 ou 4, 7.')
+    setEnviando(true)
+    try {
+      await marcarPaginasForaDoAtlas(documento.id, partes.map(Number))
+      aoConcluir()
+    } catch (falhou) {
+      if (falhou instanceof ErroApi && falhou.campos.paginasForaDoAtlas) setErro(falhou.campos.paginasForaDoAtlas)
+      else setFalha(falhou instanceof ErroApi ? falhou.message : 'Não foi possível marcar as páginas.')
+    } finally {
+      setEnviando(false)
+    }
+  }
+
+  return (
+    <Modal aberto titulo="Páginas fora do Atlas" legenda={`${documento.titulo} · versão ${documento.versao} · ${numero(documento.paginas)} páginas`} aoFechar={aoFechar}>
+      <form onSubmit={salvar} className="flex flex-col gap-4" noValidate>
+        {ondeTravou(documento) && <Aviso tipo="restrito" titulo={`O detector travou a aprovação: ${ondeTravou(documento)}`} />}
+        <p className="text-sm">
+          As páginas marcadas não são lidas pelo Atlas nem entram no índice. O PDF continua inteiro no visualizador, para a RBS e para a
+          marca. Deixe o campo vazio para não tirar nenhuma.
+        </p>
+        <Campo rotulo="Páginas" value={texto} onChange={(campo) => setTexto(campo.target.value)} erro={erro} ajuda="Números separados por vírgula, até 20 páginas." inputMode="numeric" maxLength={120} />
+        {falha && <Aviso tipo="falha" titulo={falha} />}
+        <div className="flex flex-wrap justify-end gap-2">
+          <Botao variante="secundario" className="min-w-0 max-sm:flex-1" onClick={aoFechar}>
+            Cancelar
+          </Botao>
+          <Botao type="submit" carregando={enviando} className="min-w-0 max-sm:flex-1">
+            Salvar páginas
+          </Botao>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
 function ModalDosTrechos({ documento, aoFechar }: { documento: Documento; aoFechar: () => void }) {
   const [pagina, setPagina] = useState(0)
   const trechos = useDados(() => listarTrechos(documento.id, pagina), [documento.id, pagina])
@@ -382,6 +481,7 @@ export function AbaDocumentos() {
   const [pagina, setPagina] = useState(0)
   const [pedido, setPedido] = useState<{ documento: Documento; acao: AcaoDoDocumento } | null>(null)
   const [trechosDe, setTrechosDe] = useState<Documento | null>(null)
+  const [paginasDe, setPaginasDe] = useState<Documento | null>(null)
   const documentos = useDados(
     () => listarDocumentos({ eventoId: eventoId ? Number(eventoId) : undefined, escopo: escopo || undefined, status: status || undefined, tipo: tipo || undefined, q: titulo.trim() || undefined, pagina }),
     [eventoId, escopo, status, tipo, titulo, pagina],
@@ -462,7 +562,13 @@ export function AbaDocumentos() {
             <>
               <ul className="flex flex-col">
                 {dado.itens.map((documento) => (
-                  <LinhaDoDocumento key={documento.id} documento={documento} aoAgir={(acao) => setPedido({ documento, acao })} aoVerTrechos={() => setTrechosDe(documento)} />
+                  <LinhaDoDocumento
+                    key={documento.id}
+                    documento={documento}
+                    aoAgir={(acao) => setPedido({ documento, acao })}
+                    aoVerTrechos={() => setTrechosDe(documento)}
+                    aoMarcarPaginas={() => setPaginasDe(documento)}
+                  />
                 ))}
               </ul>
               <Paginacao pagina={dado.pagina} tamanho={dado.tamanho} total={dado.total} aoMudar={setPagina} />
@@ -485,6 +591,16 @@ export function AbaDocumentos() {
         />
       )}
       {trechosDe && <ModalDosTrechos documento={trechosDe} aoFechar={() => setTrechosDe(null)} />}
+      {paginasDe && (
+        <ModalDasPaginas
+          documento={paginasDe}
+          aoFechar={() => setPaginasDe(null)}
+          aoConcluir={() => {
+            setPaginasDe(null)
+            documentos.recarregar()
+          }}
+        />
+      )}
     </div>
   )
 }

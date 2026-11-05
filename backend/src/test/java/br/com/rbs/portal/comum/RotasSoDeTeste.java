@@ -6,6 +6,7 @@ import jakarta.validation.constraints.Pattern;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -26,10 +27,25 @@ class RotasSoDeTeste {
 
     private final JdbcClient jdbc;
     private final VerificadorDeAcesso verificador;
+    private final TransactionTemplate transacao;
 
-    RotasSoDeTeste(JdbcClient jdbc, VerificadorDeAcesso verificador) {
+    RotasSoDeTeste(JdbcClient jdbc, VerificadorDeAcesso verificador, TransactionTemplate transacao) {
         this.jdbc = jdbc;
         this.verificador = verificador;
+        this.transacao = transacao;
+    }
+
+    /**
+     * Viola uma regra única com um valor canário: grava o patrocinador e tenta gravar de novo. A mensagem do PostgreSQL cita o
+     * valor da linha. A transação desfaz a primeira gravação (a exceção sai do bloco), então nada fica no banco.
+     */
+    @GetMapping("/violacao-com-valor")
+    String violacaoComValor(@RequestParam String valor) {
+        transacao.executeWithoutResult(status -> {
+            jdbc.sql("INSERT INTO patrocinador (nome_canonico) VALUES (:nome)").param("nome", valor).update();
+            jdbc.sql("INSERT INTO patrocinador (nome_canonico) VALUES (:nome)").param("nome", valor).update();
+        });
+        return "não deveria chegar aqui";
     }
 
     /** Dispara o gatilho rn_vinculo_exige_autorizacao: vincular quem não foi autorizado naquela parceria. */

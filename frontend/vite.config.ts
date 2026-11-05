@@ -13,5 +13,8 @@ export default defineConfig({
     proxy: {
       '/api': process.env.PORTAL_API_URL ?? 'http://localhost:8080',
     },
+    // As saídas dos testes de ponta a ponta ficam dentro de frontend/: sem isto, o Vite recarregava a página aberta a cada
+    // relatório HTML que o Playwright gravava, no meio de outro teste.
+    watch: { ignored: ['**/playwright-report/**', '**/test-results/**', '**/resultados-e2e/**', '**/e2e/capturas/**'] },
   },
 })
