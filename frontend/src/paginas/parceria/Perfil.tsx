@@ -19,6 +19,7 @@ import { Botao } from '../../componentes/Botao'
 import { CabecalhoSecao } from '../../componentes/CabecalhoSecao'
 import { Campo, focarPrimeiroErro } from '../../componentes/Campo'
 import { CompraDeIngressos, PlanoComercialDoPerfil } from '../../componentes/DocumentosDoPerfil'
+import { DireitosPorContrato } from '../../componentes/DireitosPorContrato'
 import { CodigoAtivacao } from '../../componentes/CodigoAtivacao'
 import { Cartao, Grade2 } from '../../componentes/Cartao'
 import { Carregando } from '../../componentes/Carregando'
@@ -379,6 +380,21 @@ export function Perfil() {
               </Cartao>
 
               <AbasLiberadas detalhe={detalhe} rbs={rbs} aoSalvar={salvo} />
+
+              {rbs && (
+                <>
+                  <DireitosPorContrato parceria={parceria} />
+                  {/* Figma R02: os dois avisos da configuração administrativa. */}
+                  <Aviso titulo="Isolamento por patrocinador">
+                    Arquivos, resultados e relatórios pertencem à empresa selecionada. Confira a parceria aberta antes de publicar ou de mudar
+                    acessos.
+                  </Aviso>
+                  <Aviso titulo="Visibilidade das 7 abas · controle da RBS">
+                    Perfil, Aplicações, Mídia, Cortesias, Credenciamento, Pesquisa e Contrato: liberar, fechar ou ocultar conforme o contrato. A
+                    Pesquisa é só da cota Master.
+                  </Aviso>
+                </>
+              )}
 
               {rbs ? (
                 <AcessosRbs parceriaId={detalhe.id} />
