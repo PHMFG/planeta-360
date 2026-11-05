@@ -64,7 +64,7 @@ export function Inicio({ parceria, llm, relatorioDisponivel, conversas, texto, a
               : 'O Atlas está sem o modelo de linguagem agora. Tente de novo mais tarde.'
             : llm
               ? 'Monte o relatório da sua ativação ou pergunte sobre os números da parceria e os documentos do evento.'
-              : 'Monte o relatório da sua ativação com os números do portal.'}
+              : 'Monte o relatório da sua ativação com os números do portal. As perguntas em texto voltam quando o modelo de linguagem estiver ligado.'}
         </p>
         {llm && (
           <div className="mt-4 w-full">
