@@ -218,7 +218,7 @@ No Windows (PowerShell): `$env:ATLAS_LLM="openai"; $env:OPENCODE_API_KEY="sua-ch
 
 Todo número do chat tem origem: vem da base do portal, do que a marca informou ou de um documento citado na mesma frase. O servidor confere isso antes de a frase chegar à tela. Use só dados fictícios enquanto o provedor estiver em teste.
 
-**Regras de envio.** Arquivos de até 20 MB nos formatos PDF, PNG, JPG (e JPEG), DOCX, XLSX, PPTX, CSV, MP4, MP3 e ZIP. A API confere o conteúdo, e não só o nome. O download sai sempre como anexo. Cada envio aceita uma observação (até 500 caracteres), que fica na versão e no histórico. As planilhas de carga são CSV em UTF-8 com vírgula como separador (no Excel, "Salvar como" e "CSV UTF-8"); as colunas estão em `docs/banco.md` e há exemplos em `docs/exemplos/`. Linha com data ou quantidade ilegível é rejeitada com o motivo e o formato esperado, e o resto do arquivo entra.
+**Regras de envio.** Arquivos de até 20 MB nos formatos PDF, PNG, JPG (e JPEG), DOC, DOCX, XLS, XLSX, PPT, PPTX, CSV, MP4, MP3 e ZIP (os do Office antigo só sem macro VBA). A API confere o conteúdo, e não só o nome. O download sai sempre como anexo. Cada envio aceita uma observação (até 500 caracteres), que fica na versão e no histórico. As planilhas de carga são CSV em UTF-8 com vírgula como separador (no Excel, "Salvar como" e "CSV UTF-8"); as colunas estão em `docs/banco.md` e há exemplos em `docs/exemplos/`. Linha com data ou quantidade ilegível é rejeitada com o motivo e o formato esperado, e o resto do arquivo entra.
 
 ## Testes
 
@@ -233,10 +233,10 @@ No front, `npm run build` confere os tipos e gera a versão de produção; `npm 
 
 **No navegador.** Na primeira vez, `npx playwright install chromium`, em `frontend/`. Os testes escrevem no banco, então dizer onde eles rodam é obrigatório, e a preparação recusa o banco `portal`:
 
-- `PORTAL_E2E_PILHA=N npm run e2e` (N de 1 a 9) usa a pilha N do `.claude/pilhas-de-teste.sh`: front na 518N, API na 808N, banco `portal_qaN`.
+- `PORTAL_E2E_PILHA=N npm run e2e` (N de 1 a 9) usa a pilha N do `.claude/pilhas-de-teste.sh` (um script local, fora do Git): front na 518N, API na 808N, banco `portal_qaN`.
 - `PORTAL_E2E_PILHA=dev npm run e2e` sobe o front na porta 5190 (ou na de `E2E_PORTA_FRONT`) e fala com a API do `scripts/atlas-dev.sh`, na 8080 (ou na de `ATLAS_DEV_PORTA`). Essa API precisa subir com `PORTAL_BD_URL` apontando para um banco de teste.
 
-As capturas ficam em `frontend/e2e/capturas/`, e o resultado de cada teste em `frontend/test-results/resultado.json`. Os testes marcados `@vivo` usam o modelo de verdade; sem chave, rode `npm run e2e -- --grep-invert @vivo`. O kit de documentos precisa estar indexado (`ATLAS_EMBEDDINGS` em `gemini` ou `teste`), porque os testes das fontes dependem dele.
+As capturas ficam em `frontend/e2e/capturas/`, e o resultado de cada teste em `frontend/resultados-e2e/resultado.json` (ou no nome dado em `E2E_RESULTADO`). Os testes marcados `@vivo` usam o modelo de verdade; sem chave, rode `npm run e2e -- --grep-invert @vivo`. O kit de documentos precisa estar indexado (`ATLAS_EMBEDDINGS` em `gemini` ou `teste`), porque os testes das fontes dependem dele.
 
 **Ensaio da demonstração.** `frontend/e2e/demo.spec.ts` percorre o roteiro inteiro com o modelo e o Gemini de verdade: os documentos da RBS e o envio do FAQ, o prazo com o PDF aberto na página citada, a conta com "Como calculei", os dias úteis, o relatório até o PDF, o pedido do pós-evento e o modelo em branco, o ataque como Cliente Roxo e o diagnóstico. Ele precisa do perfil `demo` num banco recém-criado, e cada turno tem até 30 s:
 
@@ -300,7 +300,7 @@ Opções: `--split` (`ajuste`, `reserva` ou `todos`), `--categoria`, `--casos`, 
 
 ```text
 backend/      API Spring Boot (pacotes comum, acesso, parceria, materiais, pesquisa, consolidacao, relatorio,
-              aplicacoes, dados, documentos, prazos, atlas)
+              aplicacoes, dados, documentos, prazos, cortesias, credenciamento, contrato, atlas)
               src/main/resources/db/migration  estrutura, regras e dados base (Flyway)
               src/main/resources/db/dev        amostra de demonstração
               src/main/resources/atlas         prompts, modelos do relatório, modelos em branco e as perguntas do JEV

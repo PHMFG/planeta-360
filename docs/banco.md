@@ -2,7 +2,7 @@
 
 Este documento explica o banco da Entrega 2. É para quem vai ler, testar ou mexer nele.
 O banco é o PostgreSQL (rodamos na versão 18; a mínima é a 15). As tabelas são criadas pelo Flyway.
-Os números: **50 tabelas de negócio (mais a `flyway_schema_history`, do Flyway), 8 visões, 9 funções e 34 gatilhos de regra**. As funções são as 4 de carga e de relatório (`fn_carregar_veiculacoes`, `fn_carregar_pesquisa`, `fn_carregar_plano`, da V7, e `fn_gerar_relatorio`), as 2 que formatam números (`fn_numero_br` e `fn_pct_truncado`, da V4; a `fn_pct_arredondado` da V4 saiu na V6) e as 3 dos documentos do Atlas (`fn_texto_de_busca`, `fn_trava_grupo_documento` e `fn_publicar_documento`, da V11; a V12 troca o corpo da primeira). Não contam aqui as funções `tg_*`, uma por gatilho. A V16 acrescentou 1 tabela (`entrega_conteudo`) e 2 gatilhos (`rn_contrato_arquivo` e `rn_entrega_conteudo_imutavel`). A V18 acrescentou 1 tabela (`evento_posvenda`) e 2 gatilhos (`rn_evento_posvenda_conteudo` e `rn_evento_posvenda_imutavel`). A V17 (o manual do Atlas) chega por outra branch e muda estas contagens quando entrar.
+Os números: **50 tabelas de negócio (mais a `flyway_schema_history`, do Flyway), 8 visões, 9 funções e 34 gatilhos de regra**. As funções são as 4 de carga e de relatório (`fn_carregar_veiculacoes`, `fn_carregar_pesquisa`, `fn_carregar_plano`, da V7, e `fn_gerar_relatorio`), as 2 que formatam números (`fn_numero_br` e `fn_pct_truncado`, da V4; a `fn_pct_arredondado` da V4 saiu na V6) e as 3 dos documentos do Atlas (`fn_texto_de_busca`, `fn_trava_grupo_documento` e `fn_publicar_documento`, da V11; a V12 troca o corpo da primeira). Não contam aqui as funções `tg_*`, uma por gatilho. A V16 acrescentou 1 tabela (`entrega_conteudo`) e 2 gatilhos (`rn_contrato_arquivo` e `rn_entrega_conteudo_imutavel`). A V18 acrescentou 1 tabela (`evento_posvenda`) e 2 gatilhos (`rn_evento_posvenda_conteudo` e `rn_evento_posvenda_imutavel`). A V17 acrescentou 1 gatilho (`rn_documento_paginas_ignoradas`) e 2 colunas em `documento`.
 
 **A V11 pede o pgvector.** O banco precisa da extensão `vector` e do papel `atlas_ro` antes de subir a API: rode `scripts/preparar-banco-atlas.sh` (um superusuário instala; a migração só confere e, sem eles, recusa subir com a frase "Rode scripts/preparar-banco-atlas.sh").
 
@@ -37,7 +37,7 @@ Os números: **50 tabelas de negócio (mais a `flyway_schema_history`, do Flyway
 
 Três regras de convivência:
 
-- Migração já aplicada não se edita. Mudança vira uma migração nova (V19...; a V17 é do manual do Atlas).
+- Migração já aplicada não se edita. Mudança vira uma migração nova (a próxima é a V19).
 - A amostra é repetível (`R__`) e tem uma trava: se os dados de exemplo já estão no banco, ela não faz nada. Para recarregar, recrie o banco de dev. Quem criou o banco com uma versão antiga da amostra precisa recriá-lo para ver a nova (veja "Recomeçar do zero" no README).
 - Os horários da amostra não são datas fixas: são contados para trás a partir do dia em que o banco foi criado (veja "A amostra e as datas").
 
@@ -280,7 +280,7 @@ A V17 é o R2.1 do plano dos requisitos da RBS: o manual de operações de 2026 
 
 ## O que a V18 mudou
 
-A V18 é o banco da fase F6 (pós-venda). Só acrescenta uma tabela e 2 gatilhos: nenhuma V antiga é editada, **o catálogo de 17 indicadores e as 6 seções do relatório não mudam**, e a função `fn_gerar_relatorio` nem enxerga o anexo (ele vem depois das 6 seções). Com a V17, são **50 tabelas** e **34 gatilhos `rn_*`**. A tabela `evento_resultado` (os números da edição, V1) não muda: a API de números (rotas 100 e 101) só passou a gravar nela, e a visão `vw_indicadores_parceria` já a lia. A V17, do manual do Atlas, é de outra branch: o Flyway aceita a lacuna enquanto ela não entra. A tabela nasce vazia, então a V18 sobe sobre um banco que já tem a amostra sem pré-condição.
+A V18 é o banco da fase F6 (pós-venda). Só acrescenta uma tabela e 2 gatilhos: nenhuma V antiga é editada, **o catálogo de 17 indicadores e as 6 seções do relatório não mudam**, e a função `fn_gerar_relatorio` nem enxerga o anexo (ele vem depois das 6 seções). Com a V17, são **50 tabelas** e **34 gatilhos `rn_*`**. A tabela `evento_resultado` (os números da edição, V1) não muda: a API de números (rotas 100 e 101) só passou a gravar nela, e a visão `vw_indicadores_parceria` já a lia. A tabela nasce vazia, então a V18 sobe sobre um banco que já tem a amostra sem pré-condição.
 
 | Assunto | O que a V18 faz |
 | --- | --- |
@@ -304,7 +304,7 @@ A **parceria** é a unidade de isolamento: tudo o que um patrocinador vê pende 
 
 | Tabela | Para que serve | Colunas |
 | --- | --- | --- |
-| `evento` | Uma edição do festival (Planeta Atlântida 2026, 2027) | id, nome, edicao, data_inicio, data_fim, local |
+| `evento` | Uma edição do festival (Planeta Atlântida 2026, 2027) | id, nome, edicao, data_inicio, data_fim, local, credenciamento_url, credenciamento_inicio, credenciamento_fim, cortesias_prazo (V16) |
 | `evento_resultado` | Números gerais da edição (público, marcas, alcance). "Mais de" é piso, não número exato. A RBS os informa pelas rotas 100 e 101 (upsert por `indicador`); eles entram no indicador `FESTIVAL_NUMERO` da próxima versão do relatório | id, evento_id, indicador, valor, qualificador, unidade, fonte |
 | `evento_posvenda` | O anexo "Pós-venda da edição" (V18): uma linha por versão publicada, por parceria, com o texto, os links e a audiência por veículo. **Só aceita INSERT e a retirada** (`rn_evento_posvenda_imutavel`) | id, parceria_id, evento_id, versao, texto, links, audiencias, situacao, publicado_por, publicado_em, retirado_por, retirado_em |
 | `patrocinador` | A marca, com o nome canônico | id, nome_canonico, segmento, criado_em |
@@ -403,7 +403,7 @@ Na pesquisa geral o resultado não tem parceria nem pergunta. Na pesquisa da ati
 
 | Tabela | Para que serve | Colunas |
 | --- | --- | --- |
-| `documento` | O documento que a RBS sobe, com versão, escopo e ciclo de aprovação e indexação (veja "O que a V11 mudou") | id, titulo, chave, versao, tipo, escopo, evento_id, cota_tipo_id, parceria_id, arquivo_id, status, contem_dados_pessoais, paginas, modelo_embedding, dimensoes, extracao_ms, embeddings_ms, trechos, erro, enviado_por, enviado_em, aprovado_por, aprovado_por_perfil, aprovado_em, revogado_por, revogado_em |
+| `documento` | O documento que a RBS sobe, com versão, escopo e ciclo de aprovação e indexação (veja "O que a V11 mudou") | id, titulo, chave, versao, tipo, escopo, evento_id, cota_tipo_id, parceria_id, arquivo_id, status, contem_dados_pessoais, paginas, modelo_embedding, dimensoes, extracao_ms, embeddings_ms, trechos, erro, enviado_por, enviado_em, aprovado_por, aprovado_por_perfil, aprovado_em, revogado_por, revogado_em, paginas_ignoradas, suspeitas (V17) |
 | `documento_trecho` | Os trechos do documento, com o vetor e o `tsvector`; só o trecho ativo (de documento indexado) entra na busca | id, documento_id, escopo, evento_id, cota_tipo_id, parceria_id, versao, ordem, pagina_inicio, pagina_fim, secao_caminho, texto, tokens, embedding, tsv, ativo |
 
 ### 11. Prazos (V13)
@@ -570,6 +570,10 @@ erDiagram
     parceria |o--o{ prazo : "da_parceria"
     documento |o--o{ prazo : "origem"
     usuario ||--o{ prazo : "cadastrou"
+    entrega ||--o{ entrega_conteudo : "texto_ou_link"
+    usuario ||--o{ entrega_conteudo : "enviou"
+    parceria ||--o{ evento_posvenda : "anexo"
+    evento ||--o{ evento_posvenda : "da_edicao"
 ```
 
 ## Formatos dos CSV
@@ -652,6 +656,8 @@ for f in backend/src/main/resources/db/migration/V1__estrutura.sql \
          backend/src/main/resources/db/migration/V14__campo_planilha_agencia.sql \
          backend/src/main/resources/db/migration/V15__jev_e_conversa_sem_parceria.sql \
          backend/src/main/resources/db/migration/V16__requisitos_da_rbs.sql \
+         backend/src/main/resources/db/migration/V17__documento_paginas_fora_do_atlas.sql \
+         backend/src/main/resources/db/migration/V18__posvenda_da_parceria.sql \
          backend/src/main/resources/db/dev/R__amostra.sql; do
   psql -X -h localhost -U portal -d portal_verificacao -v ON_ERROR_STOP=1 -1 -f "$f"
 done

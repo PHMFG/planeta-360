@@ -103,7 +103,7 @@ O login mantém o cookie `XSRF-TOKEN`; o **logout o apaga** (junto com o `JSESSI
 
 ## As rotas em uma tabela
 
-Todas prontas e testadas. A coluna "Etapa" mostra em que etapa do plano a rota entrou (3 a 7).
+Todas prontas e testadas. A coluna "Etapa" mostra em que etapa do plano a rota entrou: as etapas 3 a 7 da Entrega 2, os marcos do Atlas e, nas rotas 69 a 104, as fases do plano dos requisitos da RBS (F3, F5, F6, Cortesias, Pós-venda e "Requisitos RBS").
 
 | # | Rota | Quem chama | O que faz | Etapa |
 | --- | --- | --- | --- | --- |
@@ -214,7 +214,7 @@ Todas prontas e testadas. A coluna "Etapa" mostra em que etapa do plano a rota e
 
 São 104 operações (método + caminho): 103 mapeadas nos controllers (`@GetMapping`, `@PostMapping`, `@PutMapping`, `@PatchMapping` ou `@DeleteMapping`) e o logout (rota 3), que vem do Spring Security (`SegurancaConfig`), sem controller. As quatro rotas de debug ficam de fora da numeração. A rota 5 (`ativar`) faz parte do contrato de autenticação, mas só é implementada na etapa 4. As rotas 37 em diante vieram com o Atlas: a coluna "Etapa" diz `Atlas 1` (plano de aplicações e dados informados), `Atlas 2` (conversa, cartão de perguntas e relatório), `Atlas M2` (o diagnóstico: rotas 49 a 53, veja "Diagnóstico do Atlas") `Atlas M3` (os documentos: rotas 54 a 58, veja "Os documentos do Atlas") `Atlas M4` (o visualizador, rotas 59 e 60, e a busca de teste, rota 61, veja "Busca nos documentos") `Atlas M5` (os prazos: rotas 62 a 64, veja "Os prazos do Atlas") `Atlas M6` (o relatório religado: a rota 65, veja "Descarte do relatório parado"; e a planilha da agência: a rota 66, veja "Dados informados pela marca") `Atlas M8` (o Atlas da RBS: as rotas 67 e 68, veja "O Atlas da RBS") ou `Requisitos RBS` (o plano comercial e os espaços de documento da marca: as rotas 69 a 73, veja "O plano comercial e os espaços de documento") e a comprovação mensal de mídia: as rotas 88 a 91, veja a rota 88). As rotas 88 a 90 são da marca de cota Master (com a aba `MIDIA` aberta) e da RBS; a 91 é só do Admin RBS (a marca recebe **403** antes de tudo). As rotas 70 e 73 são só do Admin RBS (o patrocinador recebe **403** antes de o corpo ser lido); a 69, a 71 e a 72 são das duas pontas. As rotas 54, 55, 57, 58, 61, 62, 63, 64, 67 e 68 são só do Admin RBS (o outro perfil recebe **403** antes de o corpo ser lido); a 56, a 59 e a 60 são das duas pontas, e a marca só vê o que o escopo dela permite; a 66 é da marca da parceria e da RBS. A 49 é do dono da conversa (a marca, ou a RBS na conversa do Atlas da RBS); as 50 a 53 são só do Admin RBS (o outro perfil recebe **403** antes de tudo). **As rotas 49 a 53 estão sempre mapeadas e respondem 404 com o diagnóstico desligado** (`atlas.diagnostico.ligado=false`, o padrão). Nas rotas 42, 43, 46 e 65 só o Admin Patrocinador chama (a RBS recebe **403** antes de o corpo ser lido); nas 44, 45 e 49 chama o dono da conversa: a marca na conversa da parceria dela e, com `atlas.rbs.ligado`, a RBS na conversa dela, a do Atlas da RBS (a RBS recebe **403** antes do corpo em qualquer outra conversa, e sempre com a propriedade desligada); nas 47 e 48 chamam a marca da parceria e a RBS. **O relatório do Atlas está ligado nos perfis `dev`, `demo` e `test` e desligado no padrão** (`atlas.relatorio.ligado=false`, `ATLAS_RELATORIO`). Desligado, as rotas **46, 47, 48 e 65 não existem (404)**, e as rotas 42 e 44 só aceitam conversa por texto (`atalho` e `modelo` dão 422): é o modo só chat, que continua existindo e testado. Veja "Modo só chat". O contrato do relatório, nas rotas 42 a 48 e 65, vale com `atlas.relatorio.ligado=true`.
 
-As rotas de debug do modelo de linguagem (`/api/debug/llm`) são temporárias, só existem no perfil `dev` (o perfil `demo`, da apresentação, as deixa em 404), são só da RBS e ficam fora desta tabela e da conta das 74: veja "Rotas de debug (temporárias)", no fim.
+As rotas de debug do modelo de linguagem (`/api/debug/llm`) são temporárias, só existem no perfil `dev` (o perfil `demo`, da apresentação, as deixa em 404), são só da RBS e ficam fora desta tabela e da conta das 104: veja "Rotas de debug (temporárias)", no fim.
 
 ## Objetos que se repetem
 
@@ -2807,7 +2807,7 @@ O trecho inteiro de um documento, para o visualizador abrir na página certa e d
 
 ## 103. `PATCH /api/documentos/{id}/paginas-fora-do-atlas`  · Requisitos RBS
 
-**Quem chama:** Admin RBS (exige o token CSRF). O patrocinador recebe **403** antes de o corpo ser lido. A numeração é provisória (o plano reserva 69 a 102).
+**Quem chama:** Admin RBS (exige o token CSRF). O patrocinador recebe **403** antes de o corpo ser lido.
 
 Troca a lista de páginas do documento que **não entram no índice do Atlas** (R2.1). Serve para o caso do manual de operações de 2026: o PDF tem 54 páginas, a p. 4 (contatos, com 12 telefones) trava a aprovação, e a RBS marca só a p. 4 em vez de cortar o PDF. O que muda está em "Dados pessoais", na seção dos documentos.
 
@@ -2982,7 +2982,7 @@ Regras comuns às cinco rotas:
 
 - **Acesso.** Parceria de outra marca: **404**. Aba fechada ou oculta para a marca: **403** com as duas frases de "Aba" (o plano, o formulário e as solicitações são do `PERFIL`; o MIV e a logo, de `APLICACOES`). A RBS passa em qualquer aba. Sem sessão: 401. Sem o token CSRF nos envios: 403.
 - **Parceria `ENCERRADA` recusa toda escrita** (rotas 70, 72 e 73), para a marca e para a RBS: **409**, `"Esta parceria está encerrada e não aceita novos envios."`. A leitura continua.
-- **Envios (70, 72 e 73).** `multipart/form-data` com a parte `arquivo` (até 20 MB) e a parte opcional `observacao` (até 500 caracteres, fica ligada à versão e no histórico). Estas rotas **não** exigem o tipo `multipart` na requisição (diferente da rota 17): o 403 e o 404 vêm antes de qualquer conferência do corpo, e uma requisição sem a parte `arquivo` (ou que não é multipart) dá **422** em `campos.arquivo`. Observação com mais de 500 caracteres: 422 em `campos.observacao`.
+- **Envios (70, 72 e 73).** `multipart/form-data` com a parte `arquivo` (até 20 MB) e a parte opcional `observacao` (até 500 caracteres, fica ligada à versão e no histórico). Estas rotas **não** exigem o tipo `multipart` na requisição (diferente da rota 17): o 403 e o 404 vêm antes de qualquer conferência do corpo, e uma requisição sem a parte `arquivo` (ou que não é multipart) dá **422** em `campos.arquivo`. Observação com mais de 500 caracteres ou com caractere de controle (o NUL inclusive): 422 em `campos.observacao`.
 - **Arquivo.** Extensão fora da lista, ou conteúdo que não bate com ela: **415**. Acima de 20 MB: 413. Arquivo vazio: 422. A lista de extensões é a da rota 17; o MIV e a logo têm uma lista própria (veja a rota 72).
 - **Histórico.** Cada envio grava `ENVIO_ARQUIVO` (a primeira versão) ou `NOVA_VERSAO`, e a criação do espaço grava `CRIACAO`, na mesma transação do arquivo. Nada disso leva dado pessoal.
 - **Só leitura para a marca.** Não existe `PATCH` nem `DELETE` destas rotas: ninguém edita nem apaga uma versão enviada, só envia outra.
@@ -3514,7 +3514,7 @@ Nada guarda a cota antiga: o Atlas (busca, documentos e prazos do escopo `COTA`,
 
 # Rotas de debug (temporárias)
 
-Um recurso **temporário**, para a equipe ligar o modelo de linguagem do Atlas pela tela (o botão "Debug"), sem reiniciar a API e sem variável de ambiente. Não faz parte das 102 rotas do contrato e sai antes da entrega final.
+Um recurso **temporário**, para a equipe ligar o modelo de linguagem do Atlas pela tela (o botão "Debug"), sem reiniciar a API e sem variável de ambiente. Não faz parte das 104 rotas do contrato e só existe no perfil `dev`.
 
 - **Só existem com `atlas.debug.chaves=true`.** A propriedade vem `false` por padrão, `true` no perfil `dev` e `false` no `demo` e no `test`. Sem ela, as quatro rotas respondem **404**, como uma rota que não existe.
 - **A chave fica só na memória da API.** Nunca vai ao banco, a arquivo ou ao log, e **some quando a API reinicia**. Nenhuma resposta devolve a chave inteira: só os 4 últimos caracteres (`finalDaChave`).
@@ -3636,6 +3636,8 @@ A ordem não muda: 401 sem sessão, depois o 403 das rotas só da RBS e das abas
 - O `403` é para outra situação: o usuário **tem** acesso à parceria, mas o perfil dele não pode fazer aquela operação (rota só da RBS), ou a aba está fechada para a parceria (fora da cota, ou ainda não liberada; veja "Aba"). Nas rotas só da RBS o perfil é conferido **primeiro**: o patrocinador recebe 403 com qualquer id (da parceria dele, de outra ou que não existe) e com **qualquer corpo ou filtro** (corpo vazio, JSON quebrado, campo inválido, `?tamanho=999`...). O 403 nunca revela se o id existe nem como é o formato do corpo da rota. As rotas só da RBS são as marcadas "Admin RBS" na tabela do início deste arquivo.
 
 ## Permissões por perfil
+
+Um resumo. Para as rotas 69 a 104 (os requisitos da RBS), quem chama cada uma está na coluna "Quem chama" da tabela de rotas, e a matriz de acesso que os testes conferem fica em `backend/src/test/resources/rotas-requisitos-rbs.tsv`.
 
 | Quem | Pode |
 | --- | --- |
