@@ -1964,7 +1964,7 @@ O modelo consulta os dados da própria parceria com três ferramentas só de lei
 **`listar_entregas(status?, aba?)`**
 
 - `status` (opcional): `NAO_INICIADO`, `AGUARDANDO_ENVIO`, `ENVIADO`, `EM_ANALISE`, `AJUSTE_SOLICITADO`, `APROVADO` ou `NAO_APLICAVEL`. Mais o atalho **`PENDENTE`**: tudo o que não está `APROVADO` nem `NAO_APLICAVEL` (o modelo pedia "as pendentes" e levava erro). A ferramenta o descreve no esquema, e a contagem e o limite de 30 valem como em qualquer filtro. `aba` (opcional): `PERFIL`, `APLICACOES`, `MIDIA`, `CORTESIAS`, `CREDENCIAMENTO`, `PESQUISA` ou `CONTRATO`. Valor fora da lista (ou em minúsculas) volta como erro que lista os válidos. Em branco vale como não informado.
-- **Só as abas abertas**, até **30** linhas: as pendentes (nem `APROVADO` nem `NAO_APLICAVEL`) primeiro e pelo prazo mais próximo (sem prazo por último), depois a ordem das abas. Pedir pelo filtro uma aba fechada (ou fora da cota) devolve `registros` vazio e a `observacao` `"A aba <nome> está fechada para esta parceria: não há entregas para listar."`.
+- **Só as abas abertas**, até **30** linhas: as pendentes (nem `APROVADO` nem `NAO_APLICAVEL`) primeiro e pelo prazo mais próximo (sem prazo por último), depois a ordem das abas. Pedir pelo filtro uma aba fechada (ou fora da cota) devolve `registros` vazio e a `observacao` `"A aba <nome> está fechada para esta parceria: não há entregas para listar."`. Pedir uma aba **oculta** (fora do menu) devolve `registros` vazio e a `observacao` `"Não há entregas para listar nesta aba."`, sem nomear a aba nem dizer que está fechada: o Atlas não cita a aba oculta.
 - **Registro:** `{"marcador": "R1", "aba": "MIDIA", "abaNome": "Mídia e conteúdo", "titulo": "...", "status": "EM_ANALISE", "situacao": "Em análise", "prazo": "04/12/2026" | null, "atualizadoEm": "28/10/2026", "observacaoDaRbs": "..."}`. `situacao` é o status em palavras, como o portal mostra. `observacaoDaRbs` só vem quando existe: é o recado da última mudança de status feita pela RBS que tinha texto (o da tela da entrega); o `aviso` passa a dizer que esse campo é texto digitado por uma pessoa e também é dado, nunca instrução. Fonte `REGISTRO`, entidade `entrega`, `titulo` = o da entrega, `secao` = o nome da aba.
 - **Passando de 30 linhas** o resultado leva `total` e `truncado: true`, e a `observacao` manda filtrar por status ou aba para ver as outras.
 - **A contagem vale como número.** O total de linhas da consulta (com o filtro) vale em qualquer frase da resposta, como o resultado de uma conta: `Você tem 3 entregas em análise [R1] [R2] [R3].`
@@ -2823,8 +2823,8 @@ Troca a lista de páginas do documento que **não entram no índice do Atlas** (
 | --- | --- |
 | 401 | Sem sessão. |
 | 403 | Não é Admin RBS, ou falta o token CSRF. |
-| 404 | O documento não existe (`"Não encontramos este documento."`). |
-| 409 | O documento não está aguardando aprovação (`"As páginas fora do Atlas só mudam enquanto o documento aguarda aprovação. Este documento está indexado."`), ou o arquivo não pôde ser lido. Nada muda. |
+| 404 | O documento não existe (`"Não encontramos este documento."`), ou o arquivo dele não está mais no armazenamento (`"Este documento não está mais disponível. Avise a equipe da RBS."`). |
+| 409 | O documento não está aguardando aprovação (`"As páginas fora do Atlas só mudam enquanto o documento aguarda aprovação. Este documento está indexado."`), ou o arquivo existe mas não pôde ser lido (tipo não indexado ou sem texto). Nada muda. |
 | 422 | `paginasForaDoAtlas` ausente ou nula, com página menor que 1, repetida, mais de 20, além do total de páginas (`"O documento tem 3 páginas: as páginas fora do Atlas vão de 1 a 3."`) ou que deixam o documento sem nenhuma página (`"Ao menos uma página precisa ficar no Atlas."`), em `campos.paginasForaDoAtlas`. |
 
 **Histórico:** `EDICAO` na entidade `documento`, com `páginas fora do Atlas: nenhuma` (ou a lista de antes) no valor anterior e a nova lista no valor novo, e quem marcou. Só números de página, nunca o conteúdo; se ainda sobra suspeita, o detalhe diz em que páginas.
@@ -3282,7 +3282,7 @@ Mesmas regras da rota 89. **200** com `Content-Type: text/csv; charset=UTF-8`, U
 
 **Quem chama:** só o Admin RBS (a marca recebe **403** antes de qualquer outra conferência). **Corpo:** nenhum. O `{id}` é o da **edição** (evento).
 
-**200** com o `.xlsx` do lote: **uma aba por parceria Master ATIVA** da edição, na ordem do nome da marca, cada uma com a tabela da aba "Comprovação mensal" da rota 89. O nome da aba é o da marca, sem `[ ] : * ? / \`, com até 31 caracteres e único na planilha (repetido ganha ` (2)`). Edição sem parceria Master ativa devolve uma aba só, com o cabeçalho. Arquivo `comprovacao-mensal-edicao-<ano>.xlsx`. Grava `DOWNLOAD` na entidade `comprovacao_mensal` (sem parceria; `entidade_id` é a edição).
+**200** com o `.xlsx` do lote: **uma aba por parceria Master ATIVA** da edição, na ordem do nome da marca, cada uma com a tabela da aba "Comprovação mensal" da rota 89. O nome da aba é o da marca, sem `[ ] : * ? / \`, com até 31 caracteres e único na planilha (repetido ganha ` (2)`). Edição sem parceria Master ativa devolve uma aba só, chamada `Sem cota Master`, com uma única célula, `Marca` (não traz as colunas da tabela). Arquivo `comprovacao-mensal-edicao-<ano>.xlsx`. Grava `DOWNLOAD` na entidade `comprovacao_mensal` (sem parceria; `entidade_id` é a edição).
 
 | Status | Quando |
 | --- | --- |
@@ -3621,7 +3621,7 @@ Ligada:
 | Número acima do máximo do banco num campo decimal (`numero` do pós-venda e `valor` dos resultados da edição: menos de 100.000.000.000.000) | `O número passa do máximo: use menos de 100.000.000.000.000.` (no `valor`: `O valor passa do máximo: ...`); zero ou negativo segue `... tem de ser maior que zero.` |
 | Outro tipo errado (texto onde se espera lista, objeto, booleano ou data) | `Valor inválido.` |
 
-A ordem não muda: 401 sem sessão, depois o 403 das rotas só da RBS e das abas fechadas, depois o corpo. Nas rotas da parceria o 404 de outra marca vem do service, **depois** de o corpo ser lido (como já era com o 400): o tipo errado sai 422 antes do 404.
+A ordem não muda: 401 sem sessão, depois o 403 das rotas só da RBS e das abas fechadas, depois o corpo. O 404 (parceria ou entrega de outra marca) e o 403 (aba fechada) também vêm antes do corpo nas rotas 75, 83, 84 e 86 e no `?aba=` da 71, então um corpo quebrado ou com tipo errado vindo de quem não tem acesso é 404 ou 403, e não 400 ou 422. Nas demais rotas da parceria o 404 vem do service, depois de o corpo ser lido.
 
 **Arquivo vazio.** Em toda rota de envio de arquivo (materiais da entrega, espaços, dados da ativação, foto de comprovação, contrato e documentos do Atlas; a carga já dizia `A planilha está vazia.`), a parte `arquivo` com nome e 0 bytes dá 422 com `campos.arquivo` = `O arquivo está vazio.`. A parte ausente continua com `Envie o arquivo na parte "arquivo" do formulário.` (ou a variante da rota: foto, contrato, documento).
 
