@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
  * mexe em entregas de abas liberadas.
  */
 @Component
-class AcessoAEntregas {
+public class AcessoAEntregas {
 
     private final EntregaRepositorio entregas;
     private final VerificadorDeAcesso verificador;
@@ -42,6 +42,14 @@ class AcessoAEntregas {
      */
     void exigirAbaLiberada(UsuarioAutenticado usuario, EntregaBase entrega) {
         verificador.exigirAbaLiberada(usuario, entrega.parceriaId(), entrega.abaCodigo());
+    }
+
+    /**
+     * [PERMISSAO] A conferência de permissão que vem ANTES de o corpo ser lido (PermissaoAntesDoCorpo): a entrega é da parceria do
+     * usuário (404) e a aba dela está aberta (403). Sem trava: quem grava confere de novo no service, com a trava.
+     */
+    public void exigirAntesDoCorpo(UsuarioAutenticado usuario, long entregaId) {
+        exigirAbaLiberada(usuario, exigir(usuario, entregaId, false));
     }
 
     static NaoEncontradoException naoEncontrada() {

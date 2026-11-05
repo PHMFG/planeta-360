@@ -5,7 +5,6 @@ import br.com.rbs.portal.contrato.ContratoDtos.ContratoDto;
 import br.com.rbs.portal.contrato.ContratoDtos.SignatarioRequisicao;
 import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -48,7 +47,7 @@ public class ContratoController {
     }
 
     /** 76. Multipart: {@code arquivo} (PDF), {@code assinadoEm} (AAAA-MM-DD, opcional) e {@code observacao} (opcional). Responde 201. */
-    @PostMapping(path = "/arquivo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PostMapping(path = "/arquivo")
     public ResponseEntity<ContratoDto> enviarArquivo(@AuthenticationPrincipal UsuarioAutenticado usuario, @PathVariable long id,
                                                      @RequestPart(name = "arquivo", required = false) MultipartFile arquivo,
                                                      @RequestParam(required = false) String assinadoEm,

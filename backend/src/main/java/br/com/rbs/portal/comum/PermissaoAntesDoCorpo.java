@@ -1,5 +1,6 @@
 package br.com.rbs.portal.comum;
 
+import br.com.rbs.portal.materiais.AcessoAEntregas;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.Map;
@@ -151,14 +152,25 @@ public class PermissaoAntesDoCorpo implements HandlerInterceptor, WebMvcConfigur
      * As rotas das duas pontas com corpo em que a parceria (404) e a aba (403) vêm antes de o corpo ser lido: a marca de outra
      * parceria ou com a aba fechada não aprende nada sobre o formato do corpo. Rota e aba.
      */
-    static final Map<String, String> ROTAS_DA_ABA_ANTES_DO_CORPO = Map.of("PUT /api/parcerias/{id}/contrato/signatario", "CONTRATO");
+    static final Map<String, String> ROTAS_DA_ABA_ANTES_DO_CORPO = Map.of(
+            "PUT /api/parcerias/{id}/contrato/signatario", "CONTRATO",
+            // As cortesias (rotas 83 e 84): a marca de outra parceria ou com a aba fechada não aprende nada sobre o formato do corpo.
+            "POST /api/parcerias/{id}/cortesias/destinacoes", "CORTESIAS",
+            "PATCH /api/parcerias/{id}/cortesias/destinacoes/{destId}", "CORTESIAS");
+    /** POST /api/entregas/{id}/conteudos (rota 86): o {id} é de entrega; a parceria e a aba saem dela. */
+    static final String ENVIO_DE_CONTEUDO = "POST /api/entregas/{id}/conteudos";
+    /** GET /api/parcerias/{id}/espacos (rota 71): o {@code ?aba=} inválido não vem antes do 404 e do 403. */
+    static final String ESPACOS_DA_PARCERIA = "GET /api/parcerias/{id}/espacos";
     static final String SO_PATROCINADOR_ENVIA_PERGUNTAS ="Só o Admin Patrocinador da parceria envia as perguntas da pesquisa.";
 
     private final VerificadorDeAcesso verificador;
+    private final AcessoAEntregas entregas;
     private final boolean rbsLigado;
 
-    public PermissaoAntesDoCorpo(VerificadorDeAcesso verificador, @Value("${atlas.rbs.ligado:false}") boolean rbsLigado) {
+    public PermissaoAntesDoCorpo(VerificadorDeAcesso verificador, AcessoAEntregas entregas,
+                                 @Value("${atlas.rbs.ligado:false}") boolean rbsLigado) {
         this.verificador = verificador;
+        this.entregas = entregas;
         this.rbsLigado = rbsLigado;
     }
 
@@ -196,6 +208,24 @@ public class PermissaoAntesDoCorpo implements HandlerInterceptor, WebMvcConfigur
             if (parceriaId != null) {   // id que não é número: quem responde é o tratador de erros (404), depois daqui
                 verificador.exigirParceria(usuario, parceriaId);
                 verificador.exigirAbaLiberada(usuario, parceriaId, ABA_DA_PESQUISA);
+            }
+        } else if (ENVIO_DE_CONTEUDO.equals(rota)) {
+            Long entregaId = idDoCaminho(requisicao);
+            if (entregaId != null) {
+                entregas.exigirAntesDoCorpo(usuario, entregaId);
+            }
+        } else if (ESPACOS_DA_PARCERIA.equals(rota)) {
+            Long parceriaId = idDoCaminho(requisicao);
+            if (parceriaId != null) {
+                verificador.exigirParceria(usuario, parceriaId);
+                String aba = requisicao.getParameter("aba");
+                // aba=APLICACOES só precisa de Aplicações, aba=PERFIL só do Perfil; sem aba (ou com valor inválido) vale a regra das duas.
+                if (!"APLICACOES".equals(aba)) {
+                    verificador.exigirAbaLiberada(usuario, parceriaId, "PERFIL");
+                }
+                if (!"PERFIL".equals(aba)) {
+                    verificador.exigirAbaLiberada(usuario, parceriaId, "APLICACOES");
+                }
             }
         } else if (ROTAS_DA_ABA_ANTES_DO_CORPO.containsKey(rota)) {
             Long parceriaId = idDoCaminho(requisicao);
