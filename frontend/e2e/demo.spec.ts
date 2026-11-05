@@ -3,7 +3,7 @@
 //   E2E_DEMO=1 PORTAL_E2E_PILHA=dev ATLAS_DEV_PORTA=8099 npx playwright test e2e/demo.spec.ts
 import { writeFile } from 'node:fs/promises'
 import { expect, test, type Browser, type Page } from '@playwright/test'
-import { capturar, entrar, parceriaDa } from './apoio.ts'
+import { capturar, entrar, entrarComo, novaMarcaDeTeste, parceriaDa, sessaoDaApi } from './apoio.ts'
 
 const D08 = '../backend/src/main/resources/dev/documentos/d08-faq-patrocinador-2027.txt'
 const LIMITE_DO_TURNO_MS = 30_000
@@ -156,6 +156,44 @@ test('o roteiro da demonstração, do começo ao fim @vivo', async ({ page, brow
     await expect(gaveta.getByText('Lista vetorial')).toBeVisible()
     await gaveta.getByRole('button', { name: /JEV · intenção/ }).click()
     await capturar(page, 'demo-8-diagnostico')
+  })
+
+  await passo('9. os pedidos da RBS: comprovação mensal, contrato, Open Staff e cortesia', async () => {
+    const amarelo = await parceriaDa('amarelo')
+    await page.goto(`/parceria/${amarelo}/midia`)
+    const comprovacao = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Comprovação mensal', exact: true }) })
+    const [planilha] = await Promise.all([page.waitForEvent('download'), comprovacao.getByRole('button', { name: 'Baixar planilha (.xlsx)' }).click()])
+    expect(planilha.suggestedFilename()).toMatch(/^comprovacao-mensal-.*\.xlsx$/)
+    await capturar(page, 'demo-9-comprovacao')
+    await page.goto(`/parceria/${amarelo}/contrato`)
+    await expect(page.getByText(/Página 1 de \d+/)).toBeVisible({ timeout: 20_000 })
+    await capturar(page, 'demo-9-contrato')
+    await page.goto(`/parceria/${amarelo}/credenciamento`)
+    const openStaff = page.getByRole('link', { name: /Abrir Open Staff/ })
+    await expect(openStaff).toHaveAttribute('target', '_blank')
+    // A cortesia é destinada numa marca de teste, para não mudar os números do Amarelo que o Atlas confere.
+    const marca = await novaMarcaDeTeste('SUBCOTA')
+    const { contexto, cabecalhos } = await sessaoDaApi('rbs')
+    await contexto.patch(`/api/parcerias/${marca.parceriaId}/cortesias/cotas`, {
+      headers: cabecalhos,
+      data: { cotas: [{ setor: 'ARENA', dia: 'SEXTA', quantidade: 4, comShuttle: false, acesso: 'Portão 6' }] },
+    })
+    await contexto.dispose()
+    const daMarca = await browser.newContext({ baseURL: test.info().project.use.baseURL })
+    const pagina = await daMarca.newPage()
+    await entrarComo(pagina, marca.email)
+    await pagina.goto(`/parceria/${marca.parceriaId}/cortesias`)
+    await pagina.getByRole('button', { name: 'Destinar cortesias' }).click()
+    const dialogo = pagina.getByRole('dialog', { name: 'Destinar cortesias' })
+    await dialogo.getByLabel('Setor').selectOption('ARENA')
+    await dialogo.getByLabel('Tipo / dia').selectOption('SEXTA')
+    await dialogo.getByLabel('Quantidade').pressSequentially('2')
+    await dialogo.getByLabel('Destino / destinatário').pressSequentially('Convidada da demonstração')
+    await dialogo.getByRole('button', { name: 'Revisar destinação' }).click()
+    await dialogo.getByRole('button', { name: 'Confirmar destinação' }).click()
+    await expect(pagina.getByRole('status').filter({ hasText: '2 cortesias destinadas em Arena · Sexta' })).toBeVisible()
+    await capturar(pagina, 'demo-9-cortesia')
+    await daMarca.close()
   })
 
   await writeFile('e2e/capturas/demo-tempos.json', JSON.stringify(tempos, null, 2))
