@@ -7,7 +7,7 @@
 // marca de teste pela API, na pilha.
 import fs from 'node:fs'
 import { expect, test, type Page } from '@playwright/test'
-import { entrar, entrarComo, novaMarcaDeTeste, parceriaDa, sessaoDaApi, sessaoDaApiComo } from './apoio.ts'
+import { capturar, entrar, entrarComo, novaMarcaDeTeste, parceriaDa, sessaoDaApi, sessaoDaApiComo } from './apoio.ts'
 
 const PDF_DE_EXEMPLO = '../backend/src/main/resources/dev/documentos/d13-circular-revogada.pdf'
 
@@ -550,7 +550,20 @@ test.describe('R6 a R8 · admin, identidade e pós-venda', () => {
     await expect(page).toHaveURL(new RegExp(`/parceria/${verde}/cortesias$`))
   })
   test.fixme('[R6.d3] a troca de cota mostra a prévia do impacto', pendente)
-  test.fixme('[R7.1] o emblema de 2027 aparece no login e nos cabeçalhos', pendente)
+  test('[R7.1] o emblema de 2027 aparece no login e nos cabeçalhos', async ({ page }) => {
+    await page.goto('/entrar')
+    await expect(page.getByRole('img', { name: 'Planeta Atlântida 2027' })).toBeVisible()
+    const amarelo = await parceriaDa('amarelo')
+    await entrar(page, 'amarelo')
+    for (const aba of ['perfil', 'midia', 'cortesias', 'relatorio']) {
+      await page.goto(`/parceria/${amarelo}/${aba}`)
+      const emblema = page.locator('header img[data-emblema="2027"]')
+      await expect(emblema, aba).toBeVisible()
+      // O emblema carregou de fato (uma imagem quebrada também ficaria "visível").
+      expect(await emblema.evaluate((imagem: HTMLImageElement) => imagem.complete && imagem.naturalWidth > 0), aba).toBe(true)
+    }
+    await capturar(page, 'r7-emblema-cabecalho-1440')
+  })
   test('[R8.1] a marca vê o anexo de pós-venda com o relatório disponibilizado', async ({ page }) => {
     const marca = await novaMarcaDeTeste('SUBCOTA')
     await relatorioDisponibilizado(marca.parceriaId)
