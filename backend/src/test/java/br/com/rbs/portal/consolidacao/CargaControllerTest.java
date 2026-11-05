@@ -381,7 +381,8 @@ class CargaControllerTest extends ApoioDeCargas {
         MvcTestResult geralDe2027 = enviar(rbs, "p.csv", texto(csv), "PESQUISA", evento(2027), "GERAL");
 
         assertThat(ativacaoDe2026).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
-        assertThat((String) lerJson(ativacaoDe2026, "$.campos.escopo")).contains("2026").contains("ativação");
+        assertThat((String) lerJson(ativacaoDe2026, "$.campos.escopo")).isEqualTo(
+                "A edição 2026 ainda não tem a pesquisa de ativação aberta. Abra-a em Pesquisa, no menu da RBS.");
         assertThat(geralDe2027).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat((String) lerJson(geralDe2027, "$.campos.escopo")).contains("2027").contains("geral");
     }
