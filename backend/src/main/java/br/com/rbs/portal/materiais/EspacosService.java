@@ -248,7 +248,9 @@ public class EspacosService {
             campos.put("arquivo", "O arquivo está vazio.");
         }
         String observacao = observacaoInformada == null || observacaoInformada.isBlank() ? null : observacaoInformada.trim();
-        if (observacao != null && observacao.length() > LIMITE_OBSERVACAO) {
+        if (observacao != null && observacao.codePoints().anyMatch(c -> Character.isISOControl(c) && c != '\n' && c != '\r' && c != '\t')) {
+            campos.put("observacao", "A observação tem caracteres inválidos.");
+        } else if (observacao != null && observacao.length() > LIMITE_OBSERVACAO) {
             campos.put("observacao", "A observação tem no máximo " + LIMITE_OBSERVACAO + " caracteres.");
         }
         if (!campos.isEmpty()) {

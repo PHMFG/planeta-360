@@ -183,7 +183,7 @@ public class PesquisaAberturaService {
         if (eventoId != null) {
             exigirEdicao(eventoId);
         }
-        List<PerguntaDaFilaDto> itens = repositorio.fila(filtro, eventoId, tamanho, pagina * tamanho).stream()
+        List<PerguntaDaFilaDto> itens = repositorio.fila(filtro, eventoId, tamanho, (long) pagina * tamanho).stream()
                 .map(PesquisaAberturaService::paraPergunta).toList();
         return new PaginaDto<>(itens, pagina, tamanho, repositorio.contarFila(filtro, eventoId));
     }

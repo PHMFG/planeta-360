@@ -119,7 +119,7 @@ public class PesquisaAberturaRepositorio {
     }
 
     /** As mais antigas primeiro (a que espera há mais tempo sai no topo). */
-    public List<LinhaDaFila> fila(String status, Long eventoId, int limite, int deslocamento) {
+    public List<LinhaDaFila> fila(String status, Long eventoId, int limite, long deslocamento) {
         return jdbc.sql("""
                         SELECT q.id, q.parceria_id, pt.nome_canonico AS patrocinador, ev.id AS evento_id, ev.edicao,
                                q.pesquisa_id, q.ordem, q.texto, q.status,

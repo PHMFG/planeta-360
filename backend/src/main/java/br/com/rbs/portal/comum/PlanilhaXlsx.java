@@ -154,7 +154,7 @@ public final class PlanilhaXlsx {
                     dados.append("<c r=\"").append(ref).append('"').append(estilo).append("><v>").append(texto).append("</v></c>");
                     larguras[c] = Math.max(larguras[c], texto.length());
                 } else {
-                    String texto = sanearTexto(Csv.neutralizar(valor.toString()));
+                    String texto = Csv.neutralizar(sanearTexto(valor.toString()));
                     dados.append("<c r=\"").append(ref).append("\" t=\"inlineStr\"").append(estilo)
                             .append("><is><t xml:space=\"preserve\">").append(escapar(texto)).append("</t></is></c>");
                     larguras[c] = Math.max(larguras[c], texto.length());

@@ -22,6 +22,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Optional;
 import java.util.Map;
 import java.util.Set;
 import org.springframework.stereotype.Service;
@@ -108,7 +109,9 @@ public class TrocaDeCotaService {
 
     private Cota cotaNova(String codigo, String campo) {
         String limpo = codigo == null ? "" : codigo.trim();
-        return repositorio.cotaPorCodigo(limpo).orElseThrow(() -> {
+        // Caractere de controle (NUL, por exemplo) nunca é código de cota: 422 como o código desconhecido, e o banco nem é consultado.
+        Optional<Cota> achada = limpo.chars().anyMatch(Character::isISOControl) ? Optional.empty() : repositorio.cotaPorCodigo(limpo);
+        return achada.orElseThrow(() -> {
             String frase = limpo.isEmpty() ? "Informe a cota nova: MASTER, SUBCOTA_G ou SUBCOTA."
                     : "Cota não encontrada. Use MASTER, SUBCOTA_G ou SUBCOTA.";
             Map<String, String> campos = new LinkedHashMap<>();
