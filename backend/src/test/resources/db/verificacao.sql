@@ -69,7 +69,7 @@ END $f$;
 DO $$
 BEGIN
     -- A tabela de controle do Flyway (flyway_schema_history) não é do portal: fica de fora quando o banco foi criado pelo Flyway.
-    PERFORM pg_temp.confere('ESTRUTURA', 'tabelas (29 da modelagem + 4 novas na V1 + 3 na V7 + 7 na V8 + 1 na V10 + 2 na V11 + 1 na V12 + 1 na V13 + 1 na V16)', 49,
+    PERFORM pg_temp.confere('ESTRUTURA', 'tabelas (29 da modelagem + 4 novas na V1 + 3 na V7 + 7 na V8 + 1 na V10 + 2 na V11 + 1 na V12 + 1 na V13 + 1 na V16 + 1 na V18)', 50,
        (SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
            AND table_name <> 'flyway_schema_history'));
     PERFORM pg_temp.confere('ESTRUTURA', 'visões (7 de consolidação + vw_dado_vigente)', 8,
@@ -77,7 +77,7 @@ BEGIN
     PERFORM pg_temp.confere('ESTRUTURA', 'funções fn_carregar_veiculacoes, fn_carregar_pesquisa, fn_carregar_plano, fn_gerar_relatorio', 4,
        (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
          WHERE n.nspname = 'public' AND p.proname IN ('fn_carregar_veiculacoes', 'fn_carregar_pesquisa', 'fn_carregar_plano', 'fn_gerar_relatorio')));
-    PERFORM pg_temp.confere('ESTRUTURA', 'gatilhos de regra (rn_*): 29 até a V15, mais rn_contrato_arquivo e rn_entrega_conteudo_imutavel da V16', 31,
+    PERFORM pg_temp.confere('ESTRUTURA', 'gatilhos de regra (rn_*): 29 até a V15, mais rn_contrato_arquivo e rn_entrega_conteudo_imutavel da V16, mais rn_evento_posvenda_conteudo e rn_evento_posvenda_imutavel da V18', 33,
        (SELECT count(*) FROM pg_trigger WHERE NOT tgisinternal AND tgname LIKE 'rn\_%'));
     PERFORM pg_temp.confere('BASE', 'tipos de cota', 3, (SELECT count(*) FROM cota_tipo));
     PERFORM pg_temp.confere('BASE', 'abas do menu', 7, (SELECT count(*) FROM aba));
@@ -2563,6 +2563,46 @@ BEGIN
     PERFORM pg_temp.confere('V16 CONTEUDO', 'as tentativas não deixaram texto nem link gravados', 0, (SELECT count(*) FROM entrega_conteudo));
     PERFORM pg_temp.confere('V16 PAPEL', 'a amostra: 3 entregas de ingressos e 2 de logo (Amarelo e Roxo), nenhuma de MIV', 5, (SELECT count(*) FROM entrega WHERE papel IN ('DOCUMENTO_INGRESSOS', 'LOGO')));
     PERFORM pg_temp.confere('V16 EVENTO', 'a amostra tem o endereço do Open Staff só na edição de 2027', 1, (SELECT count(*) FROM evento WHERE credenciamento_url IS NOT NULL AND edicao = 2027));
+
+    PERFORM pg_temp.recusa('V18 POSVENDA', 'anexo vazio (sem texto, link nem audiência)', 'rn_evento_posvenda_conteudo', $q$
+        INSERT INTO evento_posvenda (parceria_id, evento_id, versao, texto, links, audiencias, publicado_por) SELECT pa.id, pa.evento_id, 1, NULL, '[]'::jsonb, '[]'::jsonb, (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM parceria pa WHERE pa.id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027) $q$);
+    PERFORM pg_temp.recusa('V18 POSVENDA', 'link javascript:', 'rn_evento_posvenda_conteudo', $q$
+        INSERT INTO evento_posvenda (parceria_id, evento_id, versao, texto, links, audiencias, publicado_por) SELECT pa.id, pa.evento_id, 1, NULL, '[{"tipo":"OUTRO","titulo":"x","url":"javascript:alert(1)"}]'::jsonb, '[]'::jsonb, (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM parceria pa WHERE pa.id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027) $q$);
+    PERFORM pg_temp.recusa('V18 POSVENDA', 'link com usuario@ antes do host', 'rn_evento_posvenda_conteudo', $q$
+        INSERT INTO evento_posvenda (parceria_id, evento_id, versao, texto, links, audiencias, publicado_por) SELECT pa.id, pa.evento_id, 1, NULL, '[{"tipo":"OUTRO","titulo":"x","url":"https://www.instagram.com@malicioso.example.invalid/p/x/"}]'::jsonb, '[]'::jsonb, (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM parceria pa WHERE pa.id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027) $q$);
+    PERFORM pg_temp.recusa('V18 POSVENDA', 'link de tipo desconhecido', 'rn_evento_posvenda_conteudo', $q$
+        INSERT INTO evento_posvenda (parceria_id, evento_id, versao, texto, links, audiencias, publicado_por) SELECT pa.id, pa.evento_id, 1, NULL, '[{"tipo":"VIDEO","titulo":"x","url":"https://exemplo.example/"}]'::jsonb, '[]'::jsonb, (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM parceria pa WHERE pa.id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027) $q$);
+    PERFORM pg_temp.recusa('V18 POSVENDA', 'audiência com número zero', 'rn_evento_posvenda_conteudo', $q$
+        INSERT INTO evento_posvenda (parceria_id, evento_id, versao, texto, links, audiencias, publicado_por) SELECT pa.id, pa.evento_id, 1, NULL, '[]'::jsonb, '[{"veiculo":"ATL TV","metrica":"pessoas","numero":0,"unidade":"pessoas"}]'::jsonb, (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM parceria pa WHERE pa.id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027) $q$);
+    PERFORM pg_temp.recusa('V18 POSVENDA', 'audiência com número em texto', 'rn_evento_posvenda_conteudo', $q$
+        INSERT INTO evento_posvenda (parceria_id, evento_id, versao, texto, links, audiencias, publicado_por) SELECT pa.id, pa.evento_id, 1, NULL, '[]'::jsonb, '[{"veiculo":"ATL TV","metrica":"pessoas","numero":"10","unidade":"pessoas"}]'::jsonb, (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM parceria pa WHERE pa.id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027) $q$);
+    PERFORM pg_temp.recusa('V18 POSVENDA', 'links que não são uma lista', 'rn_evento_posvenda_conteudo', $q$
+        INSERT INTO evento_posvenda (parceria_id, evento_id, versao, texto, links, audiencias, publicado_por) SELECT pa.id, pa.evento_id, 1, NULL, '{"tipo":"OUTRO"}'::jsonb, '[]'::jsonb, (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM parceria pa WHERE pa.id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027) $q$);
+    PERFORM pg_temp.recusa('V18 POSVENDA', 'texto acima de 5.000 caracteres', 'ck_posvenda_texto', $q$
+        INSERT INTO evento_posvenda (parceria_id, evento_id, versao, texto, links, audiencias, publicado_por) SELECT pa.id, pa.evento_id, 1, repeat('a', 5001), '[]'::jsonb, '[]'::jsonb, (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM parceria pa WHERE pa.id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027) $q$);
+    PERFORM pg_temp.recusa('V18 POSVENDA', 'texto com caractere de controle', 'ck_posvenda_texto', $q$
+        INSERT INTO evento_posvenda (parceria_id, evento_id, versao, texto, links, audiencias, publicado_por) SELECT pa.id, pa.evento_id, 1, 'texto' || chr(7) || 'com sino', '[]'::jsonb, '[]'::jsonb, (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM parceria pa WHERE pa.id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027) $q$);
+    PERFORM pg_temp.recusa('V18 POSVENDA', 'edição que não é a da parceria', 'rn_evento_posvenda_conteudo', $q$
+        INSERT INTO evento_posvenda (parceria_id, evento_id, versao, texto, publicado_por) SELECT pa.id, (SELECT id FROM evento WHERE edicao = 2026), 1, 'texto', (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM parceria pa WHERE pa.id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027) $q$);
+    PERFORM pg_temp.recusa('V18 POSVENDA', 'mesma versão duas vezes na parceria', 'uq_posvenda_versao', $q$
+        DO $d$ BEGIN INSERT INTO evento_posvenda (parceria_id, evento_id, versao, texto, links, audiencias, publicado_por) SELECT pa.id, pa.evento_id, 1, 'um', '[]'::jsonb, '[]'::jsonb, (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM parceria pa WHERE pa.id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027); INSERT INTO evento_posvenda (parceria_id, evento_id, versao, texto, links, audiencias, publicado_por) SELECT pa.id, pa.evento_id, 1, 'dois', '[]'::jsonb, '[]'::jsonb, (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM parceria pa WHERE pa.id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027); END $d$ $q$);
+    PERFORM pg_temp.recusa('V18 POSVENDA', 'situação fora de PUBLICADO e RETIRADO', 'ck_posvenda_situacao', $q$
+        INSERT INTO evento_posvenda (parceria_id, evento_id, versao, texto, situacao, publicado_por) SELECT pa.id, pa.evento_id, 1, 'texto', 'APAGADO', (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM parceria pa WHERE pa.id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027) $q$);
+    PERFORM pg_temp.recusa('V18 POSVENDA', 'UPDATE no texto publicado', 'rn_evento_posvenda_imutavel', $q$
+        DO $d$ BEGIN INSERT INTO evento_posvenda (parceria_id, evento_id, versao, texto, links, audiencias, publicado_por) SELECT pa.id, pa.evento_id, 1, 'original', '[]'::jsonb, '[]'::jsonb, (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM parceria pa WHERE pa.id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027); UPDATE evento_posvenda SET texto = 'alterado'; END $d$ $q$);
+    PERFORM pg_temp.recusa('V18 POSVENDA', 'DELETE do pós-venda publicado', 'rn_evento_posvenda_imutavel', $q$
+        DO $d$ BEGIN INSERT INTO evento_posvenda (parceria_id, evento_id, versao, texto, links, audiencias, publicado_por) SELECT pa.id, pa.evento_id, 1, 'original', '[]'::jsonb, '[]'::jsonb, (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM parceria pa WHERE pa.id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027); DELETE FROM evento_posvenda; END $d$ $q$);
+    PERFORM pg_temp.recusa('V18 POSVENDA', 'retirada que também troca o texto', 'rn_evento_posvenda_imutavel', $q$
+        DO $d$ BEGIN INSERT INTO evento_posvenda (parceria_id, evento_id, versao, texto, links, audiencias, publicado_por) SELECT pa.id, pa.evento_id, 1, 'original', '[]'::jsonb, '[]'::jsonb, (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM parceria pa WHERE pa.id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027); UPDATE evento_posvenda SET situacao = 'RETIRADO', retirado_em = now(), retirado_por = publicado_por, texto = 'alterado'; END $d$ $q$);
+    PERFORM pg_temp.recusa('V18 POSVENDA', 'voltar de RETIRADO para PUBLICADO', 'rn_evento_posvenda_imutavel', $q$
+        DO $d$ BEGIN INSERT INTO evento_posvenda (parceria_id, evento_id, versao, texto, links, audiencias, publicado_por) SELECT pa.id, pa.evento_id, 1, 'original', '[]'::jsonb, '[]'::jsonb, (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM parceria pa WHERE pa.id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027); UPDATE evento_posvenda SET situacao = 'RETIRADO', retirado_em = now(), retirado_por = publicado_por; UPDATE evento_posvenda SET situacao = 'PUBLICADO', retirado_em = NULL, retirado_por = NULL; END $d$ $q$);
+    PERFORM pg_temp.recusa('V18 POSVENDA', 'retirada sem quem retirou', 'rn_evento_posvenda_imutavel', $q$
+        DO $d$ BEGIN INSERT INTO evento_posvenda (parceria_id, evento_id, versao, texto, links, audiencias, publicado_por) SELECT pa.id, pa.evento_id, 1, 'original', '[]'::jsonb, '[]'::jsonb, (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM parceria pa WHERE pa.id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027); UPDATE evento_posvenda SET situacao = 'RETIRADO', retirado_em = now(); END $d$ $q$);
+    PERFORM pg_temp.recusa('V18 POSVENDA', 'nasce retirado sem quem retirou', 'ck_posvenda_retirada', $q$
+        INSERT INTO evento_posvenda (parceria_id, evento_id, versao, texto, situacao, publicado_por) SELECT pa.id, pa.evento_id, 1, 'texto', 'RETIRADO', (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM parceria pa WHERE pa.id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027) $q$);
+    PERFORM pg_temp.aceita('V18 POSVENDA', 'texto, link, audiência e a retirada (só situacao, retirado_em e retirado_por mudam)', $q$
+        DO $d$ BEGIN INSERT INTO evento_posvenda (parceria_id, evento_id, versao, texto, links, audiencias, publicado_por) SELECT pa.id, pa.evento_id, 1, 'Texto editorial', '[{"tipo":"AFTERMOVIE","titulo":"Aftermovie","url":"https://exemplo.example/aftermovie"}]'::jsonb, '[{"veiculo":"ATL TV","metrica":"pessoas alcançadas","numero":1600000,"unidade":"pessoas"}]'::jsonb, (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM parceria pa WHERE pa.id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027); UPDATE evento_posvenda SET situacao = 'RETIRADO', retirado_em = now(), retirado_por = publicado_por; END $d$ $q$);
+    PERFORM pg_temp.confere('V18 POSVENDA', 'as tentativas não deixaram pós-venda gravado', 0, (SELECT count(*) FROM evento_posvenda));
 END $$;
 
 -- ---------------------------------------------------------------------
