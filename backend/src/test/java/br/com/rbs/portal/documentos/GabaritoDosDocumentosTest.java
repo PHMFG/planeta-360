@@ -106,4 +106,52 @@ class GabaritoDosDocumentosTest {
                 Map.entry("D10", 7), Map.entry("D11", 2), Map.entry("D13", 1));
         esperadas.forEach((id, paginas) -> assertThat(extracao(id).totalDePaginas()).as(id).isEqualTo(paginas));
     }
+
+    private static JsonNode fatoDoGabarito(String nome) throws IOException {
+        for (JsonNode fato : gabarito()) {
+            if (nome.equals(fato.path("fato").asString())) {
+                return fato;
+            }
+        }
+        throw new AssertionError("o gabarito não tem o fato " + nome);
+    }
+
+    private String textoDoDocumento(String id) {
+        return extracao(id).paginas().stream().map(p -> normalizar(p.texto())).reduce("", (a, b) -> a + " " + b);
+    }
+
+    /** [R1.3] O D06 e o gabarito dizem os espaços e a montagem que a RBS informou: 150 + 16 m² na Arena, 40 m² no Camarote. */
+    @Test
+    void oAnexoDoAmareloTemOsEspacosDaArenaEDoCamaroteEAMontagemDeCadaUm() throws IOException {
+        String d06 = textoDoDocumento("D06");
+        assertThat(d06).contains("150 metros quadrados", "16 metros quadrados", "40 metros quadrados",
+                "na Arena começa em 11/01/2027", "no Camarote começa em 18/01/2027")
+                .doesNotContain("120 metros quadrados", "20/01/2027");
+        JsonNode area = fatoDoGabarito("amarelo-area");
+        assertThat(area.path("id").asString()).isEqualTo("D06");
+        assertThat(area.path("resposta").asString()).isEqualTo("150|16|40");
+        assertThat(area.path("trecho").asString()).contains("150 metros quadrados", "16 metros quadrados", "40 metros quadrados");
+        JsonNode montagem = fatoDoGabarito("amarelo-montagem");
+        assertThat(montagem.path("id").asString()).isEqualTo("D06");
+        assertThat(montagem.path("resposta").asString()).isEqualTo("11/01/2027|18/01/2027");
+    }
+
+    /** [R1.3] O Roxo é Cota Apresenta: o D07 não dá metragem, montagem, horário de espaço nem kVA, e o gabarito diz isso. */
+    @Test
+    void oAnexoDoRoxoEDaCotaApresentaESemEspacoFisico() throws IOException {
+        String d07 = textoDoDocumento("D07");
+        assertThat(d07).contains("Cota Apresenta", "não inclui espaço físico")
+                .doesNotContain("metros quadrados", "kVA", "20/01/2027", "22/01/2027", "Subcota G")
+                .doesNotContainIgnoringCase("Amarelo");
+        assertThat(d07).doesNotContainPattern("\\b45\\b");
+        JsonNode semEspaco = fatoDoGabarito("roxo-sem-espaco");
+        assertThat(semEspaco.path("id").asString()).isEqualTo("D07");
+        assertThat(semEspaco.path("pagina").asInt()).isEqualTo(1);
+        assertThat(normalizar(extracao("D07").paginas().get(0).texto())).contains(normalizar(semEspaco.path("trecho").asString()));
+        for (String antigo : List.of("roxo-area", "roxo-montagem", "roxo-kva", "roxo-horario-espaco", "roxo-energia-total")) {
+            for (JsonNode fato : gabarito()) {
+                assertThat(fato.path("fato").asString()).as("o fato do espaço que o Roxo não tem").isNotEqualTo(antigo);
+            }
+        }
+    }
 }

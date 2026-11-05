@@ -9,6 +9,8 @@
 R1.1	e2e	requisitos-rbs.spec.ts > [R1.1] cota e investimento dos três clientes como a RBS informou
 R1.2	back	banco.AmostraBateComOsPdfsDaRbsTest
 R1.2	e2e	requisitos-rbs.spec.ts > [R1.2] cortesias e credenciais da amostra iguais aos planos
+R1.3	back	documentos.GabaritoDosDocumentosTest#oAnexoDoAmareloTemOsEspacosDaArenaEDoCamaroteEAMontagemDeCadaUm
+R1.3	back	documentos.GabaritoDosDocumentosTest#oAnexoDoRoxoEDaCotaApresentaESemEspacoFisico
 R1.4	back	consolidacao.PlanoDoAmareloP07aP10Test#csvDasPaginas7a10EntraSemRejeicao
 R2.1	e2e	requisitos-rbs.spec.ts > [R2.1] a RBS vê a página que travou e a deixa fora do Atlas
 R2.1	back	documentos.DocumentoComPaginaDeContatosTest#semMarcarNadaAAprovacaoTravaECitaAPaginaSemOValor
