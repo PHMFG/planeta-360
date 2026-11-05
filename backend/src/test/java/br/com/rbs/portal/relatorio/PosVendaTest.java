@@ -158,13 +158,17 @@ class PosVendaTest extends ApoioDeDireitos {
     // ---------------------------------------------------------------------
 
     @Test
-    void osLinksDePostsDaParceriaAparecemNoAnexoSoComHttp() {
+    void osLinksDePostsDaCargaEDoEnvioAparecemNoAnexoSoComHttp() {
         SessaoDeApi rbs = entrar(RBS);
         SessaoDeApi marca = entrar(AMARELO);
         long amarelo = amarelo();
         veiculacaoComLink(amarelo, "2030-01-01T12:00:00Z", "https://www.instagram.com/p/abc/");
         veiculacaoComLink(amarelo, "2030-01-02T12:00:00Z", "javascript:alert(1)");
         veiculacaoComLink(amarelo, "2030-01-03T12:00:00Z", "https://www.instagram.com@malicioso.example.invalid/p/x/");
+        long entrega = ((Number) lerJson(rbs.post("/api/parcerias/" + amarelo + "/entregas", "{\"abaCodigo\":\"MIDIA\",\"titulo\":\"Post da marca\"}"),
+                "$.id")).longValue();
+        assertThat(marca.post("/api/entregas/" + entrega + "/conteudos",
+                "{\"tipo\":\"LINK\",\"url\":\"https://www.tiktok.com/@planeta/video/1\",\"titulo\":\"Vídeo da marca\"}")).hasStatus(HttpStatus.CREATED);
         publicar(rbs, amarelo, CORPO);
         disponibilizar(rbs, amarelo);
 
@@ -172,9 +176,12 @@ class PosVendaTest extends ApoioDeDireitos {
 
         assertThat(resposta).hasStatus(HttpStatus.OK);
         List<String> links = lerLista(resposta, "$.linksDePosts[*].url");
-        assertThat(links).contains("https://www.instagram.com/p/abc/");
-        assertThat(links).as("só http e https, sem usuario@ antes do host").noneMatch(l -> l.startsWith("javascript:") || l.contains("@"));
-        assertThat(lerLista(resposta, "$.linksDePosts[?(@.url=='https://www.instagram.com/p/abc/')].veiculo")).hasSize(1).doesNotContainNull();
+        assertThat(links).contains("https://www.instagram.com/p/abc/", "https://www.tiktok.com/@planeta/video/1");
+        assertThat(links).as("só http e https, sem usuario@ antes do host").noneMatch(l -> l.startsWith("javascript:") || l.contains("malicioso"));
+        assertThat(lerLista(resposta, "$.linksDePosts[?(@.url=='https://www.instagram.com/p/abc/')].origem")).containsExactly("CARGA");
+        assertThat(lerLista(resposta, "$.linksDePosts[?(@.url=='https://www.instagram.com/p/abc/')].host")).containsExactly("instagram.com");
+        assertThat(lerLista(resposta, "$.linksDePosts[?(@.origem=='ENVIO')].titulo")).containsExactly("Vídeo da marca");
+        assertThat(corpo(resposta)).as("o anexo não repete quem enviou").doesNotContain("enviadoPor");
     }
 
     @Test

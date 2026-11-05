@@ -8,6 +8,7 @@ import br.com.rbs.portal.comum.HistoricoService;
 import br.com.rbs.portal.comum.NaoEncontradoException;
 import br.com.rbs.portal.comum.UsuarioAutenticado;
 import br.com.rbs.portal.comum.VerificadorDeAcesso;
+import br.com.rbs.portal.materiais.LinksDeMidiaService;
 import br.com.rbs.portal.relatorio.PosVendaDtos.AnexoDto;
 import br.com.rbs.portal.relatorio.PosVendaDtos.AudienciaDto;
 import br.com.rbs.portal.relatorio.PosVendaDtos.InformarResultadoRequisicao;
@@ -75,8 +76,11 @@ public class PosVendaService {
     private final PosVendaRepositorio repositorio;
     private final VerificadorDeAcesso verificador;
     private final HistoricoService historico;
+    private final LinksDeMidiaService links;
 
-    public PosVendaService(PosVendaRepositorio repositorio, VerificadorDeAcesso verificador, HistoricoService historico) {
+    public PosVendaService(PosVendaRepositorio repositorio, VerificadorDeAcesso verificador, HistoricoService historico,
+                           LinksDeMidiaService links) {
+        this.links = links;
         this.repositorio = repositorio;
         this.verificador = verificador;
         this.historico = historico;
@@ -100,9 +104,8 @@ public class PosVendaService {
             throw new NaoEncontradoException(NAO_DISPONIVEL);
         }
         Long eventoId = vigente != null ? vigente.eventoId() : repositorio.eventoDaParceria(parceriaId).orElse(null);
-        List<LinkDePostDto> posts = repositorio.linksDeVeiculacao(parceriaId).stream()
-                .filter(p -> p.link() != null && p.link().length() <= URL_MAXIMA && URL.matcher(p.link().strip()).matches())
-                .map(p -> new LinkDePostDto(p.veiculo(), p.formato(), Datas.emBrasilia(p.exibidoEm()), p.link().strip())).toList();
+        List<LinkDePostDto> posts = links.daParceria(parceriaId).stream()
+                .map(l -> new LinkDePostDto(l.origem(), l.url(), l.host(), l.data(), l.veiculo(), l.formato(), l.titulo())).toList();
         return new PosVendaDaParceriaDto(parceriaId, eventoId, disponibilizado, vigente == null ? null : paraAnexo(vigente, usuario.ehRbs()), posts);
     }
 

@@ -25,10 +25,6 @@ public class PosVendaRepositorio {
     public record ParceriaTravada(String situacao, Long eventoId) {
     }
 
-    /** Um link de veiculação comprovada. */
-    public record PostComLink(String veiculo, String formato, OffsetDateTime exibidoEm, String link) {
-    }
-
     /** Um número da edição. */
     public record Resultado(Long id, String indicador, BigDecimal valor, String qualificador, String unidade, String fonte) {
     }
@@ -107,18 +103,6 @@ public class PosVendaRepositorio {
     public boolean temRelatorioDisponibilizado(long parceriaId) {
         return jdbc.sql("SELECT EXISTS (SELECT 1 FROM relatorio WHERE parceria_id = :p AND status = 'DISPONIBILIZADO')")
                 .param("p", parceriaId).query(Boolean.class).single();
-    }
-
-    /** Os links das veiculações comprovadas da parceria (R5.3.d), do mais antigo ao mais novo, sem repetir o mesmo endereço. */
-    public List<PostComLink> linksDeVeiculacao(long parceriaId) {
-        return jdbc.sql("""
-                        SELECT ap.veiculo, ap.formato, min(v.exibido_em) AS exibido_em, v.link
-                        FROM veiculacao v JOIN aproveitamento_previsto ap ON ap.id = v.aproveitamento_id
-                        WHERE ap.parceria_id = :p AND v.link IS NOT NULL AND btrim(v.link) <> ''
-                        GROUP BY ap.veiculo, ap.formato, v.link
-                        ORDER BY min(v.exibido_em), v.link
-                        """)
-                .param("p", parceriaId).query(PostComLink.class).list();
     }
 
     // ---------------------------------------------------------------------

@@ -22,8 +22,11 @@ public final class PosVendaDtos {
     public record AudienciaDto(String veiculo, String metrica, BigDecimal numero, String unidade) {
     }
 
-    /** Um post da parceria (R5.3.d): o link de uma veiculação comprovada, com o veículo e o formato do plano. */
-    public record LinkDePostDto(String veiculo, String formato, OffsetDateTime exibidoEm, String url) {
+    /**
+     * Um post da parceria (R5.3.d), como na rota 87. {@code origem} é CARGA (veiculação carregada pela RBS: vêm veiculo e formato) ou
+     * ENVIO (link enviado como conteúdo numa entrega de Mídia: vem titulo). {@code data} é a da exibição (CARGA) ou a do envio (ENVIO).
+     */
+    public record LinkDePostDto(String origem, String url, String host, OffsetDateTime data, String veiculo, String formato, String titulo) {
     }
 
     /**

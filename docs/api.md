@@ -3302,7 +3302,8 @@ Mesmas regras da rota 89. **200** com `Content-Type: text/csv; charset=UTF-8`, U
     "audiencias": [ { "veiculo": "ATL TV", "metrica": "pessoas alcançadas", "numero": 1600000, "unidade": "pessoas" } ],
     "publicadoEm": "2027-02-01T10:00:00-03:00", "publicadoPor": null
   },
-  "linksDePosts": [ { "veiculo": "atl.la", "formato": "Post no feed", "exibidoEm": "2027-01-20T12:00:00-03:00", "url": "https://www.instagram.com/p/abc/" } ]
+  "linksDePosts": [ { "origem": "CARGA", "url": "https://www.instagram.com/p/abc/", "host": "instagram.com", "data": "2027-01-20T12:00:00-03:00", "veiculo": "atl.la", "formato": "Post no feed", "titulo": null },
+                    { "origem": "ENVIO", "url": "https://www.tiktok.com/@planeta/video/1", "host": "tiktok.com", "data": "2027-01-22T09:00:00-03:00", "veiculo": null, "formato": null, "titulo": "Vídeo da marca" } ]
 }
 ```
 
@@ -3311,7 +3312,7 @@ Mesmas regras da rota 89. **200** com `Content-Type: text/csv; charset=UTF-8`, U
 | `anexo` | A versão em vigor: **a mais nova da parceria, se não foi retirada**. Se a mais nova foi retirada, o anexo some (a API **não volta** para uma versão anterior). `publicadoPor` vai `null` para a marca (é dado interno da RBS) e preenchido (`id`, `nome`, `perfil`) para a RBS. |
 | `anexo.links[].tipo` | `AFTERMOVIE`, `CLIPPING` ou `OUTRO`. O `url` é **só `http` ou `https`**; o front o abre com `target="_blank"` e `rel="noopener noreferrer"`. |
 | `anexo.audiencias[]` | A audiência por veículo: `veiculo`, `metrica` (ex.: `ouvintes`), `numero` e `unidade`. |
-| `linksDePosts[]` | R5.3.d. Os links das **veiculações comprovadas** da parceria (`veiculacao.link`, rota 29), um por endereço, do mais antigo ao mais novo, com o veículo e o formato do plano. Só entram os que são `http` ou `https`, sem `usuario@` antes do host; o resto fica de fora. Os links enviados como conteúdo de uma entrega (rota 87) **ainda não entram** aqui. Vêm também sem anexo, para a RBS. |
+| `linksDePosts[]` | R5.3.d. Os mesmos links da rota 87, do mais recente ao mais antigo: `origem` `CARGA` (a veiculação comprovada, `veiculacao.link`: vêm `veiculo` e `formato`) ou `ENVIO` (o link enviado como conteúdo numa entrega da aba Mídia, rota 86: vem `titulo`). `data` é a da exibição (CARGA) ou a do envio (ENVIO). Vale a regra de link da rota 87: só `http` ou `https` com host, sem `usuario@` antes do host, sem espaço, controle nem bidi, até 500 caracteres; o que está no banco e não cumpre a regra fica de fora. Quem enviou não aparece. Sai mesmo com a aba Mídia fechada (o anexo já confere a parceria e o relatório disponibilizado). Vêm também sem anexo, para a RBS. |
 
 **Erros**
 

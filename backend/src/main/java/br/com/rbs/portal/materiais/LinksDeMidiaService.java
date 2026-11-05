@@ -32,9 +32,18 @@ public class LinksDeMidiaService {
     public LinksDeMidiaDto listar(UsuarioAutenticado usuario, long parceriaId) {
         verificador.exigirParceria(usuario, parceriaId);
         verificador.exigirAbaLiberada(usuario, parceriaId, ABA_MIDIA);
+        return new LinksDeMidiaDto(parceriaId, daParceria(parceriaId));
+    }
+
+    /**
+     * Os mesmos links da rota 87, sem conferir quem pede nem a aba: para o anexo de pós-venda (rota 96), que já confere a parceria e o
+     * relatório disponibilizado. Quem chama é que decide o que mostrar de cada item.
+     */
+    @Transactional(readOnly = true)
+    public List<LinkDeMidiaDto> daParceria(long parceriaId) {
         List<LinkDeMidiaDto> itens = new ArrayList<>(repositorio.linksDaCarga(parceriaId));
         itens.addAll(repositorio.linksEnviados(parceriaId));
         itens.sort(Comparator.comparing(LinkDeMidiaDto::data).reversed());
-        return new LinksDeMidiaDto(parceriaId, itens);
+        return itens;
     }
 }

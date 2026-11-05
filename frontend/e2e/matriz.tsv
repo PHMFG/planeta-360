@@ -66,7 +66,7 @@ R5.3.b	back	materiais.LinksDeMidiaTest#marcaDeOutraParceriaRecebe404EOsLinksDeUm
 R5.3.c	back	comum.RotasDosRequisitosDaRbsAcessoTest#conteudoEPlanoComercialNaoTemPatchNemDelete
 R5.3.c	back	materiais.ConteudoDaEntregaTest#oBancoRecusaUpdateEDeleteDoConteudoEAApiNaoTemPatchNemDelete
 R5.3.d	back	consolidacao.ConsolidacaoControllerTest#amareloVeOPrevistoEOExibidoDeUmaUnidadeIgualAoBanco
-R5.3.d	back	relatorio.PosVendaTest#osLinksDePostsDaParceriaAparecemNoAnexoSoComHttp
+R5.3.d	back	relatorio.PosVendaTest#osLinksDePostsDaCargaEDoEnvioAparecemNoAnexoSoComHttp
 R5.3.d	back	relatorio.PosVendaTest#osLinksDePostsDeOutraParceriaNaoVazam
 R5.4.a	e2e	requisitos-rbs.spec.ts > [R5.4.a] a RBS grava a cota de cortesias com acesso e shuttle
 R5.4.a	back	cortesias.CortesiasDaRbsTest#rbsGravaAGradeInteiraEAMarcaVeAoRecarregar
