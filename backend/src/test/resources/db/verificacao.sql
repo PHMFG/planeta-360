@@ -1,6 +1,6 @@
--- Confere o banco depois de V1 a V16 e da amostra R__amostra.sql: contagens, cargas, relatórios, órfãos e uma tentativa de violar cada regra.
+-- Confere o banco depois de V1 a V17 e da amostra R__amostra.sql: contagens, cargas, relatórios, órfãos e uma tentativa de violar cada regra.
 -- Atende o item 1 da Entrega 2 (amostra e verificações), prova as 8 correções do item 8 e, na seção 8, o plano comercial, o
--- catálogo e os dados informados da V7 e, na seção 9, as tabelas do Atlas da V8, o resumo do raciocínio da V9 e o traço do diagnóstico da V10 e, na seção 10, os documentos, os trechos, a busca sem acento e a RLS da V11 e, na seção 11, as fontes citadas, o documento congelado e o plural da busca da V12 e, na seção 12, os prazos da V13 e, na seção 14, o JEV e a conversa sem parceria da V15 e, na seção 15, o papel da entrega, o Open Staff, o texto e link da entrega, o contrato e a pesquisa da ativação da V16. Nenhuma linha fica gravada: as tentativas são desfeitas (só as sequências avançam).
+-- catálogo e os dados informados da V7 e, na seção 9, as tabelas do Atlas da V8, o resumo do raciocínio da V9 e o traço do diagnóstico da V10 e, na seção 10, os documentos, os trechos, a busca sem acento e a RLS da V11 e, na seção 11, as fontes citadas, o documento congelado e o plural da busca da V12 e, na seção 12, os prazos da V13 e, na seção 14, o JEV e a conversa sem parceria da V15 e, na seção 15, o papel da entrega, o Open Staff, o texto e link da entrega, o contrato e a pesquisa da ativação da V16 e, na seção 15b, as páginas fora do Atlas da V17. Nenhuma linha fica gravada: as tentativas são desfeitas (só as sequências avançam).
 
 -- Como rodar (banco de dev ou de teste com a amostra carregada; sem meta-comandos, serve também para JDBC com o texto inteiro):
 --   PGPASSWORD=portal psql -X -P pager=off -v ON_ERROR_STOP=1 -h localhost -U portal -d <banco> -f verificacao.sql
@@ -77,7 +77,7 @@ BEGIN
     PERFORM pg_temp.confere('ESTRUTURA', 'funções fn_carregar_veiculacoes, fn_carregar_pesquisa, fn_carregar_plano, fn_gerar_relatorio', 4,
        (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
          WHERE n.nspname = 'public' AND p.proname IN ('fn_carregar_veiculacoes', 'fn_carregar_pesquisa', 'fn_carregar_plano', 'fn_gerar_relatorio')));
-    PERFORM pg_temp.confere('ESTRUTURA', 'gatilhos de regra (rn_*): 29 até a V15, mais rn_contrato_arquivo e rn_entrega_conteudo_imutavel da V16, mais rn_evento_posvenda_conteudo e rn_evento_posvenda_imutavel da V18', 33,
+    PERFORM pg_temp.confere('ESTRUTURA', 'gatilhos de regra (rn_*): 29 até a V15, mais rn_contrato_arquivo e rn_entrega_conteudo_imutavel da V16, rn_documento_paginas_ignoradas da V17, mais rn_evento_posvenda_conteudo e rn_evento_posvenda_imutavel da V18', 34,
        (SELECT count(*) FROM pg_trigger WHERE NOT tgisinternal AND tgname LIKE 'rn\_%'));
     PERFORM pg_temp.confere('BASE', 'tipos de cota', 3, (SELECT count(*) FROM cota_tipo));
     PERFORM pg_temp.confere('BASE', 'abas do menu', 7, (SELECT count(*) FROM aba));
@@ -1288,7 +1288,7 @@ BEGIN
           WHERE n.nspname = 'public' AND p.proname IN ('fn_texto_de_busca', 'fn_trava_grupo_documento', 'fn_publicar_documento')));
     PERFORM pg_temp.afirma('V11 ESTRUTURA', 'fn_texto_de_busca é IMMUTABLE (entra na coluna gerada)',
         (SELECT provolatile = 'i' FROM pg_proc WHERE proname = 'fn_texto_de_busca' AND pronamespace = 'public'::regnamespace));
-    PERFORM pg_temp.confere('V11 ESTRUTURA', 'gatilhos rn_documento* (7 da V11 e o rn_documento_congelado da V12)', 8,
+    PERFORM pg_temp.confere('V11 ESTRUTURA', 'gatilhos rn_documento* (7 da V11, o rn_documento_congelado da V12 e o rn_documento_paginas_ignoradas da V17)', 9,
         (SELECT count(*) FROM pg_trigger WHERE NOT tgisinternal AND tgname LIKE 'rn\_documento%'));
     PERFORM pg_temp.afirma('V11 ESTRUTURA', 'tsv é coluna gerada STORED (no PostgreSQL 18 a gerada é virtual por padrão)',
         (SELECT attgenerated = 's' FROM pg_attribute WHERE attrelid = 'documento_trecho'::regclass AND attname = 'tsv'));
@@ -2603,6 +2603,103 @@ BEGIN
     PERFORM pg_temp.aceita('V18 POSVENDA', 'texto, link, audiência e a retirada (só situacao, retirado_em e retirado_por mudam)', $q$
         DO $d$ BEGIN INSERT INTO evento_posvenda (parceria_id, evento_id, versao, texto, links, audiencias, publicado_por) SELECT pa.id, pa.evento_id, 1, 'Texto editorial', '[{"tipo":"AFTERMOVIE","titulo":"Aftermovie","url":"https://exemplo.example/aftermovie"}]'::jsonb, '[{"veiculo":"ATL TV","metrica":"pessoas alcançadas","numero":1600000,"unidade":"pessoas"}]'::jsonb, (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM parceria pa WHERE pa.id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027); UPDATE evento_posvenda SET situacao = 'RETIRADO', retirado_em = now(), retirado_por = publicado_por; END $d$ $q$);
     PERFORM pg_temp.confere('V18 POSVENDA', 'as tentativas não deixaram pós-venda gravado', 0, (SELECT count(*) FROM evento_posvenda));
+END $$;
+
+-- ---------------------------------------------------------------------
+-- 15b. V17: as páginas fora do Atlas (R2.1)
+-- ---------------------------------------------------------------------
+DO $$
+DECLARE v_padrao BIGINT;
+BEGIN
+    PERFORM pg_temp.confere('V17 ESTRUTURA', 'colunas paginas_ignoradas e suspeitas em documento', 2,
+        (SELECT count(*) FROM information_schema.columns WHERE table_name = 'documento' AND column_name IN ('paginas_ignoradas', 'suspeitas')));
+    PERFORM pg_temp.afirma('V17 ESTRUTURA', 'o gatilho rn_documento_paginas_ignoradas existe',
+        EXISTS (SELECT 1 FROM pg_trigger WHERE NOT tgisinternal AND tgname = 'rn_documento_paginas_ignoradas'));
+    v_padrao := pg_temp.doc('v17-p0', 'v17-p0', 'GLOBAL', 2027, NULL, NULL, 'AGUARDANDO');
+    PERFORM pg_temp.afirma('V17 PADRAO', 'o documento nasce sem página fora do Atlas e sem suspeita',
+        (SELECT cardinality(paginas_ignoradas) = 0 AND suspeitas = '[]'::jsonb FROM documento WHERE id = v_padrao));
+    PERFORM pg_temp.aceita('V17 PAGINAS', 'páginas 2 e 4 de um documento de 5 páginas', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v17-a', 'v17-a', 'GLOBAL', 2027, NULL, NULL, 'AGUARDANDO');
+        BEGIN
+            UPDATE documento SET paginas = 5 WHERE id = v_id;
+            UPDATE documento SET paginas_ignoradas = '{2,4}' WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V17 PAGINAS', 'página além do total de páginas', 'rn_documento_paginas_ignoradas', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v17-b', 'v17-b', 'GLOBAL', 2027, NULL, NULL, 'AGUARDANDO');
+        BEGIN
+            UPDATE documento SET paginas = 5 WHERE id = v_id;
+            UPDATE documento SET paginas_ignoradas = '{6}' WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V17 PAGINAS', 'página zero', 'rn_documento_paginas_ignoradas', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v17-c', 'v17-c', 'GLOBAL', 2027, NULL, NULL, 'AGUARDANDO');
+        BEGIN
+            UPDATE documento SET paginas = 5 WHERE id = v_id;
+            UPDATE documento SET paginas_ignoradas = '{0,2}' WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V17 PAGINAS', 'página repetida', 'rn_documento_paginas_ignoradas', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v17-d', 'v17-d', 'GLOBAL', 2027, NULL, NULL, 'AGUARDANDO');
+        BEGIN
+            UPDATE documento SET paginas = 5 WHERE id = v_id;
+            UPDATE documento SET paginas_ignoradas = '{2,2}' WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V17 PAGINAS', 'todas as páginas fora do Atlas', 'rn_documento_paginas_ignoradas', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v17-e', 'v17-e', 'GLOBAL', 2027, NULL, NULL, 'AGUARDANDO');
+        BEGIN
+            UPDATE documento SET paginas = 3 WHERE id = v_id;
+            UPDATE documento SET paginas_ignoradas = '{1,2,3}' WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V17 PAGINAS', 'mais de 20 páginas fora do Atlas', 'rn_documento_paginas_ignoradas', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v17-f', 'v17-f', 'GLOBAL', 2027, NULL, NULL, 'AGUARDANDO');
+        BEGIN
+            UPDATE documento SET paginas = 100 WHERE id = v_id;
+            UPDATE documento SET paginas_ignoradas = ARRAY(SELECT generate_series(1, 21))::smallint[] WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V17 PAGINAS', 'páginas marcadas num documento sem total de páginas (não foi lido)', 'rn_documento_paginas_ignoradas', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v17-g', 'v17-g', 'GLOBAL', 2027, NULL, NULL, 'AGUARDANDO');
+        BEGIN
+            UPDATE documento SET paginas_ignoradas = '{1}' WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V17 PAGINAS', 'mudar as páginas de um documento já aprovado', 'rn_documento_paginas_ignoradas', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v17-h', 'v17-h', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+        BEGIN
+            UPDATE documento SET paginas = 5 WHERE id = v_id;
+            UPDATE documento SET paginas_ignoradas = '{2}' WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V17 SUSPEITA', 'suspeitas que não é uma lista', 'ck_documento_suspeitas', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v17-i', 'v17-i', 'GLOBAL', 2027, NULL, NULL, 'AGUARDANDO');
+        BEGIN
+            UPDATE documento SET suspeitas = '{"pagina":4}' WHERE id = v_id;
+        END $d$ $q$);
+    -- A suspeita de dado pessoal segue sem se desmarcar sozinha (V12), a não ser junto de uma mudança das páginas fora do Atlas.
+    PERFORM pg_temp.recusa('V17 CONGELADO', 'desmarcar a suspeita de dado pessoal sem mexer nas páginas', 'rn_documento_congelado', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v17-j', 'v17-j', 'GLOBAL', 2027, NULL, NULL, 'AGUARDANDO', TRUE);
+        BEGIN
+            UPDATE documento SET contem_dados_pessoais = FALSE WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.aceita('V17 CONGELADO', 'desmarcar a suspeita junto de marcar as páginas, ainda aguardando aprovação', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v17-k', 'v17-k', 'GLOBAL', 2027, NULL, NULL, 'AGUARDANDO', TRUE);
+        BEGIN
+            UPDATE documento SET paginas = 5 WHERE id = v_id;
+            UPDATE documento SET paginas_ignoradas = '{4}', contem_dados_pessoais = FALSE WHERE id = v_id;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V17 CONGELADO', 'mexer na suspeita e nas páginas de um documento já aprovado', 'rn_documento_congelado', $q$
+        DO $d$
+        DECLARE v_id BIGINT := pg_temp.doc('v17-l', 'v17-l', 'GLOBAL', 2027, NULL, NULL, 'INDEXADO');
+        BEGIN
+            UPDATE documento SET paginas = 5 WHERE id = v_id;
+            UPDATE documento SET paginas_ignoradas = '{4}', contem_dados_pessoais = TRUE WHERE id = v_id;
+        END $d$ $q$);
 END $$;
 
 -- ---------------------------------------------------------------------
