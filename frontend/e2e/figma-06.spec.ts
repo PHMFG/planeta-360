@@ -1,12 +1,8 @@
 // Fidelidade ao Figma 06 ("UI com a marca"): os elementos obrigatórios de cada tela que o plano final constrói (Apêndice A),
-// por papel e nome acessível, e a captura em 1440×900 e 390×844 para comparar com o PNG do Figma. Cada tela fica como
-// `fixme` até a fase dela; o corpo pendente lança erro, para o `fixme` não poder sair sem o teste.
+// por papel e nome acessível, e a captura em 1440×900 e 390×844 para comparar com o PNG do Figma.
+import fs from 'node:fs'
 import { expect, test } from '@playwright/test'
 import { capturar, entrar, entrarComo, novaMarcaDeTeste, parceriaDa, sessaoDaApi } from './apoio.ts'
-
-const pendente = () => {
-  throw new Error('pendente: escreva o teste ao construir a tela')
-}
 
 test.describe('Figma 06', () => {
   test('P01 Perfil da marca: plano comercial e compra de ingressos', async ({ page }) => {
@@ -41,7 +37,40 @@ test.describe('Figma 06', () => {
     await expect(page.getByText('Arquivos enviados')).toBeVisible()
     await capturar(page, 'figma-06/P02-aplicacoes-1440')
   })
-  test.fixme('P03 Mídia e conteúdo: publicados pela RBS, posts e links, comprovação mensal', pendente)
+  test('P03 Mídia e conteúdo: publicados pela RBS, posts e links, comprovação mensal', async ({ page }) => {
+    // Uma Master de teste com o relatório de veiculação publicado pela RBS (o cartão "Relatório de veiculação e links" do Figma).
+    const marca = await novaMarcaDeTeste('MASTER')
+    const { contexto, cabecalhos } = await sessaoDaApi('rbs')
+    const entrega = await contexto.post(`/api/parcerias/${marca.parceriaId}/entregas`, {
+      headers: cabecalhos,
+      data: { abaCodigo: 'MIDIA', titulo: 'Relatório de veiculação', descricao: 'Publicado pela RBS.', status: 'AGUARDANDO_ENVIO' },
+    })
+    expect(entrega.status()).toBe(201)
+    const publicado = await contexto.post(`/api/entregas/${(await entrega.json()).id}/arquivos`, {
+      headers: cabecalhos,
+      multipart: {
+        arquivo: { name: 'relatorio-de-veiculacao-e-links.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: fs.readFileSync('../backend/src/main/resources/dev/exemplos/exemplo.xlsx') },
+        categoria: 'RELATORIO_VEICULACAO',
+      },
+    })
+    expect(publicado.status()).toBe(201)
+    await contexto.dispose()
+
+    await entrarComo(page, marca.email)
+    await page.goto(`/parceria/${marca.parceriaId}/midia`)
+    await expect(page.getByText('Largue seus documentos aqui')).toBeVisible()
+    await expect(page.getByRole('button', { name: 'Selecionar arquivos' })).toBeVisible()
+    await expect(page.getByPlaceholder(/Buscar por nome/)).toBeVisible()
+    const filtros = page.getByRole('group', { name: 'Filtros' })
+    for (const filtro of [/^Todos/, /^Enviados pela marca/, /^Publicados pela RBS/]) await expect(filtros.getByRole('button', { name: filtro })).toBeVisible()
+    await expect(page.getByText('relatorio-de-veiculacao-e-links.xlsx').first()).toBeVisible()
+    await expect(page.getByText('Publicado pela RBS · abrir / baixar')).toBeVisible()
+    await expect(page.getByText('A regra muda por tipo de conteúdo')).toBeVisible()
+    // O que o Figma não desenha e a RBS pede: os links dos posts e a comprovação mensal (só da Master).
+    await expect(page.getByRole('heading', { name: 'Posts e links' })).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Comprovação mensal', exact: true })).toBeVisible()
+    await capturar(page, 'figma-06/P03-midia-1440')
+  })
   test('P04 Cortesias: destinação de ingressos', async ({ page }) => {
     const marca = await novaMarcaDeTeste('SUBCOTA')
     const { contexto, cabecalhos } = await sessaoDaApi('rbs')

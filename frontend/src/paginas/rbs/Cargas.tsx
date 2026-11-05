@@ -3,6 +3,7 @@
 // [DUPLICIDADE] Reenviar a mesma planilha não muda a contagem: as linhas repetidas entram como duplicadas.
 import { useState, type FormEvent } from 'react'
 import { ErroApi } from '../../api/cliente'
+import { baixarLoteDaComprovacao } from '../../api/comprovacao'
 import { listarEventos } from '../../api/parcerias'
 import { enviarCarga, listarCargas, listarRejeicoes, type Carga, type Rejeicao } from '../../api/resultados'
 import { useDados } from '../../api/useDados'
@@ -66,6 +67,52 @@ function Rejeicoes({ carga }: { carga: Carga }) {
   )
 }
 
+/** R3.3: a RBS baixa a comprovação mensal de todas as Master ativas da edição, uma aba por parceria. */
+function LoteDaComprovacao() {
+  const eventos = useDados(listarEventos, [])
+  const [eventoId, setEventoId] = useState('')
+  const [baixando, setBaixando] = useState(false)
+  const [falha, setFalha] = useState<string | null>(null)
+  const escolhido = (eventos.dado ?? []).find((item) => String(item.id) === eventoId) ?? eventos.dado?.[0]
+
+  async function baixar() {
+    if (!escolhido) return
+    setBaixando(true)
+    setFalha(null)
+    try {
+      await baixarLoteDaComprovacao(escolhido.id, escolhido.edicao)
+    } catch (erro) {
+      setFalha(erro instanceof ErroApi ? erro.message : 'Não foi possível baixar a comprovação.')
+    } finally {
+      setBaixando(false)
+    }
+  }
+
+  return (
+    <Cartao titulo="Comprovação mensal das Master">
+      <p className="mb-4 text-sm font-medium text-texto-2">
+        Uma planilha .xlsx com uma aba por parceria Master ativa da edição: o exibido de cada mês, por tipo de mídia e unidade. Cada
+        marca Master baixa a sua na aba Mídia.
+      </p>
+      <div className="flex flex-wrap items-end gap-3">
+        <div className="w-full sm:w-64">
+          <Seletor rotulo="Edição da comprovação" value={escolhido ? String(escolhido.id) : ''} onChange={(campo) => setEventoId(campo.target.value)}>
+            {(eventos.dado ?? []).map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.nome} {item.edicao}
+              </option>
+            ))}
+          </Seletor>
+        </div>
+        <Botao icone="ri-file-excel-2-line" carregando={baixando} disabled={!escolhido} onClick={baixar}>
+          Baixar comprovação das Master
+        </Botao>
+      </div>
+      {falha && <Aviso tipo="falha" titulo={falha} className="mt-4" />}
+    </Cartao>
+  )
+}
+
 export function Cargas() {
   const eventos = useDados(listarEventos, [])
   const [pagina, setPagina] = useState(0)
@@ -123,7 +170,7 @@ export function Cargas() {
       <CabecalhoSecao
         trilha="Planeta Atlântida / RBS · Gestão"
         titulo="Cargas"
-        subtitulo="Envie as planilhas de veiculação, de pesquisa e do plano comercial e veja o resultado de cada carga."
+        subtitulo="Envie as planilhas de veiculação, de pesquisa e do plano comercial, veja o resultado de cada carga e baixe a comprovação mensal das Master."
       />
 
       <Cartao titulo="Enviar planilha">
@@ -173,6 +220,8 @@ export function Cargas() {
           <Resultado carga={ultima} />
         </>
       )}
+
+      <LoteDaComprovacao />
 
       <Cartao titulo="Cargas feitas">
         <Carregando dados={cargas} vazio={(dado) => dado.itens.length === 0} textoVazio="Nenhuma carga ainda.">

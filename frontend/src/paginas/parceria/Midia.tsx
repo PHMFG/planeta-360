@@ -22,6 +22,7 @@ import { data, dataHora, numero, tamanho } from '../../util/formatar'
 import { useParceria, useRecarregarSeAbaFechou } from './ContextoParceria'
 import { DetalheEntrega } from './DetalheEntrega'
 import { PostsELinks } from '../../componentes/PostsELinks'
+import { ComprovacaoMensal } from '../../componentes/ComprovacaoMensal'
 import { ListaEntregas, NovaEntrega } from './EntregasDaAba'
 
 type Origem = 'todos' | 'marca' | 'rbs'
@@ -305,6 +306,9 @@ function ConteudoMidia({ rbs }: { rbs: boolean }) {
       </Cartao>
 
       <PrevistoExibido />
+
+      {/* R3.2 e R3.3: só a cota Master (e a RBS, na parceria Master); as outras cotas não veem o cartão. */}
+      {parceria.cota.codigo === 'MASTER' && <ComprovacaoMensal parceriaId={parceria.id} patrocinador={parceria.patrocinador} />}
 
       {/* R4.3 e R5.3.b: os links dos posts, clicáveis, da carga da RBS e dos materiais enviados. */}
       <PostsELinks parceriaId={parceria.id} />

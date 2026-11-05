@@ -5,6 +5,7 @@
 // Enquanto a fase do requisito não chega, o teste fica como `fixme` e o corpo lança erro: tirar o `fixme` sem escrever o
 // teste deixa a execução vermelha. Nada aqui muda número do Amarelo, do Roxo ou do Verde: quem precisa escrever cria uma
 // marca de teste pela API, na pilha.
+import fs from 'node:fs'
 import { expect, test, type Page } from '@playwright/test'
 import { entrar, entrarComo, novaMarcaDeTeste, parceriaDa, sessaoDaApi } from './apoio.ts'
 
@@ -54,8 +55,61 @@ test.describe('R1 · planos comerciais', () => {
 })
 
 test.describe('R3 e R4 · comprovação mensal e formatos', () => {
-  test.fixme('[R3.2] a Master baixa a comprovação mensal por mês, tipo e unidade', pendente)
-  test.fixme('[R3.3] a comprovação mensal não aparece para Subcota G nem Subcota', pendente)
+  test('[R3.2] a Master baixa a comprovação mensal por mês, tipo e unidade', async ({ page }) => {
+    const amarelo = await parceriaDa('amarelo')
+    const { contexto } = await sessaoDaApi('amarelo')
+    const resposta = await contexto.get(`/api/parcerias/${amarelo}/comprovacao-mensal`)
+    expect(resposta.status()).toBe(200)
+    const comprovacao = (await resposta.json()) as { linhas: { mes: string; tipoMidiaNome: string; unidadeNome: string; exibido: number }[] }
+    await contexto.dispose()
+    expect(new Set(comprovacao.linhas.map((linha) => linha.mes)).size, 'a amostra tem exibição em mais de um mês').toBeGreaterThan(1)
+
+    await entrar(page, 'amarelo')
+    await page.goto(`/parceria/${amarelo}/midia`)
+    const cartao = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Comprovação mensal', exact: true }) })
+    const linhas = cartao.locator('tbody tr')
+    await expect(linhas).toHaveCount(comprovacao.linhas.length)
+    // O filtro do mês deixa só as linhas daquele mês, com o mesmo número da API (mês x tipo x unidade).
+    const escolhida = comprovacao.linhas[comprovacao.linhas.length - 1]
+    await cartao.getByLabel('Mês').selectOption(escolhida.mes)
+    await expect(linhas).toHaveCount(comprovacao.linhas.filter((linha) => linha.mes === escolhida.mes).length)
+    const linha = linhas.filter({ hasText: escolhida.tipoMidiaNome }).filter({ hasText: escolhida.unidadeNome })
+    await expect(linha).toHaveCount(1)
+    await expect(linha.locator('td').nth(3)).toHaveText(new Intl.NumberFormat('pt-BR').format(escolhida.exibido))
+
+    const [xlsx] = await Promise.all([page.waitForEvent('download'), cartao.getByRole('button', { name: 'Baixar planilha (.xlsx)' }).click()])
+    expect(xlsx.suggestedFilename()).toBe('comprovacao-mensal-cliente-amarelo.xlsx')
+    expect(fs.readFileSync(await xlsx.path()).subarray(0, 2).toString('latin1'), 'um .xlsx é um zip').toBe('PK')
+    const [csv] = await Promise.all([page.waitForEvent('download'), cartao.getByRole('button', { name: 'Baixar CSV' }).click()])
+    const texto = fs.readFileSync(await csv.path(), 'utf8')
+    expect(texto.charCodeAt(0), 'CSV com BOM, para o Excel ler os acentos').toBe(0xfeff)
+    expect(texto.split('\n')[0]).toContain(';')
+  })
+  test('[R3.3] a comprovação mensal não aparece para Subcota G nem Subcota', async ({ page }) => {
+    for (const persona of ['roxo', 'verde'] as const) {
+      const id = await parceriaDa(persona)
+      const { contexto } = await sessaoDaApi(persona)
+      for (const sufixo of ['', '.xlsx', '.csv']) {
+        const recusa = await contexto.get(`/api/parcerias/${id}/comprovacao-mensal${sufixo}`)
+        expect(recusa.status(), `${persona}${sufixo}`).toBe(403)
+        expect((await recusa.json()).detail).toBe('A comprovação mensal é das cotas Master.')
+      }
+      expect((await contexto.get('/api/eventos/1/comprovacao-mensal.xlsx')).status(), 'o lote é só da RBS').toBe(403)
+      await contexto.dispose()
+      await page.context().clearCookies()
+      await entrar(page, persona)
+      await page.goto(`/parceria/${id}/midia`)
+      await expect(page.getByRole('heading', { name: 'Posts e links' })).toBeVisible()
+      await expect(page.getByRole('heading', { name: 'Comprovação mensal', exact: true })).toHaveCount(0)
+    }
+    // A RBS baixa o lote da edição em Cargas: um .xlsx com uma aba por Master.
+    await page.context().clearCookies()
+    await entrar(page, 'rbs')
+    await page.goto('/rbs/cargas')
+    const [lote] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Baixar comprovação das Master' }).click()])
+    expect(lote.suggestedFilename()).toMatch(/^comprovacao-mensal-edicao-\d{4}\.xlsx$/)
+    expect(fs.readFileSync(await lote.path()).subarray(0, 2).toString('latin1')).toBe('PK')
+  })
   test.fixme('[R4.1] .doc, .ppt e .xls sem macro entram; com macro, não', pendente)
   test('[R4.3] o link do post abre em aba nova, e javascript: é recusado', async ({ page }) => {
     const roxo = await parceriaDa('roxo')
@@ -424,3 +478,4 @@ async function entregaDeMidia(parceriaId: number) {
   await contexto.dispose()
   return id
 }
+
