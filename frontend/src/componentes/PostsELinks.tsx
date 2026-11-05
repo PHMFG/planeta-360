@@ -19,7 +19,7 @@ export function PostsELinks({ parceriaId }: { parceriaId: number }) {
 
   return (
     <Cartao titulo="Posts e links">
-      <Carregando dados={links} vazio={(dado) => dado.itens.length === 0} textoVazio="Nenhum link de post ainda. Eles aparecem quando a RBS carrega a veiculação ou quando alguém envia um link.">
+      <Carregando dados={links} vazio={(dado) => dado.itens.length === 0} textoVazio="Nenhum link de post ainda. Eles entram pela planilha de veiculação (coluna link), em Cargas, e pelo envio em Link numa entrega desta aba, pela marca ou pela RBS.">
         {({ itens }) => (
           <ul className="flex flex-col divide-y divide-borda">
             {itens.map((link, indice) => (
