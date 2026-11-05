@@ -21,6 +21,7 @@ import { useSessao } from '../../sessao/Sessao'
 import { data, dataHora, numero, tamanho } from '../../util/formatar'
 import { useParceria, useRecarregarSeAbaFechou } from './ContextoParceria'
 import { DetalheEntrega } from './DetalheEntrega'
+import { PostsELinks } from '../../componentes/PostsELinks'
 import { ListaEntregas, NovaEntrega } from './EntregasDaAba'
 
 type Origem = 'todos' | 'marca' | 'rbs'
@@ -304,6 +305,9 @@ function ConteudoMidia({ rbs }: { rbs: boolean }) {
       </Cartao>
 
       <PrevistoExibido />
+
+      {/* R4.3 e R5.3.b: os links dos posts, clicáveis, da carga da RBS e dos materiais enviados. */}
+      <PostsELinks parceriaId={parceria.id} />
 
       <Aviso titulo="A regra muda por tipo de conteúdo">
         Comercial de TV e conteúdo assinado: sem aprovação prévia. Branded content: consulte as regras específicas antes do envio.

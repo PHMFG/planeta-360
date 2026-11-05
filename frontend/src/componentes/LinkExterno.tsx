@@ -30,7 +30,7 @@ export function LinkExterno({ href, children, className = '', mostrarDominio = t
       {children}
       <i className="ri-external-link-line ml-1" aria-hidden="true" />
       <span className="sr-only"> (abre em outra aba)</span>
-      {mostrarDominio && <span className="ml-1 text-xs font-medium opacity-80">· {url.hostname.replace(/^www\./, '')}</span>}
+      {mostrarDominio && <span className="ml-1 text-xs font-medium">· {url.hostname.replace(/^www\./, '')}</span>}
     </a>
   )
 }

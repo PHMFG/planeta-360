@@ -57,7 +57,23 @@ test.describe('R3 e R4 · comprovação mensal e formatos', () => {
   test.fixme('[R3.2] a Master baixa a comprovação mensal por mês, tipo e unidade', pendente)
   test.fixme('[R3.3] a comprovação mensal não aparece para Subcota G nem Subcota', pendente)
   test.fixme('[R4.1] .doc, .ppt e .xls sem macro entram; com macro, não', pendente)
-  test.fixme('[R4.3] o link do post abre em aba nova, e javascript: é recusado', pendente)
+  test('[R4.3] o link do post abre em aba nova, e javascript: é recusado', async ({ page }) => {
+    const roxo = await parceriaDa('roxo')
+    await entrar(page, 'roxo')
+    await page.goto(`/parceria/${roxo}/midia`)
+    const cartao = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Posts e links' }) })
+    const link = cartao.getByRole('link', { name: /instagram\.com/ }).first()
+    await expect(link).toHaveAttribute('href', /^https:\/\/www\.instagram\.com\//)
+    await expect(link).toHaveAttribute('target', '_blank')
+    await expect(link).toHaveAttribute('rel', 'noopener noreferrer')
+    // A API recusa um link que não é http(s) no envio de material.
+    const marca = await novaMarcaDeTeste('SUBCOTA')
+    const entregaId = await entregaDeMidia(marca.parceriaId)
+    const { contexto, cabecalhos } = await sessaoDaApi('rbs')
+    const recusa = await contexto.post(`/api/entregas/${entregaId}/conteudos`, { headers: cabecalhos, data: { tipo: 'LINK', url: 'javascript:alert(1)' } })
+    expect(recusa.status()).toBe(422)
+    await contexto.dispose()
+  })
 })
 
 test.describe('R5 · as abas', () => {
@@ -123,8 +139,51 @@ test.describe('R5 · as abas', () => {
     await cartao.locator('input[data-espaco="LOGO"]').setInputFiles({ name: 'logo.svg', mimeType: 'image/svg+xml', buffer: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>') })
     await expect(cartao.getByRole('alert').filter({ hasText: /dentro de um \.zip/ })).toBeVisible()
   })
-  test.fixme('[R5.3.a] a marca envia material em texto e em link', pendente)
-  test.fixme('[R5.3.b] os links dos posts aparecem em Posts e links', pendente)
+  test('[R5.3.a] a marca envia material em texto e em link', async ({ page }) => {
+    const marca = await novaMarcaDeTeste('SUBCOTA')
+    await entregaDeMidia(marca.parceriaId)
+    await entrarComo(page, marca.email)
+    await page.goto(`/parceria/${marca.parceriaId}/midia`)
+    await page.getByText('Post de lançamento').first().click()
+    const detalhe = page.getByRole('dialog', { name: 'Post de lançamento' })
+    await detalhe.getByRole('radio', { name: 'Texto' }).click()
+    const texto = detalhe.getByLabel('Texto do material')
+    await texto.click()
+    await texto.pressSequentially('Legenda: Planeta 2027 com a marca no palco.')
+    await expect(texto).toHaveValue('Legenda: Planeta 2027 com a marca no palco.')
+    await expect(texto).toBeFocused()
+    await detalhe.getByRole('button', { name: 'Enviar texto' }).click()
+    await expect(detalhe.getByText('v1 · Texto')).toBeVisible()
+    await expect(detalhe.getByText('Legenda: Planeta 2027 com a marca no palco.')).toBeVisible()
+    await detalhe.getByRole('radio', { name: 'Link' }).click()
+    const endereco = detalhe.getByLabel('Endereço do post ou do material')
+    await endereco.pressSequentially('nao-e-link')
+    await detalhe.getByRole('button', { name: 'Enviar link' }).click()
+    await expect(detalhe.getByRole('alert').filter({ hasText: 'https://' })).toBeVisible()
+    await endereco.fill('https://www.tiktok.com/@marcateste/video/123')
+    await detalhe.getByRole('button', { name: 'Enviar link' }).click()
+    await expect(detalhe.getByText('v2 · Link')).toBeVisible()
+    await expect(detalhe.getByRole('link', { name: /tiktok\.com\/@marcateste/ })).toHaveAttribute('rel', 'noopener noreferrer')
+  })
+  test('[R5.3.b] os links dos posts aparecem em Posts e links', async ({ page }) => {
+    const marca = await novaMarcaDeTeste('SUBCOTA')
+    const entregaId = await entregaDeMidia(marca.parceriaId)
+    // A RBS envia o link do post publicado como material da entrega.
+    const { contexto, cabecalhos } = await sessaoDaApi('rbs')
+    const envio = await contexto.post(`/api/entregas/${entregaId}/conteudos`, {
+      headers: cabecalhos,
+      data: { tipo: 'LINK', url: 'https://www.instagram.com/p/TESTE123/', titulo: 'Post publicado' },
+    })
+    expect(envio.status()).toBe(201)
+    await contexto.dispose()
+    await entrarComo(page, marca.email)
+    await page.goto(`/parceria/${marca.parceriaId}/midia`)
+    const cartao = page.locator('section').filter({ has: page.getByRole('heading', { name: 'Posts e links' }) })
+    await expect(cartao.getByRole('link', { name: /instagram\.com/ })).toHaveAttribute('href', 'https://www.instagram.com/p/TESTE123/')
+    await expect(cartao).toContainText('Enviado por')
+    // A marca só vê e clica: não há como editar o link enviado.
+    await expect(cartao.getByRole('button')).toHaveCount(0)
+  })
   test('[R5.4.a] a RBS grava a cota de cortesias com acesso e shuttle', async ({ page }) => {
     const marca = await novaMarcaDeTeste('SUBCOTA')
     await entrar(page, 'rbs')
@@ -351,4 +410,17 @@ async function marcaComCortesias() {
 /** Só a tabela "Destinação de ingressos": a das destinações também tem linhas com "Arena · Sábado". */
 function tabelaDeCotas(page: Page) {
   return page.locator('section').filter({ has: page.getByRole('heading', { name: 'Destinação de ingressos' }) })
+}
+
+/** Uma entrega de Mídia aberta pela RBS numa marca de teste, aguardando envio. Devolve o id. */
+async function entregaDeMidia(parceriaId: number) {
+  const { contexto, cabecalhos } = await sessaoDaApi('rbs')
+  const criada = await contexto.post(`/api/parcerias/${parceriaId}/entregas`, {
+    headers: cabecalhos,
+    data: { abaCodigo: 'MIDIA', titulo: 'Post de lançamento', descricao: 'Texto, link ou arquivo do post.', status: 'AGUARDANDO_ENVIO' },
+  })
+  expect(criada.status(), 'a RBS abre a entrega de mídia').toBe(201)
+  const id = (await criada.json()).id as number
+  await contexto.dispose()
+  return id
 }

@@ -34,7 +34,49 @@ export type Entrega = {
   ultimaObservacao: { texto: string; por: string; em: string } | null
   /** O espaço próprio da entrega: as solicitações de ingressos no Perfil, o MIV e a logo em Aplicações (D5 do plano). */
   papel?: 'DOCUMENTO_INGRESSOS' | 'MIV' | 'LOGO' | null
+  /** Todas as versões, de arquivo, texto ou link, da mais nova para a mais antiga (rota 86). */
+  versoes?: VersaoDaEntrega[]
 }
+
+/** Uma versão da entrega: um arquivo, ou um material em texto ou em link (R5.3.a). Os campos do outro tipo vêm nulos. */
+export type VersaoDaEntrega = {
+  tipo: 'ARQUIVO' | 'TEXTO' | 'LINK'
+  id: number
+  versao: number
+  enviadoPor: UsuarioResumo | null
+  enviadoEm: string
+  observacao: string | null
+  nomeOriginal: string | null
+  mimeType: string | null
+  tamanhoBytes: number | null
+  categoria: string | null
+  titulo: string | null
+  texto: string | null
+  url: string | null
+  host: string | null
+}
+
+export const enviarConteudo = (
+  entregaId: number,
+  conteudo: { tipo: 'TEXTO' | 'LINK'; texto?: string; url?: string; titulo?: string; observacao?: string },
+) => pedir<VersaoDaEntrega & { entregaId: number; statusDaEntrega: StatusEntrega }>(`/entregas/${entregaId}/conteudos`, { metodo: 'POST', corpo: conteudo })
+
+/** Um link de post da parceria (rota 87): da carga de veiculação da RBS ou enviado como conteúdo numa entrega de Mídia. */
+export type LinkDeMidia = {
+  origem: 'CARGA' | 'ENVIO'
+  url: string
+  host: string
+  data: string
+  veiculo?: string | null
+  formato?: string | null
+  espacoPrograma?: string | null
+  entregaTitulo?: string | null
+  titulo?: string | null
+  enviadoPor?: UsuarioResumo | null
+}
+
+export const listarLinksDeMidia = (parceriaId: number) =>
+  pedir<{ parceriaId: number; itens: LinkDeMidia[] }>(`/parcerias/${parceriaId}/links-de-midia`)
 
 export type ItemFila = {
   id: number
