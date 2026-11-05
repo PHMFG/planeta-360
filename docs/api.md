@@ -2,7 +2,7 @@
 
 Este documento é o **contrato entre o back-end e o front-end**. Quem faz a tela lê aqui o que cada rota pede, o que devolve e quais erros esperar, sem precisar abrir o código.
 
-- Todas as 87 rotas estão implementadas e cobertas por testes de integração (`cd backend && ./mvnw test`), inclusive o isolamento entre parcerias. A coluna "Etapa" diz em que etapa do plano cada rota entrou (as do Atlas, 37 em diante, entram como `Atlas 1`, `Atlas 2`, `Atlas M2`, `Atlas M3`, `Atlas M4`, `Atlas M5`, `Atlas M6` e `Atlas M8`). Mudança de formato daqui em diante entra neste arquivo no mesmo commit do código.
+- Todas as 91 rotas estão implementadas e cobertas por testes de integração (`cd backend && ./mvnw test`), inclusive o isolamento entre parcerias. A coluna "Etapa" diz em que etapa do plano cada rota entrou (as do Atlas, 37 em diante, entram como `Atlas 1`, `Atlas 2`, `Atlas M2`, `Atlas M3`, `Atlas M4`, `Atlas M5`, `Atlas M6` e `Atlas M8`). Mudança de formato daqui em diante entra neste arquivo no mesmo commit do código.
 - O banco está descrito em [`docs/banco.md`](banco.md). Os nomes de status, cotas e abas são os mesmos do banco.
 
 ## Como falar com a API
@@ -194,8 +194,12 @@ Todas prontas e testadas. A coluna "Etapa" mostra em que etapa do plano a rota e
 | 85 | `DELETE /api/parcerias/{id}/cortesias/destinacoes/{destId}` | Patrocinador da parceria (aba aberta), ou Admin RBS | Retira uma destinação (apaga de verdade) | Cortesias |
 | 86 | `POST /api/entregas/{id}/conteudos` | Patrocinador da parceria (aba da entrega aberta), ou Admin RBS | Envia um texto ou um link como versão nova da entrega (não há editar nem apagar) | F5 |
 | 87 | `GET /api/parcerias/{id}/links-de-midia` | Patrocinador da parceria (aba `MIDIA` aberta), ou Admin RBS | Os links de posts: os da veiculação carregada pela RBS e os enviados como conteúdo | F5 |
+| 88 | `GET /api/parcerias/{id}/comprovacao-mensal` | Patrocinador Master da parceria (aba `MIDIA` aberta), ou Admin RBS | A comprovação mensal da mídia: mês x tipo de mídia x unidade, com o exibido, o previsto do plano e os totais por mês e unidade | Requisitos RBS |
+| 89 | `GET /api/parcerias/{id}/comprovacao-mensal.xlsx` | Patrocinador Master da parceria (aba `MIDIA` aberta), ou Admin RBS | A mesma comprovação em planilha `.xlsx` (grava `DOWNLOAD`) | Requisitos RBS |
+| 90 | `GET /api/parcerias/{id}/comprovacao-mensal.csv` | Patrocinador Master da parceria (aba `MIDIA` aberta), ou Admin RBS | A mesma comprovação em CSV (grava `DOWNLOAD`) | Requisitos RBS |
+| 91 | `GET /api/eventos/{id}/comprovacao-mensal.xlsx` | Admin RBS | O lote da edição: um `.xlsx` com uma aba por parceria Master ativa (grava `DOWNLOAD`) | Requisitos RBS |
 
-São 87 operações (método + caminho): 86 mapeadas nos controllers (`@GetMapping`, `@PostMapping`, `@PutMapping`, `@PatchMapping` ou `@DeleteMapping`) e o logout (rota 3), que vem do Spring Security (`SegurancaConfig`), sem controller. As quatro rotas de debug ficam de fora da numeração. A rota 5 (`ativar`) faz parte do contrato de autenticação, mas só é implementada na etapa 4. As rotas 37 em diante vieram com o Atlas: a coluna "Etapa" diz `Atlas 1` (plano de aplicações e dados informados), `Atlas 2` (conversa, cartão de perguntas e relatório), `Atlas M2` (o diagnóstico: rotas 49 a 53, veja "Diagnóstico do Atlas") `Atlas M3` (os documentos: rotas 54 a 58, veja "Os documentos do Atlas") `Atlas M4` (o visualizador, rotas 59 e 60, e a busca de teste, rota 61, veja "Busca nos documentos") `Atlas M5` (os prazos: rotas 62 a 64, veja "Os prazos do Atlas") `Atlas M6` (o relatório religado: a rota 65, veja "Descarte do relatório parado"; e a planilha da agência: a rota 66, veja "Dados informados pela marca") `Atlas M8` (o Atlas da RBS: as rotas 67 e 68, veja "O Atlas da RBS") ou `Requisitos RBS` (o plano comercial e os espaços de documento da marca: as rotas 69 a 73, veja "O plano comercial e os espaços de documento"). As rotas 86 e 87 (`F5`: texto ou link na entrega e os links de mídia) são das duas pontas. As rotas 70 e 73 são só do Admin RBS (o patrocinador recebe **403** antes de o corpo ser lido); a 69, a 71 e a 72 são das duas pontas. As rotas 54, 55, 57, 58, 61, 62, 63, 64, 67 e 68 são só do Admin RBS (o outro perfil recebe **403** antes de o corpo ser lido); a 56, a 59 e a 60 são das duas pontas, e a marca só vê o que o escopo dela permite; a 66 é da marca da parceria e da RBS. A 49 é do dono da conversa (a marca, ou a RBS na conversa do Atlas da RBS); as 50 a 53 são só do Admin RBS (o outro perfil recebe **403** antes de tudo). **As rotas 49 a 53 estão sempre mapeadas e respondem 404 com o diagnóstico desligado** (`atlas.diagnostico.ligado=false`, o padrão). Nas rotas 42, 43, 46 e 65 só o Admin Patrocinador chama (a RBS recebe **403** antes de o corpo ser lido); nas 44, 45 e 49 chama o dono da conversa: a marca na conversa da parceria dela e, com `atlas.rbs.ligado`, a RBS na conversa dela, a do Atlas da RBS (a RBS recebe **403** antes do corpo em qualquer outra conversa, e sempre com a propriedade desligada); nas 47 e 48 chamam a marca da parceria e a RBS. **O relatório do Atlas está ligado nos perfis `dev`, `demo` e `test` e desligado no padrão** (`atlas.relatorio.ligado=false`, `ATLAS_RELATORIO`). Desligado, as rotas **46, 47, 48 e 65 não existem (404)**, e as rotas 42 e 44 só aceitam conversa por texto (`atalho` e `modelo` dão 422): é o modo só chat, que continua existindo e testado. Veja "Modo só chat". O contrato do relatório, nas rotas 42 a 48 e 65, vale com `atlas.relatorio.ligado=true`.
+São 91 operações (método + caminho): 90 mapeadas nos controllers (`@GetMapping`, `@PostMapping`, `@PutMapping`, `@PatchMapping` ou `@DeleteMapping`) e o logout (rota 3), que vem do Spring Security (`SegurancaConfig`), sem controller. As quatro rotas de debug ficam de fora da numeração. A rota 5 (`ativar`) faz parte do contrato de autenticação, mas só é implementada na etapa 4. As rotas 37 em diante vieram com o Atlas: a coluna "Etapa" diz `Atlas 1` (plano de aplicações e dados informados), `Atlas 2` (conversa, cartão de perguntas e relatório), `Atlas M2` (o diagnóstico: rotas 49 a 53, veja "Diagnóstico do Atlas") `Atlas M3` (os documentos: rotas 54 a 58, veja "Os documentos do Atlas") `Atlas M4` (o visualizador, rotas 59 e 60, e a busca de teste, rota 61, veja "Busca nos documentos") `Atlas M5` (os prazos: rotas 62 a 64, veja "Os prazos do Atlas") `Atlas M6` (o relatório religado: a rota 65, veja "Descarte do relatório parado"; e a planilha da agência: a rota 66, veja "Dados informados pela marca") `Atlas M8` (o Atlas da RBS: as rotas 67 e 68, veja "O Atlas da RBS") ou `Requisitos RBS` (o plano comercial e os espaços de documento da marca: as rotas 69 a 73, veja "O plano comercial e os espaços de documento") e a comprovação mensal de mídia: as rotas 88 a 91, veja a rota 88). As rotas 88 a 90 são da marca de cota Master (com a aba `MIDIA` aberta) e da RBS; a 91 é só do Admin RBS (a marca recebe **403** antes de tudo). As rotas 70 e 73 são só do Admin RBS (o patrocinador recebe **403** antes de o corpo ser lido); a 69, a 71 e a 72 são das duas pontas. As rotas 54, 55, 57, 58, 61, 62, 63, 64, 67 e 68 são só do Admin RBS (o outro perfil recebe **403** antes de o corpo ser lido); a 56, a 59 e a 60 são das duas pontas, e a marca só vê o que o escopo dela permite; a 66 é da marca da parceria e da RBS. A 49 é do dono da conversa (a marca, ou a RBS na conversa do Atlas da RBS); as 50 a 53 são só do Admin RBS (o outro perfil recebe **403** antes de tudo). **As rotas 49 a 53 estão sempre mapeadas e respondem 404 com o diagnóstico desligado** (`atlas.diagnostico.ligado=false`, o padrão). Nas rotas 42, 43, 46 e 65 só o Admin Patrocinador chama (a RBS recebe **403** antes de o corpo ser lido); nas 44, 45 e 49 chama o dono da conversa: a marca na conversa da parceria dela e, com `atlas.rbs.ligado`, a RBS na conversa dela, a do Atlas da RBS (a RBS recebe **403** antes do corpo em qualquer outra conversa, e sempre com a propriedade desligada); nas 47 e 48 chamam a marca da parceria e a RBS. **O relatório do Atlas está ligado nos perfis `dev`, `demo` e `test` e desligado no padrão** (`atlas.relatorio.ligado=false`, `ATLAS_RELATORIO`). Desligado, as rotas **46, 47, 48 e 65 não existem (404)**, e as rotas 42 e 44 só aceitam conversa por texto (`atalho` e `modelo` dão 422): é o modo só chat, que continua existindo e testado. Veja "Modo só chat". O contrato do relatório, nas rotas 42 a 48 e 65, vale com `atlas.relatorio.ligado=true`.
 
 As rotas de debug do modelo de linguagem (`/api/debug/llm`) são temporárias, só existem no perfil `dev` (o perfil `demo`, da apresentação, as deixa em 404), são só da RBS e ficam fora desta tabela e da conta das 74: veja "Rotas de debug (temporárias)", no fim.
 
@@ -3108,11 +3112,68 @@ O servidor **nunca redireciona** para este endereço: o front abre o link em aba
 | 404 | Edição que não existe (`"Não encontramos esta edição do festival."`). |
 | 422 | `campos.openStaffUrl`, `campos.inicio` ou `campos.fim`; corpo que não é um objeto (`campos.corpo`). |
 
+## 88. `GET /api/parcerias/{id}/comprovacao-mensal`  · Requisitos RBS (R3.2, R3.3)
+
+**Quem chama:** o Admin Patrocinador da parceria **de cota Master**, com a aba `MIDIA` aberta, ou o Admin RBS (qualquer parceria). **Corpo:** nenhum. As rotas 89 e 90 têm as mesmas regras e devolvem os mesmos números em arquivo.
+
+**200**
+
+```json
+{
+  "parceriaId": 2,
+  "patrocinador": "Cliente Amarelo",
+  "linhas": [
+    { "mes": "2026-09", "tipoMidia": "ASSINADA", "tipoMidiaNome": "Assinada", "unidade": "INSERCAO", "unidadeNome": "Inserções",
+      "exibido": 306, "previsto": 958 }
+  ],
+  "totais": [ { "mes": "2026-09", "unidade": "INSERCAO", "unidadeNome": "Inserções", "exibido": 358 } ]
+}
+```
+
+- **Uma linha por mês x tipo de mídia x unidade.** `exibido` é a soma de `veiculacao.quantidade` das exibições daquele mês, no **horário de Brasília** (uma exibição às 23h30 do último dia conta nesse mês). `mes` é `AAAA-MM`. Mês sem exibição não tem linha. **Unidades diferentes (`INSERCAO`, `CPM`) nunca são somadas**: cada uma tem a sua linha e o seu total.
+- `tipoMidia` é `ASSINADA`, `PROPRIA`, `MERCHANDISING`, `BRANDED` ou `CONTEUDO_DE_MARCA` (o tipo de mídia do plano comercial). `previsto` é o previsto do plano **inteiro** para aquele tipo e unidade (o plano não tem previsto por mês), repetido em cada mês.
+- `totais` soma as linhas do mês **por unidade**; a soma dos meses de uma unidade é igual ao `exibido` dessa unidade na consolidação (rota 29). Ordem: mês, tipo (`ASSINADA`, `PROPRIA`, `MERCHANDISING`, `BRANDED`, `CONTEUDO_DE_MARCA`), unidade (`INSERCAO`, `CPM`).
+- Sem exibição nenhuma, `linhas` e `totais` vêm vazios (200).
+- Calculada na hora, a cada chamada: não há "mês fechado".
+
+**Erros**
+
+| Status | Quando |
+| --- | --- |
+| 401 | Sem sessão. |
+| 403 | Aba `MIDIA` fechada, fora da cota ou oculta para a marca (as duas frases de "Aba"); **cota que não é Master** (Subcota G e Subcota): `"A comprovação mensal é das cotas Master."`. A aba é conferida antes da cota. |
+| 404 | Parceria que não existe ou é de outra marca; `{id}` que não é número. |
+
+## 89. `GET /api/parcerias/{id}/comprovacao-mensal.xlsx`  · Requisitos RBS (R3.2, R3.3)
+
+Mesmas regras de quem chama e de erros da rota 88. **200** com `Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` e `Content-Disposition: attachment; filename="comprovacao-mensal-<marca>.xlsx"` (o nome só tem letras minúsculas, números e hífen). Duas abas:
+
+- **"Comprovação mensal":** `Marca`, `Mês`, `Tipo de mídia`, `Unidade`, `Exibido no mês`, `Previsto no plano`, uma linha por linha da rota 88. Números saem como número, não como texto.
+- **"Totais por mês":** `Marca`, `Mês`, `Unidade`, `Exibido no mês`, uma linha por total da rota 88.
+
+A planilha é gravada pelo próprio servidor (OOXML mínimo, sem dependência nova), **nunca tem fórmula** e abre no Excel, no LibreOffice e no Numbers. Todo texto que começa com `=`, `+`, `-`, `@`, tabulação ou retorno de carro ganha um apóstrofo na frente (o nome da marca, por exemplo), para a planilha não virar vetor se alguém a salvar de novo em CSV. Cada download grava `DOWNLOAD` na entidade `comprovacao_mensal` (detalhe `xlsx`), na parceria.
+
+## 90. `GET /api/parcerias/{id}/comprovacao-mensal.csv`  · Requisitos RBS (R3.2, R3.3)
+
+Mesmas regras da rota 89. **200** com `Content-Type: text/csv; charset=UTF-8`, UTF-8 **com BOM**, separado por **ponto e vírgula**, decimais com vírgula e as mesmas seis colunas da primeira aba do `.xlsx`, com a mesma neutralização de fórmula. Grava `DOWNLOAD` (detalhe `csv`).
+
+## 91. `GET /api/eventos/{id}/comprovacao-mensal.xlsx`  · Requisitos RBS (R3.3)
+
+**Quem chama:** só o Admin RBS (a marca recebe **403** antes de qualquer outra conferência). **Corpo:** nenhum. O `{id}` é o da **edição** (evento).
+
+**200** com o `.xlsx` do lote: **uma aba por parceria Master ATIVA** da edição, na ordem do nome da marca, cada uma com a tabela da aba "Comprovação mensal" da rota 89. O nome da aba é o da marca, sem `[ ] : * ? / \`, com até 31 caracteres e único na planilha (repetido ganha ` (2)`). Edição sem parceria Master ativa devolve uma aba só, com o cabeçalho. Arquivo `comprovacao-mensal-edicao-<ano>.xlsx`. Grava `DOWNLOAD` na entidade `comprovacao_mensal` (sem parceria; `entidade_id` é a edição).
+
+| Status | Quando |
+| --- | --- |
+| 401 | Sem sessão. |
+| 403 | Quem não é da RBS (`"Esta operação é restrita à equipe da RBS."`). |
+| 404 | Edição que não existe (`"Não encontramos esta edição do festival."`); `{id}` que não é número. |
+
 ---
 
 # Rotas de debug (temporárias)
 
-Um recurso **temporário**, para a equipe ligar o modelo de linguagem do Atlas pela tela (o botão "Debug"), sem reiniciar a API e sem variável de ambiente. Não faz parte das 87 rotas do contrato e sai antes da entrega final.
+Um recurso **temporário**, para a equipe ligar o modelo de linguagem do Atlas pela tela (o botão "Debug"), sem reiniciar a API e sem variável de ambiente. Não faz parte das 91 rotas do contrato e sai antes da entrega final.
 
 - **Só existem com `atlas.debug.chaves=true`.** A propriedade vem `false` por padrão, `true` no perfil `dev` e `false` no `demo` e no `test`. Sem ela, as quatro rotas respondem **404**, como uma rota que não existe.
 - **A chave fica só na memória da API.** Nunca vai ao banco, a arquivo ou ao log, e **some quando a API reinicia**. Nenhuma resposta devolve a chave inteira: só os 4 últimos caracteres (`finalDaChave`).

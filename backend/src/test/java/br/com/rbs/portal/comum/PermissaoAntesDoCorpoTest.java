@@ -242,7 +242,10 @@ class PermissaoAntesDoCorpoTest {
             // O contrato e as credenciais (rotas 74, 75 e 77): a marca e a RBS; a escrita da RBS (76, 78 e 79) está na lista dela.
             "GET /api/parcerias/{id}/contrato", "PUT /api/parcerias/{id}/contrato/signatario", "GET /api/parcerias/{id}/credenciais",
             // Texto ou link na entrega (86) e os links de mídia (87): a marca da parceria (aba Mídia aberta) e a RBS.
-            "POST /api/entregas/{id}/conteudos", "GET /api/parcerias/{id}/links-de-midia");
+            "POST /api/entregas/{id}/conteudos", "GET /api/parcerias/{id}/links-de-midia",
+            // A comprovação mensal (rotas 88 a 90): a marca Master (aba MIDIA aberta) e a RBS; o lote (91) está na lista da RBS.
+            "GET /api/parcerias/{id}/comprovacao-mensal", "GET /api/parcerias/{id}/comprovacao-mensal.xlsx",
+            "GET /api/parcerias/{id}/comprovacao-mensal.csv");
 
     @Test
     void todaRotaDaApiEstaClassificadaEAListaDaRbsSoTemRotasQueExistem() {

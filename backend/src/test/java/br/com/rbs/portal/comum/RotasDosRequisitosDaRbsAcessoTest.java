@@ -92,7 +92,12 @@ class RotasDosRequisitosDaRbsAcessoTest {
             Map.entry("PATCH /api/eventos/{id}/credenciamento", new Detalhe("{\"inicio\":\"2027-01-05\"}", null, false)),
             // F5 · Texto ou link na entrega e os links de mídia (rotas 86 e 87). O {id} da 86 é de uma entrega de Mídia da parceria do Amarelo.
             Map.entry("POST /api/entregas/{id}/conteudos", new Detalhe("{\"tipo\":\"TEXTO\",\"texto\":\"Texto de teste\"}", "MIDIA", true)),
-            Map.entry("GET /api/parcerias/{id}/links-de-midia", new Detalhe(null, "MIDIA", true)));
+            Map.entry("GET /api/parcerias/{id}/links-de-midia", new Detalhe(null, "MIDIA", true)),
+            // F5 · Comprovação mensal (rotas 88 a 91). A 91 é do lote da edição: só a RBS, com o {id} do evento.
+            Map.entry("GET /api/parcerias/{id}/comprovacao-mensal", new Detalhe(null, "MIDIA", true)),
+            Map.entry("GET /api/parcerias/{id}/comprovacao-mensal.xlsx", new Detalhe(null, "MIDIA", true)),
+            Map.entry("GET /api/parcerias/{id}/comprovacao-mensal.csv", new Detalhe(null, "MIDIA", true)),
+            Map.entry("GET /api/eventos/{id}/comprovacao-mensal.xlsx", new Detalhe(null, null, false)));
 
     /** As rotas que recebem multipart: no teste vão como formulário sem partes (com JSON o Spring responderia 415 antes da permissão). */
     private static final Set<String> MULTIPART = Set.of("POST /api/parcerias/{id}/contrato/arquivo",

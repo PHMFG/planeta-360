@@ -13,7 +13,13 @@ R1.4	back	consolidacao.PlanoDoAmareloP07aP10Test#csvDasPaginas7a10EntraSemRejeic
 R2.2	back	documentos.DocumentoGrupoTest#oMesmoPlanoEmOutraCotaNaoEOutraVersaoDoMesmoPlano
 R3.1	back	consolidacao.CargaControllerTest#reenviarOMesmoArquivoNaoInsereNadaEAsLinhasDeAntesViramDuplicadas
 R3.2	e2e	requisitos-rbs.spec.ts > [R3.2] a Master baixa a comprovação mensal por mês, tipo e unidade
+R3.2	back	consolidacao.ComprovacaoMensalTest#cadaLinhaDoAmareloEIgualASomaDasVeiculacoesPorMesTipoEUnidade
+R3.2	back	consolidacao.ComprovacaoMensalTest#unidadesDiferentesNuncaSeSomamNemNoMesmoMesETipo
+R3.2	back	consolidacao.PlanilhaMensalXlsxTest#oXlsxDoAmareloTemOsMesmosNumerosDoSelectDeConferencia
+R3.2	back	consolidacao.PlanilhaMensalXlsxTest#textoQueComecaComIgualVaiComApostrofoENuncaViraFormula
 R3.3	e2e	requisitos-rbs.spec.ts > [R3.3] a comprovação mensal não aparece para Subcota G nem Subcota
+R3.3	back	consolidacao.ComprovacaoMensalTest#roxoEVerdeRecebem403ComAFraseDeCotaNasTresRotas
+R3.3	back	consolidacao.PlanilhaMensalXlsxTest#oLoteTemUmaAbaPorParceriaMasterDaEdicaoComOsNumerosDeCada
 R4.1	e2e	requisitos-rbs.spec.ts > [R4.1] .doc, .ppt e .xls sem macro entram; com macro, não
 R4.2	back	comum.TipoDeArquivoTest#listaAceitaExatamenteAsExtensoesCombinadasComARbs
 R4.3	e2e	requisitos-rbs.spec.ts > [R4.3] o link do post abre em aba nova, e javascript: é recusado
@@ -96,6 +102,7 @@ E2.2	back	relatorio.RelatorioControllerTest#cotaSemPesquisaTrazASecaoDePesquisaI
 E2.3	back	comum.PermissaoAntesDoCorpoTest#rbsContinuaRecebendoAValidacaoDoCorpo
 E2.4	back	materiais.ArquivosTest#patrocinadorDoAmareloEnviaPdfEmEntregaDeMidiaERecebeAutorDataVersaoEHistorico
 E2.5	back	consolidacao.CargaControllerTest#reenviarOMesmoArquivoNaoInsereNadaEAsLinhasDeAntesViramDuplicadas
+E2.5	back	consolidacao.ComprovacaoMensalTest#aSomaDoMesBateComAConsolidacaoDaRota29
 E2.6	back	relatorio.RelatorioControllerTest#parceriaSemNenhumDadoGeraRelatorioComAsSeisSecoesEOs17IndicadoresIndisponiveis
 E2.7	back	parceria.ParceriasControllerTest#patchFechaEReabreUmaAbaDaCotaDoRoxoEOEuPassaAMostrar
 E2.8	back	banco.CriacaoDoBancoTest

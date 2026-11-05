@@ -66,6 +66,9 @@ public class PermissaoAntesDoCorpo implements HandlerInterceptor, WebMvcConfigur
             // são das duas pontas.
             "PATCH /api/parcerias/{id}/cortesias/cotas",
             "PATCH /api/eventos/{id}/cortesias",
+            // O lote da comprovação mensal (rota 91): uma aba por parceria Master da edição. As rotas 88 a 90 são da marca Master e da RBS
+            // (a cota é conferida no service).
+            "GET /api/eventos/{id}/comprovacao-mensal.xlsx",
             // O diagnóstico do Atlas (rotas 50 a 53): os turnos de todas as conversas e os provedores. Sempre mapeadas; com o
             // diagnóstico desligado a RBS recebe 404 do service.
             "GET /api/atlas/diagnostico/turnos",

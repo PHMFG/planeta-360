@@ -20,3 +20,7 @@ POST	/api/parcerias/{id}/espacos/{papel}/arquivos	ambos
 POST	/api/parcerias/{id}/formulario-ingressos	rbs
 POST	/api/entregas/{id}/conteudos	ambos
 GET	/api/parcerias/{id}/links-de-midia	ambos
+GET	/api/parcerias/{id}/comprovacao-mensal	ambos
+GET	/api/parcerias/{id}/comprovacao-mensal.xlsx	ambos
+GET	/api/parcerias/{id}/comprovacao-mensal.csv	ambos
+GET	/api/eventos/{id}/comprovacao-mensal.xlsx	rbs
