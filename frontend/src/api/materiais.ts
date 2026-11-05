@@ -157,9 +157,9 @@ export const TRANSICOES: Record<StatusEntrega, StatusEntrega[]> = {
 export const ACEITA_ENVIO: StatusEntrega[] = ['NAO_INICIADO', 'AGUARDANDO_ENVIO', 'AJUSTE_SOLICITADO', 'ENVIADO']
 
 /** Extensões aceitas no envio; a API confere de novo, inclusive o conteúdo do arquivo. */
-export const EXTENSOES_ACEITAS = '.pdf,.png,.jpg,.jpeg,.docx,.xlsx,.pptx,.csv,.mp4,.mp3,.zip'
+export const EXTENSOES_ACEITAS = '.pdf,.png,.jpg,.jpeg,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv,.mp4,.mp3,.zip'
 export const LIMITE_BYTES = 20 * 1024 * 1024
-export const REGRA_ENVIO = 'PDF, PNG, JPG, DOCX, XLSX, PPTX, CSV, MP4, MP3 ou ZIP, até 20 MB'
+export const REGRA_ENVIO = 'PDF, PNG, JPG, Word, Excel, PowerPoint (sem macro), CSV, MP4, MP3 ou ZIP, até 20 MB'
 
 /**
  * Confere no navegador o que a API vai recusar de qualquer jeito (tipo e tamanho), para avisar antes do envio. [UPLOAD]

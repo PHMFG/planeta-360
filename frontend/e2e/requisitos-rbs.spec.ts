@@ -162,7 +162,31 @@ test.describe('R3 e R4 · comprovação mensal e formatos', () => {
     expect(lote.suggestedFilename()).toMatch(/^comprovacao-mensal-edicao-\d{4}\.xlsx$/)
     expect(fs.readFileSync(await lote.path()).subarray(0, 2).toString('latin1')).toBe('PK')
   })
-  test.fixme('[R4.1] .doc, .ppt e .xls sem macro entram; com macro, não', pendente)
+  test('[R4.1] .doc, .ppt e .xls sem macro entram; com macro, não', async ({ page }) => {
+    const marca = await novaMarcaDeTeste('SUBCOTA')
+    await entregaDeMidia(marca.parceriaId)
+    await entrarComo(page, marca.email)
+    await page.goto(`/parceria/${marca.parceriaId}/midia`)
+    await page.getByText('Post de lançamento').first().click()
+    const detalhe = page.getByRole('dialog', { name: 'Post de lançamento' })
+    const campo = detalhe.locator('input[type=file]')
+    await expect(campo).toHaveAttribute('accept', /\.doc,.*\.xls,.*\.ppt,/)
+    const enviar = detalhe.getByRole('button', { name: 'Enviar material' })
+    // Sem macro: o .ppt entra como versão 1.
+    await campo.setInputFiles({ name: 'apresentacao.ppt', mimeType: 'application/vnd.ms-powerpoint', buffer: ole2DeTeste() })
+    await enviar.click()
+    await expect(detalhe.getByText('apresentacao.ppt').first()).toBeVisible()
+    await expect(detalhe.getByText(/registrado como versão v1/)).toBeVisible()
+    // Com projeto VBA: recusado com a frase de macro, e nada é gravado.
+    await campo.setInputFiles({ name: 'com-macro.doc', mimeType: 'application/msword', buffer: ole2DeTeste('Macros') })
+    await enviar.click()
+    await expect(detalhe.getByText(/contém macros \(VBA\)/)).toBeVisible()
+    // PNG renomeado para .xls: recusado pela assinatura.
+    await campo.setInputFiles({ name: 'foto.xls', mimeType: 'application/vnd.ms-excel', buffer: fs.readFileSync(PNG_DE_EXEMPLO) })
+    await enviar.click()
+    await expect(detalhe.getByText(/não é um XLS de verdade/)).toBeVisible()
+    await expect(detalhe.getByText(/versão v2/)).toHaveCount(0)
+  })
   test('[R4.3] o link do post abre em aba nova, e javascript: é recusado', async ({ page }) => {
     const roxo = await parceriaDa('roxo')
     await entrar(page, 'roxo')
@@ -706,4 +730,34 @@ async function relatorioDisponibilizado(parceriaId: number) {
     expect(mudou.status(), `relatório ${status}`).toBe(200)
   }
   await contexto.dispose()
+}
+
+/** Um contêiner OLE2 mínimo (o formato do .doc, .xls e .ppt): a FAT, o diretório com a raiz e, se pedido, uma entrada a mais. */
+function ole2DeTeste(entradaExtra?: string) {
+  const b = Buffer.alloc(512 * 3)
+  Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]).copy(b, 0)
+  b.writeUInt16LE(0x3e, 0x18)
+  b.writeUInt16LE(3, 0x1a)
+  b.writeUInt16LE(0xfffe, 0x1c)
+  b.writeUInt16LE(9, 0x1e)
+  b.writeUInt16LE(6, 0x20)
+  b.writeInt32LE(1, 0x2c) // um setor de FAT
+  b.writeInt32LE(1, 0x30) // o diretório começa no setor 1
+  b.writeInt32LE(4096, 0x38)
+  b.writeInt32LE(-2, 0x3c)
+  b.writeInt32LE(-2, 0x44)
+  b.fill(0xff, 0x4c, 0x4c + 109 * 4)
+  b.writeInt32LE(0, 0x4c) // a FAT está no setor 0
+  for (let i = 0; i < 128; i++) b.writeInt32LE(i === 0 ? -3 : i === 1 ? -2 : -1, 512 + 4 * i)
+  const entrada = (posicao: number, nome: string, tipo: number) => {
+    const bytes = Buffer.from(nome, 'utf16le')
+    bytes.copy(b, posicao)
+    b.writeUInt16LE(bytes.length + 2, posicao + 64)
+    b[posicao + 66] = tipo
+    b[posicao + 67] = 1
+    for (const deslocamento of [68, 72, 76]) b.writeInt32LE(-1, posicao + deslocamento)
+  }
+  entrada(1024, 'Root Entry', 5)
+  if (entradaExtra) entrada(1024 + 128, entradaExtra, 1)
+  return b
 }
