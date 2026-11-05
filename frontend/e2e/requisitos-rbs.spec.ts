@@ -373,6 +373,13 @@ test.describe('R5 · as abas', () => {
     await page.getByLabel('Quantidade por dia', { exact: true }).fill('7')
     await page.getByRole('button', { name: 'Salvar credenciais' }).click()
     await expect(page.getByRole('status').filter({ hasText: 'Credenciais salvas' })).toBeVisible()
+    // Um segundo salvar (outra linha) não pode zerar a primeira: a grade mostra o valor gravado.
+    await expect(page.getByLabel('Quantidade por dia de Arena · Marca')).toHaveValue('7')
+    await page.getByLabel('Setor').selectOption('CAMAROTE')
+    await page.getByLabel('Quantidade por dia', { exact: true }).fill('3')
+    await page.getByRole('button', { name: 'Salvar credenciais' }).click()
+    await expect(page.getByLabel('Quantidade por dia de Camarote · Marca')).toHaveValue('3')
+    await expect(page.getByLabel('Quantidade por dia de Arena · Marca')).toHaveValue('7')
     // A marca vê a liberação com o setor, a quantidade e o período da edição (01 a 20/12/2026 na amostra).
     const outra = await browser.newPage()
     await entrarComo(outra, marca.email)

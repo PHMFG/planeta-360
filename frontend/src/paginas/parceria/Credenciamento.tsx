@@ -129,9 +129,10 @@ function ConteudoDoCredenciamento({ rbs }: { rbs: boolean }) {
 /** A grade da RBS (D10 do plano): uma linha por setor e beneficiário, com a quantidade por dia; 0 retira a linha. */
 function GradeDeCredenciais({ credenciais, aoGravar }: { credenciais: Credenciais; aoGravar: () => void }) {
   const parceria = useParceria()
-  const [quantidades, setQuantidades] = useState<Record<number, string>>(() =>
-    Object.fromEntries(credenciais.credenciais.map((credencial) => [credencial.id, String(credencial.quantidadePorDia)])),
-  )
+  // Só o que a RBS editou; o resto vem sempre dos dados recarregados (guardar uma cópia na abertura apagava, no salvar
+  // seguinte, a linha que tinha acabado de ser criada).
+  const [editadas, setEditadas] = useState<Record<number, string>>({})
+  const valorDe = (credencial: Credencial) => editadas[credencial.id] ?? String(credencial.quantidadePorDia)
   const [setor, setSetor] = useState<SetorCredencial>('ARENA')
   const [beneficiario, setBeneficiario] = useState<Beneficiario>('MARCA')
   const [nova, setNova] = useState('')
@@ -145,7 +146,7 @@ function GradeDeCredenciais({ credenciais, aoGravar }: { credenciais: Credenciai
     setFeito(null)
     const itens: { setor: SetorCredencial; beneficiario: Beneficiario; quantidadePorDia: number }[] = []
     for (const credencial of credenciais.credenciais) {
-      const texto = (quantidades[credencial.id] ?? '').trim()
+      const texto = valorDe(credencial).trim()
       const valor = texto === '' ? 0 : Number(texto)
       if (!/^\d+$/.test(texto || '0')) return setFalha(`A quantidade de ${NOME_SETOR_CREDENCIAL[credencial.setor]} precisa ser um número inteiro.`)
       if (valor !== credencial.quantidadePorDia) itens.push({ setor: credencial.setor, beneficiario: credencial.beneficiario, quantidadePorDia: valor })
@@ -162,6 +163,7 @@ function GradeDeCredenciais({ credenciais, aoGravar }: { credenciais: Credenciai
     try {
       await gravarCredenciais(parceria.id, itens)
       setNova('')
+      setEditadas({})
       setFeito('Credenciais salvas. A marca vê ao abrir ou voltar à aba.')
       aoGravar()
     } catch (erro) {
@@ -185,8 +187,8 @@ function GradeDeCredenciais({ credenciais, aoGravar }: { credenciais: Credenciai
                     aria-label={`Quantidade por dia de ${nome}`}
                     inputMode="numeric"
                     className="w-20 rounded-lg border border-borda px-2 py-1.5"
-                    value={quantidades[credencial.id] ?? ''}
-                    onChange={(evento) => setQuantidades((atuais) => ({ ...atuais, [credencial.id]: evento.target.value }))}
+                    value={valorDe(credencial)}
+                    onChange={(evento) => setEditadas((atuais) => ({ ...atuais, [credencial.id]: evento.target.value }))}
                   />
                 </li>
               )
