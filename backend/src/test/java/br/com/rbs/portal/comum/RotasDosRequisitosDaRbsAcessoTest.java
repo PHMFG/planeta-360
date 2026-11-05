@@ -112,6 +112,9 @@ class RotasDosRequisitosDaRbsAcessoTest {
             Map.entry("GET /api/eventos/{id}/resultados", new Detalhe(null, null, false)),
             Map.entry("PUT /api/eventos/{id}/resultados", new Detalhe(
                     "{\"indicador\":\"Público total\",\"valor\":80000,\"qualificador\":\"MAIS_DE\",\"unidade\":\"pessoas\",\"fonte\":\"RBS\"}", null, false)),
+            // F7 · R6.d3: a prévia (104) e a troca (102) da cota. Só da RBS, de uma parceria, sem aba; no encerrada a troca dá 409.
+            Map.entry("GET /api/parcerias/{id}/cota/previa", new Detalhe(null, null, true)),
+            Map.entry("PUT /api/parcerias/{id}/cota", new Detalhe("{\"cotaCodigo\":\"SUBCOTA_G\",\"ciente\":true}", null, true)),
             // F8 · R2.1: as páginas fora do Atlas (rota 103). O {id} é o de um documento; no teste cai num id que não é de documento (404 na RBS).
             Map.entry("PATCH /api/documentos/{id}/paginas-fora-do-atlas", new Detalhe("{\"paginasForaDoAtlas\":[4]}", null, false)));
 

@@ -2,7 +2,7 @@
 
 Este documento é o **contrato entre o back-end e o front-end**. Quem faz a tela lê aqui o que cada rota pede, o que devolve e quais erros esperar, sem precisar abrir o código.
 
-- Todas as 102 rotas estão implementadas e cobertas por testes de integração (`cd backend && ./mvnw test`), inclusive o isolamento entre parcerias. A coluna "Etapa" diz em que etapa do plano cada rota entrou (as do Atlas, 37 em diante, entram como `Atlas 1`, `Atlas 2`, `Atlas M2`, `Atlas M3`, `Atlas M4`, `Atlas M5`, `Atlas M6` e `Atlas M8`). Mudança de formato daqui em diante entra neste arquivo no mesmo commit do código.
+- Todas as 104 rotas estão implementadas e cobertas por testes de integração (`cd backend && ./mvnw test`), inclusive o isolamento entre parcerias. A coluna "Etapa" diz em que etapa do plano cada rota entrou (as do Atlas, 37 em diante, entram como `Atlas 1`, `Atlas 2`, `Atlas M2`, `Atlas M3`, `Atlas M4`, `Atlas M5`, `Atlas M6` e `Atlas M8`). Mudança de formato daqui em diante entra neste arquivo no mesmo commit do código.
 - O banco está descrito em [`docs/banco.md`](banco.md). Os nomes de status, cotas e abas são os mesmos do banco.
 
 ## Como falar com a API
@@ -208,9 +208,11 @@ Todas prontas e testadas. A coluna "Etapa" mostra em que etapa do plano a rota e
 | 99 | `DELETE /api/posvenda/{id}` | Admin RBS | Retira uma versão do anexo (não apaga) | Pós-venda |
 | 100 | `GET /api/eventos/{id}/resultados` | Admin RBS | Os números da edição ("O festival em números") | Pós-venda |
 | 101 | `PUT /api/eventos/{id}/resultados` | Admin RBS | Informa um número da edição (upsert por indicador) | Pós-venda |
+| 102 | `PUT /api/parcerias/{id}/cota` | Admin RBS | Troca a cota da parceria depois do cadastro (fecha as abas que a cota nova não inclui) | Requisitos RBS (R6.d3) |
 | 103 | `PATCH /api/documentos/{id}/paginas-fora-do-atlas` | Admin RBS | Marca (ou desmarca) as páginas de um documento que ficam fora do índice do Atlas, enquanto ele aguarda aprovação | Requisitos RBS |
+| 104 | `GET /api/parcerias/{id}/cota/previa?para=COTA` | Admin RBS | A prévia do impacto de trocar a cota (não grava nada) | Requisitos RBS (R6.d3) |
 
-São 102 operações (método + caminho): 101 mapeadas nos controllers (`@GetMapping`, `@PostMapping`, `@PutMapping`, `@PatchMapping` ou `@DeleteMapping`) e o logout (rota 3), que vem do Spring Security (`SegurancaConfig`), sem controller. As quatro rotas de debug ficam de fora da numeração. A rota 5 (`ativar`) faz parte do contrato de autenticação, mas só é implementada na etapa 4. As rotas 37 em diante vieram com o Atlas: a coluna "Etapa" diz `Atlas 1` (plano de aplicações e dados informados), `Atlas 2` (conversa, cartão de perguntas e relatório), `Atlas M2` (o diagnóstico: rotas 49 a 53, veja "Diagnóstico do Atlas") `Atlas M3` (os documentos: rotas 54 a 58, veja "Os documentos do Atlas") `Atlas M4` (o visualizador, rotas 59 e 60, e a busca de teste, rota 61, veja "Busca nos documentos") `Atlas M5` (os prazos: rotas 62 a 64, veja "Os prazos do Atlas") `Atlas M6` (o relatório religado: a rota 65, veja "Descarte do relatório parado"; e a planilha da agência: a rota 66, veja "Dados informados pela marca") `Atlas M8` (o Atlas da RBS: as rotas 67 e 68, veja "O Atlas da RBS") ou `Requisitos RBS` (o plano comercial e os espaços de documento da marca: as rotas 69 a 73, veja "O plano comercial e os espaços de documento") e a comprovação mensal de mídia: as rotas 88 a 91, veja a rota 88). As rotas 88 a 90 são da marca de cota Master (com a aba `MIDIA` aberta) e da RBS; a 91 é só do Admin RBS (a marca recebe **403** antes de tudo). As rotas 70 e 73 são só do Admin RBS (o patrocinador recebe **403** antes de o corpo ser lido); a 69, a 71 e a 72 são das duas pontas. As rotas 54, 55, 57, 58, 61, 62, 63, 64, 67 e 68 são só do Admin RBS (o outro perfil recebe **403** antes de o corpo ser lido); a 56, a 59 e a 60 são das duas pontas, e a marca só vê o que o escopo dela permite; a 66 é da marca da parceria e da RBS. A 49 é do dono da conversa (a marca, ou a RBS na conversa do Atlas da RBS); as 50 a 53 são só do Admin RBS (o outro perfil recebe **403** antes de tudo). **As rotas 49 a 53 estão sempre mapeadas e respondem 404 com o diagnóstico desligado** (`atlas.diagnostico.ligado=false`, o padrão). Nas rotas 42, 43, 46 e 65 só o Admin Patrocinador chama (a RBS recebe **403** antes de o corpo ser lido); nas 44, 45 e 49 chama o dono da conversa: a marca na conversa da parceria dela e, com `atlas.rbs.ligado`, a RBS na conversa dela, a do Atlas da RBS (a RBS recebe **403** antes do corpo em qualquer outra conversa, e sempre com a propriedade desligada); nas 47 e 48 chamam a marca da parceria e a RBS. **O relatório do Atlas está ligado nos perfis `dev`, `demo` e `test` e desligado no padrão** (`atlas.relatorio.ligado=false`, `ATLAS_RELATORIO`). Desligado, as rotas **46, 47, 48 e 65 não existem (404)**, e as rotas 42 e 44 só aceitam conversa por texto (`atalho` e `modelo` dão 422): é o modo só chat, que continua existindo e testado. Veja "Modo só chat". O contrato do relatório, nas rotas 42 a 48 e 65, vale com `atlas.relatorio.ligado=true`.
+São 104 operações (método + caminho): 103 mapeadas nos controllers (`@GetMapping`, `@PostMapping`, `@PutMapping`, `@PatchMapping` ou `@DeleteMapping`) e o logout (rota 3), que vem do Spring Security (`SegurancaConfig`), sem controller. As quatro rotas de debug ficam de fora da numeração. A rota 5 (`ativar`) faz parte do contrato de autenticação, mas só é implementada na etapa 4. As rotas 37 em diante vieram com o Atlas: a coluna "Etapa" diz `Atlas 1` (plano de aplicações e dados informados), `Atlas 2` (conversa, cartão de perguntas e relatório), `Atlas M2` (o diagnóstico: rotas 49 a 53, veja "Diagnóstico do Atlas") `Atlas M3` (os documentos: rotas 54 a 58, veja "Os documentos do Atlas") `Atlas M4` (o visualizador, rotas 59 e 60, e a busca de teste, rota 61, veja "Busca nos documentos") `Atlas M5` (os prazos: rotas 62 a 64, veja "Os prazos do Atlas") `Atlas M6` (o relatório religado: a rota 65, veja "Descarte do relatório parado"; e a planilha da agência: a rota 66, veja "Dados informados pela marca") `Atlas M8` (o Atlas da RBS: as rotas 67 e 68, veja "O Atlas da RBS") ou `Requisitos RBS` (o plano comercial e os espaços de documento da marca: as rotas 69 a 73, veja "O plano comercial e os espaços de documento") e a comprovação mensal de mídia: as rotas 88 a 91, veja a rota 88). As rotas 88 a 90 são da marca de cota Master (com a aba `MIDIA` aberta) e da RBS; a 91 é só do Admin RBS (a marca recebe **403** antes de tudo). As rotas 70 e 73 são só do Admin RBS (o patrocinador recebe **403** antes de o corpo ser lido); a 69, a 71 e a 72 são das duas pontas. As rotas 54, 55, 57, 58, 61, 62, 63, 64, 67 e 68 são só do Admin RBS (o outro perfil recebe **403** antes de o corpo ser lido); a 56, a 59 e a 60 são das duas pontas, e a marca só vê o que o escopo dela permite; a 66 é da marca da parceria e da RBS. A 49 é do dono da conversa (a marca, ou a RBS na conversa do Atlas da RBS); as 50 a 53 são só do Admin RBS (o outro perfil recebe **403** antes de tudo). **As rotas 49 a 53 estão sempre mapeadas e respondem 404 com o diagnóstico desligado** (`atlas.diagnostico.ligado=false`, o padrão). Nas rotas 42, 43, 46 e 65 só o Admin Patrocinador chama (a RBS recebe **403** antes de o corpo ser lido); nas 44, 45 e 49 chama o dono da conversa: a marca na conversa da parceria dela e, com `atlas.rbs.ligado`, a RBS na conversa dela, a do Atlas da RBS (a RBS recebe **403** antes do corpo em qualquer outra conversa, e sempre com a propriedade desligada); nas 47 e 48 chamam a marca da parceria e a RBS. **O relatório do Atlas está ligado nos perfis `dev`, `demo` e `test` e desligado no padrão** (`atlas.relatorio.ligado=false`, `ATLAS_RELATORIO`). Desligado, as rotas **46, 47, 48 e 65 não existem (404)**, e as rotas 42 e 44 só aceitam conversa por texto (`atalho` e `modelo` dão 422): é o modo só chat, que continua existindo e testado. Veja "Modo só chat". O contrato do relatório, nas rotas 42 a 48 e 65, vale com `atlas.relatorio.ligado=true`.
 
 As rotas de debug do modelo de linguagem (`/api/debug/llm`) são temporárias, só existem no perfil `dev` (o perfil `demo`, da apresentação, as deixa em 404), são só da RBS e ficam fora desta tabela e da conta das 74: veja "Rotas de debug (temporárias)", no fim.
 
@@ -567,7 +569,7 @@ Os e-mails são guardados em minúsculas e sem espaços nas pontas. A parceria n
 }
 ```
 
-A cota e o evento **não mudam** por aqui (mudar a cota refaria as abas). `abas` liberam (`liberada: true`) ou fecham uma aba só nesta parceria; cada aba pode levar também `visivel`. Os três estados do Perfil: **Liberada** (`liberada: true, visivel: true`), **Fechada** (`liberada: false, visivel: true`, a marca vê o cadeado) e **Oculta** (`liberada: false, visivel: false`, a marca não vê o item). A resposta (e as rotas 2, 4, 8 e 9) devolve `visivel` em cada aba. `valorInvestimento` e `baseValor` vão juntos (R6.d1) e o histórico guarda o antes e o depois de cada um; a marca recebe 403.
+O evento **não muda** por aqui, e a cota também não: a RBS troca a cota pela rota 102, depois de ver a prévia na 104. `abas` liberam (`liberada: true`) ou fecham uma aba só nesta parceria; cada aba pode levar também `visivel`. Os três estados do Perfil: **Liberada** (`liberada: true, visivel: true`), **Fechada** (`liberada: false, visivel: true`, a marca vê o cadeado) e **Oculta** (`liberada: false, visivel: false`, a marca não vê o item). A resposta (e as rotas 2, 4, 8 e 9) devolve `visivel` em cada aba. `valorInvestimento` e `baseValor` vão juntos (R6.d1) e o histórico guarda o antes e o depois de cada um; a marca recebe 403.
 
 **Só se libera aba que a cota inclui.** A aba precisa estar em `cota_tipo_aba` para a cota da parceria (`incluidaNaCota: true`; a decisão do projeto é a Pesquisa só para a cota Master). Mandar `liberada: true` para uma aba fora da cota, que está fechada, devolve **422** e nada do `PATCH` é gravado (todo o corpo é recusado, como em qualquer outro 422). O `detail` traz a frase, e `campos` a repete na chave `abas[i].liberada` (`i` = posição da aba na lista enviada):
 
@@ -3429,6 +3431,84 @@ O anexo "Pós-venda da edição" (R8.1) é a resposta do portal ao modelo de pó
 - **Versões.** Cada publicação é uma linha nova (`evento_posvenda`, V18). Corrigir é publicar de novo. A marca vê a versão mais nova, se ela não foi retirada.
 - **Retirar não apaga.** A linha fica, e a API não volta sozinha para a versão anterior.
 - **Parceria `ENCERRADA`** recusa publicar e retirar (409), como todas as rotas novas de escrita.
+
+
+## 104. `GET /api/parcerias/{id}/cota/previa?para=COTA`  · Requisitos RBS (R6.d3)
+
+**Quem chama:** só o Admin RBS (a marca recebe **403** antes de tudo). Não grava nada, nem histórico. Mostra o que a troca da rota 102 vai fazer, e a 102 faz exatamente isso. `para` é o código da cota nova (`MASTER`, `SUBCOTA_G` ou `SUBCOTA`).
+
+**200**
+
+```json
+{
+  "parceriaId": 12,
+  "cotaAtual": { "codigo": "MASTER", "nome": "Master" },
+  "cotaNova": { "codigo": "SUBCOTA", "nome": "Subcota" },
+  "mudaACota": true,
+  "abasQueFecham": [ { "codigo": "PESQUISA", "nome": "Pesquisa da ativação" } ],
+  "abasQuePassamAPoderAbrir": [],
+  "relatorioDisponibilizado": { "versao": 2, "disponibilizadoEm": "2026-11-03T10:15:30-03:00" },
+  "exigeCiencia": true,
+  "pesquisa": "DEIXA_DE_VALER",
+  "comprovacaoMensal": "DEIXA_DE_VALER",
+  "naoMudamSozinhos": [
+    { "aba": "CORTESIAS", "texto": "As cortesias não mudam com a cota: ajuste a cota por setor e dia na aba Cortesias." },
+    { "aba": "CREDENCIAMENTO", "texto": "As credenciais não mudam com a cota: ajuste-as na aba Credenciamento." },
+    { "aba": "PERFIL", "texto": "O plano comercial e o investimento não mudam com a cota: revise-os no Perfil." }
+  ],
+  "avisos": [ "Vão fechar: Pesquisa da ativação. A marca deixa de ver essas abas e a RBS não consegue abri-las enquanto a cota não as incluir." ]
+}
+```
+
+| Campo | O que é |
+| --- | --- |
+| `abasQueFecham` | As abas hoje **liberadas** que a cota nova não inclui (`cota_tipo_aba`). Hoje só a Pesquisa é exclusiva da Master. Aba já fechada ou fora da cota não entra. |
+| `abasQuePassamAPoderAbrir` | As abas que a cota nova inclui e a atual não. A troca **não as abre**: a RBS abre pelo Perfil (rota 10). |
+| `relatorioDisponibilizado` | A versão disponibilizada mais nova (`versao`, `disponibilizadoEm`), ou `null`. |
+| `exigeCiencia` | `true` quando há relatório disponibilizado: a rota 102 só troca com `ciente: true`. |
+| `pesquisa`, `comprovacaoMensal` | `DEIXA_DE_VALER`, `PASSA_A_VALER` ou `SEM_MUDANCA`. A pesquisa é da cota que inclui a aba `PESQUISA`; a comprovação mensal, das cotas Master. Ao deixar de valer, as perguntas e os resultados ficam guardados, mas saem do relatório novo e dos faltantes, e a marca recebe 403 na comprovação mensal. |
+| `naoMudamSozinhos` | O que a troca **não** muda: cortesias, credenciais, plano comercial e investimento. A RBS ajusta nas abas indicadas. A tela avisa. |
+| `avisos` | As mesmas informações em frases prontas para a tela. |
+
+Para a mesma cota que a parceria já tem, devolve **200** com `mudaACota: false`, listas vazias e `exigeCiencia: false`.
+
+| Status | Quando |
+| --- | --- |
+| 401 / 403 | Sem sessão; a marca (antes de qualquer outra conferência). |
+| 404 | Parceria que não existe (ou id que não é número). |
+| 422 | `para` ausente, em branco ou de uma cota que não existe: `campos.para`. |
+
+## 102. `PUT /api/parcerias/{id}/cota`  · Requisitos RBS (R6.d3)
+
+**Quem chama:** só o Admin RBS (exige o token CSRF; a marca recebe **403** antes de o corpo ser lido). Troca a cota da parceria depois do cadastro.
+
+**Corpo**
+
+```json
+{ "cotaCodigo": "SUBCOTA", "ciente": true }
+```
+
+`ciente` só pesa quando a parceria tem relatório **disponibilizado** (rascunho e validado passam sem ele). Veja a prévia na rota 104.
+
+**200**: `{ "impacto": { ... }, "parceria": { ... } }`. O `impacto` tem o formato da rota 104, com o que a troca fez; a `parceria` é o objeto da rota 9, já com a cota e as abas novas.
+
+**O que a troca faz, tudo numa transação, com a linha da parceria travada:**
+
+- grava a cota nova em `parceria.cota_tipo_id`;
+- **fecha** (`liberada: false`) as abas liberadas que a cota nova não inclui. Aba oculta continua oculta. Isso mantém a regra de que a RBS não libera aba fora da cota (rota 10, 422);
+- **não abre** aba nenhuma, nem as que a cota nova passa a incluir (a RBS abre pelo Perfil);
+- **não mexe** nas entregas, nas cortesias, nas credenciais, no plano comercial, no investimento, nas perguntas e resultados da pesquisa, nos e-mails nem no evento.
+
+Nada guarda a cota antiga: o Atlas (busca, documentos e prazos do escopo `COTA`, `consultar_cota`), o relatório novo, os faltantes e a verificação de aba leem a cota da parceria a cada chamada, então a troca vale na leitura seguinte (no Atlas, no turno seguinte). Um relatório já disponibilizado guarda os números, mas a tela dele mostra a cota viva: por isso a ciência, e a recomendação de gerar o relatório de novo.
+
+**[HISTORICO]** Uma linha `EDICAO` (`entidade` `parceria`, `detalhe` `cota`, `valorAnterior` e `valorNovo` com os nomes da cota, como `Master` e `Subcota G`) e uma `LIBERACAO_ABA` por aba que fechou (`liberada` para `fechada`, ou `oculta` para `oculta`; o `detalhe` diz de que cota para qual). Quem trocou é o usuário da linha.
+
+| Status | Quando |
+| --- | --- |
+| 401 / 403 | Sem sessão; a marca (antes do corpo); falta o token CSRF. |
+| 404 | Parceria que não existe (ou id que não é número). A RBS vê as parcerias de todas as edições. |
+| 409 | Parceria `ENCERRADA` (`"Esta parceria está encerrada e não aceita alterações."`); ou relatório disponibilizado sem `ciente: true` (`"Esta parceria tem o relatório v2 disponibilizado. Trocar a cota muda o cabeçalho dele e os indicadores que a cota nova considera; confirme com ciente = true para continuar."`). |
+| 422 | `campos.cotaCodigo`: ausente, em branco, de uma cota que não existe, ou igual à que a parceria já tem (`"A parceria já está na cota Master."`). Nada é gravado. |
 
 ---
 

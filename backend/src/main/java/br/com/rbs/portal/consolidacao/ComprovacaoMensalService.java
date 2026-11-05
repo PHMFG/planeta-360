@@ -39,7 +39,7 @@ public class ComprovacaoMensalService {
     /** A frase do 403 de quem é de uma cota que não recebe a planilha. */
     public static final String SO_AS_MASTER = "A comprovação mensal é das cotas Master.";
 
-    static final Set<String> COTAS_COM_PLANILHA_MENSAL = Set.of("MASTER");
+    public static final Set<String> COTAS_COM_PLANILHA_MENSAL = Set.of("MASTER");
 
     static final String ENTIDADE_NO_HISTORICO = "comprovacao_mensal";
 

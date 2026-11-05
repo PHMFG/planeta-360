@@ -211,6 +211,43 @@ public class ParceriaRepositorio {
     }
 
     // ---------------------------------------------------------------------
+    // Troca de cota (rotas 102 e 104)
+    // ---------------------------------------------------------------------
+
+    /** Os códigos das abas que a cota inclui (cota_tipo_aba). */
+    public java.util.Set<String> abasDaCota(int cotaTipoId) {
+        return new java.util.LinkedHashSet<>(jdbc.sql("""
+                        SELECT a.codigo FROM cota_tipo_aba cta JOIN aba a ON a.id = cta.aba_id
+                        WHERE cta.cota_tipo_id = :cota ORDER BY a.ordem
+                        """)
+                .param("cota", cotaTipoId)
+                .query(String.class)
+                .list());
+    }
+
+    /** A versão disponibilizada mais nova do relatório da parceria, se houver. */
+    public record RelatorioDisponibilizado(Integer versao, OffsetDateTime disponibilizadoEm) {
+    }
+
+    public Optional<RelatorioDisponibilizado> relatorioDisponibilizado(long parceriaId) {
+        return jdbc.sql("""
+                        SELECT versao, disponibilizado_em FROM relatorio
+                        WHERE parceria_id = :id AND status = 'DISPONIBILIZADO' ORDER BY versao DESC LIMIT 1
+                        """)
+                .param("id", parceriaId)
+                .query(RelatorioDisponibilizado.class)
+                .optional()
+                .map(r -> new RelatorioDisponibilizado(r.versao(), Datas.emBrasilia(r.disponibilizadoEm())));
+    }
+
+    public void atualizarCota(long parceriaId, int cotaTipoId) {
+        jdbc.sql("UPDATE parceria SET cota_tipo_id = :cota WHERE id = :id")
+                .param("cota", cotaTipoId)
+                .param("id", parceriaId)
+                .update();
+    }
+
+    // ---------------------------------------------------------------------
     // Lista (rota 7)
     // ---------------------------------------------------------------------
 

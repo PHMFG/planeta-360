@@ -120,6 +120,12 @@ R6.b	e2e	requisitos-rbs.spec.ts > [R6.b] a aba fora da cota aparece com o motivo
 R6.c	back	parceria.EmailsAutorizadosTest#autorizarExigeOTokenCsrf
 R6.d1	e2e	requisitos-rbs.spec.ts > [R6.d1] a RBS edita o investimento e a base
 R6.d2	e2e	requisitos-rbs.spec.ts > [R6.d2] Direitos por contrato mostra o mesmo que as abas
+R6.d3	back	parceria.TrocaDeCotaTest#previaDeMasterParaSubcotaListaOQueFechaENadaGrava
+R6.d3	back	parceria.TrocaDeCotaTest#masterParaSubcotaFechaAPesquisaEDeVoltaElaFicaFechadaAteARbsAbrir
+R6.d3	back	parceria.TrocaDeCotaTest#comRelatorioDisponibilizadoATrocaSemCienciaDa409EComCienciaPassa
+R6.d3	back	parceria.TrocaDeCotaTest#cortesiasECredenciaisFicamComoEstavam
+R6.d3	back	parceria.TrocaDeCotaTest#marcaRecebe403AntesDeLerOCorpoSejaQualForOCorpo
+R6.d3	back	parceria.TrocaDeCotaTest#aTrocaGravaAEdicaoDaCotaEUmaLiberacaoPorAbaQueFechou
 R6.d3	e2e	requisitos-rbs.spec.ts > [R6.d3] a troca de cota mostra a prévia do impacto
 R7.1	e2e	requisitos-rbs.spec.ts > [R7.1] o emblema de 2027 aparece no login e nos cabeçalhos
 R8.1	e2e	requisitos-rbs.spec.ts > [R8.1] a marca vê o anexo de pós-venda com o relatório disponibilizado

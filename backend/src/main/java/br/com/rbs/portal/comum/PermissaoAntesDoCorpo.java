@@ -41,6 +41,9 @@ public class PermissaoAntesDoCorpo implements HandlerInterceptor, WebMvcConfigur
     public static final Set<String> ROTAS_SO_DA_RBS = Set.of(
             "POST /api/parcerias",
             "PATCH /api/parcerias/{id}",
+            // A troca de cota (rotas 102 e 104): a prévia do impacto e a troca, R6.d3.
+            "GET /api/parcerias/{id}/cota/previa",
+            "PUT /api/parcerias/{id}/cota",
             "GET /api/parcerias/{id}/emails",
             "POST /api/parcerias/{id}/emails",
             "DELETE /api/parcerias/{id}/emails/{emailId}",

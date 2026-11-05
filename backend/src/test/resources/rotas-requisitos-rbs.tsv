@@ -36,5 +36,8 @@ GET	/api/eventos/{id}/posvenda	rbs
 DELETE	/api/posvenda/{id}	rbs
 GET	/api/eventos/{id}/resultados	rbs
 PUT	/api/eventos/{id}/resultados	rbs
+# R6.d3 · Troca de cota com prévia do impacto (rotas 104 e 102)
+GET	/api/parcerias/{id}/cota/previa	rbs
+PUT	/api/parcerias/{id}/cota	rbs
 # R2.1 · Páginas fora do Atlas (rota 103)
 PATCH	/api/documentos/{id}/paginas-fora-do-atlas	rbs
