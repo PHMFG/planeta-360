@@ -2,7 +2,7 @@
 
 Este documento é o **contrato entre o back-end e o front-end**. Quem faz a tela lê aqui o que cada rota pede, o que devolve e quais erros esperar, sem precisar abrir o código.
 
-- Todas as 85 rotas estão implementadas e cobertas por testes de integração (`cd backend && ./mvnw test`), inclusive o isolamento entre parcerias. A coluna "Etapa" diz em que etapa do plano cada rota entrou (as do Atlas, 37 em diante, entram como `Atlas 1`, `Atlas 2`, `Atlas M2`, `Atlas M3`, `Atlas M4`, `Atlas M5`, `Atlas M6` e `Atlas M8`). Mudança de formato daqui em diante entra neste arquivo no mesmo commit do código.
+- Todas as 87 rotas estão implementadas e cobertas por testes de integração (`cd backend && ./mvnw test`), inclusive o isolamento entre parcerias. A coluna "Etapa" diz em que etapa do plano cada rota entrou (as do Atlas, 37 em diante, entram como `Atlas 1`, `Atlas 2`, `Atlas M2`, `Atlas M3`, `Atlas M4`, `Atlas M5`, `Atlas M6` e `Atlas M8`). Mudança de formato daqui em diante entra neste arquivo no mesmo commit do código.
 - O banco está descrito em [`docs/banco.md`](banco.md). Os nomes de status, cotas e abas são os mesmos do banco.
 
 ## Como falar com a API
@@ -192,8 +192,10 @@ Todas prontas e testadas. A coluna "Etapa" mostra em que etapa do plano a rota e
 | 83 | `POST /api/parcerias/{id}/cortesias/destinacoes` | Patrocinador da parceria (aba aberta), ou Admin RBS | Destina cortesias a um destinatário, dentro do disponível | Cortesias |
 | 84 | `PATCH /api/parcerias/{id}/cortesias/destinacoes/{destId}` | Patrocinador da parceria (aba aberta), ou Admin RBS | Muda o destinatário ou a quantidade de uma destinação | Cortesias |
 | 85 | `DELETE /api/parcerias/{id}/cortesias/destinacoes/{destId}` | Patrocinador da parceria (aba aberta), ou Admin RBS | Retira uma destinação (apaga de verdade) | Cortesias |
+| 86 | `POST /api/entregas/{id}/conteudos` | Patrocinador da parceria (aba da entrega aberta), ou Admin RBS | Envia um texto ou um link como versão nova da entrega (não há editar nem apagar) | F5 |
+| 87 | `GET /api/parcerias/{id}/links-de-midia` | Patrocinador da parceria (aba `MIDIA` aberta), ou Admin RBS | Os links de posts: os da veiculação carregada pela RBS e os enviados como conteúdo | F5 |
 
-São 85 operações (método + caminho): 84 mapeadas nos controllers (`@GetMapping`, `@PostMapping`, `@PutMapping`, `@PatchMapping` ou `@DeleteMapping`) e o logout (rota 3), que vem do Spring Security (`SegurancaConfig`), sem controller. As quatro rotas de debug ficam de fora da numeração. A rota 5 (`ativar`) faz parte do contrato de autenticação, mas só é implementada na etapa 4. As rotas 37 em diante vieram com o Atlas: a coluna "Etapa" diz `Atlas 1` (plano de aplicações e dados informados), `Atlas 2` (conversa, cartão de perguntas e relatório), `Atlas M2` (o diagnóstico: rotas 49 a 53, veja "Diagnóstico do Atlas") `Atlas M3` (os documentos: rotas 54 a 58, veja "Os documentos do Atlas") `Atlas M4` (o visualizador, rotas 59 e 60, e a busca de teste, rota 61, veja "Busca nos documentos") `Atlas M5` (os prazos: rotas 62 a 64, veja "Os prazos do Atlas") `Atlas M6` (o relatório religado: a rota 65, veja "Descarte do relatório parado"; e a planilha da agência: a rota 66, veja "Dados informados pela marca") `Atlas M8` (o Atlas da RBS: as rotas 67 e 68, veja "O Atlas da RBS") ou `Requisitos RBS` (o plano comercial e os espaços de documento da marca: as rotas 69 a 73, veja "O plano comercial e os espaços de documento"). As rotas 70 e 73 são só do Admin RBS (o patrocinador recebe **403** antes de o corpo ser lido); a 69, a 71 e a 72 são das duas pontas. As rotas 54, 55, 57, 58, 61, 62, 63, 64, 67 e 68 são só do Admin RBS (o outro perfil recebe **403** antes de o corpo ser lido); a 56, a 59 e a 60 são das duas pontas, e a marca só vê o que o escopo dela permite; a 66 é da marca da parceria e da RBS. A 49 é do dono da conversa (a marca, ou a RBS na conversa do Atlas da RBS); as 50 a 53 são só do Admin RBS (o outro perfil recebe **403** antes de tudo). **As rotas 49 a 53 estão sempre mapeadas e respondem 404 com o diagnóstico desligado** (`atlas.diagnostico.ligado=false`, o padrão). Nas rotas 42, 43, 46 e 65 só o Admin Patrocinador chama (a RBS recebe **403** antes de o corpo ser lido); nas 44, 45 e 49 chama o dono da conversa: a marca na conversa da parceria dela e, com `atlas.rbs.ligado`, a RBS na conversa dela, a do Atlas da RBS (a RBS recebe **403** antes do corpo em qualquer outra conversa, e sempre com a propriedade desligada); nas 47 e 48 chamam a marca da parceria e a RBS. **O relatório do Atlas está ligado nos perfis `dev`, `demo` e `test` e desligado no padrão** (`atlas.relatorio.ligado=false`, `ATLAS_RELATORIO`). Desligado, as rotas **46, 47, 48 e 65 não existem (404)**, e as rotas 42 e 44 só aceitam conversa por texto (`atalho` e `modelo` dão 422): é o modo só chat, que continua existindo e testado. Veja "Modo só chat". O contrato do relatório, nas rotas 42 a 48 e 65, vale com `atlas.relatorio.ligado=true`.
+São 87 operações (método + caminho): 86 mapeadas nos controllers (`@GetMapping`, `@PostMapping`, `@PutMapping`, `@PatchMapping` ou `@DeleteMapping`) e o logout (rota 3), que vem do Spring Security (`SegurancaConfig`), sem controller. As quatro rotas de debug ficam de fora da numeração. A rota 5 (`ativar`) faz parte do contrato de autenticação, mas só é implementada na etapa 4. As rotas 37 em diante vieram com o Atlas: a coluna "Etapa" diz `Atlas 1` (plano de aplicações e dados informados), `Atlas 2` (conversa, cartão de perguntas e relatório), `Atlas M2` (o diagnóstico: rotas 49 a 53, veja "Diagnóstico do Atlas") `Atlas M3` (os documentos: rotas 54 a 58, veja "Os documentos do Atlas") `Atlas M4` (o visualizador, rotas 59 e 60, e a busca de teste, rota 61, veja "Busca nos documentos") `Atlas M5` (os prazos: rotas 62 a 64, veja "Os prazos do Atlas") `Atlas M6` (o relatório religado: a rota 65, veja "Descarte do relatório parado"; e a planilha da agência: a rota 66, veja "Dados informados pela marca") `Atlas M8` (o Atlas da RBS: as rotas 67 e 68, veja "O Atlas da RBS") ou `Requisitos RBS` (o plano comercial e os espaços de documento da marca: as rotas 69 a 73, veja "O plano comercial e os espaços de documento"). As rotas 86 e 87 (`F5`: texto ou link na entrega e os links de mídia) são das duas pontas. As rotas 70 e 73 são só do Admin RBS (o patrocinador recebe **403** antes de o corpo ser lido); a 69, a 71 e a 72 são das duas pontas. As rotas 54, 55, 57, 58, 61, 62, 63, 64, 67 e 68 são só do Admin RBS (o outro perfil recebe **403** antes de o corpo ser lido); a 56, a 59 e a 60 são das duas pontas, e a marca só vê o que o escopo dela permite; a 66 é da marca da parceria e da RBS. A 49 é do dono da conversa (a marca, ou a RBS na conversa do Atlas da RBS); as 50 a 53 são só do Admin RBS (o outro perfil recebe **403** antes de tudo). **As rotas 49 a 53 estão sempre mapeadas e respondem 404 com o diagnóstico desligado** (`atlas.diagnostico.ligado=false`, o padrão). Nas rotas 42, 43, 46 e 65 só o Admin Patrocinador chama (a RBS recebe **403** antes de o corpo ser lido); nas 44, 45 e 49 chama o dono da conversa: a marca na conversa da parceria dela e, com `atlas.rbs.ligado`, a RBS na conversa dela, a do Atlas da RBS (a RBS recebe **403** antes do corpo em qualquer outra conversa, e sempre com a propriedade desligada); nas 47 e 48 chamam a marca da parceria e a RBS. **O relatório do Atlas está ligado nos perfis `dev`, `demo` e `test` e desligado no padrão** (`atlas.relatorio.ligado=false`, `ATLAS_RELATORIO`). Desligado, as rotas **46, 47, 48 e 65 não existem (404)**, e as rotas 42 e 44 só aceitam conversa por texto (`atalho` e `modelo` dão 422): é o modo só chat, que continua existindo e testado. Veja "Modo só chat". O contrato do relatório, nas rotas 42 a 48 e 65, vale com `atlas.relatorio.ligado=true`.
 
 As rotas de debug do modelo de linguagem (`/api/debug/llm`) são temporárias, só existem no perfil `dev` (o perfil `demo`, da apresentação, as deixa em 404), são só da RBS e ficam fora desta tabela e da conta das 74: veja "Rotas de debug (temporárias)", no fim.
 
@@ -249,9 +251,21 @@ A regra é uma só em toda a API (lista de entregas, envio de arquivo, download 
   "status": "APROVADO", "prazo": "2026-10-20",
   "criadoEm": "2026-09-28T10:00:00-03:00", "atualizadoEm": "2026-10-18T10:15:00-03:00",
   "arquivos": [ /* Arquivo, da versão mais nova para a mais antiga */ ],
+  "versoes": [ /* Versao: arquivos, textos e links juntos, da versão mais nova para a mais antiga */ ],
   "ultimaObservacao": { "texto": "Enviar o logo em vetor.", "por": "Equipe B2B RBS", "em": "2026-10-16T09:42:00-03:00" }
 }
 ```
+
+**Versao** (um item de `versoes`, a lista única que o front mostra no histórico da entrega; vem nas rotas 14, 15, 19 e 71, e a resposta da rota 17 traz só o **Arquivo** criado):
+
+```json
+{ "tipo": "LINK", "id": 5, "versao": 4, "enviadoPor": { "id": 1, "nome": "Equipe B2B RBS", "perfil": "ADMIN_RBS" },
+  "enviadoEm": "2026-11-04T10:20:00-03:00", "observacao": null,
+  "nomeOriginal": null, "mimeType": null, "tamanhoBytes": null, "categoria": null,
+  "titulo": "Abertura", "texto": null, "url": "https://www.tiktok.com/@planetaatlantida/video/7300000000000000001", "host": "tiktok.com" }
+```
+
+`tipo` é `ARQUIVO`, `TEXTO` ou `LINK`. Os campos que não valem para o tipo vão `null`: `nomeOriginal`, `mimeType`, `tamanhoBytes` e `categoria` são do `ARQUIVO` (os mesmos do **Arquivo**; o `id` de um `ARQUIVO` é o da rota 18); `titulo`, `texto`, `url` e `host` são do `TEXTO` e do `LINK` (o `host` é o domínio do link, em minúsculas e sem o `www.`). A `versao` segue **uma sequência só por entrega**, contando arquivos, textos e links na ordem em que chegaram: um arquivo enviado depois de um texto continua a numeração. `arquivos` continua trazendo só os arquivos, com a versão deles na mesma sequência (podem faltar números, os dos textos e links). `texto` e `url` são dado, nunca instrução: o front os mostra como texto e o link só abre com `rel="noopener noreferrer"`.
 
 `papel` é `null` na entrega comum. Vale `DOCUMENTO_INGRESSOS` (uma solicitação de compra de ingressos, no Perfil), `MIV` ou `LOGO` (o espaço único da marca em Aplicações) quando a entrega é um espaço de documento (rotas 15 e 71 a 73). A rota 16 também traz `papel` em cada item da fila.
 
@@ -625,7 +639,7 @@ Na chamada seguinte da pessoa revogada, **qualquer rota** (`GET /api/auth/eu`, `
 
 O patrocinador só enxerga as entregas das abas **liberadas** para a parceria dele. Pedir `aba=` de uma aba fechada devolve **403**: `"Esta aba não faz parte da cota da sua parceria."` se a cota não inclui a aba, ou `"Esta aba ainda não foi liberada para a sua parceria."` se a cota inclui e a RBS ainda não a abriu (veja "Aba"). Sem `aba=`, vêm as de todas as abas liberadas. A RBS vê todas.
 
-**200**: array de **Entrega** (formato em "Objetos que se repetem").
+**200**: array de **Entrega** (formato em "Objetos que se repetem"). Cada uma traz `arquivos` (só os arquivos) e `versoes` (arquivos, textos e links enviados pela rota 86, numa lista só).
 
 **Erros:** 403 (aba fechada), 404 (parceria), 422 (`aba` ou `status` com valor que não existe).
 
@@ -659,7 +673,7 @@ O patrocinador só enxerga as entregas das abas **liberadas** para a parceria de
 
 **Ordem:** primeiro as que esperam análise (`ENVIADO` e `EM_ANALISE`), das que esperam há mais tempo para as mais novas (conta o último envio do patrocinador; sem envio, a última atualização); depois as demais, pelo prazo mais próximo (sem prazo por último).
 
-`atrasada` é verdadeira quando o prazo é anterior a hoje (no horário de Brasília) e a entrega ainda está pendente, isto é, não está `APROVADO` nem `NAO_APLICAVEL`. `ultimoEnvioEm` é a data do último arquivo enviado pelo patrocinador (`null` se ele ainda não enviou). Valor de filtro que não existe (`status`, `abaCodigo`) devolve 422.
+`atrasada` é verdadeira quando o prazo é anterior a hoje (no horário de Brasília) e a entrega ainda está pendente, isto é, não está `APROVADO` nem `NAO_APLICAVEL`. `ultimoEnvioEm` é a data do último arquivo, texto ou link enviado pelo patrocinador (`null` se ele ainda não enviou). Os itens da fila não trazem a lista de versões. Valor de filtro que não existe (`status`, `abaCodigo`) devolve 422.
 
 **200**: uma página.
 
@@ -689,6 +703,8 @@ O patrocinador só enxerga as entregas das abas **liberadas** para a parceria de
 | `arquivo` | Sim | O arquivo. Até **20 MB**. |
 | `categoria` | Não | Tipo do material. Padrão: `MATERIAL_MARCA` (patrocinador) ou `OUTRO` (RBS). |
 | `observacao` | Não | Recado de até 500 caracteres. Fica ligado à versão (campo `observacao` do Arquivo) e também no histórico. |
+
+A `versao` do arquivo segue a sequência única da entrega, que também conta os textos e links enviados pela rota 86.
 
 **[UPLOAD] Regras do arquivo**
 
@@ -774,7 +790,7 @@ O `filename*` leva o nome original em UTF-8 (com acentos e espaços codificados)
 | `APROVADO` | `EM_ANALISE` (reabrir, com observação) |
 | `NAO_APLICAVEL` | `NAO_INICIADO` |
 
-**200**: a **Entrega** com o novo status. **Erros:** 403; 404; 409 (`"Esta entrega não pode ir de EM_ANALISE para NAO_INICIADO."`); 422 (status que não existe, ou observação que falta).
+**200**: a **Entrega** com o novo status, com `arquivos` e `versoes`. **Erros:** 403; 404; 409 (`"Esta entrega não pode ir de EM_ANALISE para NAO_INICIADO."`); 422 (status que não existe, ou observação que falta).
 
 **Histórico:** `ALTERACAO_STATUS`, com o status anterior, o novo e a observação em `detalhe`.
 
@@ -1627,6 +1643,58 @@ Cada célula é **a cota inteira** daquele setor e dia: cria a cota, muda a quan
 ### O nome do destinatário (D8)
 
 O destinatário é só um nome, em texto. Ele fica na coluna `cortesia_destinacao.destinatario_nome` e sai em um lugar: a rota 80 (e as respostas das rotas 81, 83 e 84, que devolvem o mesmo corpo). **Fora de log** (nem o corpo lido nem a resposta escrita: os `toString` dos objetos omitem o nome), **fora do histórico, do Atlas** (`consultar_cota` só soma `destinadas` e `disponiveis`, e a fonte do turno diz "Destinadas: 3. Disponíveis para destinar: 0."), **do JEV e do relatório**. Não há índice nem regra única sobre o nome: a repetição é permitida (duas pessoas se chamam Maria). O `DadoPessoalForaDoLogTest` grava um nome canário e varre todas as colunas de texto do banco, os eventos de log e o JSON da ferramenta.
+
+## 86. `POST /api/entregas/{id}/conteudos`  · F5
+
+**Quem chama:** patrocinador da parceria da entrega ou Admin RBS (exige o token CSRF). As regras de quem pode enviar são as da rota 17: a marca só com a aba da entrega aberta (liberada e visível) e só enquanto a entrega espera material (`NAO_INICIADO`, `AGUARDANDO_ENVIO`, `AJUSTE_SOLICITADO` ou `ENVIADO`); a RBS envia em qualquer status.
+
+**Corpo** (JSON)
+
+```json
+{ "tipo": "TEXTO", "texto": "Briefing completo...", "titulo": "Briefing", "observacao": "Versão para análise." }
+{ "tipo": "LINK", "url": "https://www.tiktok.com/@planetaatlantida/video/7300000000000000001" }
+```
+
+- `tipo` (obrigatório): `TEXTO` ou `LINK`.
+- `texto` (só no `TEXTO`): de 1 a 5.000 caracteres (conta caractere, não unidade UTF-16: um emoji vale 1), normalizado em NFC e sem os espaços das pontas. Aceita quebra de linha e tab. Vazio, só espaços ou com caractere de controle (**NUL** incluso) dá 422.
+- `url` (só no `LINK`): `http` ou `https` com host, até 500 caracteres, **sem** `usuario@` antes do host, sem espaço, sem caractere de controle e sem caractere bidi. O `@` depois do host vale (`https://www.tiktok.com/@usuario/video/1`). `javascript:`, `data:`, `ftp:`, endereço sem host e endereço com usuário e senha dão 422. A regra é a do CHECK `ck_conteudo_url` do banco, conferida antes de gravar.
+- `titulo` (opcional, até 160 caracteres) e `observacao` (opcional, até 500), sem caractere de controle.
+- Mandar `url` junto com `texto`, ou o campo do outro tipo, dá 422.
+
+**Cada envio é uma versão nova da entrega**, como um arquivo: a numeração é a mesma sequência dos arquivos (veja **Versao**), com autor, data e histórico. O envio da marca põe a entrega em `ENVIADO`; o da RBS é o retorno dela e não muda o status. **Não há `PATCH` nem `DELETE` de conteúdo** (R5.3.c): corrigir é enviar de novo, e o banco recusa `UPDATE` e `DELETE` na tabela. O texto e o link ficam só na `entrega_conteudo`: o texto não vai ao Atlas, ao histórico nem ao relatório.
+
+**201:**
+
+```json
+{ "id": 7, "entregaId": 31, "tipo": "TEXTO", "versao": 3, "titulo": "Briefing", "texto": "Briefing completo...", "url": null, "host": null,
+  "observacao": "Versão para análise.",
+  "enviadoPor": { "id": 3, "nome": "Marketing Amarelo", "perfil": "ADMIN_PATROCINADOR" },
+  "enviadoEm": "2026-11-04T10:20:00-03:00", "statusDaEntrega": "ENVIADO" }
+```
+
+**Erros**, nesta ordem: 401; 404 (entrega que não existe ou de outra parceria, com a mesma frase); 403 (aba fechada ou oculta para a marca); 409 (parceria `ENCERRADA`: `"Esta parceria está encerrada e não aceita novos envios."`); 422 (`campos.tipo`, `campos.texto`, `campos.url`, `campos.titulo`, `campos.observacao`); 409 (status que não aceita envio da marca). **Histórico:** `ENVIO_ARQUIVO` (versão 1) ou `NOVA_VERSAO` na entidade `entrega`, com `valor_novo` `"Texto (versão N)"` ou `"Link: <domínio> (versão N)"` (nunca o texto), e `ALTERACAO_STATUS` quando o status muda.
+
+## 87. `GET /api/parcerias/{id}/links-de-midia`  · F5
+
+**Quem chama:** patrocinador da parceria, com a aba `MIDIA` aberta, ou Admin RBS. **Corpo:** nenhum. Alimenta o cartão "Posts e links" da Mídia: junta os links da veiculação (a coluna `link` do CSV que a RBS carrega, rota 26) e os links enviados como conteúdo (rota 86) nas entregas da aba Mídia, do mais recente para o mais antigo. Só leitura.
+
+**200:**
+
+```json
+{ "parceriaId": 2, "itens": [
+  { "origem": "ENVIO", "url": "https://www.tiktok.com/@planetaatlantida/video/7300000000000000001", "host": "tiktok.com",
+    "data": "2026-11-04T10:20:00-03:00", "veiculo": null, "formato": null, "espacoPrograma": null,
+    "entregaId": 31, "entregaTitulo": "Post de abertura", "titulo": "Abertura", "observacao": null,
+    "enviadoPor": { "id": 1, "nome": "Equipe B2B RBS", "perfil": "ADMIN_RBS" } },
+  { "origem": "CARGA", "url": "https://www.instagram.com/p/AMOSTRA000011/", "host": "instagram.com",
+    "data": "2027-01-15T20:30:00-03:00", "veiculo": "Rede Atlântida RS", "formato": "Instagram", "espacoPrograma": "Feed",
+    "entregaId": null, "entregaTitulo": null, "titulo": null, "observacao": null, "enviadoPor": null }
+] }
+```
+
+`origem` é `CARGA` (rótulo "carga da RBS": `veiculo`, `formato` e `espacoPrograma` vêm do plano e `data` é a data de exibição) ou `ENVIO` (`entregaId`, `entregaTitulo`, `titulo`, `observacao` e `enviadoPor` vêm do envio e `data` é a do envio). **Só sai `http(s)` válido** (a mesma regra da rota 86): um link inválido que esteja no banco, como o `javascript:` de uma linha de CSV, não é devolvido. Devolve no máximo os 1.000 mais recentes de cada origem. Os links enviados em entregas de outras abas não entram.
+
+**Erros:** 401; 403 (aba `MIDIA` fechada ou oculta para a marca); 404 (parceria de outra marca).
 
 
 # O Atlas: conversa, cartão de perguntas e relatório (Atlas, parte 2)
@@ -3044,7 +3112,7 @@ O servidor **nunca redireciona** para este endereço: o front abre o link em aba
 
 # Rotas de debug (temporárias)
 
-Um recurso **temporário**, para a equipe ligar o modelo de linguagem do Atlas pela tela (o botão "Debug"), sem reiniciar a API e sem variável de ambiente. Não faz parte das 85 rotas do contrato e sai antes da entrega final.
+Um recurso **temporário**, para a equipe ligar o modelo de linguagem do Atlas pela tela (o botão "Debug"), sem reiniciar a API e sem variável de ambiente. Não faz parte das 87 rotas do contrato e sai antes da entrega final.
 
 - **Só existem com `atlas.debug.chaves=true`.** A propriedade vem `false` por padrão, `true` no perfil `dev` e `false` no `demo` e no `test`. Sem ela, as quatro rotas respondem **404**, como uma rota que não existe.
 - **A chave fica só na memória da API.** Nunca vai ao banco, a arquivo ou ao log, e **some quando a API reinicia**. Nenhuma resposta devolve a chave inteira: só os 4 últimos caracteres (`finalDaChave`).

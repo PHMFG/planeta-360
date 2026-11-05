@@ -89,7 +89,10 @@ class RotasDosRequisitosDaRbsAcessoTest {
             Map.entry("GET /api/parcerias/{id}/credenciais", new Detalhe(null, "CREDENCIAMENTO", true)),
             Map.entry("PATCH /api/parcerias/{id}/credenciais", new Detalhe(
                     "{\"credenciais\":[{\"setor\":\"ARENA\",\"beneficiario\":\"MARCA\",\"quantidadePorDia\":20}]}", "CREDENCIAMENTO", true)),
-            Map.entry("PATCH /api/eventos/{id}/credenciamento", new Detalhe("{\"inicio\":\"2027-01-05\"}", null, false)));
+            Map.entry("PATCH /api/eventos/{id}/credenciamento", new Detalhe("{\"inicio\":\"2027-01-05\"}", null, false)),
+            // F5 · Texto ou link na entrega e os links de mídia (rotas 86 e 87). O {id} da 86 é de uma entrega de Mídia da parceria do Amarelo.
+            Map.entry("POST /api/entregas/{id}/conteudos", new Detalhe("{\"tipo\":\"TEXTO\",\"texto\":\"Texto de teste\"}", "MIDIA", true)),
+            Map.entry("GET /api/parcerias/{id}/links-de-midia", new Detalhe(null, "MIDIA", true)));
 
     /** As rotas que recebem multipart: no teste vão como formulário sem partes (com JSON o Spring responderia 415 antes da permissão). */
     private static final Set<String> MULTIPART = Set.of("POST /api/parcerias/{id}/contrato/arquivo",
@@ -171,6 +174,17 @@ class RotasDosRequisitosDaRbsAcessoTest {
                         .isIn("GET", "POST");
             }
         }
+        // A conferência no código, não só no arquivo: nenhum controller mapeia PATCH, PUT nem DELETE de conteúdo ou de plano comercial.
+        mapeamento.getHandlerMethods().keySet().forEach(info -> {
+            for (String padrao : info.getPathPatternsCondition().getPatternValues()) {
+                if (padrao.contains("conteudos") || padrao.contains("plano-comercial")) {
+                    assertThat(info.getMethodsCondition().getMethods())
+                            .as("R5.3.c: " + padrao + " só pode ter GET e POST")
+                            .isNotEmpty()
+                            .allMatch(m -> m == RequestMethod.GET || m == RequestMethod.POST);
+                }
+            }
+        });
     }
 
     // ---------------------------------------------------------------------
@@ -192,9 +206,19 @@ class RotasDosRequisitosDaRbsAcessoTest {
                 """).param("p", SessaoDeApi.parceriaDe2027(jdbc, cliente)).query(Long.class).single();
     }
 
-    /** O caminho da rota com o {id} da parceria do Amarelo (ou da edição) e o {destId} dado. */
+    /** Uma entrega de Mídia do Amarelo que ainda aceita envio da marca (a rota 86 tem o id de uma entrega, não o de uma parceria). */
+    private long entregaDeMidiaDoAmarelo() {
+        return jdbc.sql("""
+                INSERT INTO entrega (parceria_id, aba_id, titulo, status)
+                VALUES (:p, (SELECT id FROM aba WHERE codigo = 'MIDIA'), 'Entrega da matriz de acesso', 'AGUARDANDO_ENVIO')
+                RETURNING id
+                """).param("p", amarelo()).query(Long.class).single();
+    }
+
+    /** O caminho da rota com o {id} da parceria do Amarelo (ou da edição, ou da entrega) e o {destId} dado. */
     private String uri(Rota rota, long destinacao) {
-        long id = DETALHES.get(rota.chave()).caminhoDeParceria() ? amarelo() : eventoDoAmarelo();
+        long id = rota.caminho().startsWith("/api/entregas/") ? entregaDeMidiaDoAmarelo()
+                : DETALHES.get(rota.chave()).caminhoDeParceria() ? amarelo() : eventoDoAmarelo();
         return rota.caminho().replace("{id}", String.valueOf(id)).replace("{destId}", String.valueOf(destinacao)).replace("{papel}", "DOCUMENTO_INGRESSOS");
     }
 

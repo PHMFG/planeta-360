@@ -199,10 +199,12 @@ public class Armazenamento {
         escrever(caminho, conteudo);
         return inserir("""
                         INSERT INTO arquivo (parceria_id, aba_id, entrega_id, categoria, nome_original, mime_type,
-                                             tamanho_bytes, caminho, hash_sha256, versao, enviado_por, observacao)
+                                             tamanho_bytes, caminho, hash_sha256, versao, enviado_por, observacao, enviado_em)
                         SELECT e.parceria_id, e.aba_id, e.id, :categoria, :nome, :mime, :tamanho, :caminho, :hash,
-                               coalesce((SELECT max(a.versao) FROM arquivo a WHERE a.entrega_id = e.id), 0) + 1, :enviadoPor,
-                               nullif(CAST(:observacao AS text), '')
+                               greatest(coalesce((SELECT max(a.versao) FROM arquivo a WHERE a.entrega_id = e.id), 0),
+                                        (SELECT count(*) FROM arquivo a WHERE a.entrega_id = e.id)
+                                        + (SELECT count(*) FROM entrega_conteudo c WHERE c.entrega_id = e.id)) + 1, :enviadoPor,
+                               nullif(CAST(:observacao AS text), ''), clock_timestamp()
                         FROM entrega e WHERE e.id = :entregaId
                         RETURNING\s""" + COLUNAS,
                 Map.of("categoria", categoria, "nome", pronto.nomeOriginal(), "mime", pronto.tipo().mime(),

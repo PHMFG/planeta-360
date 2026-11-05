@@ -240,7 +240,9 @@ class PermissaoAntesDoCorpoTest {
             "GET /api/parcerias/{id}/cortesias", "POST /api/parcerias/{id}/cortesias/destinacoes",
             "PATCH /api/parcerias/{id}/cortesias/destinacoes/{destId}", "DELETE /api/parcerias/{id}/cortesias/destinacoes/{destId}",
             // O contrato e as credenciais (rotas 74, 75 e 77): a marca e a RBS; a escrita da RBS (76, 78 e 79) está na lista dela.
-            "GET /api/parcerias/{id}/contrato", "PUT /api/parcerias/{id}/contrato/signatario", "GET /api/parcerias/{id}/credenciais");
+            "GET /api/parcerias/{id}/contrato", "PUT /api/parcerias/{id}/contrato/signatario", "GET /api/parcerias/{id}/credenciais",
+            // Texto ou link na entrega (86) e os links de mídia (87): a marca da parceria (aba Mídia aberta) e a RBS.
+            "POST /api/entregas/{id}/conteudos", "GET /api/parcerias/{id}/links-de-midia");
 
     @Test
     void todaRotaDaApiEstaClassificadaEAListaDaRbsSoTemRotasQueExistem() {

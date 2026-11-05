@@ -18,3 +18,5 @@ POST	/api/parcerias/{id}/plano-comercial	rbs
 GET	/api/parcerias/{id}/espacos	ambos
 POST	/api/parcerias/{id}/espacos/{papel}/arquivos	ambos
 POST	/api/parcerias/{id}/formulario-ingressos	rbs
+POST	/api/entregas/{id}/conteudos	ambos
+GET	/api/parcerias/{id}/links-de-midia	ambos

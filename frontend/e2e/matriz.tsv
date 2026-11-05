@@ -17,6 +17,10 @@ R3.3	e2e	requisitos-rbs.spec.ts > [R3.3] a comprovação mensal não aparece par
 R4.1	e2e	requisitos-rbs.spec.ts > [R4.1] .doc, .ppt e .xls sem macro entram; com macro, não
 R4.2	back	comum.TipoDeArquivoTest#listaAceitaExatamenteAsExtensoesCombinadasComARbs
 R4.3	e2e	requisitos-rbs.spec.ts > [R4.3] o link do post abre em aba nova, e javascript: é recusado
+R4.3	back	materiais.LinksDeMidiaTest#linkInvalidoGravadoAForcaPorSqlNaoSai
+R4.3	back	materiais.LinksDeMidiaTest#javascriptEDataSaoRecusadosNoEnvio
+R4.3	back	materiais.ConteudoDaEntregaTest#linksPerigososOuMalFormadosDao422
+R4.3	back	materiais.ConteudoDaEntregaTest#marcaEnviaLinkDoTiktokComArrobaDepoisDoHost
 R5.0	back	parceria.AbasEDaCotaTest#euEOLoginTrazemIncluidaNaCotaEmCadaAba
 R5.1.a	back	parceria.EmailsAutorizadosTest#rbsListaOsEmailsComQuemAutorizouEOsRevogados
 R5.1.b	e2e	requisitos-rbs.spec.ts > [R5.1.b] a RBS sobe o plano comercial e a marca baixa a última versão
@@ -34,7 +38,16 @@ R5.2.a	back	materiais.EspacosDaMarcaTest#svgEAiSoltosSaoRecusadosComAFraseEDentr
 R5.2.a	back	materiais.PrimeiroEnvioDeMivEmParaleloTest#doisPrimeirosEnviosDeMivJuntosViramV1EV2
 R5.2.b	back	aplicacoes.AplicacaoControllerTest#rbsAnexaAFotoELinhaSemFotoPassaAContarComoComprovada
 R5.3.a	e2e	requisitos-rbs.spec.ts > [R5.3.a] a marca envia material em texto e em link
+R5.3.a	back	materiais.ConteudoDaEntregaTest#marcaEnviaTextoEEleViraAVersao1ComAutorDataEHistorico
+R5.3.a	back	materiais.ConteudoDaEntregaTest#cadaEnvioEUmaVersaoNovaEAListaDaRota14JuntaArquivoTextoELinkNaMesmaOrdem
+R5.3.a	back	materiais.ConteudoDaEntregaTest#textoVazioSoEspacosOuComNulDa422ENaoGrava
+R5.3.a	back	materiais.ConteudoDaEntregaTest#marcaDeOutraParceriaEEntregaQueNaoExisteDaoOMesmo404
 R5.3.b	e2e	requisitos-rbs.spec.ts > [R5.3.b] os links dos posts aparecem em Posts e links
+R5.3.b	back	materiais.LinksDeMidiaTest#osLinksDaAmostraDoRoxoSaemParaAMarcaEParaARbsComOrigemHostEData
+R5.3.b	back	materiais.LinksDeMidiaTest#oLinkEnviadoEmMidiaApareceComAEntregaQuemEnviouEADataEOTextoNao
+R5.3.b	back	materiais.LinksDeMidiaTest#marcaDeOutraParceriaRecebe404EOsLinksDeUmaNaoVazamParaAOutra
+R5.3.c	back	comum.RotasDosRequisitosDaRbsAcessoTest#conteudoEPlanoComercialNaoTemPatchNemDelete
+R5.3.c	back	materiais.ConteudoDaEntregaTest#oBancoRecusaUpdateEDeleteDoConteudoEAApiNaoTemPatchNemDelete
 R5.3.d	back	consolidacao.ConsolidacaoControllerTest#amareloVeOPrevistoEOExibidoDeUmaUnidadeIgualAoBanco
 R5.4.a	e2e	requisitos-rbs.spec.ts > [R5.4.a] a RBS grava a cota de cortesias com acesso e shuttle
 R5.4.a	back	cortesias.CortesiasDaRbsTest#rbsGravaAGradeInteiraEAMarcaVeAoRecarregar

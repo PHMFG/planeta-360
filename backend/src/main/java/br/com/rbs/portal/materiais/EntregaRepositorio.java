@@ -8,9 +8,11 @@ import br.com.rbs.portal.materiais.MateriaisDtos.ObservacaoDto;
 import br.com.rbs.portal.materiais.MateriaisDtos.PaginaDto;
 import br.com.rbs.portal.materiais.MateriaisDtos.ParceriaDaFilaDto;
 import br.com.rbs.portal.materiais.MateriaisDtos.UsuarioResumoDto;
+import br.com.rbs.portal.materiais.MateriaisDtos.VersaoDto;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -178,6 +180,57 @@ public class EntregaRepositorio {
         return porEntrega;
     }
 
+    private record LinhaDeConteudo(Long id, Long entregaId, String tipo, String titulo, String texto, String url, String observacao,
+                                   OffsetDateTime enviadoEm, Long usuarioId, String usuarioNome, String usuarioPerfil) {
+    }
+
+    /**
+     * As versões de cada entrega (R5.3): os arquivos já lidos e os textos e links, numa lista só, da mais nova para a mais antiga. O
+     * arquivo guarda a própria versão; o conteúdo não tem coluna de versão, então o número dele é a posição na sequência da entrega
+     * (arquivos e conteúdos juntos, por data de envio), a mesma conta que a gravação usa para dar o número do próximo arquivo.
+     */
+    public Map<Long, List<VersaoDto>> versoesDas(List<Long> entregaIds, Map<Long, List<ArquivoDto>> arquivos) {
+        Map<Long, List<VersaoDto>> porEntrega = new LinkedHashMap<>();
+        if (entregaIds.isEmpty()) {
+            return porEntrega;
+        }
+        Map<Long, List<LinhaDeConteudo>> conteudos = new LinkedHashMap<>();
+        jdbc.sql("""
+                        SELECT c.id, c.entrega_id, c.tipo, c.titulo, c.texto, c.url, c.observacao, c.enviado_em,
+                               u.id AS usuario_id, u.nome AS usuario_nome, u.perfil AS usuario_perfil
+                        FROM entrega_conteudo c JOIN usuario u ON u.id = c.enviado_por
+                        WHERE c.entrega_id IN (:ids)
+                        ORDER BY c.entrega_id, c.enviado_em, c.id
+                        """)
+                .param("ids", entregaIds)
+                .query(LinhaDeConteudo.class)
+                .list()
+                .forEach(l -> conteudos.computeIfAbsent(l.entregaId(), k -> new ArrayList<>()).add(l));
+        for (Long entregaId : entregaIds) {
+            List<ArquivoDto> doArquivo = arquivos.getOrDefault(entregaId, List.of());
+            List<LinhaDeConteudo> doConteudo = conteudos.getOrDefault(entregaId, List.of());
+            List<VersaoDto> versoes = new ArrayList<>();
+            for (ArquivoDto a : doArquivo) {
+                versoes.add(new VersaoDto("ARQUIVO", a.id(), a.versao(), a.enviadoPor(), a.enviadoEm(), a.observacao(),
+                        a.nomeOriginal(), a.mimeType(), a.tamanhoBytes(), a.categoria(), null, null, null, null));
+            }
+            for (int i = 0; i < doConteudo.size(); i++) {
+                LinhaDeConteudo l = doConteudo.get(i);
+                // A posição: os conteúdos antes deste mais os arquivos enviados antes (ou no mesmo instante), mais 1.
+                long arquivosAntes = doArquivo.stream().filter(a -> !a.enviadoEm().toInstant().isAfter(l.enviadoEm().toInstant())).count();
+                versoes.add(new VersaoDto(l.tipo(), l.id(), (int) (i + arquivosAntes + 1),
+                        new UsuarioResumoDto(l.usuarioId(), l.usuarioNome(), l.usuarioPerfil()), Datas.emBrasilia(l.enviadoEm()),
+                        l.observacao(), null, null, null, null, l.titulo(), l.texto(), l.url(), HostDoLink.de(l.url())));
+            }
+            if (!versoes.isEmpty()) {
+                versoes.sort(Comparator.comparing(VersaoDto::versao).reversed().thenComparing(v -> "ARQUIVO".equals(v.tipo()) ? 0 : 1)
+                        .thenComparing(VersaoDto::id, Comparator.reverseOrder()));
+                porEntrega.put(entregaId, versoes);
+            }
+        }
+        return porEntrega;
+    }
+
     private record LinhaDeObservacao(Long entidadeId, String detalhe, String nome, OffsetDateTime ocorridoEm) {
     }
 
@@ -226,9 +279,12 @@ public class EntregaRepositorio {
                 JOIN parceria pa ON pa.id = e.parceria_id
                 JOIN patrocinador pat ON pat.id = pa.patrocinador_id
                 JOIN cota_tipo ct ON ct.id = pa.cota_tipo_id
-                LEFT JOIN LATERAL (SELECT max(a.enviado_em) AS ultimo
-                                   FROM arquivo a JOIN usuario u ON u.id = a.enviado_por
-                                   WHERE a.entrega_id = e.id AND u.perfil = 'ADMIN_PATROCINADOR') env ON TRUE
+                LEFT JOIN LATERAL (SELECT max(x.enviado_em) AS ultimo
+                                   FROM (SELECT a.enviado_em, a.enviado_por FROM arquivo a WHERE a.entrega_id = e.id
+                                         UNION ALL
+                                         SELECT c.enviado_em, c.enviado_por FROM entrega_conteudo c WHERE c.entrega_id = e.id) x
+                                   JOIN usuario u ON u.id = x.enviado_por
+                                   WHERE u.perfil = 'ADMIN_PATROCINADOR') env ON TRUE
                 WHERE TRUE""";
         StringBuilder onde = new StringBuilder();
         Map<String, Object> parametros = new LinkedHashMap<>();
