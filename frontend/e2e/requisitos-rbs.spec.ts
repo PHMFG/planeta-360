@@ -54,6 +54,58 @@ test.describe('R1 · planos comerciais', () => {
   // R1.4 é provado no back (PlanoDoAmareloP07aP10Test): pela tela, a carga gravaria linhas no plano do Amarelo.
 })
 
+test.describe('R2 · manual de operações', () => {
+  test('[R2.1] a RBS vê a página que travou e a deixa fora do Atlas', async ({ page }) => {
+    const marca = await novaMarcaDeTeste('SUBCOTA')
+    const { contexto } = await sessaoDaApi('rbs')
+    const eventos: { id: number; edicao: number }[] = await (await contexto.get('/api/eventos')).json()
+    const edicao = eventos.find((evento) => evento.edicao === 2027) ?? eventos[0]
+    await contexto.dispose()
+    const sufixo = `${Date.now()}`
+    const titulo = `Contatos de teste ${sufixo}`
+    const pdf = pdfDeTeste([
+      'Manual de teste. Horarios de montagem e regras de acesso ao Planeta.',
+      'Contatos chave: (51) 3000-1111 (51) 3000-2222 (51) 3000-3333 (51) 3000-4444',
+      'Regras de som e de seguranca para as marcas.',
+    ])
+
+    await entrar(page, 'rbs')
+    await page.goto('/rbs/atlas')
+    await page.getByRole('tab', { name: 'Documentos' }).click()
+    const envio = page.locator('form').filter({ has: page.getByLabel('Chave') })
+    await envio.locator('input[type=file]').setInputFiles({ name: `contatos-${sufixo}.pdf`, mimeType: 'application/pdf', buffer: pdf })
+    await envio.getByLabel('Título').fill(titulo)
+    await envio.getByLabel('Chave').fill(`contatos-${sufixo}`)
+    await envio.getByLabel(/^Quem enxerga/).selectOption('PARCERIA')
+    await envio.getByLabel(/^Edição/).selectOption(String(edicao.id))
+    await envio.getByLabel(/^Parceria/).selectOption(String(marca.parceriaId))
+    // Página além do total: o erro aparece junto do campo, e nada é gravado.
+    const paginas = envio.getByLabel('Páginas fora do Atlas (opcional)')
+    await paginas.click()
+    await paginas.pressSequentially('9')
+    await expect(paginas).toHaveValue('9')
+    await envio.getByRole('button', { name: 'Enviar', exact: true }).click()
+    await expect(envio.getByText(/vão de 1 a 3/)).toBeVisible()
+    await paginas.fill('')
+    await envio.getByRole('button', { name: 'Enviar', exact: true }).click()
+    // Sem marcar, a aprovação trava, e a tela diz onde: a página e o tipo, nunca o número achado.
+    await expect(envio.getByText(/Onde: p\. 2 \(lista de telefones ou e-mails\)/)).toBeVisible()
+    await expect(page.getByText('3000-1111')).toHaveCount(0)
+
+    await page.getByPlaceholder('Buscar pelo título').fill(titulo)
+    const linha = page.getByRole('listitem', { name: `${titulo}, versão 1` })
+    await expect(linha.getByText(/na p\. 2 \(lista de telefones ou e-mails\)/)).toBeVisible()
+    await expect(linha.getByRole('button', { name: 'Aprovar' })).toHaveCount(0)
+    await linha.getByRole('button', { name: 'Páginas fora do Atlas' }).click()
+    const dialogo = page.getByRole('dialog', { name: 'Páginas fora do Atlas' })
+    await expect(dialogo.getByLabel('Páginas')).toHaveValue('2')
+    await dialogo.getByRole('button', { name: 'Salvar páginas' }).click()
+    await expect(dialogo).toHaveCount(0)
+    await expect(linha.getByText('Fora do Atlas: p. 2.')).toBeVisible()
+    await expect(linha.getByRole('button', { name: 'Aprovar' })).toBeVisible()
+  })
+})
+
 test.describe('R3 e R4 · comprovação mensal e formatos', () => {
   test('[R3.2] a Master baixa a comprovação mensal por mês, tipo e unidade', async ({ page }) => {
     const amarelo = await parceriaDa('amarelo')
@@ -479,3 +531,27 @@ async function entregaDeMidia(parceriaId: number) {
   return id
 }
 
+/** Um PDF simples, uma página por texto (só ASCII), com a tabela de referências certa, para testar o envio de documentos. */
+function pdfDeTeste(paginas: string[]) {
+  const objetos: string[] = []
+  const fonte = 3 + paginas.length * 2
+  objetos[1] = '<< /Type /Catalog /Pages 2 0 R >>'
+  objetos[2] = `<< /Type /Pages /Kids [${paginas.map((_, i) => `${3 + i * 2} 0 R`).join(' ')}] /Count ${paginas.length} >>`
+  paginas.forEach((texto, i) => {
+    const conteudo = `BT /F1 12 Tf 72 760 Td (${texto.replace(/[\\()]/g, (c) => `\\${c}`)}) Tj ET`
+    objetos[3 + i * 2] = `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 ${fonte} 0 R >> >> /Contents ${4 + i * 2} 0 R >>`
+    objetos[4 + i * 2] = `<< /Length ${conteudo.length} >>\nstream\n${conteudo}\nendstream`
+  })
+  objetos[fonte] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'
+  let corpo = '%PDF-1.4\n'
+  const posicoes: number[] = []
+  for (let n = 1; n < objetos.length; n++) {
+    posicoes[n] = corpo.length
+    corpo += `${n} 0 obj\n${objetos[n]}\nendobj\n`
+  }
+  const xref = corpo.length
+  corpo += `xref\n0 ${objetos.length}\n0000000000 65535 f \n`
+  for (let n = 1; n < objetos.length; n++) corpo += `${String(posicoes[n]).padStart(10, '0')} 00000 n \n`
+  corpo += `trailer\n<< /Size ${objetos.length} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`
+  return Buffer.from(corpo, 'latin1')
+}

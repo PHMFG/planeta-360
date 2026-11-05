@@ -8,6 +8,7 @@ export type TipoDoDocumento = 'MANUAL_OPERACOES' | 'PLANO_COMERCIAL' | 'ANEXO_PA
 export type EscopoDoDocumento = 'GLOBAL' | 'COTA' | 'PARCERIA'
 export type AcaoDoDocumento = 'APROVAR' | 'RECUSAR' | 'REVOGAR' | 'REINDEXAR'
 export type CodigoDaCota = ParceriaResumo['cota']['codigo']
+export type TipoDeSuspeita = 'CPF' | 'RG' | 'CONTATOS'
 
 export type Documento = {
   id: number
@@ -21,6 +22,11 @@ export type Documento = {
   parceria: { id: number; patrocinador: string } | null
   status: StatusDoDocumento
   contemDadosPessoais: boolean
+  /** R2.1: as páginas em que o detector achou dado pessoal (só a RBS recebe; nunca o valor achado). */
+  paginasSuspeitas?: number[]
+  suspeitas?: { pagina: number; tipo: TipoDeSuspeita }[]
+  /** R2.1: as páginas que a RBS deixou fora do índice do Atlas. O PDF continua inteiro no visualizador. */
+  paginasForaDoAtlas?: number[]
   paginas: number | null
   trechos: number
   modelo: string | null
@@ -107,6 +113,8 @@ export type NovoDocumento = {
   eventoId?: number
   cota?: CodigoDaCota
   parceriaId?: number
+  /** Páginas fora do Atlas, separadas por vírgula ("4" ou "4,7"). */
+  paginasForaDoAtlas?: string
 }
 
 export type FiltrosDeDocumentos = {
@@ -128,6 +136,7 @@ export function enviarDocumento(novo: NovoDocumento) {
   if (novo.eventoId !== undefined) formulario.append('eventoId', String(novo.eventoId))
   if (novo.cota) formulario.append('cota', novo.cota)
   if (novo.parceriaId !== undefined) formulario.append('parceriaId', String(novo.parceriaId))
+  if (novo.paginasForaDoAtlas) formulario.append('paginasForaDoAtlas', novo.paginasForaDoAtlas)
   return pedir<Documento>('/documentos', { metodo: 'POST', formulario })
 }
 
@@ -135,6 +144,10 @@ export const listarDocumentos = (filtros: FiltrosDeDocumentos = {}) => pedir<Pag
 
 export const mudarStatusDoDocumento = (id: number, acao: AcaoDoDocumento, observacao?: string) =>
   pedir<Documento>(`/documentos/${id}/status`, { metodo: 'PATCH', corpo: { acao, observacao: observacao || undefined } })
+
+/** R2.1 (rota 103): troca a lista inteira das páginas fora do Atlas, enquanto o documento aguarda aprovação; [] limpa. */
+export const marcarPaginasForaDoAtlas = (id: number, paginasForaDoAtlas: number[]) =>
+  pedir<Documento>(`/documentos/${id}/paginas-fora-do-atlas`, { metodo: 'PATCH', corpo: { paginasForaDoAtlas } })
 
 export const listarTrechos = (id: number, pagina = 0) => pedir<Pagina<TrechoDoDocumento>>(`/documentos/${id}/trechos${consulta({ pagina })}`)
 
