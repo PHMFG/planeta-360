@@ -72,7 +72,7 @@ class CategoriaDoEnvioTest extends ApoioDeMateriais {
 
             assertThat(resposta).hasStatus(HttpStatus.UNSUPPORTED_MEDIA_TYPE);
             assertThat(lerJson(resposta, "$.detail"))
-                    .isEqualTo("Este tipo de arquivo não é aceito. Envie um destes: pdf, png, jpg, jpeg, docx, xlsx, pptx, csv, mp4, mp3, zip.");
+                    .isEqualTo("Este tipo de arquivo não é aceito. Envie um destes: pdf, png, jpg, jpeg, doc, docx, xls, xlsx, ppt, pptx, csv, mp4, mp3, zip.");
         }
     }
 

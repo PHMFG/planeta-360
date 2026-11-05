@@ -22,8 +22,8 @@ class ConteudoDeExemploTest {
     @Test
     void cadaTipoAceitoTemUmConteudoPequenoQuePassaNaConferenciaDoEnvio() {
         for (TipoDeArquivo tipo : TipoDeArquivo.values()) {
-            if (tipo == TipoDeArquivo.XLS) {
-                continue;   // só a planilha da agência (rota 66) aceita .xls; a amostra não tem arquivo desse tipo
+            if (tipo == TipoDeArquivo.DOC || tipo == TipoDeArquivo.XLS || tipo == TipoDeArquivo.PPT) {
+                continue;   // a amostra não tem arquivo de Office antigo
             }
             String nome = "exemplo." + tipo.extensao();
 
@@ -42,8 +42,10 @@ class ConteudoDeExemploTest {
     }
 
     @Test
-    void xlsNaoTemExemploPoisSoAPlanilhaDaAgenciaOAceita() {
+    void officeAntigoNaoTemExemplo() {
         assertThat(ConteudoDeExemplo.para("planilha.xls")).isEmpty();
+        assertThat(ConteudoDeExemplo.para("texto.doc")).isEmpty();
+        assertThat(ConteudoDeExemplo.para("slides.ppt")).isEmpty();
     }
 
     @Test

@@ -31,6 +31,14 @@ R3.2	back	consolidacao.PlanilhaMensalXlsxTest#textoQueComecaComIgualVaiComApostr
 R3.3	e2e	requisitos-rbs.spec.ts > [R3.3] a comprovação mensal não aparece para Subcota G nem Subcota
 R3.3	back	consolidacao.ComprovacaoMensalTest#roxoEVerdeRecebem403ComAFraseDeCotaNasTresRotas
 R3.3	back	consolidacao.PlanilhaMensalXlsxTest#oLoteTemUmaAbaPorParceriaMasterDaEdicaoComOsNumerosDeCada
+R4.1	back	materiais.FormatosDoEscritorioTest#osTresFormatosSemMacroSaoAceitosNaEntrega
+R4.1	back	materiais.FormatosDoEscritorioTest#osTresFormatosSemMacroSaoAceitosNosEspacos
+R4.1	back	materiais.FormatosDoEscritorioTest#comProjetoVbaSaoRecusadosComAFraseDeMacroNasDuasRotas
+R4.1	back	materiais.FormatosDoEscritorioTest#cadaNomeDeVbaNoDiretorioReprova
+R4.1	back	materiais.FormatosDoEscritorioTest#pngRenomeadoRecebeAFraseDeFormato
+R4.1	back	materiais.FormatosDoEscritorioTest#diretorioCircularERecusadoSemTravar
+R4.1	back	materiais.FormatosDoEscritorioTest#setoresDeFatEDifatDeMaisSaoRecusadosSemAlocarNada
+R4.1	back	materiais.FormatosDoEscritorioTest#diretorioGiganteERecusadoRapidoSemEstourarAMemoria
 R4.1	e2e	requisitos-rbs.spec.ts > [R4.1] .doc, .ppt e .xls sem macro entram; com macro, não
 R4.2	back	comum.TipoDeArquivoTest#listaAceitaExatamenteAsExtensoesCombinadasComARbs
 R4.3	e2e	requisitos-rbs.spec.ts > [R4.3] o link do post abre em aba nova, e javascript: é recusado

@@ -46,7 +46,7 @@ class PlanilhaDaAgenciaTest {
     private static final String ABA_NAO_LIBERADA = "Esta aba ainda não foi liberada para a sua parceria.";
     private static final String TIPOS_ACEITOS = "Este tipo de arquivo não é aceito. Envie um destes: xlsx, xls, csv.";
     private static final byte[] XLSX = {'P', 'K', 3, 4, 20, 0, 0, 0, 8, 0, 'x', 'l', '/'};
-    private static final byte[] XLS = {(byte) 0xD0, (byte) 0xCF, 0x11, (byte) 0xE0, (byte) 0xA1, (byte) 0xB1, 0x1A, (byte) 0xE1, 0, 0, 0, 0};
+    private static final byte[] XLS = br.com.rbs.portal.comum.Ole2DeTeste.xls();   // um .xls de verdade: o diretório OLE2 é lido (R4.1)
     private static final byte[] CSV = "hora;visitantes\n10h;120\n11h;180\n".getBytes(StandardCharsets.UTF_8);
 
     @Autowired

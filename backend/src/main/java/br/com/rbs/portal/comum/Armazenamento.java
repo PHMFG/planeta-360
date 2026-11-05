@@ -276,7 +276,7 @@ public class Armazenamento {
 
         boolean aceita(TipoDeArquivo tipo) {
             return switch (this) {
-                case COMUNS -> tipo != TipoDeArquivo.TXT && tipo != TipoDeArquivo.XLS;
+                case COMUNS -> tipo != TipoDeArquivo.TXT;
                 case DOCUMENTOS -> tipo == TipoDeArquivo.PDF || tipo == TipoDeArquivo.TXT;
                 case PLANILHAS -> tipo == TipoDeArquivo.XLSX || tipo == TipoDeArquivo.XLS || tipo == TipoDeArquivo.CSV;
             };
@@ -289,7 +289,7 @@ public class Armazenamento {
     }
 
     /**
-     * O mesmo, para cada lista de tipos: a comum (a de {@link TipoDeArquivo#listaDeExtensoes()}, sem o TXT nem o XLS), a do documento
+     * O mesmo, para cada lista de tipos: a comum (a de {@link TipoDeArquivo#listaDeExtensoes()}, sem o TXT), a do documento
      * do Atlas (só PDF e TXT) e a da planilha da agência (XLSX, XLS e CSV). [ATLAS] O .txt só existe na rota 54, e o .xls só na rota
      * 66: a rota 17 continua recusando os dois.
      */
@@ -311,6 +311,14 @@ public class Armazenamento {
         boolean csvDaPlanilha = aceitos == Aceitos.PLANILHAS && tipo == TipoDeArquivo.CSV;
         if (csvDaPlanilha ? !TipoDeArquivo.semBytesNulos(conteudo) : !tipo.conteudoConfere(conteudo)) {
             throw new ArquivoRecusadoException(HttpStatus.UNSUPPORTED_MEDIA_TYPE, frasePorConteudo(tipo, conteudo, csvDaPlanilha));
+        }
+        if (Ole2Diretorio.ehOfficeAntigo(tipo)) {
+            switch (Ole2Diretorio.inspecionar(conteudo)) {
+                case MALFORMADO -> throw new ArquivoRecusadoException(HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+                        frasePorConteudo(tipo, conteudo, false));
+                case COM_MACRO -> throw new ArquivoRecusadoException(HttpStatus.UNSUPPORTED_MEDIA_TYPE, Ole2Diretorio.FRASE_DE_MACRO);
+                case SEM_MACRO -> { }
+            }
         }
         return new Preparado(nome, tipo, sha256(conteudo), UUID.randomUUID() + "." + tipo.extensao());
     }
