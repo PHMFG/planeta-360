@@ -7,6 +7,7 @@ import br.com.rbs.portal.comum.HistoricoService;
 import br.com.rbs.portal.comum.NaoEncontradoException;
 import br.com.rbs.portal.comum.UsuarioAutenticado;
 import br.com.rbs.portal.comum.VerificadorDeAcesso;
+import br.com.rbs.portal.materiais.HostDoLink;
 import br.com.rbs.portal.credenciamento.CredenciamentoDtos.CredencialDto;
 import br.com.rbs.portal.credenciamento.CredenciamentoDtos.CredenciaisDto;
 import br.com.rbs.portal.credenciamento.CredenciamentoDtos.CredenciaisRequisicao;
@@ -51,9 +52,6 @@ public class CredenciamentoService {
             "PREMIUM", "Premium", "SALA_IMPRENSA", "Sala de imprensa", "SALA_CONTEUDO", "Sala de conteúdo");
     private static final Map<String, String> BENEFICIARIOS = Map.of("MARCA", "marca", "AGENCIA", "agência",
             "EQUIPE_CONTEUDO", "equipe de conteúdo", "GERAL", "geral");
-    /** O mesmo formato do CHECK ck_evento_credenciamento_url (V16), com https obrigatório. */
-    private static final Pattern URL = Pattern.compile(
-            "^https://[^\\s\\p{Cc}\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069@/?#]+([/?#][^\\s\\p{Cc}\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]*)?$");
     private static final Pattern DATA = Pattern.compile("\\d{4}-\\d{2}-\\d{2}");
 
     private final CredenciamentoRepositorio repositorio;
@@ -240,7 +238,7 @@ public class CredenciamentoService {
         String frase = null;
         if (url.length() > URL_MAXIMA) {
             frase = "O endereço tem no máximo " + URL_MAXIMA + " caracteres.";
-        } else if (!URL.matcher(url).matches() || !temHostValido(url)) {
+        } else if (!url.startsWith("https://") || !HostDoLink.valido(url) || !temHostValido(url)) {
             frase = "Informe um endereço que comece com https://, sem espaços e sem usuário@ antes do site.";
         }
         if (frase != null) {

@@ -8,6 +8,7 @@ import br.com.rbs.portal.comum.HistoricoService;
 import br.com.rbs.portal.comum.NaoEncontradoException;
 import br.com.rbs.portal.comum.UsuarioAutenticado;
 import br.com.rbs.portal.comum.VerificadorDeAcesso;
+import br.com.rbs.portal.materiais.HostDoLink;
 import br.com.rbs.portal.materiais.LinksDeMidiaService;
 import br.com.rbs.portal.relatorio.PosVendaDtos.AnexoDto;
 import br.com.rbs.portal.relatorio.PosVendaDtos.AudienciaDto;
@@ -28,7 +29,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.regex.Pattern;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.core.type.TypeReference;
@@ -63,12 +63,6 @@ public class PosVendaService {
     private static final String FRASE_DO_MAXIMO_NUMERO = "O número passa do máximo: use menos de 100.000.000.000.000.";
     private static final List<String> TIPOS_DE_LINK = List.of("AFTERMOVIE", "CLIPPING", "OUTRO");
     private static final List<String> QUALIFICADORES = List.of("EXATO", "MAIS_DE");
-    /**
-     * O mesmo formato do CHECK da V18 (e da V16): http ou https, com host, sem "usuario@" antes do host, sem espaço, controle nem bidi.
-     * Quantificadores possessivos: nenhuma volta, nenhuma recursão (ExpressoesRegularesSemRecursaoTest).
-     */
-    private static final Pattern URL = Pattern.compile(
-            "^https?://[^\\s\\p{Cntrl}\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069@/?#]++(?:[/?#][^\\s\\p{Cntrl}\\u200e\\u200f\\u202a-\\u202e\\u2066-\\u2069]*+)?+$");
     private static final JsonMapper JSON = JsonMapper.builder().build();
     private static final TypeReference<List<LinkDto>> LISTA_DE_LINKS = new TypeReference<>() {
     };
@@ -273,7 +267,7 @@ public class PosVendaService {
             String url = l.url() == null ? null : l.url().strip();
             if (url == null || url.isEmpty()) {
                 campos.put(campo + ".url", "Informe o endereço do link.");
-            } else if (url.length() > URL_MAXIMA || !URL.matcher(url).matches()) {
+            } else if (url.length() > URL_MAXIMA || !HostDoLink.valido(url)) {
                 campos.put(campo + ".url", "O endereço precisa começar com http:// ou https://, sem espaços e sem usuário antes do domínio, "
                         + "com até " + URL_MAXIMA + " caracteres.");
             }

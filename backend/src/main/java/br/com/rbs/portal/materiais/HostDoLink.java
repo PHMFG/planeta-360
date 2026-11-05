@@ -10,9 +10,9 @@ import java.util.regex.Pattern;
  * que esteja no banco nunca sai pela API. O {@code @} depois do host vale (o TikTok usa {@code /@usuario/video/...}). O servidor
  * nunca abre o endereço.
  */
-final class HostDoLink {
+public final class HostDoLink {
 
-    static final int LIMITE = 500;
+    public static final int LIMITE = 500;
 
     // \p{C} cobre os controles, os caracteres de formato (entre eles os bidi) e os não atribuídos; \p{Z} e \s, os espaços de todo tipo.
     private static final String PROIBIDOS = "\\s\\p{Z}\\p{C}";
@@ -23,12 +23,12 @@ final class HostDoLink {
     }
 
     /** O endereço serve como link clicável? */
-    static boolean valido(String url) {
+    public static boolean valido(String url) {
         return de(url) != null;
     }
 
     /** O domínio para mostrar ao lado do link (minúsculo, sem "www." nem porta), ou nulo se o endereço não é válido. */
-    static String de(String url) {
+    public static String de(String url) {
         if (url == null || url.length() > LIMITE || !FORMA.matcher(url).matches()) {
             return null;
         }
