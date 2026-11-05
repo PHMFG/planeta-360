@@ -37,14 +37,24 @@ public final class DocumentoDtos {
      * {@code modelo} e {@code dimensoes} são os dos embeddings que o indexaram; {@code modeloDiferente} é verdadeiro quando o documento
      * está indexado com um modelo que não é o de agora (a busca o ignora: é preciso reindexar, e a aba mostra o aviso);
      * {@code extracaoMs} e {@code embeddingsMs} são os tempos da ingestão; {@code erro} é o motivo, quando o status é ERRO.
-     * {@code acoes} diz o que a RBS pode fazer agora com ele (as ações da rota 57).
+     * {@code acoes} diz o que a RBS pode fazer agora com ele (as ações da rota 57). {@code paginasSuspeitas} e {@code suspeitas} dizem
+     * quais páginas travaram a aprovação e por quê (só página e tipo, nunca o valor achado); {@code paginasForaDoAtlas} são as páginas
+     * que a RBS marcou para não entrarem no índice (o PDF continua inteiro no visualizador).
      */
     public record DocumentoDto(Long id, String titulo, String chave, Integer versao, String tipo, String escopo, EventoDto evento,
                                CotaDto cota, ParceriaDoDocumentoDto parceria, String status, boolean contemDadosPessoais,
                                Integer paginas, Integer trechos, String modelo, Integer dimensoes, boolean modeloDiferente,
                                Integer extracaoMs, Integer embeddingsMs, String erro, ArquivoDoDocumentoDto arquivo,
                                UsuarioResumoDto enviadoPor, OffsetDateTime enviadoEm, UsuarioResumoDto aprovadoPor,
-                               OffsetDateTime aprovadoEm, UsuarioResumoDto revogadoPor, OffsetDateTime revogadoEm, List<String> acoes) {
+                               OffsetDateTime aprovadoEm, UsuarioResumoDto revogadoPor, OffsetDateTime revogadoEm, List<String> acoes,
+                               List<Integer> paginasSuspeitas, List<SuspeitaDto> suspeitas, List<Integer> paginasForaDoAtlas) {
+    }
+
+    /**
+     * Onde o detector achou dado pessoal: a página e o tipo ({@code CPF}, {@code RG} ou {@code CONTATOS}, a lista de telefones e
+     * e-mails). [SEGURANCA] Nunca o valor achado: a RBS vai ao PDF e vê a página.
+     */
+    public record SuspeitaDto(Integer pagina, String tipo) {
     }
 
     /**
@@ -65,6 +75,10 @@ public final class DocumentoDtos {
     /** Um trecho na lista da RBS (rota 58): onde está, de que seção é, quanto pesa e o começo do texto. */
     public record TrechoDoDocumentoDto(Long id, Integer ordem, Integer paginaInicio, Integer paginaFim, String secao, Integer tokens,
                                        boolean ativo, String inicioDoTexto) {
+    }
+
+    /** [VALIDACAO] Corpo da rota 103: as páginas que ficam fora do Atlas (a lista inteira; vazia limpa a marcação). */
+    public record PaginasForaDoAtlasRequisicao(List<Integer> paginasForaDoAtlas) {
     }
 
     /** [VALIDACAO] Corpo da rota 57. */

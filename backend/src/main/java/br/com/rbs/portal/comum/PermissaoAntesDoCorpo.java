@@ -86,6 +86,8 @@ public class PermissaoAntesDoCorpo implements HandlerInterceptor, WebMvcConfigur
             "GET /api/documentos",
             "PATCH /api/documentos/{id}/status",
             "GET /api/documentos/{id}/trechos",
+            // As páginas fora do Atlas (rota 103, R2.1): a RBS marca as páginas que não entram no índice, enquanto o documento aguarda.
+            "PATCH /api/documentos/{id}/paginas-fora-do-atlas",
             // A busca de teste do Atlas (rota 61): a RBS escolhe uma parceria e uma consulta e vê o que a busca faria por ela. As
             // rotas 59 e 60 (o visualizador: o arquivo e um trecho do documento) são das duas pontas, como a 56.
             "POST /api/atlas/busca-teste",

@@ -198,7 +198,9 @@ public class IngestaoService implements SmartInitializingSingleton {
             byte[] conteudo = lerArquivo(caminho);
             TipoDeArquivo tipo = TipoDeArquivo.daExtensao(documento.arquivoNome())
                     .orElseThrow(() -> new FalhaDaIngestao("Este tipo de arquivo não é indexado."));
-            Extracao extracao = extrator.extrair(tipo, conteudo);
+            // [ATLAS] As páginas fora do Atlas (R2.1) viram páginas sem texto ANTES do divisor: nenhum trecho nasce delas, e o texto delas
+            // nunca chega aos embeddings nem ao modelo. A numeração e a contagem de páginas seguem as do PDF.
+            Extracao extracao = extrator.extrair(tipo, conteudo).semPaginas(PaginasForaDoAtlas.daColuna(documento.paginasIgnoradas()));
 
             // 2. Dividir (sem transação).
             List<Trecho> trechos = divisor.dividir(extracao.paginas());

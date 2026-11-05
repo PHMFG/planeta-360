@@ -3,6 +3,7 @@ package br.com.rbs.portal.documentos;
 import br.com.rbs.portal.comum.UsuarioAutenticado;
 import br.com.rbs.portal.documentos.DocumentoDtos.DocumentoDto;
 import br.com.rbs.portal.documentos.DocumentoDtos.MudarStatusRequisicao;
+import br.com.rbs.portal.documentos.DocumentoDtos.PaginasForaDoAtlasRequisicao;
 import br.com.rbs.portal.documentos.DocumentoDtos.TrechoDoDocumentoDto;
 import br.com.rbs.portal.documentos.DocumentoDtos.TrechoDoVisualizadorDto;
 import br.com.rbs.portal.documentos.DocumentoService.ConteudoDoDocumento;
@@ -36,7 +37,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
- * Rotas 54 a 60 do contrato (docs/api.md): os documentos do Atlas. [ATLAS] Enviar (54), listar (55), ver (56), aprovar, recusar,
+ * Rotas 54 a 60 e 103 do contrato (docs/api.md): os documentos do Atlas. [ATLAS] Enviar (54), listar (55), ver (56), aprovar, recusar,
  * revogar e reindexar (57), ver os trechos (58) e o visualizador: o arquivo (59) e um trecho inteiro (60). [PERMISSAO] São só da RBS,
  * menos a 56, a 59 e a 60, em que a marca vê o documento que o escopo dela permite (e só o que a rota mostra). As regras estão no DocumentoService; aqui entram as partes do formulário, o corpo e
  * os cabeçalhos. As partes são conferidas no service (e não por required=true) para a falta delas virar 422 com "campos".
@@ -53,7 +54,8 @@ public class DocumentoController {
 
     /**
      * 54. multipart/form-data: arquivo (PDF ou TXT), titulo, chave, tipo, escopo e, conforme o escopo, eventoId (GLOBAL e COTA), cota
-     * (COTA) ou parceriaId (PARCERIA). Responde 201 com o documento.
+     * (COTA) ou parceriaId (PARCERIA); opcional, paginasForaDoAtlas ("4" ou "4,7": páginas que não entram no índice do Atlas).
+     * Responde 201 com o documento.
      */
     @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<DocumentoDto> enviar(@AuthenticationPrincipal UsuarioAutenticado usuario,
@@ -65,6 +67,7 @@ public class DocumentoController {
                                                @RequestParam(required = false) String eventoId,
                                                @RequestParam(required = false) String cota,
                                                @RequestParam(required = false) String parceriaId,
+                                               @RequestParam(required = false) String paginasForaDoAtlas,
                                                HttpServletRequest requisicao) {
         byte[] conteudo = null;
         try {
@@ -73,7 +76,7 @@ public class DocumentoController {
             throw new UncheckedIOException(erro);
         }
         DocumentoDto criado = servico.enviar(usuario, arquivo == null ? null : arquivo.getOriginalFilename(), conteudo,
-                new DadosDoEnvio(titulo, chave, tipo, escopo, eventoId, cota, parceriaId), requisicao);
+                new DadosDoEnvio(titulo, chave, tipo, escopo, eventoId, cota, parceriaId, paginasForaDoAtlas), requisicao);
         return ResponseEntity.created(URI.create("/api/documentos/" + criado.id())).body(criado);
     }
 
@@ -97,6 +100,13 @@ public class DocumentoController {
     @GetMapping("/{id}")
     public Object ver(@AuthenticationPrincipal UsuarioAutenticado usuario, @PathVariable long id) {
         return servico.ver(usuario, id);
+    }
+
+    /** 103. A RBS marca (ou desmarca) as páginas que ficam fora do Atlas, enquanto o documento aguarda aprovação. */
+    @PatchMapping("/{id}/paginas-fora-do-atlas")
+    public DocumentoDto marcarPaginasForaDoAtlas(@AuthenticationPrincipal UsuarioAutenticado usuario, @PathVariable long id,
+                                                 @RequestBody PaginasForaDoAtlasRequisicao corpo, HttpServletRequest requisicao) {
+        return servico.marcarPaginasForaDoAtlas(usuario, id, corpo.paginasForaDoAtlas(), requisicao);
     }
 
     /** 57. */

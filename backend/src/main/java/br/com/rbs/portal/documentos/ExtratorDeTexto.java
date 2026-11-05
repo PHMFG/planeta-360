@@ -66,6 +66,21 @@ public class ExtratorDeTexto {
         public int totalDePaginas() {
             return paginas.size();
         }
+
+        /**
+         * A mesma extração com o texto das páginas dadas esvaziado (R2.1: páginas fora do Atlas). A numeração e a contagem de páginas
+         * não mudam, então a citação "p. 13" continua batendo com o PDF; só que o detector, o divisor de trechos e os embeddings
+         * nunca veem o texto dessas páginas.
+         */
+        public Extracao semPaginas(java.util.Collection<Integer> foraDoAtlas) {
+            if (foraDoAtlas == null || foraDoAtlas.isEmpty()) {
+                return this;
+            }
+            List<Pagina> restantes = paginas.stream()
+                    .map(p -> foraDoAtlas.contains(p.numero()) ? new Pagina(p.numero(), List.of()) : p)
+                    .toList();
+            return new Extracao(restantes, milissegundos);
+        }
     }
 
     /** O motivo, em português, de o documento não poder ser lido: vai para {@code documento.erro} como está. */

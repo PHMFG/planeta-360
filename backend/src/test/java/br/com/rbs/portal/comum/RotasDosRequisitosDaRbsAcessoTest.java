@@ -111,7 +111,9 @@ class RotasDosRequisitosDaRbsAcessoTest {
             Map.entry("DELETE /api/posvenda/{id}", new Detalhe(null, null, false)),
             Map.entry("GET /api/eventos/{id}/resultados", new Detalhe(null, null, false)),
             Map.entry("PUT /api/eventos/{id}/resultados", new Detalhe(
-                    "{\"indicador\":\"Público total\",\"valor\":80000,\"qualificador\":\"MAIS_DE\",\"unidade\":\"pessoas\",\"fonte\":\"RBS\"}", null, false)));
+                    "{\"indicador\":\"Público total\",\"valor\":80000,\"qualificador\":\"MAIS_DE\",\"unidade\":\"pessoas\",\"fonte\":\"RBS\"}", null, false)),
+            // F8 · R2.1: as páginas fora do Atlas (rota 103). O {id} é o de um documento; no teste cai num id que não é de documento (404 na RBS).
+            Map.entry("PATCH /api/documentos/{id}/paginas-fora-do-atlas", new Detalhe("{\"paginasForaDoAtlas\":[4]}", null, false)));
 
     /** As rotas que recebem multipart: no teste vão como formulário sem partes (com JSON o Spring responderia 415 antes da permissão). */
     private static final Set<String> MULTIPART = Set.of("POST /api/parcerias/{id}/contrato/arquivo",

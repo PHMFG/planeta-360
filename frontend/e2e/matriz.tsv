@@ -10,6 +10,14 @@ R1.1	e2e	requisitos-rbs.spec.ts > [R1.1] cota e investimento dos três clientes 
 R1.2	back	banco.AmostraBateComOsPdfsDaRbsTest
 R1.2	e2e	requisitos-rbs.spec.ts > [R1.2] cortesias e credenciais da amostra iguais aos planos
 R1.4	back	consolidacao.PlanoDoAmareloP07aP10Test#csvDasPaginas7a10EntraSemRejeicao
+R2.1	back	documentos.DocumentoComPaginaDeContatosTest#semMarcarNadaAAprovacaoTravaECitaAPaginaSemOValor
+R2.1	back	documentos.DocumentoComPaginaDeContatosTest#comAPaginaMarcadaNoEnvioAprovaEIndexaSemNenhumTrechoDela
+R2.1	back	documentos.DocumentoComPaginaDeContatosTest#comAPaginaMarcadaDepoisDoEnvioAprovaEIndexaSemNenhumTrechoDela
+R2.1	back	documentos.PaginasForaDoAtlasTest#aMarcaNaoMarcaPaginas
+R2.1	back	documentos.PaginasForaDoAtlasTest#paginaForaDoIntervaloOuListaInvalidaDa422ENadaMuda
+R2.1	back	documentos.PaginasForaDoAtlasTest#soSeMarcaEnquantoAguardaAprovacaoEDesmarcarTrazASuspeitaDeVolta
+R2.1	back	documentos.PaginasForaDoAtlasTest#oVisualizadorEntregaOPdfInteiroMesmoComAPaginaMarcada
+R2.1	back	banco.VerificacaoDoBancoTest#todasAsConferenciasDoBancoPassam
 R2.2	back	documentos.DocumentoGrupoTest#oMesmoPlanoEmOutraCotaNaoEOutraVersaoDoMesmoPlano
 R3.1	back	consolidacao.CargaControllerTest#reenviarOMesmoArquivoNaoInsereNadaEAsLinhasDeAntesViramDuplicadas
 R3.2	e2e	requisitos-rbs.spec.ts > [R3.2] a Master baixa a comprovação mensal por mês, tipo e unidade
