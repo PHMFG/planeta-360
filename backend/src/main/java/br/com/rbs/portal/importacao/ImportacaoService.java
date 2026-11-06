@@ -521,6 +521,10 @@ public class ImportacaoService {
             throw new NaoEncontradoException("Esta linha não tem a origem do campo " + (campo == null ? "" : campo) + ".");
         }
         String tipo = TipoDeArquivo.extensaoDe(importacao.arquivoNome()).toUpperCase(Locale.ROOT);
+        // A rota 116 fala PNG ou JPG; o .jpeg é o mesmo JPG.
+        if ("JPEG".equals(tipo)) {
+            tipo = "JPG";
+        }
         Path caminho = armazenamento.localizar(importacao.arquivoCaminho())
                 .orElseThrow(() -> new NaoEncontradoException("O arquivo desta importação não está mais disponível."));
         String extensao = TipoDeArquivo.extensaoDe(importacao.arquivoNome());
