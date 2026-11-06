@@ -129,6 +129,21 @@ class ConsultarMidiaTest extends ApoioDasConsultas {
     }
 
     @Test
+    void doisRecortesDoMesmoTurnoGanhamMarcadoresProprios() {
+        AtlasContexto contexto = contexto(AMARELO, "Cliente Amarelo");
+        FontesDoTurno turno = turno();
+
+        List<Map<String, Object>> primeiro = registros(resultado(contexto, turno, MIDIA, "{\"veiculo\":\"RBS TV\"}"));
+        List<Map<String, Object>> segundo = registros(resultado(contexto, turno, MIDIA, "{\"veiculo\":\"Rádio 92\"}"));
+
+        assertThat(primeiro).isNotEmpty();
+        assertThat(segundo).isNotEmpty();
+        assertThat(primeiro).extracting(r -> r.get("marcador")).doesNotContainAnyElementsOf(
+                segundo.stream().map(r -> r.get("marcador")).toList());
+        assertThat(turno.fonte((String) segundo.get(0).get("marcador")).orElseThrow().texto()).contains("Rádio 92");
+    }
+
+    @Test
     void aVeiculacaoImportadaLevaOArquivoEOLocalizadorNaFonte() {
         long amarelo = parceria("Cliente Amarelo");
         long usuario = ApoioDoAtlas.usuario(jdbc, ApoioDoAtlas.RBS).id();

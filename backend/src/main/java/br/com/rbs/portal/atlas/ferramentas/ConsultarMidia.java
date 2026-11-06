@@ -6,6 +6,7 @@ import static br.com.rbs.portal.atlas.ferramentas.Argumentos.texto;
 
 import br.com.rbs.portal.atlas.checagem.FontesDoTurno;
 import br.com.rbs.portal.atlas.checagem.FontesDoTurno.Fonte;
+import br.com.rbs.portal.atlas.checagem.FontesDoTurno.Tipo;
 import br.com.rbs.portal.atlas.contexto.AtlasContexto;
 import br.com.rbs.portal.atlas.ferramentas.MidiaDoPortal.Filtro;
 import br.com.rbs.portal.atlas.ferramentas.MidiaDoPortal.Linha;
@@ -285,7 +286,9 @@ public class ConsultarMidia implements Ferramenta {
         if (linha.localizador() != null) {
             dados.put("localizador", linha.localizador());
         }
-        Fonte fonte = turno.registrarRegistro("aproveitamento", linha.aproveitamentoId(), linha.veiculo() + " · " + linha.formato(),
+        // A mesma linha do plano pode voltar com outro recorte (outro mês, outro filtro): o marcador é novo a cada resultado, para a
+        // fonte citada ser sempre a do número que o modelo acabou de ver.
+        Fonte fonte = registrar(turno, "aproveitamento", linha.aproveitamentoId(), linha.veiculo() + " · " + linha.formato(),
                 "Mídia e conteúdo", texto.toString(), dados);
 
         Map<String, Object> registro = new LinkedHashMap<>();
@@ -349,8 +352,8 @@ public class ConsultarMidia implements Ferramenta {
         if (total.impacto() != null) {
             dados.put("impacto", total.impacto());
         }
-        Fonte fonte = turno.registrarRegistro("veiculacao", idDoTotal(total.unidade()), "Total de mídia · " + unidade, "Total", texto.toString(),
-                dados);
+        Fonte fonte = registrar(turno, "veiculacao", idDoTotal(total.unidade()), "Total de mídia · " + unidade, "Total",
+                texto.toString(), dados);
 
         Map<String, Object> registro = new LinkedHashMap<>();
         registro.put("marcador", fonte.marcador());
@@ -365,6 +368,15 @@ public class ConsultarMidia implements Ferramenta {
             registro.put("impacto", total.impacto());
         }
         return registro;
+    }
+
+    /** Registra a fonte com marcador novo, sem reaproveitar o de um recorte anterior do mesmo turno. */
+    private static Fonte registrar(FontesDoTurno turno, String entidade, long id, String titulo, String secao, String texto,
+                                   Map<String, Object> dados) {
+        Fonte fonte = new Fonte(turno.novoMarcador(Tipo.REGISTRO), Tipo.REGISTRO, null, null, titulo, null, null, secao, texto,
+                entidade, id, dados);
+        turno.registrar(fonte);
+        return fonte;
     }
 
     /** O id sintético do total: um por unidade, para duas unidades não dividirem o mesmo marcador. */
