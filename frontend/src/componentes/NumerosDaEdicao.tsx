@@ -26,6 +26,7 @@ export function NumerosDaEdicao({ eventoId, edicao }: { eventoId: number; edicao
   const [erros, setErros] = useState<Record<string, string>>({})
   const [falha, setFalha] = useState<string | null>(null)
   const [aberto, setAberto] = useState(false)
+  const [salvoAgora, setSalvoAgora] = useState<string | null>(null)
   const avisar = usarToast()
   const [enviando, setEnviando] = useState(false)
   const mudar = (campo: keyof typeof VAZIO, valor: string) => setForm((atual) => ({ ...atual, [campo]: valor }))
@@ -53,6 +54,7 @@ export function NumerosDaEdicao({ eventoId, edicao }: { eventoId: number; edicao
       avisar(`${salvo.indicador}: ${comoTexto(salvo)}. Os relatórios gerados a partir de agora mostram este número.`)
       setForm(VAZIO)
       setAberto(false)
+      setSalvoAgora(salvo.indicador)
       numeros.recarregar()
     } catch (erro) {
       if (erro instanceof ErroApi && Object.keys(erro.campos).length) setErros(erro.campos)
@@ -87,6 +89,7 @@ export function NumerosDaEdicao({ eventoId, edicao }: { eventoId: number; edicao
             rotulo="Números da edição"
             linhas={lista}
             chave={(linha) => linha.id}
+            destaque={(linha) => linha.indicador === salvoAgora}
             colunas={[
               { titulo: 'Indicador', celula: (linha) => <span className="font-semibold">{linha.indicador}</span> },
               { titulo: 'Número', celula: comoTexto },

@@ -15,7 +15,7 @@ import {
 } from '../../api/parcerias'
 import { useDados } from '../../api/useDados'
 import { Aviso } from '../../componentes/Aviso'
-import { Botao } from '../../componentes/Botao'
+import { Botao, usarFeito } from '../../componentes/Botao'
 import { CabecalhoSecao } from '../../componentes/CabecalhoSecao'
 import { Campo, focarPrimeiroErro } from '../../componentes/Campo'
 import { CompraDeIngressos, PlanoComercialDoPerfil } from '../../componentes/DocumentosDoPerfil'
@@ -63,6 +63,7 @@ function EdicaoEmpresa({ detalhe, aoSalvar }: { detalhe: ParceriaDetalhe; aoSalv
   const [falha, setFalha] = useState<string | null>(null)
   const [erros, setErros] = useState<Record<string, string>>({})
   const [salvando, setSalvando] = useState(false)
+  const [feito, marcarFeito] = usarFeito()
 
   async function salvar(evento: FormEvent) {
     evento.preventDefault()
@@ -89,6 +90,7 @@ function EdicaoEmpresa({ detalhe, aoSalvar }: { detalhe: ParceriaDetalhe; aoSalv
           atendimentoEmail: atendimentoEmail.trim(),
         }),
       )
+      marcarFeito()
     } catch (erro) {
       setFalha(erro instanceof ErroApi ? erro.message : 'Não foi possível salvar.')
       if (erro instanceof ErroApi) setErros(erro.campos)
@@ -145,7 +147,7 @@ function EdicaoEmpresa({ detalhe, aoSalvar }: { detalhe: ParceriaDetalhe; aoSalv
       </Grade2>
       {falha && <Aviso tipo="falha" titulo={falha} />}
       <div>
-        <Botao type="submit" carregando={salvando}>
+        <Botao type="submit" carregando={salvando} feito={feito}>
           Salvar empresa
         </Botao>
       </div>

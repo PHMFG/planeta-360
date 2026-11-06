@@ -1,5 +1,5 @@
 // Botões do Figma (P360/Botão): primário na cor da seção e secundário com contorno preto. [ITEM-7]
-import type { ButtonHTMLAttributes, ReactNode } from 'react'
+import { useCallback, useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react'
 import { Link, type LinkProps } from 'react-router'
 
 type Variante = 'primario' | 'secundario'
@@ -18,11 +18,26 @@ const VARIANTES: Record<Variante, string> = {
 type PropsBotao = ButtonHTMLAttributes<HTMLButtonElement> & {
   variante?: Variante
   carregando?: boolean
+  /** Logo depois de dar certo: o ícone vira um visto por um instante (usarFeito). */
+  feito?: boolean
   icone?: string
   children: ReactNode
 }
 
-export function Botao({ variante = 'primario', carregando = false, icone, className = '', children, disabled, ...resto }: PropsBotao) {
+/** O "deu certo" de um botão: `const [feito, marcarFeito] = usarFeito()`; depois do salvar, `marcarFeito()`. Some em 1,6 s. */
+export function usarFeito(): [boolean, () => void] {
+  const [feito, setFeito] = useState(false)
+  const timer = useRef<number | undefined>(undefined)
+  useEffect(() => () => window.clearTimeout(timer.current), [])
+  const marcar = useCallback(() => {
+    window.clearTimeout(timer.current)
+    setFeito(true)
+    timer.current = window.setTimeout(() => setFeito(false), 1600)
+  }, [])
+  return [feito, marcar]
+}
+
+export function Botao({ variante = 'primario', carregando = false, feito = false, icone, className = '', children, disabled, ...resto }: PropsBotao) {
   return (
     <button
       type="button"
@@ -33,6 +48,8 @@ export function Botao({ variante = 'primario', carregando = false, icone, classN
     >
       {carregando ? (
         <i className="ri-loader-4-line animate-spin text-lg" aria-hidden="true" />
+      ) : feito ? (
+        <i className="ri-check-line animate-crescer text-lg" aria-hidden="true" />
       ) : (
         icone && <i className={`${icone} text-lg`} aria-hidden="true" />
       )}
