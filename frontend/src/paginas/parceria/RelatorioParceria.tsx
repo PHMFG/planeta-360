@@ -59,61 +59,128 @@ function valorDo(indicador: Indicador) {
   return `${texto} ${indicador.valor === 1 ? (SINGULAR[unidade] ?? unidade) : unidade}`
 }
 
+/** Percentual de verdade (entrega, comprovação, destinação): ganha barra. Resultado de pesquisa em nota não. */
+function ehPercentual(indicador: Indicador) {
+  return indicador.disponivel && indicador.valor !== null && (indicador.unidade ?? '').trim().startsWith('%') && !/\(nota\)/.test(indicador.baseCalculo ?? '')
+}
+
+type Grupo = { codigo: string; nome: string; baseCalculo: string | null; itens: Indicador[] }
+
+/** Os indicadores da seção agrupados pelo código, na ordem da API: "Entrega por veículo" vira um bloco com um veículo por linha. */
+function agruparIndicadores(indicadores: Indicador[]): Grupo[] {
+  const grupos: Grupo[] = []
+  for (const indicador of indicadores) {
+    const grupo = grupos.find((item) => item.codigo === indicador.codigo)
+    if (grupo) grupo.itens.push(indicador)
+    else grupos.push({ codigo: indicador.codigo, nome: indicador.nome, baseCalculo: indicador.baseCalculo, itens: [indicador] })
+  }
+  return grupos
+}
+
+/** "Como foi calculado" num "i" na tela; no papel, o texto sai inteiro embaixo. */
+function ComoFoiCalculado({ texto }: { texto: string | null }) {
+  if (!texto) return null
+  return (
+    <>
+      <details className="relative shrink-0 print:hidden">
+        <summary className="grid size-6 cursor-pointer list-none place-items-center rounded-full text-texto-2 hover:bg-cinza-100 hover:text-tinta [&::-webkit-details-marker]:hidden">
+          <i className="ri-information-line text-base" aria-hidden="true" />
+          <span className="sr-only">Como foi calculado</span>
+        </summary>
+        <p className="absolute right-0 z-10 mt-1 w-64 animate-surgir rounded-xl bg-tinta px-3 py-2 text-xs font-medium text-white shadow-modal">{texto}</p>
+      </details>
+      <span className="hidden text-[10px] text-texto-2 print:block">{texto}</span>
+    </>
+  )
+}
+
+function BarraFina({ valor }: { valor: number }) {
+  return (
+    <span className="mt-3 block h-2 overflow-hidden rounded-full bg-cinza-100" aria-hidden="true">
+      <span className="block h-full rounded-full bg-secao" style={{ width: `${Math.max(0, Math.min(100, valor))}%` }} />
+    </span>
+  )
+}
+
+function BlocoDoIndicador({ grupo, indice }: { grupo: Grupo; indice: number }) {
+  const [unico] = grupo.itens
+  const estilo = { '--ordem': indice } as React.CSSProperties
+  // Um valor só: o número grande. Vários recortes (veículo, setor, pergunta): uma lista, com barra no que é percentual.
+  if (grupo.itens.length === 1) {
+    return (
+      <li className="entrar-em-cascata flex flex-col rounded-2xl border border-borda p-4 break-inside-avoid" style={estilo}>
+        <p className="flex items-start justify-between gap-2 text-sm font-semibold text-texto-2">
+          {grupo.nome}
+          {unico.disponivel && <ComoFoiCalculado texto={grupo.baseCalculo} />}
+        </p>
+        <p className={`mt-2 leading-none ${unico.disponivel && unico.valor !== null ? 'font-display text-[40px]' : 'text-sm'}`}>{valorDo(unico)}</p>
+        {/* Indisponível sempre com o motivo à vista (decisão do relatório), sem precisar abrir o "i". */}
+        {!unico.disponivel && unico.baseCalculo && <p className="mt-1 text-xs font-medium text-texto-2">{unico.baseCalculo}</p>}
+        {unico.recorte && <p className="mt-1.5 text-xs font-medium text-texto-2">{recorteDo(unico)}</p>}
+        {ehPercentual(unico) && <BarraFina valor={unico.valor ?? 0} />}
+      </li>
+    )
+  }
+  return (
+    <li className="entrar-em-cascata rounded-2xl border border-borda p-4 break-inside-avoid sm:col-span-2" style={estilo}>
+      <p className="flex items-start justify-between gap-2 text-sm font-semibold text-texto-2">
+        {grupo.nome}
+        <ComoFoiCalculado texto={grupo.baseCalculo} />
+      </p>
+      <ul className="mt-3 flex flex-col gap-2.5">
+        {grupo.itens.map((indicador) => (
+          <li key={indicador.recorte} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 text-sm sm:grid-cols-[minmax(140px,260px)_1fr_auto]">
+            <span className="font-medium">{recorteDo(indicador)}</span>
+            {ehPercentual(indicador) ? (
+              <span className="col-span-2 row-start-2 h-2 overflow-hidden rounded-full bg-cinza-100 sm:col-span-1 sm:row-start-auto" aria-hidden="true">
+                <span className="block h-full rounded-full bg-secao" style={{ width: `${Math.max(0, Math.min(100, indicador.valor ?? 0))}%` }} />
+              </span>
+            ) : (
+              <span className="hidden sm:block" aria-hidden="true" />
+            )}
+            <span className="text-right font-semibold whitespace-nowrap">{valorDo(indicador)}</span>
+          </li>
+        ))}
+      </ul>
+    </li>
+  )
+}
+
 function Documento({ relatorio }: { relatorio: Relatorio }) {
   const parceria = useParceria()
+  const datas = [
+    ['gerado', relatorio.geradoEm],
+    ['validado', relatorio.validadoEm],
+    ['disponibilizado', relatorio.disponibilizadoEm],
+  ].filter(([, quando]) => quando)
   return (
     <article className="rounded-[20px] border border-borda bg-white p-5 sm:p-10 print:border-0 print:p-0">
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-4 border-b border-borda pb-6">
+      <header className="mb-8 flex flex-wrap items-start justify-between gap-4 border-b border-borda pb-6">
         <div>
           <p className="texto-sobretitulo text-texto-2">Planeta 360 · relatório pós-evento</p>
-          <h2 className="mt-1 font-display text-[44px] leading-none uppercase">Relatório da parceria</h2>
+          <h2 className="mt-1 font-display text-[44px] leading-none uppercase">{parceria.patrocinador}</h2>
+          <p className="mt-2 text-sm font-semibold">
+            Cota {nomeCota(parceria)} · {parceria.evento.nome} {parceria.evento.edicao}
+          </p>
+          <p className="mt-1 text-xs font-medium text-texto-2">
+            {datas.map(([nome, quando]) => `${nome} em ${dataHora(quando)}`).join(' · ')}
+            {relatorio.geradoPor && ` · por ${relatorio.geradoPor.nome}`}
+          </p>
         </div>
         <Status codigo={relatorio.status} complemento={`versão ${relatorio.versao}`} />
-      </div>
-      <dl className="mb-8 grid gap-x-8 gap-y-3 text-sm sm:grid-cols-2">
-        {[
-          ['Empresa', `${parceria.patrocinador} · cota ${nomeCota(parceria)}`],
-          ['Edição', `${parceria.evento.nome} ${parceria.evento.edicao}`],
-          ['Gerado em', dataHora(relatorio.geradoEm)],
-          ['Validado pela RBS em', dataHora(relatorio.validadoEm)],
-          ['Disponibilizado em', dataHora(relatorio.disponibilizadoEm)],
-          ...(relatorio.geradoPor ? [['Gerado por', relatorio.geradoPor.nome]] : []),
-        ].map(([rotulo, texto]) => (
-          <div key={rotulo}>
-            <dt className="texto-sobretitulo text-texto-2">{rotulo}</dt>
-            <dd className="font-semibold">{texto}</dd>
-          </div>
-        ))}
-      </dl>
+      </header>
 
       {relatorio.secoes.map((secao, indice) => (
-        <section key={secao.secao} className="mb-8 break-inside-avoid">
-          <h3 className="mb-3 text-base font-bold">
-            {indice + 1}. {secao.secao}
+        <section key={secao.secao} className="mb-8 break-inside-avoid" aria-label={secao.secao}>
+          <h3 className="mb-3 flex items-baseline gap-2 text-base font-bold">
+            <span className="font-display text-2xl leading-none text-secao-texto">{indice + 1}</span>
+            {secao.secao}
           </h3>
-          <div className="overflow-x-auto">
-            <table className="w-full border-separate border-spacing-0 text-sm">
-              <thead>
-                <tr>
-                  {['Indicador', 'Recorte', 'Valor', 'Como foi calculado'].map((titulo, posicao) => (
-                    <th key={titulo} className={`bg-cinza-100 px-3 py-2 text-left font-semibold ${posicao === 0 ? 'rounded-l-[10px]' : ''} ${posicao === 3 ? 'rounded-r-[10px]' : ''}`}>
-                      {titulo}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {secao.indicadores.map((indicador) => (
-                  <tr key={`${indicador.codigo}-${indicador.recorte}`}>
-                    <td className="border-b border-borda px-3 py-2.5 font-semibold">{indicador.nome}</td>
-                    <td className="border-b border-borda px-3 py-2.5">{recorteDo(indicador)}</td>
-                    <td className="border-b border-borda px-3 py-2.5 whitespace-nowrap">{valorDo(indicador)}</td>
-                    <td className="border-b border-borda px-3 py-2.5 text-xs text-texto-2">{indicador.baseCalculo ?? '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {agruparIndicadores(secao.indicadores).map((grupo, posicao) => (
+              <BlocoDoIndicador key={grupo.codigo} grupo={grupo} indice={posicao} />
+            ))}
+          </ul>
         </section>
       ))}
       <p className="text-xs text-texto-2">
@@ -197,12 +264,14 @@ export function RelatorioParceria() {
         {(dado) =>
           dado ? (
             <>
-              {dado.status !== 'DISPONIBILIZADO' && (
-                <Aviso tipo="ausente" titulo={dado.status === 'RASCUNHO' ? 'Rascunho: a marca ainda não vê esta versão' : 'Validado: falta disponibilizar esta versão para a marca'}>
-                  Se uma versão anterior já foi disponibilizada, a marca continua vendo aquela até esta ser disponibilizada.
-                </Aviso>
-              )}
-              <div className="flex flex-wrap gap-3 print:hidden">
+              <div className="flex flex-wrap items-center gap-3 print:hidden">
+                {/* Uma linha de estado no lugar dos dois avisos (F9). */}
+                {dado.status !== 'DISPONIBILIZADO' && (
+                  <p className="mr-auto text-sm font-semibold text-texto-2">
+                    {dado.status === 'RASCUNHO' ? 'Rascunho: a marca ainda não vê esta versão.' : 'Validado: falta disponibilizar para a marca.'}
+                    <span className="font-medium"> Enquanto isso, ela vê a última versão disponibilizada, se houver.</span>
+                  </p>
+                )}
                 <Botao variante="secundario" icone="ri-printer-line" onClick={() => window.print()}>
                   Imprimir ou salvar PDF
                 </Botao>

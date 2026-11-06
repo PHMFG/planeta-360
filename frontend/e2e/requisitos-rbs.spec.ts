@@ -699,7 +699,7 @@ test.describe('R6 a R8 · admin, identidade e pós-venda', () => {
     // O relatório gerado depois traz o número em "O festival em números", com a fonte.
     await page.goto(`/parceria/${marca.parceriaId}/relatorio`)
     await page.getByRole('button', { name: 'Gerar nova versão' }).click()
-    await expect(page.getByRole('row').filter({ hasText: indicador })).toContainText(/80\.000/)
+    await expect(page.getByRole('listitem').filter({ hasText: indicador }).last()).toContainText(/80\.000/)
   })
 })
 
