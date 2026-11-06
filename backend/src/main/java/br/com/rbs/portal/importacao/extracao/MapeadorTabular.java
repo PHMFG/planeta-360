@@ -9,6 +9,7 @@ import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.MensagemDeChat;
 import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.PedidoAoLlm;
 import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.RespostaDoLlm;
 import br.com.rbs.portal.importacao.AlcanceDeUmaImportacao;
+import br.com.rbs.portal.importacao.CamposDaAtivacao;
 import br.com.rbs.portal.importacao.ConteudoLido;
 import br.com.rbs.portal.importacao.ExtratorDeLinhas;
 import br.com.rbs.portal.importacao.DestinoDaImportacao;
@@ -75,14 +76,35 @@ public class MapeadorTabular implements ExtratorDeLinhas {
     }
 
     private final ProvedorAtual provedorAtual;
+    private final CamposDaAtivacao camposDaAtivacao;
 
-    public MapeadorTabular(ProvedorAtual provedorAtual) {
+    public MapeadorTabular(ProvedorAtual provedorAtual, CamposDaAtivacao camposDaAtivacao) {
         this.provedorAtual = provedorAtual;
+        this.camposDaAtivacao = camposDaAtivacao;
     }
 
     @Override
     public boolean aceita(ConteudoLido conteudo) {
         return !LeitorDePlanilha.abas(conteudo).isEmpty();
+    }
+
+    /**
+     * O cabeçalho de uma planilha de pesquisa (pergunta/alternativa/base ou dimensão/categoria) sugere PESQUISA; sem isso,
+     * a planilha é de veiculação, como antes.
+     */
+    @Override
+    public DestinoDaImportacao sugerirDestino(ConteudoLido conteudo) {
+        for (AbaLida aba : LeitorDePlanilha.abas(conteudo)) {
+            for (List<String> linha : aba.linhas()) {
+                Map<String, Integer> colunas = colunasDa(linha);
+                if ((colunas.containsKey("pergunta") || colunas.containsKey("dimensao"))
+                        && (colunas.containsKey("alternativa") || colunas.containsKey("base_respondentes")
+                        || (colunas.containsKey("dimensao") && colunas.containsKey("categoria")))) {
+                    return DestinoDaImportacao.PESQUISA;
+                }
+            }
+        }
+        return null;
     }
 
     @Override
@@ -97,8 +119,14 @@ public class MapeadorTabular implements ExtratorDeLinhas {
         if (abas.isEmpty()) {
             return ResultadoDaExtracao.vazio();
         }
-        if (destino != DestinoDaImportacao.VEICULACAO && destino != DestinoDaImportacao.PLANO) {
+        if (!entende(destino)) {
             return ResultadoDaExtracao.vazio();
+        }
+        if (destino == DestinoDaImportacao.PESQUISA) {
+            Optional<ResultadoDaExtracao> secoes = pesquisaEmSecoes(abas);
+            if (secoes.isPresent()) {
+                return secoes.get();
+            }
         }
         Optional<Mapeamento> padrao = padrao(abas, destino);
         if (padrao.isPresent()) {
@@ -112,8 +140,14 @@ public class MapeadorTabular implements ExtratorDeLinhas {
     public ResultadoDaExtracao extrairSemModeloComDetalhe(ConteudoLido conteudo, DestinoDaImportacao destino,
                                                           AlcanceDeUmaImportacao alcance) {
         List<AbaLida> abas = LeitorDePlanilha.abas(conteudo);
-        if (abas.isEmpty() || (destino != DestinoDaImportacao.VEICULACAO && destino != DestinoDaImportacao.PLANO)) {
+        if (abas.isEmpty() || !entende(destino)) {
             return ResultadoDaExtracao.vazio();
+        }
+        if (destino == DestinoDaImportacao.PESQUISA) {
+            Optional<ResultadoDaExtracao> secoes = pesquisaEmSecoes(abas);
+            if (secoes.isPresent()) {
+                return secoes.get();
+            }
         }
         Optional<Mapeamento> padrao = padrao(abas, destino);
         if (padrao.isEmpty()) {
@@ -126,6 +160,12 @@ public class MapeadorTabular implements ExtratorDeLinhas {
     // O CSV com o cabeçalho padrão (E7)
     // ---------------------------------------------------------------------
 
+    /** Os destinos que a leitura tabular em código sabe montar (os outros dependem do modelo ou de outra leitura). */
+    private static boolean entende(DestinoDaImportacao destino) {
+        return destino == DestinoDaImportacao.VEICULACAO || destino == DestinoDaImportacao.PLANO
+                || destino == DestinoDaImportacao.DADOS_ATIVACAO || destino == DestinoDaImportacao.PESQUISA;
+    }
+
     private Optional<Mapeamento> padrao(List<AbaLida> abas, DestinoDaImportacao destino) {
         for (AbaLida aba : abas) {
             for (int r = 0; r < aba.linhas().size(); r++) {
@@ -134,19 +174,39 @@ public class MapeadorTabular implements ExtratorDeLinhas {
                 if (destino == DestinoDaImportacao.VEICULACAO && colunas.containsKey("patrocinador")
                         && colunas.containsKey("veiculo") && colunas.containsKey("formato")
                         && colunas.containsKey("quantidade") && (colunas.containsKey("exibido_em") || colunas.containsKey("mes"))) {
-                    Map<String, Coluna> campos = new LinkedHashMap<>();
-                    for (String campo : List.of("patrocinador", "veiculo", "formato", "espaco_programa", "exibido_em", "mes",
-                            "quantidade", "impacto", "link")) {
-                        Integer c = colunas.get(campo);
-                        if (c != null) {
-                            campos.put(campo, new Coluna(letra(c), 0));
-                        }
-                    }
+                    return Optional.of(new Mapeamento(r + 1, r + 2, List.of(), camposDe(colunas,
+                            List.of("patrocinador", "veiculo", "formato", "espaco_programa", "exibido_em", "mes", "quantidade",
+                                    "impacto", "link")), List.of()));
+                }
+                if (destino == DestinoDaImportacao.DADOS_ATIVACAO && colunas.containsKey("campo")
+                        && colunas.containsKey("valor")) {
+                    Map<String, Coluna> campos = camposDe(colunas, List.of("valor"));
+                    campos.put("campo_chave", new Coluna(letra(colunas.get("campo")), 0));
                     return Optional.of(new Mapeamento(r + 1, r + 2, List.of(), campos, List.of()));
+                }
+                if (destino == DestinoDaImportacao.PESQUISA && colunas.containsKey("tipo")
+                        && (colunas.containsKey("pergunta") || colunas.containsKey("dimensao"))
+                        && (colunas.containsKey("alternativa") || colunas.containsKey("categoria")
+                        || colunas.containsKey("base_respondentes"))) {
+                    return Optional.of(new Mapeamento(r + 1, r + 2, List.of(), camposDe(colunas,
+                            List.of("tipo", "patrocinador", "pergunta", "alternativa", "dimensao", "categoria", "valor",
+                                    "base_respondentes", "unidade")), List.of()));
                 }
             }
         }
         return Optional.empty();
+    }
+
+    /** As colunas do cabeçalho que o destino usa, na ordem dada (as que não existem ficam de fora). */
+    private static Map<String, Coluna> camposDe(Map<String, Integer> colunas, List<String> nomes) {
+        Map<String, Coluna> campos = new LinkedHashMap<>();
+        for (String campo : nomes) {
+            Integer c = colunas.get(campo);
+            if (c != null) {
+                campos.put(campo, new Coluna(letra(c), 0));
+            }
+        }
+        return campos;
     }
 
     private static Map<String, Integer> colunasDa(List<String> linha) {
@@ -185,8 +245,11 @@ public class MapeadorTabular implements ExtratorDeLinhas {
                 as colunas que são uma marca cada (marcas), a coluna de cada campo e as linhas que devem ser puladas (título,
                 cabeçalho, total), com o motivo. Não calcule, não converta e não invente números. Os campos possíveis são
                 patrocinador, veiculo, formato, espaco_programa, mes, exibido_em, quantidade, impacto, link, categoria, bloco,
-                janela, tipo_midia, quantidade_prevista, unidade e fonte_pagina. Se a quantidade estiver na coluna de cada marca,
-                deixe quantidade fora de campos. Responda só pela ferramenta.
+                janela, tipo_midia, quantidade_prevista, unidade, fonte_pagina, tipo, pergunta, alternativa, dimensao,
+                base_respondentes e campo_chave. Para a pesquisa, tipo é RESULTADO, PERFIL ou TEXTO, pergunta é a ordem da
+                pergunta, dimensao e categoria são o perfil demográfico e base_respondentes é a base. Para os dados da
+                ativação, campo_chave é o rótulo ou a chave do campo do catálogo e valor é o número. Se a quantidade estiver
+                na coluna de cada marca, deixe quantidade fora de campos. Responda só pela ferramenta.
                 """;
         String usuario = "Destino: " + destino + "\n<dados>\n" + dados + "\n</dados>";
         try {
@@ -426,9 +489,15 @@ public class MapeadorTabular implements ExtratorDeLinhas {
             int indice = numero - 1;
             List<String> linha = aba.linhas().get(indice);
             if (linha == null || linha.stream().allMatch(String::isBlank)) {
+                if (destino == DestinoDaImportacao.DADOS_ATIVACAO) {
+                    // A planilha da agência traz o resumo no topo e, depois de uma linha em branco, a quebra por dia (que não
+                    // é um campo do catálogo): o resumo termina no primeiro vazio.
+                    break;
+                }
                 continue;
             }
-            if (eTotal(linha)) {
+            // Nos dados da ativação, "total" pode ser parte da chave do campo (ativacao.visitantes_total).
+            if (destino != DestinoDaImportacao.DADOS_ATIVACAO && eTotal(linha)) {
                 naoEntendidos.add(new NaoEntendidoDto(aba.nome() + "!A" + numero, textoDa(linha), "Linha de total"));
                 continue;
             }
@@ -451,6 +520,12 @@ public class MapeadorTabular implements ExtratorDeLinhas {
 
     private LinhaProposta montar(AbaLida aba, DestinoDaImportacao destino, List<String> linha, int numero, Marca marca,
                                  Map<String, Coluna> campos) {
+        if (destino == DestinoDaImportacao.DADOS_ATIVACAO) {
+            return montarDadosDaAtivacao(aba, linha, numero, campos);
+        }
+        if (destino == DestinoDaImportacao.PESQUISA) {
+            return montarPesquisa(aba, linha, numero, campos);
+        }
         Map<String, Object> dados = new LinkedHashMap<>();
         Map<String, OrigemDoValor> origem = new LinkedHashMap<>();
         if (marca != null) {
@@ -512,6 +587,218 @@ public class MapeadorTabular implements ExtratorDeLinhas {
             origem.put("quantidade_prevista", origem.remove("quantidade"));
         }
         return new LinhaProposta(destino, dados, origem);
+    }
+
+    /** Uma linha de pesquisa num CSV/planilha de uma tabela só: o tipo e os campos que a linha trouxer. */
+    private LinhaProposta montarPesquisa(AbaLida aba, List<String> linha, int numero, Map<String, Coluna> campos) {
+        Map<String, Object> dados = new LinkedHashMap<>();
+        Map<String, OrigemDoValor> origem = new LinkedHashMap<>();
+        for (var campo : campos.entrySet()) {
+            String nome = campo.getKey();
+            Coluna coluna = campo.getValue();
+            int linhaDoValor = coluna.linha() > 0 ? coluna.linha() : numero;
+            String valor = valor(aba, coluna.coluna(), linhaDoValor);
+            if (valor == null || valor.isBlank()) {
+                continue;
+            }
+            dados.put(nome, "tipo".equals(nome) ? valor.strip().toUpperCase(Locale.ROOT) : conversao(nome, valor));
+            origem.put(nome, origem(aba, coluna.coluna(), linhaDoValor));
+        }
+        return dados.isEmpty() ? null : new LinhaProposta(DestinoDaImportacao.PESQUISA, dados, origem);
+    }
+
+    /**
+     * A planilha da empresa de pesquisa, no formato que ela costuma mandar: uma seção de perfil (dimensão, categoria,
+     * percentual e base) e outra de respostas por pergunta (pergunta, alternativa, valor, unidade e base), com a seção de
+     * texto livre quando houver. Cada aba é uma marca; a aba "Geral" é a pesquisa do festival, sem marca.
+     */
+    private Optional<ResultadoDaExtracao> pesquisaEmSecoes(List<AbaLida> abas) {
+        List<LinhaProposta> linhas = new ArrayList<>();
+        boolean encontrou = false;
+        for (AbaLida aba : abas) {
+            String marca = marcaDaAba(aba);
+            int r = 0;
+            while (r < aba.linhas().size()) {
+                List<String> linha = aba.linhas().get(r);
+                String primeira = normalizarCabecalho(celula(linha, 0));
+                String segunda = normalizarCabecalho(celula(linha, 1));
+                if ("dimensao".equals(primeira) && cabecalhoTem(linha, "categoria")) {
+                    encontrou = true;
+                    r++;
+                    while (r < aba.linhas().size() && !linhaVazia(aba.linhas().get(r)) && !eCabecalhoDeSecao(aba.linhas().get(r))) {
+                        LinhaProposta proposta = linhaDePerfil(aba, r, marca);
+                        if (proposta != null) {
+                            linhas.add(proposta);
+                        }
+                        r++;
+                    }
+                    continue;
+                }
+                if ("pergunta".equals(primeira)) {
+                    boolean texto = segunda.contains("resposta") && !segunda.contains("texto da pergunta");
+                    boolean resposta = segunda.contains("texto da pergunta") || cabecalhoTem(linha, "alternativa");
+                    if (texto || resposta) {
+                        encontrou = true;
+                        r++;
+                        while (r < aba.linhas().size() && !linhaVazia(aba.linhas().get(r)) && !eCabecalhoDeSecao(aba.linhas().get(r))) {
+                            LinhaProposta proposta = texto ? linhaDeTexto(aba, r, marca) : linhaDeResultado(aba, r, marca);
+                            if (proposta != null) {
+                                linhas.add(proposta);
+                            }
+                            r++;
+                        }
+                        continue;
+                    }
+                }
+                r++;
+            }
+        }
+        if (!encontrou) {
+            return Optional.empty();
+        }
+        return Optional.of(new ResultadoDaExtracao(linhas, List.of(), DestinoDaImportacao.PESQUISA, new BigDecimal("1.000")));
+    }
+
+    private LinhaProposta linhaDePerfil(AbaLida aba, int r, String marca) {
+        List<String> linha = aba.linhas().get(r);
+        String dimensao = textoDaCelula(linha, 0);
+        String categoria = textoDaCelula(linha, 1);
+        String valor = textoDaCelula(linha, 2);
+        String base = textoDaCelula(linha, 3);
+        if (dimensao.isBlank() || categoria.isBlank()) {
+            return null;
+        }
+        Map<String, Object> dados = new LinkedHashMap<>();
+        Map<String, OrigemDoValor> origem = new LinkedHashMap<>();
+        if (marca != null) {
+            dados.put("patrocinador", marca);
+            origem.put("patrocinador", origemDaCelula(aba, 0, 0));
+        }
+        dados.put("tipo", "PERFIL");
+        dados.put("dimensao", dimensao);
+        dados.put("categoria", categoria);
+        dados.put("valor", conversao("valor", valor));
+        dados.put("base_respondentes", conversao("base_respondentes", base));
+        origem.put("dimensao", origemDaCelula(aba, 0, r));
+        origem.put("categoria", origemDaCelula(aba, 1, r));
+        origem.put("valor", origemDaCelula(aba, 2, r));
+        origem.put("base_respondentes", origemDaCelula(aba, 3, r));
+        return new LinhaProposta(DestinoDaImportacao.PESQUISA, dados, origem);
+    }
+
+    private LinhaProposta linhaDeResultado(AbaLida aba, int r, String marca) {
+        if (marca == null) {
+            return null;
+        }
+        List<String> linha = aba.linhas().get(r);
+        String pergunta = textoDaCelula(linha, 0);
+        String alternativa = textoDaCelula(linha, 2);
+        if (pergunta.isBlank() || alternativa.isBlank()) {
+            return null;
+        }
+        Map<String, Object> dados = new LinkedHashMap<>();
+        Map<String, OrigemDoValor> origem = new LinkedHashMap<>();
+        dados.put("patrocinador", marca);
+        origem.put("patrocinador", origemDaCelula(aba, 0, 0));
+        dados.put("tipo", "RESULTADO");
+        dados.put("pergunta", conversao("pergunta", pergunta));
+        dados.put("alternativa", alternativa);
+        dados.put("valor", conversao("valor", textoDaCelula(linha, 3)));
+        dados.put("unidade", textoDaCelula(linha, 4));
+        dados.put("base_respondentes", conversao("base_respondentes", textoDaCelula(linha, 5)));
+        origem.put("pergunta", origemDaCelula(aba, 0, r));
+        origem.put("alternativa", origemDaCelula(aba, 2, r));
+        origem.put("valor", origemDaCelula(aba, 3, r));
+        origem.put("unidade", origemDaCelula(aba, 4, r));
+        origem.put("base_respondentes", origemDaCelula(aba, 5, r));
+        return new LinhaProposta(DestinoDaImportacao.PESQUISA, dados, origem);
+    }
+
+    private LinhaProposta linhaDeTexto(AbaLida aba, int r, String marca) {
+        if (marca == null) {
+            return null;
+        }
+        List<String> linha = aba.linhas().get(r);
+        String pergunta = textoDaCelula(linha, 0);
+        String resposta = textoDaCelula(linha, 1);
+        if (pergunta.isBlank() || resposta.isBlank()) {
+            return null;
+        }
+        Map<String, Object> dados = new LinkedHashMap<>();
+        Map<String, OrigemDoValor> origem = new LinkedHashMap<>();
+        dados.put("patrocinador", marca);
+        origem.put("patrocinador", origemDaCelula(aba, 0, 0));
+        dados.put("tipo", "TEXTO");
+        dados.put("pergunta", conversao("pergunta", pergunta));
+        dados.put("alternativa", resposta);
+        dados.put("valor", 1L);
+        origem.put("pergunta", origemDaCelula(aba, 0, r));
+        origem.put("alternativa", origemDaCelula(aba, 1, r));
+        origem.put("valor", origemDaCelula(aba, 1, r));
+        return new LinhaProposta(DestinoDaImportacao.PESQUISA, dados, origem);
+    }
+
+    private static String marcaDaAba(AbaLida aba) {
+        String primeira = textoDaCelula(aba.linhas().isEmpty() ? List.of() : aba.linhas().getFirst(), 0);
+        return primeira.isBlank() || "geral".equals(normalizarCabecalho(primeira)) ? null : primeira;
+    }
+
+    private static boolean cabecalhoTem(List<String> linha, String nome) {
+        for (String celula : linha) {
+            if (nome.equals(normalizarCabecalho(celula))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean eCabecalhoDeSecao(List<String> linha) {
+        String primeira = normalizarCabecalho(celula(linha, 0));
+        return "dimensao".equals(primeira) || "pergunta".equals(primeira);
+    }
+
+    private static boolean linhaVazia(List<String> linha) {
+        return linha == null || linha.stream().allMatch(valor -> valor == null || valor.isBlank());
+    }
+
+    private static String textoDaCelula(List<String> linha, int coluna) {
+        String valor = celula(linha, coluna);
+        return valor == null ? "" : valor.strip();
+    }
+
+    private static String celula(List<String> linha, int coluna) {
+        return coluna >= 0 && coluna < linha.size() ? linha.get(coluna) : "";
+    }
+
+    private static OrigemDoValor origemDaCelula(AbaLida aba, int coluna, int linha) {
+        return new OrigemDoValor(aba.nome() + "!" + letra(coluna) + (linha + 1), textoDaCelula(aba.linhas().get(linha), coluna));
+    }
+
+    /**
+     * Uma linha de dados da ativação: o campo (o rótulo ou a chave, que o catálogo resolve) e o valor. A linha sem campo e
+     * sem valor não é uma linha; o campo desconhecido fica como veio, para a conferência recusar com o motivo.
+     */
+    private LinhaProposta montarDadosDaAtivacao(AbaLida aba, List<String> linha, int numero, Map<String, Coluna> campos) {
+        Coluna colunaDoCampo = campos.get("campo_chave");
+        Coluna colunaDoValor = campos.get("valor");
+        if (colunaDoCampo == null || colunaDoValor == null) {
+            return null;
+        }
+        String referencia = valor(aba, colunaDoCampo.coluna(), numero);
+        String valor = valor(aba, colunaDoValor.coluna(), numero);
+        if ((referencia == null || referencia.isBlank()) && (valor == null || valor.isBlank())) {
+            return null;
+        }
+        Map<String, Object> dados = new LinkedHashMap<>();
+        Map<String, OrigemDoValor> origem = new LinkedHashMap<>();
+        String chave = camposDaAtivacao.resolver(referencia).map(c -> c.chave()).orElse(referencia);
+        dados.put("campo_chave", chave);
+        origem.put("campo_chave", origem(aba, colunaDoCampo.coluna(), numero));
+        if (valor != null && !valor.isBlank()) {
+            dados.put("valor", conversao("valor", valor));
+            origem.put("valor", origem(aba, colunaDoValor.coluna(), numero));
+        }
+        return new LinhaProposta(DestinoDaImportacao.DADOS_ATIVACAO, dados, origem);
     }
 
     private static boolean eTotal(List<String> linha) {

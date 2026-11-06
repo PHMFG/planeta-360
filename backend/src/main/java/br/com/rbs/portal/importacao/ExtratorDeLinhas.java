@@ -14,6 +14,14 @@ public interface ExtratorDeLinhas {
         return true;
     }
 
+    /**
+     * O destino que o próprio conteúdo sugere, quando ele é reconhecível sem o modelo (o cabeçalho de uma planilha de
+     * pesquisa, por exemplo). Nulo deixa a sugestão por extensão. Só vale quando a pessoa não escolheu o destino.
+     */
+    default DestinoDaImportacao sugerirDestino(ConteudoLido conteudo) {
+        return null;
+    }
+
     /** Extrai as linhas do conteúdo para o destino, sem sair do alcance da importação. */
     List<LinhaProposta> extrair(ConteudoLido conteudo, DestinoDaImportacao destino, AlcanceDeUmaImportacao alcance);
 

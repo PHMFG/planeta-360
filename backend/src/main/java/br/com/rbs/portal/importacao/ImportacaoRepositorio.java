@@ -344,6 +344,102 @@ public class ImportacaoRepositorio {
     }
 
     // ---------------------------------------------------------------------
+    // A pesquisa (destino PESQUISA)
+    // ---------------------------------------------------------------------
+
+    /** A pesquisa da edição com aquele escopo (ATIVACAO ou GERAL); vazia enquanto a RBS não a abre. */
+    public Optional<Long> pesquisaDaEdicao(long eventoId, String escopo) {
+        return jdbc.sql("SELECT id FROM pesquisa WHERE evento_id = :evento AND escopo = :escopo ORDER BY id LIMIT 1")
+                .param("evento", eventoId).param("escopo", escopo).query(Long.class).optional();
+    }
+
+    /** Uma pergunta da pesquisa da marca, pela ordem; a lista de alternativas vem como o JSONB gravado. */
+    public Optional<PerguntaDaImportacao> perguntaDaMarca(long pesquisaId, long parceriaId, int ordem) {
+        return jdbc.sql("""
+                        SELECT id, tipo_resposta, status, alternativas::text AS alternativas
+                        FROM pesquisa_pergunta
+                        WHERE pesquisa_id = :pesquisa AND parceria_id = :parceria AND ordem = :ordem
+                        """)
+                .param("pesquisa", pesquisaId).param("parceria", parceriaId).param("ordem", ordem)
+                .query(PerguntaDaImportacao.class).optional();
+    }
+
+    /** Uma pergunta da pesquisa, para conferir a existência e a aprovação na prévia. */
+    public record PerguntaDaImportacao(long id, String tipoResposta, String status, String alternativas) {
+    }
+
+    /** Grava uma linha em stg_pesquisa; o número da linha é a ordem da linha na importação. */
+    public void gravarStgPesquisa(long cargaId, int numero, String patrocinador, Integer pergunta, String indicador,
+                                  String alternativa, BigDecimal valor, String unidade, Integer baseRespondentes) {
+        jdbc.sql("""
+                        INSERT INTO stg_pesquisa (carga_id, linha, patrocinador, pergunta, indicador, alternativa, valor, unidade,
+                                                  base_respondentes)
+                        VALUES (:carga, :linha, :patrocinador, :pergunta, :indicador, :alternativa, :valor, :unidade, :base)
+                        """)
+                .param("carga", cargaId).param("linha", numero).param("patrocinador", patrocinador)
+                .param("pergunta", pergunta).param("indicador", indicador).param("alternativa", alternativa)
+                .param("valor", valor).param("unidade", unidade).param("base", baseRespondentes).update();
+    }
+
+    public void processarPesquisa(long cargaId, long pesquisaId) {
+        jdbc.sql("SELECT * FROM fn_carregar_pesquisa(:carga, :pesquisa)").param("carga", cargaId)
+                .param("pesquisa", pesquisaId).query().listOfRows();
+    }
+
+    /** Troca o perfil anterior da mesma pesquisa, parceria, dimensão e categoria (a chave natural da tabela). */
+    public int apagarPerfil(long pesquisaId, Long parceriaId, String dimensao, String categoria) {
+        return jdbc.sql("""
+                        DELETE FROM pesquisa_perfil
+                        WHERE pesquisa_id = :pesquisa
+                          AND parceria_id IS NOT DISTINCT FROM CAST(:parceria AS bigint)
+                          AND dimensao = :dimensao AND categoria = :categoria
+                        """)
+                .param("pesquisa", pesquisaId).param("parceria", parceriaId).param("dimensao", dimensao)
+                .param("categoria", categoria).update();
+    }
+
+    /** Grava uma categoria do perfil demográfico, com a importação de origem. */
+    public long inserirPerfil(long pesquisaId, Long parceriaId, String dimensao, String categoria, BigDecimal valor,
+                              int baseRespondentes, long importacaoId) {
+        return jdbc.sql("""
+                        INSERT INTO pesquisa_perfil (pesquisa_id, parceria_id, dimensao, categoria, valor, base_respondentes,
+                                                     importacao_id)
+                        VALUES (:pesquisa, CAST(:parceria AS bigint), :dimensao, :categoria, :valor, :base, :importacao)
+                        RETURNING id
+                        """)
+                .param("pesquisa", pesquisaId).param("parceria", parceriaId).param("dimensao", dimensao)
+                .param("categoria", categoria).param("valor", valor).param("base", baseRespondentes)
+                .param("importacao", importacaoId).query(Long.class).single();
+    }
+
+    /** Grava uma resposta de texto livre já agregada, com a suspeita de dado pessoal e a importação de origem. */
+    public long inserirRespostaTexto(long pesquisaId, long parceriaId, long perguntaId, String texto, int contagem,
+                                     boolean suspeita, long importacaoId) {
+        return jdbc.sql("""
+                        INSERT INTO pesquisa_resposta_texto (pesquisa_id, parceria_id, pergunta_id, texto, contagem,
+                                                            suspeita_dado_pessoal, importacao_id)
+                        VALUES (:pesquisa, :parceria, :pergunta, :texto, :contagem, :suspeita, :importacao)
+                        RETURNING id
+                        """)
+                .param("pesquisa", pesquisaId).param("parceria", parceriaId).param("pergunta", perguntaId)
+                .param("texto", texto).param("contagem", contagem).param("suspeita", suspeita)
+                .param("importacao", importacaoId).query(Long.class).single();
+    }
+
+    /** Os resultados de uma carga de pesquisa (a retirada de uma importação confirmada). */
+    public int apagarPesquisaResultadoDaCarga(long cargaId) {
+        return jdbc.sql("DELETE FROM pesquisa_resultado WHERE carga_id = :carga").param("carga", cargaId).update();
+    }
+
+    public int apagarPerfilDaImportacao(long importacaoId) {
+        return jdbc.sql("DELETE FROM pesquisa_perfil WHERE importacao_id = :id").param("id", importacaoId).update();
+    }
+
+    public int apagarTextoDaImportacao(long importacaoId) {
+        return jdbc.sql("DELETE FROM pesquisa_resposta_texto WHERE importacao_id = :id").param("id", importacaoId).update();
+    }
+
+    // ---------------------------------------------------------------------
     // A carga da veiculação e do plano
     // ---------------------------------------------------------------------
 

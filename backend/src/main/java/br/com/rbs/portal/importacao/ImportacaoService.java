@@ -199,6 +199,9 @@ public class ImportacaoService {
             campos.put("parceriaId", "Só a importação de escopo PARCERIA leva parceria.");
         }
         DestinoDaImportacao destino = destino(destinoInformado, campos);
+        if (destino == DestinoDaImportacao.DADOS_ATIVACAO && alcance != AlcanceDaImportacao.PARCERIA) {
+            campos.put("destino", "Os dados da ativação são de uma importação de parceria.");
+        }
         if (!campos.isEmpty()) {
             throw new DadosInvalidosException(campos);
         }
@@ -224,6 +227,48 @@ public class ImportacaoService {
                 ImportacaoDtos.OrigemDaImportacao.RBS, gravado.id(), destino, usuario.id());
         historico.registrar(AcaoHistorico.CRIACAO, usuario, parceriaIdFinal, "importacao", id, null,
                 gravado.nomeOriginal() + " (" + alcance + (destino == null ? "" : ", " + destino) + ")", null, requisicao);
+        fila.depoisDoCommit(id);
+        return resumo(repositorio.buscar(id).orElseThrow(), false);
+    }
+
+    // ---------------------------------------------------------------------
+    // Rota 117: a planilha da agência, enviada pela marca
+    // ---------------------------------------------------------------------
+
+    /**
+     * Rota 117. A marca (ou a RBS, por ela) manda a planilha da agência com a aba APLICACOES aberta: a importação nasce com
+     * origem MARCA, alcance PARCERIA e destino fixo DADOS_ATIVACAO, no evento da parceria. Ordem das respostas: 404 (parceria
+     * que não existe ou é de outra), 403 (aba fechada), 409 (parceria encerrada), 422 (arquivo ausente ou vazio), 415 (não é
+     * planilha) e 413/415 do Armazenamento. A leitura roda na mesma fila da rota 109.
+     */
+    @Transactional
+    public ImportacaoResumo criarDaMarca(UsuarioAutenticado usuario, long parceriaId, MultipartFile arquivo,
+                                         HttpServletRequest requisicao) {
+        verificador.exigirParceria(usuario, parceriaId);
+        verificador.exigirAbaLiberada(usuario, parceriaId, "APLICACOES");
+        Parceria parceria = repositorio.parceria(parceriaId).orElseThrow(ImportacaoService::naoEncontrada);
+        if ("ENCERRADA".equals(parceria.situacao())) {
+            throw new ConflitoException("Esta parceria está encerrada e não aceita novos envios.");
+        }
+        boolean nomeDeArquivo = arquivo != null && arquivo.getOriginalFilename() != null
+                && !arquivo.getOriginalFilename().isBlank();
+        if (!nomeDeArquivo) {
+            throw new DadosInvalidosException(Map.of("arquivo", "Envie a planilha da agência na parte \"arquivo\" do formulário."));
+        }
+        if (arquivo.isEmpty()) {
+            throw new DadosInvalidosException(Map.of("arquivo", "O arquivo está vazio."));
+        }
+        String nome = arquivo.getOriginalFilename();
+        if (!Set.of("xlsx", "xls", "csv").contains(TipoDeArquivo.extensaoDe(nome))) {
+            throw new br.com.rbs.portal.comum.ArquivoRecusadoException(org.springframework.http.HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+                    "A planilha da agência é .xlsx, .xls ou .csv.");
+        }
+
+        var gravado = armazenamento.gravarImportacao(bytesDe(arquivo), nome, usuario.id(), parceriaId);
+        long id = repositorio.inserir(parceria.eventoId(), AlcanceDaImportacao.PARCERIA, null, parceriaId,
+                ImportacaoDtos.OrigemDaImportacao.MARCA, gravado.id(), DestinoDaImportacao.DADOS_ATIVACAO, usuario.id());
+        historico.registrar(AcaoHistorico.CRIACAO, usuario, parceriaId, "importacao", id, null,
+                gravado.nomeOriginal() + " (PARCERIA, DADOS_ATIVACAO)", null, requisicao);
         fila.depoisDoCommit(id);
         return resumo(repositorio.buscar(id).orElseThrow(), false);
     }
@@ -432,15 +477,20 @@ public class ImportacaoService {
         int linhas;
         switch (destino) {
             case VEICULACAO -> linhas = repositorio.apagarVeiculacoesDaImportacao(id);
-            case COMPROVANTE -> throw new ConflitoException("Esta importação não se retira; corrija o valor na tela.");
-            case PESQUISA -> throw new ConflitoException("Esta importação não se retira; corrija o valor na tela.");
-            case NUMEROS_EDICAO, DADOS_ATIVACAO, PLANO, SO_CONSULTA -> throw new ConflitoException(
+            case PESQUISA -> {
+                int perfil = repositorio.apagarPerfilDaImportacao(id);
+                int texto = repositorio.apagarTextoDaImportacao(id);
+                int resultados = importacao.cargaId() == null ? 0
+                        : repositorio.apagarPesquisaResultadoDaCarga(importacao.cargaId());
+                linhas = perfil + texto + resultados;
+            }
+            case COMPROVANTE, NUMEROS_EDICAO, DADOS_ATIVACAO, PLANO, SO_CONSULTA -> throw new ConflitoException(
                     "Esta importação não se retira; corrija o valor na tela.");
             default -> throw new ConflitoException("Esta importação não se retira; corrija o valor na tela.");
         }
         repositorio.marcarRetirada(id, usuario.id());
         historico.registrar(AcaoHistorico.EDICAO, usuario, importacao.parceriaId(), "importacao", id, "CONFIRMADA", "RETIRADA",
-                linhas + " linha(s) de veiculação apagada(s)", requisicao);
+                linhas + " linha(s) apagada(s)", requisicao);
         return resumo(repositorio.buscar(id).orElseThrow(), false);
     }
 
@@ -572,7 +622,7 @@ public class ImportacaoService {
             ConteudoLido conteudo = leitor.ler(caminho);
             List<Pagina> paginas = paginas(conteudo);
             List<Suspeita> suspeitas = detector.analisarConversa(paginas);
-            DestinoDaImportacao sugerido = destinoSugerido(extensao);
+            DestinoDaImportacao sugerido = sugestaoDoConteudo(conteudo, destinoSugerido(extensao));
             DestinoDaImportacao destino = importacao.destino() != null ? importacao.destino() : sugerido;
             ResultadoDaExtracao extracao = extrair(conteudo, destino, importacao, suspeitas);
             if (extracao.destinoSugerido() != null) {
@@ -660,7 +710,8 @@ public class ImportacaoService {
         Long parceriaId = null;
         String marca = texto(proposta.dados().get("patrocinador"));
         List<String> problemas = new ArrayList<>();
-        if (destino == DestinoDaImportacao.VEICULACAO || destino == DestinoDaImportacao.PLANO) {
+        if (destino == DestinoDaImportacao.VEICULACAO || destino == DestinoDaImportacao.PLANO
+                || (destino == DestinoDaImportacao.PESQUISA && marca != null && !marca.isBlank())) {
             Parceria parceria = repositorio.parceriaDaMarca(importacao.eventoId(), marca).orElse(null);
             if (parceria == null) {
                 problemas.add("Marca não encontrada nesta edição.");
@@ -670,6 +721,12 @@ public class ImportacaoService {
                 problemas.add("A marca " + parceria.patrocinador() + " está fora do alcance da importação.");
             } else {
                 parceriaId = parceria.id();
+            }
+        } else if (destino == DestinoDaImportacao.DADOS_ATIVACAO) {
+            if (importacao.alcance() != AlcanceDaImportacao.PARCERIA || importacao.parceriaId() == null) {
+                problemas.add("Os dados da ativação são de uma importação de parceria.");
+            } else {
+                parceriaId = importacao.parceriaId();
             }
         }
         Long sugeridoId = null;
@@ -716,7 +773,8 @@ public class ImportacaoService {
         repositorio.travarGrupoDeDocumento(importacao.eventoId(), escopo, importacao.cotaTipoId(), importacao.parceriaId(), chave);
         int versao = repositorio.proximaVersaoDeDocumento(importacao.eventoId(), escopo, importacao.cotaTipoId(),
                 importacao.parceriaId(), chave);
-        Long aprovadoPor = importacao.criadaPor();
+        // Só a RBS aprova o documento: o da marca fica aguardando, porque o aprovador tem de ser um usuário da RBS.
+        Long aprovadoPor = importacao.origem() == ImportacaoDtos.OrigemDaImportacao.RBS ? importacao.criadaPor() : null;
         // O gatilho do documento exige arquivo da categoria DOCUMENTO; o arquivo da importação é IMPORTACAO. A cópia tem o mesmo
         // conteúdo e um nome novo no disco.
         var arquivoDoDocumento = armazenamento.gravarDocumentoImportado(bytes, importacao.arquivoNome(), importacao.criadaPor(),
@@ -844,8 +902,16 @@ public class ImportacaoService {
             List<RejeicaoDaLinhaDto> rejeicoes = repositorio.rejeicoesDaCarga(importacao.cargaId()).stream()
                     .map(r -> new RejeicaoDaLinhaDto(r.ordem(), r.motivo())).toList();
             if (totais != null) {
-                return new ResultadoDaConfirmacao(totais.lidas(), totais.inseridas(), totais.duplicadas(), totais.rejeitadas(),
-                        rejeicoes);
+                // A carga conta só os RESULTADO; o perfil e o texto livre, que não passam pela área de passagem, entram na
+                // mesma conta para a tela dizer quantas linhas foram salvas.
+                int foraDaCarga = importacao.destino() == DestinoDaImportacao.PESQUISA ? (int) itens.stream()
+                        .filter(i -> i.situacao() == SituacaoDaLinha.ACEITA)
+                        .filter(i -> {
+                            String tipo = i.dados() == null ? null : texto(i.dados().get("tipo"));
+                            return "PERFIL".equalsIgnoreCase(tipo) || "TEXTO".equalsIgnoreCase(tipo);
+                        }).count() : 0;
+                return new ResultadoDaConfirmacao(totais.lidas() + foraDaCarga, totais.inseridas() + foraDaCarga,
+                        totais.duplicadas(), totais.rejeitadas(), rejeicoes);
             }
         }
         int aceitas = (int) itens.stream().filter(i -> i.situacao() == SituacaoDaLinha.ACEITA).count();
@@ -889,6 +955,19 @@ public class ImportacaoService {
             case COTA -> importacao.cotaTipoId() != null && importacao.cotaTipoId().equals(parceria.cotaTipoId());
             case PARCERIA -> importacao.parceriaId() != null && importacao.parceriaId() == parceria.id();
         };
+    }
+
+    /** A sugestão do próprio conteúdo (a planilha de pesquisa), antes da sugestão por extensão. */
+    private DestinoDaImportacao sugestaoDoConteudo(ConteudoLido conteudo, DestinoDaImportacao porExtensao) {
+        for (ExtratorDeLinhas extrator : extratores) {
+            if (extrator.aceita(conteudo)) {
+                DestinoDaImportacao doConteudo = extrator.sugerirDestino(conteudo);
+                if (doConteudo != null) {
+                    return doConteudo;
+                }
+            }
+        }
+        return porExtensao;
     }
 
     private static DestinoDaImportacao destinoSugerido(String extensao) {

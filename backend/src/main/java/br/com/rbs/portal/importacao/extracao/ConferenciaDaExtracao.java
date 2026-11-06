@@ -25,8 +25,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class ConferenciaDaExtracao {
 
-    private static final Set<String> UNIDADES = Set.of("INSERCAO", "CPM", "APLICACAO", "PERCENTUAL", "NOTA", "PESSOAS", "MARCAS",
-            "IMPACTOS", "REAIS", "UNIDADE");
+    private static final Set<String> UNIDADES = Set.of("INSERCAO", "CPM", "APLICACAO", "PERCENTUAL", "NOTA", "CONTAGEM", "PESSOAS",
+            "MARCAS", "IMPACTOS", "REAIS", "UNIDADE");
 
     private final ImportacaoRepositorio repositorio;
 
@@ -36,9 +36,13 @@ public class ConferenciaDaExtracao {
 
     public List<String> problemas(LinhaProposta linha, AlcanceDeUmaImportacao alcance, Long parceriaId) {
         List<String> problemas = new ArrayList<>();
-        for (String campo : List.of("quantidade", "impacto", "valor", "base_respondentes", "quantidade_prevista")) {
+        for (String campo : List.of("quantidade", "impacto", "valor", "pergunta", "base_respondentes", "quantidade_prevista")) {
             Object valor = linha.dados().get(campo);
             if (valor == null) {
+                continue;
+            }
+            // A contagem de uma resposta de texto livre é o número de repetições, e não um número da planilha.
+            if ("valor".equals(campo) && "TEXTO".equalsIgnoreCase(texto(linha.dados().get("tipo")))) {
                 continue;
             }
             OrigemDoValor origem = linha.origem().get(campo);
@@ -67,11 +71,15 @@ public class ConferenciaDaExtracao {
     }
 
     private static boolean numeroNaFonte(Object valor, String trecho) {
+        // O valor não é número: quem dá o motivo é o destino, com a frase do campo ("precisa ser um número").
+        if (MapeadorTabular.decimal(texto(valor)) == null) {
+            return true;
+        }
         String alvo;
         try {
             alvo = NormalizadorDeNumeros.normalizarNumero(texto(valor));
         } catch (RuntimeException naoEhNumero) {
-            return false;
+            return true;
         }
         for (Achado achado : NormalizadorDeNumeros.extrair(trecho, true)) {
             if (achado.valores().contains(alvo)) {
