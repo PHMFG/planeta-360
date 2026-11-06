@@ -52,15 +52,31 @@ public class BuscaHibrida {
         /** O "sem cota" do escopo só global. Nenhuma cota nem parceria de verdade tem id zero (as chaves começam em 1). */
         public static final int SEM_COTA = 0;
         public static final long SEM_PARCERIA = 0;
+        /** Os marcadores do escopo de todos os escopos da edição (o Atlas da RBS, desde a base da RBS). */
+        public static final int TODAS_AS_COTAS = -1;
+        public static final long TODAS_AS_PARCERIAS = -1;
 
         /** O escopo do Atlas da RBS: os documentos {@code GLOBAL} desta edição, e nenhum de cota nem de parceria. */
         public static Escopo soGlobal(long eventoId) {
             return new Escopo(eventoId, SEM_COTA, SEM_PARCERIA);
         }
 
+        /**
+         * [ISOLAMENTO] O escopo do Atlas da RBS em toda a base: todos os documentos da edição, globais, de cota e de parceria. Só a
+         * conversa da RBS o usa; a marca nunca.
+         */
+        public static Escopo todaAEdicao(long eventoId) {
+            return new Escopo(eventoId, TODAS_AS_COTAS, TODAS_AS_PARCERIAS);
+        }
+
         /** Este escopo enxerga só os documentos {@code GLOBAL} da edição? */
         public boolean soGlobal() {
             return cotaTipoId == SEM_COTA && parceriaId == SEM_PARCERIA;
+        }
+
+        /** Este escopo enxerga todos os documentos da edição (o Atlas da RBS em toda a base)? */
+        public boolean todaAEdicao() {
+            return cotaTipoId == TODAS_AS_COTAS && parceriaId == TODAS_AS_PARCERIAS;
         }
     }
 
@@ -75,9 +91,9 @@ public class BuscaHibrida {
      * Um trecho achado e o que as duas listas disseram dele. A posição e a distância (ou a nota) são nulas na lista em que ele não
      * entrou. {@code rrf} é a soma das duas contribuições.
      */
-    public record Candidato(long trechoId, long documentoId, String documento, int versao, String tipo, int pagina, int paginaFim,
-                            String secao, String texto, int tokens, Integer posicaoVetorial, Double distancia, Integer posicaoTextual,
-                            Double nota, double rrf) {
+    public record Candidato(long trechoId, long documentoId, String documento, int versao, String tipo, String parceria, int pagina,
+                            int paginaFim, String secao, String texto, int tokens, Integer posicaoVetorial, Double distancia,
+                            Integer posicaoTextual, Double nota, double rrf) {
     }
 
     /**
@@ -103,8 +119,18 @@ public class BuscaHibrida {
     private static final String FILTRO_SO_GLOBAL = """
             t.ativo AND d.status = 'INDEXADO' AND t.evento_id = :evento AND t.escopo = 'GLOBAL'""";
 
+    /**
+     * O filtro do Atlas da RBS em toda a base: todos os escopos da edição. [ISOLAMENTO] O {@code WHERE} é a primeira linha de
+     * defesa e vale sozinho: só a RBS monta este escopo.
+     */
+    private static final String FILTRO_TODA_A_EDICAO = """
+            t.ativo AND d.status = 'INDEXADO' AND t.evento_id = :evento""";
+
     /** O filtro do {@code WHERE} montado aqui em código, a primeira linha de defesa (a RLS é a segunda). */
     private static String baseDoFiltro(Escopo escopo) {
+        if (escopo.todaAEdicao()) {
+            return FILTRO_TODA_A_EDICAO;
+        }
         return escopo.soGlobal() ? FILTRO_SO_GLOBAL : BASE_DO_FILTRO;
     }
 
@@ -208,12 +234,15 @@ public class BuscaHibrida {
                              CROSS JOIN (SELECT CAST(:lexemas AS tsquery) AS consulta) q
                         WHERE %s AND t.tsv @@ q.consulta
                         ORDER BY nota DESC, t.id LIMIT %d) x)
-                SELECT t.id, t.documento_id, d.titulo AS documento, d.versao, d.tipo, t.pagina_inicio AS pagina, t.pagina_fim,
+                SELECT t.id, t.documento_id, d.titulo AS documento, d.versao, d.tipo, pat.nome_canonico AS parceria,
+                       t.pagina_inicio AS pagina, t.pagina_fim,
                        t.secao_caminho AS secao, t.texto, t.tokens, v.posicao AS posicao_vetorial, v.distancia,
                        x.posicao AS posicao_textual, x.nota,
                        coalesce(CAST(1.0 AS float8) / (%d + v.posicao), 0) + coalesce(CAST(1.0 AS float8) / (%d + x.posicao), 0) AS rrf
                 FROM documento_trecho t
                 JOIN documento d ON d.id = t.documento_id
+                LEFT JOIN parceria pa ON pa.id = d.parceria_id
+                LEFT JOIN patrocinador pat ON pat.id = pa.patrocinador_id
                 LEFT JOIN vetorial v ON v.id = t.id
                 LEFT JOIN textual x ON x.id = t.id
                 WHERE v.id IS NOT NULL OR x.id IS NOT NULL
@@ -229,8 +258,8 @@ public class BuscaHibrida {
             consulta = consulta.param("vetor", ProvedorDeEmbeddings.comoTextoDoBanco(pedido.vetor())).param("modelo", pedido.modeloDoVetor());
         }
         List<Candidato> todos = consulta.query((rs, n) -> new Candidato(rs.getLong("id"), rs.getLong("documento_id"),
-                rs.getString("documento"), rs.getInt("versao"), rs.getString("tipo"), rs.getInt("pagina"), rs.getInt("pagina_fim"),
-                rs.getString("secao"), rs.getString("texto"), rs.getInt("tokens"),
+                rs.getString("documento"), rs.getInt("versao"), rs.getString("tipo"), rs.getString("parceria"), rs.getInt("pagina"),
+                rs.getInt("pagina_fim"), rs.getString("secao"), rs.getString("texto"), rs.getInt("tokens"),
                 inteiroOuNulo(rs, "posicao_vetorial"), decimalOuNulo(rs, "distancia"), inteiroOuNulo(rs, "posicao_textual"),
                 decimalOuNulo(rs, "nota"), rs.getDouble("rrf"))).list();
 

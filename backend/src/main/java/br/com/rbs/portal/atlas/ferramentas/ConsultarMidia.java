@@ -11,6 +11,7 @@ import br.com.rbs.portal.atlas.ferramentas.MidiaDoPortal.Filtro;
 import br.com.rbs.portal.atlas.ferramentas.MidiaDoPortal.Linha;
 import br.com.rbs.portal.atlas.ferramentas.MidiaDoPortal.Total;
 import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.DefinicaoDeFerramenta;
+import br.com.rbs.portal.comum.DadosInvalidosException;
 import br.com.rbs.portal.comum.VerificadorDeAcesso;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -49,9 +50,12 @@ public class ConsultarMidia implements Ferramenta {
     /** O recorte por mês que só a cota Master (e a RBS) pode pedir. */
     public static final String MES_SO_DA_MASTER = "O recorte por mês é das cotas Master.";
     static final Pattern MES = Pattern.compile("\\d{4}-(0[1-9]|1[0-2])");
-    private static final Set<String> ARGUMENTOS = Set.of("veiculo", "formato", "mes", "tipoMidia", "unidade");
+    private static final Set<String> ARGUMENTOS_DA_MARCA = Set.of("veiculo", "formato", "mes", "tipoMidia", "unidade");
+    private static final Set<String> ARGUMENTOS_DA_RBS = Set.of("veiculo", "formato", "mes", "tipoMidia", "unidade", "parceria",
+            "cota");
     private static final Set<String> TIPOS_DE_MIDIA = Set.of("ASSINADA", "PROPRIA", "MERCHANDISING", "BRANDED", "CONTEUDO_DE_MARCA");
     private static final Set<String> UNIDADES = Set.of("INSERCAO", "CPM", "APLICACAO");
+    private static final Set<String> COTAS = Set.of("MASTER", "SUBCOTA_G", "SUBCOTA");
     private static final Map<String, String> UNIDADES_NA_TELA = Map.of("INSERCAO", "Inserções", "CPM", "CPM", "APLICACAO", "Aplicações");
     private static final Map<String, String> TIPOS_NA_TELA = Map.of("ASSINADA", "assinada", "PROPRIA", "própria", "MERCHANDISING",
             "merchandising", "BRANDED", "branded", "CONTEUDO_DE_MARCA", "conteúdo de marca");
@@ -68,6 +72,32 @@ public class ConsultarMidia implements Ferramenta {
               "veiculo":{"type":"string","maxLength":80,"description":"Opcional: só este veículo, sem caixa nem acento."},
               "formato":{"type":"string","maxLength":160,"description":"Opcional: o formato contém este texto, também no espaço ou programa."},
               "mes":{"type":"string","pattern":"^\\\\d{4}-(0[1-9]|1[0-2])$","description":"Opcional (só cotas Master): o mês no formato AAAA-MM."},
+              "tipoMidia":{"type":"string","enum":["ASSINADA","PROPRIA","MERCHANDISING","BRANDED","CONTEUDO_DE_MARCA"],
+                           "description":"Opcional: só este tipo de mídia."},
+              "unidade":{"type":"string","enum":["INSERCAO","CPM","APLICACAO"],
+                         "description":"Opcional: só esta unidade."}},
+             "additionalProperties":false}""");
+
+    /**
+     * O que o modelo da RBS lê (AC2): a mídia de todas as marcas da edição, com a marca em cada linha e os filtros de parceria e
+     * cota.
+     */
+    private static final DefinicaoDeFerramenta DEFINICAO_DA_RBS = new DefinicaoDeFerramenta(NOME,
+            "Consulta a mídia das marcas da edição: o contratado no plano e o que já foi exibido, por marca, veículo e formato, com a "
+                    + "entrega em percentual e o impacto. Filtros opcionais: parceria (nome do patrocinador sem caixa nem acento, ou "
+                    + "id), cota (MASTER, SUBCOTA_G ou SUBCOTA), veiculo, formato, tipoMidia, unidade e mes (AAAA-MM). Sem parceria, lê "
+                    + "todas as marcas da edição. Sem mês, cada linha do plano soma todos os meses e vem uma vez. Devolve os totais por "
+                    + "unidade (inserção, CPM e aplicação nunca se somam) e até 40 linhas, cada uma com a marca. Cada linha e cada total "
+                    + "vem com o marcador (R1, R2...): cite o marcador entre colchetes, como [R1], logo depois da afirmação, e copie "
+                    + "os números exatamente como estão.",
+            """
+            {"type":"object","properties":{
+              "parceria":{"type":"string","maxLength":120,
+                          "description":"Opcional: só esta marca, pelo nome do patrocinador (sem caixa nem acento) ou pelo id."},
+              "cota":{"type":"string","enum":["MASTER","SUBCOTA_G","SUBCOTA"],"description":"Opcional: só as marcas desta cota."},
+              "veiculo":{"type":"string","maxLength":80,"description":"Opcional: só este veículo, sem caixa nem acento."},
+              "formato":{"type":"string","maxLength":160,"description":"Opcional: o formato contém este texto, também no espaço ou programa."},
+              "mes":{"type":"string","pattern":"^\\\\d{4}-(0[1-9]|1[0-2])$","description":"Opcional: o mês no formato AAAA-MM."},
               "tipoMidia":{"type":"string","enum":["ASSINADA","PROPRIA","MERCHANDISING","BRANDED","CONTEUDO_DE_MARCA"],
                            "description":"Opcional: só este tipo de mídia."},
               "unidade":{"type":"string","enum":["INSERCAO","CPM","APLICACAO"],
@@ -95,6 +125,16 @@ public class ConsultarMidia implements Ferramenta {
     }
 
     @Override
+    public DefinicaoDeFerramenta definicaoDaRbs() {
+        return DEFINICAO_DA_RBS;
+    }
+
+    @Override
+    public boolean daRbs() {
+        return true;
+    }
+
+    @Override
     public int ordem() {
         return 23;
     }
@@ -107,13 +147,16 @@ public class ConsultarMidia implements Ferramenta {
     @Override
     public Execucao executar(AtlasContexto contexto, FontesDoTurno turno, Map<String, Object> argumentos, String chamadaId,
                              Object preparado) {
+        boolean daRbs = contexto.daRbs();
         Map<String, String> erros = new LinkedHashMap<>();
-        desconhecidos(argumentos, ARGUMENTOS, erros);
+        desconhecidos(argumentos, daRbs ? ARGUMENTOS_DA_RBS : ARGUMENTOS_DA_MARCA, erros);
         String veiculo = limpo(texto(argumentos, "veiculo", false, erros));
         String formato = limpo(texto(argumentos, "formato", false, erros));
         String mes = limpo(texto(argumentos, "mes", false, erros));
         String tipoMidia = limpo(texto(argumentos, "tipoMidia", false, erros));
         String unidade = limpo(texto(argumentos, "unidade", false, erros));
+        String parceria = daRbs ? limpo(texto(argumentos, "parceria", false, erros)) : null;
+        String cota = daRbs ? limpo(texto(argumentos, "cota", false, erros)) : null;
         LocalDate primeiroDiaDoMes = null;
         if (mes != null) {
             if (!MES.matcher(mes).matches()) {
@@ -130,10 +173,25 @@ public class ConsultarMidia implements Ferramenta {
             erros.put("unidade", "Unidade inválida. Use " + String.join(", ", UNIDADES.stream().sorted().toList())
                     + ", ou não informe a unidade.");
         }
-        if (primeiroDiaDoMes != null && !"MASTER".equals(contexto.cota())) {
+        if (cota != null && !COTAS.contains(cota)) {
+            erros.put("cota", "Cota inválida. Use " + String.join(", ", COTAS.stream().sorted().toList()) + ", ou não informe a cota.");
+        }
+        if (primeiroDiaDoMes != null && !daRbs && !"MASTER".equals(contexto.cota())) {
             erros.put("mes", MES_SO_DA_MASTER);
         }
         exigirSemErros(erros);
+
+        if (daRbs) {
+            Long parceriaId = null;
+            if (parceria != null) {
+                parceriaId = registros.parceriaDaEdicao(contexto.eventoId(), parceria).orElseThrow(() -> new DadosInvalidosException(
+                        "Os argumentos da ferramenta estão errados.",
+                        Map.of("parceria", "Não encontramos esta parceria nesta edição.")));
+            }
+            return consultar(contexto, turno, new Filtro(contexto.eventoId(), parceriaId, cota, primeiroDiaDoMes, veiculo, formato,
+                    tipoMidia, unidade), true);
+        }
+
         verificador.exigirParceria(contexto.usuario(), contexto.parceriaId());
         if (registros.abaOculta(contexto.parceriaId(), "MIDIA")) {
             return vazio("Não há números de mídia para consultar.");

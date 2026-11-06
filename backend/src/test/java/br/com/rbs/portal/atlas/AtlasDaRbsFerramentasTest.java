@@ -18,7 +18,6 @@ import br.com.rbs.portal.atlas.relatorio.ResolvedorDeReferencias.ReferenciaDesco
 import br.com.rbs.portal.comum.DadosInvalidosException;
 import br.com.rbs.portal.comum.SemPermissaoException;
 import java.time.LocalDate;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -38,8 +37,9 @@ import tools.jackson.core.type.TypeReference;
 @Transactional
 class AtlasDaRbsFerramentasTest {
 
-    private static final List<String> FERRAMENTAS_DA_RBS = List.of("buscar_documentos", "contar_dias", "calcular", "gerar_modelo");
-    private static final List<String> FERRAMENTAS_DE_MARCA = List.of("parceria_consultar", "listar_entregas", "consultar_cota",
+    private static final List<String> FERRAMENTAS_DA_RBS = List.of("buscar_documentos", "listar_entregas", "consultar_midia",
+            "contar_dias", "calcular", "gerar_modelo");
+    private static final List<String> FERRAMENTAS_DE_MARCA = List.of("parceria_consultar", "consultar_cota",
             "consultar_prazos", "pedido_de_relatorio", "relatorio_iniciar", "relatorio_solicitar_campos", "relatorio_editar",
             "relatorio_finalizar");
 
@@ -129,25 +129,29 @@ class AtlasDaRbsFerramentasTest {
     // ---------------------------------------------------------------------
 
     @Test
-    void oModeloDaRbsRecebeSoAsQuatroFerramentasDela() {
+    void oModeloDaRbsRecebeAsSeisFerramentasDela() {
         assertThat(nomes(registro.oferecidasDaRbs(false))).containsExactlyElementsOf(FERRAMENTAS_DA_RBS);
     }
 
     @Test
-    void semAsDiretasFicamTresEAGeracaoDeModeloSai() {
-        assertThat(nomes(registro.oferecidasDaRbs(true))).containsExactly("buscar_documentos", "contar_dias", "calcular");
+    void semAsDiretasFicamCincoEAGeracaoDeModeloSai() {
+        assertThat(nomes(registro.oferecidasDaRbs(true))).containsExactly("buscar_documentos", "listar_entregas", "consultar_midia",
+                "contar_dias", "calcular");
     }
 
     @Test
-    void nenhumaDefinicaoDaRbsFalaDeParceriaCotaOuRelatorio() {
+    void nenhumaDefinicaoDaRbsFalaDeRelatorioNemAceitaIdDeParceria() {
         for (DefinicaoDeFerramenta definicao : registro.oferecidasDaRbs(false)) {
             String tudo = (definicao.descricao() + " " + definicao.esquema()).toLowerCase();
-            assertThat(tudo).as(definicao.nome()).doesNotContain("parceria_id").doesNotContain("esta parceria").doesNotContain("cons:")
-                    .doesNotContain("dado:ativacao").doesNotContain("dado:...").doesNotContain("registro r#").doesNotContain("relatorio_iniciar")
-                    .doesNotContain("relatorio_editar").doesNotContain("relatorio_finalizar").doesNotContain("relatorio_solicitar");
+            assertThat(tudo).as(definicao.nome()).doesNotContain("parceria_id").doesNotContain("cons:")
+                    .doesNotContain("dado:ativacao").doesNotContain("dado:...").doesNotContain("registro r#")
+                    .doesNotContain("relatorio_iniciar").doesNotContain("relatorio_editar").doesNotContain("relatorio_finalizar")
+                    .doesNotContain("relatorio_solicitar");
         }
         DefinicaoDeFerramenta busca = registro.oferecidasDaRbs(false).get(0);
-        assertThat(busca.descricao()).contains("globais").contains("nunca o nome de uma marca");
+        assertThat(busca.descricao()).contains("documentos da edição").contains("nome da marca");
+        assertThat(registro.oferecidasDaRbs(false).stream().filter(d -> d.nome().equals("consultar_midia")).findFirst().orElseThrow()
+                .esquema()).contains("\"parceria\"", "\"cota\"");
     }
 
     @Test
@@ -197,7 +201,7 @@ class AtlasDaRbsFerramentasTest {
     }
 
     // ---------------------------------------------------------------------
-    // buscar_documentos: só o GLOBAL
+    // buscar_documentos: todos os escopos da edição
     // ---------------------------------------------------------------------
 
     @SuppressWarnings("unchecked")
@@ -219,31 +223,7 @@ class AtlasDaRbsFerramentasTest {
     }
 
     @Test
-    void aBuscaDaRbsNuncaDevolveDocumentoDeCotaNemDeParceria() {
-        AtlasContexto contexto = contextoDaRbs();
-        List<String> falhas = new ArrayList<>();
-
-        for (String consulta : List.of("cortesias credenciais prazo de conteúdo plano comercial", "Girassol Elétrico", "Tempestade Violeta",
-                "tema do espaço da ativação", "anexo da parceria Cliente Amarelo", "plano comercial Cota Master")) {
-            for (String argumentos : List.of("{\"consulta\":\"" + consulta + "\"}", "{\"consulta\":\"" + consulta + "\",\"tipo\":\"PLANO_COMERCIAL\"}",
-                    "{\"consulta\":\"" + consulta + "\",\"tipo\":\"ANEXO_PARCERIA\"}")) {
-                for (Map<String, Object> trecho : trechos(rodar(contexto, turno(consulta), "buscar_documentos", argumentos))) {
-                    String documento = (String) trecho.get("documento");
-                    String texto = ((String) trecho.get("texto")).toLowerCase();
-                    String escopo = jdbc.sql("SELECT escopo FROM documento WHERE titulo = :t AND versao = :v").param("t", documento)
-                            .param("v", trecho.get("versao")).query(String.class).single();
-                    if (!"GLOBAL".equals(escopo) || texto.contains("girassol") || texto.contains("tempestade violeta")) {
-                        falhas.add(argumentos + " -> " + escopo + " " + documento);
-                    }
-                }
-            }
-        }
-
-        assertThat(falhas).isEmpty();
-    }
-
-    @Test
-    void oTipoDeDocumentoQueSoExisteEmCotaOuParceriaNaoAchaNada() {
+    void aBuscaDaRbsAlcancaOsDocumentosDeCotaEDeParceria() {
         AtlasContexto contexto = contextoDaRbs();
 
         Execucao plano = rodar(contexto, turno("plano"), "buscar_documentos",
@@ -251,8 +231,20 @@ class AtlasDaRbsFerramentasTest {
         Execucao anexo = rodar(contexto, turno("anexo"), "buscar_documentos",
                 "{\"consulta\":\"tema do espaço da ativação\",\"tipo\":\"ANEXO_PARCERIA\"}");
 
-        assertThat(trechos(plano)).isEmpty();
-        assertThat(trechos(anexo)).isEmpty();
+        assertThat(trechos(plano)).isNotEmpty();
+        assertThat(trechos(anexo)).isNotEmpty();
+        assertThat(trechos(plano)).allSatisfy(trecho -> {
+            String escopo = jdbc.sql("SELECT escopo FROM documento WHERE titulo = :t AND versao = :v")
+                    .param("t", trecho.get("documento")).param("v", trecho.get("versao")).query(String.class).single();
+            assertThat(escopo).isEqualTo("COTA");
+            assertThat(trecho).doesNotContainKey("parceria");
+        });
+        assertThat(trechos(anexo)).anySatisfy(trecho -> {
+            String escopo = jdbc.sql("SELECT escopo FROM documento WHERE titulo = :t AND versao = :v")
+                    .param("t", trecho.get("documento")).param("v", trecho.get("versao")).query(String.class).single();
+            assertThat(escopo).isEqualTo("PARCERIA");
+            assertThat(trecho).containsKey("parceria");
+        });
     }
 
     @Test
@@ -264,6 +256,76 @@ class AtlasDaRbsFerramentasTest {
                     .isInstanceOf(DadosInvalidosException.class).satisfies(erro -> assertThat(((DadosInvalidosException) erro).campos())
                             .hasSize(1).allSatisfy((campo, frase) -> assertThat(frase).startsWith("Argumento desconhecido")));
         }
+    }
+
+    // ---------------------------------------------------------------------
+    // consultar_midia e listar_entregas na base toda
+    // ---------------------------------------------------------------------
+
+    @Test
+    void aMidiaDaRbsFiltraPorMarcaECotaEDevolveAMarcaEmCadaLinha() {
+        AtlasContexto contexto = contextoDaRbs();
+        long amarelo = br.com.rbs.portal.acesso.SessaoDeApi.parceriaDe2027(jdbc, "Cliente Amarelo");
+
+        Execucao execucao = rodar(contexto, turno("mídia do amarelo"), "consultar_midia",
+                "{\"parceria\":\"cliente amarelo\",\"cota\":\"MASTER\"}");
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> registros = (List<Map<String, Object>>) json(execucao.resultadoJson()).get("registros");
+
+        assertThat(registros).isNotEmpty().allSatisfy(registro -> {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> parceria = (Map<String, Object>) registro.get("parceria");
+            assertThat(parceria).containsEntry("id", (int) amarelo).containsEntry("patrocinador", "Cliente Amarelo")
+                    .containsEntry("cota", "MASTER");
+        });
+        // o mesmo filtro pelo id
+        Execucao porId = rodar(contexto, turno("mídia"), "consultar_midia", "{\"parceria\":\"" + amarelo + "\"}");
+        assertThat((String) porId.resultadoJson()).contains("\"patrocinador\":\"Cliente Amarelo\"");
+        assertThatThrownBy(() -> rodar(contexto, turno("x"), "consultar_midia", "{\"parceria\":\"Marca Que Não Existe\"}"))
+                .isInstanceOf(DadosInvalidosException.class)
+                .satisfies(erro -> assertThat(((DadosInvalidosException) erro).campos()).containsEntry("parceria",
+                        "Não encontramos esta parceria nesta edição."));
+    }
+
+    @Test
+    void aMidiaDaRbsSemFiltroLeAsMarcasDaEdicaoEAceitaOCortePorCota() {
+        AtlasContexto contexto = contextoDaRbs();
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> todas = (List<Map<String, Object>>) json(rodar(contexto, turno("mídia"), "consultar_midia", "{}")
+                .resultadoJson()).get("registros");
+        assertThat(todas).extracting(r -> ((Map<?, ?>) r.get("parceria")).get("patrocinador"))
+                .contains("Cliente Amarelo", "Cliente Roxo", "Cliente Verde");
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> subcotaG = (List<Map<String, Object>>) json(rodar(contexto, turno("mídia"),
+                "consultar_midia", "{\"cota\":\"SUBCOTA_G\"}").resultadoJson()).get("registros");
+        assertThat(subcotaG).isNotEmpty().allSatisfy(registro -> {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> parceria = (Map<String, Object>) registro.get("parceria");
+            assertThat(parceria).containsEntry("patrocinador", "Cliente Roxo").containsEntry("cota", "SUBCOTA_G");
+        });
+    }
+
+    @Test
+    void oFaltaReceberDaRbsTrazSoOQueEsperaEnvioAgrupadoPorMarca() {
+        AtlasContexto contexto = contextoDaRbs();
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> registros = (List<Map<String, Object>>) json(rodar(contexto, turno("o que falta receber"),
+                "listar_entregas", "{\"faltaReceber\":true}").resultadoJson()).get("registros");
+
+        assertThat(registros).isNotEmpty().allSatisfy(registro -> {
+            assertThat(registro.get("status")).isIn("AGUARDANDO_ENVIO", "AJUSTE_SOLICITADO");
+            assertThat(registro).containsKey("marca");
+        });
+        assertThat(registros).extracting(r -> r.get("marca")).isSorted();
+        assertThat(registros).extracting(r -> r.get("marca")).contains("Cliente Amarelo", "Cliente Roxo");
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> doAmarelo = (List<Map<String, Object>>) json(rodar(contexto, turno("o que falta do amarelo"),
+                "listar_entregas", "{\"parceria\":\"Cliente Amarelo\",\"faltaReceber\":true}").resultadoJson()).get("registros");
+        assertThat(doAmarelo).isNotEmpty().allSatisfy(registro -> assertThat(registro).containsEntry("marca", "Cliente Amarelo"));
     }
 
     // ---------------------------------------------------------------------

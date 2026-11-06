@@ -64,6 +64,19 @@ public final class Argumentos {
         return texto;
     }
 
+    /** Um argumento booleano; falta vale como falso. Outro tipo é erro. */
+    public static boolean booleano(Map<String, Object> argumentos, String nome, Map<String, String> erros) {
+        Object valor = argumentos.get(nome);
+        if (valor == null) {
+            return false;
+        }
+        if (!(valor instanceof Boolean booleano)) {
+            erros.put(nome, nome + " tem de ser verdadeiro ou falso.");
+            return false;
+        }
+        return booleano;
+    }
+
     /** Um argumento que é uma lista de textos. */
     public static List<String> lista(Map<String, Object> argumentos, String nome, Map<String, String> erros) {
         Object valor = argumentos.get(nome);

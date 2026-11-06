@@ -34,6 +34,13 @@ final class ContextoDeRls {
      * um identificador): nesse caso nenhuma consulta pode rodar.
      */
     static void aplicar(JdbcClient jdbc, String papel, Escopo escopo, int limiteDeTempoEmMs) {
+        if (escopo.todaAEdicao()) {
+            // [ISOLAMENTO] O escopo de toda a edição é o da RBS, que pode ler todos os documentos. A política da RLS é por cota e
+            // por parceria e não tem como representar "todas"; sem V nova, este é o único caminho. O filtro do WHERE (só a edição,
+            // indexado e ativo) vai sempre junto, e nenhuma conversa de marca monta este escopo.
+            configurar(jdbc, escopo, limiteDeTempoEmMs);
+            return;
+        }
         if (papel == null || !NOME_DE_PAPEL.matcher(papel).matches()) {
             throw new IllegalStateException("Nome de papel inválido para a busca nos documentos.");
         }
@@ -45,8 +52,13 @@ final class ContextoDeRls {
         }
         // O escopo só global (o Atlas da RBS) grava a cota e a parceria VAZIAS: o NULLIF das políticas as lê como nulas, e a comparação
         // com nulo nunca é verdadeira. Nenhum documento de cota nem de parceria passa, e não depende de um id "que não existe".
-        String cota = escopo.soGlobal() ? "" : Integer.toString(escopo.cotaTipoId());
-        String parceria = escopo.soGlobal() ? "" : Long.toString(escopo.parceriaId());
+        configurar(jdbc, escopo, limiteDeTempoEmMs);
+    }
+
+    /** Os parâmetros da transação (o contexto da RLS e o tempo limite), sem mexer no papel. */
+    private static void configurar(JdbcClient jdbc, Escopo escopo, int limiteDeTempoEmMs) {
+        String cota = escopo.soGlobal() || escopo.todaAEdicao() ? "" : Integer.toString(escopo.cotaTipoId());
+        String parceria = escopo.soGlobal() || escopo.todaAEdicao() ? "" : Long.toString(escopo.parceriaId());
         jdbc.sql("""
                         SELECT set_config('app.evento_id', :evento, true), set_config('app.cota_tipo_id', :cota, true),
                                set_config('app.parceria_id', :parceria, true), set_config('statement_timeout', :tempo, true),

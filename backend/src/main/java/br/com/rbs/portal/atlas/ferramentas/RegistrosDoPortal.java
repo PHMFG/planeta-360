@@ -26,6 +26,11 @@ public class RegistrosDoPortal {
                           String observacaoDaRbs) {
     }
 
+    /** A mesma entrega na visão da RBS, com o nome da marca: a lista de todas as marcas da edição precisa dizer de quem é cada uma. */
+    public record EntregaDaRbs(Long id, String marca, String aba, String abaNome, String titulo, String status, LocalDate prazo,
+                               LocalDate atualizadoEm, String observacaoDaRbs) {
+    }
+
     /**
      * [ISOLAMENTO] O documento {@code d} é visível para a parceria {@code p}: indexado, da edição dela e do escopo dela (GLOBAL da
      * edição, COTA da cota dela, PARCERIA dela). A mesma regra da RLS do {@code atlas_ro} e da rota 56, repetida aqui porque estas
@@ -141,6 +146,63 @@ public class RegistrosDoPortal {
     public long contarEntregas(long parceriaId, String status, String aba) {
         return jdbc.sql("SELECT count(*) " + ENTREGAS_DA_MARCA)
                 .param("parceria", parceriaId).param("status", status).param("aba", aba).query(Long.class).single();
+    }
+
+    /**
+     * [ISOLAMENTO] As entregas de todas as marcas da edição, na visão da RBS: agrupadas pelo nome da marca, com o mesmo filtro de
+     * status e aba da marca. {@code faltaReceber} deixa só as que esperam envio da marca ({@code AGUARDANDO_ENVIO} e
+     * {@code AJUSTE_SOLICITADO}). A RBS vê também as abas fechadas: ela é quem as abre.
+     */
+    private static final String ENTREGAS_DA_RBS = """
+            FROM entrega e JOIN aba a ON a.id = e.aba_id
+            JOIN parceria pa ON pa.id = e.parceria_id JOIN patrocinador p ON p.id = pa.patrocinador_id
+            WHERE pa.evento_id = :evento
+              AND (CAST(:parceria AS bigint) IS NULL OR e.parceria_id = CAST(:parceria AS bigint))
+              AND (CAST(:status AS text) IS NULL OR e.status = CAST(:status AS text)
+                   OR (CAST(:status AS text) = 'PENDENTE' AND e.status NOT IN ('APROVADO', 'NAO_APLICAVEL')))
+              AND (CAST(:aba AS text) IS NULL OR a.codigo = :aba)
+              AND (NOT CAST(:faltaReceber AS boolean) OR e.status IN ('AGUARDANDO_ENVIO', 'AJUSTE_SOLICITADO'))
+            """;
+
+    public List<EntregaDaRbs> entregasDaRbs(long eventoId, Long parceriaId, String status, String aba, boolean faltaReceber,
+                                            int limite) {
+        return jdbc.sql("""
+                        SELECT e.id, p.nome_canonico AS marca, a.codigo AS aba, a.nome AS aba_nome, e.titulo, e.status, e.prazo,
+                               (e.atualizado_em AT TIME ZONE 'America/Sao_Paulo')::date AS atualizado_em,
+                               (SELECT h.detalhe FROM historico h JOIN usuario u ON u.id = h.usuario_id
+                                 WHERE h.entidade = 'entrega' AND h.entidade_id = e.id AND h.acao = 'ALTERACAO_STATUS'
+                                   AND u.perfil = 'ADMIN_RBS' AND btrim(coalesce(h.detalhe, '')) <> ''
+                                 ORDER BY h.ocorrido_em DESC, h.id DESC LIMIT 1) AS observacao_da_rbs
+                        """ + ENTREGAS_DA_RBS + """
+                        ORDER BY p.nome_canonico, (e.status IN ('APROVADO', 'NAO_APLICAVEL')), e.prazo NULLS LAST, a.ordem, e.id
+                        LIMIT :limite
+                        """)
+                .param("evento", eventoId).param("parceria", parceriaId).param("status", status).param("aba", aba)
+                .param("faltaReceber", faltaReceber).param("limite", limite).query(EntregaDaRbs.class).list();
+    }
+
+    public long contarEntregasDaRbs(long eventoId, Long parceriaId, String status, String aba, boolean faltaReceber) {
+        return jdbc.sql("SELECT count(*) " + ENTREGAS_DA_RBS)
+                .param("evento", eventoId).param("parceria", parceriaId).param("status", status).param("aba", aba)
+                .param("faltaReceber", faltaReceber).query(Long.class).single();
+    }
+
+    /**
+     * A parceria da edição pelo id ou pelo nome do patrocinador (sem caixa nem acento). {@code vazio} quando não há nenhuma.
+     * [ISOLAMENTO] A busca é sempre dentro da edição da conversa da RBS.
+     */
+    public Optional<Long> parceriaDaEdicao(long eventoId, String idOuNome) {
+        String texto = idOuNome.strip();
+        if (texto.matches("\\d+")) {
+            return jdbc.sql("SELECT pa.id FROM parceria pa WHERE pa.evento_id = :evento AND pa.id = CAST(:id AS bigint)")
+                    .param("evento", eventoId).param("id", texto).query(Long.class).optional();
+        }
+        return jdbc.sql("""
+                        SELECT pa.id FROM parceria pa JOIN patrocinador p ON p.id = pa.patrocinador_id
+                        WHERE pa.evento_id = :evento
+                          AND public.unaccent(lower(p.nome_canonico)) = public.unaccent(lower(:nome))
+                        """)
+                .param("evento", eventoId).param("nome", texto).query(Long.class).optional();
     }
 
     // ---------------------------------------------------------------------

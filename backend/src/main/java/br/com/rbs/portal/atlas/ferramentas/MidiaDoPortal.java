@@ -3,7 +3,6 @@ package br.com.rbs.portal.atlas.ferramentas;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
-import java.util.Optional;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
@@ -125,21 +124,4 @@ public class MidiaDoPortal {
                 .param("formato", filtro.formato()).param("tipoMidia", filtro.tipoMidia()).param("unidade", filtro.unidade());
     }
 
-    /**
-     * A parceria da edição pelo id ou pelo nome do patrocinador (sem caixa nem acento). {@code vazio} quando não há nenhuma.
-     * [ISOLAMENTO] A busca é sempre dentro da edição da conversa da RBS.
-     */
-    public Optional<Long> parceriaDaEdicao(long eventoId, String idOuNome) {
-        String texto = idOuNome.strip();
-        if (texto.matches("\\d+")) {
-            return jdbc.sql("SELECT pa.id FROM parceria pa WHERE pa.evento_id = :evento AND pa.id = CAST(:id AS bigint)")
-                    .param("evento", eventoId).param("id", texto).query(Long.class).optional();
-        }
-        return jdbc.sql("""
-                        SELECT pa.id FROM parceria pa JOIN patrocinador p ON p.id = pa.patrocinador_id
-                        WHERE pa.evento_id = :evento
-                          AND public.unaccent(lower(p.nome_canonico)) = public.unaccent(lower(:nome))
-                        """)
-                .param("evento", eventoId).param("nome", texto).query(Long.class).optional();
-    }
 }

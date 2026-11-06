@@ -100,8 +100,8 @@ class AtlasDaRbsSemJevTest {
         assertThat(texto(resposta).texto()).isEqualTo("Posso ajudar com os documentos da edição.");
         assertThat(texto(resposta).texto()).isNotEqualTo(LoopDoAgente.RECUSA_DE_FORA_DE_ESCOPO);
         assertThat(decisoes()).isEqualTo(antes);
-        assertThat(ProvedorRoteirizado.nomesDasFerramentas(modelo.ultimoPedido())).containsExactly("buscar_documentos", "contar_dias",
-                "calcular", "gerar_modelo");   // sem o subconjunto de nenhum ramo do JEV
+        assertThat(ProvedorRoteirizado.nomesDasFerramentas(modelo.ultimoPedido())).containsExactly("buscar_documentos", "listar_entregas",
+                "consultar_midia", "contar_dias", "calcular", "gerar_modelo");   // sem o subconjunto de nenhum ramo do JEV
     }
 
     @Test
