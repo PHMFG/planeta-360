@@ -97,7 +97,13 @@
   animation: brilho 1.4s ease-in-out infinite;
 }
 
-/* Troca de tela (View Transitions, pelo React Router): só o conteúdo entra e sai; o menu e a barra do topo ficam parados. */
+/* Troca de tela (View Transitions, pelo React Router): só o conteúdo entra e sai; o menu e a barra do topo ficam parados. O nome
+   vale só enquanto a transição acontece: um view-transition-name fixo cria contexto de empilhamento e prende os modais por baixo
+   da barra do topo. Navegador sem :active-view-transition ignora a regra e troca a tela sem animação. */
+:root:active-view-transition .conteudo-da-pagina {
+  view-transition-name: conteudo;
+}
+
 ::view-transition-old(conteudo) {
   animation: 120ms cubic-bezier(0.4, 0, 1, 1) both sumir;
 }

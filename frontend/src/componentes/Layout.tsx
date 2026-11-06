@@ -40,7 +40,9 @@ export function Layout({ parceria, contexto }: { parceria: ParceriaResumo | null
       <BotaoDebug />
       <main className="p-4 lg:pl-[296px] print:p-0">
         {/* [MOVIMENTO] Só o conteúdo troca na transição de tela; o menu e a barra do topo ficam parados. */}
-        <div className="flex max-w-[1200px] min-w-0 flex-col gap-4" style={{ viewTransitionName: 'conteudo' }}>
+        {/* O nome da transição ("conteudo") só vale durante a troca de tela (movimento.css): fixo, ele criaria um contexto de
+            empilhamento, e os modais e o visualizador daqui de dentro ficariam por baixo da barra do topo e do menu. */}
+        <div className="conteudo-da-pagina flex max-w-[1200px] min-w-0 flex-col gap-4">
           <Outlet context={contexto} />
         </div>
       </main>
