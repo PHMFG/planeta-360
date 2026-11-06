@@ -22,8 +22,11 @@ public interface DestinoDeGravacao {
      */
     ResultadoDaGravacao gravar(UsuarioAutenticado usuario, ContextoDaGravacao contexto, List<LinhaAceita> linhas);
 
-    /** Uma linha aceita na confirmação: o id no banco, a ordem na importação e o que ela propôs. */
-    record LinhaAceita(long id, int ordem, LinhaProposta proposta) {
+    /**
+     * Uma linha aceita na confirmação: o id no banco, a ordem na importação, a marca resolvida, a linha do plano escolhida (ou a
+     * sugerida) e o que ela propôs.
+     */
+    record LinhaAceita(long id, int ordem, Long parceriaId, String patrocinador, Long aproveitamentoId, LinhaProposta proposta) {
     }
 
     /**
