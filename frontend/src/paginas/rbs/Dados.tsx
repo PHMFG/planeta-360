@@ -42,6 +42,7 @@ export function Dados() {
           key={edicao}
           modo="edicao"
           eventoId={Number(edicao)}
+          edicao={(eventos.dado ?? []).find((item) => String(item.id) === edicao)?.edicao}
           parcerias={(parcerias.dado ?? []).map((item) => ({ id: item.id, nome: item.patrocinador.nome })).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'))}
         />
       )}

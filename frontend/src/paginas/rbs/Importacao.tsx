@@ -73,7 +73,8 @@ export function Importacao() {
       if (sucesso) avisar(sucesso)
       dados.recarregar()
     } catch (erro) {
-      setFalha(erro instanceof ErroApi ? erro.message : 'Não deu certo agora. Tente de novo.')
+      // A frase do 422 é genérica ("Confira os campos destacados"), e esta tela não tem campo: vale a mensagem do campo (rodada H1).
+      setFalha(erro instanceof ErroApi ? (Object.values(erro.campos)[0] ?? erro.message) : 'Não deu certo agora. Tente de novo.')
     } finally {
       setOcupado(null)
     }
@@ -98,7 +99,10 @@ export function Importacao() {
     )
   }
 
-  const campos = (importacao.destino && CAMPOS_DO_DESTINO[importacao.destino]) || []
+  // As colunas que vêm vazias em todas as linhas (o mês, numa planilha de exibições) não aparecem: "—" em tudo confundia (H1).
+  const campos = ((importacao.destino && CAMPOS_DO_DESTINO[importacao.destino]) || []).filter((campo) =>
+    importacao.itens.some((linha) => linha.dados[campo.chave] !== null && linha.dados[campo.chave] !== undefined && linha.dados[campo.chave] !== ''),
+  )
   const porVisao: Record<Exclude<Visao, 'naoEntendidos'>, LinhaDaImportacao[]> = {
     revisar: importacao.itens.filter((linha) => linha.situacao === 'PROPOSTA' || linha.situacao === 'EDITADA'),
     aceitas: importacao.itens.filter((linha) => linha.situacao === 'ACEITA'),
@@ -135,8 +139,20 @@ export function Importacao() {
       {importacao.situacao === 'EM_PREVIA' && (importacao.suspeitas?.length ?? 0) > 0 && (
         <Aviso tipo="restrito" titulo="O arquivo parece ter dado pessoal, e o Atlas não o mandou ao modelo">
           A prévia traz só o que a leitura em código entendeu. Suspeita em:{' '}
-          {importacao.suspeitas!.map((item) => `${item.pagina ? `página ${item.pagina}` : 'arquivo'} (${item.tipo.toLowerCase()})`).join(', ')}. Se o resto
+          {importacao.suspeitas!
+            .map((item) => `${item.pagina ? `${importacao.arquivo.tipo === 'PDF' ? 'página' : 'parte'} ${item.pagina}` : 'arquivo'} (${item.tipo.toLowerCase()})`)
+            .join(', ')}
+          . Se o resto
           não veio, tire os dados pessoais do arquivo e importe de novo.
+        </Aviso>
+      )}
+
+      {/* Word, PDF e texto sem o modelo (ou um arquivo que não traz números) ficam só para consulta: a tela diz o que houve (H1). */}
+      {importacao.situacao === 'EM_PREVIA' && importacao.destino === 'SO_CONSULTA' && importacao.itens.length === 0 && (
+        <Aviso tipo="info" titulo="Guardado só para consulta: o Atlas não tirou linhas deste arquivo">
+          O arquivo já está nos documentos que o Atlas consulta e cita. Para virar números na base, Word, PowerPoint, PDF e texto
+          precisam do modelo de linguagem ligado; sem ele, só as planilhas e o CSV no formato que o código entende viram linhas.
+          Descarte esta importação se o arquivo não precisar ficar como consulta.
         </Aviso>
       )}
 
@@ -301,7 +317,10 @@ export function Importacao() {
                           ) : linha.aproveitamentoSugerido ? (
                             <span>
                               {linha.aproveitamentoSugerido.formato}
-                              <span className="text-texto-2"> · {Math.round(linha.aproveitamentoSugerido.semelhanca * 100)}% parecido</span>
+                              <span className="text-texto-2">
+                                {' '}
+                                · {linha.aproveitamentoSugerido.semelhanca >= 1 ? 'igual ao plano' : `parecido com o plano (${Math.round(linha.aproveitamentoSugerido.semelhanca * 100)}%)`}
+                              </span>
                             </span>
                           ) : (
                             <span className="text-[#c8203f]">sem linha do plano</span>
@@ -343,9 +362,11 @@ export function Importacao() {
           importacao={importacao}
           linha={editando}
           aoFechar={() => setEditando(null)}
-          aoSalvar={() => {
+          aoSalvar={(salva) => {
             setEditando(null)
             dados.recarregar()
+            // O valor editado precisa estar na fonte: se não está, a linha vai para "Recusadas", e a pessoa precisa saber já (H1).
+            if (salva.situacao === 'RECUSADA') avisar(`Linha ${salva.ordem} recusada: ${salva.motivo ?? 'o valor não confere com a fonte.'}`, 'falha')
           }}
         />
       )}
@@ -467,7 +488,17 @@ function GradeDaPlanilha({ planilha }: { planilha: NonNullable<OrigemParaVer['pl
 }
 
 /** Editar uma linha da prévia: os campos do destino e, na veiculação, a linha do plano da marca. */
-function EdicaoDaLinha({ importacao, linha, aoFechar, aoSalvar }: { importacao: ImportacaoCompleta; linha: LinhaDaImportacao; aoFechar: () => void; aoSalvar: () => void }) {
+function EdicaoDaLinha({
+  importacao,
+  linha,
+  aoFechar,
+  aoSalvar,
+}: {
+  importacao: ImportacaoCompleta
+  linha: LinhaDaImportacao
+  aoFechar: () => void
+  aoSalvar: (salva: LinhaDaImportacao) => void
+}) {
   const campos = (importacao.destino && CAMPOS_DO_DESTINO[importacao.destino]) || []
   const [valores, setValores] = useState<Record<string, string>>(() =>
     Object.fromEntries(campos.map((campo) => [campo.chave, linha.dados[campo.chave] === null || linha.dados[campo.chave] === undefined ? '' : String(linha.dados[campo.chave])])),
@@ -490,11 +521,11 @@ function EdicaoDaLinha({ importacao, linha, aoFechar, aoSalvar }: { importacao: 
         .map((campo) => [campo.chave, valores[campo.chave] === '' ? null : campo.numero ? Number(valores[campo.chave].replace(/\./g, '').replace(',', '.')) : valores[campo.chave]]),
     )
     try {
-      await mudarLinha(importacao.id, linha.id, {
+      const salva = await mudarLinha(importacao.id, linha.id, {
         dados: Object.keys(mudados).length ? mudados : undefined,
         aproveitamentoId: aproveitamentoId && Number(aproveitamentoId) !== linha.aproveitamento?.id ? Number(aproveitamentoId) : undefined,
       })
-      aoSalvar()
+      aoSalvar(salva)
     } catch (erro) {
       if (erro instanceof ErroApi) {
         setErros(Object.fromEntries(Object.entries(erro.campos).map(([chave, texto]) => [chave.replace(/^dados\./, ''), texto])))

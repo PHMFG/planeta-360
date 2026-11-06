@@ -89,7 +89,7 @@ function agrupar(linhas: LinhaDeMidia[], por: (linha: LinhaDeMidia) => { chave: 
 
 type Props =
   | { modo: 'parceria'; parceriaId: number; apelido: string; comMes: boolean }
-  | { modo: 'edicao'; eventoId?: number; parcerias: { id: number; nome: string }[] }
+  | { modo: 'edicao'; eventoId?: number; edicao?: number; parcerias: { id: number; nome: string }[] }
 
 export function BaseDeMidia(props: Props) {
   const [mes, setMes] = useState('')
@@ -130,7 +130,7 @@ export function BaseDeMidia(props: Props) {
     setFalha(null)
     try {
       if (props.modo === 'parceria') await baixarMidiaDaParceria(props.parceriaId, props.apelido, filtros, formatoDoArquivo)
-      else await baixarMidiaDaEdicao(filtros, formatoDoArquivo)
+      else await baixarMidiaDaEdicao(filtros, formatoDoArquivo, props.edicao)
     } catch (erro) {
       setFalha(erro instanceof ErroApi ? erro.message : 'Não foi possível baixar a planilha.')
     } finally {

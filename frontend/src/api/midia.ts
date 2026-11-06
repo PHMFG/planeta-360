@@ -56,7 +56,8 @@ function nomeDoArquivo(base: string, filtros: FiltrosDeMidia, formato: 'xlsx' | 
 export const baixarMidiaDaParceria = (parceriaId: number, apelido: string, filtros: FiltrosDeMidia, formato: 'xlsx' | 'csv') =>
   baixar(`/parcerias/${parceriaId}/midia.${formato}${filtrosNaUrl(filtros)}`, nomeDoArquivo(`midia-${apelido}`, filtros, formato))
 
-export const baixarMidiaDaEdicao = (filtros: FiltrosDeMidia, formato: 'xlsx' | 'csv') =>
-  baixar(`/midia.${formato}${filtrosNaUrl(filtros)}`, nomeDoArquivo('midia-da-edicao', filtros, formato))
+/** O nome leva o ano da edição ("midia-edicao-2027-2026-10.xlsx"): sem ele, o mês parecia a edição (rodada H1). */
+export const baixarMidiaDaEdicao = (filtros: FiltrosDeMidia, formato: 'xlsx' | 'csv', edicao?: number) =>
+  baixar(`/midia.${formato}${filtrosNaUrl(filtros)}`, nomeDoArquivo(edicao ? `midia-edicao-${edicao}` : 'midia-da-edicao', filtros, formato))
 
 export const NOME_DO_TIPO_DE_MIDIA: Record<string, string> = { ASSINADA: 'Assinada', PROPRIA: 'Própria', CONTEUDO_DE_MARCA: 'Conteúdo de marca' }
