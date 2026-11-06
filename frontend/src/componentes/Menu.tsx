@@ -1,8 +1,10 @@
 // Menu lateral flutuante do Figma (P360/Navegação): marca, conta, as oito seções e o rodapé. [ITEM-7]
 // A RBS vê também os atalhos de gestão e escolhe a parceria que está consultando.
 import { useEffect, useRef, useState, type RefObject } from 'react'
-import { Link, NavLink, useMatch, useNavigate } from 'react-router'
+import { Link, NavLink, useLocation, useMatch, useNavigate } from 'react-router'
+import { obterNovidades, registrarVisita, type AbaComNovidade } from '../api/novidades'
 import type { ParceriaResumo, UsuarioLogado } from '../api/tipos'
+import { useDados } from '../api/useDados'
 import { useSessao } from '../sessao/Sessao'
 import { estadoAbaNaParceria } from './AbaFechada'
 import { Faq } from './Faq'
@@ -40,7 +42,32 @@ function classeItem(ativo: boolean) {
     : `${ITEM} font-semibold text-tinta hover:bg-cinza-100`
 }
 
-function ItemSecao({ secao, parceria, rbs }: { secao: Secao; parceria: ParceriaResumo; rbs: boolean }) {
+/**
+ * O selo "novo" da marca (S3): busca as novidades da parceria (e de novo ao voltar para a aba do navegador) e grava a visita à
+ * seção aberta. A seção aberta perde o selo na hora; a RBS não vê selo nem grava visita.
+ */
+function usarNovidades(parceria: ParceriaResumo | null, rbs: boolean) {
+  const local = useLocation()
+  const ativo = Boolean(parceria) && !rbs
+  const novidades = useDados(() => (ativo && parceria ? obterNovidades(parceria.id).catch(() => null) : Promise.resolve(null)), [parceria?.id, ativo])
+  const [vistas, setVistas] = useState<Set<string>>(new Set())
+  const prefixo = parceria ? `/parceria/${parceria.id}` : ''
+  const resto = parceria && local.pathname.startsWith(prefixo) ? local.pathname.slice(prefixo.length).replace(/^\//, '').split('/')[0] : null
+  const abaAberta: AbaComNovidade | null = resto === null ? null : resto === 'relatorio' ? 'RELATORIO' : (SECOES.find((secao) => secao.caminho === resto)?.aba ?? null)
+
+  useEffect(() => {
+    if (!ativo || !parceria || !abaAberta) return
+    setVistas((atual) => new Set(atual).add(abaAberta))
+    registrarVisita(parceria.id, abaAberta).catch(() => undefined)
+  }, [ativo, parceria, abaAberta])
+
+  // A cada busca nova (volta à aba do navegador), o que a API diz vale de novo.
+  useEffect(() => setVistas(new Set()), [novidades.dado])
+
+  return (aba: AbaComNovidade | null) => Boolean(aba && aba !== abaAberta && !vistas.has(aba) && novidades.dado?.abas[aba]?.novo)
+}
+
+function ItemSecao({ secao, parceria, rbs, novo = false }: { secao: Secao; parceria: ParceriaResumo; rbs: boolean; novo?: boolean }) {
   const estado = estadoAbaNaParceria(parceria, secao.aba)
   // A RBS olha a parceria de fora: "sua cota" é texto para a marca.
   const motivo =
@@ -62,6 +89,11 @@ function ItemSecao({ secao, parceria, rbs }: { secao: Secao; parceria: ParceriaR
           <>
             <i className={`${secao.icone} text-xl ${isActive ? 'text-white' : 'text-secao'}`} aria-hidden="true" />
             <span className="flex-1">{secao.nome}</span>
+            {novo && (
+              <span className={`animate-surgir rounded-full px-1.5 py-0.5 text-[10px] font-bold tracking-wide uppercase ${isActive ? 'bg-white text-tinta' : 'bg-secao text-white'}`}>
+                novo<span className="sr-only"> desde a sua última visita</span>
+              </span>
+            )}
             {/* [PERMISSAO] A aba aparece para todos; o estado fica escrito ao lado do cadeado, e não só no hover (U05 e U19).
                 O motivo inteiro vai no title e no texto para leitor de tela. */}
             {estado !== 'LIBERADA' && (
@@ -187,6 +219,8 @@ export function Menu({ parceria, aberto, aoFechar, atlas }: PropsMenu) {
   const { usuario, sair } = useSessao()
   const navegar = useNavigate()
   const [ajudaAberta, setAjudaAberta] = useState(false)
+  const rbsNoMenu = usuario?.perfil === 'ADMIN_RBS'
+  const temNovidade = usarNovidades(parceria, rbsNoMenu)
   // Na gaveta aberta o foco entra nela, o Tab gira só dentro dela, e o Esc fecha e devolve o foco ao botão Menu (U08).
   const gavetaRef = usarFocoPreso(aberto, aoFechar)
   // A gaveta entra com transição de visibilidade: no quadro em que abre ela ainda está invisível, e o foco do usarFocoPreso
@@ -268,7 +302,7 @@ export function Menu({ parceria, aberto, aoFechar, atlas }: PropsMenu) {
             <ul className="flex flex-col gap-1">
               {/* A aba que a RBS ocultou some do menu da marca; a RBS continua vendo, marcada como Oculta (R6.a). */}
               {SECOES.filter((secao) => rbs || estadoAbaNaParceria(parceria, secao.aba) !== 'OCULTA').map((secao) => (
-                <ItemSecao key={secao.chave} secao={secao} parceria={parceria} rbs={rbs} />
+                <ItemSecao key={secao.chave} secao={secao} parceria={parceria} rbs={rbs} novo={temNovidade(secao.aba ?? 'RELATORIO')} />
               ))}
             </ul>
           )}
