@@ -181,8 +181,8 @@ BEGIN
         UPDATE pesquisa_pergunta q SET pesquisa_id = p_pesquisa_id
         WHERE q.pesquisa_id IS NULL AND q.id IN (SELECT pergunta_id FROM tmp_pesq_vinculo);
 
-        -- [VALIDACAO] BG3: a alternativa tem de estar na lista da pergunta fechada. Pergunta sem lista (as antigas) aceita
-        -- qualquer alternativa, e a pergunta NOTA/TEXTO não usa alternativa.
+        -- [VALIDACAO] BG3: a alternativa tem de estar na lista da pergunta fechada, sem diferença de caixa nem de espaços
+        -- nas pontas. Pergunta sem lista (as antigas) aceita qualquer alternativa, e a pergunta NOTA/TEXTO não usa alternativa.
         INSERT INTO carga_rejeicao (carga_id, linha, campo, motivo, conteudo)
         SELECT p_carga_id, v.linha, 'alternativa', 'Alternativa fora da lista da pergunta.',
                concat_ws(' | ', v.patrocinador, v.ordem::text, v.indicador, v.alternativa, v.valor::text, v.unidade, v.base_respondentes::text)
@@ -191,7 +191,8 @@ BEGIN
         WHERE v.alternativa IS NOT NULL
           AND q.tipo_resposta IN ('ESCOLHA', 'SIM_NAO')
           AND q.alternativas IS NOT NULL
-          AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements_text(q.alternativas) a WHERE a = v.alternativa);
+          AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements_text(q.alternativas) a
+                          WHERE lower(btrim(a)) = lower(btrim(v.alternativa)));
         DELETE FROM tmp_pesq_vinculo v
         WHERE EXISTS (SELECT 1 FROM carga_rejeicao r WHERE r.carga_id = p_carga_id AND r.linha = v.linha);
     END IF;

@@ -402,7 +402,8 @@ class CargaControllerTest extends ApoioDeCargas {
         String csv = CABECALHO_PESQUISA + "\n"
                 + "Cliente Amarelo,1,,Sim,60,PERCENTUAL,412\n"
                 + "Cliente Amarelo,1,,Talvez,10,PERCENTUAL,412\n"
-                + "Cliente Amarelo,2,,Não,40,PERCENTUAL,412\n"
+                // A caixa não importa: "não" vale a alternativa "Não" da lista.
+                + "Cliente Amarelo,2,,não,40,PERCENTUAL,412\n"
                 + "Cliente Amarelo,2,,Talvez,10,PERCENTUAL,412\n"
                 + "Cliente Amarelo,3,,Qualquer,50,PERCENTUAL,412\n";
 
