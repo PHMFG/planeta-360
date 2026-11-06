@@ -259,7 +259,9 @@ class PermissaoAntesDoCorpoTest {
             // 110 e 115) estão na lista da RBS.
             "GET /api/importacoes/{id}", "PATCH /api/importacoes/{id}/linhas/{linhaId}", "PATCH /api/importacoes/{id}/linhas",
             "POST /api/importacoes/{id}/confirmar", "POST /api/importacoes/{id}/descartar",
-            "GET /api/importacoes/{id}/origem/{linhaId}");
+            "GET /api/importacoes/{id}/origem/{linhaId}",
+            // A planilha da agência (rota 117): a marca da parceria, com a aba APLICACOES aberta, e a RBS.
+            "POST /api/parcerias/{id}/importacoes");
 
     @Test
     void todaRotaDaApiEstaClassificadaEAListaDaRbsSoTemRotasQueExistem() {

@@ -167,7 +167,9 @@ public class PermissaoAntesDoCorpo implements HandlerInterceptor, WebMvcConfigur
             "PUT /api/parcerias/{id}/contrato/signatario", "CONTRATO",
             // As cortesias (rotas 83 e 84): a marca de outra parceria ou com a aba fechada não aprende nada sobre o formato do corpo.
             "POST /api/parcerias/{id}/cortesias/destinacoes", "CORTESIAS",
-            "PATCH /api/parcerias/{id}/cortesias/destinacoes/{destId}", "CORTESIAS");
+            "PATCH /api/parcerias/{id}/cortesias/destinacoes/{destId}", "CORTESIAS",
+            // A planilha da agência (rota 117): a marca com a aba APLICACOES aberta; a RBS passa em qualquer aba.
+            "POST /api/parcerias/{id}/importacoes", "APLICACOES");
     /** POST /api/entregas/{id}/conteudos (rota 86): o {id} é de entrega; a parceria e a aba saem dela. */
     static final String ENVIO_DE_CONTEUDO = "POST /api/entregas/{id}/conteudos";
     /** GET /api/parcerias/{id}/espacos (rota 71): o {@code ?aba=} inválido não vem antes do 404 e do 403. */
