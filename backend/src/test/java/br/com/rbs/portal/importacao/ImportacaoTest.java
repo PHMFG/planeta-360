@@ -288,6 +288,9 @@ class ImportacaoTest {
         MvcTestResult criada = enviar(rbs, "tv-novembro.xlsx", corpus("tv-novembro.xlsx"), evento2027(), "EDICAO", null, null,
                 "VEICULACAO");
         long id = ((Number) lerJson(criada, "$.id")).longValue();
+        MvcTestResult lista = rbs.get("/api/importacoes?eventoId=" + evento2027() + "&situacao=EM_PREVIA");
+        assertThat(lista).hasStatus(HttpStatus.OK);
+        assertThat(lerLista(lista, "$.itens[*].id").stream().map(v -> ((Number) v).longValue()).toList()).contains(id);
         assertThat(rbs.post("/api/importacoes/" + id + "/retirar", "{}")).hasStatus(HttpStatus.CONFLICT);
         var csrf = ApoioDeTeste.pedirCsrf(mvc);
         assertThat(mvc.post().uri("/api/importacoes").multipart().param("eventoId", String.valueOf(evento2027()))
