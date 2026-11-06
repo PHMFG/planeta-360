@@ -202,11 +202,24 @@ function EnvioDeConteudo({ entrega, forma, aoEnviar }: { entrega: Entrega; forma
   )
 }
 
+/** O tipo de conteúdo que o arquivo provavelmente é, pela aba e pela extensão; a pessoa pode trocar. */
+function categoriaProvavel(arquivo: File | null, aba: string, rbs: boolean) {
+  const extensao = arquivo?.name.split('.').pop()?.toLowerCase() ?? ''
+  if (rbs) {
+    if (['jpg', 'jpeg', 'png', 'webp', 'heic'].includes(extensao)) return 'COMPROVACAO'
+    return 'RELATORIO_VEICULACAO'
+  }
+  if (aba === 'CORTESIAS' || aba === 'CREDENCIAMENTO') return 'DOCUMENTO_INGRESSOS'
+  if (aba === 'MIDIA' || ['mp4', 'mov', 'mp3', 'wav'].includes(extensao)) return 'MATERIAL_MIDIA'
+  return 'MATERIAL_MARCA'
+}
+
 function FormularioEnvio({ entrega, rbs, aoEnviar, aoEnviarConteudo }: { entrega: Entrega; rbs: boolean; aoEnviar: (arquivo: Arquivo) => void; aoEnviarConteudo: () => void }) {
   const [forma, setForma] = useState<Forma>('ARQUIVO')
   const categorias = rbs ? CATEGORIAS_RBS : CATEGORIAS_MARCA
   const [arquivo, setArquivo] = useState<File | null>(null)
-  const [categoria, setCategoria] = useState<string>(rbs ? 'RELATORIO_VEICULACAO' : entrega.abaCodigo === 'MIDIA' ? 'MATERIAL_MIDIA' : 'MATERIAL_MARCA')
+  const [categoria, setCategoria] = useState<string>(() => categoriaProvavel(null, entrega.abaCodigo, rbs))
+  const [trocandoTipo, setTrocandoTipo] = useState(false)
   const [observacao, setObservacao] = useState('')
   const [falha, setFalha] = useState<string | null>(null)
   const [enviando, setEnviando] = useState(false)
@@ -214,6 +227,7 @@ function FormularioEnvio({ entrega, rbs, aoEnviar, aoEnviarConteudo }: { entrega
   // Outro arquivo escolhido: o erro do anterior não vale mais.
   function escolher(novo: File | null) {
     setArquivo(novo)
+    if (novo && !trocandoTipo) setCategoria(categoriaProvavel(novo, entrega.abaCodigo, rbs))
     setFalha(novo ? problemaNoArquivo(novo) : null)
   }
 
@@ -265,7 +279,7 @@ function FormularioEnvio({ entrega, rbs, aoEnviar, aoEnviarConteudo }: { entrega
         <span className="flex-1 truncate font-semibold">{arquivo ? `${arquivo.name} · ${tamanho(arquivo.size)}` : 'Escolher arquivo (até 20 MB)'}</span>
         <input type="file" className="sr-only" accept={EXTENSOES_ACEITAS} onChange={(evento) => escolher(evento.target.files?.[0] ?? null)} />
       </label>
-      <div className="grid gap-4 sm:grid-cols-2">
+      {trocandoTipo ? (
         <Seletor rotulo="Tipo de conteúdo" value={categoria} onChange={(evento) => setCategoria(evento.target.value)}>
           {categorias.map(([codigo, nome]) => (
             <option key={codigo} value={codigo}>
@@ -273,18 +287,22 @@ function FormularioEnvio({ entrega, rbs, aoEnviar, aoEnviarConteudo }: { entrega
             </option>
           ))}
         </Seletor>
-        <AreaTexto rotulo="Observações (opcional)" rows={1} maxLength={500} value={observacao} onChange={(evento) => setObservacao(evento.target.value)} />
-      </div>
-      {!rbs && (
-        <Aviso titulo="Antes de enviar">
-          Cada envio vira uma nova versão; as anteriores continuam disponíveis. O status passa a "Enviado", que indica recebimento, não aprovação.
-        </Aviso>
+      ) : (
+        <p className="text-xs font-medium text-texto-2">
+          Vai como <span className="font-semibold text-tinta">{NOMES_CATEGORIA[categoria] ?? categoria}</span> ·{' '}
+          <button type="button" className="font-semibold text-secao-texto hover:underline" onClick={() => setTrocandoTipo(true)}>
+            trocar
+          </button>
+        </p>
       )}
+      <AreaTexto rotulo="Observações (opcional)" rows={1} maxLength={500} value={observacao} onChange={(evento) => setObservacao(evento.target.value)} />
       {falha && <Aviso tipo="falha" titulo={falha} />}
-      <div>
+      <div className="flex flex-wrap items-center gap-3">
         <Botao type="submit" carregando={enviando} disabled={!arquivo || problema !== null} icone="ri-upload-cloud-2-line">
           {rbs ? 'Publicar retorno' : 'Enviar material'}
         </Botao>
+        {/* Era o aviso "Antes de enviar": vira uma linha ao lado do botão. */}
+        {!rbs && <span className="text-xs font-medium text-texto-2">Cada envio vira uma versão nova; "Enviado" indica recebimento, não aprovação.</span>}
       </div>
         </form>
       )}
@@ -403,7 +421,7 @@ export function DetalheEntrega({ entrega: inicial, aoFechar, aoMudar }: Props) {
       : null
 
   return (
-    <Modal titulo={entrega.titulo} legenda={`${secao.nome} · prazo ${data(entrega.prazo)}`} aberto aoFechar={aoFechar} largura="max-w-[760px]">
+    <Modal titulo={entrega.titulo} legenda={entrega.prazo ? `${secao.nome} · prazo ${data(entrega.prazo)}` : secao.nome} aberto aoFechar={aoFechar} largura="max-w-[760px]">
       <div data-secao={secao.chave} className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <Status codigo={entrega.status} />
@@ -476,9 +494,8 @@ export function DetalheEntrega({ entrega: inicial, aoFechar, aoMudar }: Props) {
             }}
           />
         ) : (
-          <Aviso tipo="restrito" titulo="Esta entrega não recebe envios agora">
-            Ela está como “{nomeStatus(entrega.status)}”. Se precisar mudar algo, fale com a RBS.
-          </Aviso>
+          // O status já diz que a entrega não recebe envio; fica só a saída.
+          !rbs && <p className="text-xs font-medium text-texto-2">Para mudar algo nesta entrega, fale com a RBS.</p>
         )}
 
         {rbs && (
