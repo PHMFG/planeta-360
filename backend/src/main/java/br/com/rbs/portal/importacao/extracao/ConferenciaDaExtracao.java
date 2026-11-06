@@ -37,7 +37,7 @@ public class ConferenciaDaExtracao {
     private static final Set<String> NUMEROS = Set.of("quantidade", "impacto", "valor", "base_respondentes", "quantidade_prevista",
             "pergunta", "fonte_pagina");
     /** Os campos que são código do destino: o valor não precisa estar escrito com esse nome na fonte. */
-    private static final Set<String> CODIGOS = Set.of("qualificador", "tipo", "dimensao", "unidade", "tipo_midia");
+    private static final Set<String> CODIGOS = Set.of("qualificador", "tipo", "dimensao", "unidade", "tipo_midia", "indicador");
     private static final DateTimeFormatter DIA_MES_ANO = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     private final ImportacaoRepositorio repositorio;

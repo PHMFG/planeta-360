@@ -536,9 +536,9 @@ public class ImportacaoService {
             try {
                 return textoDaOrigem(importacao, leitor.ler(caminho), origem, tipo);
             } catch (LeituraFalhouException semTexto) {
-                // O PDF escaneado não tem texto para o visualizador de texto; a tela mostra a imagem do arquivo inteiro.
+                // O PDF escaneado não tem texto para o visualizador de texto; a tela mostra a imagem, e a página vem do localizador.
                 return new ImportacaoDtos.OrigemDaLinha(importacao.arquivoId(), tipo, origem.localizador(), origem.trecho(), null, null,
-                        null);
+                        paginaDoLocalizador(origem.localizador()));
             }
         }
         return new ImportacaoDtos.OrigemDaLinha(importacao.arquivoId(), tipo, origem.localizador(), origem.trecho(), null, null, null);

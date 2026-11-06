@@ -97,6 +97,33 @@ public class Armazenamento {
     }
 
     /**
+     * O mesmo, com a aba do arquivo: o comprovante de uma veiculação mora na aba MIDIA, e a rota 18 confere a aba antes de entregar.
+     * Sem parceria não há aba (erro de quem chama).
+     */
+    public Arquivo gravarComObservacao(byte[] conteudo, String nomeOriginal, String categoria, long enviadoPor, Long parceriaId,
+                                       String observacao, String abaCodigo) {
+        if (parceriaId == null) {
+            throw new IllegalArgumentException("Arquivo geral da RBS (sem parceria) não pertence a uma aba.");
+        }
+        Preparado pronto = preparar(conteudo, nomeOriginal);
+        Integer abaId = jdbc.sql("SELECT id FROM aba WHERE codigo = :codigo").param("codigo", abaCodigo)
+                .query(Integer.class).optional()
+                .orElseThrow(() -> new IllegalArgumentException("A aba " + abaCodigo + " não existe."));
+        String caminho = "parcerias/" + parceriaId + "/" + pronto.nomeNoDisco();
+        escrever(caminho, conteudo);
+        return inserir("""
+                        INSERT INTO arquivo (parceria_id, aba_id, categoria, nome_original, mime_type, tamanho_bytes, caminho,
+                                             hash_sha256, enviado_por, observacao)
+                        VALUES (:parceriaId, :abaId, :categoria, :nome, :mime, :tamanho, :caminho, :hash, :enviadoPor,
+                                nullif(CAST(:observacao AS text), ''))
+                        RETURNING\s""" + COLUNAS,
+                Map.of("abaId", abaId, "categoria", categoria, "nome", pronto.nomeOriginal(), "mime", pronto.tipo().mime(),
+                        "tamanho", (long) conteudo.length, "caminho", caminho, "hash", pronto.hash(),
+                        "enviadoPor", enviadoPor, "observacao", observacao == null ? "" : observacao),
+                parceriaId, caminho);
+    }
+
+    /**
      * Confere um arquivo de documento do Atlas sem gravar nada, para a rota 54 recusar o que não é PDF nem TXT (415), o que passa do
      * limite (413) e o arquivo vazio (422) ANTES de extrair o texto. Devolve o tipo. O mesmo teste roda de novo dentro de
      * {@link #gravarDocumento(byte[], String, long, Long)}.

@@ -95,7 +95,7 @@ public class ParaComprovante implements DestinoDeGravacao {
                     continue;
                 }
                 var arquivo = armazenamento.gravarComObservacao(conteudo, contexto.nomeArquivo(), "COMPROVACAO", usuario.id(),
-                        parceria.id(), "importacao:" + contexto.importacaoId());
+                        parceria.id(), "importacao:" + contexto.importacaoId(), "MIDIA");
                 repositorio.gravarComprovante(veiculacao.get(), arquivo.id());
                 inseridas++;
             } catch (RuntimeException recusado) {
