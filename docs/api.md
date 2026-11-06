@@ -3859,6 +3859,8 @@ A pesquisa é a da edição da importação (a `ATIVACAO`; a `GERAL` para o perf
 
 **Os leitores de texto (E8).** O Word (`.docx`) é lido pelo XWPF: cada parágrafo vira o localizador `parágrafo N` e cada linha de tabela, `tabela T, linha L`. O PowerPoint (`.pptx`) é lido pelo XSLF: cada forma com texto vira `slide N` e cada linha de tabela, `slide N, tabela T, linha L`. O PDF com texto é lido pelo mesmo `ExtratorDeTexto` dos documentos do Atlas, com `página N, linha L`. O `.txt` continua com `linha N` e, quando é uma exportação do WhatsApp (linhas `dd/mm/aaaa hh:mm - Autor: texto`), passa a `mensagem N`, com as linhas de continuação na mesma mensagem. O `.doc` e o `.ppt` antigos, o PDF escaneado e o PDF com senha não viram texto nesta rota; a origem (116) devolve o arquivo quando não há texto.
 
+**O texto corrido (E8).** O modelo recebe os pedaços com o localizador de cada um e chama a ferramenta `propor_linhas`, com o destino e, em cada linha, os campos do destino e, para cada valor, o `localizador` e o `trecho` de onde ele saiu. O código só aceita o campo do destino e a origem cujo localizador existe e cujo trecho aparece no texto lido; a conferência de texto corrido exige a origem de **todos** os valores e recusa, com motivo, o valor que não aparece no trecho. O dado pessoal continua vindo antes do modelo: com suspeita, esta extração não roda e a importação fica só com a leitura em código.
+
 ---
 
 # Regras que valem para todas as rotas

@@ -356,8 +356,9 @@ public class ImportacaoService {
         BigDecimal semelhanca = linha.semelhanca();
         String motivo = situacao == SituacaoDaLinha.ACEITA || situacao == SituacaoDaLinha.DESCARTADA ? linha.motivo() : null;
         if (mudou && situacao != SituacaoDaLinha.DESCARTADA) {
+            Map<String, OrigemDoValor> origens = lerOrigem(linha.origem());
             ConferenciaDaLinha conferida = conferir(importacao, linha.destino(),
-                    new LinhaProposta(linha.destino(), dados, lerOrigem(linha.origem())));
+                    new LinhaProposta(linha.destino(), dados, origens, ehDeTexto(origens)));
             parceriaId = conferida.parceriaId();
             sugeridoId = conferida.aproveitamentoSugeridoId();
             semelhanca = conferida.semelhanca();
@@ -934,7 +935,14 @@ public class ImportacaoService {
     }
 
     private LinhaProposta proposta(LinhaGravada linha, DestinoDaImportacao destino) {
-        return new LinhaProposta(destino, lerDados(linha.dados()), lerOrigem(linha.origem()));
+        Map<String, OrigemDoValor> origens = lerOrigem(linha.origem());
+        return new LinhaProposta(destino, lerDados(linha.dados()), origens, ehDeTexto(origens));
+    }
+
+    /** A linha veio de texto corrido? O localizador de uma planilha é "Aba!Célula"; os outros formatos não têm célula. */
+    private static boolean ehDeTexto(Map<String, OrigemDoValor> origens) {
+        return origens.values().stream().anyMatch(o -> o.localizador() != null
+                && !o.localizador().matches(".+![A-Z]{1,3}\\d+"));
     }
 
     private Map<String, Object> lerDados(String json) {

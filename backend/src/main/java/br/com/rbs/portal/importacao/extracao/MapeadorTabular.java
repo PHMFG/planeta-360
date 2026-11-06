@@ -805,7 +805,7 @@ public class MapeadorTabular implements ExtratorDeLinhas {
         return !linha.isEmpty() && linha.getFirst() != null && linha.getFirst().toUpperCase(Locale.ROOT).contains("TOTAL");
     }
 
-    private static Object conversao(String campo, String valor) {
+    static Object conversao(String campo, String valor) {
         return switch (campo) {
             case "quantidade", "impacto", "quantidade_prevista", "fonte_pagina", "pergunta", "base_respondentes" -> {
                 BigDecimal numero = decimal(valor);
