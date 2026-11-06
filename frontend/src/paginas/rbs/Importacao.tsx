@@ -373,7 +373,7 @@ function PainelDaOrigem({ importacaoId, linha, campo, aoFechar }: { importacaoId
     <aside
       role="dialog"
       aria-label="De onde veio o valor"
-      className="fixed top-4 right-4 bottom-4 z-40 flex w-[min(460px,calc(100vw-32px))] animate-[entrar_200ms_cubic-bezier(0.2,0.8,0.2,1)_both] flex-col gap-4 overflow-y-auto rounded-[20px] border border-borda bg-white p-6 shadow-modal"
+      className="fixed top-4 right-4 bottom-4 z-40 flex w-[min(460px,calc(100vw-32px))] animate-deslizar flex-col gap-4 overflow-y-auto rounded-[20px] border border-borda bg-white p-6 shadow-modal"
     >
       <div className="flex items-start justify-between gap-3">
         <div>
