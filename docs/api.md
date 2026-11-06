@@ -3828,7 +3828,7 @@ Corpo: `{ "situacao": "ACEITA" | "DESCARTADA", "ids": [401, 402] }` ou `{ "situa
 
 ### 113 · `POST /api/importacoes/{id}/confirmar` (Admin RBS; a marca só no destino `DADOS_ATIVACAO`, nas dela)
 
-Grava as linhas `ACEITA` pelo destino. Veiculação: `stg_veiculacao` → `fn_carregar_veiculacoes`, numa `carga` nova ligada à importação, e cada `veiculacao` gravada leva `importacao_linha_id`. Plano: `stg_plano` → `fn_carregar_plano`. Números da edição: pelo serviço das rotas 100 e 101. Só consulta: só o documento. **200:** o corpo da 111. **409:** fora de `EM_PREVIA`, ou nenhuma linha aceita (`Aceite ao menos uma linha antes de confirmar.`). Histórico: `CRIACAO` na entidade `importacao`, com o destino e os totais.
+Grava as linhas `ACEITA` pelo destino. Veiculação: `stg_veiculacao` → `fn_carregar_veiculacoes`, numa `carga` nova ligada à importação, e cada `veiculacao` gravada leva `importacao_linha_id`. Comprovante: o arquivo importado vira um `arquivo` da categoria `COMPROVACAO` da marca e é ligado em `veiculacao.comprovante_arquivo_id` da exibição daquela data, casada por veículo e formato (ou pela linha do plano do `CasadorDoPlano`); sem exibição, a linha fica `RECUSADA` com `Nenhuma veiculação desta marca nesta data`. Plano: `stg_plano` → `fn_carregar_plano`. Números da edição: pelo serviço das rotas 100 e 101. Só consulta: só o documento. **200:** o corpo da 111. **409:** fora de `EM_PREVIA`, ou nenhuma linha aceita (`Aceite ao menos uma linha antes de confirmar.`). Histórico: `CRIACAO` na entidade `importacao`, com o destino e os totais.
 
 ### 114 · `POST /api/importacoes/{id}/descartar` (Admin RBS; a marca nas dela)
 
@@ -3836,7 +3836,7 @@ Grava as linhas `ACEITA` pelo destino. Veiculação: `stg_veiculacao` → `fn_ca
 
 ### 115 · `POST /api/importacoes/{id}/retirar` (Admin RBS)
 
-Só `CONFIRMADA`. `VEICULACAO`: apaga as `veiculacao` com `importacao_linha_id` da importação. `PESQUISA`: apaga `pesquisa_perfil` e `pesquisa_resposta_texto` com o `importacao_id` da importação e os `pesquisa_resultado` da carga dela. `COMPROVANTE`, `NUMEROS_EDICAO`, `DADOS_ATIVACAO`, `PLANO` e `SO_CONSULTA`: **409** `Esta importação não se retira; corrija o valor na tela.` **200:** o resumo, `RETIRADA`. Histórico `EDICAO` com quantas linhas saíram.
+Só `CONFIRMADA`. `VEICULACAO`: apaga as `veiculacao` com `importacao_linha_id` da importação. `COMPROVANTE`: limpa o `comprovante_arquivo_id` que ela pôs (o arquivo da importação leva `observacao = 'importacao:<id>'`). `PESQUISA`: apaga `pesquisa_perfil` e `pesquisa_resposta_texto` com o `importacao_id` da importação e os `pesquisa_resultado` da carga dela. `NUMEROS_EDICAO`, `DADOS_ATIVACAO`, `PLANO` e `SO_CONSULTA`: **409** `Esta importação não se retira; corrija o valor na tela.` **200:** o resumo, `RETIRADA`. Histórico `EDICAO` com quantas linhas saíram.
 
 ### 116 · `GET /api/importacoes/{id}/origem/{linhaId}?campo=quantidade` (Admin RBS; a marca nas dela)
 

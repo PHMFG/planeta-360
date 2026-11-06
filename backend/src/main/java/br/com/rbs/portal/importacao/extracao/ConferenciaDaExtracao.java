@@ -240,7 +240,7 @@ public class ConferenciaDaExtracao {
     }
 
     /** A data de um valor ISO (com ou sem hora), de "dd/MM/yyyy" ou de "dd-MM-yyyy"; nula quando não é uma data. */
-    static LocalDate dataDe(String data) {
+    public static LocalDate dataDe(String data) {
         if (data == null) {
             return null;
         }

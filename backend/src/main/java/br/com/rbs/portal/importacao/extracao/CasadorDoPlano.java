@@ -72,7 +72,7 @@ public class CasadorDoPlano {
     }
 
     /** Sem caixa, sem acento, sem aspas e com um espaço só entre as palavras. */
-    static String normalizar(String texto) {
+    public static String normalizar(String texto) {
         if (texto == null) {
             return "";
         }

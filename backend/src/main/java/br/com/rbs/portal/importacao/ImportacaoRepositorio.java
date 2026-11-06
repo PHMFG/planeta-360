@@ -540,6 +540,56 @@ public class ImportacaoRepositorio {
     }
 
     // ---------------------------------------------------------------------
+    // O comprovante (destino COMPROVANTE)
+    // ---------------------------------------------------------------------
+
+    /** Uma exibição da marca numa data, com o veículo e o formato da linha do plano, para o comprovante casar. */
+    public record VeiculacaoDaData(long id, long aproveitamentoId, String veiculo, String formato) {
+    }
+
+    public List<VeiculacaoDaData> veiculacoesDaParceriaNaData(long parceriaId, java.time.LocalDate data) {
+        return jdbc.sql("""
+                        SELECT v.id, v.aproveitamento_id, a.veiculo, a.formato
+                        FROM veiculacao v
+                        JOIN aproveitamento_previsto a ON a.id = v.aproveitamento_id
+                        WHERE a.parceria_id = :parceria
+                          AND (v.exibido_em AT TIME ZONE 'America/Sao_Paulo')::date = :data
+                        ORDER BY v.id
+                        """).param("parceria", parceriaId).param("data", data).query(VeiculacaoDaData.class).list();
+    }
+
+    public Optional<Long> veiculacaoDoPlanoNaData(long parceriaId, long aproveitamentoId, java.time.LocalDate data) {
+        return jdbc.sql("""
+                        SELECT v.id
+                        FROM veiculacao v
+                        JOIN aproveitamento_previsto a ON a.id = v.aproveitamento_id
+                        WHERE a.parceria_id = :parceria AND v.aproveitamento_id = :aproveitamento
+                          AND (v.exibido_em AT TIME ZONE 'America/Sao_Paulo')::date = :data
+                        ORDER BY v.id LIMIT 1
+                        """).param("parceria", parceriaId).param("aproveitamento", aproveitamentoId).param("data", data)
+                .query(Long.class).optional();
+    }
+
+    public Optional<String> caminhoDoArquivo(long arquivoId) {
+        return jdbc.sql("SELECT caminho FROM arquivo WHERE id = :id").param("id", arquivoId)
+                .query(String.class).optional();
+    }
+
+    public void gravarComprovante(long veiculacaoId, long arquivoId) {
+        jdbc.sql("UPDATE veiculacao SET comprovante_arquivo_id = :arquivo WHERE id = :veiculacao")
+                .param("arquivo", arquivoId).param("veiculacao", veiculacaoId).update();
+    }
+
+    /** Os vínculos de comprovante que esta importação pôs: cada arquivo criado por ela leva a marca em {@code observacao}. */
+    public int limparComprovantesDaImportacao(long importacaoId) {
+        return jdbc.sql("""
+                        UPDATE veiculacao SET comprovante_arquivo_id = NULL
+                        WHERE comprovante_arquivo_id IN
+                            (SELECT id FROM arquivo WHERE observacao = :marca)
+                        """).param("marca", "importacao:" + importacaoId).update();
+    }
+
+    // ---------------------------------------------------------------------
     // O documento da importação (E15)
     // ---------------------------------------------------------------------
 

@@ -76,6 +76,27 @@ public class Armazenamento {
     }
 
     /**
+     * O mesmo de {@link #gravar(byte[], String, String, long, Long)}, com a observação que liga o arquivo à origem dele. O comprovante
+     * de uma importação usa {@code importacao:<id>} para a retirada saber quais vínculos desfazer sem uma coluna nova.
+     */
+    public Arquivo gravarComObservacao(byte[] conteudo, String nomeOriginal, String categoria, long enviadoPor, Long parceriaId,
+                                       String observacao) {
+        Preparado pronto = preparar(conteudo, nomeOriginal);
+        String caminho = (parceriaId == null ? "geral" : "parcerias/" + parceriaId) + "/" + pronto.nomeNoDisco();
+        escrever(caminho, conteudo);
+        return inserir("""
+                        INSERT INTO arquivo (parceria_id, categoria, nome_original, mime_type, tamanho_bytes, caminho,
+                                             hash_sha256, enviado_por, observacao)
+                        VALUES (:parceriaId, :categoria, :nome, :mime, :tamanho, :caminho, :hash, :enviadoPor,
+                                nullif(CAST(:observacao AS text), ''))
+                        RETURNING\s""" + COLUNAS,
+                Map.of("categoria", categoria, "nome", pronto.nomeOriginal(), "mime", pronto.tipo().mime(),
+                        "tamanho", (long) conteudo.length, "caminho", caminho, "hash", pronto.hash(),
+                        "enviadoPor", enviadoPor, "observacao", observacao == null ? "" : observacao),
+                parceriaId, caminho);
+    }
+
+    /**
      * Confere um arquivo de documento do Atlas sem gravar nada, para a rota 54 recusar o que não é PDF nem TXT (415), o que passa do
      * limite (413) e o arquivo vazio (422) ANTES de extrair o texto. Devolve o tipo. O mesmo teste roda de novo dentro de
      * {@link #gravarDocumento(byte[], String, long, Long)}.

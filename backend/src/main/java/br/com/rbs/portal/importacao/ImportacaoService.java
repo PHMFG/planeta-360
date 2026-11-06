@@ -476,23 +476,24 @@ public class ImportacaoService {
             throw new ConflitoException("Só uma importação confirmada pode ser retirada.");
         }
         DestinoDaImportacao destino = importacao.destino();
-        int linhas;
+        String detalhe;
         switch (destino) {
-            case VEICULACAO -> linhas = repositorio.apagarVeiculacoesDaImportacao(id);
+            case VEICULACAO -> detalhe = repositorio.apagarVeiculacoesDaImportacao(id) + " linha(s) de veiculação apagada(s)";
+            case COMPROVANTE -> detalhe = repositorio.limparComprovantesDaImportacao(id) + " comprovante(s) desligado(s)";
             case PESQUISA -> {
                 int perfil = repositorio.apagarPerfilDaImportacao(id);
                 int texto = repositorio.apagarTextoDaImportacao(id);
                 int resultados = importacao.cargaId() == null ? 0
                         : repositorio.apagarPesquisaResultadoDaCarga(importacao.cargaId());
-                linhas = perfil + texto + resultados;
+                detalhe = (perfil + texto + resultados) + " linha(s) de pesquisa apagada(s)";
             }
-            case COMPROVANTE, NUMEROS_EDICAO, DADOS_ATIVACAO, PLANO, SO_CONSULTA -> throw new ConflitoException(
+            case NUMEROS_EDICAO, DADOS_ATIVACAO, PLANO, SO_CONSULTA -> throw new ConflitoException(
                     "Esta importação não se retira; corrija o valor na tela.");
             default -> throw new ConflitoException("Esta importação não se retira; corrija o valor na tela.");
         }
         repositorio.marcarRetirada(id, usuario.id());
         historico.registrar(AcaoHistorico.EDICAO, usuario, importacao.parceriaId(), "importacao", id, "CONFIRMADA", "RETIRADA",
-                linhas + " linha(s) apagada(s)", requisicao);
+                detalhe, requisicao);
         return resumo(repositorio.buscar(id).orElseThrow(), false);
     }
 
@@ -741,6 +742,7 @@ public class ImportacaoService {
         String marca = texto(proposta.dados().get("patrocinador"));
         List<String> problemas = new ArrayList<>();
         if (destino == DestinoDaImportacao.VEICULACAO || destino == DestinoDaImportacao.PLANO
+                || destino == DestinoDaImportacao.COMPROVANTE
                 || (destino == DestinoDaImportacao.PESQUISA && marca != null && !marca.isBlank())) {
             Parceria parceria = repositorio.parceriaDaMarca(importacao.eventoId(), marca).orElse(null);
             if (parceria == null) {

@@ -68,6 +68,8 @@ class ImportacaoTest {
         jdbc.sql("DELETE FROM arquivo WHERE categoria = 'IMPORTACAO'").update();
         jdbc.sql("DELETE FROM arquivo WHERE categoria = 'DOCUMENTO' AND nome_original IN "
                 + "('tv-novembro.xlsx', 'padrao-rbs-outubro.xlsx', 'conversa-whatsapp.txt')").update();
+        jdbc.sql("DELETE FROM aproveitamento_previsto WHERE formato = 'Comprovante de teste'").update();
+        jdbc.sql("DELETE FROM arquivo WHERE categoria = 'COMPROVACAO' AND observacao LIKE 'importacao:%'").update();
     }
 
     private long evento2027() {
@@ -387,7 +389,9 @@ class ImportacaoTest {
         long id = ((Number) lerJson(criada, "$.id")).longValue();
         MvcTestResult detalhe = rbs.get("/api/importacoes/" + id);
         assertThat(lerJson(detalhe, "$.situacao")).isEqualTo("EM_PREVIA");
-        assertThat(lerJson(detalhe, "$.itens[0].situacao")).isEqualTo("PROPOSTA");
+        assertThat(lerJson(detalhe, "$.itens[0].situacao")).isEqualTo("RECUSADA");
+        assertThat(String.valueOf(lerJson(detalhe, "$.itens[0].motivo")))
+                .contains("Nenhuma veiculação desta marca nesta data");
         assertThat(lerJson(detalhe, "$.itens[0].dados.data")).isEqualTo("2026-10-21");
         assertThat(lerJson(detalhe, "$.itens[0].origem.data.localizador")).isEqualTo("imagem");
 
@@ -425,6 +429,69 @@ class ImportacaoTest {
         assertThat(lerJson(detalhe, "$.situacao")).isEqualTo("ERRO");
         assertThat(String.valueOf(lerJson(detalhe, "$.erro"))).contains("Este provedor não lê imagem");
         assertThat(roteiro.pedidos()).isEmpty();
+    }
+
+    private long planoDoComprovante() {
+        long parceria = SessaoDeApi.parceriaDe2027(jdbc, "Cliente Amarelo");
+        long plano = jdbc.sql("""
+                        INSERT INTO aproveitamento_previsto (parceria_id, categoria, veiculo, formato, quantidade_prevista, unidade,
+                                                             tipo_midia)
+                        VALUES (:parceria, 'MIDIA', 'Rádio 92', 'Comprovante de teste', 10, 'INSERCAO', 'ASSINADA')
+                        RETURNING id
+                        """).param("parceria", parceria).query(Long.class).single();
+        jdbc.sql("""
+                        INSERT INTO veiculacao (aproveitamento_id, exibido_em, quantidade)
+                        VALUES (:plano, TIMESTAMPTZ '2026-10-18 12:00:00-03', 1)
+                        """).param("plano", plano).update();
+        return plano;
+    }
+
+    @Test
+    void oComprovanteCasaAVeiculacaoERetirarDesligaOVinculo() throws IOException {
+        long plano = planoDoComprovante();
+        long veiculacao = jdbc.sql("SELECT id FROM veiculacao WHERE aproveitamento_id = :plano").param("plano", plano)
+                .query(Long.class).single();
+        imagemTranscritaEPostaEmLinha("Cliente Amarelo\nRádio 92\nComprovante de teste\n18 de outubro de 2026", "imagem",
+                "Cliente Amarelo", "Rádio 92", "Comprovante de teste", "2026-10-18", "18 de outubro de 2026");
+        SessaoDeApi rbs = SessaoDeApi.entrar(mvc, RBS);
+        MvcTestResult criada = enviar(rbs, "comprovante-outubro.png", corpus("post-instagram.png"), evento2027(), "EDICAO", null,
+                null, "COMPROVANTE");
+        long id = ((Number) lerJson(criada, "$.id")).longValue();
+        MvcTestResult detalhe = rbs.get("/api/importacoes/" + id);
+        assertThat(lerJson(detalhe, "$.itens[0].situacao")).isEqualTo("PROPOSTA");
+
+        assertThat(rbs.patch("/api/importacoes/" + id + "/linhas", "{\"situacao\":\"ACEITA\",\"todas\":true}"))
+                .hasStatus(HttpStatus.OK);
+        MvcTestResult confirmada = rbs.post("/api/importacoes/" + id + "/confirmar", "{}");
+        assertThat(confirmada).hasStatus(HttpStatus.OK);
+        assertThat(lerJson(confirmada, "$.situacao")).isEqualTo("CONFIRMADA");
+        assertThat(lerJson(confirmada, "$.resultado.inseridas")).isEqualTo(1);
+        Long arquivo = jdbc.sql("SELECT comprovante_arquivo_id FROM veiculacao WHERE id = :id").param("id", veiculacao)
+                .query(Long.class).single();
+        assertThat(arquivo).as("o comprovante ficou ligado à veiculação").isNotNull();
+        assertThat(jdbc.sql("SELECT categoria FROM arquivo WHERE id = :id").param("id", arquivo).query(String.class).single())
+                .isEqualTo("COMPROVACAO");
+
+        MvcTestResult retirada = rbs.post("/api/importacoes/" + id + "/retirar", "{}");
+        assertThat(retirada).hasStatus(HttpStatus.OK);
+        assertThat(lerJson(retirada, "$.situacao")).isEqualTo("RETIRADA");
+        assertThat(jdbc.sql("SELECT comprovante_arquivo_id FROM veiculacao WHERE id = :id").param("id", veiculacao)
+                .query(Long.class).optional()).isEmpty();
+    }
+
+    @Test
+    void semVeiculacaoNaDataAaLinhaFicaRecusada() throws IOException {
+        planoDoComprovante();
+        imagemTranscritaEPostaEmLinha("Cliente Amarelo\nRádio 92\nComprovante de teste\n19 de outubro de 2026", "imagem",
+                "Cliente Amarelo", "Rádio 92", "Comprovante de teste", "2026-10-19", "19 de outubro de 2026");
+        SessaoDeApi rbs = SessaoDeApi.entrar(mvc, RBS);
+        MvcTestResult criada = enviar(rbs, "comprovante-outubro.png", corpus("post-instagram.png"), evento2027(), "EDICAO", null,
+                null, "COMPROVANTE");
+        long id = ((Number) lerJson(criada, "$.id")).longValue();
+        MvcTestResult detalhe = rbs.get("/api/importacoes/" + id);
+        assertThat(lerJson(detalhe, "$.itens[0].situacao")).isEqualTo("RECUSADA");
+        assertThat(String.valueOf(lerJson(detalhe, "$.itens[0].motivo")))
+                .contains("Nenhuma veiculação desta marca nesta data");
     }
 
     @Test
