@@ -13,7 +13,6 @@ import { Status } from '../../componentes/Status'
 import { useSessao } from '../../sessao/Sessao'
 import { dataHora, numero } from '../../util/formatar'
 import { useParceria } from './ContextoParceria'
-import { RelatoriosDoAtlas } from './RelatorioAtlas'
 import { PosVendaDaMarca, PosVendaDaRbs } from '../../componentes/PosVenda'
 
 // Partes do recorte que chegam como código do banco e o nome que a marca lê.
@@ -229,8 +228,8 @@ export function RelatorioParceria() {
       </Carregando>
 
       {rbs && <PosVendaDaRbs parceriaId={parceria.id} />}
-
-      <RelatoriosDoAtlas />
+      {/* U10 (plano da base da RBS): os relatórios montados pelo Atlas saíram daqui, para a página do relatório oficial ser só
+          dele. O código fica em RelatorioAtlas.tsx, e cada relatório do Atlas continua abrindo pela própria rota. */}
     </div>
   )
 }
