@@ -29,8 +29,12 @@ function apelido(nome: string) {
   )
 }
 
-export const baixarComprovacaoMensal = (parceriaId: number, patrocinador: string, formato: 'xlsx' | 'csv') =>
-  baixar(`/parcerias/${parceriaId}/comprovacao-mensal.${formato}`, `comprovacao-mensal-${apelido(patrocinador)}.${formato}`)
+/** Com `mes` (AAAA-MM), a planilha traz só aquele mês (U1, plano da base da RBS); sem ele, todos os meses. */
+export const baixarComprovacaoMensal = (parceriaId: number, patrocinador: string, formato: 'xlsx' | 'csv', mes?: string) =>
+  baixar(
+    `/parcerias/${parceriaId}/comprovacao-mensal.${formato}${mes ? `?mes=${encodeURIComponent(mes)}` : ''}`,
+    `comprovacao-mensal-${apelido(patrocinador)}${mes ? `-${mes}` : ''}.${formato}`,
+  )
 
 export const baixarLoteDaComprovacao = (eventoId: number, edicao: string | number) =>
   baixar(`/eventos/${eventoId}/comprovacao-mensal.xlsx`, `comprovacao-mensal-edicao-${apelido(String(edicao))}.xlsx`)

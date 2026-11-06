@@ -18,6 +18,7 @@ import { Modal } from '../../componentes/Modal'
 import { Status } from '../../componentes/Status'
 import { Tabela } from '../../componentes/Tabela'
 import { useSessao } from '../../sessao/Sessao'
+import { baixarCsv } from '../../util/csv'
 import { data, dataHora, numero, tamanho } from '../../util/formatar'
 import { useParceria, useRecarregarSeAbaFechou } from './ContextoParceria'
 import { DetalheEntrega } from './DetalheEntrega'
@@ -130,35 +131,127 @@ function PreparoEnvio({
   )
 }
 
+/** O veículo, o formato e o espaço de uma linha do plano, para a busca: sem acento e sem maiúscula. */
+function textoDaLinha(linha: LinhaMidia) {
+  return normalizar(`${linha.veiculo ?? ''} ${linha.formato ?? ''} ${linha.espacoPrograma ?? ''}`)
+}
+
+/**
+ * Previsto x exibido (U4, plano da base da RBS): o total por unidade e, embaixo, por veículo; escolhendo um veículo (ou buscando
+ * um formato), aparecem as linhas do plano, veículo × formato, que a API já devolvia em `midia.linhas`. O CSV baixa o que está na tela.
+ */
 function PrevistoExibido() {
   const parceria = useParceria()
   const consolidacao = useDados(() => obterConsolidacao(parceria.id), [parceria.id])
-  const colunas = (comVeiculo: boolean) => [
-    ...(comVeiculo ? [{ titulo: 'Veículo', celula: (linha: LinhaMidia) => <span className="font-semibold">{linha.veiculo}</span> }] : []),
+  const [veiculo, setVeiculo] = useState('')
+  const [busca, setBusca] = useState('')
+  const termo = normalizar(busca)
+  const colunaEntrega = { titulo: 'Entrega', celula: (linha: LinhaMidia) => <Barra valor={linha.percentual} rotulo="Exibido sobre o previsto" /> }
+  const colunasNumeros = [
     { titulo: 'Unidade', celula: (linha: LinhaMidia) => UNIDADES[linha.unidade] ?? linha.unidade },
     { titulo: 'Previsto', celula: (linha: LinhaMidia) => numero(linha.previsto), classe: 'text-right' },
     { titulo: 'Exibido', celula: (linha: LinhaMidia) => numero(linha.exibido), classe: 'text-right' },
-    { titulo: 'Entrega', celula: (linha: LinhaMidia) => <Barra valor={linha.percentual} rotulo="Exibido sobre o previsto" /> },
+    colunaEntrega,
   ]
 
   return (
-    <Cartao titulo="Previsto x exibido">
-      <Carregando dados={consolidacao}>
-        {(dado) =>
-          dado.midia.porUnidade.length === 0 ? (
-            <Aviso tipo="ausente" titulo="Ainda sem números de veiculação">
-              Os números aparecem depois que a RBS carrega a planilha de veiculação dos veículos.
-            </Aviso>
-          ) : (
-            <div className="flex flex-col gap-6">
-              {/* [DUPLICIDADE] Unidades diferentes (inserções e CPM) nunca são somadas entre si. */}
-              <Tabela linhas={dado.midia.porUnidade} chave={(linha) => linha.unidade} colunas={colunas(false)} />
-              <Tabela linhas={dado.midia.porVeiculo} chave={(linha) => `${linha.veiculo}-${linha.unidade}`} colunas={colunas(true)} />
-            </div>
+    <Carregando dados={consolidacao} linhas={5}>
+      {(dado) => {
+        const veiculos = [...new Set(dado.midia.linhas.map((linha) => linha.veiculo ?? '').filter(Boolean))].sort((a, b) => a.localeCompare(b, 'pt-BR'))
+        const detalhando = Boolean(veiculo || termo)
+        const linhas = dado.midia.linhas.filter((linha) => (!veiculo || linha.veiculo === veiculo) && (!termo || textoDaLinha(linha).includes(termo)))
+        const exportar = () =>
+          baixarCsv(
+            `previsto-exibido-${parceria.patrocinador.toLowerCase().replace(/[^a-z0-9]+/g, '-')}${veiculo ? `-${veiculo.toLowerCase().replace(/[^a-z0-9]+/g, '-')}` : ''}.csv`,
+            ['Veículo', 'Formato', 'Espaço ou programa', 'Unidade', 'Previsto', 'Exibido', 'Entrega (%)'],
+            (detalhando ? linhas : dado.midia.linhas).map((linha) => [
+              linha.veiculo,
+              linha.formato,
+              linha.espacoPrograma ?? '',
+              UNIDADES[linha.unidade] ?? linha.unidade,
+              linha.previsto,
+              linha.exibido,
+              linha.percentual,
+            ]),
           )
-        }
-      </Carregando>
-    </Cartao>
+        return (
+          <Cartao
+            titulo="Previsto x exibido"
+            extra={
+              dado.midia.linhas.length > 0 && (
+                <button type="button" onClick={exportar} className="flex items-center gap-1 text-[13px] font-semibold text-secao-texto hover:underline">
+                  <i className="ri-download-2-line" aria-hidden="true" /> Baixar CSV {detalhando ? 'do filtro' : ''}
+                </button>
+              )
+            }
+          >
+            {dado.midia.porUnidade.length === 0 ? (
+              <Aviso tipo="ausente" titulo="Ainda sem números de veiculação">
+                Os números aparecem depois que a RBS carrega a planilha de veiculação dos veículos.
+              </Aviso>
+            ) : (
+              <div className="flex flex-col gap-5">
+                {/* [DUPLICIDADE] Unidades diferentes (inserções e CPM) nunca são somadas entre si. */}
+                <ul className="flex flex-col gap-3" aria-label="Total por unidade">
+                  {dado.midia.porUnidade.map((linha) => (
+                    <li key={linha.unidade} className="grid items-center gap-x-6 gap-y-1 sm:grid-cols-[200px_1fr]">
+                      <p className="text-sm">
+                        <span className="font-semibold">{UNIDADES[linha.unidade] ?? linha.unidade}</span>
+                        <span className="text-texto-2"> · {numero(linha.exibido)} de {numero(linha.previsto)}</span>
+                      </p>
+                      <Barra valor={linha.percentual} rotulo={`Exibido sobre o previsto em ${UNIDADES[linha.unidade] ?? linha.unidade}`} />
+                    </li>
+                  ))}
+                </ul>
+                <div className="grid gap-3 sm:grid-cols-[260px_1fr]">
+                  <Seletor rotulo="Veículo" value={veiculo} onChange={(evento) => setVeiculo(evento.target.value)}>
+                    <option value="">Todos os veículos ({veiculos.length})</option>
+                    {veiculos.map((nome) => (
+                      <option key={nome} value={nome}>
+                        {nome}
+                      </option>
+                    ))}
+                  </Seletor>
+                  <Busca valor={busca} aoMudar={setBusca} placeholder="Buscar formato, programa ou espaço…" />
+                </div>
+                {detalhando ? (
+                  <Tabela
+                    rotulo="Previsto x exibido por formato"
+                    linhas={linhas}
+                    chave={(linha) => String(linha.aproveitamentoId ?? `${linha.veiculo}-${linha.formato}-${linha.unidade}`)}
+                    vazio="Nenhuma linha do plano com esse filtro."
+                    colunas={[
+                      { titulo: 'Veículo', celula: (linha: LinhaMidia) => <span className="font-semibold">{linha.veiculo}</span> },
+                      {
+                        titulo: 'Formato',
+                        celula: (linha: LinhaMidia) => (
+                          <span>
+                            {linha.formato}
+                            {linha.espacoPrograma && <span className="block text-xs text-texto-2">{linha.espacoPrograma}</span>}
+                          </span>
+                        ),
+                      },
+                      ...colunasNumeros,
+                    ]}
+                  />
+                ) : (
+                  <>
+                    <Tabela
+                      rotulo="Previsto x exibido por veículo"
+                      linhas={dado.midia.porVeiculo}
+                      chave={(linha) => `${linha.veiculo}-${linha.unidade}`}
+                      aoClicar={(linha) => setVeiculo(linha.veiculo ?? '')}
+                      colunas={[{ titulo: 'Veículo', celula: (linha: LinhaMidia) => <span className="font-semibold">{linha.veiculo}</span> }, ...colunasNumeros]}
+                    />
+                    <p className="text-xs font-medium text-texto-2">Toque num veículo para ver os formatos dele.</p>
+                  </>
+                )}
+              </div>
+            )}
+          </Cartao>
+        )
+      }}
+    </Carregando>
   )
 }
 
@@ -216,7 +309,7 @@ function ConteudoMidia({ rbs }: { rbs: boolean }) {
         subtitulo={
           rbs
             ? `Os materiais que ${parceria.patrocinador} enviou, os retornos publicados pela RBS e o previsto x exibido da mídia.`
-            : 'Envie os materiais da campanha e consulte as publicações disponibilizadas pela RBS.'
+            : 'O que a RBS já veiculou da sua campanha, e o envio dos seus materiais.'
         }
       />
 
@@ -229,26 +322,40 @@ function ConteudoMidia({ rbs }: { rbs: boolean }) {
         </Aviso>
       )}
 
-      {/* Sem nenhuma entrega aberta, a marca sabe antes de escolher o arquivo, e não depois (U04). */}
-      {!rbs && semEntregaAberta && (
-        <Aviso tipo="restrito" titulo="Nenhuma entrega de mídia aceita envio agora">
-          A RBS abre cada entrega (ou pede um ajuste) quando é a hora de enviar. As entregas desta aba estão em análise, aprovadas ou
-          ainda não foram abertas. Dúvidas sobre prazos: fale com o time B2B da RBS.
-        </Aviso>
-      )}
-      {!rbs && (
-        <AreaEnvio
-          texto={`ou selecione no computador · ${REGRA_ENVIO} · a entrega é escolhida na hora do envio`}
-          aceitar={EXTENSOES_ACEITAS}
-          aoEscolher={(arquivo) => {
-            setRecebido(null)
-            setEnvios((total) => total + 1)
-            setSelecionado(arquivo)
-          }}
-          desabilitado={!entregas.dado || semEntregaAberta}
-        />
-      )}
+      {/* Os números primeiro (U5, plano da base da RBS): é o que a marca vem acompanhar; o envio de material vem depois. */}
+      <PrevistoExibido />
 
+      {/* R3.2 e R3.3: só a cota Master (e a RBS, na parceria Master); as outras cotas não veem o cartão. */}
+      {parceria.cota.codigo === 'MASTER' && <ComprovacaoMensal parceriaId={parceria.id} patrocinador={parceria.patrocinador} />}
+
+      {/* R4.3 e R5.3.b: os links dos posts, clicáveis, da carga da RBS e dos materiais enviados. */}
+      <PostsELinks key={`links-${versaoDosLinks}`} parceriaId={parceria.id} />
+      {!rbs && (
+        <section className="flex flex-col gap-3" aria-label="Enviar material">
+          <h2 className="texto-titulo">Enviar material</h2>
+          {/* Sem nenhuma entrega aberta, a marca sabe antes de escolher o arquivo, e não depois (U04). */}
+          {semEntregaAberta && (
+            <Aviso tipo="restrito" titulo="Nenhuma entrega de mídia aceita envio agora">
+              A RBS abre cada entrega (ou pede um ajuste) quando é a hora de enviar.
+            </Aviso>
+          )}
+          <AreaEnvio
+            texto={`ou selecione no computador · ${REGRA_ENVIO} · a entrega é escolhida na hora do envio`}
+            aceitar={EXTENSOES_ACEITAS}
+            aoEscolher={(arquivo) => {
+              setRecebido(null)
+              setEnvios((total) => total + 1)
+              setSelecionado(arquivo)
+            }}
+            desabilitado={!entregas.dado || semEntregaAberta}
+            compacta={semEntregaAberta}
+          />
+          <p className="text-xs font-medium text-texto-2">
+            <span className="font-semibold text-tinta">A regra muda por tipo de conteúdo:</span> comercial de TV e conteúdo assinado não passam por
+            aprovação prévia; branded content segue regras específicas.
+          </p>
+        </section>
+      )}
       <Busca valor={busca} aoMudar={setBusca} placeholder="Buscar por nome do arquivo ou entrega…" />
       <Filtros<Origem>
         valor={origem}
@@ -306,18 +413,6 @@ function ConteudoMidia({ rbs }: { rbs: boolean }) {
           {(itens) => <ListaEntregas lista={itens} aoAbrir={setAberta} />}
         </Carregando>
       </Cartao>
-
-      <PrevistoExibido />
-
-      {/* R3.2 e R3.3: só a cota Master (e a RBS, na parceria Master); as outras cotas não veem o cartão. */}
-      {parceria.cota.codigo === 'MASTER' && <ComprovacaoMensal parceriaId={parceria.id} patrocinador={parceria.patrocinador} />}
-
-      {/* R4.3 e R5.3.b: os links dos posts, clicáveis, da carga da RBS e dos materiais enviados. */}
-      <PostsELinks key={`links-${versaoDosLinks}`} parceriaId={parceria.id} />
-
-      <Aviso titulo="A regra muda por tipo de conteúdo">
-        Comercial de TV e conteúdo assinado: sem aprovação prévia. Branded content: consulte as regras específicas antes do envio.
-      </Aviso>
 
       <PreparoEnvio
         key={envios}

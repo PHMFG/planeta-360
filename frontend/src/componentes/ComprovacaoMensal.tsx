@@ -26,7 +26,7 @@ export function ComprovacaoMensal({ parceriaId, patrocinador }: { parceriaId: nu
     setBaixando(formato)
     setFalha(null)
     try {
-      await baixarComprovacaoMensal(parceriaId, patrocinador, formato)
+      await baixarComprovacaoMensal(parceriaId, patrocinador, formato, mes || undefined)
     } catch (erro) {
       setFalha(erro instanceof ErroApi ? erro.message : 'Não foi possível baixar a comprovação.')
     } finally {
@@ -36,12 +36,9 @@ export function ComprovacaoMensal({ parceriaId, patrocinador }: { parceriaId: nu
 
   return (
     <Cartao titulo="Comprovação mensal">
-      <p className="mb-4 text-sm font-medium text-texto-2">
-        O que foi exibido em cada mês, por tipo de mídia e unidade, a partir da veiculação carregada pela RBS. A planilha é montada
-        sozinha a cada consulta.
-      </p>
+      <p className="mb-4 text-sm font-medium text-texto-2">O exibido de cada mês. A planilha baixada traz o mês escolhido.</p>
       <Carregando dados={comprovacao}>
-        {({ linhas, totais }) =>
+        {({ linhas }) =>
           linhas.length === 0 ? (
             <Aviso tipo="ausente" titulo="Ainda sem exibição para comprovar">
               A comprovação aparece depois que a RBS carrega a planilha de veiculação dos veículos.
@@ -78,24 +75,9 @@ export function ComprovacaoMensal({ parceriaId, patrocinador }: { parceriaId: nu
                   { titulo: 'Tipo de mídia', celula: (linha) => linha.tipoMidiaNome },
                   { titulo: 'Unidade', celula: (linha) => linha.unidadeNome },
                   { titulo: 'Exibido no mês', celula: (linha) => numero(linha.exibido), classe: 'text-right' },
-                  { titulo: 'Previsto no plano', celula: (linha) => numero(linha.previsto), classe: 'text-right' },
+                  { titulo: 'Previsto no plano (total)', celula: (linha) => numero(linha.previsto), classe: 'text-right' },
                 ]}
               />
-              <div>
-                <p className="mb-2 text-sm font-semibold">Total de cada mês, por unidade</p>
-                <ul className="flex flex-col gap-1 text-sm">
-                  {totais
-                    .filter((total) => !mes || total.mes === mes)
-                    .map((total) => (
-                      <li key={`${total.mes}-${total.unidade}`}>
-                        <span className="font-semibold">{nomeDoMes(total.mes)}:</span> {numero(total.exibido)} {total.unidadeNome.toLowerCase()}
-                      </li>
-                    ))}
-                </ul>
-              </div>
-              <p className="text-xs text-texto-2">
-                O previsto é o do plano comercial inteiro, para aquele tipo e unidade: o plano não divide o previsto por mês.
-              </p>
             </div>
           )
         }
