@@ -355,6 +355,8 @@ class ConsultaDeMidiaTest {
         String semBom = texto.substring(1);   // o CSV sai com BOM UTF-8
         assertThat(semBom).startsWith("Mês;Veículo;Formato;Espaço ou programa;Tipo de mídia;Unidade;Previsto (linha do plano);Exibido;Entrega (%);Impacto;Comprovantes");
         assertThat(semBom).contains("2030-06;").doesNotContain("2030-07;");
+        // Tipo e unidade como a tela mostra, não o código do banco.
+        assertThat(semBom).contains(";Assinada;CPM;").doesNotContain(";ASSINADA;");
     }
 
     @Test

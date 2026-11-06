@@ -368,8 +368,9 @@ public class ConsultaDeMidiaService {
             linha.add(l.veiculo());
             linha.add(l.formato());
             linha.add(l.espacoPrograma());
-            linha.add(l.tipoMidia());
-            linha.add(l.unidade());
+            // A planilha fala como a tela: "Assinada" e "Inserções", não os códigos do banco.
+            linha.add(l.tipoMidia() == null ? null : ComprovacaoMensalService.TIPOS.getOrDefault(l.tipoMidia(), l.tipoMidia()));
+            linha.add(ComprovacaoMensalService.UNIDADES.getOrDefault(l.unidade(), l.unidade()));
             linha.add(l.previsto());
             linha.add(l.exibido());
             linha.add(l.percentual());

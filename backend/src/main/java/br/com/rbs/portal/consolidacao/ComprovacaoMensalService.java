@@ -53,9 +53,9 @@ public class ComprovacaoMensalService {
     private static final List<Object> CABECALHO = List.of("Marca", "Mês", "Tipo de mídia", "Unidade", "Exibido no mês", "Previsto no plano");
     private static final List<Object> CABECALHO_DOS_TOTAIS = List.of("Marca", "Mês", "Unidade", "Exibido no mês");
 
-    private static final Map<String, String> TIPOS = Map.of("ASSINADA", "Assinada", "PROPRIA", "Própria", "MERCHANDISING",
+    static final Map<String, String> TIPOS = Map.of("ASSINADA", "Assinada", "PROPRIA", "Própria", "MERCHANDISING",
             "Merchandising", "BRANDED", "Branded", "CONTEUDO_DE_MARCA", "Conteúdo de marca");
-    private static final Map<String, String> UNIDADES = Map.of("INSERCAO", "Inserções", "CPM", "CPM", "APLICACAO", "Aplicações");
+    static final Map<String, String> UNIDADES = Map.of("INSERCAO", "Inserções", "CPM", "CPM", "APLICACAO", "Aplicações");
 
     /** Um arquivo pronto para baixar. */
     public record Arquivo(String nome, String tipoMime, byte[] bytes) {
