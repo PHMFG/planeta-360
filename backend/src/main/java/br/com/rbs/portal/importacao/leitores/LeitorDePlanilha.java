@@ -39,8 +39,6 @@ public class LeitorDePlanilha implements LeitorDeConteudo {
     public record AbaLida(String nome, List<List<String>> linhas) {
     }
 
-    private final DataFormatter formato = new DataFormatter(Locale.forLanguageTag("pt-BR"));
-
     @Override
     public boolean aceita(String extensao) {
         return "xlsx".equalsIgnoreCase(extensao) || "xls".equalsIgnoreCase(extensao);
@@ -50,6 +48,8 @@ public class LeitorDePlanilha implements LeitorDeConteudo {
     public ConteudoLido ler(Path arquivo) {
         ZipSecureFile.setMinInflateRatio(0.01);
         ZipSecureFile.setMaxEntrySize(MAXIMO_DE_ENTRADA);
+        // Um formatador por leitura: o DataFormatter guarda estado e o bean é compartilhado por duas threads da fila.
+        DataFormatter formato = new DataFormatter(Locale.forLanguageTag("pt-BR"));
         try (InputStream entrada = Files.newInputStream(arquivo); Workbook livro = WorkbookFactory.create(entrada)) {
             if (livro.getNumberOfSheets() > MAXIMO_DE_ABAS) {
                 throw new LeituraFalhouException("A planilha tem " + livro.getNumberOfSheets() + " abas; o limite é "
@@ -84,7 +84,7 @@ public class LeitorDePlanilha implements LeitorDeConteudo {
                     List<String> valores = new ArrayList<>(ultimaColuna);
                     for (int c = 0; c < ultimaColuna; c++) {
                         Cell celula = linha == null ? null : linha.getCell(c);
-                        String valor = valorDaCelula(celula);
+                        String valor = valorDaCelula(celula, formato);
                         if (valor.isBlank()) {
                             valores.add("");
                             continue;
@@ -106,7 +106,7 @@ public class LeitorDePlanilha implements LeitorDeConteudo {
     }
 
     /** O texto da célula, sem avaliar fórmula: o valor em cache ou, sem cache, a própria fórmula. */
-    private String valorDaCelula(Cell celula) {
+    private String valorDaCelula(Cell celula, DataFormatter formato) {
         if (celula == null) {
             return "";
         }

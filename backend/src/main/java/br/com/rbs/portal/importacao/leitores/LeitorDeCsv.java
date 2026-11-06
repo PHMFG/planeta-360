@@ -88,9 +88,8 @@ public class LeitorDeCsv implements LeitorDeConteudo {
         }
     }
 
-    /** O separador da primeira linha: o que aparece mais vezes fora de aspas (vírgula quando não há nenhum). */
+    /** O separador da primeira linha, fora de aspas: ponto e vírgula, tabulação ou vírgula. */
     static char separador(String texto) {
-        int virgula = 0;
         int pontoEVirgula = 0;
         int tabulacao = 0;
         boolean aspas = false;
@@ -99,9 +98,7 @@ public class LeitorDeCsv implements LeitorDeConteudo {
             if (c == '"') {
                 aspas = !aspas;
             } else if (!aspas) {
-                if (c == ',') {
-                    virgula++;
-                } else if (c == ';') {
+                if (c == ';') {
                     pontoEVirgula++;
                 } else if (c == '\t') {
                     tabulacao++;
@@ -110,10 +107,12 @@ public class LeitorDeCsv implements LeitorDeConteudo {
                 }
             }
         }
-        if (pontoEVirgula >= virgula && pontoEVirgula >= tabulacao && pontoEVirgula > 0) {
+        // Ponto e vírgula e tabulação vêm antes da vírgula: num CSV com vírgula decimal, a vírgula aparece dentro dos
+        // números e não é o separador de colunas. A vírgula é o padrão quando não há nenhum dos dois.
+        if (pontoEVirgula > 0) {
             return ';';
         }
-        if (tabulacao > virgula) {
+        if (tabulacao > 0) {
             return '\t';
         }
         return ',';
