@@ -16,8 +16,10 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  *   <li>o limite de tempo da consulta e os ajustes do índice vetorial (a busca iterativa do HNSW, que continua achando vizinhos
  *       quando o filtro de escopo descarta os primeiros).</li>
  * </ol>
- * Os valores do escopo são sempre números do servidor, nunca texto da pessoa nem do modelo. No escopo só global (o Atlas da RBS) a cota
- * e a parceria vão vazias: as políticas as leem como nulas e só o documento {@code GLOBAL} da edição passa.
+ * Os valores do escopo são sempre números do servidor, nunca texto da pessoa nem do modelo. No escopo só global a cota e a parceria
+ * vão vazias: as políticas as leem como nulas e só o documento {@code GLOBAL} da edição passa. O escopo de toda a edição (o Atlas da
+ * RBS, desde a base da RBS) é a exceção: a política não representa "todas as cotas e parcerias", então ele não troca o papel e lê com
+ * o filtro de edição do servidor sempre junto; só a conversa da RBS o monta.
  */
 final class ContextoDeRls {
 
