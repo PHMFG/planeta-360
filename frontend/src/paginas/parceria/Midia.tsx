@@ -1,41 +1,29 @@
 // Mídia e conteúdo (Figma P03, F01, F02): envio de material, arquivos da marca e da RBS e previsto x exibido. [ITEM-4] [ITEM-5]
-import { useState, type FormEvent } from 'react'
+import { useMemo, useState, type FormEvent } from 'react'
 import { ErroApi } from '../../api/cliente'
 import { ACEITA_ENVIO, EXTENSOES_ACEITAS, REGRA_ENVIO, enviarArquivo, listarEntregas, problemaNoArquivo, type Arquivo, type Entrega } from '../../api/materiais'
 import { useDados } from '../../api/useDados'
-import { CartaoArquivo } from '../../componentes/Arquivo'
 import { AvisoAbaFechada, estadoAbaNaParceria } from '../../componentes/AbaFechada'
 import { AreaEnvio } from '../../componentes/AreaEnvio'
 import { Aviso } from '../../componentes/Aviso'
 import { Botao } from '../../componentes/Botao'
 import { CabecalhoSecao } from '../../componentes/CabecalhoSecao'
-import { Cartao, Grade3 } from '../../componentes/Cartao'
+import { Cartao } from '../../componentes/Cartao'
 import { Carregando } from '../../componentes/Carregando'
-import { AreaTexto, Busca, Filtros, Seletor } from '../../componentes/Formulario'
+import { AreaTexto, Seletor } from '../../componentes/Formulario'
 import { Modal } from '../../componentes/Modal'
-import { Status } from '../../componentes/Status'
 import { useSessao } from '../../sessao/Sessao'
-import { data, dataHora, tamanho } from '../../util/formatar'
+import { data, tamanho } from '../../util/formatar'
 import { useParceria, useRecarregarSeAbaFechou } from './ContextoParceria'
 import { DetalheEntrega } from './DetalheEntrega'
 import { PostsELinks } from '../../componentes/PostsELinks'
 import { ComprovacaoMensal } from '../../componentes/ComprovacaoMensal'
 import { apelido } from '../../api/comprovacao'
 import { BaseDeMidia } from '../../componentes/BaseDeMidia'
+import { NavegadorDeArquivos, type Comprovante } from '../../componentes/navegador/NavegadorDeArquivos'
+import { usarToast } from '../../componentes/Toast'
+import { obterMidiaDaParceria } from '../../api/midia'
 import { ListaEntregas, NovaEntrega } from './EntregasDaAba'
-
-type Origem = 'todos' | 'marca' | 'rbs'
-type ArquivoDaEntrega = { arquivo: Arquivo; entrega: Entrega }
-
-/** Busca que acha "teste pequeno" em "teste-pequeno.pdf": sem acento, sem maiúscula e com hífen, ponto e sublinhado valendo espaço. */
-function normalizar(texto: string) {
-  return texto
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[-_.\s]+/g, ' ')
-    .trim()
-}
 
 function PreparoEnvio({
   arquivo,
@@ -158,20 +146,35 @@ function ConteudoMidia({ rbs }: { rbs: boolean }) {
   // Cada envio pelo detalhe (arquivo, texto ou link) relê Posts e links: o link novo aparece na hora.
   const [versaoDosLinks, setVersaoDosLinks] = useState(0)
   const [recebido, setRecebido] = useState<{ arquivo: Arquivo; entrega: Entrega } | null>(null)
-  const [busca, setBusca] = useState('')
-  const [origem, setOrigem] = useState<Origem>('todos')
+  const avisar = usarToast()
+  // Os comprovantes da base (prints e PDFs das veiculações) viram a pasta "Comprovantes de veiculação" do navegador.
+  const base = useDados(() => obterMidiaDaParceria(parceria.id), [parceria.id])
+  const comprovantes = useMemo<Comprovante[]>(() => {
+    const vistos = new Set<number>()
+    return (base.dado?.linhas ?? []).flatMap((linha) =>
+      linha.comprovantes
+        .filter((item) => !vistos.has(item.arquivoId) && vistos.add(item.arquivoId))
+        .map((item) => ({ ...item, legenda: [linha.veiculo, linha.formato, linha.mes].filter(Boolean).join(' · ') })),
+    )
+  }, [base.dado])
 
   const lista = entregas.dado ?? []
-  const arquivos: ArquivoDaEntrega[] = lista
-    .flatMap((entrega) => entrega.arquivos.map((arquivo) => ({ arquivo, entrega })))
-    .sort((a, b) => b.arquivo.enviadoEm.localeCompare(a.arquivo.enviadoEm))
-  const daRbs = (item: ArquivoDaEntrega) => item.arquivo.enviadoPor?.perfil === 'ADMIN_RBS'
-  const termo = normalizar(busca)
-  const visiveis = arquivos.filter(
-    (item) =>
-      (origem === 'todos' || (origem === 'rbs') === daRbs(item)) &&
-      (!termo || normalizar(item.arquivo.nomeOriginal).includes(termo) || normalizar(item.entrega.titulo).includes(termo)),
-  )
+
+  async function enviarParaPasta(arquivo: File, entrega: Entrega) {
+    const problema = problemaNoArquivo(arquivo)
+    if (problema) {
+      avisar(problema, 'falha')
+      return
+    }
+    try {
+      const enviado = await enviarArquivo(entrega.id, arquivo, { categoria: 'MATERIAL_MIDIA' })
+      setRecebido({ arquivo: enviado, entrega })
+      avisar(`${arquivo.name} enviado para “${entrega.titulo}”`)
+      entregas.recarregar()
+    } catch (erro) {
+      avisar(erro instanceof ErroApi ? erro.message : 'Não foi possível enviar o arquivo.', 'falha')
+    }
+  }
 
   return (
     <div data-secao="midia" className="flex flex-col gap-4">
@@ -229,47 +232,10 @@ function ConteudoMidia({ rbs }: { rbs: boolean }) {
           </p>
         </section>
       )}
-      <Busca valor={busca} aoMudar={setBusca} placeholder="Buscar por nome do arquivo ou entrega…" />
-      <Filtros<Origem>
-        valor={origem}
-        aoMudar={setOrigem}
-        opcoes={[
-          { valor: 'todos', nome: 'Todos', total: arquivos.length },
-          { valor: 'marca', nome: 'Enviados pela marca', total: arquivos.filter((item) => !daRbs(item)).length },
-          { valor: 'rbs', nome: 'Publicados pela RBS', total: arquivos.filter(daRbs).length },
-        ]}
-      />
-
       <Carregando dados={entregas}>
-        {() =>
-          visiveis.length === 0 ? (
-            <Aviso
-              tipo="vazio"
-              titulo={!arquivos.length ? 'Nenhum arquivo enviado ainda' : termo ? 'Nenhum arquivo encontrado com essa busca' : 'Nenhum arquivo com esse filtro'}
-            />
-          ) : (
-            <Grade3>
-              {visiveis.map(({ arquivo, entrega }) => (
-                <CartaoArquivo
-                  key={arquivo.id}
-                  nome={arquivo.nomeOriginal}
-                  meta={`v${arquivo.versao} · ${arquivo.enviadoPor?.nome ?? '—'} · ${dataHora(arquivo.enviadoEm)}`}
-                  rodape={
-                    arquivo.enviadoPor?.perfil === 'ADMIN_RBS' ? (
-                      <span className="font-bold text-secao-texto">Publicado pela RBS · abrir / baixar</span>
-                    ) : arquivo.versao < Math.max(...entrega.arquivos.map((item) => item.versao)) ? (
-                      // O status é da entrega e vale para a versão mais nova; a antiga não foi aprovada nem recusada sozinha.
-                      <span className="font-semibold text-texto-2">Versão anterior · ver detalhe / histórico</span>
-                    ) : (
-                      <Status codigo={entrega.status} complemento="ver detalhe / histórico" />
-                    )
-                  }
-                  onClick={() => setAberta(entrega)}
-                />
-              ))}
-            </Grade3>
-          )
-        }
+        {(itens) => (
+          <NavegadorDeArquivos entregas={itens} comprovantes={comprovantes} podeEnviar={!rbs} aoEnviar={enviarParaPasta} aoAbrirEntrega={setAberta} />
+        )}
       </Carregando>
 
       <Cartao

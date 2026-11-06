@@ -65,7 +65,7 @@ test.describe('R2 · manual de operações', () => {
 
     await entrar(page, 'rbs')
     await page.goto('/rbs/atlas')
-    await page.getByRole('tab', { name: 'Documentos' }).click()
+    await page.getByRole('button', { name: 'Documentos' }).click()
     const envio = page.locator('form').filter({ has: page.getByLabel('Chave') })
     await envio.locator('input[type=file]').setInputFiles({ name: `contatos-${sufixo}.pdf`, mimeType: 'application/pdf', buffer: pdf })
     await envio.getByLabel('Título').fill(titulo)
@@ -162,7 +162,8 @@ test.describe('R3 e R4 · comprovação mensal e formatos', () => {
     await entregaDeMidia(marca.parceriaId)
     await entrarComo(page, marca.email)
     await page.goto(`/parceria/${marca.parceriaId}/midia`)
-    await page.getByText('Post de lançamento').first().click()
+    // O título também é o nome da pasta no navegador de arquivos; o detalhe abre pela lista de entregas.
+    await page.locator('section', { has: page.getByRole('heading', { name: 'Entregas de mídia' }) }).getByText('Post de lançamento').first().click()
     const detalhe = page.getByRole('dialog', { name: 'Post de lançamento' })
     const campo = detalhe.locator('input[type=file]')
     await expect(campo).toHaveAttribute('accept', /\.doc,.*\.xls,.*\.ppt,/)
@@ -269,7 +270,8 @@ test.describe('R5 · as abas', () => {
     await entregaDeMidia(marca.parceriaId)
     await entrarComo(page, marca.email)
     await page.goto(`/parceria/${marca.parceriaId}/midia`)
-    await page.getByText('Post de lançamento').first().click()
+    // O título também é o nome da pasta no navegador de arquivos; o detalhe abre pela lista de entregas.
+    await page.locator('section', { has: page.getByRole('heading', { name: 'Entregas de mídia' }) }).getByText('Post de lançamento').first().click()
     const detalhe = page.getByRole('dialog', { name: 'Post de lançamento' })
     await detalhe.getByRole('radio', { name: 'Texto' }).click()
     const texto = detalhe.getByLabel('Texto do material')
