@@ -1,6 +1,6 @@
--- Confere o banco depois de V1 a V22 e da amostra R__amostra.sql: contagens, cargas, relatórios, órfãos e uma tentativa de violar cada regra.
+-- Confere o banco depois de V1 a V23 e da amostra R__amostra.sql: contagens, cargas, relatórios, órfãos e uma tentativa de violar cada regra.
 -- Atende o item 1 da Entrega 2 (amostra e verificações), prova as 8 correções do item 8 e, na seção 8, o plano comercial, o
--- catálogo e os dados informados da V7 e, na seção 9, as tabelas do Atlas da V8, o resumo do raciocínio da V9 e o traço do diagnóstico da V10 e, na seção 10, os documentos, os trechos, a busca sem acento e a RLS da V11 e, na seção 11, as fontes citadas, o documento congelado e o plural da busca da V12 e, na seção 12, os prazos da V13 e, na seção 14, o JEV e a conversa sem parceria da V15 e, na seção 15, o papel da entrega, o Open Staff, o texto e link da entrega, o contrato e a pesquisa da ativação da V16 e, na seção 15b, as páginas fora do Atlas da V17 e, na seção 15, o pós-venda da V18 e, na seção 16, a unidade do relatório e o atendimento da V19, a base de mídia da V20, a importação da V21 e a pesquisa e as visitas da V22. Nenhuma linha fica gravada: as tentativas são desfeitas (só as sequências avançam).
+-- catálogo e os dados informados da V7 e, na seção 9, as tabelas do Atlas da V8, o resumo do raciocínio da V9 e o traço do diagnóstico da V10 e, na seção 10, os documentos, os trechos, a busca sem acento e a RLS da V11 e, na seção 11, as fontes citadas, o documento congelado e o plural da busca da V12 e, na seção 12, os prazos da V13 e, na seção 14, o JEV e a conversa sem parceria da V15 e, na seção 15, o papel da entrega, o Open Staff, o texto e link da entrega, o contrato e a pesquisa da ativação da V16 e, na seção 15b, as páginas fora do Atlas da V17 e, na seção 15, o pós-venda da V18 e, na seção 16, a unidade do relatório e o atendimento da V19, a base de mídia da V20, a importação da V21, a pesquisa e as visitas da V22 e os faltantes e a carga da pesquisa da V23. Nenhuma linha fica gravada: as tentativas são desfeitas (só as sequências avançam).
 
 -- Como rodar (banco de dev ou de teste com a amostra carregada; sem meta-comandos, serve também para JDBC com o texto inteiro):
 --   PGPASSWORD=portal psql -X -P pager=off -v ON_ERROR_STOP=1 -h localhost -U portal -d <banco> -f verificacao.sql
@@ -3257,6 +3257,43 @@ BEGIN
             SELECT u.id, (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), 'RELATORIO', now()
             FROM _ver_usr u WHERE u.email = 'marketing@amarelo.example';
         END $d$ $q$);
+END $$;
+
+-- A V23 troca a regra da pesquisa na visão de faltantes (nenhuma pergunta, e não menos de 3) e faz a carga de resultados
+-- recusar a alternativa fora da lista de uma pergunta fechada (BG3).
+DO $$
+DECLARE v_2026 BIGINT; v_2027 BIGINT; v_carga BIGINT; v_pesq BIGINT; v_amarelo BIGINT; v_estado TEXT; v_msg TEXT;
+BEGIN
+    SELECT id INTO v_2026 FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2026;
+    SELECT id INTO v_2027 FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027;
+    SELECT id INTO v_pesq FROM pesquisa WHERE escopo = 'ATIVACAO';
+    SELECT id INTO v_amarelo FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027;
+
+    -- A de 2026 é Master e não tem pergunta; a de 2027 é Master e tem 3 (uma ou duas já não bastam para o faltante).
+    PERFORM pg_temp.confere('V23 FALTANTES', 'a Master sem nenhuma pergunta continua nos faltantes', 1,
+        (SELECT count(*) FROM vw_faltantes WHERE parceria_id = v_2026 AND tipo = 'PESQUISA_SEM_PERGUNTAS'));
+    PERFORM pg_temp.confere('V23 FALTANTES', 'a Master com perguntas sai dos faltantes', 0,
+        (SELECT count(*) FROM vw_faltantes WHERE parceria_id = v_2027 AND tipo = 'PESQUISA_SEM_PERGUNTAS'));
+
+    -- A carga de resultados recusa a alternativa fora da lista de uma pergunta ESCOLHA; a linha sem lista continua aceita.
+    BEGIN
+        UPDATE pesquisa_pergunta SET tipo_resposta = 'ESCOLHA', alternativas = '["Sim","Não"]'::jsonb
+        WHERE parceria_id = v_amarelo AND ordem = 1;
+        INSERT INTO carga (tipo, evento_id, executada_por)
+        SELECT 'PESQUISA', e.id, u.id FROM evento e, _ver_usr u
+        WHERE e.edicao = 2027 AND u.email = 'b2b@rbs.example' RETURNING id INTO v_carga;
+        INSERT INTO stg_pesquisa (carga_id, linha, patrocinador, pergunta, indicador, alternativa, valor, unidade, base_respondentes)
+        VALUES (v_carga, 1, 'Cliente Amarelo', 1, 'Pergunta 1', 'Talvez', 10, 'PERCENTUAL', 412);
+        PERFORM fn_carregar_pesquisa(v_carga, v_pesq);
+        IF (SELECT count(*) FROM carga_rejeicao WHERE carga_id = v_carga AND campo = 'alternativa'
+                AND motivo = 'Alternativa fora da lista da pergunta.') <> 1 THEN
+            RAISE EXCEPTION 'a alternativa fora da lista entrou' USING ERRCODE = 'check_violation', CONSTRAINT = 'v23_carga';
+        END IF;
+        RAISE EXCEPTION 'desfazer a tentativa' USING ERRCODE = 'ZZ001';
+    EXCEPTION WHEN OTHERS THEN
+        GET STACKED DIAGNOSTICS v_estado = RETURNED_SQLSTATE, v_msg = MESSAGE_TEXT;
+    END;
+    PERFORM pg_temp.afirma('V23 CARGA', 'a alternativa fora da lista vira rejeição com motivo', v_estado = 'ZZ001');
 END $$;
 
 -- ---------------------------------------------------------------------

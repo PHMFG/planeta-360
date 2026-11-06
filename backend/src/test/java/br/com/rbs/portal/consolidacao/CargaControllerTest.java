@@ -387,6 +387,40 @@ class CargaControllerTest extends ApoioDeCargas {
         assertThat((String) lerJson(geralDe2027, "$.campos.escopo")).contains("2027").contains("geral");
     }
 
+    @Test
+    void alternativaForaDaListaDaPerguntaFechadaEhRejeitadaComMotivo() {
+        semResultadosDePesquisa();
+        long amarelo = contar("""
+                SELECT pa.id FROM parceria pa JOIN patrocinador p ON p.id = pa.patrocinador_id
+                JOIN evento e ON e.id = pa.evento_id WHERE p.nome_canonico = 'Cliente Amarelo' AND e.edicao = 2027""");
+        // A pergunta 1 é ESCOLHA com lista; a 2 é SIM_NAO com a lista fixa; a 3 fica sem lista (como as antigas).
+        jdbc.sql("UPDATE pesquisa_pergunta SET tipo_resposta = 'ESCOLHA', alternativas = '[\"Sim\",\"Não\"]'::jsonb "
+                + "WHERE parceria_id = :p AND ordem = 1").param("p", amarelo).update();
+        jdbc.sql("UPDATE pesquisa_pergunta SET tipo_resposta = 'SIM_NAO', alternativas = '[\"Sim\",\"Não\"]'::jsonb "
+                + "WHERE parceria_id = :p AND ordem = 2").param("p", amarelo).update();
+        SessaoDeApi rbs = entrar(RBS);
+        String csv = CABECALHO_PESQUISA + "\n"
+                + "Cliente Amarelo,1,,Sim,60,PERCENTUAL,412\n"
+                + "Cliente Amarelo,1,,Talvez,10,PERCENTUAL,412\n"
+                + "Cliente Amarelo,2,,Não,40,PERCENTUAL,412\n"
+                + "Cliente Amarelo,2,,Talvez,10,PERCENTUAL,412\n"
+                + "Cliente Amarelo,3,,Qualquer,50,PERCENTUAL,412\n";
+
+        MvcTestResult carga = enviar(rbs, "alternativas.csv", texto(csv), "PESQUISA", evento(2027), null);
+
+        assertThat(carga).hasStatus(HttpStatus.CREATED);
+        assertThat(inteiro(carga, "$.linhasLidas")).isEqualTo(5);
+        assertThat(inteiro(carga, "$.linhasInseridas")).isEqualTo(3);
+        assertThat(inteiro(carga, "$.linhasRejeitadas")).isEqualTo(2);
+        MvcTestResult rejeicoes = rbs.get("/api/cargas/" + longo(carga, "$.id") + "/rejeicoes");
+        assertThat(lerLista(rejeicoes, "$.itens[*].linha")).containsExactly(3, 5);
+        assertThat(lerLista(rejeicoes, "$.itens[*].campo")).containsOnly("alternativa");
+        assertThat(lerLista(rejeicoes, "$.itens[*].motivo")).containsOnly("Alternativa fora da lista da pergunta.");
+        // A pergunta sem lista continua aceitando alternativa nova (as antigas), e nenhum "Talvez" entrou.
+        assertThat(contar("SELECT count(*) FROM pesquisa_resultado WHERE carga_id = ?", longo(carga, "$.id"))).isEqualTo(3);
+        assertThat(contar("SELECT count(*) FROM pesquisa_resultado WHERE alternativa = 'Talvez'")).isZero();
+    }
+
     // ---------------------------------------------------------------------
     // Rota 26: erros do arquivo e das partes
     // ---------------------------------------------------------------------
@@ -566,7 +600,7 @@ class CargaControllerTest extends ApoioDeCargas {
                 "Unidade inválida. Use PERCENTUAL, NOTA ou CONTAGEM.",
                 "Base de respondentes inválida. Use só números inteiros, como 412.",
                 "A base de respondentes deve ser maior que zero.",
-                "Pergunta inválida. Use o número da pergunta: 1, 2 ou 3.");
+                "Pergunta inválida. Use o número da pergunta: 1 a 10.");
     }
 
     @Test

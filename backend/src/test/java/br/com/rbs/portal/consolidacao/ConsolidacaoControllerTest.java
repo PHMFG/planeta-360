@@ -241,8 +241,9 @@ class ConsolidacaoControllerTest {
     @Test
     void patrocinadorSoVeOsDoisTiposDeFaltanteQueEleResolveEARbsVeTodos() {
         long amarelo = parceria("Cliente Amarelo");
-        // A marca mandou só 2 das 3 perguntas: agora existe também o faltante PESQUISA_SEM_PERGUNTAS.
-        jdbc.sql("DELETE FROM pesquisa_pergunta WHERE parceria_id = :p AND ordem = 3").param("p", amarelo).update();
+        // A marca não tem nenhuma pergunta cadastrada: agora existe o faltante PESQUISA_SEM_PERGUNTAS (o limite é o da
+        // pesquisa, então ter uma ou duas perguntas já basta).
+        jdbc.sql("DELETE FROM pesquisa_pergunta WHERE parceria_id = :p").param("p", amarelo).update();
         List<String> todosNoBanco = jdbc.sql("SELECT DISTINCT tipo FROM vw_faltantes WHERE parceria_id = :p")
                 .param("p", amarelo).query(String.class).list();
         assertThat(todosNoBanco).as("a amostra tem faltantes que a marca não pode ver")
@@ -256,7 +257,7 @@ class ConsolidacaoControllerTest {
             assertThat(r).hasStatus(HttpStatus.OK);
             assertThat(lerLista(r, "$.faltantes[*].tipo")).containsExactly("PESQUISA_SEM_PERGUNTAS", "ENTREGA_PENDENTE");
             assertThat(lerLista(r, "$.faltantes[*].detalhe")).containsExactly(
-                    "Cota Master sem as 3 perguntas cadastradas", "Peça de 30\" para mídia própria (em analise)");
+                    "Cota Master sem perguntas cadastradas", "Peça de 30\" para mídia própria (em analise)");
             // O filtro vale para o corpo inteiro: nenhum faltante interno vaza nem no texto da resposta.
             assertThat(corpo(r)).doesNotContain("MIDIA_ABAIXO_DO_PREVISTO").doesNotContain("APLICACAO_SEM_COMPROVACAO")
                     .doesNotContain("FESTIVAL_SEM_NUMEROS").doesNotContain("Planeta Lounge");
