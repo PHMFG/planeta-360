@@ -143,7 +143,7 @@ function BotaoAtlas({ destino }: { destino?: string }) {
         </button>
       )}
       <p id="atlas-legenda" className={`mt-1.5 text-center text-[11px] font-medium ${ativo ? 'text-atlas-roxo' : 'text-texto-2'}`}>
-        {ativo ? 'Conversa aberta · assistente IA' : destino ? 'Assistente IA · números da parceria' : 'Assistente das marcas'}
+        {ativo ? 'Conversa aberta · assistente IA' : destino ? 'Pergunte sobre os seus dados' : 'Assistente das marcas'}
       </p>
     </div>
   )
