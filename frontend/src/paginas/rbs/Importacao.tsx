@@ -113,7 +113,8 @@ export function Importacao() {
   const emPrevia = importacao.situacao === 'EM_PREVIA'
 
   return (
-    <div data-secao="neutro" className="flex flex-col gap-4">
+    // Com a gaveta da origem aberta, a página abre espaço à direita: a gaveta cobria o Confirmar (rodada H1).
+    <div data-secao="neutro" className={`flex flex-col gap-4 transition-[padding] duration-(--duracao-media) ${origem ? 'lg:pr-[476px]' : ''}`}>
       <CabecalhoSecao
         trilha="Planeta Atlântida / RBS · Gestão"
         titulo={importacao.arquivo.nome}

@@ -776,6 +776,29 @@ public class ImportacaoService {
     }
 
     /** O que a conferência devolve para uma linha: a marca resolvida, a linha do plano sugerida e os motivos de recusa. */
+    /** A frase do conflito do mês (M2), ou nulo: a linha mensal contra exibições do mês na base, e a exibição contra o total. */
+    private String conflitoDoMes(Long aproveitamentoId, Map<String, Object> dados) {
+        if (aproveitamentoId == null) {
+            return null;
+        }
+        String mes = texto(dados.get("mes"));
+        String exibidoEm = texto(dados.get("exibido_em"));
+        if (mes != null && mes.matches("\\d{4}-\\d{2}")) {
+            return repositorio.haExibicoesNoMes(aproveitamentoId, mes)
+                    ? "Esta linha do plano já tem exibições em " + mes + " na base; o total do mês e as exibições não se somam. "
+                            + "Use um ou outro: retire a importação das exibições ou deixe esta linha de fora."
+                    : null;
+        }
+        if (exibidoEm != null && exibidoEm.length() >= 7 && exibidoEm.substring(0, 7).matches("\\d{4}-\\d{2}")) {
+            String doMes = exibidoEm.substring(0, 7);
+            return repositorio.haTotalDoMes(aproveitamentoId, doMes)
+                    ? "Esta linha do plano já tem o total de " + doMes + " na base; o total do mês e as exibições não se somam. "
+                            + "Use um ou outro: retire a importação do total ou deixe esta linha de fora."
+                    : null;
+        }
+        return null;
+    }
+
     private record ConferenciaDaLinha(Long parceriaId, Long aproveitamentoSugeridoId, BigDecimal semelhanca, List<String> problemas) {
     }
 
@@ -812,6 +835,12 @@ public class ImportacaoService {
             } else {
                 sugeridoId = casamento.aproveitamentoId();
                 semelhanca = casamento.semelhanca();
+                // M2: o total do mês e as exibições do mesmo mês nunca se somam. A carga recusaria a linha na confirmação; a
+                // prévia já avisa, com o que está na base (achado da rodada H1).
+                String conflito = conflitoDoMes(sugeridoId, proposta.dados());
+                if (conflito != null) {
+                    problemas.add(conflito);
+                }
             }
         }
         AlcanceDeUmaImportacao alcance = new AlcanceDeUmaImportacao(importacao.eventoId(), importacao.alcance(),

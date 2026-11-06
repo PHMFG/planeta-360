@@ -348,6 +348,22 @@ public class ImportacaoRepositorio {
     // ---------------------------------------------------------------------
 
     /** A pesquisa da edição com aquele escopo (ATIVACAO ou GERAL); vazia enquanto a RBS não a abre. */
+    /** M2: há exibição (não total mensal) desta linha do plano no mês AAAA-MM, no horário de Brasília? */
+    public boolean haExibicoesNoMes(long aproveitamentoId, String mes) {
+        return jdbc.sql("""
+                        SELECT EXISTS (SELECT 1 FROM veiculacao WHERE aproveitamento_id = :a AND periodo = 'EXIBICAO'
+                               AND to_char(exibido_em AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM') = :mes)""")
+                .param("a", aproveitamentoId).param("mes", mes).query(Boolean.class).single();
+    }
+
+    /** M2: há o total mensal desta linha do plano no mês AAAA-MM? */
+    public boolean haTotalDoMes(long aproveitamentoId, String mes) {
+        return jdbc.sql("""
+                        SELECT EXISTS (SELECT 1 FROM veiculacao WHERE aproveitamento_id = :a AND periodo = 'MES'
+                               AND to_char(mes_referencia, 'YYYY-MM') = :mes)""")
+                .param("a", aproveitamentoId).param("mes", mes).query(Boolean.class).single();
+    }
+
     public Optional<Long> pesquisaDaEdicao(long eventoId, String escopo) {
         return jdbc.sql("SELECT id FROM pesquisa WHERE evento_id = :evento AND escopo = :escopo ORDER BY id LIMIT 1")
                 .param("evento", eventoId).param("escopo", escopo).query(Long.class).optional();

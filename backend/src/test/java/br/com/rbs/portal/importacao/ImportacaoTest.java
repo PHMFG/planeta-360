@@ -286,6 +286,37 @@ class ImportacaoTest {
     }
 
     @Test
+    void oTotalDoMesContraExibicoesDoMesmoMesVemRecusadoNaPrevia() {
+        // M2: o total do mês e as exibições do mesmo mês não se somam. A prévia já recusa, com o motivo (achado da rodada H1).
+        SessaoDeApi rbs = SessaoDeApi.entrar(mvc, RBS);
+        Map<String, Object> plano = jdbc.sql("""
+                        SELECT ap.veiculo, ap.formato, ap.espaco_programa FROM aproveitamento_previsto ap
+                        JOIN parceria pa ON pa.id = ap.parceria_id JOIN patrocinador p ON p.id = pa.patrocinador_id
+                        JOIN evento e ON e.id = pa.evento_id
+                        WHERE p.nome_canonico = 'Cliente Amarelo' AND e.edicao = 2027 AND ap.categoria = 'MIDIA'
+                          AND ap.espaco_programa IS NOT NULL AND ap.formato !~ '[",]' AND ap.espaco_programa !~ '[",]'
+                          AND NOT EXISTS (SELECT 1 FROM veiculacao v WHERE v.aproveitamento_id = ap.id AND v.periodo = 'MES')
+                        ORDER BY ap.id LIMIT 1""").query().singleRow();
+        String linhaDoPlano = "Cliente Amarelo," + plano.get("veiculo") + "," + plano.get("formato") + "," + plano.get("espaco_programa");
+        byte[] exibicao = ("patrocinador,veiculo,formato,espaco_programa,exibido_em,quantidade,link\n"
+                + linhaDoPlano + ",2026-12-10T15:00:00-03:00,1,\n").getBytes(StandardCharsets.UTF_8);
+        long primeira = ((Number) lerJson(enviar(rbs, "exibicao-dezembro.csv", exibicao, evento2027(), "EDICAO", null, null,
+                "VEICULACAO"), "$.id")).longValue();
+        assertThat(rbs.patch("/api/importacoes/" + primeira + "/linhas", "{\"situacao\":\"ACEITA\",\"todas\":true}")).hasStatus(HttpStatus.OK);
+        assertThat(rbs.post("/api/importacoes/" + primeira + "/confirmar", "{}")).hasStatus(HttpStatus.OK);
+
+        byte[] total = ("patrocinador,veiculo,formato,espaco_programa,mes,quantidade,link\n"
+                + linhaDoPlano + ",2026-12,30,\n").getBytes(StandardCharsets.UTF_8);
+        long segunda = ((Number) lerJson(enviar(rbs, "total-dezembro.csv", total, evento2027(), "EDICAO", null, null,
+                "VEICULACAO"), "$.id")).longValue();
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> itens = (List<Map<String, Object>>) (List<?>) lerLista(rbs.get("/api/importacoes/" + segunda), "$.itens");
+        assertThat(itens).hasSize(1);
+        assertThat(itens.getFirst().get("situacao")).isEqualTo("RECUSADA");
+        assertThat(String.valueOf(itens.getFirst().get("motivo"))).contains("já tem exibições em 2026-12");
+    }
+
+    @Test
     void asTransicoesProibidasDao409EAsPermissoesSeguemOContrato() throws IOException {
         mapearTv();
         SessaoDeApi rbs = SessaoDeApi.entrar(mvc, RBS);
