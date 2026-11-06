@@ -46,6 +46,7 @@ import br.com.rbs.portal.importacao.ImportacaoRepositorio.RejeicaoDeCarga;
 import br.com.rbs.portal.importacao.ImportacaoRepositorio.TotaisDaCarga;
 import br.com.rbs.portal.importacao.extracao.CasadorDoPlano;
 import br.com.rbs.portal.importacao.extracao.ConferenciaDaExtracao;
+import br.com.rbs.portal.importacao.leitores.LeitorDeImagem;
 import br.com.rbs.portal.materiais.MateriaisDtos.PaginaDto;
 import jakarta.servlet.http.HttpServletRequest;
 import java.io.IOException;
@@ -635,7 +636,19 @@ public class ImportacaoService {
             String extensao = TipoDeArquivo.extensaoDe(importacao.arquivoNome());
             LeitorDeConteudo leitor = leitores.stream().filter(l -> l.aceita(extensao)).findFirst()
                     .orElseThrow(() -> new LeituraFalhouException("Este formato ainda não é lido nesta versão (" + extensao + ")."));
-            ConteudoLido conteudo = leitor.ler(caminho);
+            ConteudoLido conteudo;
+            try {
+                conteudo = leitor.ler(caminho);
+            } catch (LeituraFalhouException semTexto) {
+                // PDF sem texto (escaneado): a leitura por imagem transcreve cada página e a extração segue sobre a transcrição (E9).
+                if ("pdf".equals(extensao) && br.com.rbs.portal.documentos.ExtratorDeTexto.SEM_TEXTO.equals(semTexto.getMessage())) {
+                    LeitorDeImagem imagens = leitores.stream().filter(LeitorDeImagem.class::isInstance).map(LeitorDeImagem.class::cast)
+                            .findFirst().orElseThrow(() -> semTexto);
+                    conteudo = imagens.lerPdfEscaneado(caminho);
+                } else {
+                    throw semTexto;
+                }
+            }
             List<Pagina> paginas = paginas(conteudo);
             List<Suspeita> suspeitas = detector.analisarConversa(paginas);
             DestinoDaImportacao sugerido = sugestaoDoConteudo(conteudo, destinoSugerido(extensao));
@@ -648,7 +661,8 @@ public class ImportacaoService {
             BigDecimal confianca = extracao.confianca() != null ? extracao.confianca() : new BigDecimal("0.800");
             DestinoDaImportacao destinoFinal = destino;
             DestinoDaImportacao sugeridoFinal = sugerido;
-            transacao.executeWithoutResult(estado -> gravarPrevia(importacao, conteudo, bytes, suspeitas, extracao, sugeridoFinal,
+            ConteudoLido conteudoFinal = conteudo;
+            transacao.executeWithoutResult(estado -> gravarPrevia(importacao, conteudoFinal, bytes, suspeitas, extracao, sugeridoFinal,
                     destinoFinal, confianca));
         } catch (Throwable erro) {
             marcarErro(id, motivoDe(erro), erro);

@@ -3861,6 +3861,8 @@ A pesquisa é a da edição da importação (a `ATIVACAO`; a `GERAL` para o perf
 
 **O texto corrido (E8).** O modelo recebe os pedaços com o localizador de cada um e chama a ferramenta `propor_linhas`, com o destino e, em cada linha, os campos do destino e, para cada valor, o `localizador` e o `trecho` de onde ele saiu. O código só aceita o campo do destino e a origem cujo localizador existe e cujo trecho aparece no texto lido; a conferência de texto corrido exige a origem de **todos** os valores e recusa, com motivo, o valor que não aparece no trecho. O dado pessoal continua vindo antes do modelo: com suspeita, esta extração não roda e a importação fica só com a leitura em código.
 
+**A imagem (E9).** O `.png` e o `.jpg` (e o PDF sem texto, que é renderizado página a página) passam por duas chamadas: o modelo com visão transcreve a imagem e o ExtratorLivre trabalha só sobre a transcrição, como no E8. A origem de cada valor aponta para `imagem` (ou `página N`, no PDF escaneado) e para o trecho da transcrição; a rota 116 devolve o `tipo` `PNG`/`JPG` e o trecho. O provedor sem visão recusa com a frase `Este provedor não lê imagem.`, e a importação vai a `ERRO` com ela.
+
 ---
 
 # Regras que valem para todas as rotas

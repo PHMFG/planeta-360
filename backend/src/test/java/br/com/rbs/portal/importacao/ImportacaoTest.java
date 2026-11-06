@@ -11,11 +11,14 @@ import br.com.rbs.portal.atlas.ProvedorRoteirizado;
 import br.com.rbs.portal.atlas.RoteiroDeLlmConfig;
 import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.ChamadaDeFerramenta;
 import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.RespostaDoLlm;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -340,6 +343,88 @@ class ImportacaoTest {
         assertThat(recusada).hasStatus(HttpStatus.OK);
         assertThat(lerJson(recusada, "$.situacao")).isEqualTo("RECUSADA");
         assertThat(String.valueOf(lerJson(recusada, "$.motivo"))).contains("não aparece na fonte");
+    }
+
+    private void imagemTranscritaEPostaEmLinha(String transcricao, String localizador, String patrocinador, String veiculo,
+                                               String formato, String data, String trechoDaData) {
+        roteiro.limpar()
+                .passo(pedido -> {
+                    assertThat(pedido.imagem()).as("a primeira chamada leva a imagem").isNotNull();
+                    return new RespostaDoLlm(transcricao, List.of(), null);
+                })
+                .passo(pedido -> {
+                    assertThat(pedido.imagem()).as("a extração trabalha só sobre a transcrição").isNull();
+                    String argumentos = """
+                            {"destino":"COMPROVANTE","linhas":[{"campos":{"patrocinador":"%s","veiculo":"%s","formato":"%s","data":"%s"},
+                              "origem":{"patrocinador":{"localizador":"%s","trecho":"%s"},
+                                        "veiculo":{"localizador":"%s","trecho":"%s"},
+                                        "formato":{"localizador":"%s","trecho":"%s"},
+                                        "data":{"localizador":"%s","trecho":"%s"}}}]}
+                            """.formatted(patrocinador, veiculo, formato, data, localizador, patrocinador, localizador, veiculo,
+                            localizador, formato, localizador, trechoDaData);
+                    return new RespostaDoLlm(null, List.of(new ChamadaDeFerramenta("m1", "propor_linhas", argumentos)), null);
+                });
+    }
+
+    private static byte[] pdfSemTexto() throws IOException {
+        try (PDDocument documento = new PDDocument(); ByteArrayOutputStream saida = new ByteArrayOutputStream()) {
+            documento.addPage(new PDPage());
+            documento.save(saida);
+            return saida.toByteArray();
+        }
+    }
+
+    @Test
+    void aImagemEhTranscritaEAsLinhasSaemDaTranscricao() throws IOException {
+        imagemTranscritaEPostaEmLinha("Cliente Roxo\natl.la\nPost feed serviço e valorização do cotista (durante)\n"
+                        + "21 de outubro de 2026", "imagem", "Cliente Roxo", "atl.la",
+                "Post feed serviço e valorização do cotista (durante)", "2026-10-21", "21 de outubro de 2026");
+        SessaoDeApi rbs = SessaoDeApi.entrar(mvc, RBS);
+        MvcTestResult criada = enviar(rbs, "post-instagram.png", corpus("post-instagram.png"), evento2027(), "EDICAO", null, null,
+                "COMPROVANTE");
+        assertThat(criada).hasStatus(HttpStatus.ACCEPTED);
+        assertThat(roteiro.pedidos().getFirst().imagem().mimeType()).isEqualTo("image/png");
+        long id = ((Number) lerJson(criada, "$.id")).longValue();
+        MvcTestResult detalhe = rbs.get("/api/importacoes/" + id);
+        assertThat(lerJson(detalhe, "$.situacao")).isEqualTo("EM_PREVIA");
+        assertThat(lerJson(detalhe, "$.itens[0].situacao")).isEqualTo("PROPOSTA");
+        assertThat(lerJson(detalhe, "$.itens[0].dados.data")).isEqualTo("2026-10-21");
+        assertThat(lerJson(detalhe, "$.itens[0].origem.data.localizador")).isEqualTo("imagem");
+
+        long linhaId = ((Number) lerJson(detalhe, "$.itens[0].id")).longValue();
+        MvcTestResult origem = rbs.get("/api/importacoes/" + id + "/origem/" + linhaId + "?campo=data");
+        assertThat(origem).hasStatus(HttpStatus.OK);
+        assertThat(lerJson(origem, "$.tipo")).isEqualTo("PNG");
+        assertThat(lerJson(origem, "$.localizador")).isEqualTo("imagem");
+        assertThat(lerJson(origem, "$.trecho")).isEqualTo("21 de outubro de 2026");
+        assertThat(lerJson(origem, "$.texto")).isNull();
+    }
+
+    @Test
+    void oPdfEscaneadoCaiNaTranscricaoPorPagina() throws IOException {
+        imagemTranscritaEPostaEmLinha("Cliente Amarelo\nZero Hora\nPágina dupla assinada\n18 de outubro de 2026", "página 1",
+                "Cliente Amarelo", "Zero Hora", "Página dupla assinada", "2026-10-18", "18 de outubro de 2026");
+        SessaoDeApi rbs = SessaoDeApi.entrar(mvc, RBS);
+        MvcTestResult criada = enviar(rbs, "escaneado.pdf", pdfSemTexto(), evento2027(), "EDICAO", null, null, "COMPROVANTE");
+        assertThat(criada).hasStatus(HttpStatus.ACCEPTED);
+        long id = ((Number) lerJson(criada, "$.id")).longValue();
+        MvcTestResult detalhe = rbs.get("/api/importacoes/" + id);
+        assertThat(lerJson(detalhe, "$.situacao")).isEqualTo("EM_PREVIA");
+        assertThat(lerJson(detalhe, "$.itens[0].origem.data.localizador")).isEqualTo("página 1");
+    }
+
+    @Test
+    void oProvedorSemVisaoDeixaAImportacaoEmErro() throws IOException {
+        roteiro.limpar().semVisao();
+        SessaoDeApi rbs = SessaoDeApi.entrar(mvc, RBS);
+        MvcTestResult criada = enviar(rbs, "post-instagram.png", corpus("post-instagram.png"), evento2027(), "EDICAO", null, null,
+                "COMPROVANTE");
+        assertThat(criada).hasStatus(HttpStatus.ACCEPTED);
+        long id = ((Number) lerJson(criada, "$.id")).longValue();
+        MvcTestResult detalhe = rbs.get("/api/importacoes/" + id);
+        assertThat(lerJson(detalhe, "$.situacao")).isEqualTo("ERRO");
+        assertThat(String.valueOf(lerJson(detalhe, "$.erro"))).contains("Este provedor não lê imagem");
+        assertThat(roteiro.pedidos()).isEmpty();
     }
 
     @Test

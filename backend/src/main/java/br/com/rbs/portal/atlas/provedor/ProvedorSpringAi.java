@@ -4,6 +4,7 @@ import com.openai.core.JsonValue;
 import com.openai.models.completions.CompletionUsage;
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -22,7 +23,9 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.content.Media;
 import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.util.MimeType;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.DefaultToolDefinition;
 import org.springframework.ai.tool.definition.ToolDefinition;
@@ -98,11 +101,17 @@ public class ProvedorSpringAi implements ProvedorDeLlm {
         return ((OpenAiChatOptions) modelo.getOptions()).getModel();
     }
 
+    /** O provedor da OpenAI aceita imagem: ela vai como {@code image_url} na mensagem da pessoa. */
+    @Override
+    public boolean leImagem() {
+        return true;
+    }
+
     @Override
     public RespostaDoLlm responder(PedidoAoLlm pedido) {
         long inicio = System.nanoTime();
         try {
-            ChatResponse resposta = modelo.call(new Prompt(mensagens(pedido.mensagens()), opcoes(pedido)));
+            ChatResponse resposta = modelo.call(new Prompt(mensagens(pedido.mensagens(), pedido.imagem()), opcoes(pedido)));
             RespostaDoLlm saida = resposta(resposta);
             long ms = (System.nanoTime() - inicio) / 1_000_000;
             return new RespostaDoLlm(saida.texto(), saida.chamadas(), raciocinio ? saida.raciocinio() : null,
@@ -147,7 +156,7 @@ public class ProvedorSpringAi implements ProvedorDeLlm {
         try {
             // toIterable consome o fluxo nesta thread (a do turno): o cliente HTTP enche a fila na dele, e nada fica em transação.
             // O uso vem do stream_options.include_usage, que o Spring AI 2.0.2 já manda em todo fluxo (conferido em teste).
-            for (ChatResponse parte : modelo.stream(new Prompt(mensagens(pedido.mensagens()), opcoes(pedido))).toIterable()) {
+            for (ChatResponse parte : modelo.stream(new Prompt(mensagens(pedido.mensagens(), pedido.imagem()), opcoes(pedido))).toIterable()) {
                 if (parte.getMetadata() != null && (maisCompleta == null || tokensDe(parte.getMetadata().getUsage()) > tokensDe(maisCompleta.getUsage()))) {
                     maisCompleta = parte.getMetadata();
                 }
@@ -297,12 +306,12 @@ public class ProvedorSpringAi implements ProvedorDeLlm {
         return padrao.mutate().customHeaders(cabecalhos).extraBody(corpoExtra);
     }
 
-    private static List<Message> mensagens(List<MensagemDeChat> mensagens) {
+    private static List<Message> mensagens(List<MensagemDeChat> mensagens, Imagem imagem) {
         List<Message> convertidas = new ArrayList<>();
         for (MensagemDeChat mensagem : mensagens) {
             convertidas.add(switch (mensagem.papel()) {
                 case "system" -> new SystemMessage(mensagem.conteudo());
-                case "user" -> new UserMessage(mensagem.conteudo());
+                case "user" -> usuario(mensagem.conteudo(), imagem);
                 case "assistant" -> assistente(mensagem);
                 case "tool" -> ToolResponseMessage.builder()
                         .responses(List.of(new ToolResponse(mensagem.chamadaId(),
@@ -312,6 +321,16 @@ public class ProvedorSpringAi implements ProvedorDeLlm {
             });
         }
         return convertidas;
+    }
+
+    /** A mensagem da pessoa; com a imagem do pedido, ela vai como {@code image_url} (base64) junto do texto. */
+    private static UserMessage usuario(String texto, Imagem imagem) {
+        if (imagem == null || imagem.base64() == null || imagem.base64().isBlank()) {
+            return new UserMessage(texto);
+        }
+        Media midia = Media.builder().mimeType(MimeType.valueOf(imagem.mimeType()))
+                .data(Base64.getDecoder().decode(imagem.base64())).build();
+        return UserMessage.builder().text(texto).media(midia).build();
     }
 
     private static AssistantMessage assistente(MensagemDeChat mensagem) {
