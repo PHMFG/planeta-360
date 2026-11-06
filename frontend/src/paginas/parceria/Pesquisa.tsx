@@ -233,18 +233,26 @@ function Perguntas({ dados, rbs, aoEnviar, aoDecidir }: PropsPerguntas) {
 
   async function enviar() {
     if (!podeEnviar) return
+    // A pergunta que não mudou vai como veio da API (a antiga, de antes do tipo, não tem alternativas e continua valendo).
     const lista = rascunhos
       .filter((rascunho) => rascunho.texto.trim())
-      .map((rascunho) => ({
-        ordem: rascunho.ordem,
-        texto: rascunho.texto.trim(),
-        tipoResposta: rascunho.tipoResposta,
-        alternativas: rascunho.tipoResposta === 'ESCOLHA' ? rascunho.alternativas.map((item) => item.trim()).filter(Boolean) : undefined,
-      }))
-    // [VALIDACAO] As regras da API: de 1 ao limite, texto de 10 a 300, escolha com 2 a 10 alternativas.
+      .map((rascunho) => {
+        const salva = porOrdem(rascunho.ordem)
+        if (salva && igual(rascunho, salva))
+          return { ordem: salva.ordem, texto: salva.texto, tipoResposta: salva.tipoResposta ?? 'ESCOLHA', alternativas: salva.alternativas ?? undefined, mudou: false }
+        return {
+          ordem: rascunho.ordem,
+          texto: rascunho.texto.trim(),
+          tipoResposta: rascunho.tipoResposta,
+          alternativas: rascunho.tipoResposta === 'ESCOLHA' ? rascunho.alternativas.map((item) => item.trim()).filter(Boolean) : undefined,
+          mudou: true,
+        }
+      })
+    // [VALIDACAO] As regras da API: de 1 ao limite, texto de 10 a 300, escolha com 2 a 10 alternativas (na pergunta nova ou mudada).
     const novos: Record<string, string> = {}
     if (!lista.length) novos.geral = 'Escreva pelo menos uma pergunta.'
     lista.forEach((item) => {
+      if (!item.mudou) return
       if (item.texto.length < 10) novos[item.ordem] = 'A pergunta precisa de pelo menos 10 caracteres.'
       if (item.alternativas && item.alternativas.length < 2) novos[`alt${item.ordem}`] = 'Uma pergunta de escolha precisa de pelo menos 2 alternativas.'
     })
@@ -253,7 +261,7 @@ function Perguntas({ dados, rbs, aoEnviar, aoDecidir }: PropsPerguntas) {
     if (Object.keys(novos).length) return
     setEnviando(true)
     try {
-      aoEnviar(await enviarPerguntas(dados.parceriaId, lista))
+      aoEnviar(await enviarPerguntas(dados.parceriaId, lista.map(({ mudou: _mudou, ...pergunta }) => pergunta)))
     } catch (erro) {
       setFalha(erro instanceof ErroApi ? (Object.values(erro.campos)[0] ?? erro.message) : 'Não foi possível enviar as perguntas.')
     } finally {
