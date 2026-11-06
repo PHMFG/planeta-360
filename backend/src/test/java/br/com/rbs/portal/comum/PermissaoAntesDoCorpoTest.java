@@ -191,15 +191,16 @@ class PermissaoAntesDoCorpoTest {
     }
 
     @Test
-    void rbsRecebe403AntesDeQualquerOutraConferenciaNoEnvioDasPerguntas() {
+    void aRbsPassaNoEnvioDasPerguntasEParceriaInexistenteContinua404() {
         SessaoDeApi rbs = SessaoDeApi.entrar(mvc, RBS);
+        long amarelo = SessaoDeApi.parceriaDe2027(jdbc, "Cliente Amarelo");
 
-        for (String uri : List.of("/api/parcerias/999999/pesquisa/perguntas",
-                "/api/parcerias/" + SessaoDeApi.parceriaDe2027(jdbc, "Cliente Amarelo") + "/pesquisa/perguntas")) {
-            MvcTestResult resposta = rbs.put(uri, PERGUNTAS_INVALIDAS);
-            assertThat(resposta).as(uri).hasStatus(HttpStatus.FORBIDDEN);
-            assertThat(lerJson(resposta, "$.detail")).isEqualTo("Só o Admin Patrocinador da parceria envia as perguntas da pesquisa.");
-        }
+        // A RBS escreve as perguntas de qualquer Master: com o corpo inválido, ela recebe a validação do corpo (422).
+        MvcTestResult invalido = rbs.put("/api/parcerias/" + amarelo + "/pesquisa/perguntas", PERGUNTAS_INVALIDAS);
+        assertThat(invalido).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(lerJson(invalido, "$.campos['perguntas[0].texto']")).isEqualTo("A pergunta precisa ter de 10 a 300 caracteres.");
+        assertThat(rbs.put("/api/parcerias/999999/pesquisa/perguntas", PERGUNTAS_INVALIDAS))
+                .as("a parceria vem antes do corpo").hasStatus(HttpStatus.NOT_FOUND);
     }
 
     @Test
@@ -228,7 +229,10 @@ class PermissaoAntesDoCorpoTest {
             // O plano comercial (69) e os espaços de documento da marca (71 e 72): a marca da parceria e a RBS.
             "GET /api/parcerias/{id}/plano-comercial", "GET /api/parcerias/{id}/espacos",
             "POST /api/parcerias/{id}/espacos/{papel}/arquivos",
-            "GET /api/parcerias/{id}/pesquisa", "PUT /api/parcerias/{id}/pesquisa/perguntas",
+            "GET /api/parcerias/{id}/pesquisa", "GET /api/parcerias/{id}/pesquisa/perfil",
+            "PUT /api/parcerias/{id}/pesquisa/perguntas",
+            // As visitas e o selo "novo" (rota 120): a pessoa da parceria (marca ou RBS).
+            "POST /api/parcerias/{id}/visitas/{aba}", "GET /api/parcerias/{id}/novidades",
             "GET /api/parcerias/{id}/consolidacao", "GET /api/parcerias/{id}/relatorio", "GET /api/relatorios/{id}/csv",
             "GET /api/parcerias/{id}/aplicacoes", "GET /api/campos", "GET /api/parcerias/{id}/dados",
             "POST /api/parcerias/{id}/dados", "POST /api/parcerias/{id}/dados-informados/{chave}/arquivo",
