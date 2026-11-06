@@ -3,7 +3,6 @@
 // pessoa confirmar; o que a conferência recusou fica à vista, com o motivo.
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
-import { Orbe } from '../../atlas/Elementos'
 import { ErroApi, pedirArquivo } from '../../api/cliente'
 import {
   CAMPOS_DO_DESTINO,
@@ -24,6 +23,7 @@ import { useDados } from '../../api/useDados'
 import { Aviso } from '../../componentes/Aviso'
 import { Botao } from '../../componentes/Botao'
 import { CabecalhoSecao } from '../../componentes/CabecalhoSecao'
+import { LeituraDoAtlas } from '../../componentes/LeituraDoAtlas'
 import { Campo } from '../../componentes/Campo'
 import { Cartao } from '../../componentes/Cartao'
 import { Esqueleto } from '../../componentes/Carregando'
@@ -35,11 +35,6 @@ import { SituacaoDaImportacao } from './Importar'
 
 type Visao = 'revisar' | 'aceitas' | 'recusadas' | 'descartadas' | 'naoEntendidos'
 
-const ETAPAS = [
-  ['LENDO_ARQUIVO', 'Lendo o arquivo'],
-  ['ENTENDENDO', 'Entendendo as colunas e os trechos'],
-  ['CONFERINDO', 'Conferindo cada número na fonte'],
-] as const
 
 function valorNaTela(valor: string | number | null | undefined, ehNumero?: boolean) {
   if (valor === null || valor === undefined || valor === '') return '—'
@@ -123,7 +118,7 @@ export function Importacao() {
         }
       />
 
-      {importacao.situacao === 'LENDO' && <Lendo etapa={importacao.etapa} />}
+      {importacao.situacao === 'LENDO' && <LeituraDoAtlas etapa={importacao.etapa} />}
 
       {importacao.situacao === 'ERRO' && (
         <Aviso tipo="falha" titulo="Não deu para ler este arquivo">
@@ -345,32 +340,6 @@ export function Importacao() {
 }
 
 /** A leitura em andamento: a orbe pensa e as três etapas acendem uma a uma. */
-function Lendo({ etapa }: { etapa: ImportacaoCompleta['etapa'] }) {
-  const atual = Math.max(0, ETAPAS.findIndex(([codigo]) => codigo === etapa))
-  return (
-    <section className="flex animate-entrar flex-col items-center gap-5 rounded-[20px] border border-borda bg-white px-6 py-10 text-center" aria-live="polite">
-      <Orbe tamanho={72} estado="pensando" />
-      <div>
-        <h2 className="texto-titulo">O Atlas está lendo o arquivo</h2>
-        <p className="mt-1 text-sm text-texto-2">Isso leva alguns segundos. Você pode sair desta tela: a importação continua.</p>
-      </div>
-      <ol className="flex flex-col gap-2 text-left text-sm">
-        {ETAPAS.map(([codigo, nome], indice) => (
-          <li key={codigo} className={`flex items-center gap-2 transition-colors duration-(--duracao-media) ${indice <= atual ? 'font-semibold text-tinta' : 'text-texto-2'}`}>
-            <i
-              className={
-                indice < atual ? 'ri-checkbox-circle-fill text-aplicacoes' : indice === atual ? 'ri-loader-4-line animate-spin text-secao-texto' : 'ri-checkbox-blank-circle-line'
-              }
-              aria-hidden="true"
-            />
-            {nome}
-          </li>
-        ))}
-      </ol>
-    </section>
-  )
-}
-
 /** O painel da origem: a célula marcada na planilha, o trecho no texto ou a imagem, ao lado da prévia. */
 function PainelDaOrigem({ importacaoId, linha, campo, aoFechar }: { importacaoId: number; linha: LinhaDaImportacao; campo: string; aoFechar: () => void }) {
   const origem = useDados<OrigemParaVer>(() => obterOrigem(importacaoId, linha.id, campo), [importacaoId, linha.id, campo])

@@ -30,6 +30,7 @@ import { useSessao } from '../../sessao/Sessao'
 import { dataHora, numero, porcentagem, tamanho } from '../../util/formatar'
 import { useParceria, useRecarregarSeAbaFechou } from './ContextoParceria'
 import { EntregasDaAba } from './EntregasDaAba'
+import { ImportacaoDaAgencia } from './ImportacaoDaAgencia'
 
 const NOME = 'Aplicações da marca'
 
@@ -298,6 +299,12 @@ function DadosDaAtivacao({ rbs }: { rbs: boolean }) {
         )}
       </Carregando>
       {salvo && <Aviso titulo="Números salvos" className="mt-4" />}
+      {/* S1: a agência manda a planilha dela, o Atlas lê e a marca confere cada número antes de salvar. */}
+      {!rbs && dados.dado && dados.dado.campos.some((campo) => campo.tipo !== 'ARQUIVO') && (
+        <div className="mt-5 border-t border-borda pt-5">
+          <ImportacaoDaAgencia parceriaId={parceria.id} campos={dados.dado.campos} aoConfirmar={dados.recarregar} />
+        </div>
+      )}
       {dados.dado?.campos
         .filter((campo) => campo.tipo === 'ARQUIVO')
         .map((campo) => <ArquivoDaAtivacao key={campo.chave} campo={campo} aoEnviar={dados.recarregar} />)}
