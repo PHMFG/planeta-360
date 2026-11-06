@@ -48,10 +48,12 @@ class ImportacaoPesquisaAtivacaoTest {
     JdbcClient jdbc;
 
     private long dadoInformadoMax;
+    private long historicoMax;
 
     @BeforeEach
     void antes() {
         dadoInformadoMax = jdbc.sql("SELECT coalesce(max(id), 0) FROM dado_informado").query(Long.class).single();
+        historicoMax = jdbc.sql("SELECT coalesce(max(id), 0) FROM historico").query(Long.class).single();
     }
 
     @AfterEach
@@ -87,6 +89,14 @@ class ImportacaoPesquisaAtivacaoTest {
             jdbc.sql("DELETE FROM dado_informado WHERE id > :max").param("max", dadoInformadoMax).update();
         } finally {
             jdbc.sql("ALTER TABLE dado_informado ENABLE TRIGGER rn_dado_informado_imutavel").update();
+        }
+        // O histórico que a confirmação gravou (CRIACAO de cada dado informado) também sai: os testes dos dados informados
+        // contam as linhas de histórico da parceria.
+        jdbc.sql("ALTER TABLE historico DISABLE TRIGGER rn_historico_imutavel").update();
+        try {
+            jdbc.sql("DELETE FROM historico WHERE id > :max").param("max", historicoMax).update();
+        } finally {
+            jdbc.sql("ALTER TABLE historico ENABLE TRIGGER rn_historico_imutavel").update();
         }
     }
 
