@@ -225,6 +225,13 @@ public class BuscaHibrida {
                     WHERE %s AND d.modelo_embedding = :modelo
                     ORDER BY t.embedding <=> CAST(:vetor AS vector) LIMIT %d) v
                 """.formatted(filtro, TAMANHO_DAS_LISTAS);
+        // [ISOLAMENTO] O nome da marca do trecho só no escopo da RBS, que roda com o papel do portal. Na conversa da marca a busca roda
+        // como atlas_ro, que não lê parceria nem patrocinador (a V11 confere o 42501): a junta não pode estar lá.
+        boolean comMarca = pedido.escopo().todaAEdicao();
+        String nomeDaMarca = comMarca ? "pat.nome_canonico" : "CAST(NULL AS text)";
+        String juntaDaMarca = comMarca
+                ? " LEFT JOIN parceria pa ON pa.id = d.parceria_id LEFT JOIN patrocinador pat ON pat.id = pa.patrocinador_id"
+                : "";
         String sql = """
                 WITH vetorial AS MATERIALIZED (%s),
                 textual AS (
@@ -234,20 +241,18 @@ public class BuscaHibrida {
                              CROSS JOIN (SELECT CAST(:lexemas AS tsquery) AS consulta) q
                         WHERE %s AND t.tsv @@ q.consulta
                         ORDER BY nota DESC, t.id LIMIT %d) x)
-                SELECT t.id, t.documento_id, d.titulo AS documento, d.versao, d.tipo, pat.nome_canonico AS parceria,
+                SELECT t.id, t.documento_id, d.titulo AS documento, d.versao, d.tipo, %s AS parceria,
                        t.pagina_inicio AS pagina, t.pagina_fim,
                        t.secao_caminho AS secao, t.texto, t.tokens, v.posicao AS posicao_vetorial, v.distancia,
                        x.posicao AS posicao_textual, x.nota,
                        coalesce(CAST(1.0 AS float8) / (%d + v.posicao), 0) + coalesce(CAST(1.0 AS float8) / (%d + x.posicao), 0) AS rrf
                 FROM documento_trecho t
-                JOIN documento d ON d.id = t.documento_id
-                LEFT JOIN parceria pa ON pa.id = d.parceria_id
-                LEFT JOIN patrocinador pat ON pat.id = pa.patrocinador_id
+                JOIN documento d ON d.id = t.documento_id%s
                 LEFT JOIN vetorial v ON v.id = t.id
                 LEFT JOIN textual x ON x.id = t.id
                 WHERE v.id IS NOT NULL OR x.id IS NOT NULL
                 ORDER BY rrf DESC, t.id
-                """.formatted(vetorial, filtro, TAMANHO_DAS_LISTAS, CONSTANTE_DO_RRF, CONSTANTE_DO_RRF);
+                """.formatted(vetorial, filtro, TAMANHO_DAS_LISTAS, nomeDaMarca, CONSTANTE_DO_RRF, CONSTANTE_DO_RRF, juntaDaMarca);
 
         var consulta = jdbc.sql(sql).param("evento", pedido.escopo().eventoId()).param("cota", pedido.escopo().cotaTipoId())
                 .param("parceria", pedido.escopo().parceriaId()).param("lexemas", lexemas);
