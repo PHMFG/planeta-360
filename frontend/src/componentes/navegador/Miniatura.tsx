@@ -38,7 +38,7 @@ function Icone({ item }: { item: ItemDoNavegador }) {
   return (
     <span className="flex size-full flex-col items-center justify-center gap-1 text-secao">
       <i className={`${iconeDoTipo(item.mime, item.nome)} text-3xl`} aria-hidden="true" />
-      {extensao && <span className="text-[10px] font-bold tracking-wide">{extensao}</span>}
+      {extensao && <span className="text-[10px] font-bold tracking-wide text-secao-texto">{extensao}</span>}
     </span>
   )
 }

@@ -124,13 +124,16 @@ function usarSoltar(ativo: boolean, aoSoltar: (arquivo: File) => void) {
   }
 }
 
-function CartaoDaPasta({ pasta, podeEnviar, aoAbrir, aoEnviar }: { pasta: Pasta; podeEnviar: boolean; aoAbrir: () => void; aoEnviar: (arquivo: File) => void }) {
+// A entrada em cascata fica no próprio <li>: um <div> entre o <ul> e o <li> quebra a lista para o leitor de tela (axe: list).
+const cascata = (ordem: number) => ({ className: 'entrar-em-cascata', style: { '--ordem': ordem } as React.CSSProperties })
+
+function CartaoDaPasta({ pasta, podeEnviar, aoAbrir, aoEnviar, ordem }: { pasta: Pasta; podeEnviar: boolean; aoAbrir: () => void; aoEnviar: (arquivo: File) => void; ordem: number }) {
   const aceita = podeEnviar && Boolean(pasta.entrega && ACEITA_ENVIO.includes(pasta.entrega.status))
   const { porCima, manipuladores } = usarSoltar(aceita, aoEnviar)
   const capa = ordenar(pasta.atuais, 'data')[0]
   const total = pasta.atuais.length + pasta.anteriores.length
   return (
-    <li {...manipuladores}>
+    <li {...manipuladores} {...cascata(ordem)}>
       <button
         type="button"
         onClick={aoAbrir}
@@ -162,11 +165,11 @@ function CartaoDaPasta({ pasta, podeEnviar, aoAbrir, aoEnviar }: { pasta: Pasta;
   )
 }
 
-function CartaoDoArquivo({ item, vista, aoAbrir }: { item: ItemDoNavegador; vista: 'grade' | 'lista'; aoAbrir: () => void }) {
+function CartaoDoArquivo({ item, vista, aoAbrir, ordem }: { item: ItemDoNavegador; vista: 'grade' | 'lista'; aoAbrir: () => void; ordem: number }) {
   const selo = item.daRbs ? <span className="rounded-full bg-tinta px-2 py-0.5 text-[10px] font-bold tracking-wide text-white uppercase">RBS</span> : null
   if (vista === 'lista')
     return (
-      <li>
+      <li {...cascata(ordem)}>
         <button type="button" onClick={aoAbrir} className="flex w-full items-center gap-3 rounded-xl border border-borda bg-white p-2 text-left hover:border-secao">
           <span className="relative size-12 shrink-0 overflow-hidden rounded-lg bg-secao-tinta">
             <Miniatura item={item} className="absolute inset-0" />
@@ -183,7 +186,7 @@ function CartaoDoArquivo({ item, vista, aoAbrir }: { item: ItemDoNavegador; vist
       </li>
     )
   return (
-    <li>
+    <li {...cascata(ordem)}>
       <button
         type="button"
         onClick={aoAbrir}
@@ -304,9 +307,7 @@ export function NavegadorDeArquivos({ entregas, comprovantes, podeEnviar, aoEnvi
   const listaDeArquivos = (lista: ItemDoNavegador[]) => (
     <ul className={vista === 'grade' ? 'grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4' : 'flex flex-col gap-2'}>
       {lista.map((item, indice) => (
-        <div key={`${item.id}-${indice}`} className="entrar-em-cascata contents" style={{ '--ordem': indice } as React.CSSProperties}>
-          <CartaoDoArquivo item={item} vista={vista} aoAbrir={() => setAberto(item)} />
-        </div>
+        <CartaoDoArquivo key={`${item.id}-${indice}`} item={item} vista={vista} aoAbrir={() => setAberto(item)} ordem={indice} />
       ))}
     </ul>
   )
@@ -367,9 +368,14 @@ export function NavegadorDeArquivos({ entregas, comprovantes, podeEnviar, aoEnvi
         ) : (
           <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
             {pastas.map((item, indice) => (
-              <div key={item.chave} className="entrar-em-cascata contents" style={{ '--ordem': indice } as React.CSSProperties}>
-                <CartaoDaPasta pasta={item} podeEnviar={podeEnviar} aoAbrir={() => irPara(item.chave)} aoEnviar={(arquivo) => item.entrega && void enviar(arquivo, item.entrega)} />
-              </div>
+              <CartaoDaPasta
+                key={item.chave}
+                pasta={item}
+                podeEnviar={podeEnviar}
+                aoAbrir={() => irPara(item.chave)}
+                aoEnviar={(arquivo) => item.entrega && void enviar(arquivo, item.entrega)}
+                ordem={indice}
+              />
             ))}
           </ul>
         )
