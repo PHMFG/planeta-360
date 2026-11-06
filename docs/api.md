@@ -3672,7 +3672,7 @@ A rota 107 em planilha e CSV, com a coluna **Marca** primeiro e as mesmas coluna
 
 # Rotas de debug (temporárias)
 
-Um recurso **temporário**, para a equipe ligar o modelo de linguagem do Atlas pela tela (o botão "Debug"), sem reiniciar a API e sem variável de ambiente. Não faz parte das 123 rotas do contrato e só existe no perfil `dev`.
+Um recurso **temporário**, para a equipe ligar o modelo de linguagem do Atlas sem reiniciar a API e sem variável de ambiente (o botão "Debug" da tela saiu em 06/11; as rotas ficam). Não faz parte das 123 rotas do contrato e só existe no perfil `dev`.
 
 - **Só existem com `atlas.debug.chaves=true`.** A propriedade vem `false` por padrão, `true` no perfil `dev` e `false` no `demo` e no `test`. Sem ela, as quatro rotas respondem **404**, como uma rota que não existe.
 - **A chave fica só na memória da API.** Nunca vai ao banco, a arquivo ou ao log, e **some quando a API reinicia**. Nenhuma resposta devolve a chave inteira: só os 4 últimos caracteres (`finalDaChave`).

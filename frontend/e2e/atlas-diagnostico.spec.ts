@@ -1,4 +1,4 @@
-// A gaveta do diagnóstico na conversa da marca, a página Atlas da RBS e o botão Debug só para a RBS.
+// A gaveta do diagnóstico na conversa da marca, a página Atlas da RBS e nenhum botão Debug na tela.
 import { expect, test, type Page } from '@playwright/test'
 import { capturar, entrar, parceriaDa } from './apoio.ts'
 
@@ -75,13 +75,15 @@ test('o item Atlas aparece no menu da RBS', async ({ page }) => {
   await expect(page.getByRole('heading', { name: 'Atlas', exact: true })).toBeVisible()
 })
 
-test('o botão Debug só aparece para a RBS', async ({ page }) => {
+test('não há botão Debug na tela, para ninguém', async ({ page }) => {
+  // Desde 06/11 (pedido do ph) a chave do modelo vem só do servidor (variável de ambiente ou config/segredos.local.properties).
   await entrar(page, 'amarelo')
   await expect(page.getByRole('link', { name: 'atlas', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: /^Debug/ })).toHaveCount(0)
   await page.getByRole('button', { name: 'Sair' }).click()
   await entrar(page, 'rbs')
-  await expect(page.getByRole('button', { name: /^Debug/ })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^Debug/ })).toHaveCount(0)
 })
 
 test.describe('no celular', () => {

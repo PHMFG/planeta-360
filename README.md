@@ -189,7 +189,7 @@ A apresentação segue um roteiro de oito passos, que o ensaio automático perco
 
 Sem estas variáveis, o portal e os testes funcionam normalmente, mas o Atlas não responde. Com elas, a marca conversa com o Atlas pelo chat. A resposta aparece enquanto o modelo escreve, com a etapa do momento ("Consultando os números da parceria…"). Antes dela, uma caixa conta o tempo em que o modelo pensa e mostra um resumo curto do raciocínio, que fica aberto enquanto ele pensa e depois recolhe; dá para abrir de novo, inclusive nas conversas antigas. O raciocínio completo não sai do servidor: ele volta só ao modelo. O resumo é escrito no servidor, numa chamada curta à parte, e passa pela mesma checagem do texto do Atlas (sem números nem nomes internos); recusado, a caixa mostra só o tempo.
 
-**Pela tela, sem reiniciar (temporário, só no perfil `dev` e só para a RBS).** O selo amarelo "Debug", no topo da tela da RBS, abre um formulário para colar a chave do provedor (e, se quiser, outro endereço ou modelo), ligar ou desligar o raciocínio do modelo, testar a conexão e remover a chave. A bolinha do selo fica verde com o modelo ligado. A chave fica só na memória da API e some quando ela reinicia; nunca volta inteira para a tela. Fora do perfil `dev` as rotas de debug não existem e o selo não aparece.
+**Sem botão na tela.** A chave entra só pelo servidor: variável de ambiente ou `backend/config/segredos.local.properties` (perfil `dev`, com a API subindo a partir de `backend/`, como faz o `scripts/atlas-dev.sh`). As rotas de debug da chave continuam existindo no perfil `dev` (`docs/api.md`), sem tela.
 
 **Pelas variáveis de ambiente:**
 
