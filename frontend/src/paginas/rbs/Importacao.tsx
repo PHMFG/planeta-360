@@ -46,6 +46,19 @@ function valorNaTela(valor: string | number | null | undefined, ehNumero?: boole
   return String(valor)
 }
 
+/** O número com a palavra no singular ou no plural: "1 linha nova", "2 linhas novas". */
+function contagem(valor: number, singular: string, plural: string) {
+  return `${numero(valor)} ${valor === 1 ? singular : plural}`
+}
+
+/** A confirmação só diz que entrou o que a carga gravou (rodada A1: "entrou na base" com 0 linhas novas). */
+function avisoDaConfirmacao(resposta: ImportacaoCompleta) {
+  const novas = resposta.resultado?.inseridas ?? 0
+  return novas > 0
+    ? `Confirmado: ${contagem(novas, 'linha nova entrou', 'linhas novas entraram')} na base.`
+    : 'Confirmado, mas nada novo entrou na base: veja o motivo de cada linha.'
+}
+
 export function Importacao() {
   const { importacaoId } = useParams()
   const id = Number(importacaoId)
@@ -65,12 +78,12 @@ export function Importacao() {
     return () => window.clearInterval(timer)
   }, [importacao?.situacao, dados])
 
-  async function agir(nome: string, acao: () => Promise<unknown>, sucesso?: string) {
+  async function agir<T>(nome: string, acao: () => Promise<T>, sucesso?: string | ((resposta: T) => string)) {
     setOcupado(nome)
     setFalha(null)
     try {
-      await acao()
-      if (sucesso) avisar(sucesso)
+      const resposta = await acao()
+      if (sucesso) avisar(typeof sucesso === 'function' ? sucesso(resposta) : sucesso)
       dados.recarregar()
     } catch (erro) {
       // A frase do 422 é genérica ("Confira os campos destacados"), e esta tela não tem campo: vale a mensagem do campo (rodada H1).
@@ -158,12 +171,13 @@ export function Importacao() {
       )}
 
       {importacao.situacao === 'CONFIRMADA' && importacao.resultado && (
-        <Cartao titulo="Entrou na base">
+        <Cartao titulo={importacao.resultado.inseridas > 0 ? 'Entrou na base' : 'Nada novo entrou na base'}>
           <p className="text-sm">
-            <span className="font-semibold">{numero(importacao.resultado.inseridas)} linhas novas</span>
+            <span className="font-semibold">{contagem(importacao.resultado.inseridas, 'linha nova', 'linhas novas')}</span>
             <span className="text-texto-2">
               {' '}
-              · {numero(importacao.resultado.duplicadas)} já estavam na base · {numero(importacao.resultado.rejeitadas)} recusadas na carga
+              · {contagem(importacao.resultado.duplicadas, 'já estava na base', 'já estavam na base')} ·{' '}
+              {contagem(importacao.resultado.rejeitadas, 'recusada na carga', 'recusadas na carga')}
             </span>
           </p>
           {importacao.resultado.rejeicoes.length > 0 && (
@@ -226,7 +240,7 @@ export function Importacao() {
                   icone="ri-check-double-line"
                   carregando={ocupado === 'confirmar'}
                   disabled={porVisao.aceitas.length === 0}
-                  onClick={() => agir('confirmar', () => confirmarImportacao(id), 'Confirmado: as linhas aceitas entraram na base.')}
+                  onClick={() => agir('confirmar', () => confirmarImportacao(id), avisoDaConfirmacao)}
                 >
                   Confirmar {porVisao.aceitas.length || ''}
                 </Botao>

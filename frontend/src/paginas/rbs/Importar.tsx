@@ -197,7 +197,7 @@ export function Importar() {
                   { titulo: 'Situação', celula: (item) => <SituacaoDaImportacao importacao={item} /> },
                   {
                     titulo: 'Linhas',
-                    celula: (item) => (item.linhas.total ? `${item.linhas.aceitas} de ${item.linhas.total}` : '—'),
+                    celula: (item) => (item.linhas.total ? `${item.linhas.aceitas} ${item.linhas.aceitas === 1 ? 'aceita' : 'aceitas'} de ${item.linhas.total}` : '—'),
                     classe: 'text-right',
                   },
                   { titulo: 'Enviada', celula: (item) => `${item.criadaPor.nome} · ${dataHora(item.criadaEm)}` },
