@@ -66,6 +66,12 @@ public class JevRoteirizado implements ProvedorDeJev {
         return this;
     }
 
+    /** O destino que o JEV teria sugerido para o arquivo (o ponto ARQUIVO_DESTINO, em sombra). */
+    public JevRoteirizado arquivoDestino(String escolha, double confianca) {
+        return passo(PontoDoJev.ARQUIVO_DESTINO, pedido -> resposta("destino",
+                RespostaDaPergunta.deEscolha(escolha, confianca, probabilidades(escolha, confianca))));
+    }
+
     /** A intenção da mensagem, sem pedir modelo em branco e sem sinal de injeção. */
     public JevRoteirizado intencao(String escolha, double confianca) {
         return intencao(escolha, confianca, "nenhum", 0.99);
@@ -160,6 +166,9 @@ public class JevRoteirizado implements ProvedorDeJev {
     /** O ponto a que a requisição pertence, pelo nome das perguntas (cada ponto tem os seus). */
     static PontoDoJev pontoDe(PedidoAoJev pedido) {
         List<String> nomes = List.copyOf(pedido.perguntas().keySet());
+        if (nomes.contains("destino")) {
+            return PontoDoJev.ARQUIVO_DESTINO;
+        }
         if (nomes.contains("intencao")) {
             return PontoDoJev.INTENCAO;
         }

@@ -125,6 +125,14 @@ public class ServicoDoJev {
     public record LacunaOpcional(String chave, String rotulo) {
     }
 
+    /**
+     * O que o JEV teria sugerido para o destino de um arquivo importado (E5 e AC3). {@code escolha} é a opção em minúsculas do
+     * arquivo de perguntas; {@code agiu} só é verdadeiro no modo ATIVO com a confiança no limiar. Nesta versão o ponto fica em SOMBRA:
+     * a sugestão serve para o registro e quem escolhe é o modelo.
+     */
+    public record SugestaoDoArquivo(String escolha, double confianca, boolean agiu) {
+    }
+
     /** A chamada ao JEV: a resposta, ou o motivo do erro; e quanto levou. */
     private record Chamada(RespostaDoJev resposta, String erro, long ms) {
     }
@@ -170,6 +178,15 @@ public class ServicoDoJev {
             return ModoDoJev.DESLIGADO;
         }
         return modo;
+    }
+
+    /** O modo do ponto fora de uma conversa (a importação): sem traço, e o disjuntor aberto só desliga o ponto. */
+    private ModoDoJev modo(JevDoTurno jev, PontoDoJev ponto) {
+        if (!jev.ativo()) {
+            return ModoDoJev.DESLIGADO;
+        }
+        ModoDoJev modo = config.modo(ponto);
+        return modo.consulta() && disjuntores.jev().bloqueado() ? ModoDoJev.DESLIGADO : modo;
     }
 
     public double limiar(PontoDoJev ponto) {
@@ -582,6 +599,69 @@ public class ServicoDoJev {
                 .fim(comErro == julgadas.size() ? ResultadoDaEtapa.ERRO
                         : modo == ModoDoJev.ATIVO ? (dispensadas.isEmpty() ? ResultadoDaEtapa.OK : ResultadoDaEtapa.RECUSADO) : ResultadoDaEtapa.SOMBRA);
         return dispensadas;
+    }
+
+    // ---------------------------------------------------------------------
+    // AC3: o destino do arquivo da importação
+    // ---------------------------------------------------------------------
+
+    /**
+     * Pergunta ao JEV para qual destino vai o arquivo importado, com o nome, o tipo e as primeiras linhas já mascaradas (AC3). Roda
+     * fora de um turno de conversa, na leitura da importação. Em SOMBRA devolve o que ele teria sugerido, sem decidir; em ATIVO, com a
+     * confiança no limiar, {@code agiu} é verdadeiro. A decisão fica em {@link JevDoTurno} e é gravada por
+     * {@link #gravarDoArquivo(JevDoTurno, long)}.
+     */
+    public Optional<SugestaoDoArquivo> arquivoDestino(JevDoTurno jev, long importacaoId, String nomeArquivo, String tipo,
+                                                     String primeirasLinhas) {
+        ModoDoJev modo = modo(jev, PontoDoJev.ARQUIVO_DESTINO);
+        if (!modo.consulta()) {
+            return Optional.empty();
+        }
+        double limiar = config.limiar(PontoDoJev.ARQUIVO_DESTINO);
+        if (jev.reservar(1, modo) == 0) {
+            return Optional.empty();
+        }
+        String estado = perguntas.estado(PontoDoJev.ARQUIVO_DESTINO, Map.of("arquivo", nomeArquivo == null ? "" : nomeArquivo,
+                "tipo", tipo == null ? "" : tipo, "linhas", primeirasLinhas == null ? "" : primeirasLinhas));
+        PedidoAoJev pedido = new PedidoAoJev(MascaraDoJev.mascarar(estado, List.of()),
+                perguntas.perguntas(PontoDoJev.ARQUIVO_DESTINO));
+        Chamada chamada = chamar(pedido);
+        RespostaDaPergunta escolha = valida(chamada, "destino", PontoDoJev.ARQUIVO_DESTINO, pedido);
+        if (escolha == null) {
+            String erro = chamada.erro() != null ? chamada.erro() : "RESPOSTA_INCOMPLETA";
+            jev.adicionar(new Decisao(PontoDoJev.ARQUIVO_DESTINO, modo, limiar, "destino", null, null, null, provedor.modelo(),
+                    chamada.ms(), erro, "não agiu: o JEV não respondeu (" + erro + "), o destino vem do modelo",
+                    "importacao:" + importacaoId));
+            return Optional.empty();
+        }
+        boolean passa = escolha.confianca() >= limiar;
+        String acao = textoDaAcao(modo, "sugeriu o destino " + escolha.escolha(), "sugerir o destino " + escolha.escolha(), null);
+        jev.adicionar(new Decisao(PontoDoJev.ARQUIVO_DESTINO, modo, limiar, "destino", escolha.escolha(), escolha.confianca(),
+                escolha.probabilidades(), provedor.modelo(), chamada.ms(), null, acao, "importacao:" + importacaoId));
+        return Optional.of(new SugestaoDoArquivo(escolha.escolha(), escolha.confianca(), modo == ModoDoJev.ATIVO && passa));
+    }
+
+    /**
+     * Grava em {@code atlas_decisao} as decisões do ponto do arquivo, numa transação curta e sem mensagem de conversa
+     * ({@code mensagem_id} nulo, V24). Falha de gravação é só log: o registro do JEV nunca derruba a importação.
+     */
+    public void gravarDoArquivo(JevDoTurno jev, long importacaoId) {
+        List<Decisao> pendentes = jev.esvaziar();
+        if (pendentes.isEmpty()) {
+            return;
+        }
+        try {
+            transacao.executeWithoutResult(estado -> {
+                for (Decisao d : pendentes) {
+                    repositorio.inserirDecisao(null, null, d.ponto.nome(), d.modo.name(), d.limiar, d.pergunta, d.escolha, d.confianca,
+                            d.probabilidades == null ? null : AtlasJson.escrever(d.probabilidades), d.modelo, d.decisaoDoLlm, d.latenciaMs,
+                            d.erro, d.acao, d.alvo == null ? "importacao:" + importacaoId : d.alvo);
+                }
+            });
+        } catch (RuntimeException falha) {
+            log.warn("Atlas: as decisões do JEV da importação {} não puderam ser gravadas ({})", importacaoId,
+                    falha.getClass().getSimpleName());
+        }
     }
 
     // ---------------------------------------------------------------------

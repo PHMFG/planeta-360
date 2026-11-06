@@ -241,6 +241,10 @@ atlas:
     lacunas:
       modo: ${ATLAS_JEV_LACUNAS:sombra}
       limiar: 0.80
+    # O destino do arquivo importado (AC3): em sombra nesta versão, só registra o que teria sugerido; o destino vem do modelo.
+    arquivo-destino:
+      modo: ${ATLAS_JEV_ARQUIVO_DESTINO:sombra}
+      limiar: 0.80
 
 ---
 # [ATLAS] O perfil demo (M8): o portal como vai à apresentação. Sobe como o dev (a amostra, os arquivos de exemplo e o kit de documentos
@@ -285,6 +289,10 @@ atlas:
       limiar: 0.92
     lacunas:
       modo: ${ATLAS_JEV_LACUNAS:sombra}
+      limiar: 0.80
+    # O destino do arquivo importado (AC3): em sombra nesta versão, só registra o que teria sugerido; o destino vem do modelo.
+    arquivo-destino:
+      modo: ${ATLAS_JEV_ARQUIVO_DESTINO:sombra}
       limiar: 0.80
 
 ---

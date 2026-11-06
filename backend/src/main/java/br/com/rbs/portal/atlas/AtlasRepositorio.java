@@ -223,7 +223,7 @@ public class AtlasRepositorio {
      * Grava uma decisão do JEV (V15): onde foi consultado, no modo e com o limiar que valiam, o que respondeu e o que o servidor fez
      * (ou, em sombra, teria feito). Chamar numa transação curta, depois das chamadas ao JEV. Nunca leva o estado enviado a ele.
      */
-    public void inserirDecisao(long mensagemId, java.util.UUID turno, String ponto, String modo, double limiar, String pergunta,
+    public void inserirDecisao(Long mensagemId, java.util.UUID turno, String ponto, String modo, double limiar, String pergunta,
                                String escolha, Double confianca, String probabilidadesJson, String modelo, String decisaoLlm,
                                Long latenciaMs, String erro, String acao, String alvo) {
         jdbc.sql("""

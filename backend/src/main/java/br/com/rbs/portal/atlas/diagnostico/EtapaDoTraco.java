@@ -36,6 +36,11 @@ public enum EtapaDoTraco {
     SAIDA,
     /** O disjuntor de um provedor (llm, jev ou gemini) estava aberto e a chamada nem saiu. Uma por provedor por turno. */
     DISJUNTOR,
+    /**
+     * O destino do arquivo da importação (AC3), fora de um turno de conversa: o ponto do JEV roda na leitura do arquivo e só grava a
+     * decisão em {@code atlas_decisao}; não vira etapa do traço nesta versão.
+     */
+    ARQUIVO_DESTINO,
     /** Uma falha inesperada (a exceção, sem rastro de pilha). */
     ERRO;
 

@@ -2,6 +2,8 @@ package br.com.rbs.portal.importacao;
 
 import br.com.rbs.portal.atlas.embeddings.ProvedorDeEmbeddings;
 import br.com.rbs.portal.atlas.embeddings.ProvedorDeEmbeddings.TextoDoTrecho;
+import br.com.rbs.portal.atlas.jev.JevDoTurno;
+import br.com.rbs.portal.atlas.jev.ServicoDoJev;
 import br.com.rbs.portal.comum.AcaoHistorico;
 import br.com.rbs.portal.comum.Armazenamento;
 import br.com.rbs.portal.comum.ConflitoException;
@@ -46,6 +48,7 @@ import br.com.rbs.portal.importacao.ImportacaoRepositorio.RejeicaoDeCarga;
 import br.com.rbs.portal.importacao.ImportacaoRepositorio.TotaisDaCarga;
 import br.com.rbs.portal.importacao.extracao.CasadorDoPlano;
 import br.com.rbs.portal.importacao.extracao.ConferenciaDaExtracao;
+import br.com.rbs.portal.importacao.extracao.SugestorDeDestino;
 import br.com.rbs.portal.importacao.leitores.LeitorDeImagem;
 import br.com.rbs.portal.materiais.MateriaisDtos.PaginaDto;
 import jakarta.servlet.http.HttpServletRequest;
@@ -107,14 +110,16 @@ public class ImportacaoService {
     private final ProvedorDeEmbeddings embeddings;
     private final VerificadorDeAcesso verificador;
     private final HistoricoService historico;
+    private final ServicoDoJev servicoJev;
+    private final SugestorDeDestino sugestorDeDestino;
     private final TransactionTemplate transacao;
 
     public ImportacaoService(ImportacaoRepositorio repositorio, Armazenamento armazenamento, FilaDeImportacao fila,
                              DetectorDeDadosPessoais detector, List<LeitorDeConteudo> leitores, List<ExtratorDeLinhas> extratores,
                              List<DestinoDeGravacao> destinos, ObjectProvider<ConferenciaDaExtracao> conferencia,
                              ObjectProvider<CasadorDoPlano> casador, ProvedorDeEmbeddings embeddings,
-                             VerificadorDeAcesso verificador, HistoricoService historico,
-                             PlatformTransactionManager gerenteDeTransacao) {
+                             VerificadorDeAcesso verificador, HistoricoService historico, ServicoDoJev servicoJev,
+                             SugestorDeDestino sugestorDeDestino, PlatformTransactionManager gerenteDeTransacao) {
         this.repositorio = repositorio;
         this.armazenamento = armazenamento;
         this.fila = fila;
@@ -127,6 +132,8 @@ public class ImportacaoService {
         this.embeddings = embeddings;
         this.verificador = verificador;
         this.historico = historico;
+        this.servicoJev = servicoJev;
+        this.sugestorDeDestino = sugestorDeDestino;
         this.transacao = new TransactionTemplate(gerenteDeTransacao);
     }
 
@@ -652,19 +659,50 @@ public class ImportacaoService {
             }
             List<Pagina> paginas = paginas(conteudo);
             List<Suspeita> suspeitas = detector.analisarConversa(paginas);
-            DestinoDaImportacao sugerido = sugestaoDoConteudo(conteudo, destinoSugerido(extensao));
+            String primeirasLinhas = primeirasLinhas(conteudo);
+            // Com suspeita de dado pessoal nada vai ao modelo nem ao JEV (E4).
+            JevDoTurno jev = suspeitas.isEmpty() ? new JevDoTurno() : JevDoTurno.NENHUM;
+            Optional<ServicoDoJev.SugestaoDoArquivo> doJev = servicoJev.arquivoDestino(jev, id, importacao.arquivoNome(),
+                    extensao.toUpperCase(Locale.ROOT), primeirasLinhas);
+            // O cabeçalho reconhecido em código (a planilha de pesquisa) vale antes da extensão e dispensa o modelo.
+            DestinoDaImportacao porExtensao = destinoSugerido(extensao);
+            DestinoDaImportacao sugerido = sugestaoDoConteudo(conteudo, porExtensao);
+            boolean peloConteudo = sugerido != porExtensao;
+            BigDecimal confianca = new BigDecimal(peloConteudo ? "0.900" : "0.800");
+            if (importacao.destino() == null) {
+                ServicoDoJev.SugestaoDoArquivo doJevQueAgiu = doJev.filter(ServicoDoJev.SugestaoDoArquivo::agiu).orElse(null);
+                DestinoDaImportacao doJevDestino = doJevQueAgiu == null ? null : destinoDaEscolha(doJevQueAgiu.escolha());
+                if (doJevDestino != null) {
+                    sugerido = doJevDestino;
+                    confianca = BigDecimal.valueOf(doJevQueAgiu.confianca()).setScale(3, java.math.RoundingMode.HALF_UP);
+                } else if (suspeitas.isEmpty() && !peloConteudo) {
+                    Optional<SugestorDeDestino.Sugestao> doModelo = sugestorDeDestino.sugerir(importacao.arquivoNome(),
+                            extensao.toUpperCase(Locale.ROOT), primeirasLinhas);
+                    if (doModelo.isPresent()) {
+                        sugerido = doModelo.get().destino();
+                        confianca = doModelo.get().confianca();
+                    }
+                }
+            }
             DestinoDaImportacao destino = importacao.destino() != null ? importacao.destino() : sugerido;
             ResultadoDaExtracao extracao = extrair(conteudo, destino, importacao, suspeitas);
-            if (extracao.destinoSugerido() != null) {
+            if (extracao.destinoSugerido() != null && importacao.destino() == null) {
                 sugerido = extracao.destinoSugerido();
-                destino = importacao.destino() != null ? importacao.destino() : sugerido;
+                destino = sugerido;
             }
-            BigDecimal confianca = extracao.confianca() != null ? extracao.confianca() : new BigDecimal("0.800");
+            if (extracao.confianca() != null) {
+                confianca = extracao.confianca();
+            }
             DestinoDaImportacao destinoFinal = destino;
             DestinoDaImportacao sugeridoFinal = sugerido;
+            BigDecimal confiancaFinal = confianca;
             ConteudoLido conteudoFinal = conteudo;
-            transacao.executeWithoutResult(estado -> gravarPrevia(importacao, conteudoFinal, bytes, suspeitas, extracao, sugeridoFinal,
-                    destinoFinal, confianca));
+            try {
+                transacao.executeWithoutResult(estado -> gravarPrevia(importacao, conteudoFinal, bytes, suspeitas, extracao,
+                        sugeridoFinal, destinoFinal, confiancaFinal));
+            } finally {
+                servicoJev.gravarDoArquivo(jev, id);
+            }
         } catch (Throwable erro) {
             marcarErro(id, motivoDe(erro), erro);
         }
@@ -1016,6 +1054,36 @@ public class ImportacaoService {
             case "pdf" -> DestinoDaImportacao.NUMEROS_EDICAO;
             default -> DestinoDaImportacao.SO_CONSULTA;
         };
+    }
+
+    /** A escolha do JEV (ou do modelo) em minúsculas, como no perguntas.json, no enum do destino; nula se não for um destino. */
+    private static DestinoDaImportacao destinoDaEscolha(String escolha) {
+        if (escolha == null || escolha.isBlank()) {
+            return null;
+        }
+        try {
+            return DestinoDaImportacao.valueOf(escolha.strip().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException invalido) {
+            return null;
+        }
+    }
+
+    /** As primeiras linhas que o JEV e o modelo do destino veem: até 15 linhas (ou pedaços), no máximo 1.500 caracteres. */
+    private static String primeirasLinhas(ConteudoLido conteudo) {
+        List<String> linhas = new ArrayList<>();
+        var abas = br.com.rbs.portal.importacao.leitores.LeitorDePlanilha.abas(conteudo);
+        if (!abas.isEmpty()) {
+            var aba = abas.getFirst();
+            for (int r = 0; r < Math.min(15, aba.linhas().size()); r++) {
+                linhas.add(String.join(" | ", aba.linhas().get(r)));
+            }
+        } else {
+            for (int i = 0; i < Math.min(15, conteudo.pedacos().size()); i++) {
+                linhas.add(conteudo.pedacos().get(i).texto());
+            }
+        }
+        String texto = String.join("\n", linhas);
+        return texto.length() > 1_500 ? texto.substring(0, 1_500) : texto;
     }
 
     private static String etapa(Importacao importacao) {

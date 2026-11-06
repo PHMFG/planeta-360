@@ -3792,6 +3792,8 @@ O Atlas de entrada: a RBS (ou, na rota 117, a marca) envia uma planilha ou cola 
 
 Partes: `arquivo` (opcional quando há `texto`), `texto` (a conversa colada, até 100.000 caracteres; vira um `.txt`), `eventoId` (obrigatório), `alcance` (`EDICAO`, `COTA` ou `PARCERIA`), `cota` (o código ou o id, com `COTA`), `parceriaId` (com `PARCERIA`) e `destino` (opcional: força o destino e pula a sugestão). Arquivos aceitos: `.xlsx`, `.xls`, `.csv`, `.docx`, `.pptx`, `.pdf`, `.txt`, `.png`, `.jpg` e `.jpeg`, até 20 MB. **202:** o `ImportacaoResumo` com `situacao: "LENDO"`; a leitura roda na fila `atlas-importacao-`. **422:** `campos` com `arquivo` (`Envie um arquivo ou cole um texto.`), `eventoId`, `alcance`, `cota`, `parceriaId` (`Esta parceria não é da edição.`) e `destino`. **413** e **415** como no envio de materiais.
 
+Sem `destino`, a sugestão vem do modelo, numa chamada curta com o nome do arquivo, o tipo e as primeiras linhas mascaradas pela `MascaraDoJev`; ela fica em `destinoSugerido` e `confianca`. O JEV `arquivo_destino` roda em `SOMBRA` nessa leitura: grava em `atlas_decisao` o que teria sugerido e **não decide** nada. Com suspeita de dado pessoal, nem o JEV nem o modelo rodam.
+
 ### 110 · `GET /api/importacoes` (Admin RBS)
 
 Filtros: `eventoId`, `situacao` (uma ou várias, por vírgula), `pagina` e `tamanho` (até 200). **200:** página de `ImportacaoResumo`, a mais nova primeiro.

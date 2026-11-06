@@ -1138,10 +1138,10 @@ DECLARE
             SELECT c.parceria_id, c.id, gen_random_uuid(), 1, '%1$s', '%2$s', now(), %3$s FROM atlas_conversa c WHERE c.id = v_conversa;
         END $d$ $c$;
 BEGIN
-    PERFORM pg_temp.afirma('V10 ESTRUTURA', 'o CHECK de etapa aceita as 15 etapas do plano',
+    PERFORM pg_temp.afirma('V10 ESTRUTURA', 'o CHECK de etapa aceita as 16 etapas do plano',
         (SELECT count(*) FROM unnest(ARRAY['G1_LIMITES','J1_INTENCAO','J1_CARTAO','LLM_IDA','FERRAMENTA','BUSCA','R3_FONTES','CHECAGEM',
-                                           'R5_RESPOSTA','V2_COERENCIA','LACUNAS','RESUMO','SAIDA','DISJUNTOR','ERRO']) e
-          WHERE (SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = 'ck_atlas_traco_etapa') LIKE '%''' || e || '''%') = 15);
+                                           'R5_RESPOSTA','V2_COERENCIA','LACUNAS','RESUMO','SAIDA','DISJUNTOR','ARQUIVO_DESTINO','ERRO']) e
+          WHERE (SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = 'ck_atlas_traco_etapa') LIKE '%''' || e || '''%') = 16);
     PERFORM pg_temp.confere('V10 ESTRUTURA', 'a amostra não traz traço do diagnóstico', 0, (SELECT count(*) FROM atlas_traco));
     PERFORM pg_temp.aceita('V10 TRACO', 'um traço de LLM_IDA numa conversa do Amarelo', format(c_novo, 'LLM_IDA', 'OK', '12'));
     PERFORM pg_temp.recusa('V10 TRACO', 'etapa fora da lista', 'ck_atlas_traco_etapa', format(c_novo, 'INVENTADA', 'OK', '12'));
