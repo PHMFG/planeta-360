@@ -3857,6 +3857,8 @@ A pesquisa é a da edição da importação (a `ATIVACAO`; a `GERAL` para o perf
 
 **O CSV padrão da RBS** (`patrocinador`, `veiculo`, `formato`, `espaco_programa`, `exibido_em` ou `mes`, `quantidade`, `impacto`, `link`) vai direto para as linhas, sem modelo. Qualquer outra planilha é mapeada pelo modelo (só o cabeçalho e até 20 linhas, mascarados), e o código aplica o mapeamento: nenhum número passa pelo modelo. A planilha com cabeçalho de pesquisa (pergunta/alternativa/base ou dimensão/categoria) sugere o destino `PESQUISA`, e a da agência (campo/valor) é lida em código quando o destino é `DADOS_ATIVACAO`. O detector de dado pessoal roda antes, e com suspeita a importação para em `EM_PREVIA` só com o que o código leu.
 
+**Os leitores de texto (E8).** O Word (`.docx`) é lido pelo XWPF: cada parágrafo vira o localizador `parágrafo N` e cada linha de tabela, `tabela T, linha L`. O PowerPoint (`.pptx`) é lido pelo XSLF: cada forma com texto vira `slide N` e cada linha de tabela, `slide N, tabela T, linha L`. O PDF com texto é lido pelo mesmo `ExtratorDeTexto` dos documentos do Atlas, com `página N, linha L`. O `.txt` continua com `linha N` e, quando é uma exportação do WhatsApp (linhas `dd/mm/aaaa hh:mm - Autor: texto`), passa a `mensagem N`, com as linhas de continuação na mesma mensagem. O `.doc` e o `.ppt` antigos, o PDF escaneado e o PDF com senha não viram texto nesta rota; a origem (116) devolve o arquivo quando não há texto.
+
 ---
 
 # Regras que valem para todas as rotas

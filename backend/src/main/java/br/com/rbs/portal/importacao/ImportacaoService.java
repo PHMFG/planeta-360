@@ -520,10 +520,16 @@ public class ImportacaoService {
             ConteudoLido conteudo = leitor.ler(caminho);
             return planilhaDaOrigem(importacao, conteudo, origem, tipo);
         }
-        if ("txt".equals(extensao)) {
+        if (List.of("txt", "docx", "pptx", "pdf").contains(extensao)) {
             LeitorDeConteudo leitor = leitores.stream().filter(l -> l.aceita(extensao)).findFirst()
                     .orElseThrow(() -> new NaoEncontradoException("Este arquivo não é um texto."));
-            return textoDaOrigem(importacao, leitor.ler(caminho), origem, tipo);
+            try {
+                return textoDaOrigem(importacao, leitor.ler(caminho), origem, tipo);
+            } catch (LeituraFalhouException semTexto) {
+                // O PDF escaneado não tem texto para o visualizador de texto; a tela mostra a imagem do arquivo inteiro.
+                return new ImportacaoDtos.OrigemDaLinha(importacao.arquivoId(), tipo, origem.localizador(), origem.trecho(), null, null,
+                        null);
+            }
         }
         return new ImportacaoDtos.OrigemDaLinha(importacao.arquivoId(), tipo, origem.localizador(), origem.trecho(), null, null, null);
     }
@@ -587,7 +593,16 @@ public class ImportacaoService {
             depois = depois.substring(0, 300);
         }
         return new ImportacaoDtos.OrigemDaLinha(importacao.arquivoId(), tipo, origem.localizador(), origem.trecho(), null,
-                new ImportacaoDtos.TextoDaOrigemDto(antes, origem.trecho(), depois), null);
+                new ImportacaoDtos.TextoDaOrigemDto(antes, origem.trecho(), depois), paginaDoLocalizador(origem.localizador()));
+    }
+
+    /** A página de um localizador "página N, linha L" (ou "página N"); nula nos outros formatos. */
+    private static Integer paginaDoLocalizador(String localizador) {
+        if (localizador == null) {
+            return null;
+        }
+        java.util.regex.Matcher achado = java.util.regex.Pattern.compile("^página (\\d+)").matcher(localizador);
+        return achado.find() ? Integer.valueOf(achado.group(1)) : null;
     }
 
     // ---------------------------------------------------------------------
