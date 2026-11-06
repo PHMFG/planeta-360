@@ -157,12 +157,13 @@ export function Importacao() {
             .map((item) => `${item.pagina ? `${importacao.arquivo.tipo === 'PDF' ? 'página' : 'parte'} ${item.pagina}` : 'arquivo'} (${item.tipo.toLowerCase()})`)
             .join(', ')}
           . Se o resto
-          não veio, tire os dados pessoais do arquivo e importe de novo.
+          não veio, tire os dados pessoais do arquivo e importe de novo. Enquanto isso, o arquivo fica aguardando revisão em
+          Documentos, e o Atlas não o consulta nem o cita.
         </Aviso>
       )}
 
       {/* Word, PDF e texto sem o modelo (ou um arquivo que não traz números) ficam só para consulta: a tela diz o que houve (H1). */}
-      {importacao.situacao === 'EM_PREVIA' && importacao.destino === 'SO_CONSULTA' && importacao.itens.length === 0 && (
+      {importacao.situacao === 'EM_PREVIA' && importacao.destino === 'SO_CONSULTA' && importacao.itens.length === 0 && (importacao.suspeitas?.length ?? 0) === 0 && (
         <Aviso tipo="info" titulo="Guardado só para consulta: o Atlas não tirou linhas deste arquivo">
           O arquivo já está nos documentos que o Atlas consulta e cita. Para virar números na base, Word, PowerPoint, PDF e texto
           precisam do modelo de linguagem ligado; sem ele, só as planilhas e o CSV no formato que o código entende viram linhas.
