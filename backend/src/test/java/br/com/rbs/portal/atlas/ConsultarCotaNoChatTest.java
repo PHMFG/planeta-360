@@ -89,7 +89,7 @@ class ConsultarCotaNoChatTest {
 
         List<String> nomes = ProvedorRoteirizado.nomesDasFerramentas(modelo.ultimoPedido());
         assertThat(nomes).containsSubsequence("buscar_documentos", "listar_entregas", COTA, "contar_dias");
-        assertThat(nomes.indexOf(COTA)).isEqualTo(nomes.indexOf("listar_entregas") + 1);
+        assertThat(nomes.indexOf(COTA)).isEqualTo(nomes.indexOf("listar_entregas") + 2);
     }
 
     @Test

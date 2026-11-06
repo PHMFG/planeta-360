@@ -97,7 +97,7 @@ class LoopComServidorFalsoTest {
         assertThat(SERVIDOR.recebidas()).hasSize(2);
         // 1ª ida: só a ferramenta do estado "sem relatório", o raciocínio ligado (thinking enabled) e os cabeçalhos próprios
         var primeira = SERVIDOR.recebidas().get(0);
-        assertThat(JsonPath.<List<String>>read(primeira.corpo(), "$.tools[*].function.name")).containsExactly("parceria_consultar", "buscar_documentos", "listar_entregas", "consultar_cota", "consultar_prazos", "contar_dias", "calcular", "pedido_de_relatorio", "gerar_modelo", "relatorio_iniciar");
+        assertThat(JsonPath.<List<String>>read(primeira.corpo(), "$.tools[*].function.name")).containsExactly("parceria_consultar", "buscar_documentos", "listar_entregas", "consultar_midia", "consultar_cota", "consultar_prazos", "contar_dias", "calcular", "pedido_de_relatorio", "gerar_modelo", "relatorio_iniciar");
         assertThat(primeira.corpo()).contains("\"thinking\":{\"type\":\"enabled\"}");
         assertThat(JsonPath.<String>read(primeira.corpo(), "$.messages[0].role")).isEqualTo("system");
         assertThat(JsonPath.<String>read(primeira.corpo(), "$.messages[0].content")).contains("Cliente Amarelo");
@@ -111,7 +111,7 @@ class LoopComServidorFalsoTest {
         // 2ª ida: o resultado de relatorio_iniciar e o raciocínio da 1ª resposta, com o id que o loop deu ao pedido
         var segunda = SERVIDOR.recebidas().get(1);
         assertThat(JsonPath.<List<String>>read(segunda.corpo(), "$.tools[*].function.name"))
-                .containsExactly("parceria_consultar", "buscar_documentos", "listar_entregas", "consultar_cota", "consultar_prazos", "contar_dias", "calcular", "pedido_de_relatorio", "gerar_modelo", "relatorio_solicitar_campos", "relatorio_editar", "relatorio_finalizar");
+                .containsExactly("parceria_consultar", "buscar_documentos", "listar_entregas", "consultar_midia", "consultar_cota", "consultar_prazos", "contar_dias", "calcular", "pedido_de_relatorio", "gerar_modelo", "relatorio_solicitar_campos", "relatorio_editar", "relatorio_finalizar");
         assertThat(JsonPath.<List<String>>read(segunda.corpo(), "$.messages[*].role")).containsExactly("system", "user", "assistant", "tool");
         assertThat(JsonPath.<String>read(segunda.corpo(), "$.messages[2].reasoning_content")).isEqualTo("Preciso criar o relatório.");
         String idDoPrimeiro = JsonPath.read(segunda.corpo(), "$.messages[2].tool_calls[0].id");
@@ -147,7 +147,7 @@ class LoopComServidorFalsoTest {
         assertThat(JsonPath.<String>read(retomada, "$.messages[5].tool_call_id")).isEqualTo(idDoCartao).isNotEqualTo(idDoPrimeiro);
         assertThat(JsonPath.<String>read(retomada, "$.messages[5].content")).contains("\"acao\":\"accept\"", "\"ref\":\"dado:ativacao.visitantes_total\"");
         assertThat(JsonPath.<List<String>>read(retomada, "$.tools[*].function.name"))
-                .containsExactly("parceria_consultar", "buscar_documentos", "listar_entregas", "consultar_cota", "consultar_prazos", "contar_dias", "calcular", "pedido_de_relatorio", "gerar_modelo", "relatorio_solicitar_campos", "relatorio_editar", "relatorio_finalizar");
+                .containsExactly("parceria_consultar", "buscar_documentos", "listar_entregas", "consultar_midia", "consultar_cota", "consultar_prazos", "contar_dias", "calcular", "pedido_de_relatorio", "gerar_modelo", "relatorio_solicitar_campos", "relatorio_editar", "relatorio_finalizar");
         for (var recebida : SERVIDOR.recebidas()) {
             assertThat(recebida.corpo()).contains("\"thinking\":{\"type\":\"enabled\"}");
             assertThat(recebida.cabecalho("user-agent")).containsExactly("PlanetaAtlas/0.1");

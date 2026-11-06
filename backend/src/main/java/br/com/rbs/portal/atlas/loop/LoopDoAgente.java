@@ -19,6 +19,7 @@ import br.com.rbs.portal.atlas.checagem.Frases;
 import br.com.rbs.portal.atlas.ferramentas.BuscarDocumentos;
 import br.com.rbs.portal.atlas.ferramentas.Calcular;
 import br.com.rbs.portal.atlas.ferramentas.ConsultarCota;
+import br.com.rbs.portal.atlas.ferramentas.ConsultarMidia;
 import br.com.rbs.portal.atlas.ferramentas.ConsultarPrazos;
 import br.com.rbs.portal.atlas.ferramentas.ContarDias;
 import br.com.rbs.portal.atlas.ferramentas.Execucao;
@@ -178,7 +179,7 @@ public class LoopDoAgente {
      * {@code pedido_de_relatorio}, {@code gerar_modelo}); as {@code relatorio_*} de um relatório aberto ficam.
      */
     static final Set<String> FERRAMENTAS_DE_CONSULTA = Set.of(BuscarDocumentos.NOME, RelatorioFerramentas.CONSULTAR, ListarEntregas.NOME,
-            ConsultarCota.NOME, ConsultarPrazos.NOME, Calcular.NOME, ContarDias.NOME);
+            ConsultarCota.NOME, ConsultarMidia.NOME, ConsultarPrazos.NOME, Calcular.NOME, ContarDias.NOME);
     public static final String TEXTO_NAO_ENCONTREI = FRASE_NAO_ENCONTREI + " " + INDICACAO_DO_ATENDIMENTO;
     /**
      * As frases que o próprio loop grava como texto do assistente: no item {@code texto}, saem com {@code porModelo} falso. Entram
@@ -199,6 +200,7 @@ public class LoopDoAgente {
             Map.entry(BuscarDocumentos.NOME, "Buscando nos documentos do portal…"),
             Map.entry(ListarEntregas.NOME, "Consultando as entregas…"),
             Map.entry(ConsultarCota.NOME, "Consultando a cota…"),
+            Map.entry(ConsultarMidia.NOME, "Consultando a mídia…"),
             Map.entry(ConsultarPrazos.NOME, "Consultando os prazos…"),
             Map.entry(ContarDias.NOME, "Contando os dias…"),
             Map.entry(Calcular.NOME, "Fazendo a conta…"),

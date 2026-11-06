@@ -276,7 +276,7 @@ class JevIntencaoTest {
 
     /** Os dois ramos oferecem as mesmas ferramentas: as de consulta. Uma pergunta que cruza documento e dado não pode perder nenhuma. */
     private static final List<String> FERRAMENTAS_DE_CONSULTA = List.of("buscar_documentos", "parceria_consultar", "listar_entregas",
-            "consultar_cota", "consultar_prazos", "calcular", "contar_dias");
+            "consultar_cota", "consultar_midia", "consultar_prazos", "calcular", "contar_dias");
 
     @Test
     void perguntaSobreDocumentosDaAoModeloTodasAsFerramentasDeConsulta() {
