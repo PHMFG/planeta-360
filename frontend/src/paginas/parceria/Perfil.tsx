@@ -58,6 +58,8 @@ function EdicaoEmpresa({ detalhe, aoSalvar }: { detalhe: ParceriaDetalhe; aoSalv
   // O investimento e a base andam juntos (a API recusa um sem o outro) e a RBS edita os dois aqui (R6.d1).
   const [investimento, setInvestimento] = useState(detalhe.valorInvestimento === null ? '' : String(detalhe.valorInvestimento).replace('.', ','))
   const [base, setBase] = useState<'BRUTO_TABELA' | 'LIQUIDO'>(detalhe.baseValor ?? 'LIQUIDO')
+  const [atendimentoNome, setAtendimentoNome] = useState(detalhe.atendimentoNome ?? '')
+  const [atendimentoEmail, setAtendimentoEmail] = useState(detalhe.atendimentoEmail ?? '')
   const [falha, setFalha] = useState<string | null>(null)
   const [erros, setErros] = useState<Record<string, string>>({})
   const [salvando, setSalvando] = useState(false)
@@ -82,6 +84,9 @@ function EdicaoEmpresa({ detalhe, aoSalvar }: { detalhe: ParceriaDetalhe; aoSalv
           nomeProduto: produto.trim() || null,
           situacao,
           ...(valor !== null ? { valorInvestimento: valor, baseValor: base } : {}),
+          // "" limpa o atendimento (a única exceção à regra de que campo vazio não muda nada).
+          atendimentoNome: atendimentoNome.trim(),
+          atendimentoEmail: atendimentoEmail.trim(),
         }),
       )
     } catch (erro) {
@@ -117,6 +122,26 @@ function EdicaoEmpresa({ detalhe, aoSalvar }: { detalhe: ParceriaDetalhe; aoSalv
             </option>
           ))}
         </Seletor>
+      </Grade2>
+      <Grade2>
+        <Campo
+          rotulo="Atendimento na RBS"
+          maxLength={120}
+          placeholder="Nome de quem atende a marca"
+          value={atendimentoNome}
+          onChange={(evento) => setAtendimentoNome(evento.target.value)}
+          erro={erros.atendimentoNome}
+          ajuda="Aparece para a marca no fim da Ajuda."
+        />
+        <Campo
+          rotulo="E-mail do atendimento"
+          type="email"
+          maxLength={254}
+          placeholder="atendimento@rbs.com.br"
+          value={atendimentoEmail}
+          onChange={(evento) => setAtendimentoEmail(evento.target.value)}
+          erro={erros.atendimentoEmail}
+        />
       </Grade2>
       {falha && <Aviso tipo="falha" titulo={falha} />}
       <div>
