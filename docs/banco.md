@@ -681,7 +681,7 @@ Os três exemplos estão em `docs/exemplos/`. Valem para os três arquivos:
 | `patrocinador` | Sim | Nome canônico ou grafia alternativa da marca |
 | `veiculo` | Sim | Por exemplo "Rede Atlântida RS" |
 | `formato` | Sim | Por exemplo `Chamadas assinadas 5"` |
-| `espaco_programa` | Não | Coluna "Determinação" do plano. Vazio casa com plano sem espaço |
+| `espaco_programa` | Sim (a coluna; o valor pode ficar vazio) | Coluna "Determinação" do plano. Vazio casa com plano sem espaço |
 | `exibido_em` | Só sem `mes` | Data e hora da exibição |
 | `quantidade` | Sim | Maior que zero. Vale 1 por exibição; em CPM, o total do dia |
 | `link` | Não | Endereço da exibição |
