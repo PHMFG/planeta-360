@@ -23,6 +23,7 @@ import { RelatorioAtlas } from './paginas/parceria/RelatorioAtlas'
 import { RelatorioParceria } from './paginas/parceria/RelatorioParceria'
 import { AtlasRbs } from './paginas/rbs/Atlas'
 import { Cargas } from './paginas/rbs/Cargas'
+import { Dados } from './paginas/rbs/Dados'
 import { Importacao } from './paginas/rbs/Importacao'
 import { Importar } from './paginas/rbs/Importar'
 import { Fila } from './paginas/rbs/Fila'
@@ -108,6 +109,7 @@ export function App() {
         <Route path="patrocinadores" element={<Patrocinadores />} />
         <Route path="fila" element={<Fila />} />
         <Route path="cargas" element={<Cargas />} />
+        <Route path="dados" element={<Dados />} />
         <Route path="importar" element={<Importar />} />
         <Route path="importar/:importacaoId" element={<Importacao />} />
         <Route path="pesquisa" element={<PesquisaRbs />} />
