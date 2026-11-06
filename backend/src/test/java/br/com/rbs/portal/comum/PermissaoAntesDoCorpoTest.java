@@ -254,7 +254,12 @@ class PermissaoAntesDoCorpoTest {
             // A consulta da mídia da parceria (rotas 105 e 106): a marca (aba MIDIA aberta) e a RBS; a da RBS (107 e 108) está na lista dela.
             "GET /api/parcerias/{id}/midia", "GET /api/parcerias/{id}/midia.xlsx", "GET /api/parcerias/{id}/midia.csv",
             // O anexo de pós-venda (rota 96): a marca com o relatório disponibilizado e a RBS; publicar, listar, retirar e os números (97 a 101) são só da RBS.
-            "GET /api/parcerias/{id}/posvenda");
+            "GET /api/parcerias/{id}/posvenda",
+            // A importação (rotas 111 a 114, 116 e 112b): a RBS e a marca nas importações dela. Criar, listar e retirar (109,
+            // 110 e 115) estão na lista da RBS.
+            "GET /api/importacoes/{id}", "PATCH /api/importacoes/{id}/linhas/{linhaId}", "PATCH /api/importacoes/{id}/linhas",
+            "POST /api/importacoes/{id}/confirmar", "POST /api/importacoes/{id}/descartar",
+            "GET /api/importacoes/{id}/origem/{linhaId}");
 
     @Test
     void todaRotaDaApiEstaClassificadaEAListaDaRbsSoTemRotasQueExistem() {

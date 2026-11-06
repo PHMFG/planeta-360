@@ -121,6 +121,11 @@ public class PermissaoAntesDoCorpo implements HandlerInterceptor, WebMvcConfigur
             "DELETE /api/posvenda/{id}",
             "GET /api/eventos/{id}/resultados",
             "PUT /api/eventos/{id}/resultados",
+            // A importação (rotas 109, 110 e 115): criar, listar e retirar. As rotas 111 a 114, 116 e a 112b são da RBS e da
+            // marca nas importações dela, e o service confere a parceria.
+            "POST /api/importacoes",
+            "GET /api/importacoes",
+            "POST /api/importacoes/{id}/retirar",
             // As rotas de debug da chave do modelo (temporárias, só no perfil dev): só a RBS as usa. Só existem com
             // atlas.debug.chaves=true; o teste de classificação liga a propriedade, porque no perfil test elas não existem.
             "GET /api/debug/llm",

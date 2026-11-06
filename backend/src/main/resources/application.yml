@@ -191,6 +191,10 @@ portal:
     pasta: ./armazenamento
     # Limite exato de um arquivo, conferido pelo Armazenamento (20 MB). A resposta ao passar disso é 413.
     tamanho-maximo-bytes: 20971520
+  # [IMPORTACAO] A leitura da importação roda numa fila própria (2 threads). sincrona=true só nos testes: o callback do commit
+  # espera a leitura terminar, sempre em outra thread, para o teste ler a prévia logo depois do POST.
+  importacao:
+    sincrona: false
 
 ---
 spring:
@@ -342,3 +346,6 @@ atlas:
 portal:
   armazenamento:
     pasta: ./target/armazenamento-teste
+  # [IMPORTACAO] A leitura da importação espera o fim no callback do commit: o teste vê a prévia logo depois do POST.
+  importacao:
+    sincrona: true

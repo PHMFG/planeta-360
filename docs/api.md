@@ -2,7 +2,7 @@
 
 Este documento é o **contrato entre o back-end e o front-end**. Quem faz a tela lê aqui o que cada rota pede, o que devolve e quais erros esperar, sem precisar abrir o código.
 
-- Todas as 113 rotas estão implementadas e cobertas por testes de integração (`cd backend && ./mvnw test`), inclusive o isolamento entre parcerias. A coluna "Etapa" diz em que etapa do plano cada rota entrou (as do Atlas, 37 em diante, entram como `Atlas 1`, `Atlas 2`, `Atlas M2`, `Atlas M3`, `Atlas M4`, `Atlas M5`, `Atlas M6` e `Atlas M8`). Mudança de formato daqui em diante entra neste arquivo no mesmo commit do código.
+- Todas as 122 rotas estão implementadas e cobertas por testes de integração (`cd backend && ./mvnw test`), inclusive o isolamento entre parcerias. A coluna "Etapa" diz em que etapa do plano cada rota entrou (as do Atlas, 37 em diante, entram como `Atlas 1`, `Atlas 2`, `Atlas M2`, `Atlas M3`, `Atlas M4`, `Atlas M5`, `Atlas M6` e `Atlas M8`). Mudança de formato daqui em diante entra neste arquivo no mesmo commit do código.
 - O banco está descrito em [`docs/banco.md`](banco.md). Os nomes de status, cotas e abas são os mesmos do banco.
 
 ## Como falar com a API
@@ -215,10 +215,19 @@ Todas prontas e testadas. A coluna "Etapa" mostra em que etapa do plano a rota e
 | 106 | `GET /api/parcerias/{id}/midia.xlsx` e `GET /api/parcerias/{id}/midia.csv` | Idem | A mesma consulta em `.xlsx` e CSV (grava `DOWNLOAD`) | Base de mídia (M4) |
 | 107 | `GET /api/midia` | Admin RBS | A mídia de todas as parcerias da edição (ou das filtradas por parceria e cota), com a marca em cada linha | Base de mídia (M3) |
 | 108 | `GET /api/midia.xlsx` e `GET /api/midia.csv` | Admin RBS | A mesma consulta da RBS em `.xlsx` e CSV, com a coluna Marca primeiro (grava `DOWNLOAD`) | Base de mídia (M4) |
+| 109 | `POST /api/importacoes` | Admin RBS | Cria a importação (arquivo ou texto colado), que nasce `LENDO` e é lida na fila | Atlas de entrada |
+| 110 | `GET /api/importacoes` | Admin RBS | Lista as importações, a mais nova primeiro, com filtros de edição e situação | Atlas de entrada |
+| 111 | `GET /api/importacoes/{id}` | Admin RBS; a marca nas importações dela (rota 117) | O detalhe da importação, com as linhas propostas, a origem de cada valor e o resultado | Atlas de entrada |
+| 112 | `PATCH /api/importacoes/{id}/linhas/{linhaId}` | Admin RBS; a marca nas importações dela | Edita os valores ou a linha do plano de uma linha e roda a conferência de novo | Atlas de entrada |
+| 112b | `PATCH /api/importacoes/{id}/linhas` | Admin RBS; a marca nas importações dela | Aceita ou descarta várias linhas de uma vez | Atlas de entrada |
+| 113 | `POST /api/importacoes/{id}/confirmar` | Admin RBS; a marca só no destino `DADOS_ATIVACAO`, nas importações dela | Grava as linhas aceitas no destino, numa carga nova | Atlas de entrada |
+| 114 | `POST /api/importacoes/{id}/descartar` | Admin RBS; a marca nas importações dela | Descarta a prévia sem gravar nada | Atlas de entrada |
+| 115 | `POST /api/importacoes/{id}/retirar` | Admin RBS | Retira uma importação confirmada (a veiculação apaga as linhas que ela gravou) | Atlas de entrada |
+| 116 | `GET /api/importacoes/{id}/origem/{linhaId}` | Admin RBS; a marca nas importações dela | A origem de um campo da linha, para o visualizador (célula, texto ou imagem) | Atlas de entrada |
 | 119 | `GET /api/parcerias/{id}/pesquisa/perfil` | Patrocinador Master da parceria (aba `PESQUISA` aberta), ou Admin RBS | O perfil demográfico da pesquisa da marca, o comparativo da pesquisa geral e as respostas de texto | F5 |
 | 120 | `POST /api/parcerias/{id}/visitas/{aba}` e `GET /api/parcerias/{id}/novidades` | Pessoa da parceria (marca ou RBS) | Marca a visita a uma aba (ou ao relatório) e devolve o selo "novo" de cada aba | F6 |
 
-São 113 operações (método + caminho): 112 mapeadas nos controllers (`@GetMapping`, `@PostMapping`, `@PutMapping`, `@PatchMapping` ou `@DeleteMapping`) e o logout (rota 3), que vem do Spring Security (`SegurancaConfig`), sem controller. As quatro rotas de debug ficam de fora da numeração. A rota 5 (`ativar`) faz parte do contrato de autenticação, mas só é implementada na etapa 4. As rotas 37 em diante vieram com o Atlas: a coluna "Etapa" diz `Atlas 1` (plano de aplicações e dados informados), `Atlas 2` (conversa, cartão de perguntas e relatório), `Atlas M2` (o diagnóstico: rotas 49 a 53, veja "Diagnóstico do Atlas") `Atlas M3` (os documentos: rotas 54 a 58, veja "Os documentos do Atlas") `Atlas M4` (o visualizador, rotas 59 e 60, e a busca de teste, rota 61, veja "Busca nos documentos") `Atlas M5` (os prazos: rotas 62 a 64, veja "Os prazos do Atlas") `Atlas M6` (o relatório religado: a rota 65, veja "Descarte do relatório parado"; e a planilha da agência: a rota 66, veja "Dados informados pela marca") `Atlas M8` (o Atlas da RBS: as rotas 67 e 68, veja "O Atlas da RBS") ou `Requisitos RBS` (o plano comercial e os espaços de documento da marca: as rotas 69 a 73, veja "O plano comercial e os espaços de documento") e a comprovação mensal de mídia: as rotas 88 a 91, veja a rota 88). As rotas 88 a 90 são da marca de cota Master (com a aba `MIDIA` aberta) e da RBS; a 91 é só do Admin RBS (a marca recebe **403** antes de tudo). As rotas 70 e 73 são só do Admin RBS (o patrocinador recebe **403** antes de o corpo ser lido); a 69, a 71 e a 72 são das duas pontas. As rotas 54, 55, 57, 58, 61, 62, 63, 64, 67 e 68 são só do Admin RBS (o outro perfil recebe **403** antes de o corpo ser lido); a 56, a 59 e a 60 são das duas pontas, e a marca só vê o que o escopo dela permite; a 66 é da marca da parceria e da RBS. A 49 é do dono da conversa (a marca, ou a RBS na conversa do Atlas da RBS); as 50 a 53 são só do Admin RBS (o outro perfil recebe **403** antes de tudo). **As rotas 49 a 53 estão sempre mapeadas e respondem 404 com o diagnóstico desligado** (`atlas.diagnostico.ligado=false`, o padrão). Nas rotas 42, 43, 46 e 65 só o Admin Patrocinador chama (a RBS recebe **403** antes de o corpo ser lido); nas 44, 45 e 49 chama o dono da conversa: a marca na conversa da parceria dela e, com `atlas.rbs.ligado`, a RBS na conversa dela, a do Atlas da RBS (a RBS recebe **403** antes do corpo em qualquer outra conversa, e sempre com a propriedade desligada); nas 47 e 48 chamam a marca da parceria e a RBS. **O relatório do Atlas está ligado nos perfis `dev`, `demo` e `test` e desligado no padrão** (`atlas.relatorio.ligado=false`, `ATLAS_RELATORIO`). Desligado, as rotas **46, 47, 48 e 65 não existem (404)**, e as rotas 42 e 44 só aceitam conversa por texto (`atalho` e `modelo` dão 422): é o modo só chat, que continua existindo e testado. Veja "Modo só chat". O contrato do relatório, nas rotas 42 a 48 e 65, vale com `atlas.relatorio.ligado=true`. As rotas 119 e 120 são da marca da parceria (a 119 só da cota Master, com a aba `PESQUISA` aberta) e da RBS; a 120 é de qualquer pessoa com vínculo na parceria.
+São 122 operações (método + caminho): 121 mapeadas nos controllers (`@GetMapping`, `@PostMapping`, `@PutMapping`, `@PatchMapping` ou `@DeleteMapping`) e o logout (rota 3), que vem do Spring Security (`SegurancaConfig`), sem controller. As quatro rotas de debug ficam de fora da numeração. A rota 5 (`ativar`) faz parte do contrato de autenticação, mas só é implementada na etapa 4. As rotas 37 em diante vieram com o Atlas: a coluna "Etapa" diz `Atlas 1` (plano de aplicações e dados informados), `Atlas 2` (conversa, cartão de perguntas e relatório), `Atlas M2` (o diagnóstico: rotas 49 a 53, veja "Diagnóstico do Atlas") `Atlas M3` (os documentos: rotas 54 a 58, veja "Os documentos do Atlas") `Atlas M4` (o visualizador, rotas 59 e 60, e a busca de teste, rota 61, veja "Busca nos documentos") `Atlas M5` (os prazos: rotas 62 a 64, veja "Os prazos do Atlas") `Atlas M6` (o relatório religado: a rota 65, veja "Descarte do relatório parado"; e a planilha da agência: a rota 66, veja "Dados informados pela marca") `Atlas M8` (o Atlas da RBS: as rotas 67 e 68, veja "O Atlas da RBS") ou `Requisitos RBS` (o plano comercial e os espaços de documento da marca: as rotas 69 a 73, veja "O plano comercial e os espaços de documento") e a comprovação mensal de mídia: as rotas 88 a 91, veja a rota 88). As rotas 88 a 90 são da marca de cota Master (com a aba `MIDIA` aberta) e da RBS; a 91 é só do Admin RBS (a marca recebe **403** antes de tudo). As rotas 70 e 73 são só do Admin RBS (o patrocinador recebe **403** antes de o corpo ser lido); a 69, a 71 e a 72 são das duas pontas. As rotas 54, 55, 57, 58, 61, 62, 63, 64, 67 e 68 são só do Admin RBS (o outro perfil recebe **403** antes de o corpo ser lido); a 56, a 59 e a 60 são das duas pontas, e a marca só vê o que o escopo dela permite; a 66 é da marca da parceria e da RBS. A 49 é do dono da conversa (a marca, ou a RBS na conversa do Atlas da RBS); as 50 a 53 são só do Admin RBS (o outro perfil recebe **403** antes de tudo). **As rotas 49 a 53 estão sempre mapeadas e respondem 404 com o diagnóstico desligado** (`atlas.diagnostico.ligado=false`, o padrão). Nas rotas 42, 43, 46 e 65 só o Admin Patrocinador chama (a RBS recebe **403** antes de o corpo ser lido); nas 44, 45 e 49 chama o dono da conversa: a marca na conversa da parceria dela e, com `atlas.rbs.ligado`, a RBS na conversa dela, a do Atlas da RBS (a RBS recebe **403** antes do corpo em qualquer outra conversa, e sempre com a propriedade desligada); nas 47 e 48 chamam a marca da parceria e a RBS. **O relatório do Atlas está ligado nos perfis `dev`, `demo` e `test` e desligado no padrão** (`atlas.relatorio.ligado=false`, `ATLAS_RELATORIO`). Desligado, as rotas **46, 47, 48 e 65 não existem (404)**, e as rotas 42 e 44 só aceitam conversa por texto (`atalho` e `modelo` dão 422): é o modo só chat, que continua existindo e testado. Veja "Modo só chat". O contrato do relatório, nas rotas 42 a 48 e 65, vale com `atlas.relatorio.ligado=true`. As rotas 119 e 120 são da marca da parceria (a 119 só da cota Master, com a aba `PESQUISA` aberta) e da RBS; a 120 é de qualquer pessoa com vínculo na parceria. As rotas 109, 110 e 115 são só do Admin RBS; as 111 a 114 e a 116 são da RBS e da marca nas importações dela (as que ela criou pela 117), e a marca só confirma o destino `DADOS_ATIVACAO`.
 
 As rotas de debug do modelo de linguagem (`/api/debug/llm`) são temporárias, só existem no perfil `dev` (o perfil `demo`, da apresentação, as deixa em 404), são só da RBS e ficam fora desta tabela e da conta das 106: veja "Rotas de debug (temporárias)", no fim.
 
@@ -3652,7 +3661,7 @@ A rota 107 em planilha e CSV, com a coluna **Marca** primeiro e as mesmas coluna
 
 # Rotas de debug (temporárias)
 
-Um recurso **temporário**, para a equipe ligar o modelo de linguagem do Atlas pela tela (o botão "Debug"), sem reiniciar a API e sem variável de ambiente. Não faz parte das 113 rotas do contrato e só existe no perfil `dev`.
+Um recurso **temporário**, para a equipe ligar o modelo de linguagem do Atlas pela tela (o botão "Debug"), sem reiniciar a API e sem variável de ambiente. Não faz parte das 122 rotas do contrato e só existe no perfil `dev`.
 
 - **Só existem com `atlas.debug.chaves=true`.** A propriedade vem `false` por padrão, `true` no perfil `dev` e `false` no `demo` e no `test`. Sem ela, as quatro rotas respondem **404**, como uma rota que não existe.
 - **A chave fica só na memória da API.** Nunca vai ao banco, a arquivo ou ao log, e **some quando a API reinicia**. Nenhuma resposta devolve a chave inteira: só os 4 últimos caracteres (`finalDaChave`).
@@ -3742,6 +3751,87 @@ Ligada:
 - Desligada: nenhum item nem evento `ferramenta`, e nada disso muda o que vai ao modelo.
 
 **O raciocínio cru continua nunca saindo do servidor**, também por aqui. O debug mostra só o que a própria ferramenta já devolveu para aquela conversa, que é só do usuário que a abriu, com a consulta limitada à parceria e ao perfil dele; a chave do modelo não aparece em lugar nenhum.
+
+---
+
+# A importação (rotas 109 a 116 e 112b)
+
+O Atlas de entrada: a RBS (ou, na rota 117, a marca) envia uma planilha ou cola uma conversa, o servidor lê, propõe as linhas com a origem de cada valor, a pessoa confere na prévia e confirma no destino. **Nada entra na base antes da confirmação**, e nenhuma linha some: o que a conferência recusa fica com o motivo.
+
+**Situações.** `LENDO` → `EM_PREVIA` ou `ERRO`; `EM_PREVIA` → `CONFIRMADA` ou `DESCARTADA`; `CONFIRMADA` → `RETIRADA`. Fora dessas, 409. **Destinos.** `VEICULACAO`, `COMPROVANTE`, `PESQUISA`, `NUMEROS_EDICAO`, `DADOS_ATIVACAO`, `PLANO` e `SO_CONSULTA`. **Situação da linha.** `PROPOSTA`, `EDITADA`, `ACEITA`, `DESCARTADA` e `RECUSADA` (a conferência recusou; `motivo` diz por quê; a pessoa pode corrigir e ela volta a `EDITADA`).
+
+**O `ImportacaoResumo`**:
+
+```json
+{
+  "id": 7, "situacao": "EM_PREVIA", "origem": "RBS",
+  "arquivo": { "id": 120, "nome": "tv-novembro.xlsx", "tipo": "XLSX", "tamanho": 3296 },
+  "evento": { "id": 2, "nome": "Planeta Atlântida", "edicao": 2027 },
+  "alcance": "EDICAO", "cota": null, "parceria": null,
+  "destino": "VEICULACAO", "destinoSugerido": "VEICULACAO", "confianca": 0.9,
+  "linhas": { "total": 18, "propostas": 12, "editadas": 1, "aceitas": 0, "descartadas": 1, "recusadas": 4 },
+  "criadaPor": { "id": 1, "nome": "Equipe B2B RBS" }, "criadaEm": "2026-11-06T15:02:11-03:00",
+  "confirmadaEm": null, "retiradaEm": null, "erro": null, "suspeitas": []
+}
+```
+
+`suspeitas` (só no detalhe) diz onde o detector achou dado pessoal: `[{"pagina": 5, "tipo": "CONTATOS"}]`; com suspeita, a importação vai a `EM_PREVIA` só com a leitura em código e **não chama o modelo**.
+
+### 109 · `POST /api/importacoes` (Admin RBS) · multipart
+
+Partes: `arquivo` (opcional quando há `texto`), `texto` (a conversa colada, até 100.000 caracteres; vira um `.txt`), `eventoId` (obrigatório), `alcance` (`EDICAO`, `COTA` ou `PARCERIA`), `cota` (o código ou o id, com `COTA`), `parceriaId` (com `PARCERIA`) e `destino` (opcional: força o destino e pula a sugestão). Arquivos aceitos: `.xlsx`, `.xls`, `.csv`, `.docx`, `.pptx`, `.pdf`, `.txt`, `.png`, `.jpg` e `.jpeg`, até 20 MB. **202:** o `ImportacaoResumo` com `situacao: "LENDO"`; a leitura roda na fila `atlas-importacao-`. **422:** `campos` com `arquivo` (`Envie um arquivo ou cole um texto.`), `eventoId`, `alcance`, `cota`, `parceriaId` (`Esta parceria não é da edição.`) e `destino`. **413** e **415** como no envio de materiais.
+
+### 110 · `GET /api/importacoes` (Admin RBS)
+
+Filtros: `eventoId`, `situacao` (uma ou várias, por vírgula), `pagina` e `tamanho` (até 200). **200:** página de `ImportacaoResumo`, a mais nova primeiro.
+
+### 111 · `GET /api/importacoes/{id}` (Admin RBS; a marca, só as importações dela)
+
+**200:** o `ImportacaoResumo` achatado, mais `documentoId`, `etapa` (só em `LENDO`: `LENDO_ARQUIVO`, `ENTENDENDO` ou `CONFERINDO`), `itens`, `naoEntendidos` e `resultado`:
+
+```json
+{
+  "documentoId": 31, "etapa": null,
+  "itens": [ {
+    "id": 401, "ordem": 1, "destino": "VEICULACAO", "situacao": "PROPOSTA", "motivo": null,
+    "dados": { "patrocinador": "Cliente Amarelo", "veiculo": "RBS TV", "formato": "Comercial 30\"", "espacoPrograma": "JNAC", "mes": "2026-11", "quantidade": 3, "impacto": 2300000 },
+    "origem": { "quantidade": { "localizador": "Entregas Nov-26!F7", "trecho": "3" }, "impacto": { "localizador": "Entregas Nov-26!E7", "trecho": "2.300.000" } },
+    "parceria": { "id": 2, "patrocinador": "Cliente Amarelo" },
+    "aproveitamentoSugerido": { "id": 61, "veiculo": "RBS TV", "formato": "Comercial 30\"", "espacoPrograma": "JNAC", "semelhanca": 1.0 },
+    "aproveitamento": null, "editadaPor": null, "editadaEm": null
+  } ],
+  "naoEntendidos": [ { "localizador": "linha 15", "trecho": "TOTAL | ...", "motivo": "Linha de total" } ],
+  "resultado": null
+}
+```
+
+Depois de confirmada, `resultado` é `{ "lidas": 18, "inseridas": 14, "duplicadas": 0, "rejeitadas": 0, "rejeicoes": [ { "ordem": 3, "motivo": "..." } ] }`. A marca de outra parceria e a marca numa importação da RBS recebem **404**.
+
+### 112 · `PATCH /api/importacoes/{id}/linhas/{linhaId}` (Admin RBS; a marca nas dela)
+
+Corpo (tudo opcional): `{ "situacao": "ACEITA" | "DESCARTADA", "dados": { ...só os campos mudados }, "aproveitamentoId": 61 }`. Editar `dados` ou `aproveitamentoId` passa a linha a `EDITADA` e roda a conferência de novo; se ela recusar, a linha volta `RECUSADA` com o `motivo`, e o 200 traz isso. Aceitar uma linha `RECUSADA` dá **409** com o motivo. **200:** a linha. **409:** importação fora de `EM_PREVIA`. **422:** `campos.dados.<campo>` e `campos.aproveitamentoId` (`Esta linha do plano não é da marca da linha.`).
+
+### 112b · `PATCH /api/importacoes/{id}/linhas` (Admin RBS; a marca nas dela)
+
+Corpo: `{ "situacao": "ACEITA" | "DESCARTADA", "ids": [401, 402] }` ou `{ "situacao": "ACEITA", "todas": true }` (todas as `PROPOSTA` e `EDITADA`; as `RECUSADA` ficam). **200:** `{ "alteradas": 12 }`.
+
+### 113 · `POST /api/importacoes/{id}/confirmar` (Admin RBS; a marca só no destino `DADOS_ATIVACAO`, nas dela)
+
+Grava as linhas `ACEITA` pelo destino. Veiculação: `stg_veiculacao` → `fn_carregar_veiculacoes`, numa `carga` nova ligada à importação, e cada `veiculacao` gravada leva `importacao_linha_id`. Plano: `stg_plano` → `fn_carregar_plano`. Números da edição: pelo serviço das rotas 100 e 101. Só consulta: só o documento. **200:** o corpo da 111. **409:** fora de `EM_PREVIA`, ou nenhuma linha aceita (`Aceite ao menos uma linha antes de confirmar.`). Histórico: `CRIACAO` na entidade `importacao`, com o destino e os totais.
+
+### 114 · `POST /api/importacoes/{id}/descartar` (Admin RBS; a marca nas dela)
+
+**200:** o resumo, `DESCARTADA`. **409:** fora de `EM_PREVIA`.
+
+### 115 · `POST /api/importacoes/{id}/retirar` (Admin RBS)
+
+Só `CONFIRMADA`. `VEICULACAO`: apaga as `veiculacao` com `importacao_linha_id` da importação. `COMPROVANTE`, `PESQUISA`, `NUMEROS_EDICAO`, `DADOS_ATIVACAO`, `PLANO` e `SO_CONSULTA`: **409** `Esta importação não se retira; corrija o valor na tela.` **200:** o resumo, `RETIRADA`. Histórico `EDICAO` com quantas linhas saíram.
+
+### 116 · `GET /api/importacoes/{id}/origem/{linhaId}?campo=quantidade` (Admin RBS; a marca nas dela)
+
+O que o visualizador mostra ao lado da prévia. **200:** `{ "arquivoId": 120, "tipo": "XLSX", "localizador": "Entregas Nov-26!F7", "trecho": "3", "planilha": { "aba": "Entregas Nov-26", "celula": "F7", "linhaInicial": 4, "colunaInicial": "A", "grade": [["Programa", "..."]] }, "texto": null, "pagina": null }`. Planilha: uma grade de até 9 linhas e 9 colunas em volta da célula. Texto: `"texto": { "antes": "...", "trecho": "3 chamadas", "depois": "..." }` (até 300 caracteres de cada lado). Imagem: `tipo` `PNG` ou `JPG` e o `arquivoId`.
+
+**O CSV padrão da RBS** (`patrocinador`, `veiculo`, `formato`, `espaco_programa`, `exibido_em` ou `mes`, `quantidade`, `impacto`, `link`) vai direto para as linhas, sem modelo. Qualquer outra planilha é mapeada pelo modelo (só o cabeçalho e até 20 linhas, mascarados), e o código aplica o mapeamento: nenhum número passa pelo modelo. O detector de dado pessoal roda antes, e com suspeita a importação para em `EM_PREVIA` só com o que o código leu.
 
 ---
 
