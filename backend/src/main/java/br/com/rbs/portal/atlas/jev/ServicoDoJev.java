@@ -635,7 +635,9 @@ public class ServicoDoJev {
             return Optional.empty();
         }
         boolean passa = escolha.confianca() >= limiar;
-        String acao = textoDaAcao(modo, "sugeriu o destino " + escolha.escolha(), "sugerir o destino " + escolha.escolha(), null);
+        String acao = passa
+                ? textoDaAcao(modo, "sugeriu o destino " + escolha.escolha(), "sugerir o destino " + escolha.escolha(), null)
+                : "não agiu: confiança abaixo do limiar";
         jev.adicionar(new Decisao(PontoDoJev.ARQUIVO_DESTINO, modo, limiar, "destino", escolha.escolha(), escolha.confianca(),
                 escolha.probabilidades(), provedor.modelo(), chamada.ms(), null, acao, "importacao:" + importacaoId));
         return Optional.of(new SugestaoDoArquivo(escolha.escolha(), escolha.confianca(), modo == ModoDoJev.ATIVO && passa));

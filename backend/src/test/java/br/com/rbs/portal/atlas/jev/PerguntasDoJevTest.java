@@ -10,7 +10,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 /**
- * [ATLAS] O arquivo de perguntas do JEV ({@code atlas/jev/perguntas.json}), que o servidor e a calibração leem: os seis pontos, as
+ * [ATLAS] O arquivo de perguntas do JEV ({@code atlas/jev/perguntas.json}), que o servidor e a calibração leem: os pontos, as
  * opções do plano na ordem do plano ({@code outro} por último na intenção), os marcadores que cada molde usa e a repetição do molde
  * da resposta por frase. Sem contexto do Spring.
  */

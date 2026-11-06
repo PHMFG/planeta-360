@@ -1,8 +1,8 @@
 package br.com.rbs.portal.atlas.diagnostico;
 
 /**
- * As etapas que um turno do Atlas pode deixar no traço ({@code atlas_traco.etapa}, o {@code CHECK} da V10 tem exatamente esta
- * lista, também as dos marcos seguintes). [ATLAS] Hoje a API grava {@link #G1_LIMITES}, {@link #J1_INTENCAO}, {@link #J1_CARTAO},
+ * As etapas que um turno do Atlas pode deixar no traço ({@code atlas_traco.etapa}, o {@code CHECK} da V10 com o acréscimo da V24 tem
+ * exatamente esta lista, também as dos marcos seguintes). [ATLAS] Hoje a API grava {@link #G1_LIMITES}, {@link #J1_INTENCAO}, {@link #J1_CARTAO},
  * {@link #LLM_IDA}, {@link #FERRAMENTA}, {@link #CHECAGEM}, {@link #RESUMO}, {@link #BUSCA}, {@link #R3_FONTES}, {@link #R5_RESPOSTA},
  * {@link #V2_COERENCIA}, {@link #LACUNAS}, {@link #SAIDA}, {@link #DISJUNTOR} e {@link #ERRO}.
  * <p>
