@@ -123,6 +123,23 @@ public class DetectorDeDadosPessoais {
     }
 
     /**
+     * A mesma análise, mas para uma conversa importada (E4): um telefone ou um e-mail isolado já é motivo para não mandar o texto ao
+     * modelo. O documento (rota 54) continua exigindo a lista de 3 contatos, para um contato institucional não travar um manual; na
+     * conversa, o contato é de uma pessoa e a importação não pode expô-lo. CPF e RG valem como em {@link #analisar(List)}.
+     */
+    public List<Suspeita> analisarConversa(List<Pagina> paginas) {
+        List<Suspeita> suspeitas = new ArrayList<>(analisar(paginas));
+        for (Pagina pagina : paginas) {
+            String texto = normalizar(pagina.texto());
+            if (!contatos(texto).isEmpty() && suspeitas.stream()
+                    .noneMatch(s -> s.pagina() == pagina.numero() && "CONTATOS".equals(s.tipo()))) {
+                suspeitas.add(new Suspeita(pagina.numero(), "CONTATOS"));
+            }
+        }
+        return suspeitas;
+    }
+
+    /**
      * O texto como o detector o lê: NFKC (dígito de largura total vira dígito comum, o espaço sem quebra e os espaços finos viram
      * espaço), sem nenhum caractere de formato invisível (a categoria {@code Cf} inteira: largura zero, hífen condicional, marca de
      * ordem de bytes, marcas e isolamentos de direção, marca de letra árabe, separador de vogal mongol, anotações interlineares) e sem
