@@ -27,17 +27,30 @@ export const NOME_DA_SITUACAO: Record<SituacaoDaImportacao, string> = {
   ERRO: 'Não deu para ler',
 }
 
-/** Os campos de cada destino, na ordem em que a prévia mostra, com o rótulo da coluna. */
+/**
+ * Os campos de cada destino, na ordem em que a prévia mostra, com o rótulo da coluna. As chaves são as de `dados` na API, em
+ * snake_case (as mesmas do CSV padrão e do gabarito do corpus).
+ */
 export const CAMPOS_DO_DESTINO: Partial<Record<DestinoDaImportacao, { chave: string; rotulo: string; numero?: boolean }[]>> = {
   VEICULACAO: [
     { chave: 'patrocinador', rotulo: 'Marca' },
     { chave: 'veiculo', rotulo: 'Veículo' },
     { chave: 'formato', rotulo: 'Formato' },
-    { chave: 'espacoPrograma', rotulo: 'Espaço ou programa' },
+    { chave: 'espaco_programa', rotulo: 'Espaço ou programa' },
     { chave: 'mes', rotulo: 'Mês' },
-    { chave: 'exibidoEm', rotulo: 'Exibido em' },
+    { chave: 'exibido_em', rotulo: 'Exibido em' },
     { chave: 'quantidade', rotulo: 'Quantidade', numero: true },
     { chave: 'impacto', rotulo: 'Impacto', numero: true },
+  ],
+  PLANO: [
+    { chave: 'patrocinador', rotulo: 'Marca' },
+    { chave: 'categoria', rotulo: 'Categoria' },
+    { chave: 'veiculo', rotulo: 'Veículo' },
+    { chave: 'formato', rotulo: 'Formato' },
+    { chave: 'espaco_programa', rotulo: 'Espaço ou programa' },
+    { chave: 'tipo_midia', rotulo: 'Tipo' },
+    { chave: 'unidade', rotulo: 'Unidade' },
+    { chave: 'quantidade_prevista', rotulo: 'Previsto', numero: true },
   ],
   NUMEROS_EDICAO: [
     { chave: 'indicador', rotulo: 'Indicador' },
@@ -47,16 +60,18 @@ export const CAMPOS_DO_DESTINO: Partial<Record<DestinoDaImportacao, { chave: str
     { chave: 'fonte', rotulo: 'Fonte' },
   ],
   DADOS_ATIVACAO: [
-    { chave: 'campoChave', rotulo: 'Campo' },
+    { chave: 'campo_chave', rotulo: 'Campo' },
     { chave: 'valor', rotulo: 'Valor', numero: true },
   ],
   PESQUISA: [
     { chave: 'tipo', rotulo: 'Tipo' },
     { chave: 'patrocinador', rotulo: 'Marca' },
-    { chave: 'dimensao', rotulo: 'Dimensão ou pergunta' },
-    { chave: 'categoria', rotulo: 'Categoria ou alternativa' },
+    { chave: 'pergunta', rotulo: 'Pergunta' },
+    { chave: 'alternativa', rotulo: 'Alternativa' },
+    { chave: 'dimensao', rotulo: 'Dimensão' },
+    { chave: 'categoria', rotulo: 'Categoria' },
     { chave: 'valor', rotulo: 'Valor', numero: true },
-    { chave: 'baseRespondentes', rotulo: 'Base', numero: true },
+    { chave: 'base_respondentes', rotulo: 'Base', numero: true },
   ],
   COMPROVANTE: [
     { chave: 'patrocinador', rotulo: 'Marca' },
@@ -84,6 +99,8 @@ export type ResumoDaImportacao = {
   confirmadaEm: string | null
   retiradaEm: string | null
   erro: string | null
+  /** E4: onde o detector achou dado pessoal; com suspeita, o modelo não foi chamado e a prévia tem só a leitura em código. */
+  suspeitas?: { pagina: number; tipo: string }[]
 }
 
 export type OrigemDoCampo = { localizador: string; trecho: string }

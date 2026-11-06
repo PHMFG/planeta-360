@@ -129,7 +129,7 @@ export function ImportacaoDaAgencia({ parceriaId, campos, aoConfirmar }: { parce
                         style={{ '--ordem': indice } as React.CSSProperties}
                       >
                         <span className="min-w-0 flex-1">
-                          <span className="block font-semibold">{rotulo(linha.dados.campoChave)}</span>
+                          <span className="block font-semibold">{rotulo(linha.dados.campo_chave)}</span>
                           {origem && (
                             <span className="block truncate text-xs text-texto-2">
                               {origem.localizador} · “{origem.trecho}”

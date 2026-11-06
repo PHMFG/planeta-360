@@ -126,6 +126,15 @@ export function Importacao() {
         </Aviso>
       )}
 
+      {/* E4: com suspeita de dado pessoal, o modelo não foi chamado; a prévia tem só o que a leitura em código entendeu. */}
+      {importacao.situacao === 'EM_PREVIA' && (importacao.suspeitas?.length ?? 0) > 0 && (
+        <Aviso tipo="restrito" titulo="O arquivo parece ter dado pessoal, e o Atlas não o mandou ao modelo">
+          A prévia traz só o que a leitura em código entendeu. Suspeita em:{' '}
+          {importacao.suspeitas!.map((item) => `${item.pagina ? `página ${item.pagina}` : 'arquivo'} (${item.tipo.toLowerCase()})`).join(', ')}. Se o resto
+          não veio, tire os dados pessoais do arquivo e importe de novo.
+        </Aviso>
+      )}
+
       {importacao.situacao === 'CONFIRMADA' && importacao.resultado && (
         <Cartao titulo="Entrou na base">
           <p className="text-sm">
