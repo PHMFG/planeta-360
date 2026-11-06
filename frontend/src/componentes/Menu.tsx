@@ -335,7 +335,7 @@ const TEXTO_DA_GESTAO: Record<string, string> = {
   '/rbs': 'resumo das parcerias, da fila e da última carga.',
   '/rbs/patrocinadores': 'cadastro das parcerias e dos e-mails de acesso.',
   '/rbs/fila': 'o que as marcas enviaram, para aprovar ou pedir ajuste, e o que ainda falta receber de cada uma.',
-  '/rbs/cargas': 'planilhas de veiculação, de pesquisa e do plano comercial.',
+  '/rbs/importar': 'arraste o arquivo de um veículo, da pesquisa ou de uma marca; o Atlas lê e você confere antes de entrar.',
   '/rbs/pesquisa': 'a pesquisa de cada edição e as perguntas das marcas Master.',
   '/rbs/relatorios': 'gerar, validar e disponibilizar o relatório de cada parceria.',
   '/rbs/historico': 'tudo o que aconteceu no portal, com autor e data.',
