@@ -30,6 +30,7 @@ import { Esqueleto } from '../../componentes/Carregando'
 import { Filtros, Seletor } from '../../componentes/Formulario'
 import { Modal } from '../../componentes/Modal'
 import { usarToast } from '../../componentes/Toast'
+import { nomeDoMes } from '../../api/comprovacao'
 import { dataHora, numero } from '../../util/formatar'
 import { SituacaoDaImportacao } from './Importar'
 
@@ -38,7 +39,11 @@ type Visao = 'revisar' | 'aceitas' | 'recusadas' | 'descartadas' | 'naoEntendido
 
 function valorNaTela(valor: string | number | null | undefined, ehNumero?: boolean) {
   if (valor === null || valor === undefined || valor === '') return '—'
-  return ehNumero && typeof valor === 'number' ? numero(valor) : String(valor)
+  if (ehNumero && typeof valor === 'number') return numero(valor)
+  // A data e hora da exibição vem em ISO ("2026-11-03T10:00:00-03:00"); o mês, em AAAA-MM.
+  if (typeof valor === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(valor)) return dataHora(valor)
+  if (typeof valor === 'string' && /^\d{4}-\d{2}$/.test(valor)) return nomeDoMes(valor)
+  return String(valor)
 }
 
 export function Importacao() {
