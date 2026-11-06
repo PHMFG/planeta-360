@@ -158,7 +158,8 @@ function BotaoAtlas({ destino }: { destino?: string }) {
       <span className="absolute -top-6 -left-4 size-20 rounded-full bg-[#0a2a6e] opacity-70 blur-2xl" aria-hidden="true" />
       <span className="absolute -bottom-8 left-16 size-20 rounded-full bg-[#572781] opacity-70 blur-2xl" aria-hidden="true" />
       <span className="absolute -right-6 -bottom-6 size-20 rounded-full bg-[#e1047d] opacity-60 blur-2xl" aria-hidden="true" />
-      <i className="ri-globe-fill relative text-2xl" aria-hidden="true" />
+      {/* Fora do Atlas, este globo é a "atlas-orbe" que cresce até a orbe da página ao abrir; lá dentro, a página tem o nome. */}
+      <i className="ri-globe-fill relative text-2xl" aria-hidden="true" style={{ viewTransitionName: ativo ? undefined : 'atlas-orbe' }} />
       <span className="relative text-xl font-semibold tracking-[-0.01em]">atlas</span>
     </>
   )

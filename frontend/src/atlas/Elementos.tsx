@@ -86,7 +86,7 @@ export const PONTO_RASCUNHO = '#ffd201'
 /** Atlas/Mensagem · Você (179:1200): rótulo "VOCÊ" e a bolha à direita, com o canto de baixo mais fechado. */
 export function MensagemVoce({ texto }: { texto: string }) {
   return (
-    <div className="flex flex-col items-end gap-1.5 pl-10">
+    <div className="animate-entrar flex flex-col items-end gap-1.5 pl-10">
       <span className="text-[11px] font-bold tracking-[0.12em] text-white/64 uppercase">Você</span>
       <p className="max-w-full rounded-[20px_20px_6px_20px] bg-white/16 px-[18px] py-3.5 text-[15px] leading-normal font-medium break-words whitespace-pre-wrap text-white">
         {texto}
@@ -96,10 +96,11 @@ export function MensagemVoce({ texto }: { texto: string }) {
 }
 
 /** A resposta do modelo de linguagem: orbe, "atlas" e o conteúdo (texto, cartão, documento). */
-export function BlocoDoAtlas({ children, compacto = false }: { children: ReactNode; compacto?: boolean }) {
+export function BlocoDoAtlas({ children, compacto = false, estado }: { children: ReactNode; compacto?: boolean; estado?: EstadoDaOrbe }) {
+  // A resposta entra deslizando de leve; só a que está chegando mostra o estado da orbe (pensando ou escrevendo).
   return (
-    <div className={`flex ${compacto ? 'gap-2.5' : 'gap-3.5'}`}>
-      <Orbe tamanho={compacto ? 24 : 32} />
+    <div className={`flex animate-entrar ${compacto ? 'gap-2.5' : 'gap-3.5'}`}>
+      <Orbe tamanho={compacto ? 24 : 32} estado={estado} />
       <div className="flex min-w-0 flex-1 flex-col gap-3.5">
         <span className="text-[15px] font-semibold tracking-[-0.01em] text-white">atlas</span>
         {children}

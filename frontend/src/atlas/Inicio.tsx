@@ -5,7 +5,7 @@ import { Link } from 'react-router'
 import { NOME_STATUS_ATLAS, type ConversaResumo } from '../api/atlas'
 import type { ParceriaResumo } from '../api/tipos'
 import { Compositor } from './Compositor'
-import { AvisoAtlas } from './Elementos'
+import { AvisoAtlas, Orbe } from './Elementos'
 
 const CARTAO =
   'flex w-full items-start gap-3 rounded-2xl border border-white/14 bg-white/8 p-3.5 text-left backdrop-blur-md transition-colors hover:bg-white/14 disabled:cursor-not-allowed disabled:opacity-60 sm:w-[232px]'
@@ -56,6 +56,8 @@ export function Inicio({ parceria, llm, relatorioDisponivel, conversas, texto, a
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-8 sm:px-8">
       <div className="m-auto flex w-full max-w-[720px] flex-col items-center gap-4">
+        {/* A orbe do botão do menu cresce até esta (transição "atlas-orbe"). */}
+        <Orbe tamanho={72} estado={pensando ? 'pensando' : 'parada'} transicao />
         <h1 className="text-center text-[30px] leading-tight font-semibold tracking-[-0.01em] text-white sm:text-[40px]">Olá! Como posso ajudar?</h1>
         <p className="text-center text-base text-white/80">
           {!relatorioDisponivel
