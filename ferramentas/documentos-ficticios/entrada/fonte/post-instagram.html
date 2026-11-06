@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<title>Post da Rádio Atlântida · Cliente Roxo</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; width: 390px; height: 844px; overflow: hidden; background: #fff; }
+  body { font-family: -apple-system, "Helvetica Neue", Helvetica, Arial, sans-serif; color: #111; }
+  .topo { height: 54px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px;
+          border-bottom: 1px solid #ececec; font-weight: 700; font-size: 16px; }
+  .topo .voltar { font-size: 22px; font-weight: 400; }
+  .topo .acoes { letter-spacing: 3px; font-weight: 700; }
+  .post-cabecalho { display: flex; align-items: center; gap: 10px; padding: 10px 14px; }
+  .avatar { width: 38px; height: 38px; border-radius: 50%; background: linear-gradient(135deg, #5b2bd9, #d92b8b);
+            color: #fff; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 800; }
+  .perfil { flex: 1; line-height: 1.2; }
+  .perfil .nome { font-size: 14px; font-weight: 700; }
+  .perfil .local { font-size: 11px; color: #666; }
+  .seguir { font-size: 13px; font-weight: 700; color: #1a73e8; }
+  .imagem { position: relative; width: 390px; height: 356px; overflow: hidden;
+            background: radial-gradient(circle at 72% 28%, #ef5aa7 0, #9b2bd9 38%, #2d0a57 78%); }
+  .imagem .texto { position: absolute; left: 24px; bottom: 28px; color: #fff; }
+  .imagem .texto .marca { font-size: 44px; line-height: .92; font-weight: 800; letter-spacing: -1.5px; }
+  .imagem .texto .frase { font-size: 15px; line-height: 1.25; margin-top: 12px; max-width: 300px; }
+  .imagem .marcado { position: absolute; left: 18px; top: 18px; background: rgba(255,255,255,.94); color: #2d0a57;
+                     border-radius: 999px; padding: 7px 12px; font-size: 12px; font-weight: 700; }
+  .imagem .selo { position: absolute; right: 18px; bottom: 18px; background: rgba(0,0,0,.35); color: #fff;
+                  border-radius: 8px; padding: 6px 9px; font-size: 10px; letter-spacing: .08em; }
+  .acoes { display: flex; align-items: center; gap: 14px; padding: 10px 14px 4px; font-size: 24px; }
+  .acoes .dir { margin-left: auto; }
+  .curtidas { padding: 0 14px; font-size: 14px; font-weight: 700; }
+  .legenda { padding: 6px 14px 0; font-size: 13px; line-height: 1.38; }
+  .legenda .nome { font-weight: 700; }
+  .comentarios { padding: 4px 14px 0; font-size: 13px; color: #737373; }
+  .data { padding: 8px 14px 0; font-size: 11px; color: #737373; text-transform: uppercase; letter-spacing: .04em; }
+  .alcance { margin: 10px 14px 0; display: inline-flex; align-items: center; gap: 6px; background: #f2effa;
+             color: #4b2aa0; border-radius: 999px; padding: 7px 12px; font-size: 12px; font-weight: 700; }
+  .rodape { position: absolute; bottom: 0; left: 0; width: 390px; height: 52px; border-top: 1px solid #ececec;
+            display: flex; align-items: center; justify-content: space-around; font-size: 21px; background: #fff; }
+  .rodape .eu { width: 22px; height: 22px; border-radius: 50%; background: #222; }
+</style>
+</head>
+<body>
+  <div class="topo"><span class="voltar">&#8249;</span><span>Publicações</span><span class="acoes">&#8943;</span></div>
+  <div class="post-cabecalho">
+    <div class="avatar">RA</div>
+    <div class="perfil">
+      <div class="nome">radioatlantida</div>
+      <div class="local">Rádio Atlântida · Patrocinado</div>
+    </div>
+    <div class="seguir">Seguir</div>
+  </div>
+  <div class="imagem">
+    <div class="marcado">Cliente Roxo marcado</div>
+    <div class="texto">
+      <div class="marca">CLIENTE<br>ROXO</div>
+      <div class="frase">A trilha sonora do Planeta tem a sua marca. Ouça, sinta e viva a transmissão oficial.</div>
+    </div>
+    <div class="selo">CONTEÚDO ASSINADO</div>
+  </div>
+  <div class="acoes">
+    <span>&#9825;</span><span>&#128172;</span><span>&#10148;</span><span class="dir">&#128278;</span>
+  </div>
+  <div class="curtidas">1.284 curtidas</div>
+  <div class="legenda"><span class="nome">radioatlantida</span> O Cliente Roxo é a marca que apresenta a transmissão oficial do Planeta Atlântida. Post fictício do corpus de testes.</div>
+  <div class="comentarios">Ver todos os 38 comentários</div>
+  <div class="data">21 de outubro de 2026</div>
+  <div class="alcance">&#128200; alcance: 48.200 contas</div>
+  <div class="rodape"><span>&#8962;</span><span>&#9906;</span><span>&#10148;</span><span>&#9825;</span><span class="eu"></span></div>
+</body>
+</html>
