@@ -10,6 +10,7 @@
           "criteria": {
             "pergunta_documentos": "Pergunta sobre regras, prazos, horários, tarifas, credenciais, cortesias, seguros, contatos ou procedimentos do evento, ou sobre o que pode ou não ser feito no espaço da marca e no evento (materiais, estruturas, som, alimentação, fogos, animais), que estão nos documentos do evento (manual de operações, plano comercial da cota, anexo da parceria, FAQ, comunicados)",
             "dados_parceria": "Pergunta sobre os números ou o andamento da própria parceria no portal: aplicações de marca previstas e comprovadas, entregas pendentes, cota contratada, dados já informados",
+            "dados_de_midia": "Pergunta sobre números de mídia, veiculação, inserções, impacto, contratado x entregue",
             "misto": "Junta, na mesma mensagem, uma pergunta sobre os documentos do evento e uma sobre os números da própria parceria",
             "montar_relatorio": "Pede para montar, gerar, começar ou continuar o relatório de ativação da marca no evento (o documento de trabalho feito pelo Atlas com os números da marca)",
             "outro_relatorio": "Pede um relatório que não é o de ativação: o relatório oficial, o final, o pós-evento, o de mídia, o consolidado ou os resultados da parceria em documento",

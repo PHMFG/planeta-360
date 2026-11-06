@@ -172,8 +172,8 @@ public class LoopDoAgente {
     /** A resposta fixa do JEV ativo a quem escreve os números do cartão na conversa: o cartão continua aberto. */
     public static final String RESPOSTA_DO_CARTAO_ABERTO = "Use o cartão acima para informar os números: assim eles ficam registrados com autor e data.";
     /**
-     * As ferramentas dos ramos {@code pergunta_documentos} e {@code dados_parceria} do JEV ativo: as mesmas nos dois, todas as de
-     * consulta. A fronteira entre "documentos" e "dados da parceria" não é nítida (a carga elétrica contratada está no anexo; "quantas
+     * As ferramentas dos ramos {@code pergunta_documentos}, {@code dados_parceria} e {@code dados_de_midia} do JEV ativo: as mesmas
+     * nos três, todas as de consulta. A fronteira entre "documentos" e "dados da parceria" não é nítida (a carga elétrica contratada está no anexo; "quantas
      * faltam comprovar e o que acontece se eu não comprovar" cruza as duas coisas), e um ramo que tirasse a busca de quem precisava dela
      * fazia o modelo responder "não encontrei" sem buscar. O ramo tira só o que não é consulta ({@code relatorio_iniciar},
      * {@code pedido_de_relatorio}, {@code gerar_modelo}); as {@code relatorio_*} de um relatório aberto ficam.

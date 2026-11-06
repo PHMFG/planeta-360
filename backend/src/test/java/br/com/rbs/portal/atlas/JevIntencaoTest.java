@@ -291,6 +291,19 @@ class JevIntencaoTest {
     }
 
     @Test
+    void perguntaSobreDadosDeMidiaDaAoModeloTodasAsFerramentasDeConsulta() {
+        long conversa = conversa();
+        jev.intencao("dados_de_midia", 0.95);
+        modelo.texto("Posso consultar a mídia.");
+
+        falar(conversa, "quantas inserções já foram veiculadas?");
+
+        assertThat(nomesDasFerramentasDoPedido(0)).containsExactlyInAnyOrderElementsOf(FERRAMENTAS_DE_CONSULTA);
+        assertThat(nomesDasFerramentasDoPedido(0)).contains("consultar_midia");
+        assertThat(decisoes(conversa).get(0).get("acao")).isEqualTo("fez: deu ao modelo só as ferramentas de consulta");
+    }
+
+    @Test
     void perguntaSobreOsDadosDaParceriaDaAoModeloTodasAsFerramentasDeConsulta() {
         long conversa = conversa();
         jev.intencao("dados_parceria", 0.95);
