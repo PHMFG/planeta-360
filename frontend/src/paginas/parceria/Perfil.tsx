@@ -16,6 +16,7 @@ import {
 import { useDados } from '../../api/useDados'
 import { Aviso } from '../../componentes/Aviso'
 import { Botao, usarFeito } from '../../componentes/Botao'
+import { usarToast } from '../../componentes/Toast'
 import { CabecalhoSecao } from '../../componentes/CabecalhoSecao'
 import { Campo, focarPrimeiroErro } from '../../componentes/Campo'
 import { CompraDeIngressos, PlanoComercialDoPerfil } from '../../componentes/DocumentosDoPerfil'
@@ -353,6 +354,7 @@ export function Perfil() {
   const { usuario } = useSessao()
   const rbs = usuario?.perfil === 'ADMIN_RBS'
   const recarregarParceria = useRecarregarParceria()
+  const avisar = usarToast()
   const dados = useDados(() => obterParceria(parceria.id), [parceria.id])
   const [editando, setEditando] = useState(false)
   const [trocandoCota, setTrocandoCota] = useState(false)
@@ -392,6 +394,8 @@ export function Perfil() {
                     aoSalvar={(novo) => {
                       salvo(novo)
                       setEditando(false)
+                      // O formulário fecha ao salvar: o visto do botão não chegaria a aparecer (rodada H3).
+                      avisar('Dados da empresa salvos.')
                     }}
                   />
                 ) : !rbs ? (
@@ -437,6 +441,11 @@ export function Perfil() {
                       valor={detalhe.valorInvestimento ? `${moeda(detalhe.valorInvestimento)} · ${detalhe.baseValor === 'LIQUIDO' ? 'líquido' : 'bruto de tabela'}` : null}
                     />
                     <Dado rotulo="Cadastrada em" valor={dataHora(detalhe.criadoEm)} />
+                    {/* U7: o atendimento que a marca vê no fim da Ajuda; a RBS confere sem abrir a edição (rodada H3). */}
+                    <Dado
+                      rotulo="Atendimento na RBS"
+                      valor={detalhe.atendimentoNome || detalhe.atendimentoEmail ? [detalhe.atendimentoNome, detalhe.atendimentoEmail].filter(Boolean).join(' · ') : null}
+                    />
                   </Grade2>
                 )}
               </Cartao>

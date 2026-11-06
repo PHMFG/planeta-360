@@ -6,7 +6,6 @@ import type { ParceriaResumo } from '../api/tipos'
 import { useSessao } from '../sessao/Sessao'
 import { BotaoDebug } from './BotaoDebug'
 import { Menu } from './Menu'
-import { ProvedorDeToast } from './Toast'
 
 export function Layout({ parceria, contexto }: { parceria: ParceriaResumo | null; contexto?: unknown }) {
   const [menuAberto, setMenuAberto] = useState(false)
@@ -15,7 +14,6 @@ export function Layout({ parceria, contexto }: { parceria: ParceriaResumo | null
   const atlas = parceria !== null && usuario?.perfil === 'ADMIN_PATROCINADOR' ? `/parceria/${parceria.id}/atlas` : undefined
 
   return (
-    <ProvedorDeToast>
     <div className="min-h-screen">
       <header className="sticky top-0 z-30 flex items-center justify-between gap-4 border-b border-borda bg-white px-4 py-2.5 lg:hidden print:hidden">
         <p className="truncate font-display text-[28px] leading-none text-parceria uppercase">Planeta 360</p>
@@ -47,6 +45,5 @@ export function Layout({ parceria, contexto }: { parceria: ParceriaResumo | null
         </div>
       </main>
     </div>
-    </ProvedorDeToast>
   )
 }
