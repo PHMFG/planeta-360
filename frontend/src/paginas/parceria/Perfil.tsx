@@ -343,7 +343,7 @@ export function Perfil() {
       <CabecalhoSecao
         trilha={rbs ? 'Planeta Atlântida / RBS · Gestão' : 'Planeta Atlântida / Patrocinador'}
         titulo={rbs ? 'Empresa, cota e acessos' : 'Perfil'}
-        subtitulo={rbs ? 'Cadastro da parceria, abas liberadas e quem pode entrar.' : 'Dados da empresa, cota, acessos autorizados e documentos da parceria.'}
+        subtitulo={rbs ? 'Cadastro da parceria, abas liberadas e quem pode entrar.' : 'O plano comercial, a cota e quem acessa o portal.'}
       />
       <Carregando dados={dados}>
         {() =>
@@ -367,6 +367,21 @@ export function Perfil() {
                       setEditando(false)
                     }}
                   />
+                ) : !rbs ? (
+                  // F9 (plano da base da RBS): para a marca, só o que ela consulta; edição, produto e datas estão no cabeçalho
+                  // ou não mudam nada para ela, e a lista das abas repetia o menu.
+                  <div className="flex flex-col gap-4">
+                    <Grade2>
+                      <Dado rotulo="Empresa" valor={detalhe.patrocinador.nome} />
+                      <Dado rotulo="Cota" valor={detalhe.cota.nome} />
+                      <Dado
+                        rotulo="Investimento"
+                        valor={detalhe.valorInvestimento ? `${moeda(detalhe.valorInvestimento)} · ${detalhe.baseValor === 'LIQUIDO' ? 'líquido' : 'bruto de tabela'}` : null}
+                      />
+                      {detalhe.situacao !== 'ATIVA' && <Dado rotulo="Situação" valor={SITUACOES[detalhe.situacao]} />}
+                    </Grade2>
+                    <p className="text-xs font-medium text-texto-2">Algum dado errado? Peça a correção ao seu atendimento.</p>
+                  </div>
                 ) : (
                   <Grade2>
                     <Dado rotulo="Empresa" valor={detalhe.patrocinador.nome} />
@@ -417,23 +432,13 @@ export function Perfil() {
                 />
               )}
 
-              {/* Remonta quando a cota muda: o aviso da última mudança de aba não pode ficar ao lado do da troca. */}
-              <AbasLiberadas key={detalhe.cota.codigo} detalhe={detalhe} rbs={rbs} aoSalvar={salvo} />
+              {/* Remonta quando a cota muda: o aviso da última mudança de aba não pode ficar ao lado do da troca.
+                  Só a RBS: para a marca, a lista das abas repetia o menu (F9). */}
+              {rbs && <AbasLiberadas key={detalhe.cota.codigo} detalhe={detalhe} rbs={rbs} aoSalvar={salvo} />}
 
-              {rbs && (
-                <>
-                  <DireitosPorContrato parceria={parceria} />
-                  {/* Figma R02: os dois avisos da configuração administrativa. */}
-                  <Aviso titulo="Isolamento por patrocinador">
-                    Arquivos, resultados e relatórios pertencem à empresa selecionada. Confira a parceria aberta antes de publicar ou de mudar
-                    acessos.
-                  </Aviso>
-                  <Aviso titulo="Visibilidade das 7 abas · controle da RBS">
-                    Perfil, Aplicações, Mídia, Cortesias, Credenciamento, Pesquisa e Contrato: liberar, fechar ou ocultar conforme o contrato. A
-                    Pesquisa é só da cota Master.
-                  </Aviso>
-                </>
-              )}
+              {rbs && <DireitosPorContrato parceria={parceria} />}
+
+              {!rbs && <PlanoComercialDoPerfil parceriaId={detalhe.id} rbs={rbs} />}
 
               {rbs ? (
                 <AcessosRbs parceriaId={detalhe.id} />
@@ -453,15 +458,10 @@ export function Perfil() {
               )}
 
               {/* Figma P01: o plano comercial e a compra de ingressos têm cartões próprios (R5.1); as outras entregas ficam abaixo. */}
-              <PlanoComercialDoPerfil parceriaId={detalhe.id} rbs={rbs} />
+              {rbs && <PlanoComercialDoPerfil parceriaId={detalhe.id} rbs={rbs} />}
               <CompraDeIngressos parceriaId={detalhe.id} rbs={rbs} />
               <EntregasDaAba aba="PERFIL" titulo="Outros documentos da parceria" semPapel />
 
-              {!rbs && (
-                <Aviso titulo="Cadastro divergente?">
-                  Solicite a correção à RBS. A empresa não altera a própria cota nem libera novos acessos.
-                </Aviso>
-              )}
             </>
           )
         }

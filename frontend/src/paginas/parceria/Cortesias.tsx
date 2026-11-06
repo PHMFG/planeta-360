@@ -268,8 +268,8 @@ function FormularioDeDestinacao({
               </Aviso>
             )}
             {passa && (
-              <Aviso tipo="falha" titulo="Passa do disponível">
-                Só restam {numero(celula!.disponiveis)}. O que você preencheu fica: ajuste a quantidade e revise de novo.
+              <Aviso tipo="falha" titulo={`A quantidade passa do disponível (${numero(celula!.disponiveis)})`}>
+                O que você preencheu fica: ajuste a quantidade e revise de novo.
               </Aviso>
             )}
           </>

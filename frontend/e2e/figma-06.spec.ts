@@ -10,7 +10,8 @@ test.describe('Figma 06', () => {
     await entrar(page, 'amarelo')
     await page.goto(`/parceria/${amarelo}/perfil`)
     await expect(page.getByRole('heading', { name: 'Plano comercial' })).toBeVisible()
-    await expect(page.getByText('Cadastro divergente?')).toBeVisible()
+    // Rework visual (F9): o aviso "Cadastro divergente?" virou uma linha no cartão da empresa.
+    await expect(page.getByText('Algum dado errado? Peça a correção ao seu atendimento.')).toBeVisible()
     await expect(page.getByRole('heading', { name: 'Compra de ingressos com valor de patrocinador' })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Enviar solicitação' })).toBeVisible()
     await capturar(page, 'figma-06/P01-perfil-1440')
@@ -21,8 +22,8 @@ test.describe('Figma 06', () => {
     await page.goto(`/parceria/${amarelo}/perfil`)
     await expect(page.getByRole('heading', { name: 'Direitos por contrato' })).toBeVisible()
     for (const coluna of ['Benefício / setor / dia', 'Quantidade', 'Visibilidade']) await expect(page.getByRole('columnheader', { name: coluna })).toBeVisible()
-    await expect(page.getByText('Isolamento por patrocinador')).toBeVisible()
-    await expect(page.getByText(/Visibilidade das 7 abas/)).toBeVisible()
+    // Rework visual (F9): os dois avisos da configuração saíram; as abas em três estados continuam.
+    await expect(page.getByText('Isolamento por patrocinador')).toHaveCount(0)
     await expect(page.getByLabel('Situação da aba Cortesias')).toBeVisible()
     await expect(page.getByLabel('Situação da aba Cortesias').locator('option')).toHaveText(['Liberada', 'Fechada', 'Oculta'])
     await capturar(page, 'figma-06/R02-perfil-rbs-1440')

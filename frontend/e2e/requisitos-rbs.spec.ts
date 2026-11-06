@@ -124,7 +124,8 @@ test.describe('R3 e R4 · comprovação mensal e formatos', () => {
     await expect(linha.locator('td').nth(3)).toHaveText(new Intl.NumberFormat('pt-BR').format(escolhida.exibido))
 
     const [xlsx] = await Promise.all([page.waitForEvent('download'), cartao.getByRole('button', { name: 'Baixar planilha (.xlsx)' }).click()])
-    expect(xlsx.suggestedFilename()).toBe('comprovacao-mensal-cliente-amarelo.xlsx')
+    // U1 (plano da base da RBS): com um mês escolhido, o arquivo leva o mês no nome e traz só ele.
+    expect(xlsx.suggestedFilename()).toBe(`comprovacao-mensal-cliente-amarelo-${escolhida.mes}.xlsx`)
     expect(fs.readFileSync(await xlsx.path()).subarray(0, 2).toString('latin1'), 'um .xlsx é um zip').toBe('PK')
     const [csv] = await Promise.all([page.waitForEvent('download'), cartao.getByRole('button', { name: 'Baixar CSV' }).click()])
     const texto = fs.readFileSync(await csv.path(), 'utf8')
@@ -402,7 +403,8 @@ test.describe('R5 · as abas', () => {
     await expect(botao).toHaveAttribute('href', 'https://example.com/')
     await expect(botao).toHaveAttribute('target', '_blank')
     await expect(botao).toHaveAttribute('rel', 'noopener noreferrer')
-    await expect(page.getByText('Você será direcionado a um serviço externo')).toBeVisible()
+    // Rework visual (F9): o aviso de serviço externo virou uma linha ao lado do botão.
+    await expect(page.getByText('O cadastro das pessoas é feito no Open Staff, fora do portal.')).toBeVisible()
     // A API recusa endereço que não é https (o front também, antes de enviar).
     const { contexto, cabecalhos } = await sessaoDaApi('rbs')
     const eventos: { id: number; edicao: number }[] = await (await contexto.get('/api/eventos')).json()
