@@ -28,6 +28,17 @@ export function nomePendencia(tipo: string) {
   return TIPOS_PENDENCIA[tipo] ?? tipo
 }
 
+/** Para onde cada status do Painel leva em Materiais (U8). */
+const VISAO_DO_STATUS: Record<string, string> = {
+  NAO_INICIADO: 'falta-aba',
+  AGUARDANDO_ENVIO: 'falta-aba',
+  AJUSTE_SOLICITADO: 'ajuste',
+  ENVIADO: 'analise',
+  EM_ANALISE: 'analise',
+  APROVADO: 'aprovadas',
+  NAO_APLICAVEL: 'todas',
+}
+
 export function Painel() {
   const eventos = useDados(listarEventos, [])
   const [eventoId, setEventoId] = useState('')
@@ -40,8 +51,8 @@ export function Painel() {
         titulo="Painel"
         subtitulo="Resumo das parcerias, materiais na fila e últimas atualizações."
         acoes={
-          <LinkBotao to="/rbs/fila" className="bg-white! text-tinta!" icone="ri-inbox-archive-line">
-            Abrir a fila
+          <LinkBotao to="/rbs/fila" viewTransition className="bg-white! text-tinta!" icone="ri-inbox-archive-line">
+            Abrir materiais
           </LinkBotao>
         }
       />
@@ -66,7 +77,10 @@ export function Painel() {
                 valor={dado.parcerias.ativas}
                 legenda={`${dado.parcerias.total} cadastradas na edição ${dado.evento.edicao}${dado.parcerias.semUsuario ? ` · ${dado.parcerias.semUsuario} sem usuário` : ''}`}
               />
-              <Indicador rotulo="Esperando análise" valor={dado.entregas.esperandoAnalise} legenda={`${dado.entregas.atrasadas} ${dado.entregas.atrasadas === 1 ? 'entrega' : 'entregas'} com prazo vencido`} />
+              {/* U8: o número abre a lista dele em Materiais. */}
+              <Link to="/rbs/fila?status=analise" viewTransition className="rounded-2xl transition-shadow hover:shadow-menu" aria-label={`Esperando análise: ${dado.entregas.esperandoAnalise}. Abrir em Materiais`}>
+                <Indicador rotulo="Esperando análise" valor={dado.entregas.esperandoAnalise} legenda={`${dado.entregas.atrasadas} ${dado.entregas.atrasadas === 1 ? 'entrega' : 'entregas'} com prazo vencido`} />
+              </Link>
               {/* O número grande é o que as marcas veem; a legenda é a situação da versão mais nova e fecha com o total. */}
               <Indicador
                 rotulo="Relatórios com a marca"
@@ -79,9 +93,19 @@ export function Painel() {
               <Cartao titulo="Entregas por status">
                 <ul className="flex flex-col gap-2">
                   {STATUS_ENTREGA.map((codigo) => (
-                    <li key={codigo} className="flex items-center justify-between border-b border-borda pb-2 last:border-b-0">
-                      <Status codigo={codigo} />
-                      <span className="text-sm font-bold">{numero(dado.entregas.porStatus[codigo] ?? 0)}</span>
+                    <li key={codigo} className="border-b border-borda last:border-b-0">
+                      {/* U8: cada status abre a lista dele em Materiais. */}
+                      <Link
+                        to={`/rbs/fila?${VISAO_DO_STATUS[codigo] === 'falta-aba' ? 'aba=falta' : `status=${VISAO_DO_STATUS[codigo]}`}`}
+                        viewTransition
+                        className="flex items-center justify-between rounded-lg py-2 transition-colors hover:bg-cinza-100"
+                      >
+                        <Status codigo={codigo} />
+                        <span className="flex items-center gap-1 text-sm font-bold">
+                          {numero(dado.entregas.porStatus[codigo] ?? 0)}
+                          <i className="ri-arrow-right-s-line text-texto-2" aria-hidden="true" />
+                        </span>
+                      </Link>
                     </li>
                   ))}
                 </ul>

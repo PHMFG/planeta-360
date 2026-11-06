@@ -146,7 +146,7 @@ Com o banco recém-criado (amostra original):
 1. Entre como `marketing@roxo.example`. "Minha parceria" mostra a próxima ação: o "VT para os telões dos palcos", em "Ajuste solicitado", com o recado da RBS (o VT passa de 30 segundos e a trilha precisa de autorização). Em **Mídia e conteúdo**, a entrega mostra o envio anterior da marca, com a observação que ela escreveu, e o **Histórico** traz o envio e o pedido de ajuste, com autor e data.
 2. Em **Mídia e conteúdo**, solte um PDF (ou JPG, PNG, MP4) na área de envio, escolha a entrega e envie. O arquivo vira uma nova versão, com autor, data e status "Enviado".
 3. Isolamento: ainda como Roxo, abra <http://localhost:5173/parceria/2> (a parceria do Amarelo). A tela diz "Parceria não encontrada" e a API responde 404, igual a um id que não existe.
-4. Saia e entre como `b2b@rbs.example`. Em **Fila de materiais**, abra o envio do Roxo e aprove (ou peça ajuste com uma observação). Tudo fica no **Histórico**, com autor e data.
+4. Saia e entre como `b2b@rbs.example`. Em **Materiais** (aba "Para analisar"), abra o envio do Roxo e aprove (ou peça ajuste com uma observação). Tudo fica no **Histórico**, com autor e data.
 5. Em **Cargas**, envie `docs/exemplos/veiculacao.csv` duas vezes. Na segunda, nada é inserido: as linhas contam como duplicadas.
 6. Em **Relatórios**, gere uma nova versão do relatório do Roxo, valide e disponibilize.
 7. Volte como Roxo: o relatório aparece em **Relatório**, com as seções do modelo, e pode ser impresso ou exportado em CSV.
@@ -268,7 +268,7 @@ Opções: `--split` (`ajuste`, `reserva` ou `todos`), `--categoria`, `--casos`, 
 | 1 | Diagnóstico dos dados | Amostra organizada em `backend/src/main/resources/db/dev/R__amostra.sql`; entidades Java em `record` nos pacotes de cada área |
 | 2 | Modelo do relatório | Seções e catálogo de 17 indicadores no banco (V3); tela Relatório |
 | 3 | Acesso e cadastro | Login por sessão, primeiro acesso por código, Patrocinadores (cadastro), Perfil (empresa, abas e e-mails); isolamento testado pela API |
-| 4 | Materiais e acompanhamento | Mídia e conteúdo e as abas, com versões, status e histórico; Fila de materiais da RBS |
+| 4 | Materiais e acompanhamento | Mídia e conteúdo e as abas, com versões, status e histórico; Materiais da RBS (para analisar e o que falta receber de cada marca) |
 | 5 | Consolidação dos dados | Cargas (planilhas de veiculação e de pesquisa) sem contagem duplicada, rejeições com motivo, previsto x exibido e faltantes |
 | 6 | Relatório | Gerado por parceria a partir da base; a RBS valida e disponibiliza; exporta CSV e imprime |
 | 7 | Integração | Menu com as sete abas, painel da RBS e o roteiro acima |
