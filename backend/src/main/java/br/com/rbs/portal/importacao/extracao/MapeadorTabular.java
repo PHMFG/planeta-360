@@ -536,7 +536,9 @@ public class MapeadorTabular implements ExtratorDeLinhas {
 
     private static OrigemDoValor origem(AbaLida aba, String coluna, int linha) {
         String valor = valor(aba, coluna, linha);
-        String localizador = aba.nome() + "!" + coluna.toUpperCase(Locale.ROOT).replace("\"", "") + linha;
+        String referencia = coluna != null && coluna.matches("\\d+")
+                ? letra(Integer.parseInt(coluna) - 1) : coluna.toUpperCase(Locale.ROOT).replace("\"", "");
+        String localizador = aba.nome() + "!" + referencia + linha;
         return new OrigemDoValor(localizador, valor);
     }
 
