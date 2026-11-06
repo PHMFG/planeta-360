@@ -2,7 +2,7 @@
 
 Este documento é o **contrato entre o back-end e o front-end**. Quem faz a tela lê aqui o que cada rota pede, o que devolve e quais erros esperar, sem precisar abrir o código.
 
-- Todas as 104 rotas estão implementadas e cobertas por testes de integração (`cd backend && ./mvnw test`), inclusive o isolamento entre parcerias. A coluna "Etapa" diz em que etapa do plano cada rota entrou (as do Atlas, 37 em diante, entram como `Atlas 1`, `Atlas 2`, `Atlas M2`, `Atlas M3`, `Atlas M4`, `Atlas M5`, `Atlas M6` e `Atlas M8`). Mudança de formato daqui em diante entra neste arquivo no mesmo commit do código.
+- Todas as 106 rotas estão implementadas e cobertas por testes de integração (`cd backend && ./mvnw test`), inclusive o isolamento entre parcerias. A coluna "Etapa" diz em que etapa do plano cada rota entrou (as do Atlas, 37 em diante, entram como `Atlas 1`, `Atlas 2`, `Atlas M2`, `Atlas M3`, `Atlas M4`, `Atlas M5`, `Atlas M6` e `Atlas M8`). Mudança de formato daqui em diante entra neste arquivo no mesmo commit do código.
 - O banco está descrito em [`docs/banco.md`](banco.md). Os nomes de status, cotas e abas são os mesmos do banco.
 
 ## Como falar com a API
@@ -129,8 +129,8 @@ Todas prontas e testadas. A coluna "Etapa" mostra em que etapa do plano a rota e
 | 20 | `GET /api/parcerias/{id}/historico` | Patrocinador da parceria, ou Admin RBS | Histórico da parceria | 5 |
 | 21 | `GET /api/historico` | Admin RBS | Histórico geral, com filtros | 5 |
 | 22 | `GET /api/historico.csv` | Admin RBS | O mesmo histórico, em CSV | 5 |
-| 23 | `GET /api/parcerias/{id}/pesquisa` | Patrocinador da parceria, ou Admin RBS | Perguntas e resultados da pesquisa | 6 |
-| 24 | `PUT /api/parcerias/{id}/pesquisa/perguntas` | Admin Patrocinador da parceria | Envia as até 3 perguntas | 6 |
+| 23 | `GET /api/parcerias/{id}/pesquisa` | Patrocinador da parceria, ou Admin RBS | Perguntas (com tipo e alternativas), o limite e os resultados da pesquisa | 6 |
+| 24 | `PUT /api/parcerias/{id}/pesquisa/perguntas` | Admin Patrocinador da parceria, ou Admin RBS | Envia as perguntas (até o limite da pesquisa) | 6 |
 | 25 | `PATCH /api/pesquisa/perguntas/{id}/status` | Admin RBS | Aprova a pergunta ou pede ajuste | 6 |
 | 26 | `POST /api/cargas` | Admin RBS | Envia um CSV de veiculação, de pesquisa ou do plano comercial | 6 |
 | 27 | `GET /api/cargas` | Admin RBS | Lista as cargas feitas | 6 |
@@ -211,10 +211,12 @@ Todas prontas e testadas. A coluna "Etapa" mostra em que etapa do plano a rota e
 | 102 | `PUT /api/parcerias/{id}/cota` | Admin RBS | Troca a cota da parceria depois do cadastro (fecha as abas que a cota nova não inclui) | Requisitos RBS (R6.d3) |
 | 103 | `PATCH /api/documentos/{id}/paginas-fora-do-atlas` | Admin RBS | Marca (ou desmarca) as páginas de um documento que ficam fora do índice do Atlas, enquanto ele aguarda aprovação | Requisitos RBS |
 | 104 | `GET /api/parcerias/{id}/cota/previa?para=COTA` | Admin RBS | A prévia do impacto de trocar a cota (não grava nada) | Requisitos RBS (R6.d3) |
+| 119 | `GET /api/parcerias/{id}/pesquisa/perfil` | Patrocinador Master da parceria (aba `PESQUISA` aberta), ou Admin RBS | O perfil demográfico da pesquisa da marca, o comparativo da pesquisa geral e as respostas de texto | F5 |
+| 120 | `POST /api/parcerias/{id}/visitas/{aba}` e `GET /api/parcerias/{id}/novidades` | Pessoa da parceria (marca ou RBS) | Marca a visita a uma aba (ou ao relatório) e devolve o selo "novo" de cada aba | F6 |
 
-São 104 operações (método + caminho): 103 mapeadas nos controllers (`@GetMapping`, `@PostMapping`, `@PutMapping`, `@PatchMapping` ou `@DeleteMapping`) e o logout (rota 3), que vem do Spring Security (`SegurancaConfig`), sem controller. As quatro rotas de debug ficam de fora da numeração. A rota 5 (`ativar`) faz parte do contrato de autenticação, mas só é implementada na etapa 4. As rotas 37 em diante vieram com o Atlas: a coluna "Etapa" diz `Atlas 1` (plano de aplicações e dados informados), `Atlas 2` (conversa, cartão de perguntas e relatório), `Atlas M2` (o diagnóstico: rotas 49 a 53, veja "Diagnóstico do Atlas") `Atlas M3` (os documentos: rotas 54 a 58, veja "Os documentos do Atlas") `Atlas M4` (o visualizador, rotas 59 e 60, e a busca de teste, rota 61, veja "Busca nos documentos") `Atlas M5` (os prazos: rotas 62 a 64, veja "Os prazos do Atlas") `Atlas M6` (o relatório religado: a rota 65, veja "Descarte do relatório parado"; e a planilha da agência: a rota 66, veja "Dados informados pela marca") `Atlas M8` (o Atlas da RBS: as rotas 67 e 68, veja "O Atlas da RBS") ou `Requisitos RBS` (o plano comercial e os espaços de documento da marca: as rotas 69 a 73, veja "O plano comercial e os espaços de documento") e a comprovação mensal de mídia: as rotas 88 a 91, veja a rota 88). As rotas 88 a 90 são da marca de cota Master (com a aba `MIDIA` aberta) e da RBS; a 91 é só do Admin RBS (a marca recebe **403** antes de tudo). As rotas 70 e 73 são só do Admin RBS (o patrocinador recebe **403** antes de o corpo ser lido); a 69, a 71 e a 72 são das duas pontas. As rotas 54, 55, 57, 58, 61, 62, 63, 64, 67 e 68 são só do Admin RBS (o outro perfil recebe **403** antes de o corpo ser lido); a 56, a 59 e a 60 são das duas pontas, e a marca só vê o que o escopo dela permite; a 66 é da marca da parceria e da RBS. A 49 é do dono da conversa (a marca, ou a RBS na conversa do Atlas da RBS); as 50 a 53 são só do Admin RBS (o outro perfil recebe **403** antes de tudo). **As rotas 49 a 53 estão sempre mapeadas e respondem 404 com o diagnóstico desligado** (`atlas.diagnostico.ligado=false`, o padrão). Nas rotas 42, 43, 46 e 65 só o Admin Patrocinador chama (a RBS recebe **403** antes de o corpo ser lido); nas 44, 45 e 49 chama o dono da conversa: a marca na conversa da parceria dela e, com `atlas.rbs.ligado`, a RBS na conversa dela, a do Atlas da RBS (a RBS recebe **403** antes do corpo em qualquer outra conversa, e sempre com a propriedade desligada); nas 47 e 48 chamam a marca da parceria e a RBS. **O relatório do Atlas está ligado nos perfis `dev`, `demo` e `test` e desligado no padrão** (`atlas.relatorio.ligado=false`, `ATLAS_RELATORIO`). Desligado, as rotas **46, 47, 48 e 65 não existem (404)**, e as rotas 42 e 44 só aceitam conversa por texto (`atalho` e `modelo` dão 422): é o modo só chat, que continua existindo e testado. Veja "Modo só chat". O contrato do relatório, nas rotas 42 a 48 e 65, vale com `atlas.relatorio.ligado=true`.
+São 106 operações (método + caminho): 105 mapeadas nos controllers (`@GetMapping`, `@PostMapping`, `@PutMapping`, `@PatchMapping` ou `@DeleteMapping`) e o logout (rota 3), que vem do Spring Security (`SegurancaConfig`), sem controller. As quatro rotas de debug ficam de fora da numeração. A rota 5 (`ativar`) faz parte do contrato de autenticação, mas só é implementada na etapa 4. As rotas 37 em diante vieram com o Atlas: a coluna "Etapa" diz `Atlas 1` (plano de aplicações e dados informados), `Atlas 2` (conversa, cartão de perguntas e relatório), `Atlas M2` (o diagnóstico: rotas 49 a 53, veja "Diagnóstico do Atlas") `Atlas M3` (os documentos: rotas 54 a 58, veja "Os documentos do Atlas") `Atlas M4` (o visualizador, rotas 59 e 60, e a busca de teste, rota 61, veja "Busca nos documentos") `Atlas M5` (os prazos: rotas 62 a 64, veja "Os prazos do Atlas") `Atlas M6` (o relatório religado: a rota 65, veja "Descarte do relatório parado"; e a planilha da agência: a rota 66, veja "Dados informados pela marca") `Atlas M8` (o Atlas da RBS: as rotas 67 e 68, veja "O Atlas da RBS") ou `Requisitos RBS` (o plano comercial e os espaços de documento da marca: as rotas 69 a 73, veja "O plano comercial e os espaços de documento") e a comprovação mensal de mídia: as rotas 88 a 91, veja a rota 88). As rotas 88 a 90 são da marca de cota Master (com a aba `MIDIA` aberta) e da RBS; a 91 é só do Admin RBS (a marca recebe **403** antes de tudo). As rotas 70 e 73 são só do Admin RBS (o patrocinador recebe **403** antes de o corpo ser lido); a 69, a 71 e a 72 são das duas pontas. As rotas 54, 55, 57, 58, 61, 62, 63, 64, 67 e 68 são só do Admin RBS (o outro perfil recebe **403** antes de o corpo ser lido); a 56, a 59 e a 60 são das duas pontas, e a marca só vê o que o escopo dela permite; a 66 é da marca da parceria e da RBS. A 49 é do dono da conversa (a marca, ou a RBS na conversa do Atlas da RBS); as 50 a 53 são só do Admin RBS (o outro perfil recebe **403** antes de tudo). **As rotas 49 a 53 estão sempre mapeadas e respondem 404 com o diagnóstico desligado** (`atlas.diagnostico.ligado=false`, o padrão). Nas rotas 42, 43, 46 e 65 só o Admin Patrocinador chama (a RBS recebe **403** antes de o corpo ser lido); nas 44, 45 e 49 chama o dono da conversa: a marca na conversa da parceria dela e, com `atlas.rbs.ligado`, a RBS na conversa dela, a do Atlas da RBS (a RBS recebe **403** antes do corpo em qualquer outra conversa, e sempre com a propriedade desligada); nas 47 e 48 chamam a marca da parceria e a RBS. **O relatório do Atlas está ligado nos perfis `dev`, `demo` e `test` e desligado no padrão** (`atlas.relatorio.ligado=false`, `ATLAS_RELATORIO`). Desligado, as rotas **46, 47, 48 e 65 não existem (404)**, e as rotas 42 e 44 só aceitam conversa por texto (`atalho` e `modelo` dão 422): é o modo só chat, que continua existindo e testado. Veja "Modo só chat". O contrato do relatório, nas rotas 42 a 48 e 65, vale com `atlas.relatorio.ligado=true`. As rotas 119 e 120 são da marca da parceria (a 119 só da cota Master, com a aba `PESQUISA` aberta) e da RBS; a 120 é de qualquer pessoa com vínculo na parceria.
 
-As rotas de debug do modelo de linguagem (`/api/debug/llm`) são temporárias, só existem no perfil `dev` (o perfil `demo`, da apresentação, as deixa em 404), são só da RBS e ficam fora desta tabela e da conta das 104: veja "Rotas de debug (temporárias)", no fim.
+As rotas de debug do modelo de linguagem (`/api/debug/llm`) são temporárias, só existem no perfil `dev` (o perfil `demo`, da apresentação, as deixa em 404), são só da RBS e ficam fora desta tabela e da conta das 106: veja "Rotas de debug (temporárias)", no fim.
 
 ## Objetos que se repetem
 
@@ -901,7 +903,7 @@ Content-Disposition: attachment; filename="historico-2026-10-23.csv"
 {
   "parceriaId": 2,
   "abaLiberada": true,
-  "limitePerguntas": 3,
+  "limitePerguntas": 10,
   "pesquisa": {
     "id": 2, "nome": "Pesquisa nos espaços de ativação 2027", "escopo": "ATIVACAO",
     "metodologia": "Entrevistas nos espaços da marca (Arena e Camarote)", "baseRespondentes": 412, "nivelConfianca": null
@@ -910,6 +912,7 @@ Content-Disposition: attachment; filename="historico-2026-10-23.csv"
     {
       "id": 7, "ordem": 1, "texto": "Você visitou o espaço da marca na Arena ou no Camarote?",
       "status": "APROVADA", "observacaoRbs": null,
+      "tipoResposta": "ESCOLHA", "alternativas": ["Sim", "Não"],
       "enviadaPor": { "id": 3, "nome": "Marketing Amarelo", "perfil": "ADMIN_PATROCINADOR" },
       "enviadaEm": "2026-11-20T16:00:00-03:00"
     }
@@ -923,38 +926,44 @@ Content-Disposition: attachment; filename="historico-2026-10-23.csv"
 - `status` da pergunta: `RASCUNHO` (ainda não enviada, devolvida para ajuste ou reaberta pela RBS depois de aprovada), `ENVIADA` (espera a RBS) ou `APROVADA`. `observacaoRbs` é o recado da RBS na última decisão sobre a pergunta (pedido de ajuste ou aprovação com observação), enquanto a pergunta continua no status que aquela decisão gerou; quando a marca reenvia, o recado antigo sai e vem `null`.
 - `pesquisa` é `null` enquanto a RBS não abriu a pesquisa da ativação daquela edição. A marca já pode enviar as perguntas nesse período; a carga de resultados liga cada uma à pesquisa depois.
 - `abaLiberada` é sempre `true` para o patrocinador (senão ele recebe 403). Para a RBS mostra o estado real da aba. Aba só conta como liberada se estiver liberada **e** visível.
-- As perguntas vêm em ordem (`ordem` 1 a 3); os resultados, por pergunta e depois na ordem da carga.
+- `limitePerguntas` é o limite da pesquisa da edição (`pesquisa.limite_perguntas`); sem a pesquisa aberta, o padrão é **10**. A pergunta sem pesquisa também vale o padrão de 10.
+- `tipoResposta` é `ESCOLHA` (com a lista de `alternativas`), `SIM_NAO` (a lista é sempre `["Sim", "Não"]`), `NOTA` (0 a 10) ou `TEXTO` (a resposta livre, na rota 119). Nas perguntas que já existiam antes do tipo, ele vem `ESCOLHA` e `alternativas` vem `null`: a pergunta sem lista continua aceitando qualquer alternativa na carga, como antes.
+- As perguntas vêm em ordem (`ordem` 1 até o `limitePerguntas`); os resultados, por pergunta e depois na ordem da carga.
 - `resultados` só existem para perguntas `APROVADA` e sempre trazem a **base de respondentes**. `unidade`: `PERCENTUAL`, `NOTA` ou `CONTAGEM`.
 
 ## 24. `PUT /api/parcerias/{id}/pesquisa/perguntas`  · etapa 6
 
-**Quem chama:** o Admin Patrocinador da parceria (exige o token CSRF). A RBS recebe 403. Só com a aba `PESQUISA` liberada (senão 403, com a frase de cota ou de aba ainda não liberada; veja "Aba").
+**Quem chama:** o Admin Patrocinador da parceria (exige o token CSRF), só com a aba `PESQUISA` liberada (senão 403, com a frase de cota ou de aba ainda não liberada; veja "Aba"), ou o **Admin RBS**, que escreve as perguntas de qualquer parceria de cota Master, mesmo com a aba fechada para a marca (a cota é conferida no service).
 
 **Corpo.** A lista **completa** das perguntas que a marca quer (o `PUT` substitui o conjunto):
 
 ```json
 {
   "perguntas": [
-    { "ordem": 1, "texto": "Você visitou o espaço da marca na Arena ou no Camarote?" },
-    { "ordem": 2, "texto": "De 0 a 10, quanto você recomendaria a marca a um amigo?" }
+    { "ordem": 1, "texto": "Você visitou o espaço da marca na Arena ou no Camarote?",
+      "tipoResposta": "ESCOLHA", "alternativas": ["Sim", "Não", "Não sei"] },
+    { "ordem": 2, "texto": "De 0 a 10, quanto você recomendaria a marca a um amigo?",
+      "tipoResposta": "NOTA" }
   ]
 }
 ```
 
 | Regra | Detalhe |
 | --- | --- |
-| Quantidade | De 1 a **3** perguntas. |
-| `ordem` | 1, 2 ou 3, sem repetir. |
+| Quantidade | De 1 até o `limitePerguntas` da pesquisa (padrão **10** sem pesquisa). |
+| `ordem` | De 1 até o limite, sem repetir. |
 | `texto` | De 10 a 300 caracteres. |
-| O que acontece | Pergunta nova ou alterada fica `ENVIADA`, esperando a RBS. Pergunta já `APROVADA` e sem mudança continua como está. Pergunta devolvida (`RASCUNHO`) volta a `ENVIADA` ao ser enviada de novo, mesmo com o mesmo texto. Pergunta `ENVIADA` e sem mudança fica como está. |
-| Pergunta aprovada | A marca não pode alterá-la nem tirá-la da lista (409). Para mudar, a marca fala com a RBS, que **reabre** a pergunta pedindo ajuste (rota 25); ela volta a `RASCUNHO` e a marca passa a poder editá-la. |
+| `tipoResposta` | `ESCOLHA`, `SIM_NAO`, `NOTA` (0 a 10) ou `TEXTO`. Opcional para o cliente antigo: ausente, vale o tipo que a pergunta já tem no banco (ou `ESCOLHA`, numa pergunta nova). |
+| `alternativas` | Só em `ESCOLHA`: de **2 a 10**, cada uma de 1 a 80 caracteres (os espaços das pontas saem). Em `SIM_NAO` o servidor grava sempre `["Sim", "Não"]` e ignora o que vier. Em `NOTA` e `TEXTO` a lista não é usada (422 se vier preenchida). `ESCOLHA` explícita sem lista dá 422; sem `tipoResposta` e sem lista, a pergunta existente mantém a lista (ou a ausência dela) do banco. |
+| O que acontece | Pergunta nova ou com texto, tipo ou alternativas diferentes fica `ENVIADA`, esperando a RBS. Pergunta já `APROVADA` e sem nenhuma dessas mudanças continua como está. Pergunta devolvida (`RASCUNHO`) volta a `ENVIADA` ao ser enviada de novo, mesmo sem mudança. Pergunta `ENVIADA` e sem mudança fica como está. |
+| Pergunta aprovada | A marca não pode alterar texto, tipo ou alternativas, nem tirá-la da lista (409). Para mudar, a marca fala com a RBS, que **reabre** a pergunta pedindo ajuste (rota 25); ela volta a `RASCUNHO` e a marca passa a poder editá-la. |
 | Pergunta reaberta com resultados | Uma pergunta que já teve resultados carregados não pode ser **retirada** da lista (409: `"A pergunta 3 já tem resultados carregados e não pode ser retirada da lista. Altere o texto dela ou fale com a RBS."`), porque apagá-la apagaria os resultados. Alterar o texto dela é permitido. |
 | Pergunta fora da lista | Pergunta que ainda não foi aprovada e não vem na lista é retirada. |
 | Tudo ou nada | Se qualquer pergunta recusar, nada é gravado. Lista igual à que já está salva não muda nada e não grava histórico. |
 
 **200**: o mesmo objeto da rota 23.
 
-**Erros:** 403; 404; 409 (`"A pergunta 2 já foi aprovada pela RBS e não pode mais ser alterada."`, com o número da pergunta aprovada que foi alterada ou retirada); 422 (mais de 3, ordem repetida, texto curto ou longo, em `campos`). As chaves de `campos` seguem o corpo: `perguntas` (quantidade, "Envie de 1 a 3 perguntas."), `perguntas[0].texto`, `perguntas[0].ordem` e, para ordem repetida, o segundo item repetido (`perguntas[1].ordem`). Corpo que não é JSON: 400. A RBS recebe 403 antes de qualquer outra conferência (inclusive com parceria que não existe). A ordem é: 403 (RBS) → 404 (parceria que não é do usuário ou não existe) → 403 (aba `PESQUISA` não liberada) → só então o corpo é lido e validado (400 e 422). Ou seja, numa parceria sem a aba liberada o patrocinador recebe 403 com qualquer corpo, vazio ou inválido.
+**Erros:** 403; 404; 409 (`"A pergunta 2 já foi aprovada pela RBS e não pode mais ser alterada."`, com o número da pergunta aprovada que foi alterada ou retirada); 422 (mais que o limite, ordem repetida ou fora do intervalo, texto curto ou longo, tipo inválido, alternativas fora da regra, em `campos`). As chaves de `campos` seguem o corpo: `perguntas` (quantidade, "Envie de 1 a 10 perguntas."), `perguntas[0].texto`, `perguntas[0].ordem` (para ordem repetida, o segundo item repetido: `perguntas[1].ordem`), `perguntas[0].tipoResposta` e `perguntas[0].alternativas`. Corpo que não é JSON: 400. Para a marca, a ordem é: 404 (parceria que não é do usuário ou não existe) → 403 (aba `PESQUISA` não liberada) → só então o corpo é lido e validado (400 e 422). Para a RBS: 404 (parceria que não existe) → 403 (cota que não é Master) → corpo. Ou seja, numa parceria sem a aba liberada o patrocinador recebe 403 com qualquer corpo, vazio ou inválido.
 
 **Histórico:** `EDICAO` (entidade `pesquisa_pergunta`), uma linha por pergunta que mudou (enviada, alterada, devolvida e reenviada, ou retirada), com o texto anterior e o novo.
 
@@ -983,6 +992,7 @@ O patrocinador recebe 403 nesta rota mesmo para a pergunta da própria parceria 
 {
   "id": 7, "ordem": 1, "texto": "Você visitou o espaço da marca na Arena ou no Camarote?",
   "status": "RASCUNHO", "observacaoRbs": "Troque \"bom\" por uma escala de 0 a 10.",
+  "tipoResposta": "ESCOLHA", "alternativas": ["Sim", "Não"],
   "enviadaPor": { "id": 3, "nome": "Marketing Amarelo", "perfil": "ADMIN_PATROCINADOR" },
   "enviadaEm": "2026-11-20T16:00:00-03:00"
 }
@@ -1010,7 +1020,7 @@ O patrocinador recebe 403 nesta rota mesmo para a pergunta da própria parceria 
 1. A API confere o cabeçalho e guarda o arquivo como arquivo geral da RBS (sem parceria; categoria `RELATORIO_VEICULACAO`, `PESQUISA` ou `PLANO_COMERCIAL`). O cabeçalho precisa ter **todas** as colunas do tipo, em qualquer ordem e em maiúsculas ou minúsculas; coluna a mais é ignorada. Veiculação: `patrocinador, veiculo, formato, espaco_programa, exibido_em, quantidade, link`. Pesquisa: `patrocinador, pergunta, indicador, alternativa, valor, unidade, base_respondentes`. Plano: `patrocinador, categoria, bloco, veiculo, formato, espaco_programa, janela, tipo_midia, quantidade_prevista, unidade, fonte_pagina`. Célula vazia vale como nulo.
 2. Grava as linhas numa área de passagem e chama a função do banco, que rejeita o que não tem campo obrigatório ou não bate com nenhuma parceria, e **insere sem duplicar**. Data ou número que não dá para ler (por exemplo `exibido_em` = "ontem", ou decimal com vírgula) não derruba o arquivo: a linha é rejeitada, com o campo e o **motivo específico**, que diz o formato esperado (veja a rota 28). Data sem fuso vale no horário de Brasília. Tudo corre numa transação: se algo falhar, não ficam a carga, as linhas nem o arquivo.
 3. A chave da veiculação é a **linha do plano comercial + data e hora**. Reenviar o mesmo arquivo não insere nada: tudo conta como duplicada. Reenviar com quantidade corrigida também conta como duplicada (a primeira versão prevalece).
-4. Na pesquisa da ativação, só pergunta `APROVADA` recebe resultado; a linha de pergunta ainda não aprovada é rejeitada.
+4. Na pesquisa da ativação, só pergunta `APROVADA` recebe resultado; a linha de pergunta ainda não aprovada é rejeitada. O limite de perguntas é o da pesquisa (`limite_perguntas`, padrão 10): a linha com `pergunta` acima dele é rejeitada. E, numa pergunta `ESCOLHA` ou `SIM_NAO` **com lista de alternativas**, a alternativa da linha precisa estar nela (BG3); a pergunta sem lista (as antigas) continua aceitando qualquer alternativa. A rejeição traz `campo` `alternativa` e o motivo `Alternativa fora da lista da pergunta.`.
 5. **No plano**, cada linha vira uma linha de `aproveitamento_previsto` da parceria da marca naquela edição (a mesma carga serve ao previsto de mídia e ao de aplicações de marca). A chave é **parceria + veículo + formato + espaço do programa** (categoria, unidade e janela ficam fora): linha repetida no arquivo, ou que já está no plano, conta como duplicada e a **primeira versão prevalece**. Reenviar uma linha com a quantidade corrigida **não** corrige o plano (editar uma linha fica fora desta etapa). `categoria`, `tipo_midia` e `unidade` valem em maiúsculas ou minúsculas. Os textos são gravados sem espaço nas pontas, e `fonte_pagina` fora de 1 a 32767 (ou que não é número) vira nula sem rejeitar a linha. Aplicação de marca não leva tipo de mídia: se vier um tipo válido, ele é ignorado. Os motivos de rejeição estão na rota 28.
 
 **201**
@@ -3510,11 +3520,64 @@ Nada guarda a cota antiga: o Atlas (busca, documentos e prazos do escopo `COTA`,
 | 409 | Parceria `ENCERRADA` (`"Esta parceria está encerrada e não aceita alterações."`); ou relatório disponibilizado sem `ciente: true` (`"Esta parceria tem o relatório v2 disponibilizado. Trocar a cota muda o cabeçalho dele e os indicadores que a cota nova considera; confirme com ciente = true para continuar."`). |
 | 422 | `campos.cotaCodigo`: ausente, em branco, de uma cota que não existe, ou igual à que a parceria já tem (`"A parceria já está na cota Master."`). Nada é gravado. |
 
+## 119. `GET /api/parcerias/{id}/pesquisa/perfil`  · F5
+
+**Quem chama:** o patrocinador **Master** da parceria, com a aba `PESQUISA` aberta, ou o Admin RBS. A marca de outra cota recebe **403** com a frase de aba fora da cota (a cota Master é conferida de novo no service); a RBS vê qualquer parceria.
+
+**200**
+
+```json
+{
+  "pesquisa": { "id": 3, "nome": "Pesquisa nos espaços de ativação 2027", "baseRespondentes": 412 },
+  "perfil": [ { "dimensao": "GENERO", "categoria": "Feminino", "valor": 56.0, "baseRespondentes": 412 } ],
+  "geral": [ { "dimensao": "GENERO", "categoria": "Feminino", "valor": 62.0, "baseRespondentes": 1038 } ],
+  "respostasTexto": [ { "perguntaId": 9, "ordem": 4, "texto": "Gostei do espaço", "contagem": 3 } ]
+}
+```
+
+- `pesquisa` é a pesquisa da ativação da edição (id, nome e base), ou `null` enquanto a RBS não a abriu. `perfil` vem de `pesquisa_perfil` da parceria; `geral` é o perfil da pesquisa `GERAL` da mesma edição (vazio sem ela), com `parceria_id` nulo.
+- `respostasTexto` traz as respostas livres das perguntas `APROVADA`, já agregadas, com a contagem das repetidas. A marca **nunca** recebe a resposta com `suspeita_dado_pessoal`; a RBS a vê, com `"suspeita": true` (as sem suspeita vêm com `false`). Para a marca o campo `suspeita` não aparece.
+- `valor` é o percentual da categoria (0 a 100), e `baseRespondentes` vai em toda linha. As listas vêm por dimensão e categoria.
+
+| Status | Quando |
+| --- | --- |
+| 401 | Sem sessão. |
+| 403 | A marca sem a aba `PESQUISA` aberta (`"Esta aba não faz parte da cota da sua parceria."` ou `"Esta aba ainda não foi liberada para a sua parceria."`) ou de cota que não é Master (`"A pesquisa é das cotas Master."`). |
+| 404 | Parceria que não existe ou não é do usuário. |
+
+## 120. `POST /api/parcerias/{id}/visitas/{aba}` e `GET /api/parcerias/{id}/novidades`  · F6
+
+**Quem chama:** qualquer pessoa com vínculo na parceria (a marca ou a agência) e a RBS. `aba` é o código de uma das sete abas (`PERFIL`, `APLICACOES`, `MIDIA`, `CORTESIAS`, `CREDENCIAMENTO`, `PESQUISA`, `CONTRATO`) ou `RELATORIO`. O `POST` exige o token CSRF; o `GET` não.
+
+**POST**: grava (upsert) a última visita da pessoa àquela aba, com o `now()` do banco, e responde **204**, sem corpo. A marca só marca visita a uma aba **aberta** para ela (403 com a frase de aba); a RBS passa em qualquer uma. O `RELATORIO` não é uma aba do menu e não tem essa conferência.
+
+**GET**: o estado das oito abas, na ordem do menu, para a pessoa que chama.
+
+```json
+{
+  "abas": {
+    "MIDIA": { "novo": true, "desde": "2026-11-01T10:00:00-03:00" },
+    "PESQUISA": { "novo": false, "desde": null }
+  }
+}
+```
+
+- `desde` é a última visita da pessoa àquela aba (ISO 8601, horário de Brasília), ou `null` sem visita registrada.
+- `novo` é verdadeiro quando, **depois** da última visita da pessoa àquela aba: entrou veiculação ou o comprovante dela (MIDIA), mudou o status de uma entrega da aba (todas as abas do menu), entrou resultado ou perfil (PESQUISA), ou o relatório foi disponibilizado (RELATORIO). **Sem visita registrada**, é verdadeiro se houver qualquer um desses eventos. A resposta sempre traz as oito abas.
+- O `POST` não grava histórico: a própria linha de `visita_aba` é o registro.
+
+| Status | Quando |
+| --- | --- |
+| 401 | Sem sessão. |
+| 403 | A marca marcando visita a uma aba fechada ou oculta; falta o token CSRF no `POST`. |
+| 404 | Parceria que não existe ou não é do usuário. |
+| 422 | `campos.aba`: código que não é de uma aba nem `RELATORIO` (`"Aba inválida. Use o código de uma aba ou RELATORIO."`). |
+
 ---
 
 # Rotas de debug (temporárias)
 
-Um recurso **temporário**, para a equipe ligar o modelo de linguagem do Atlas pela tela (o botão "Debug"), sem reiniciar a API e sem variável de ambiente. Não faz parte das 104 rotas do contrato e só existe no perfil `dev`.
+Um recurso **temporário**, para a equipe ligar o modelo de linguagem do Atlas pela tela (o botão "Debug"), sem reiniciar a API e sem variável de ambiente. Não faz parte das 106 rotas do contrato e só existe no perfil `dev`.
 
 - **Só existem com `atlas.debug.chaves=true`.** A propriedade vem `false` por padrão, `true` no perfil `dev` e `false` no `demo` e no `test`. Sem ela, as quatro rotas respondem **404**, como uma rota que não existe.
 - **A chave fica só na memória da API.** Nunca vai ao banco, a arquivo ou ao log, e **some quando a API reinicia**. Nenhuma resposta devolve a chave inteira: só os 4 últimos caracteres (`finalDaChave`).

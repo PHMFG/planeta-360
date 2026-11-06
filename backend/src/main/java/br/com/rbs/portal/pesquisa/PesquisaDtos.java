@@ -1,8 +1,6 @@
 package br.com.rbs.portal.pesquisa;
 
 import jakarta.validation.Valid;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -17,8 +15,8 @@ import java.util.List;
  */
 public final class PesquisaDtos {
 
-    /** O máximo de perguntas por marca; o banco também limita a ordem a 1..3 (CHECK em pesquisa_pergunta). */
-    public static final int LIMITE_DE_PERGUNTAS = 3;
+    /** O limite padrão de perguntas quando a edição ainda não tem a pesquisa aberta (o da pesquisa manda quando existe). */
+    public static final int LIMITE_PADRAO_DE_PERGUNTAS = 10;
 
     private PesquisaDtos() {
     }
@@ -34,10 +32,13 @@ public final class PesquisaDtos {
 
     /**
      * Uma pergunta da marca. {@code status}: RASCUNHO (não enviada, ou devolvida para ajuste), ENVIADA (espera a RBS) ou
-     * APROVADA. {@code observacaoRbs} é o recado da RBS na última decisão, enquanto ela ainda vale.
+     * APROVADA. {@code observacaoRbs} é o recado da RBS na última decisão, enquanto ela ainda vale. {@code tipoResposta}:
+     * ESCOLHA, SIM_NAO, NOTA ou TEXTO; {@code alternativas} só existe em ESCOLHA e SIM_NAO (nas perguntas antigas, sem lista,
+     * vem {@code null}).
      */
     public record PerguntaDto(Long id, Integer ordem, String texto, String status, String observacaoRbs,
-                              UsuarioResumoDto enviadaPor, OffsetDateTime enviadaEm) {
+                              String tipoResposta, List<String> alternativas, UsuarioResumoDto enviadaPor,
+                              OffsetDateTime enviadaEm) {
     }
 
     /** [VALIDACAO] Um resultado agregado de pergunta APROVADA. A base de respondentes vai sempre junto do número. */
@@ -56,26 +57,30 @@ public final class PesquisaDtos {
 
     /**
      * [VALIDACAO] Uma pergunta do PUT. O texto vale sem os espaços das pontas. Texto vazio e texto curto caem na mesma
-     * regra (10 a 300 caracteres), para o campo ter uma mensagem só.
+     * regra (10 a 300 caracteres), para o campo ter uma mensagem só. A ordem é conferida no Service contra o limite da
+     * pesquisa (que não é fixo). {@code tipoResposta} ausente vale o tipo que a pergunta já tem (ou ESCOLHA, numa nova),
+     * para o cliente antigo continuar funcionando; quando vem, é ESCOLHA, SIM_NAO, NOTA ou TEXTO.
      */
     public record PerguntaRequisicao(
-            @NotNull(message = "Informe a ordem da pergunta (1, 2 ou 3).")
-            @Min(value = 1, message = "A ordem da pergunta vai de 1 a 3.")
-            @Max(value = LIMITE_DE_PERGUNTAS, message = "A ordem da pergunta vai de 1 a 3.")
+            @NotNull(message = "Informe a ordem da pergunta.")
             Integer ordem,
             @NotNull(message = "Escreva a pergunta.")
             @Size(min = 10, max = 300, message = "A pergunta precisa ter de 10 a 300 caracteres.")
-            String texto) {
+            String texto,
+            @Pattern(regexp = "ESCOLHA|SIM_NAO|NOTA|TEXTO",
+                    message = "Tipo de resposta inválido. Use ESCOLHA, SIM_NAO, NOTA ou TEXTO.")
+            String tipoResposta,
+            List<String> alternativas) {
 
         public PerguntaRequisicao {
             texto = texto == null ? null : texto.trim();
+            tipoResposta = tipoResposta == null || tipoResposta.isBlank() ? null : tipoResposta.trim();
         }
     }
 
-    /** [VALIDACAO] O corpo do PUT: a lista completa, de 1 a 3 perguntas. A ordem repetida o Service confere. */
+    /** [VALIDACAO] O corpo do PUT: a lista completa. O tamanho e a ordem são conferidos no Service, contra o limite da pesquisa. */
     public record EnviarPerguntasRequisicao(
             @NotNull(message = "Envie a lista de perguntas.")
-            @Size(min = 1, max = LIMITE_DE_PERGUNTAS, message = "Envie de 1 a 3 perguntas.")
             List<@NotNull(message = "Pergunta vazia.") @Valid PerguntaRequisicao> perguntas) {
     }
 

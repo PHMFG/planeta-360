@@ -28,8 +28,9 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
  *       conversa: o patrocinador, na conversa da parceria dele, e, com {@code atlas.rbs.ligado}, a RBS, na conversa dela (a do Atlas da
  *       RBS, sem parceria). A RBS recebe o mesmo 403 antes do corpo quando o Atlas da RBS está desligado ou quando a conversa é de uma
  *       parceria; conversa que não existe ou é de outra pessoa da RBS o service responde com 404.</li>
- *   <li>O envio das perguntas da pesquisa (PUT): a RBS recebe 403; o patrocinador precisa ser da parceria (404 se não for)
- *       e ter a aba PESQUISA liberada (403), e só depois o corpo é lido e validado.</li>
+ *   <li>O envio das perguntas da pesquisa (PUT): o patrocinador precisa ser da parceria (404 se não for) e ter a aba PESQUISA
+ *       liberada (403), e só depois o corpo é lido e validado. A RBS também passa (escreve as perguntas de qualquer Master);
+ *       a cota Master é conferida no service.</li>
  * </ul>
  * A lista usa o método e o padrão exatamente como estão nos controllers; o HEAD vale como GET (senão ele contornaria a conferência
  * e a validação dos parâmetros viria antes do 403). O PermissaoAntesDoCorpoTest confere que toda rota
@@ -203,11 +204,17 @@ public class PermissaoAntesDoCorpo implements HandlerInterceptor, WebMvcConfigur
                 verificador.exigirPatrocinador(usuario, VerificadorDeAcesso.SO_PATROCINADOR_USA_O_ATLAS);
             }
         } else if (ENVIO_DAS_PERGUNTAS.equals(rota)) {
-            verificador.exigirPatrocinador(usuario, SO_PATROCINADOR_ENVIA_PERGUNTAS);
+            // A marca precisa ser Admin Patrocinador e ter a aba PESQUISA aberta; a RBS também escreve as perguntas de
+            // qualquer Master, e a cota é conferida no service. A parceria (404) vem antes do corpo para as duas.
+            if (!usuario.ehRbs()) {
+                verificador.exigirPatrocinador(usuario, SO_PATROCINADOR_ENVIA_PERGUNTAS);
+            }
             Long parceriaId = idDoCaminho(requisicao);
             if (parceriaId != null) {   // id que não é número: quem responde é o tratador de erros (404), depois daqui
                 verificador.exigirParceria(usuario, parceriaId);
-                verificador.exigirAbaLiberada(usuario, parceriaId, ABA_DA_PESQUISA);
+                if (!usuario.ehRbs()) {
+                    verificador.exigirAbaLiberada(usuario, parceriaId, ABA_DA_PESQUISA);
+                }
             }
         } else if (ENVIO_DE_CONTEUDO.equals(rota)) {
             Long entregaId = idDoCaminho(requisicao);

@@ -101,6 +101,26 @@ class PesquisaControllerTest {
         return json.append("]}").toString();
     }
 
+    /** Uma pergunta do PUT com o tipo e, quando houver, as alternativas. */
+    static String pergunta(int ordem, String texto, String tipo, String... alternativas) {
+        StringBuilder json = new StringBuilder("{\"ordem\":").append(ordem).append(",\"texto\":\"").append(texto).append("\"");
+        if (tipo != null) {
+            json.append(",\"tipoResposta\":\"").append(tipo).append("\"");
+        }
+        if (alternativas.length > 0) {
+            json.append(",\"alternativas\":[");
+            for (int i = 0; i < alternativas.length; i++) {
+                json.append(i > 0 ? "," : "").append("\"").append(alternativas[i]).append("\"");
+            }
+            json.append("]");
+        }
+        return json.append("}").toString();
+    }
+
+    static String listaDePerguntas(String... itens) {
+        return "{\"perguntas\":[" + String.join(",", itens) + "]}";
+    }
+
     MvcTestResult enviarPerguntas(SessaoDeApi sessao, long parceriaId, String json) {
         return sessao.put("/api/parcerias/" + parceriaId + "/pesquisa/perguntas", json);
     }
@@ -133,7 +153,7 @@ class PesquisaControllerTest {
         assertThat(resposta.getResponse().getContentType()).startsWith("application/json");
         assertThat(numero(resposta, "$.parceriaId")).isEqualTo(amarelo);
         assertThat(lerJson(resposta, "$.abaLiberada")).isEqualTo(true);
-        assertThat(lerJson(resposta, "$.limitePerguntas")).isEqualTo(3);
+        assertThat(lerJson(resposta, "$.limitePerguntas")).isEqualTo(10);
         assertThat(lerJson(resposta, "$.pesquisa.escopo")).isEqualTo("ATIVACAO");
         assertThat(lerJson(resposta, "$.pesquisa.nome")).isEqualTo("Pesquisa nos espaços de ativação 2027");
         assertThat(lerJson(resposta, "$.pesquisa.baseRespondentes")).isEqualTo(412);
@@ -395,15 +415,16 @@ class PesquisaControllerTest {
         String curto = "{\"perguntas\":[{\"ordem\":1,\"texto\":\"Curta\"}]}";
         String longo = "{\"perguntas\":[{\"ordem\":1,\"texto\":\"" + "a".repeat(301) + "\"}]}";
         String branco = "{\"perguntas\":[{\"ordem\":1,\"texto\":\"          \"}]}";
-        String ordemFora = "{\"perguntas\":[{\"ordem\":4,\"texto\":\"" + P1 + "\"}]}";
+        String ordemFora = "{\"perguntas\":[{\"ordem\":11,\"texto\":\"" + P1 + "\"}]}";
         String ordemRepetida = "{\"perguntas\":[{\"ordem\":1,\"texto\":\"" + P1 + "\"},{\"ordem\":1,\"texto\":\"" + P2 + "\"}]}";
 
-        // Quatro perguntas: 422 em "perguntas".
-        MvcTestResult quatro = enviarPerguntas(marca, amarelo, perguntas(P1, P2, P3, "Qual é o seu nome completo, por favor?"));
-        assertThat(quatro).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
-        assertThat(quatro.getResponse().getContentType()).startsWith("application/problem+json");
-        assertThat(lerJson(quatro, "$.title")).isEqualTo("Dados inválidos");
-        assertThat(lerJson(quatro, "$.campos.perguntas")).isEqualTo("Envie de 1 a 3 perguntas.");
+        // Onze perguntas: 422 em "perguntas" (o limite da pesquisa é 10).
+        MvcTestResult onze = enviarPerguntas(marca, amarelo, perguntas(P1, P1, P1, P1, P1, P1, P1, P1, P1, P1, P1));
+        assertThat(onze).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(onze.getResponse().getContentType()).startsWith("application/problem+json");
+        assertThat(lerJson(onze, "$.title")).isEqualTo("Dados inválidos");
+        assertThat(lerJson(onze, "$.campos.perguntas")).isEqualTo("Envie de 1 a 10 perguntas.");
+        assertThat(lerJson(onze, "$.campos['perguntas[10].ordem']")).isEqualTo("A ordem da pergunta vai de 1 a 10.");
 
         assertThat(enviarPerguntas(marca, amarelo, "{\"perguntas\":[]}")).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
         assertThat(enviarPerguntas(marca, amarelo, "{}")).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
@@ -417,7 +438,7 @@ class PesquisaControllerTest {
 
         MvcTestResult fora = enviarPerguntas(marca, amarelo, ordemFora);
         assertThat(fora).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
-        assertThat(lerJson(fora, "$.campos['perguntas[0].ordem']")).isEqualTo("A ordem da pergunta vai de 1 a 3.");
+        assertThat(lerJson(fora, "$.campos['perguntas[0].ordem']")).isEqualTo("A ordem da pergunta vai de 1 a 10.");
 
         MvcTestResult repetida = enviarPerguntas(marca, amarelo, ordemRepetida);
         assertThat(repetida).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
@@ -441,6 +462,105 @@ class PesquisaControllerTest {
         assertThat(resposta).hasStatus(HttpStatus.OK);
         assertThat(lerJson(resposta, "$.perguntas[0].texto")).isEqualTo(P1);
         assertThat(lerJson(resposta, "$.perguntas[0].ordem")).as("a ordem 3 sozinha vale: o contrato não exige sequência").isEqualTo(3);
+    }
+
+    @Test
+    void aceitaDezPerguntasNoLimitePadraoERecusaADecimaPrimeira() {
+        long amarelo = parceria("Cliente Amarelo");
+        apagarPerguntas(amarelo);
+        SessaoDeApi marca = entrar(AMARELO);
+
+        MvcTestResult dez = enviarPerguntas(marca, amarelo, perguntas(P1, P1, P1, P1, P1, P1, P1, P1, P1, P1));
+        assertThat(dez).hasStatus(HttpStatus.OK);
+        assertThat(lerLista(dez, "$.perguntas[*].ordem")).containsExactly(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+        assertThat(jdbc.sql("SELECT count(*) FROM pesquisa_pergunta WHERE parceria_id = :p").param("p", amarelo)
+                .query(Long.class).single()).isEqualTo(10);
+
+        MvcTestResult onze = enviarPerguntas(marca, amarelo, perguntas(P1, P1, P1, P1, P1, P1, P1, P1, P1, P1, P1));
+        assertThat(onze).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(lerJson(onze, "$.campos.perguntas")).isEqualTo("Envie de 1 a 10 perguntas.");
+        assertThat(jdbc.sql("SELECT count(*) FROM pesquisa_pergunta WHERE parceria_id = :p").param("p", amarelo)
+                .query(Long.class).single()).as("o 422 não grava nada").isEqualTo(10);
+    }
+
+    @Test
+    void tipoEAlternativasSaoGravadosEValidados() {
+        long amarelo = parceria("Cliente Amarelo");
+        apagarPerguntas(amarelo);
+        SessaoDeApi marca = entrar(AMARELO);
+
+        MvcTestResult resposta = enviarPerguntas(marca, amarelo, listaDePerguntas(
+                pergunta(1, "Como você conheceu a marca no festival?", "ESCOLHA", "Sim", "Não", "Talvez"),
+                pergunta(2, "Você pretende voltar ao festival no ano que vem?", "SIM_NAO", "Qualquer coisa"),
+                pergunta(3, "De 0 a 10, quanto você recomendaria a marca?", "NOTA"),
+                pergunta(4, "O que você mais gostou na ativação da marca?", "TEXTO")));
+
+        assertThat(resposta).hasStatus(HttpStatus.OK);
+        assertThat(lerLista(resposta, "$.perguntas[*].tipoResposta")).containsExactly("ESCOLHA", "SIM_NAO", "NOTA", "TEXTO");
+        assertThat(lerLista(resposta, "$.perguntas[0].alternativas")).containsExactly("Sim", "Não", "Talvez");
+        assertThat(lerLista(resposta, "$.perguntas[1].alternativas")).as("SIM_NAO grava sempre a lista fixa")
+                .containsExactly("Sim", "Não");
+        assertThat(lerJson(resposta, "$.perguntas[2].alternativas")).isNull();
+        assertThat(lerJson(resposta, "$.perguntas[3].alternativas")).isNull();
+        assertThat(jdbc.sql("SELECT tipo_resposta || '|' || coalesce(alternativas::text, 'nulo') FROM pesquisa_pergunta "
+                + "WHERE parceria_id = :p ORDER BY ordem").param("p", amarelo).query(String.class).list())
+                .containsExactly("ESCOLHA|[\"Sim\", \"Não\", \"Talvez\"]", "SIM_NAO|[\"Sim\", \"Não\"]", "NOTA|nulo", "TEXTO|nulo");
+
+        // ESCOLHA sem lista, com uma só, com mais de dez ou com alternativa longa: 422 no item.
+        String semLista = listaDePerguntas(pergunta(1, "Como você conheceu a marca no festival?", "ESCOLHA"));
+        String umaSo = listaDePerguntas(pergunta(1, "Como você conheceu a marca no festival?", "ESCOLHA", "Sim"));
+        String onze = listaDePerguntas(pergunta(1, "Como você conheceu a marca no festival?", "ESCOLHA",
+                "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K"));
+        String longa = listaDePerguntas(pergunta(1, "Como você conheceu a marca no festival?", "ESCOLHA", "Sim", "a".repeat(81)));
+        for (String corpo : List.of(semLista, umaSo, onze, longa)) {
+            MvcTestResult r = enviarPerguntas(marca, amarelo, corpo);
+            assertThat(r).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
+            assertThat(lerJson(r, "$.campos['perguntas[0].alternativas']")).isNotNull();
+        }
+        assertThat(lerJson(enviarPerguntas(marca, amarelo, semLista), "$.campos['perguntas[0].alternativas']"))
+                .isEqualTo("A pergunta de escolha precisa de 2 a 10 alternativas.");
+        assertThat(lerJson(enviarPerguntas(marca, amarelo, longa), "$.campos['perguntas[0].alternativas']"))
+                .isEqualTo("Cada alternativa precisa ter de 1 a 80 caracteres.");
+
+        // NOTA e TEXTO não usam alternativas; tipo fora da lista também é 422.
+        MvcTestResult notaComLista = enviarPerguntas(marca, amarelo,
+                listaDePerguntas(pergunta(1, "De 0 a 10, quanto você recomendaria a marca?", "NOTA", "Sim", "Não")));
+        assertThat(notaComLista).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(lerJson(notaComLista, "$.campos['perguntas[0].alternativas']")).isEqualTo("Só a pergunta de escolha usa alternativas.");
+        MvcTestResult tipoInvalido = enviarPerguntas(marca, amarelo,
+                listaDePerguntas(pergunta(1, "Como você conheceu a marca no festival?", "MULTIPLA", "Sim", "Não")));
+        assertThat(tipoInvalido).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(lerJson(tipoInvalido, "$.campos['perguntas[0].tipoResposta']"))
+                .isEqualTo("Tipo de resposta inválido. Use ESCOLHA, SIM_NAO, NOTA ou TEXTO.");
+    }
+
+    @Test
+    void clienteAntigoSemTipoPreservaOTipoEAsAlternativasDoBanco() {
+        long amarelo = parceria("Cliente Amarelo");
+        jdbc.sql("UPDATE pesquisa_pergunta SET tipo_resposta = 'SIM_NAO', alternativas = '[\"Sim\",\"Não\"]'::jsonb "
+                + "WHERE parceria_id = :p AND ordem = 1").param("p", amarelo).update();
+
+        MvcTestResult resposta = enviarPerguntas(entrar(AMARELO), amarelo, perguntas(P1, P2, P3));
+
+        assertThat(resposta).hasStatus(HttpStatus.OK);
+        assertThat(lerLista(resposta, "$.perguntas[*].status")).containsOnly("APROVADA");
+        assertThat(lerJson(resposta, "$.perguntas[0].tipoResposta")).isEqualTo("SIM_NAO");
+        assertThat(lerLista(resposta, "$.perguntas[0].alternativas")).containsExactly("Sim", "Não");
+        assertThat(contarHistorico("EDICAO", amarelo)).as("sem tipo explícito e sem alternativas, nada mudou").isZero();
+    }
+
+    @Test
+    void mudarOTipoDeUmaPerguntaAprovadaEConflito() {
+        long amarelo = parceria("Cliente Amarelo");
+        SessaoDeApi marca = entrar(AMARELO);
+
+        MvcTestResult mudouOTipo = enviarPerguntas(marca, amarelo, listaDePerguntas(
+                pergunta(1, P1, "TEXTO"), pergunta(2, P2, "NOTA"), pergunta(3, P3, "ESCOLHA", "Sim", "Não")));
+
+        assertThat(mudouOTipo).hasStatus(HttpStatus.CONFLICT);
+        assertThat(lerJson(mudouOTipo, "$.detail")).isEqualTo(FRASE_DA_P1);
+        assertThat(jdbc.sql("SELECT tipo_resposta FROM pesquisa_pergunta WHERE parceria_id = :p AND ordem = 1")
+                .param("p", amarelo).query(String.class).single()).isEqualTo("ESCOLHA");
     }
 
     // ---------------------------------------------------------------------
@@ -662,20 +782,24 @@ class PesquisaControllerTest {
     // ---------------------------------------------------------------------
 
     @Test
-    void rbsTentandoOPutRecebe403ENadaMuda() {
+    void rbsEscreveAsPerguntasDeQualquerMasterEMarcaComoAutora() {
         long amarelo = parceria("Cliente Amarelo");
         apagarPerguntas(amarelo);
         SessaoDeApi rbs = entrar(RBS);
 
         MvcTestResult resposta = enviarPerguntas(rbs, amarelo, perguntas(P1, P2, P3));
 
-        assertThat(resposta).hasStatus(HttpStatus.FORBIDDEN);
-        assertThat(resposta.getResponse().getContentType()).startsWith("application/problem+json");
-        assertThat(lerJson(resposta, "$.title")).isEqualTo("Acesso negado");
+        assertThat(resposta).hasStatus(HttpStatus.OK);
+        assertThat(lerLista(resposta, "$.perguntas[*].status")).containsOnly("ENVIADA");
+        assertThat(lerLista(resposta, "$.perguntas[*].texto")).containsExactly(P1, P2, P3);
+        assertThat(lerJson(resposta, "$.perguntas[0].enviadaPor.nome")).isEqualTo("Equipe B2B RBS");
+        assertThat(lerJson(resposta, "$.perguntas[0].enviadaPor.perfil")).isEqualTo("ADMIN_RBS");
         assertThat(jdbc.sql("SELECT count(*) FROM pesquisa_pergunta WHERE parceria_id = :p").param("p", amarelo)
-                .query(Long.class).single()).isZero();
-        // Nem a RBS nem uma parceria que não existe mudam isso: a RBS recebe 403 antes de qualquer outra coisa.
-        assertThat(enviarPerguntas(rbs, 999_999L, perguntas(P1))).hasStatus(HttpStatus.FORBIDDEN);
+                .query(Long.class).single()).isEqualTo(3);
+
+        // Parceria que não existe continua 404, e a cota que não é Master não recebe perguntas nem da RBS.
+        assertThat(enviarPerguntas(rbs, 999_999L, perguntas(P1))).hasStatus(HttpStatus.NOT_FOUND);
+        assertThat(enviarPerguntas(rbs, parceria("Cliente Roxo"), perguntas(P1))).hasStatus(HttpStatus.FORBIDDEN);
     }
 
     @Test

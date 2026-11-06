@@ -18,6 +18,7 @@ public class PesquisaRepositorio {
 
     /** A pergunta como a rota 23 a mostra, com quem enviou e o recado vigente da RBS. */
     public record LinhaDePergunta(Long id, Integer ordem, String texto, String status, String observacaoRbs,
+                                  String tipoResposta, String alternativas,
                                   Long enviadaPorId, String enviadaPorNome, String enviadaPorPerfil,
                                   OffsetDateTime enviadaEm) {
     }
@@ -26,7 +27,8 @@ public class PesquisaRepositorio {
      * A pergunta como o PUT e o PATCH precisam: com a linha travada (FOR UPDATE) até o fim da transação. temResultados: já há
      * resultado carregado para ela (só existe se ela foi aprovada um dia; a reabertura pela RBS a deixa fora de APROVADA).
      */
-    public record PerguntaTravada(Long id, Long parceriaId, Integer ordem, String texto, String status, boolean temResultados) {
+    public record PerguntaTravada(Long id, Long parceriaId, Integer ordem, String texto, String status,
+                                  String tipoResposta, String alternativas, boolean temResultados) {
     }
 
     public record LinhaDeResultado(Long perguntaId, Integer ordem, String alternativa, BigDecimal valor, String unidade,
@@ -34,7 +36,7 @@ public class PesquisaRepositorio {
     }
 
     public record LinhaDePesquisa(Long id, String nome, String escopo, String metodologia, Integer baseRespondentes,
-                                  BigDecimal nivelConfianca) {
+                                  BigDecimal nivelConfianca, Integer limitePerguntas) {
     }
 
     // O recado da RBS vem do histórico (não há coluna para ele): a última ALTERACAO_STATUS da pergunta, que só vale
@@ -42,6 +44,7 @@ public class PesquisaRepositorio {
     private static final String PERGUNTAS = """
             SELECT q.id, q.ordem, q.texto, q.status,
                    CASE WHEN h.valor_novo = q.status THEN h.detalhe END AS observacao_rbs,
+                   q.tipo_resposta, q.alternativas::text AS alternativas,
                    u.id AS enviada_por_id, u.nome AS enviada_por_nome, u.perfil AS enviada_por_perfil, q.enviada_em
             FROM pesquisa_pergunta q
             LEFT JOIN usuario u ON u.id = q.enviada_por
@@ -81,13 +84,25 @@ public class PesquisaRepositorio {
      */
     public Optional<LinhaDePesquisa> pesquisaDaAtivacao(long parceriaId) {
         return jdbc.sql("""
-                        SELECT p.id, p.nome, p.escopo, p.metodologia, p.base_respondentes, p.nivel_confianca
+                        SELECT p.id, p.nome, p.escopo, p.metodologia, p.base_respondentes, p.nivel_confianca,
+                               p.limite_perguntas
                         FROM pesquisa p JOIN parceria pa ON pa.evento_id = p.evento_id
                         WHERE pa.id = :parceriaId AND p.escopo = 'ATIVACAO'
                         ORDER BY p.id LIMIT 1
                         """)
                 .param("parceriaId", parceriaId)
                 .query(LinhaDePesquisa.class)
+                .optional();
+    }
+
+    /** O código da cota da parceria (MASTER, SUBCOTA_G ou SUBCOTA). Vazio se a parceria não existe. */
+    public Optional<String> cota(long parceriaId) {
+        return jdbc.sql("""
+                        SELECT ct.codigo FROM parceria pa JOIN cota_tipo ct ON ct.id = pa.cota_tipo_id
+                        WHERE pa.id = :parceriaId
+                        """)
+                .param("parceriaId", parceriaId)
+                .query(String.class)
                 .optional();
     }
 
@@ -136,7 +151,7 @@ public class PesquisaRepositorio {
      */
     public List<PerguntaTravada> perguntasTravadas(long parceriaId) {
         return jdbc.sql("""
-                        SELECT id, parceria_id, ordem, texto, status,
+                        SELECT id, parceria_id, ordem, texto, status, tipo_resposta, alternativas::text AS alternativas,
                                EXISTS (SELECT 1 FROM pesquisa_resultado r WHERE r.pergunta_id = pesquisa_pergunta.id) AS tem_resultados
                         FROM pesquisa_pergunta
                         WHERE parceria_id = :parceriaId ORDER BY ordem FOR UPDATE
@@ -148,7 +163,7 @@ public class PesquisaRepositorio {
 
     public Optional<PerguntaTravada> travarPergunta(long perguntaId) {
         return jdbc.sql("""
-                        SELECT id, parceria_id, ordem, texto, status,
+                        SELECT id, parceria_id, ordem, texto, status, tipo_resposta, alternativas::text AS alternativas,
                                EXISTS (SELECT 1 FROM pesquisa_resultado r WHERE r.pergunta_id = pesquisa_pergunta.id) AS tem_resultados
                         FROM pesquisa_pergunta WHERE id = :id FOR UPDATE
                         """)
@@ -158,16 +173,21 @@ public class PesquisaRepositorio {
     }
 
     /** Pergunta nova: nasce ENVIADA, esperando a RBS. {@code pesquisaId} é nulo se a RBS ainda não abriu a pesquisa. */
-    public long inserir(long parceriaId, Long pesquisaId, int ordem, String texto, long usuarioId) {
+    public long inserir(long parceriaId, Long pesquisaId, int ordem, String texto, String tipoResposta,
+                        String alternativasJson, long usuarioId) {
         return jdbc.sql("""
-                        INSERT INTO pesquisa_pergunta (parceria_id, pesquisa_id, ordem, texto, status, enviada_por, enviada_em)
-                        VALUES (:parceriaId, :pesquisaId, :ordem, :texto, 'ENVIADA', :usuarioId, now())
+                        INSERT INTO pesquisa_pergunta (parceria_id, pesquisa_id, ordem, texto, status, tipo_resposta,
+                                                       alternativas, enviada_por, enviada_em)
+                        VALUES (:parceriaId, :pesquisaId, :ordem, :texto, 'ENVIADA', :tipoResposta,
+                                CAST(:alternativas AS jsonb), :usuarioId, now())
                         RETURNING id
                         """)
                 .param("parceriaId", parceriaId)
                 .param("pesquisaId", pesquisaId)
                 .param("ordem", ordem)
                 .param("texto", texto)
+                .param("tipoResposta", tipoResposta)
+                .param("alternativas", alternativasJson)
                 .param("usuarioId", usuarioId)
                 .query(Long.class)
                 .single();
@@ -177,14 +197,18 @@ public class PesquisaRepositorio {
      * Pergunta alterada ou devolvida e reenviada: volta a ENVIADA. Se ela ainda não estava ligada a uma pesquisa e agora
      * existe uma, liga (a carga de resultados só aceita pergunta da mesma pesquisa).
      */
-    public void reenviar(long perguntaId, Long pesquisaId, String texto, long usuarioId) {
+    public void reenviar(long perguntaId, Long pesquisaId, String texto, String tipoResposta, String alternativasJson,
+                         long usuarioId) {
         jdbc.sql("""
                         UPDATE pesquisa_pergunta
-                        SET texto = :texto, status = 'ENVIADA', enviada_por = :usuarioId, enviada_em = now(),
+                        SET texto = :texto, tipo_resposta = :tipoResposta, alternativas = CAST(:alternativas AS jsonb),
+                            status = 'ENVIADA', enviada_por = :usuarioId, enviada_em = now(),
                             pesquisa_id = coalesce(pesquisa_id, :pesquisaId)
                         WHERE id = :id
                         """)
                 .param("texto", texto)
+                .param("tipoResposta", tipoResposta)
+                .param("alternativas", alternativasJson)
                 .param("usuarioId", usuarioId)
                 .param("pesquisaId", pesquisaId)
                 .param("id", perguntaId)
