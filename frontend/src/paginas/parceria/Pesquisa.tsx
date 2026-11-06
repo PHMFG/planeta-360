@@ -10,7 +10,6 @@ import { CabecalhoSecao } from '../../componentes/CabecalhoSecao'
 import { Cartao } from '../../componentes/Cartao'
 import { Carregando } from '../../componentes/Carregando'
 import { AreaTexto } from '../../componentes/Formulario'
-import { Tabela } from '../../componentes/Tabela'
 import { useSessao } from '../../sessao/Sessao'
 import { dataHora, numero } from '../../util/formatar'
 import { useParceria } from './ContextoParceria'
@@ -31,6 +30,51 @@ function valor(resultado: ResultadoPesquisa) {
   if (resultado.unidade === 'PERCENTUAL') return `${numero(resultado.valor)}%`
   if (resultado.unidade === 'NOTA') return `nota ${numero(resultado.valor)}`
   return numero(resultado.valor)
+}
+
+/**
+ * Os resultados por pergunta, com o texto dela (U6, plano da base da RBS): cada alternativa numa barra (percentual) ou o número
+ * (nota, contagem), e a base de respondentes uma vez só, no fim da pergunta. Nenhum texto interpretativo: só o dado.
+ */
+function ResultadosPorPergunta({ resultados, perguntas }: { resultados: ResultadoPesquisa[]; perguntas: Pergunta[] }) {
+  const ordens = [...new Set(resultados.map((item) => item.ordem))].sort((a, b) => a - b)
+  return (
+    <div className="flex flex-col gap-6">
+      {ordens.map((ordem) => {
+        const itens = resultados.filter((item) => item.ordem === ordem)
+        const texto = perguntas.find((pergunta) => pergunta.ordem === ordem)?.texto
+        const bases = [...new Set(itens.map((item) => item.baseRespondentes))]
+        return (
+          <section key={ordem} aria-label={`Pergunta ${ordem}`}>
+            <p className="texto-sobretitulo text-texto-2">Pergunta {ordem}</p>
+            <h3 className="mt-1 text-sm font-semibold">{texto ?? `Pergunta ${ordem}`}</h3>
+            <ul className="mt-3 flex flex-col gap-2">
+              {itens.map((item, indice) => (
+                <li
+                  key={`${item.perguntaId}-${item.alternativa}`}
+                  className="entrar-em-cascata grid grid-cols-[minmax(110px,180px)_1fr_auto] items-center gap-3 text-sm"
+                  style={{ '--ordem': indice } as React.CSSProperties}
+                >
+                  <span className="font-medium">{item.alternativa}</span>
+                  {item.unidade === 'PERCENTUAL' ? (
+                    <span className="h-3 overflow-hidden rounded-full bg-cinza-100" aria-hidden="true">
+                      <span className="block h-full rounded-full bg-secao" style={{ width: `${Math.max(0, Math.min(100, item.valor))}%` }} />
+                    </span>
+                  ) : (
+                    <span aria-hidden="true" />
+                  )}
+                  <span className="w-20 text-right font-semibold">{valor(item)}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 text-xs font-medium text-texto-2">
+              Base: {bases.map((base) => numero(base)).join(' / ')} respondentes
+            </p>
+          </section>
+        )
+      })}
+    </div>
+  )
 }
 
 function DecisaoRbs({ pergunta, aoDecidir }: { pergunta: Pergunta; aoDecidir: () => void }) {
@@ -209,7 +253,9 @@ export function Pesquisa() {
         subtitulo={
           rbs
             ? `As perguntas de ${parceria.patrocinador} na pesquisa do festival, para aprovar, e os resultados.`
-            : 'As três perguntas da sua marca na pesquisa do festival e os resultados.'
+            : bloqueada
+              ? 'A pesquisa nos espaços de ativação é das cotas Master.'
+              : 'As perguntas da sua marca na pesquisa do festival e os resultados.'
         }
       />
       {bloqueada && !rbs ? (
@@ -253,16 +299,7 @@ export function Pesquisa() {
                       A RBS carrega os resultados da empresa de pesquisa depois do festival. Toda resposta vem com a base de respondentes.
                     </Aviso>
                   ) : (
-                    <Tabela
-                      linhas={dado.resultados}
-                      chave={(item) => `${item.perguntaId}-${item.alternativa}`}
-                      colunas={[
-                        { titulo: 'Pergunta', celula: (item) => `Pergunta ${item.ordem}` },
-                        { titulo: 'Resposta', celula: (item) => <span className="font-semibold">{item.alternativa}</span> },
-                        { titulo: 'Resultado', celula: (item) => valor(item), classe: 'text-right' },
-                        { titulo: 'Base', celula: (item) => `${numero(item.baseRespondentes)} respondentes`, classe: 'text-right' },
-                      ]}
-                    />
+                    <ResultadosPorPergunta resultados={dado.resultados} perguntas={dado.perguntas} />
                   )}
                 </Cartao>
               </>
