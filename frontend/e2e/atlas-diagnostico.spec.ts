@@ -40,7 +40,7 @@ test('a marca abre o diagnóstico da resposta, e a RBS vê o mesmo turno @vivo',
   const contexto = await browser.newContext({ baseURL: test.info().project.use.baseURL })
   const rbs = await contexto.newPage()
   await entrar(rbs, 'rbs')
-  await rbs.goto('/rbs/atlas')
+  await rbs.goto('/rbs/atlas?aba=turnos')
   await expect(rbs.getByRole('tab', { name: 'Turnos', selected: true })).toBeVisible()
   const primeira = rbs.locator('tbody tr').first()
   await expect(primeira).toContainText('Cliente Amarelo')
@@ -57,7 +57,7 @@ test('a marca abre o diagnóstico da resposta, e a RBS vê o mesmo turno @vivo',
 
 test('a RBS vê os provedores e testa a conexão @vivo', async ({ page }) => {
   await entrar(page, 'rbs')
-  await page.goto('/rbs/atlas')
+  await page.goto('/rbs/atlas?aba=turnos')
   await page.getByRole('tab', { name: 'Provedores' }).click()
   await expect(page.getByRole('heading', { name: 'Modelo de linguagem' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'JEV' })).toBeVisible()
@@ -89,7 +89,7 @@ test.describe('no celular', () => {
 
   test('a página da RBS e a gaveta cabem na tela', async ({ page }) => {
     await entrar(page, 'rbs')
-    await page.goto('/rbs/atlas')
+    await page.goto('/rbs/atlas?aba=turnos')
     await expect(page.getByRole('tab', { name: 'Turnos' })).toBeVisible()
     await semRolagemHorizontal(page)
     await capturar(page, 'rbs-atlas-celular')
