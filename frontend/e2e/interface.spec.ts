@@ -37,13 +37,14 @@ test('[U16] os botões de cada e-mail autorizado dizem de qual e-mail são', asy
   for (const nome of nomes) expect(nome).toMatch(/@/)
 })
 
-test('[U17] o botão do Atlas desabilitado da RBS não parece ativo e diz por quê', async ({ page }) => {
+test('[U17] o botão do Atlas da RBS abre o Atlas da gestão, na conversa', async ({ page }) => {
+  // Desde 06/11 (pedido do ph) a RBS usa o botão: ele leva ao Atlas da gestão, que consulta a base de todas as marcas.
   await entrar(page, 'rbs')
-  const atlas = page.getByRole('navigation', { name: 'Menu principal' }).locator('xpath=..').getByRole('button', { name: /atlas/i })
-  await expect(atlas).toBeDisabled()
-  const opacidade = await atlas.evaluate((b) => Number(getComputedStyle(b).opacity))
-  expect(opacidade, 'o desabilitado precisa parecer desabilitado').toBeLessThan(0.8)
-  await expect(page.locator('#atlas-legenda')).toContainText(/marca|patrocinador/i)
+  const atlas = page.getByRole('navigation', { name: 'Menu principal' }).locator('xpath=..').getByRole('link', { name: /atlas/i }).last()
+  await expect(page.locator('#atlas-legenda')).toContainText('todas as marcas')
+  await atlas.click()
+  await expect(page).toHaveURL(/\/rbs\/atlas$/)
+  await expect(page.getByRole('tab', { name: 'Conversa', selected: true })).toBeVisible()
 })
 
 test('[U04] sem entrega de mídia aberta, a marca sabe antes de escolher o arquivo', async ({ page }) => {

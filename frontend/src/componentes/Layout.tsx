@@ -11,7 +11,9 @@ export function Layout({ parceria, contexto }: { parceria: ParceriaResumo | null
   const [menuAberto, setMenuAberto] = useState(false)
   const { usuario } = useSessao()
   // [ATLAS] Só a marca conversa com o Atlas, e sempre dentro de uma parceria: o botão do menu abre a janela dele.
-  const atlas = parceria !== null && usuario?.perfil === 'ADMIN_PATROCINADOR' ? `/parceria/${parceria.id}/atlas` : undefined
+  // A marca conversa dentro da parceria dela; a RBS, no Atlas da gestão, que consulta a base de todas as marcas (pedido do ph, 06/11).
+  const atlas =
+    usuario?.perfil === 'ADMIN_RBS' ? '/rbs/atlas' : parceria !== null && usuario?.perfil === 'ADMIN_PATROCINADOR' ? `/parceria/${parceria.id}/atlas` : undefined
 
   return (
     <div className="min-h-screen">

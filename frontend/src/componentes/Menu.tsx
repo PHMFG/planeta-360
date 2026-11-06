@@ -154,8 +154,8 @@ function ChipConta({ usuario, parceria }: { usuario: UsuarioLogado; parceria: Pa
 const CLASSE_BOTAO_ATLAS = 'relative flex h-[60px] baixa:h-[50px] w-full items-center justify-center gap-2 overflow-hidden rounded-2xl border border-white/22 bg-atlas text-white shadow-atlas-brilho transition-[filter]'
 
 function BotaoAtlas({ destino }: { destino?: string }) {
-  // [ATLAS] Só a marca conversa com o Atlas, dentro de uma parceria: o botão abre a janela dele (Figma P360/Botão Atlas,
-  // 167:18). Para a RBS fica desabilitado, e os relatórios do Atlas aparecem na tela Relatório da parceria.
+  // [ATLAS] O botão abre o Atlas (Figma P360/Botão Atlas, 167:18): a marca, na janela dela, dentro da parceria; a RBS, no Atlas
+  // da gestão (/rbs/atlas), que consulta a base de todas as marcas. Sem destino (ninguém logado numa parceria), fica desabilitado.
   const ativo = Boolean(useMatch(`${destino ?? '/sem-atlas'}/*`))
   const conteudo = (
     <>
@@ -180,7 +180,7 @@ function BotaoAtlas({ destino }: { destino?: string }) {
         </button>
       )}
       <p id="atlas-legenda" className={`mt-1.5 text-center text-[11px] font-medium ${ativo ? 'text-atlas-roxo' : 'text-texto-2'}`}>
-        {ativo ? 'Conversa aberta · assistente IA' : destino ? 'Pergunte sobre os seus dados' : 'Assistente das marcas'}
+        {ativo ? 'Conversa aberta · assistente IA' : destino === '/rbs/atlas' ? 'Pergunte sobre todas as marcas' : destino ? 'Pergunte sobre os seus dados' : 'Assistente das marcas'}
       </p>
     </div>
   )
