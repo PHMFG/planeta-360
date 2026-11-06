@@ -479,9 +479,17 @@ function GradeDaRbs({ cortesias, aoGravar }: { cortesias: DadosDeCortesias; aoGr
   }
 
   return (
-    <Cartao titulo="Cota de cortesias da parceria">
+    <Cartao
+      titulo="Cota de cortesias da parceria"
+      // O salvar também no topo: no fim do formulário ele ficava abaixo da dobra em 1440×900 (rodada H3).
+      extra={
+        <Botao type="submit" form="form-cota-cortesias" carregando={enviando} className="min-w-0 px-5" icone="ri-save-line">
+          Salvar
+        </Botao>
+      }
+    >
       <p className="mb-4 text-sm font-medium text-texto-2">O que o contrato dá, por setor e tipo/dia. Em branco, a cota não tem.</p>
-      <form onSubmit={salvar} className="flex flex-col gap-4" noValidate>
+      <form id="form-cota-cortesias" onSubmit={salvar} className="flex flex-col gap-4" noValidate>
         <div className="overflow-x-auto">
           <table className="w-full border-separate border-spacing-0 text-sm">
             <thead>

@@ -167,8 +167,16 @@ function GradeDeCredenciais({ credenciais, aoGravar }: { credenciais: Credenciai
   }
 
   return (
-    <Cartao titulo="Credenciais da parceria">
-      <form onSubmit={salvar} className="flex flex-col gap-4" noValidate>
+    <Cartao
+      titulo="Credenciais da parceria"
+      // O salvar também no topo: no fim do formulário ele ficava abaixo da dobra em 1440×900 (rodada H3).
+      extra={
+        <Botao type="submit" form="form-credenciais" carregando={enviando} className="min-w-0 px-5" icone="ri-save-line">
+          Salvar
+        </Botao>
+      }
+    >
+      <form id="form-credenciais" onSubmit={salvar} className="flex flex-col gap-4" noValidate>
         {credenciais.credenciais.length > 0 && (
           <ul className="flex flex-col gap-2">
             {credenciais.credenciais.map((credencial) => {
