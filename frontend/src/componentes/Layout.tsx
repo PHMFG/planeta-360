@@ -6,6 +6,7 @@ import type { ParceriaResumo } from '../api/tipos'
 import { useSessao } from '../sessao/Sessao'
 import { BotaoDebug } from './BotaoDebug'
 import { Menu } from './Menu'
+import { ProvedorDeToast } from './Toast'
 
 export function Layout({ parceria, contexto }: { parceria: ParceriaResumo | null; contexto?: unknown }) {
   const [menuAberto, setMenuAberto] = useState(false)
@@ -14,6 +15,7 @@ export function Layout({ parceria, contexto }: { parceria: ParceriaResumo | null
   const atlas = parceria !== null && usuario?.perfil === 'ADMIN_PATROCINADOR' ? `/parceria/${parceria.id}/atlas` : undefined
 
   return (
+    <ProvedorDeToast>
     <div className="min-h-screen">
       <header className="sticky top-0 z-30 flex items-center justify-between gap-4 border-b border-borda bg-white px-4 py-2.5 lg:hidden print:hidden">
         <p className="truncate font-display text-[28px] leading-none text-parceria uppercase">Planeta 360</p>
@@ -37,10 +39,12 @@ export function Layout({ parceria, contexto }: { parceria: ParceriaResumo | null
       {/* [TEMPORARIO] Só aparece com as rotas de debug da API (perfil dev). */}
       <BotaoDebug />
       <main className="p-4 lg:pl-[296px] print:p-0">
-        <div className="flex max-w-[1200px] min-w-0 flex-col gap-4">
+        {/* [MOVIMENTO] Só o conteúdo troca na transição de tela; o menu e a barra do topo ficam parados. */}
+        <div className="flex max-w-[1200px] min-w-0 flex-col gap-4" style={{ viewTransitionName: 'conteudo' }}>
           <Outlet context={contexto} />
         </div>
       </main>
     </div>
+    </ProvedorDeToast>
   )
 }
