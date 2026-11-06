@@ -34,7 +34,7 @@ import org.springframework.stereotype.Component;
  *       oculta, o resultado vem vazio, como no {@code listar_entregas}.</li>
  *   <li><b>O recorte por mês é das cotas Master</b> (e da RBS, na conversa dela). Nas outras cotas, {@code mes} volta como erro
  *       {@code campos.mes} = "O recorte por mês é das cotas Master.", e as linhas nunca trazem mês.</li>
- *   <li><b>Os filtros</b> {@code veiculo} (igual, sem caixa nem acento), {@code formato} (contém, sem caixa nem acento, também no
+ *   <li><b>Os filtros</b> {@code veiculo} (contém, sem caixa nem acento: "radio" pega as Rádios), {@code formato} (contém, sem caixa nem acento, também no
  *       espaço ou programa), {@code tipoMidia} e {@code unidade} são opcionais. Sem mês, cada linha do plano vem uma vez, somando os
  *       meses; com mês, só o mês pedido, e a linha do plano sem exibição no mês continua com o contratado.</li>
  *   <li><b>Os totais são por unidade e nunca somam unidades diferentes.</b> Até {@value #LIMITE} linhas; passando disso, o resultado
@@ -64,14 +64,14 @@ public class ConsultarMidia implements Ferramenta {
 
     private static final DefinicaoDeFerramenta DEFINICAO = new DefinicaoDeFerramenta(NOME,
             "Consulta a mídia desta parceria: o contratado no plano e o que já foi exibido, por veículo e formato, com a entrega em "
-                    + "percentual e o impacto. Filtros opcionais: veiculo (igual), formato (contém, também no espaço ou programa), "
+                    + "percentual e o impacto. Filtros opcionais: veiculo (contém o nome, como radio ou zero hora), formato (contém, também no espaço ou programa), "
                     + "tipoMidia, unidade e mes (AAAA-MM; só as cotas Master recortam por mês). Sem mês, cada linha do plano soma todos "
                     + "os meses e vem uma vez. Devolve os totais por unidade (inserção, CPM e aplicação nunca se somam) e até 40 "
                     + "linhas. Cada linha e cada total vem com o marcador (R1, R2...): cite o marcador entre colchetes, como [R1], "
                     + "logo depois da afirmação, e copie os números exatamente como estão.",
             """
             {"type":"object","properties":{
-              "veiculo":{"type":"string","maxLength":80,"description":"Opcional: só este veículo, sem caixa nem acento."},
+              "veiculo":{"type":"string","maxLength":80,"description":"Opcional: o nome do veículo contém este texto, sem caixa nem acento."},
               "formato":{"type":"string","maxLength":160,"description":"Opcional: o formato contém este texto, também no espaço ou programa."},
               "mes":{"type":"string","pattern":"^\\\\d{4}-(0[1-9]|1[0-2])$","description":"Opcional (só cotas Master): o mês no formato AAAA-MM."},
               "tipoMidia":{"type":"string","enum":["ASSINADA","PROPRIA","MERCHANDISING","BRANDED","CONTEUDO_DE_MARCA"],
@@ -98,7 +98,7 @@ public class ConsultarMidia implements Ferramenta {
               "parceria":{"type":"string","maxLength":120,
                           "description":"Opcional: só esta marca, pelo nome do patrocinador (sem caixa nem acento) ou pelo id."},
               "cota":{"type":"string","enum":["MASTER","SUBCOTA_G","SUBCOTA"],"description":"Opcional: só as marcas desta cota."},
-              "veiculo":{"type":"string","maxLength":80,"description":"Opcional: só este veículo, sem caixa nem acento."},
+              "veiculo":{"type":"string","maxLength":80,"description":"Opcional: o nome do veículo contém este texto, sem caixa nem acento."},
               "formato":{"type":"string","maxLength":160,"description":"Opcional: o formato contém este texto, também no espaço ou programa."},
               "mes":{"type":"string","pattern":"^\\\\d{4}-(0[1-9]|1[0-2])$","description":"Opcional: o mês no formato AAAA-MM."},
               "tipoMidia":{"type":"string","enum":["ASSINADA","PROPRIA","MERCHANDISING","BRANDED","CONTEUDO_DE_MARCA"],
@@ -257,6 +257,8 @@ public class ConsultarMidia implements Ferramenta {
             boolean comFiltro = filtro.veiculo() != null || filtro.formato() != null || filtro.tipoMidia() != null
                     || filtro.unidade() != null || filtro.mes() != null;
             observacao = comFiltro ? "Nenhuma linha de mídia atende a esses filtros."
+                    + (filtro.veiculo() != null ? " O veículo é filtrado pelo nome (Rádio 92, Rede Atlântida RS, Zero Hora), não pelo tipo: "
+                            + "consulte de novo sem o veículo para ver todos." : "")
                     : (daRbs ? "Esta edição não tem linha de mídia no plano." : "Esta parceria não tem linha de mídia no plano.");
         }
         return Execucao.resultado(ResultadoDeRegistros.montar(null, observacao, extras, registrosDaLinha));

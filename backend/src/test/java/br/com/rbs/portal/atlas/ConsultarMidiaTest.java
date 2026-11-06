@@ -144,6 +144,25 @@ class ConsultarMidiaTest extends ApoioDasConsultas {
     }
 
     @Test
+    void oVeiculoEFiltradoPeloNomeQueContemOTexto() {
+        // Rodada A2: o modelo pediu veiculo "radio" e, com o filtro por igualdade, recebeu zero linhas e disse que não havia rádio.
+        AtlasContexto contexto = contexto(AMARELO, "Cliente Amarelo");
+        List<Map<String, Object>> radios = registros(resultado(contexto, turno(), MIDIA, "{\"veiculo\":\"radio\"}"));
+
+        assertThat(radios).isNotEmpty();
+        assertThat(radios).extracting(r -> (String) r.get("veiculo")).allMatch(v -> v.startsWith("Rádio"));
+    }
+
+    @Test
+    void semLinhaComVeiculoAObservacaoDizQueOFiltroEPeloNome() {
+        AtlasContexto contexto = contexto(AMARELO, "Cliente Amarelo");
+        Map<String, Object> resultado = resultado(contexto, turno(), MIDIA, "{\"veiculo\":\"televisao\"}");
+
+        assertThat(registros(resultado)).isEmpty();
+        assertThat((String) resultado.get("observacao")).contains("pelo nome").contains("sem o veículo");
+    }
+
+    @Test
     void aVeiculacaoImportadaLevaOArquivoEOLocalizadorNaFonte() {
         long amarelo = parceria("Cliente Amarelo");
         long usuario = ApoioDoAtlas.usuario(jdbc, ApoioDoAtlas.RBS).id();

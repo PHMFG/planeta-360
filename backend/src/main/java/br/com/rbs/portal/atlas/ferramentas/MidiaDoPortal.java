@@ -60,7 +60,7 @@ public class MidiaDoPortal {
                   AND (CAST(:parceria AS bigint) IS NULL OR ap.parceria_id = CAST(:parceria AS bigint))
                   AND (CAST(:cota AS text) IS NULL OR ct.codigo = CAST(:cota AS text))
                   AND (CAST(:veiculo AS text) IS NULL
-                       OR public.unaccent(lower(ap.veiculo)) = public.unaccent(lower(CAST(:veiculo AS text))))
+                       OR strpos(public.unaccent(lower(ap.veiculo)), public.unaccent(lower(CAST(:veiculo AS text)))) > 0)
                   AND (CAST(:formato AS text) IS NULL
                        OR public.unaccent(lower(ap.formato)) LIKE '%' || public.unaccent(lower(CAST(:formato AS text))) || '%'
                        OR public.unaccent(lower(coalesce(ap.espaco_programa, '')))
