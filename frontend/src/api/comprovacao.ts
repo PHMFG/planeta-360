@@ -18,7 +18,7 @@ export type ComprovacaoMensal = { parceriaId: number; patrocinador: string; linh
 export const obterComprovacaoMensal = (parceriaId: number) => pedir<ComprovacaoMensal>(`/parcerias/${parceriaId}/comprovacao-mensal`)
 
 /** "Cliente Amarelo" → "cliente-amarelo", para o nome do arquivo baixado. */
-function apelido(nome: string) {
+export function apelido(nome: string) {
   return (
     nome
       .normalize('NFD')
