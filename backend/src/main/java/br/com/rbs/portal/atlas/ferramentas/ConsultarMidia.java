@@ -230,6 +230,12 @@ public class ConsultarMidia implements Ferramenta {
 
         Map<String, Object> extras = new LinkedHashMap<>();
         extras.put("totais", registrosDoTotal);
+        if (filtro.mes() != null) {
+            // Com o recorte de mês, o previsto continua sendo o da campanha inteira (o plano não divide por mês): o modelo
+            // chamava o contratado da campanha de "previsto de outubro" (rodada A2).
+            extras.put("sobreOMes", "O exibido é só do mês pedido; o previsto é o contratado da campanha inteira, não do mês. "
+                    + "Diga \"de X contratados na campanha\", nunca \"previsto do mês\".");
+        }
         // A RBS sem filtro de marca: as linhas param no limite (a primeira marca enche as 40), e o total de cada marca por unidade
         // é o que responde "quanto cada marca entregou". Cada um é uma fonte [R#], como os totais.
         if (daRbs && filtro.parceriaId() == null) {
@@ -243,6 +249,8 @@ public class ConsultarMidia implements Ferramenta {
         if (total > LIMITE) {
             extras.put("total", total);
             extras.put("truncado", true);
+            // O "40 de 69" do aviso é do próprio resultado: vale como número da resposta, como o total.
+            turno.adicionarNumeroLivre(String.valueOf(LIMITE));
             observacao = "Estas são as " + LIMITE + " primeiras de " + total + " linhas de mídia. Filtre por veículo, formato, tipo ou "
                     + "mês para ver as outras.";
         } else if (registrosDaLinha.isEmpty()) {

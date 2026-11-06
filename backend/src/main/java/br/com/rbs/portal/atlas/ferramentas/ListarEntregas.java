@@ -187,6 +187,7 @@ public class ListarEntregas implements Ferramenta {
         if (total > LIMITE) {
             extras.put("total", total);
             extras.put("truncado", true);
+            turno.adicionarNumeroLivre(String.valueOf(LIMITE));   // o "30 de 45" do aviso vale como número da resposta
             observacao = "Estas são as " + LIMITE + " primeiras de " + total + " entregas, as pendentes antes. Filtre por status ou aba "
                     + "para ver as outras.";
         } else if (linhas.isEmpty()) {
@@ -212,6 +213,7 @@ public class ListarEntregas implements Ferramenta {
         if (total > LIMITE) {
             extras.put("total", total);
             extras.put("truncado", true);
+            turno.adicionarNumeroLivre(String.valueOf(LIMITE));   // o "30 de 45" do aviso vale como número da resposta
             observacao = "Estas são as " + LIMITE + " primeiras de " + total + " entregas, agrupadas por marca. Filtre por marca, "
                     + "status ou aba para ver as outras.";
         } else if (linhas.isEmpty()) {
