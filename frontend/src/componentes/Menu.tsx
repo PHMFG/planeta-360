@@ -64,7 +64,11 @@ function usarNovidades(parceria: ParceriaResumo | null, rbs: boolean) {
   // A cada busca nova (volta à aba do navegador), o que a API diz vale de novo.
   useEffect(() => setVistas(new Set()), [novidades.dado])
 
-  return (aba: AbaComNovidade | null) => Boolean(aba && aba !== abaAberta && !vistas.has(aba) && novidades.dado?.abas[aba]?.novo)
+  // Só quem já visitou a aba vê o selo: no primeiro acesso tudo seria "novo", e o selo não diria nada.
+  return (aba: AbaComNovidade | null) => {
+    const novidade = aba ? novidades.dado?.abas[aba] : undefined
+    return Boolean(aba && aba !== abaAberta && !vistas.has(aba) && novidade?.novo && novidade.desde)
+  }
 }
 
 function ItemSecao({ secao, parceria, rbs, novo = false }: { secao: Secao; parceria: ParceriaResumo; rbs: boolean; novo?: boolean }) {
