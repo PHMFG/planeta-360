@@ -87,6 +87,9 @@ public class ParaDadosDaAtivacao implements DestinoDeGravacao {
                 dadoInformado.gravar(usuario, parceriaId,
                         List.of(new ValorRequisicao(campo.get().chave(), valor)), OrigemDoDado.ATLAS, null);
                 inseridas++;
+            } catch (br.com.rbs.portal.comum.SemPermissaoException | br.com.rbs.portal.comum.NaoEncontradoException bloqueio) {
+                // Aba fechada ou parceria que sumiu não é uma linha recusada: a resposta inteira é 403 ou 404.
+                throw bloqueio;
             } catch (RuntimeException recusado) {
                 rejeicoes.add(new Rejeicao(linha.ordem(), motivo(recusado)));
             }
