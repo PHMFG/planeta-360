@@ -26,8 +26,16 @@ import org.apache.commons.csv.CSVRecord;
  */
 final class LeitorDeCsv {
 
-    /** Uma coluna esperada: o nome no cabeçalho e o tamanho máximo do texto (o da coluna da área de passagem no banco). */
-    record Coluna(String nome, int limite) {
+    /**
+     * Uma coluna esperada: o nome no cabeçalho, o tamanho máximo do texto (o da coluna da área de passagem no banco) e se
+     * ela precisa estar no cabeçalho. Coluna opcional ausente vale nulo; a obrigatória que falta é 422.
+     */
+    record Coluna(String nome, int limite, boolean obrigatoria) {
+
+        /** O caso de sempre: a coluna precisa estar no cabeçalho. */
+        Coluna(String nome, int limite) {
+            this(nome, limite, true);
+        }
     }
 
     /** Uma linha de dados: o número no arquivo e os valores na ordem das colunas esperadas ({@code null} = vazio). */
@@ -94,7 +102,7 @@ final class LeitorDeCsv {
         for (int i = 0; i < colunas.size(); i++) {
             Integer indice = indices.get(colunas.get(i).nome());
             posicoes[i] = indice == null ? -1 : indice;
-            if (indice == null) {
+            if (indice == null && colunas.get(i).obrigatoria()) {
                 faltam.add(colunas.get(i).nome());
             }
         }
@@ -109,7 +117,8 @@ final class LeitorDeCsv {
     private static Linha montarLinha(CSVRecord registro, int numero, int[] posicoes, List<Coluna> colunas) {
         List<String> valores = new ArrayList<>(colunas.size());
         for (int i = 0; i < colunas.size(); i++) {
-            String valor = posicoes[i] < registro.size() ? registro.get(posicoes[i]).strip() : "";
+            // Coluna opcional que não veio no cabeçalho: a célula é nula, como a vazia.
+            String valor = posicoes[i] >= 0 && posicoes[i] < registro.size() ? registro.get(posicoes[i]).strip() : "";
             if (valor.isEmpty()) {
                 valor = null;
             } else if (valor.length() > colunas.get(i).limite()) {

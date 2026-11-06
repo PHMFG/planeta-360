@@ -682,12 +682,14 @@ Os três exemplos estão em `docs/exemplos/`. Valem para os três arquivos:
 | `veiculo` | Sim | Por exemplo "Rede Atlântida RS" |
 | `formato` | Sim | Por exemplo `Chamadas assinadas 5"` |
 | `espaco_programa` | Não | Coluna "Determinação" do plano. Vazio casa com plano sem espaço |
-| `exibido_em` | Sim | Data e hora da exibição |
+| `exibido_em` | Só sem `mes` | Data e hora da exibição |
 | `quantidade` | Sim | Maior que zero. Vale 1 por exibição; em CPM, o total do dia |
 | `link` | Não | Endereço da exibição |
+| `impacto` | Não | Impacto da entrega, maior ou igual a zero, com ponto decimal. Vazio vale como nulo; não se soma entre unidades diferentes |
+| `mes` | Só sem `exibido_em` | O total do mês, em `AAAA-MM` (por exemplo `2026-11`). Não convive com `exibido_em` nem com exibições da mesma linha do plano no mesmo mês |
 
 O exemplo tem 12 linhas: 10 entram, 1 é repetida (duplicada) e 1 não tem data (rejeitada).
-As colunas são as mesmas de `stg_veiculacao`, como prevê o plano.
+As colunas são as mesmas de `stg_veiculacao`, como prevê o plano. As colunas `impacto` e `mes` são opcionais: o arquivo de hoje, sem elas, continua entrando do mesmo jeito. A linha mensal e as exibições do mesmo mês e da mesma linha do plano não entram juntas (a segunda vira rejeição, com o motivo).
 
 **`pesquisa.csv`** (vai para `stg_pesquisa`). É o resultado agregado: não há respostas individuais.
 

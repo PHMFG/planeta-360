@@ -114,6 +114,20 @@ class LeitorDeCsvTest {
     }
 
     @Test
+    void colunaOpcionalAusenteViraNuloEAsObrigatoriasContinuamExigidas() {
+        List<Coluna> colunas = List.of(new Coluna("a", 20), new Coluna("b", 20, false));
+        List<Linha> lidas = new ArrayList<>();
+
+        int total = LeitorDeCsv.ler("a\n1\n".getBytes(StandardCharsets.UTF_8), colunas, 1000, lidas::addAll);
+
+        assertThat(total).isEqualTo(1);
+        assertThat(lidas.getFirst().valores()).containsExactly("1", null);
+        assertThatThrownBy(() -> LeitorDeCsv.ler("b\n1\n".getBytes(StandardCharsets.UTF_8), colunas, 1000, lote -> { }))
+                .isInstanceOf(DadosInvalidosException.class)
+                .satisfies(erro -> assertThat(erroDoArquivo(erro)).isEqualTo("O cabeçalho da planilha não tem as colunas: a."));
+    }
+
+    @Test
     void separadorPontoEVirgulaGanhaUmaDica() {
         assertThatThrownBy(() -> ler("a;b;c\n1;2;3\n"))
                 .satisfies(erro -> assertThat(erroDoArquivo(erro)).contains("a, b, c").contains("vírgula"));

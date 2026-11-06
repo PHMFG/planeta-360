@@ -88,6 +88,89 @@ class CargaControllerTest extends ApoioDeCargas {
     }
 
     @Test
+    void veiculacaoAceitaImpactoEMesNoLugarDaExibicao() {
+        semVeiculacoes();
+        SessaoDeApi rbs = entrar(RBS);
+        String csv = "patrocinador,veiculo,formato,espaco_programa,mes,quantidade,impacto,link\n"
+                + "Cliente Amarelo,RBS TV,Chamadas assinadas,Programação,2030-05,3,1500.50,\n"
+                + "Cliente Amarelo,Rádio 92,\"Chamadas assinadas 5\"\"\",Indeterminado,2030-05,2,800,\n";
+
+        MvcTestResult resposta = enviar(rbs, "veiculacao.csv", texto(csv), "VEICULACAO", evento(2027), null);
+
+        assertThat(resposta).hasStatus(HttpStatus.CREATED);
+        assertThat(inteiro(resposta, "$.linhasLidas")).isEqualTo(2);
+        assertThat(inteiro(resposta, "$.linhasInseridas")).isEqualTo(2);
+        assertThat(inteiro(resposta, "$.linhasRejeitadas")).isZero();
+        Map<String, Object> linha = jdbc.sql("""
+                        SELECT periodo, to_char(mes_referencia, 'YYYY-MM-DD') AS mes, impacto,
+                               to_char(exibido_em AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM-DD HH24:MI') AS exibido
+                        FROM veiculacao WHERE carga_id = :c ORDER BY id LIMIT 1
+                        """).param("c", longo(resposta, "$.id")).query().singleRow();
+        assertThat(linha.get("periodo")).isEqualTo("MES");
+        assertThat(linha.get("mes")).isEqualTo("2030-05-01");
+        assertThat(linha.get("exibido")).isEqualTo("2030-05-01 00:00");
+        assertThat((java.math.BigDecimal) linha.get("impacto")).isEqualByComparingTo("1500.50");
+    }
+
+    @Test
+    void impactoIlegivelViraRejeicaoComOCampoEOMotivo() {
+        semVeiculacoes();
+        SessaoDeApi rbs = entrar(RBS);
+        String csv = """
+                patrocinador,veiculo,formato,espaco_programa,exibido_em,quantidade,impacto,link
+                Cliente Amarelo,RBS TV,Chamadas assinadas,Programação,2030-06-10T10:00:00-03:00,1,muito,
+                """;
+
+        MvcTestResult resposta = enviar(rbs, "veiculacao.csv", texto(csv), "VEICULACAO", evento(2027), null);
+
+        assertThat(resposta).hasStatus(HttpStatus.CREATED);
+        assertThat(inteiro(resposta, "$.linhasInseridas")).isZero();
+        assertThat(inteiro(resposta, "$.linhasRejeitadas")).isEqualTo(1);
+        Map<String, Object> rejeicao = jdbc.sql("SELECT campo, motivo FROM carga_rejeicao WHERE carga_id = :c")
+                .param("c", longo(resposta, "$.id")).query().singleRow();
+        assertThat(rejeicao.get("campo")).isEqualTo("impacto");
+        assertThat(rejeicao.get("motivo"))
+                .isEqualTo("Impacto inválido. Use só números, como 1500 ou 250.5 (ponto nos decimais).");
+    }
+
+    @Test
+    void semExibicaoESemMesAFuncaoRejeitaALinha() {
+        semVeiculacoes();
+        SessaoDeApi rbs = entrar(RBS);
+        String csv = """
+                patrocinador,veiculo,formato,espaco_programa,quantidade,link
+                Cliente Amarelo,RBS TV,Chamadas assinadas,Programação,1,
+                """;
+
+        MvcTestResult resposta = enviar(rbs, "veiculacao.csv", texto(csv), "VEICULACAO", evento(2027), null);
+
+        assertThat(resposta).hasStatus(HttpStatus.CREATED);
+        assertThat(inteiro(resposta, "$.linhasInseridas")).isZero();
+        Map<String, Object> rejeicao = jdbc.sql("SELECT campo, motivo FROM carga_rejeicao WHERE carga_id = :c")
+                .param("c", longo(resposta, "$.id")).query().singleRow();
+        assertThat(rejeicao.get("campo")).isEqualTo("exibido_em");
+        assertThat(rejeicao.get("motivo")).isEqualTo("Campo obrigatório vazio ou inválido");
+    }
+
+    @Test
+    void mesMalformadoViraRejeicaoDaFuncao() {
+        semVeiculacoes();
+        SessaoDeApi rbs = entrar(RBS);
+        String csv = """
+                patrocinador,veiculo,formato,espaco_programa,mes,quantidade,link
+                Cliente Amarelo,RBS TV,Chamadas assinadas,Programação,2030-5,1,
+                """;
+
+        MvcTestResult resposta = enviar(rbs, "veiculacao.csv", texto(csv), "VEICULACAO", evento(2027), null);
+
+        assertThat(resposta).hasStatus(HttpStatus.CREATED);
+        Map<String, Object> rejeicao = jdbc.sql("SELECT campo, motivo FROM carga_rejeicao WHERE carga_id = :c")
+                .param("c", longo(resposta, "$.id")).query().singleRow();
+        assertThat(rejeicao.get("campo")).isEqualTo("mes");
+        assertThat(rejeicao.get("motivo")).isEqualTo("Mês inválido. Use o formato AAAA-MM (ano-mês), como 2026-11.");
+    }
+
+    @Test
     void aPlanilhaFicaGuardadaComoArquivoDaRbsSemParceriaComAutorEHash() throws Exception {
         semVeiculacoes();
         SessaoDeApi rbs = entrar(RBS);
@@ -444,7 +527,9 @@ class CargaControllerTest extends ApoioDeCargas {
         MvcTestResult resposta = enviar(entrar(RBS), "pesquisa.csv", exemplo("pesquisa.csv"), "VEICULACAO", evento(2027), null);
 
         assertThat(resposta).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
-        assertThat((String) lerJson(resposta, "$.campos.arquivo")).contains("veiculo", "formato", "exibido_em", "quantidade");
+        // exibido_em deixou de ser obrigatória: a linha pode trazer o mês no lugar dela (V20).
+        assertThat((String) lerJson(resposta, "$.campos.arquivo")).contains("veiculo", "formato", "quantidade", "link")
+                .doesNotContain("exibido_em");
     }
 
     @Test
