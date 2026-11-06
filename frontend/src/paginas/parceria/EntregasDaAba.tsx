@@ -122,6 +122,32 @@ export function EntregasDaAba({ aba, titulo = 'Entregas', vazio = 'A RBS ainda n
   const [aberta, setAberta] = useState<Entrega | null>(null)
   const [criando, setCriando] = useState(false)
 
+  // F9 (plano da base da RBS): para a marca, a lista no fim de cada aba repetia o que a tela já mostra. Fica à vista só o que
+  // falta enviar; o resto (enviado, aprovado) fica recolhido. Sem nenhuma entrega, nada aparece. A RBS vê a lista inteira.
+  if (!rbs) {
+    if (!entregas.pronto || entregas.erro || !entregas.dado?.length) return <DetalheEntrega entrega={aberta} aoFechar={() => setAberta(null)} aoMudar={entregas.recarregar} />
+    const pendentes = entregas.dado.filter((entrega) => entrega.status === 'AGUARDANDO_ENVIO' || entrega.status === 'AJUSTE_SOLICITADO')
+    return (
+      <section className="flex flex-col gap-3" aria-label={titulo}>
+        {pendentes.length > 0 && (
+          <Cartao titulo="Falta enviar">
+            <ListaEntregas lista={pendentes} aoAbrir={setAberta} />
+          </Cartao>
+        )}
+        <details className="group rounded-[20px] border border-borda bg-white px-6 py-4">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-semibold">
+            Ver {entregas.dado.length === 1 ? 'a entrega' : `as ${entregas.dado.length} entregas`} desta aba, com o histórico
+            <i className="ri-arrow-down-s-line text-lg transition-transform duration-(--duracao-media) group-open:rotate-180" aria-hidden="true" />
+          </summary>
+          <div className="mt-4 animate-entrar">
+            <ListaEntregas lista={entregas.dado} aoAbrir={setAberta} />
+          </div>
+        </details>
+        <DetalheEntrega entrega={aberta} aoFechar={() => setAberta(null)} aoMudar={entregas.recarregar} />
+      </section>
+    )
+  }
+
   return (
     <Cartao
       titulo={titulo}
