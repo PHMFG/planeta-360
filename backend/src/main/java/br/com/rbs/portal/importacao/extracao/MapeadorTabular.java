@@ -196,11 +196,13 @@ public class MapeadorTabular implements ExtratorDeLinhas {
                             "Devolve o mapeamento das colunas da planilha. Nenhum número é calculado aqui.", ESQUEMA))));
             for (ChamadaDeFerramenta chamada : resposta.chamadas()) {
                 if (FERRAMENTA.equals(chamada.nome())) {
-                    return Optional.of(lerMapeamento(chamada.argumentos()));
+                    Mapeamento mapeamento = lerMapeamento(chamada.argumentos());
+                    return valido(mapeamento, aba) ? Optional.of(mapeamento) : Optional.empty();
                 }
             }
             if (resposta.texto() != null && resposta.texto().contains("{")) {
-                return Optional.of(lerMapeamento(resposta.texto()));
+                Mapeamento mapeamento = lerMapeamento(resposta.texto());
+                return valido(mapeamento, aba) ? Optional.of(mapeamento) : Optional.empty();
             }
         } catch (RuntimeException falha) {
             log.warn("Importação: o modelo não devolveu o mapeamento ({}); uso a leitura em código.", falha.getClass().getSimpleName());
@@ -261,6 +263,31 @@ public class MapeadorTabular implements ExtratorDeLinhas {
             }
         }
         return new Mapeamento(cabecalho, primeiraLinha, marcas, campos, ignoradas);
+    }
+
+    /** O mapeamento do modelo aponta linhas e colunas que existem? Se não, vale a heurística em código. */
+    private static boolean valido(Mapeamento mapeamento, AbaLida aba) {
+        if (mapeamento.cabecalho() < 1 || mapeamento.primeiraLinha() < mapeamento.cabecalho() + 1
+                || mapeamento.primeiraLinha() > aba.linhas().size() + 1) {
+            return false;
+        }
+        int colunas = aba.linhas().stream().mapToInt(List::size).max().orElse(0);
+        for (Marca marca : mapeamento.marcas()) {
+            if (!colunaValida(marca.coluna(), colunas)) {
+                return false;
+            }
+        }
+        for (Coluna coluna : mapeamento.campos().values()) {
+            if (!colunaValida(coluna.coluna(), colunas)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean colunaValida(String referencia, int colunas) {
+        int c = coluna(referencia);
+        return c >= 0 && c < colunas;
     }
 
     // ---------------------------------------------------------------------
