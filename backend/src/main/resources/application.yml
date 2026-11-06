@@ -242,7 +242,7 @@ atlas:
       modo: ${ATLAS_JEV_LACUNAS:sombra}
       limiar: 0.80
     # O destino do arquivo importado (AC3): em sombra nesta versão, só registra o que teria sugerido; o destino vem do modelo.
-    arquivo-destino:
+    arquivo_destino:
       modo: ${ATLAS_JEV_ARQUIVO_DESTINO:sombra}
       limiar: 0.80
 
@@ -291,7 +291,7 @@ atlas:
       modo: ${ATLAS_JEV_LACUNAS:sombra}
       limiar: 0.80
     # O destino do arquivo importado (AC3): em sombra nesta versão, só registra o que teria sugerido; o destino vem do modelo.
-    arquivo-destino:
+    arquivo_destino:
       modo: ${ATLAS_JEV_ARQUIVO_DESTINO:sombra}
       limiar: 0.80
 
