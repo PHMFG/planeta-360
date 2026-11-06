@@ -53,7 +53,8 @@ export type PesquisaDaParceria = {
 
 export const obterPesquisa = (parceriaId: number) => pedir<PesquisaDaParceria>(`/parcerias/${parceriaId}/pesquisa`)
 
-export type PerguntaParaEnviar = { ordem: number; texto: string; tipoResposta: TipoResposta; alternativas?: string[] }
+/** Sem `tipoResposta`, a API mantém o tipo e as alternativas que a pergunta já tem (é assim que a pergunta sem mudança vai). */
+export type PerguntaParaEnviar = { ordem: number; texto: string; tipoResposta?: TipoResposta; alternativas?: string[] }
 
 /** A marca Master envia as perguntas dela; a RBS também escreve as de qualquer Master (rota 24). */
 export const enviarPerguntas = (parceriaId: number, perguntas: PerguntaParaEnviar[]) =>

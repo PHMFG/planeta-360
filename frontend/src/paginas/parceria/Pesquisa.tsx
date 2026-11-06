@@ -224,6 +224,7 @@ function Perguntas({ dados, rbs, aoEnviar, aoDecidir }: PropsPerguntas) {
 
   function mudar(chave: string, mudanca: Partial<Rascunho>) {
     setRascunhos((lista) => lista.map((rascunho) => (rascunho.chave === chave ? { ...rascunho, ...mudanca } : rascunho)))
+    setFalha(null)
   }
 
   function acrescentar() {
@@ -238,8 +239,9 @@ function Perguntas({ dados, rbs, aoEnviar, aoDecidir }: PropsPerguntas) {
       .filter((rascunho) => rascunho.texto.trim())
       .map((rascunho) => {
         const salva = porOrdem(rascunho.ordem)
-        if (salva && igual(rascunho, salva))
-          return { ordem: salva.ordem, texto: salva.texto, tipoResposta: salva.tipoResposta ?? 'ESCOLHA', alternativas: salva.alternativas ?? undefined, mudou: false }
+        // Sem mudança, vai só a ordem e o texto: a API mantém o tipo e as alternativas que já tem. Mandar "ESCOLHA" sem lista numa
+        // pergunta antiga (de antes do tipo) faria a API recusar o envio inteiro.
+        if (salva && igual(rascunho, salva)) return { ordem: salva.ordem, texto: salva.texto, mudou: false }
         return {
           ordem: rascunho.ordem,
           texto: rascunho.texto.trim(),
@@ -254,7 +256,7 @@ function Perguntas({ dados, rbs, aoEnviar, aoDecidir }: PropsPerguntas) {
     lista.forEach((item) => {
       if (!item.mudou) return
       if (item.texto.length < 10) novos[item.ordem] = 'A pergunta precisa de pelo menos 10 caracteres.'
-      if (item.alternativas && item.alternativas.length < 2) novos[`alt${item.ordem}`] = 'Uma pergunta de escolha precisa de pelo menos 2 alternativas.'
+      if ('alternativas' in item && item.alternativas && item.alternativas.length < 2) novos[`alt${item.ordem}`] = 'Uma pergunta de escolha precisa de pelo menos 2 alternativas.'
     })
     setErros(novos)
     setFalha(novos.geral ?? null)
@@ -263,7 +265,19 @@ function Perguntas({ dados, rbs, aoEnviar, aoDecidir }: PropsPerguntas) {
     try {
       aoEnviar(await enviarPerguntas(dados.parceriaId, lista.map(({ mudou: _mudou, ...pergunta }) => pergunta)))
     } catch (erro) {
-      setFalha(erro instanceof ErroApi ? (Object.values(erro.campos)[0] ?? erro.message) : 'Não foi possível enviar as perguntas.')
+      if (!(erro instanceof ErroApi)) return setFalha('Não foi possível enviar as perguntas.')
+      // O erro de "perguntas[1].alternativas" vai para o campo da pergunta certa, e não para uma frase solta no fim.
+      const doCampo: Record<string, string> = {}
+      const soltos: string[] = []
+      Object.entries(erro.campos).forEach(([chave, mensagem]) => {
+        const encontrado = /^perguntas\[(\d+)\]\.(\w+)$/.exec(chave)
+        const item = encontrado ? lista[Number(encontrado[1])] : undefined
+        if (item && encontrado?.[2] === 'alternativas') doCampo[`alt${item.ordem}`] = mensagem
+        else if (item && encontrado?.[2] === 'texto') doCampo[item.ordem] = mensagem
+        else soltos.push(item ? `Pergunta ${rascunhos.findIndex((r) => r.ordem === item.ordem) + 1}: ${mensagem}` : mensagem)
+      })
+      setErros(doCampo)
+      setFalha(soltos[0] ?? (Object.keys(doCampo).length ? null : erro.message))
     } finally {
       setEnviando(false)
     }
@@ -300,7 +314,12 @@ function Perguntas({ dados, rbs, aoEnviar, aoDecidir }: PropsPerguntas) {
                     <button
                       type="button"
                       className="text-xs font-semibold text-texto-2 hover:text-[#c8203f] hover:underline"
-                      onClick={() => setRascunhos((lista) => lista.filter((item) => item.chave !== rascunho.chave))}
+                      onClick={() => {
+                        setRascunhos((lista) => lista.filter((item) => item.chave !== rascunho.chave))
+                        // O erro era da pergunta que saiu (ou do envio com ela): não fica preso na tela.
+                        setFalha(null)
+                        setErros({})
+                      }}
                     >
                       Tirar
                     </button>
