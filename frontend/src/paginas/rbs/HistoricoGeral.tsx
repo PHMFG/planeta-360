@@ -70,7 +70,7 @@ export function HistoricoGeral() {
         <Carregando dados={historico} vazio={(dado) => dado.itens.length === 0} textoVazio="Nada encontrado com esses filtros.">
           {(dado) => (
             <>
-              <LinhaDoTempo itens={dado.itens} comParceria />
+              <LinhaDoTempo itens={dado.itens} comParceria tudo={Boolean(acao) || Boolean(q.trim())} />
               <Paginacao pagina={dado.pagina} tamanho={dado.tamanho} total={dado.total} aoMudar={setPagina} />
             </>
           )}
