@@ -103,7 +103,7 @@ O login mantém o cookie `XSRF-TOKEN`; o **logout o apaga** (junto com o `JSESSI
 
 ## As rotas em uma tabela
 
-Todas prontas e testadas. A coluna "Etapa" mostra em que etapa do plano a rota entrou: as etapas 3 a 7 da Entrega 2, os marcos do Atlas e, nas rotas 69 a 104, as fases do plano dos requisitos da RBS (F3, F5, F6, Cortesias, Pós-venda e "Requisitos RBS").
+Todas prontas e testadas. A coluna "Etapa" mostra em que etapa do plano a rota entrou: as etapas 3 a 7 da Entrega 2, os marcos do Atlas e, nas rotas 69 a 104, as fases do plano dos requisitos da RBS (F3, F5, F6, Cortesias, Pós-venda e "Requisitos RBS") e, nas 105 a 108, a base de mídia.
 
 | # | Rota | Quem chama | O que faz | Etapa |
 | --- | --- | --- | --- | --- |
@@ -211,6 +211,10 @@ Todas prontas e testadas. A coluna "Etapa" mostra em que etapa do plano a rota e
 | 102 | `PUT /api/parcerias/{id}/cota` | Admin RBS | Troca a cota da parceria depois do cadastro (fecha as abas que a cota nova não inclui) | Requisitos RBS (R6.d3) |
 | 103 | `PATCH /api/documentos/{id}/paginas-fora-do-atlas` | Admin RBS | Marca (ou desmarca) as páginas de um documento que ficam fora do índice do Atlas, enquanto ele aguarda aprovação | Requisitos RBS |
 | 104 | `GET /api/parcerias/{id}/cota/previa?para=COTA` | Admin RBS | A prévia do impacto de trocar a cota (não grava nada) | Requisitos RBS (R6.d3) |
+| 105 | `GET /api/parcerias/{id}/midia` | Patrocinador da parceria (aba `MIDIA` aberta), ou Admin RBS | A mídia da parceria com filtros: linha do plano × mês (ou uma linha por plano), com previsto, exibido, %, impacto, comprovantes e links, e os totais por unidade | Base de mídia (M3, M7) |
+| 106 | `GET /api/parcerias/{id}/midia.xlsx` e `GET /api/parcerias/{id}/midia.csv` | Idem | A mesma consulta em `.xlsx` e CSV (grava `DOWNLOAD`) | Base de mídia (M4) |
+| 107 | `GET /api/midia` | Admin RBS | A mídia de todas as parcerias da edição (ou das filtradas por parceria e cota), com a marca em cada linha | Base de mídia (M3) |
+| 108 | `GET /api/midia.xlsx` e `GET /api/midia.csv` | Admin RBS | A mesma consulta da RBS em `.xlsx` e CSV, com a coluna Marca primeiro (grava `DOWNLOAD`) | Base de mídia (M4) |
 | 119 | `GET /api/parcerias/{id}/pesquisa/perfil` | Patrocinador Master da parceria (aba `PESQUISA` aberta), ou Admin RBS | O perfil demográfico da pesquisa da marca, o comparativo da pesquisa geral e as respostas de texto | F5 |
 | 120 | `POST /api/parcerias/{id}/visitas/{aba}` e `GET /api/parcerias/{id}/novidades` | Pessoa da parceria (marca ou RBS) | Marca a visita a uma aba (ou ao relatório) e devolve o selo "novo" de cada aba | F6 |
 
@@ -3583,6 +3587,66 @@ Nada guarda a cota antiga: o Atlas (busca, documentos e prazos do escopo `COTA`,
 | 403 | A marca marcando visita a uma aba fechada ou oculta; falta o token CSRF no `POST`. |
 | 404 | Parceria que não existe ou não é do usuário. |
 | 422 | `campos.aba`: código que não é de uma aba nem `RELATORIO` (`"Aba inválida. Use o código de uma aba ou RELATORIO."`). |
+
+---
+
+# Base de mídia: a consulta com filtros (rotas 105 a 108)
+
+As quatro rotas leem a mesma base da comprovação mensal, agora linha do plano × mês (a visão `vw_midia_detalhe`, V20). O **previsto** é sempre o da linha do plano inteira; o **exibido** é a soma das exibições (todos os meses, ou só o mês pedido); o **percentual** é cortado na primeira casa (`fn_pct_truncado`) e pode passar de 100; unidades diferentes (`INSERCAO`, `CPM`) nunca se somam. O **impacto** é a soma do que veio na veiculação e é nulo quando nenhuma exibição da linha tem impacto. Os **comprovantes** são os arquivos da veiculação (ou o da importação, quando ela é de comprovante) e os **links** são os das exibições, até 5, os mais recentes, só os que passam na regra do endereço (a mesma da rota 87). A ordem é veículo e, depois, formato.
+
+## 105. `GET /api/parcerias/{id}/midia`  · Base de mídia (M3, M7)
+
+**Quem chama:** o Admin Patrocinador da parceria, com a aba `MIDIA` aberta, ou o Admin RBS. **Filtros (todos opcionais):** `mes` (`AAAA-MM`), `veiculo` (igual, sem caixa nem acento), `formato` (contém, sem caixa nem acento, também no espaço ou programa), `tipoMidia` e `unidade`.
+
+**O recorte por mês é das cotas Master e da RBS (M7).** Para a marca de outra cota, qualquer `mes` (até malformado) dá **422** com `campos.mes` = `O recorte por mês é das cotas Master.`, e a resposta **nunca traz** `meses` nem `mes` nas linhas. Para quem pode, `mes` fora de `AAAA-MM` dá **422** com `campos.mes` = `Use o mês no formato AAAA-MM.`
+
+**200**
+
+```json
+{
+  "parceriaId": 2,
+  "filtros": { "mes": "2026-10", "veiculo": null, "formato": null, "tipoMidia": null, "unidade": null },
+  "meses": ["2026-07", "2026-08", "2026-09", "2026-10"],
+  "totais": [ { "unidade": "INSERCAO", "previsto": 1113, "exibido": 83, "percentual": 7.4, "impacto": 2300000 } ],
+  "linhas": [
+    {
+      "aproveitamentoId": 52, "veiculo": "Rede Atlântida RS", "formato": "Chamadas assinadas 5\"", "espacoPrograma": "Indeterminado",
+      "tipoMidia": "ASSINADA", "unidade": "INSERCAO", "mes": "2026-10",
+      "previsto": 300, "exibido": 40, "percentual": 13.3, "impacto": 640000, "exibicoes": 40,
+      "comprovantes": [ { "arquivoId": 91, "nome": "chamada-out.png", "tipo": "PNG" } ],
+      "links": ["https://exemplo.example/post/1"]
+    }
+  ]
+}
+```
+
+- Sem `mes`, cada linha do plano vem **uma vez**, somando todos os meses, com `"mes": null`. Com `mes`, só o mês pedido, e a linha do plano **sem exibição no mês** vem com `exibido` 0 (o contratado continua aparecendo).
+- `meses` são os meses com exibição na parceria, em ordem, respeitados os outros filtros; o recorte por mês não muda a lista. Sem nenhum mês, vem `[]`.
+- `totais` soma as linhas **por unidade**; `percentual` é cortado na primeira casa.
+- `comprovantes` é a lista dos arquivos da linha (o mesmo arquivo não se repete) e `links` são até 5 endereços válidos, do mais recente ao mais antigo.
+
+**Erros**
+
+| Status | Quando |
+| --- | --- |
+| 401 | Sem sessão. |
+| 403 | Aba `MIDIA` fechada, fora da cota ou oculta (`"Esta aba ainda não foi liberada para a sua parceria."` ou `"Esta aba não faz parte da cota da sua parceria."`). |
+| 404 | Parceria que não existe ou é de outra marca (`"Não encontramos esta parceria."`). |
+| 422 | `campos.mes`: mês malformado, ou recorte por mês pedido por cota que não é Master. |
+
+## 106. `GET /api/parcerias/{id}/midia.xlsx` e `GET /api/parcerias/{id}/midia.csv`  · Base de mídia (M4)
+
+As mesmas permissões, filtros e linhas da rota 105. **200** com o `.xlsx` (`application/vnd.openxmlformats-officedocument.spreadsheetml.sheet`) ou o CSV (UTF-8 com BOM, ponto e vírgula, decimais com vírgula), com as colunas **Mês, Veículo, Formato, Espaço ou programa, Tipo de mídia, Unidade, Previsto (linha do plano), Exibido, Entrega (%), Impacto, Comprovantes**. O `.xlsx` é gravado pelo `PlanilhaXlsx`, sem fórmula; o CSV, pelo `Csv`, com a mesma neutralização. O nome é `midia-<apelido da marca>[-AAAA-MM].xlsx` (ou `.csv`), com o apelido só de letras minúsculas, números e hífen. Cada download grava `DOWNLOAD` na entidade `midia`, na parceria. A coluna `Comprovantes` traz os nomes separados por `; `. Mês sem exibição devolve só o cabeçalho.
+
+## 107. `GET /api/midia`  · Base de mídia (M3)
+
+**Quem chama:** só o Admin RBS (a marca recebe **403** antes de tudo). Os filtros da 105 mais `eventoId` (padrão: a edição mais nova), `parceriaId` e `cota`. **200** com o mesmo corpo da 105, **sem** `parceriaId` no topo e com `parceria: { id, patrocinador, cota }` em cada linha; os `totais` somam as parcerias filtradas, por unidade. `filtros` traz também `eventoId`, `parceriaId` e `cota`. A ordem é a marca, o veículo e o formato.
+
+**Erros:** 401; 403 (não é da RBS, `"Esta operação é restrita à equipe da RBS."`); 404 (edição que não existe, `"Não encontramos esta edição do festival."`); 422 (`campos.mes`).
+
+## 108. `GET /api/midia.xlsx` e `GET /api/midia.csv`  · Base de mídia (M4)
+
+A rota 107 em planilha e CSV, com a coluna **Marca** primeiro e as mesmas colunas da 106 depois. Nome `midia-edicao-<ano>[-AAAA-MM].xlsx` (ou `.csv`). Grava `DOWNLOAD` na entidade `midia`, sem parceria (`entidade_id` é a edição).
 
 ---
 

@@ -250,6 +250,8 @@ class PermissaoAntesDoCorpoTest {
             // A comprovação mensal (rotas 88 a 90): a marca Master (aba MIDIA aberta) e a RBS; o lote (91) está na lista da RBS.
             "GET /api/parcerias/{id}/comprovacao-mensal", "GET /api/parcerias/{id}/comprovacao-mensal.xlsx",
             "GET /api/parcerias/{id}/comprovacao-mensal.csv",
+            // A consulta da mídia da parceria (rotas 105 e 106): a marca (aba MIDIA aberta) e a RBS; a da RBS (107 e 108) está na lista dela.
+            "GET /api/parcerias/{id}/midia", "GET /api/parcerias/{id}/midia.xlsx", "GET /api/parcerias/{id}/midia.csv",
             // O anexo de pós-venda (rota 96): a marca com o relatório disponibilizado e a RBS; publicar, listar, retirar e os números (97 a 101) são só da RBS.
             "GET /api/parcerias/{id}/posvenda");
 
