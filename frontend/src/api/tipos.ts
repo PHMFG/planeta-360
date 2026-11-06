@@ -30,6 +30,9 @@ export type ParceriaResumo = {
   abas: AbaLiberada[]
   /** Como quem está logado entra nesta parceria: pela marca ou pela agência dela (U10). */
   vinculo?: 'MARCA' | 'AGENCIA'
+  /** O atendimento da RBS desta parceria (U7, V19): aparece no fim da Ajuda. Nulo até a RBS preencher no Perfil. */
+  atendimentoNome?: string | null
+  atendimentoEmail?: string | null
 }
 
 export type UsuarioLogado = {

@@ -5,6 +5,7 @@ import { Link, NavLink, useMatch, useNavigate } from 'react-router'
 import type { ParceriaResumo, UsuarioLogado } from '../api/tipos'
 import { useSessao } from '../sessao/Sessao'
 import { estadoAbaNaParceria } from './AbaFechada'
+import { Faq } from './Faq'
 import { Modal } from './Modal'
 import { GESTAO_RBS, SECOES, type Secao } from './secoes'
 import { usarFocoPreso } from './usarFocoPreso'
@@ -56,7 +57,7 @@ function ItemSecao({ secao, parceria, rbs }: { secao: Secao; parceria: ParceriaR
 
   return (
     <li data-secao={secao.chave}>
-      <NavLink to={destino} end className={({ isActive }) => classeItem(isActive)}>
+      <NavLink to={destino} end viewTransition className={({ isActive }) => classeItem(isActive)}>
         {({ isActive }) => (
           <>
             <i className={`${secao.icone} text-xl ${isActive ? 'text-white' : 'text-secao'}`} aria-hidden="true" />
@@ -132,7 +133,7 @@ function BotaoAtlas({ destino }: { destino?: string }) {
   return (
     <div>
       {destino ? (
-        <Link to={destino} aria-describedby="atlas-legenda" aria-current={ativo ? 'page' : undefined} className={`${CLASSE_BOTAO_ATLAS} hover:brightness-125`}>
+        <Link to={destino} viewTransition aria-describedby="atlas-legenda" aria-current={ativo ? 'page' : undefined} className={`${CLASSE_BOTAO_ATLAS} hover:brightness-125`}>
           {conteudo}
         </Link>
       ) : (
@@ -251,7 +252,7 @@ export function Menu({ parceria, aberto, aoFechar, atlas }: PropsMenu) {
               <ul className="flex flex-col gap-1" data-secao="neutro">
                 {GESTAO_RBS.map((atalho) => (
                   <li key={atalho.caminho}>
-                    <NavLink to={atalho.caminho} end className={({ isActive }) => classeItem(isActive)}>
+                    <NavLink to={atalho.caminho} end viewTransition className={({ isActive }) => classeItem(isActive)}>
                       <i className={`${atalho.icone} text-xl`} aria-hidden="true" />
                       {atalho.nome}
                     </NavLink>
@@ -305,22 +306,25 @@ export function Menu({ parceria, aberto, aoFechar, atlas }: PropsMenu) {
         </div>
       </aside>
       {/* A ajuda abre num painel por cima da tela: dentro do menu, que rola, ela ficava cortada (U11). */}
-      <Modal titulo="Ajuda" legenda={rbs ? 'O que cada tela da gestão faz' : 'O que cada aba da parceria faz'} aberto={ajudaAberta} aoFechar={() => setAjudaAberta(false)}>
-        <ul className="flex flex-col gap-3 text-sm">
-          {(rbs ? GESTAO_RBS.map((atalho) => ({ nome: atalho.nome, texto: TEXTO_DA_GESTAO[atalho.caminho] ?? '' })) : SECOES.map((secao) => ({ nome: secao.nome, texto: secao.subtitulo }))).map(
-            (item) => (
-              <li key={item.nome}>
-                <span className="font-semibold">{item.nome}</span>
-                {item.texto && <span className="text-texto-2"> · {item.texto}</span>}
-              </li>
-            ),
-          )}
-        </ul>
-        <p className="mt-4 rounded-xl bg-cinza-100 p-3 text-sm font-medium">
-          {rbs
-            ? 'O Atlas de cada marca abre só no acesso dela. Dúvidas sobre o portal: fale com a equipe do projeto.'
-            : 'Dúvidas sobre a parceria, acessos, prazos ou cortesias: fale com o atendimento ao patrocinador da RBS (time B2B).'}
-        </p>
+      <Modal titulo="Ajuda" legenda={rbs ? 'O que cada tela da gestão faz' : 'Perguntas frequentes sobre o portal'} aberto={ajudaAberta} aoFechar={() => setAjudaAberta(false)}>
+        {rbs ? (
+          <>
+            <ul className="flex flex-col gap-3 text-sm">
+              {GESTAO_RBS.map((atalho) => (
+                <li key={atalho.nome}>
+                  <span className="font-semibold">{atalho.nome}</span>
+                  {TEXTO_DA_GESTAO[atalho.caminho] && <span className="text-texto-2"> · {TEXTO_DA_GESTAO[atalho.caminho]}</span>}
+                </li>
+              ))}
+            </ul>
+            <p className="mt-1 rounded-xl bg-cinza-100 p-3 text-sm font-medium">
+              O Atlas de cada marca abre só no acesso dela. Dúvidas sobre o portal: fale com a equipe do projeto.
+            </p>
+          </>
+        ) : (
+          // U7: a marca lê um FAQ que termina no contato do atendimento dela (os campos novos da parceria, quando a RBS preencher).
+          <Faq atendimento={{ nome: parceria?.atendimentoNome, email: parceria?.atendimentoEmail }} />
+        )}
       </Modal>
     </>
   )
@@ -330,7 +334,7 @@ export function Menu({ parceria, aberto, aoFechar, atlas }: PropsMenu) {
 const TEXTO_DA_GESTAO: Record<string, string> = {
   '/rbs': 'resumo das parcerias, da fila e da última carga.',
   '/rbs/patrocinadores': 'cadastro das parcerias e dos e-mails de acesso.',
-  '/rbs/fila': 'materiais enviados pelas marcas, para aprovar ou pedir ajuste.',
+  '/rbs/fila': 'o que as marcas enviaram, para aprovar ou pedir ajuste, e o que ainda falta receber de cada uma.',
   '/rbs/cargas': 'planilhas de veiculação, de pesquisa e do plano comercial.',
   '/rbs/pesquisa': 'a pesquisa de cada edição e as perguntas das marcas Master.',
   '/rbs/relatorios': 'gerar, validar e disponibilizar o relatório de cada parceria.',
