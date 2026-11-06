@@ -6,7 +6,7 @@ import { useDados } from '../../api/useDados'
 import { Barra } from '../../componentes/Barra'
 import { Botao } from '../../componentes/Botao'
 import { CabecalhoSecao } from '../../componentes/CabecalhoSecao'
-import { Cartao, Grade3, Indicador } from '../../componentes/Cartao'
+import { Cartao } from '../../componentes/Cartao'
 import { Carregando } from '../../componentes/Carregando'
 import { Busca, Filtros, Seletor } from '../../componentes/Formulario'
 import { Status } from '../../componentes/Status'
@@ -37,15 +37,13 @@ export function Patrocinadores() {
       (cota === 'TODAS' || item.cota.codigo === cota) &&
       item.patrocinador.nome.toLowerCase().includes(busca.trim().toLowerCase()),
   )
-  const pendentes = todas.reduce((soma, item) => soma + item.entregas.pendentes, 0)
-  const usuarios = todas.reduce((soma, item) => soma + (item.usuarios ?? 0), 0)
 
   return (
     <div data-secao="neutro" className="flex flex-col gap-4">
       <CabecalhoSecao
         trilha="Planeta Atlântida / RBS · Gestão"
         titulo="Patrocinadores"
-        subtitulo="Cadastre patrocinadores, cotas e e-mails autorizados, e acompanhe cada parceria."
+        subtitulo="As parcerias da edição, com o andamento das entregas de cada uma."
         acoes={
           <Botao className="bg-white! text-tinta!" icone="ri-add-line" onClick={() => setCadastrando(true)} disabled={!eventos.dado}>
             Cadastrar patrocinador
@@ -53,15 +51,6 @@ export function Patrocinadores() {
         }
       />
 
-      <Grade3>
-        <Indicador
-          rotulo="Parcerias"
-          valor={todas.length}
-          legenda={`${contar('MASTER')} Master · ${contar('SUBCOTA_G')} Subcota G · ${contar('SUBCOTA')} Subcota`}
-        />
-        <Indicador rotulo="Entregas pendentes" valor={pendentes} legenda="Somando todas as parcerias da lista" />
-        <Indicador rotulo="Usuários com acesso" valor={usuarios} legenda="E-mails que já fizeram o primeiro acesso" />
-      </Grade3>
 
       <Cartao>
         <div className="mb-4 grid gap-4 md:grid-cols-[1fr_260px]">
