@@ -147,10 +147,10 @@ export function BaseDeMidia(props: Props) {
       titulo="Contratado x entregue"
       extra={
         <div className="flex flex-wrap gap-2">
-          <Botao variante="secundario" icone="ri-file-excel-2-line" carregando={baixando === 'xlsx'} onClick={() => baixar('xlsx')}>
+          <Botao variante="secundario" className="min-w-0 px-4" icone="ri-file-excel-2-line" carregando={baixando === 'xlsx'} onClick={() => baixar('xlsx')}>
             Baixar {filtrando ? 'o filtro' : 'tudo'} (.xlsx)
           </Botao>
-          <Botao variante="secundario" carregando={baixando === 'csv'} onClick={() => baixar('csv')}>
+          <Botao variante="secundario" className="min-w-0 px-4" carregando={baixando === 'csv'} onClick={() => baixar('csv')}>
             CSV
           </Botao>
         </div>
@@ -264,7 +264,8 @@ export function BaseDeMidia(props: Props) {
                 chave={(linha) => `${linha.parceria?.id ?? ''}-${linha.aproveitamentoId}-${linha.mes ?? ''}`}
                 colunas={[
                   ...(props.modo === 'edicao' ? [{ titulo: 'Marca', celula: (linha: LinhaDeMidia) => <span className="font-semibold">{linha.parceria?.patrocinador}</span> }] : []),
-                  ...(base.linhas.some((linha) => linha.mes) ? [{ titulo: 'Mês', celula: (linha: LinhaDeMidia) => (linha.mes ? nomeDoMes(linha.mes) : '—') }] : []),
+                  // Com um mês escolhido, a coluna só repetiria o filtro.
+                  ...(!mes && base.linhas.some((linha) => linha.mes) ? [{ titulo: 'Mês', celula: (linha: LinhaDeMidia) => (linha.mes ? nomeDoMes(linha.mes) : '—') }] : []),
                   { titulo: 'Veículo', celula: (linha) => <span className="font-semibold">{linha.veiculo}</span> },
                   {
                     titulo: 'Formato',
