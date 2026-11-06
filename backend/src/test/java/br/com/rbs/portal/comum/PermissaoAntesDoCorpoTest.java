@@ -128,7 +128,8 @@ class PermissaoAntesDoCorpoTest {
 
         for (String uri : List.of("/api/entregas?tamanho=999", "/api/entregas?pagina=-1", "/api/cargas?pagina=-1",
                 "/api/cargas/1/rejeicoes?tamanho=0", "/api/historico?pagina=-1", "/api/historico.csv?q=" + "x".repeat(200),
-                "/api/relatorios?status=INVENTADO", "/api/relatorios.csv?status=INVENTADO", "/api/painel?eventoId=abc")) {
+                "/api/relatorios?status=INVENTADO", "/api/relatorios.csv?status=INVENTADO", "/api/painel?eventoId=abc",
+                "/api/midia", "/api/midia?eventoId=abc", "/api/midia.xlsx", "/api/midia.csv")) {
             MvcTestResult resposta = amarelo.get(uri);
             assertThat(resposta).as(uri).hasStatus(HttpStatus.FORBIDDEN);
             assertThat(lerJson(resposta, "$.detail")).isEqualTo(SO_RBS);

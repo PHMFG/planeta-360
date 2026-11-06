@@ -79,6 +79,11 @@ public class PermissaoAntesDoCorpo implements HandlerInterceptor, WebMvcConfigur
             // O lote da comprovação mensal (rota 91): uma aba por parceria Master da edição. As rotas 88 a 90 são da marca Master e da RBS
             // (a cota é conferida no service).
             "GET /api/eventos/{id}/comprovacao-mensal.xlsx",
+            // A consulta da mídia da RBS (rotas 107 e 108). As rotas 105 e 106 são da marca da parceria e da RBS (aba MIDIA e
+            // cota conferidas no service).
+            "GET /api/midia",
+            "GET /api/midia.xlsx",
+            "GET /api/midia.csv",
             // O diagnóstico do Atlas (rotas 50 a 53): os turnos de todas as conversas e os provedores. Sempre mapeadas; com o
             // diagnóstico desligado a RBS recebe 404 do service.
             "GET /api/atlas/diagnostico/turnos",
