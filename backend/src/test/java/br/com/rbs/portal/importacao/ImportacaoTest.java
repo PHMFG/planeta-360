@@ -317,6 +317,27 @@ class ImportacaoTest {
     }
 
     @Test
+    void aLinhaRepetidaEALinhaSemDataVemRecusadasComOMotivo() {
+        // Rodada do Atlas da RBS (06/11): a linha igual a outra do mesmo arquivo entrava para revisar, e a linha sem data sumia.
+        SessaoDeApi rbs = SessaoDeApi.entrar(mvc, RBS);
+        byte[] csv = ("patrocinador,veiculo,formato,espaco_programa,exibido_em,quantidade,link\n"
+                + "Cliente Amarelo,Rede Atlântida RS,Chamadas assinadas 5,Indeterminado,2026-11-20T10:15:30-03:00,1,\n"
+                + "Cliente Amarelo,Rede Atlântida RS,Chamadas assinadas 5,Indeterminado,2026-11-20T14:42:10-03:00,1,\n"
+                + "Cliente Amarelo,Rede Atlântida RS,Chamadas assinadas 5,Indeterminado,2026-11-20T10:15:30-03:00,1,\n"
+                + "Cliente Amarelo,Rede Atlântida RS,Chamadas assinadas 5,Indeterminado,,1,\n").getBytes(StandardCharsets.UTF_8);
+        long id = ((Number) lerJson(enviar(rbs, "repetida.csv", csv, evento2027(), "EDICAO", null, null, "VEICULACAO"), "$.id"))
+                .longValue();
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> itens = (List<Map<String, Object>>) (List<?>) lerLista(rbs.get("/api/importacoes/" + id), "$.itens");
+        assertThat(itens).hasSize(4);
+        assertThat(itens.get(1).get("situacao")).isNotEqualTo("RECUSADA");
+        assertThat(itens.get(2).get("situacao")).isEqualTo("RECUSADA");
+        assertThat(String.valueOf(itens.get(2).get("motivo"))).contains("Repete").contains("linha 2");
+        assertThat(itens.get(3).get("situacao")).isEqualTo("RECUSADA");
+        assertThat(String.valueOf(itens.get(3).get("motivo"))).contains("Falta a data ou o mês");
+    }
+
+    @Test
     void asTransicoesProibidasDao409EAsPermissoesSeguemOContrato() throws IOException {
         mapearTv();
         SessaoDeApi rbs = SessaoDeApi.entrar(mvc, RBS);

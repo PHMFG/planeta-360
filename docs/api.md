@@ -3770,7 +3770,7 @@ Ligada:
 
 O Atlas de entrada: a RBS (ou, na rota 117, a marca) envia uma planilha ou cola uma conversa, o servidor lê, propõe as linhas com a origem de cada valor, a pessoa confere na prévia e confirma no destino. **Nada entra na base antes da confirmação**, e nenhuma linha some: o que a conferência recusa fica com o motivo.
 
-**Situações.** `LENDO` → `EM_PREVIA` ou `ERRO`; `EM_PREVIA` → `CONFIRMADA` ou `DESCARTADA`; `CONFIRMADA` → `RETIRADA`. Fora dessas, 409. **Destinos.** `VEICULACAO`, `COMPROVANTE`, `PESQUISA`, `NUMEROS_EDICAO`, `DADOS_ATIVACAO`, `PLANO` e `SO_CONSULTA`. **Situação da linha.** `PROPOSTA`, `EDITADA`, `ACEITA`, `DESCARTADA` e `RECUSADA` (a conferência recusou; `motivo` diz por quê; a pessoa pode corrigir e ela volta a `EDITADA`).
+**Situações.** `LENDO` → `EM_PREVIA` ou `ERRO`; `EM_PREVIA` → `CONFIRMADA` ou `DESCARTADA`; `CONFIRMADA` → `RETIRADA`. Fora dessas, 409. **Destinos.** `VEICULACAO`, `COMPROVANTE`, `PESQUISA`, `NUMEROS_EDICAO`, `DADOS_ATIVACAO`, `PLANO` e `SO_CONSULTA`. **Situação da linha.** `PROPOSTA`, `EDITADA`, `ACEITA`, `DESCARTADA` e `RECUSADA` (a conferência recusou; `motivo` diz por quê; a pessoa pode corrigir e ela volta a `EDITADA`). Na veiculação, a linha sem data nem mês vem `RECUSADA` (`Falta a data ou o mês da entrega.`), e não some; a linha igual a outra do mesmo arquivo também (`Repete Planilha 1, linha 2 deste arquivo.`), para a exibição não contar em dobro.
 
 **O `ImportacaoResumo`**:
 

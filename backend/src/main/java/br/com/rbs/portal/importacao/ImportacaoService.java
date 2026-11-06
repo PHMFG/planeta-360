@@ -58,6 +58,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -716,13 +717,24 @@ public class ImportacaoService {
                               ResultadoDaExtracao extracao, DestinoDaImportacao sugerido, DestinoDaImportacao destino,
                               BigDecimal confianca) {
         int ordem = 1;
+        // A mesma linha duas vezes no arquivo (mesma marca, veículo, formato, data e quantidade) contaria a exibição em dobro: a
+        // segunda vem recusada, apontando a primeira (achado da rodada do Atlas da RBS, 06/11).
+        Map<String, String> vistas = new HashMap<>();
         for (LinhaProposta proposta : extracao.linhas()) {
             ConferenciaDaLinha conferenciaDaLinha = conferir(importacao, destino, proposta);
-            SituacaoDaLinha situacao = conferenciaDaLinha.problemas().isEmpty() ? SituacaoDaLinha.PROPOSTA
-                    : SituacaoDaLinha.RECUSADA;
-            repositorio.inserirLinha(importacao.id(), ordem++, destino, JSON.writeValueAsString(proposta.dados()),
+            List<String> problemas = new ArrayList<>(conferenciaDaLinha.problemas());
+            String dados = JSON.writeValueAsString(proposta.dados());
+            OrigemDoValor onde = proposta.origem().get("veiculo");
+            String repetida = destino == DestinoDaImportacao.VEICULACAO
+                    ? vistas.putIfAbsent(dados, onde != null && onde.localizador() != null ? onde.localizador() : "a linha " + ordem)
+                    : null;
+            if (repetida != null) {
+                problemas.add("Repete " + repetida.replaceFirst("!.*?(\\d+)$", ", linha $1") + " deste arquivo.");
+            }
+            SituacaoDaLinha situacao = problemas.isEmpty() ? SituacaoDaLinha.PROPOSTA : SituacaoDaLinha.RECUSADA;
+            repositorio.inserirLinha(importacao.id(), ordem++, destino, dados,
                     JSON.writeValueAsString(proposta.origem()), situacao,
-                    conferenciaDaLinha.problemas().isEmpty() ? null : String.join(" ", conferenciaDaLinha.problemas()),
+                    problemas.isEmpty() ? null : String.join(" ", problemas),
                     conferenciaDaLinha.parceriaId(), conferenciaDaLinha.aproveitamentoSugeridoId(),
                     conferenciaDaLinha.semelhanca());
         }

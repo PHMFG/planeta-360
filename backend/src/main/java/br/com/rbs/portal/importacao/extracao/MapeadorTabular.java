@@ -578,9 +578,7 @@ public class MapeadorTabular implements ExtratorDeLinhas {
             if (!dados.containsKey("veiculo") || !dados.containsKey("formato")) {
                 return null;
             }
-            if (!dados.containsKey("mes") && !dados.containsKey("exibido_em")) {
-                return null;
-            }
+            // Sem data nem mês, a linha não some: entra e o destino a recusa com o motivo ("Falta a data ou o mês da entrega").
         }
         if (destino == DestinoDaImportacao.PLANO && !dados.containsKey("quantidade_prevista") && dados.containsKey("quantidade")) {
             dados.put("quantidade_prevista", dados.remove("quantidade"));
