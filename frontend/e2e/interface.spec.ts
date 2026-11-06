@@ -149,6 +149,8 @@ test('[U03] a lista de relatórios conta indicadores e explica as colunas', asyn
     const [com, sem] = texto.match(/\d+/g)!.map(Number)
     expect(com + sem, texto).toBe(17)
   }
+  // A explicação das colunas fica recolhida em "Como ler as colunas" (F9).
+  await page.getByText('Como ler as colunas').click()
   await expect(page.getByText(/Faltantes: o que impede/)).toBeVisible()
 })
 
