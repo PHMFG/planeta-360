@@ -729,38 +729,39 @@ public class ImportacaoService {
                     .map(s -> Map.<String, Object>of("pagina", s.pagina(), "tipo", s.tipo())).toList();
             repositorio.gravarSuspeitasDoDocumento(documentoId, JSON.writeValueAsString(lista));
         }
-        if (aprovadoPor == null || dadosPessoais) {
-            // Sem aprovação (a importação da marca, no futuro) ou com suspeita de dado pessoal, o documento fica aguardando: não
-            // entra em PROCESSANDO nem tem trechos indexados (o gatilho recusa os dois).
+        if (aprovadoPor == null || dadosPessoais || !embeddings.ligado()) {
+            // Sem aprovação (a importação da marca, no futuro), com suspeita de dado pessoal ou com os embeddings desligados, o
+            // documento fica aguardando: não entra em PROCESSANDO nem tem trechos indexados (o gatilho recusa os dois). A importação
+            // em si segue em EM_PREVIA; o documento continua como fonte, sem busca vetorial.
+            if (!embeddings.ligado() && !dadosPessoais) {
+                log.warn("Importação: o documento {} fica aguardando porque os embeddings estão desligados ({}).", documentoId,
+                        embeddings.motivoDeDesligado());
+            }
             return documentoId;
         }
         repositorio.aprovarDocumento(documentoId, aprovadoPor);
         List<TextoDoTrecho> textos = conteudo.pedacos().stream()
                 .map(p -> new TextoDoTrecho(p.localizador(), p.texto())).toList();
-        List<float[]> vetores = null;
-        String modelo = "sem-embeddings";
-        if (embeddings.ligado()) {
-            try {
-                vetores = embeddings.paraTrechos(titulo, textos);
-                modelo = embeddings.modelo();
-            } catch (RuntimeException semVetor) {
-                log.warn("Importação: os embeddings não responderam para o documento {}; os trechos ficam sem vetor de busca.", documentoId);
-            }
+        List<float[]> vetores;
+        try {
+            vetores = embeddings.paraTrechos(titulo, textos);
+        } catch (RuntimeException semVetor) {
+            log.warn("Importação: os embeddings não responderam para o documento {}; ele fica aguardando aprovação.", documentoId);
+            return documentoId;
+        }
+        if (vetores.size() != conteudo.pedacos().size()) {
+            log.warn("Importação: os embeddings voltaram em número diferente dos trechos ({} para {}); o documento {} fica aguardando.",
+                    vetores.size(), conteudo.pedacos().size(), documentoId);
+            return documentoId;
         }
         for (int i = 0; i < conteudo.pedacos().size(); i++) {
             Pedaco pedaco = conteudo.pedacos().get(i);
-            String vetor = vetores != null && vetores.size() == conteudo.pedacos().size()
-                    ? ProvedorDeEmbeddings.comoTextoDoBanco(vetores.get(i)) : vetorZerado();
             repositorio.inserirTrechoDoDocumento(documentoId, i + 1, pedaco.localizador(), pedaco.texto(),
-                    Math.max(1, pedaco.texto().length() / 4), vetor);
+                    Math.max(1, pedaco.texto().length() / 4), ProvedorDeEmbeddings.comoTextoDoBanco(vetores.get(i)));
         }
-        repositorio.gravarModeloDoDocumento(documentoId, modelo, ProvedorDeEmbeddings.DIMENSOES);
+        repositorio.gravarModeloDoDocumento(documentoId, embeddings.modelo(), ProvedorDeEmbeddings.DIMENSOES);
         repositorio.publicarDocumento(documentoId);
         return documentoId;
-    }
-
-    private static String vetorZerado() {
-        return "[" + "0,".repeat(ProvedorDeEmbeddings.DIMENSOES - 1) + "0]";
     }
 
     // ---------------------------------------------------------------------
