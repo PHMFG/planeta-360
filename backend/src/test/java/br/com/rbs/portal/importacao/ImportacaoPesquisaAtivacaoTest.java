@@ -413,6 +413,23 @@ class ImportacaoPesquisaAtivacaoTest {
     }
 
     @Test
+    void oPerfilSemMarcaSemAPesquisaGeralDaEdicaoVemRecusadoNaPrevia() {
+        // A amostra só tem a pesquisa geral de 2026: em 2027 a linha do festival inteiro não tem onde entrar, e a prévia já diz
+        // isso, em vez de a confirmação inteira dar 422 (achado da rodada H1).
+        SessaoDeApi rbs = SessaoDeApi.entrar(mvc, RBS);
+        byte[] planilha = csv(CABECALHO_PESQUISA,
+                "PERFIL,,,,GENERO,Feminino,62,1038,PERCENTUAL",
+                "PERFIL,Cliente Amarelo,,,GENERO,Feminino,56,412,PERCENTUAL");
+        long id = id(enviarRbs(rbs, "pesquisa-t4b.csv", planilha, "EDICAO", null, "PESQUISA"));
+
+        List<Map<String, Object>> itens = itens(rbs, id);
+        assertThat(itens).hasSize(2);
+        assertThat(itens.get(0).get("situacao")).isEqualTo("RECUSADA");
+        assertThat(String.valueOf(itens.get(0).get("motivo"))).contains("pesquisa geral do festival");
+        assertThat(itens.get(1).get("situacao")).isNotEqualTo("RECUSADA");
+    }
+
+    @Test
     void semPesquisaAbertaAConfirmacaoDa422() {
         SessaoDeApi rbs = SessaoDeApi.entrar(mvc, RBS);
         long pesquisa = jdbc.sql("SELECT id FROM pesquisa WHERE evento_id = :evento AND escopo = 'ATIVACAO'")

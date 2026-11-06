@@ -129,11 +129,11 @@ public class ParaPesquisa implements DestinoDeGravacao {
         if (!baseValida(dados.get("base_respondentes"))) {
             problemas.add("A base de respondentes precisa ser um número inteiro maior que zero.");
         }
-        // A pesquisa só é exigida na confirmação; aqui, sem ela, não há pergunta para conferir.
-        if (daMarca) {
-            repositorio.pesquisaDaEdicao(alcance.eventoId(), "ATIVACAO");
-        } else {
-            repositorio.pesquisaDaEdicao(alcance.eventoId(), "GERAL");
+        // Sem a pesquisa da edição, a linha não teria onde entrar: a prévia já diz isso, em vez de a confirmação inteira dar 422.
+        if (daMarca && repositorio.pesquisaDaEdicao(alcance.eventoId(), "ATIVACAO").isEmpty()) {
+            problemas.add("A edição não tem a pesquisa da ativação aberta. Abra-a em Pesquisa, no menu da RBS, ou deixe esta linha de fora.");
+        } else if (!daMarca && repositorio.pesquisaDaEdicao(alcance.eventoId(), "GERAL").isEmpty()) {
+            problemas.add("A edição não tem a pesquisa geral do festival aberta. Abra-a em Pesquisa, no menu da RBS, ou deixe esta linha de fora.");
         }
     }
 
