@@ -190,7 +190,7 @@ public class ConsultarMidia implements Ferramenta {
                         Map.of("parceria", "Não encontramos esta parceria nesta edição.")));
             }
             return consultar(contexto, turno, new Filtro(contexto.eventoId(), parceriaId, cota, primeiroDiaDoMes, veiculo, formato,
-                    tipoMidia, unidade), true);
+                    tipoMidia, unidade), true, true);
         }
 
         verificador.exigirParceria(contexto.usuario(), contexto.parceriaId());
@@ -201,12 +201,17 @@ public class ConsultarMidia implements Ferramenta {
             String nomeDaAba = registros.abas().getOrDefault("MIDIA", "Mídia");
             return vazio("A aba " + nomeDaAba + " está fechada para esta parceria: não há números de mídia para consultar.");
         }
+        // O campo mes existe para as cotas que recortam por mês (e para a RBS): sem filtro, vem nulo, como na rota 105.
+        boolean comMes = "MASTER".equals(contexto.cota());
         return consultar(contexto, turno, new Filtro(null, contexto.parceriaId(), null, primeiroDiaDoMes, veiculo, formato, tipoMidia,
-                unidade), false);
+                unidade), false, comMes);
     }
 
-    /** Roda a consulta e monta o resultado. {@code daRbs} só muda o que a resposta diz da marca em cada linha. */
-    Execucao consultar(AtlasContexto contexto, FontesDoTurno turno, Filtro filtro, boolean daRbs) {
+    /**
+     * Roda a consulta e monta o resultado. {@code daRbs} muda o que a resposta diz da marca em cada linha; {@code comMes} diz se a
+     * linha leva o campo {@code mes} (nulo quando não houve recorte por mês).
+     */
+    Execucao consultar(AtlasContexto contexto, FontesDoTurno turno, Filtro filtro, boolean daRbs, boolean comMes) {
         List<Total> totais = midia.totais(filtro);
         List<Linha> linhas = midia.linhas(filtro, LIMITE);
         long total = linhas.isEmpty() ? 0 : linhas.get(0).total();
@@ -218,7 +223,7 @@ public class ConsultarMidia implements Ferramenta {
         }
         List<Map<String, Object>> registrosDaLinha = new ArrayList<>();
         for (Linha linha : linhas) {
-            registrosDaLinha.add(registroDaLinha(turno, linha, daRbs));
+            registrosDaLinha.add(registroDaLinha(turno, linha, daRbs, comMes));
         }
 
         Map<String, Object> extras = new LinkedHashMap<>();
@@ -244,7 +249,7 @@ public class ConsultarMidia implements Ferramenta {
     }
 
     /** Uma linha vira o registro do resultado e a fonte {@code [R#]} do turno. */
-    private static Map<String, Object> registroDaLinha(FontesDoTurno turno, Linha linha, boolean daRbs) {
+    private static Map<String, Object> registroDaLinha(FontesDoTurno turno, Linha linha, boolean daRbs, boolean comMes) {
         StringBuilder texto = new StringBuilder(daRbs ? "Mídia da marca " + linha.patrocinador() + ": " : "Mídia: ")
                 .append(linha.veiculo()).append(", ").append(linha.formato());
         if (linha.espacoPrograma() != null && !linha.espacoPrograma().isBlank()) {
@@ -311,8 +316,8 @@ public class ConsultarMidia implements Ferramenta {
         }
         registro.put("unidade", linha.unidade());
         registro.put("unidadeNome", unidadeNaTela(linha.unidade()));
-        if (linha.mes() != null) {
-            registro.put("mes", linha.mes());
+        if (comMes) {
+            registro.put("mes", linha.mes());   // nulo quando a consulta soma todos os meses
         }
         registro.put("previsto", linha.previsto());
         registro.put("exibido", linha.exibido());

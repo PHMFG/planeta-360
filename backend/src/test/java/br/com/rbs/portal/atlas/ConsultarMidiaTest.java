@@ -39,7 +39,7 @@ class ConsultarMidiaTest extends ApoioDasConsultas {
                 .param("p", amarelo).query(Long.class).single();
         assertThat(registros).hasSize((int) linhasDoPlano);
         assertThat(registros).allSatisfy(registro -> {
-            assertThat(registro).doesNotContainKey("mes");
+            assertThat(registro).containsEntry("mes", null);   // a cota Master tem o campo; sem recorte, ele é nulo
             assertThat((String) registro.get("marcador")).startsWith("R");
             assertThat(registro).containsKeys("veiculo", "formato", "previsto", "exibido", "unidade", "unidadeNome");
             var fonte = turno.fonte((String) registro.get("marcador")).orElseThrow();
