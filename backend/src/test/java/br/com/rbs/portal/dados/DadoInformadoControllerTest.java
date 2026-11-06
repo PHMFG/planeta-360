@@ -44,6 +44,7 @@ class DadoInformadoControllerTest {
     private static final String CADASTROS = "ativacao.cadastros_consentidos";
     private static final String DISPONIVEIS = "ativacao.brindes_disponiveis";
     private static final String DISTRIBUIDOS = "ativacao.brindes_distribuidos";
+    private static final String PESSOAS = "ativacao.pessoas_na_ativacao";
     private static final String PLANILHA = "ativacao.planilha_agencia";
     private static final String ABA_FECHADA = "Esta aba ainda não foi liberada para a sua parceria.";
     private static final String FORA_DA_COTA = "Esta aba não faz parte da cota da sua parceria.";
@@ -155,7 +156,7 @@ class DadoInformadoControllerTest {
             MvcTestResult lista = entrar(email).get("/api/campos?aba=APLICACOES");
 
             assertThat(lista).as(email).hasStatus(HttpStatus.OK);
-            assertThat(lerLista(lista, "$[*].chave")).containsExactly(VISITANTES, CADASTROS, DISPONIVEIS, DISTRIBUIDOS, PLANILHA);
+            assertThat(lerLista(lista, "$[*].chave")).containsExactly(VISITANTES, CADASTROS, DISPONIVEIS, DISTRIBUIDOS, PESSOAS, PLANILHA);
             assertThat(chaves(lista, "$[0]")).containsExactlyElementsOf(CHAVES_DO_CAMPO);
             assertThat(lerJson(lista, "$[0].aba")).isEqualTo("APLICACOES");
             assertThat(lerJson(lista, "$[0].rotulo")).isEqualTo("Visitantes no espaço");
@@ -169,7 +170,7 @@ class DadoInformadoControllerTest {
             assertThat(lerJson(lista, "$[2].limiteCampo")).isNull();
             assertThat(lerJson(lista, "$[3].limiteCampo")).isEqualTo(DISPONIVEIS);
             assertThat(lerLista(lista, "$[*].rotulo")).containsExactly("Visitantes no espaço", "Cadastros com consentimento",
-                    "Brindes disponíveis", "Brindes distribuídos", "Planilha da agência");
+                    "Brindes disponíveis", "Brindes distribuídos", "Pessoas na ativação", "Planilha da agência");
         }
     }
 
@@ -214,7 +215,7 @@ class DadoInformadoControllerTest {
             assertThat(chaves(dados, "$")).containsExactly("parceriaId", "aba", "campos");
             assertThat(((Number) lerJson(dados, "$.parceriaId")).longValue()).isEqualTo(amarelo);
             assertThat(lerJson(dados, "$.aba")).isEqualTo("APLICACOES");
-            assertThat(lerLista(dados, "$.campos[*].chave")).containsExactly(VISITANTES, CADASTROS, DISPONIVEIS, DISTRIBUIDOS, PLANILHA);
+            assertThat(lerLista(dados, "$.campos[*].chave")).containsExactly(VISITANTES, CADASTROS, DISPONIVEIS, DISTRIBUIDOS, PESSOAS, PLANILHA);
             assertThat(chaves(dados, "$.campos[0]")).containsExactly("chave", "aba", "rotulo", "tipo", "unidade", "minimo", "maximo",
                     "ajuda", "limiteCampo", "vigente");
             assertThat(lerLista(dados, "$.campos[*].vigente")).containsOnlyNulls();
@@ -298,7 +299,7 @@ class DadoInformadoControllerTest {
 
         assertThat(gravado).hasStatus(HttpStatus.OK);
         assertThat(corpo(gravado)).as("o corpo da 41 é o da 40").isEqualTo(corpo(ver(marca, amarelo)));
-        assertThat(lerLista(gravado, "$.campos[*].chave")).containsExactly(VISITANTES, CADASTROS, DISPONIVEIS, DISTRIBUIDOS, PLANILHA);
+        assertThat(lerLista(gravado, "$.campos[*].chave")).containsExactly(VISITANTES, CADASTROS, DISPONIVEIS, DISTRIBUIDOS, PESSOAS, PLANILHA);
         Map<String, Object> visitantes = vigente(gravado, VISITANTES);
         assertThat(visitantes.keySet()).containsExactly("valor", "origem", "informadoPor", "informadoEm", "arquivo");
         assertThat(visitantes.get("arquivo")).as("só o campo de arquivo traz o arquivo").isNull();
