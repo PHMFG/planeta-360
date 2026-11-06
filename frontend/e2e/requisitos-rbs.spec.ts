@@ -5,7 +5,7 @@
 // Nada aqui muda número do Amarelo, do Roxo ou do Verde: quem precisa escrever cria uma marca de teste pela API, na pilha.
 import fs from 'node:fs'
 import { expect, test, type Page } from '@playwright/test'
-import { capturar, entrar, entrarComo, novaMarcaDeTeste, parceriaDa, sessaoDaApi, sessaoDaApiComo } from './apoio.ts'
+import { entrar, entrarComo, novaMarcaDeTeste, parceriaDa, sessaoDaApi, sessaoDaApiComo } from './apoio.ts'
 
 const PDF_DE_EXEMPLO = '../backend/src/main/resources/dev/documentos/d13-circular-revogada.pdf'
 
@@ -618,19 +618,19 @@ test.describe('R6 a R8 · admin, identidade e pós-venda', () => {
     await page.goto(`/parceria/${marca.parceriaId}/pesquisa`)
     await expect(page.getByText(/não inclui|fora da cota/i).first()).toBeVisible()
   })
-  test('[R7.1] o emblema de 2027 aparece no login e nos cabeçalhos', async ({ page }) => {
+  test('[R7.1] o emblema de 2027 aparece no login e não nos cabeçalhos', async ({ page }) => {
+    // Desde 06/11 (pedido do ph), o emblema fica só no login: os cabeçalhos das telas não o repetem.
     await page.goto('/entrar')
-    await expect(page.getByRole('img', { name: 'Planeta Atlântida 2027' })).toBeVisible()
+    const login = page.getByRole('img', { name: 'Planeta Atlântida 2027' })
+    await expect(login).toBeVisible()
+    expect(await login.evaluate((imagem: HTMLImageElement) => imagem.complete && imagem.naturalWidth > 0)).toBe(true)
     const amarelo = await parceriaDa('amarelo')
     await entrar(page, 'amarelo')
-    for (const aba of ['perfil', 'midia', 'cortesias', 'relatorio']) {
+    for (const aba of ['perfil', 'midia']) {
       await page.goto(`/parceria/${amarelo}/${aba}`)
-      const emblema = page.locator('header img[data-emblema="2027"]')
-      await expect(emblema, aba).toBeVisible()
-      // O emblema carregou de fato (uma imagem quebrada também ficaria "visível").
-      expect(await emblema.evaluate((imagem: HTMLImageElement) => imagem.complete && imagem.naturalWidth > 0), aba).toBe(true)
+      await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+      await expect(page.locator('header img[data-emblema="2027"]'), aba).toHaveCount(0)
     }
-    await capturar(page, 'r7-emblema-cabecalho-1440')
   })
   test('[R8.1] a marca vê o anexo de pós-venda com o relatório disponibilizado', async ({ page }) => {
     const marca = await novaMarcaDeTeste('SUBCOTA')

@@ -1,6 +1,6 @@
 // Cabeçalho de seção do Figma: faixa na cor da seção, título em Bebas e uma linha de subtítulo. [ITEM-7]
 // Plano da base da RBS (F9): a faixa caiu de 180 para cerca de 96 px. A trilha ("Planeta Atlântida / Patrocinador") saiu da
-// tela, porque repetia o menu; ela continua no prop e vai para o leitor de tela. O emblema de 2027 (R7.1) fica, menor.
+// tela, porque repetia o menu; ela continua no prop e vai para o leitor de tela. O emblema de 2027 (R7.1) saiu dos cabeçalhos a pedido do ph (06/11): fica só no login.
 import type { ReactNode } from 'react'
 
 type PropsCabecalho = {
@@ -22,16 +22,6 @@ export function CabecalhoSecao({ trilha, titulo, subtitulo, acoes }: PropsCabeca
         </div>
         <div className="flex items-center gap-4 sm:shrink-0">
           {acoes && <div className="flex flex-wrap gap-3">{acoes}</div>}
-          {/* R7.1: o emblema da edição onde o Figma tem a marca do evento. Decorativo; fica de fora no celular. */}
-          <img
-            src="/logo-planeta-atlantida-2027.png"
-            alt=""
-            aria-hidden="true"
-            width={52}
-            height={52}
-            data-emblema="2027"
-            className="pointer-events-none hidden size-[52px] drop-shadow-md sm:block"
-          />
         </div>
       </div>
     </header>
