@@ -143,7 +143,9 @@ BEGIN
     PERFORM pg_temp.confere('CARGA 2', 'inseridas', 0, c.linhas_inseridas);
     PERFORM pg_temp.confere('CARGA 2', 'duplicadas', 1485, c.linhas_duplicadas);
     PERFORM pg_temp.confere('CARGA 2', 'rejeitadas', 4, c.linhas_rejeitadas);
-    PERFORM pg_temp.confere('CARGA 2', 'veiculações na base depois das duas cargas (sem contagem em dobro)', 1483, (SELECT count(*) FROM veiculacao));
+    -- A amostra tem ainda uma linha mensal (periodo MES) para o Amarelo; ela não é uma exibição carregada.
+    PERFORM pg_temp.confere('CARGA 2', 'exibições na base depois das duas cargas (sem contagem em dobro)', 1483,
+        (SELECT count(*) FROM veiculacao WHERE periodo = 'EXIBICAO'));
 
     SELECT * INTO c FROM carga WHERE tipo = 'PESQUISA' ORDER BY id LIMIT 1;
     PERFORM pg_temp.confere('PESQUISA', 'carga de pesquisa: lidas', 11, c.linhas_lidas);
@@ -166,7 +168,7 @@ BEGIN
     PERFORM pg_temp.confere('CONSOLIDAÇÃO', 'Roxo, CPM: exibido de previsto (%, cortado), sem somar com inserções', 97.2,
         (SELECT u.pct_entrega FROM vw_midia_unidade u JOIN parceria pa ON pa.id = u.parceria_id JOIN patrocinador p ON p.id = pa.patrocinador_id
           WHERE p.nome_canonico = 'Cliente Roxo' AND u.unidade = 'CPM'));
-    PERFORM pg_temp.confere('CONSOLIDAÇÃO', 'Amarelo, inserções: exibido de previsto (%, cortado: 1105 de 1113 = 99,28)', 99.2,
+    PERFORM pg_temp.confere('CONSOLIDAÇÃO', 'Amarelo, inserções: exibido de previsto (%, cortado: 1115 de 1113 = 100,17)', 100.1,
         (SELECT u.pct_entrega FROM vw_midia_unidade u JOIN parceria pa ON pa.id = u.parceria_id JOIN patrocinador p ON p.id = pa.patrocinador_id
           WHERE p.nome_canonico = 'Cliente Amarelo' AND u.unidade = 'INSERCAO'));
     PERFORM pg_temp.confere('CONSOLIDAÇÃO', 'Verde, inserções: exibido de previsto (%)', 100,

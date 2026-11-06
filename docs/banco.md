@@ -301,7 +301,7 @@ A V18 é o banco da fase F6 (pós-venda). Só acrescenta uma tabela e 2 gatilhos
 
 ## O que a V19 a V22 mudaram
 
-As quatro migrações são o banco da extração (o Atlas de entrada, a base de mídia, a pesquisa e as visitas). Só acrescentam e relaxam uma regra: nenhuma V antiga é editada, **o catálogo de 17 indicadores e as 6 seções do relatório não mudam**, e a amostra não muda (as linhas que já existem ficam com a unidade, o período e o impacto nulos ou no padrão, e nenhuma importação ou visita existe até a fase da amostra). São **55 tabelas**, **9 visões** e **39 gatilhos `rn_*`**.
+As quatro migrações são o banco da extração (o Atlas de entrada, a base de mídia, a pesquisa e as visitas). Só acrescentam e relaxam uma regra: nenhuma V antiga é editada, **o catálogo de 17 indicadores e as 6 seções do relatório não mudam**, e as migrações não mexem na amostra (as linhas que já existem ficam com a unidade, o período e o impacto nulos ou no padrão, e nenhuma importação ou visita existe até a fase da amostra). A amostra ganha, no bloco final, o impacto e a linha mensal da trilha de mídia (veja "A amostra", na V20). São **55 tabelas**, **9 visões** e **39 gatilhos `rn_*`**.
 
 | Assunto | O que a V19 faz |
 | --- | --- |
@@ -319,7 +319,7 @@ As quatro migrações são o banco da extração (o Atlas de entrada, a base de 
 | `stg_veiculacao` | `impacto` (número), `impacto_texto` (o texto ilegível, para o motivo certo) e `mes` (o `AAAA-MM` da planilha) |
 | `fn_carregar_veiculacoes` | Mesma função da V4, com: a linha traz a exibição **ou** o mês (as duas ou nenhuma são rejeitadas; o mês fora de `AAAA-MM` também, com o formato esperado); o impacto ilegível é rejeitado, e o impacto vazio vale como nulo; grava `periodo`, `mes_referencia` e `impacto`; a linha que cairia no `rn_veiculacao_periodo` vira rejeição com motivo, conferida antes de inserir, sem derrubar a carga. Os totais não mudam de formato |
 | `vw_midia_detalhe` | Uma linha por linha do plano `MIDIA` e por mês com veiculação: `parceria_id`, `aproveitamento_id`, `veiculo`, `formato`, `espaco_programa`, `tipo_midia`, `unidade`, `quantidade_prevista` (o previsto da linha inteira), `mes` (o dia 1 do mês de Brasília), `exibido` (a soma das quantidades), `impacto` (a soma, nula se todas forem nulas), `exibicoes`, `comprovantes` e `links`. A linha do plano sem veiculação aparece uma vez, com `mes` nulo e `exibido` 0 |
-| A amostra | Nenhuma linha vira `MES` nem ganha impacto: as exibições continuam `EXIBICAO`, e a carga da amostra passa pela função nova com os mesmos totais |
+| A amostra | As exibições carregadas continuam `EXIBICAO` e a carga passa pela função nova com os mesmos totais. O bloco final da amostra dá impacto a algumas exibições de TV e rádio do Cliente Amarelo e cria uma linha `MES` (10 de impacto 5.000) para a primeira linha do plano dele, num mês sem exibição; o bloco é idempotente (`UPDATE` só no impacto nulo e `INSERT ... ON CONFLICT`), então repetir a amostra não duplica a linha |
 
 | Assunto | O que a V21 faz |
 | --- | --- |

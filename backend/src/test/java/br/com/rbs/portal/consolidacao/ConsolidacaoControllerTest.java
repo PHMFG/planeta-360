@@ -130,16 +130,17 @@ class ConsolidacaoControllerTest {
         assertThat(resposta.getResponse().getContentType()).startsWith("application/json");
         assertThat(((Number) lerJson(resposta, "$.parceriaId")).longValue()).isEqualTo(amarelo);
 
-        // Conferência por SQL direto nas tabelas: 1113 previstos e 1105 exibidos em inserções.
+        // Conferência por SQL direto nas tabelas: 1113 previstos e 1115 exibidos em inserções (a amostra ganhou uma linha
+        // mensal de 10 para a primeira linha do plano do Amarelo).
         BigDecimal previstoNoBanco = previsto(amarelo, "INSERCAO");
         BigDecimal exibidoNoBanco = exibido(amarelo, "INSERCAO");
         assertThat(previstoNoBanco).isEqualByComparingTo("1113");
-        assertThat(exibidoNoBanco).isEqualByComparingTo("1105");
+        assertThat(exibidoNoBanco).isEqualByComparingTo("1115");
         assertThat(lerLista(resposta, "$.midia.porUnidade")).hasSize(1);
         assertThat(lerJson(resposta, "$.midia.porUnidade[0].unidade")).isEqualTo("INSERCAO");
         assertThat(numero(lerJson(resposta, "$.midia.porUnidade[0].previsto"))).isEqualByComparingTo(previstoNoBanco);
         assertThat(numero(lerJson(resposta, "$.midia.porUnidade[0].exibido"))).isEqualByComparingTo(exibidoNoBanco);
-        assertThat(numero(lerJson(resposta, "$.midia.porUnidade[0].percentual"))).isEqualByComparingTo("99.2");   // 1105 de 1113 = 99,28%: cortado, e não arredondado
+        assertThat(numero(lerJson(resposta, "$.midia.porUnidade[0].percentual"))).isEqualByComparingTo("100.1");   // 1115 de 1113 = 100,17%: cortado, e a mídia pode passar de 100
 
         // Aplicações de marca, entregas e cortesias, também conferidas nas tabelas.
         BigDecimal previstas = jdbc.sql("SELECT sum(quantidade_prevista) FROM aproveitamento_previsto "
