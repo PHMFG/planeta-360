@@ -148,7 +148,9 @@ export function BaseDeMidia(props: Props) {
       extra={
         <div className="flex flex-wrap gap-2">
           <Botao variante="secundario" className="min-w-0 px-4" icone="ri-file-excel-2-line" carregando={baixando === 'xlsx'} onClick={() => baixar('xlsx')}>
-            Baixar {filtrando ? 'o filtro' : 'tudo'} (.xlsx)
+            {/* No celular, o rótulo curto: o longo quebrava em três linhas (rodada H2). */}
+            <span className="sm:hidden">.xlsx</span>
+            <span className="max-sm:hidden">Baixar {filtrando ? 'o filtro' : 'tudo'} (.xlsx)</span>
           </Botao>
           <Botao variante="secundario" className="min-w-0 px-4" carregando={baixando === 'csv'} onClick={() => baixar('csv')}>
             CSV
@@ -225,7 +227,16 @@ export function BaseDeMidia(props: Props) {
                       <span className="font-semibold">{UNIDADES[total.unidade] ?? total.unidade}</span>
                       <span className="text-texto-2">
                         {' '}
-                        · {numero(total.exibido)} de {numero(total.previsto)}
+                        {/* Com um mês escolhido, o contratado continua sendo o da campanha inteira (rodada H2): a frase diz isso. */}
+                        {mes ? (
+                          <>
+                            · {numero(total.exibido)} em {nomeDoMes(mes)}, de {numero(total.previsto)} contratados na campanha
+                          </>
+                        ) : (
+                          <>
+                            · {numero(total.exibido)} de {numero(total.previsto)}
+                          </>
+                        )}
                         {total.impacto !== null && <> · {numero(total.impacto)} de impacto</>}
                       </span>
                     </p>
@@ -247,7 +258,7 @@ export function BaseDeMidia(props: Props) {
                     colunas={[
                       { titulo: resumo === 'marca' ? 'Marca' : 'Veículo', celula: (grupo) => <span className="font-semibold">{grupo.nome}</span> },
                       { titulo: 'Unidade', celula: (grupo) => UNIDADES[grupo.unidade] ?? grupo.unidade },
-                      { titulo: 'Contratado', celula: (grupo) => numero(grupo.previsto), classe: 'text-right' },
+                      { titulo: mes ? 'Contratado (campanha)' : 'Contratado', celula: (grupo) => numero(grupo.previsto), classe: 'text-right' },
                       { titulo: 'Entregue', celula: (grupo) => numero(grupo.exibido), classe: 'text-right' },
                       { titulo: 'Entrega', celula: (grupo) => <Barra valor={grupo.percentual} rotulo="Entregue sobre o contratado" /> },
                       { titulo: 'Impacto', celula: (grupo) => (grupo.impacto === null ? '—' : numero(grupo.impacto)), classe: 'text-right' },
@@ -255,6 +266,7 @@ export function BaseDeMidia(props: Props) {
                   />
                   <p className="text-xs font-medium text-texto-2">
                     Toque {resumo === 'marca' ? 'numa marca para ver os veículos dela' : 'num veículo para ver os formatos, o impacto e os comprovantes'}.
+                    {' '}Impacto “—”: o veículo ainda não informou.
                   </p>
                 </>
               ) : (
@@ -276,7 +288,7 @@ export function BaseDeMidia(props: Props) {
                       </span>
                     ),
                   },
-                  { titulo: 'Contratado', celula: (linha) => numero(linha.previsto), classe: 'text-right' },
+                  { titulo: mes ? 'Contratado (campanha)' : 'Contratado', celula: (linha) => numero(linha.previsto), classe: 'text-right' },
                   { titulo: 'Entregue', celula: (linha) => numero(linha.exibido), classe: 'text-right' },
                   { titulo: 'Entrega', celula: (linha) => <Barra valor={linha.percentual} rotulo="Entregue sobre o contratado" /> },
                   { titulo: 'Impacto', celula: (linha) => (linha.impacto === null ? '—' : numero(linha.impacto)), classe: 'text-right' },
@@ -303,6 +315,7 @@ export function BaseDeMidia(props: Props) {
                 ]}
               />
               )}
+              {!resumo && <p className="text-xs font-medium text-texto-2">Impacto “—”: o veículo ainda não informou.</p>}
             </div>
           )
         }
