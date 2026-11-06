@@ -50,7 +50,7 @@ export function Tabela<T>({ colunas, linhas, chave, vazio = 'Nada para mostrar.'
       )}
       <div
         ref={caixa}
-        className="overflow-x-auto rounded-[10px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secao"
+        className="relative overflow-x-auto rounded-[10px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secao"
         {...(rola ? { tabIndex: 0, role: 'region', 'aria-label': `${rotulo}, role para os lados` } : {})}
       >
       <table className="w-full border-separate border-spacing-0 text-sm">

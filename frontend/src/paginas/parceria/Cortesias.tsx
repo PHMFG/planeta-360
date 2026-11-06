@@ -490,7 +490,7 @@ function GradeDaRbs({ cortesias, aoGravar }: { cortesias: DadosDeCortesias; aoGr
     >
       <p className="mb-4 text-sm font-medium text-texto-2">O que o contrato dá, por setor e tipo/dia. Em branco, a cota não tem.</p>
       <form id="form-cota-cortesias" onSubmit={salvar} className="flex flex-col gap-4" noValidate>
-        <div className="overflow-x-auto">
+        <div className="relative overflow-x-auto">
           <table className="w-full border-separate border-spacing-0 text-sm">
             <thead>
               <tr>
