@@ -43,7 +43,8 @@ public class ComprovacaoMensalRepositorio {
                 .optional();
     }
 
-    public List<LinhaMensal> linhas(long parceriaId) {
+    /** Com {@code mes} (AAAA-MM), só as exibições daquele mês; nulo traz todos. */
+    public List<LinhaMensal> linhas(long parceriaId, String mes) {
         return jdbc.sql("""
                         SELECT to_char(v.exibido_em AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM') AS mes,
                                ap.tipo_midia, ap.unidade, CAST(sum(v.quantidade) AS numeric(14,2)) AS exibido,
@@ -52,6 +53,8 @@ public class ComprovacaoMensalRepositorio {
                                   AND p.tipo_midia = ap.tipo_midia AND p.unidade = ap.unidade) AS previsto
                         FROM veiculacao v JOIN aproveitamento_previsto ap ON ap.id = v.aproveitamento_id
                         WHERE ap.parceria_id = :parceriaId AND ap.categoria = 'MIDIA'
+                          AND (CAST(:mes AS text) IS NULL
+                               OR to_char(v.exibido_em AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM') = CAST(:mes AS text))
                         GROUP BY 1, ap.parceria_id, ap.tipo_midia, ap.unidade
                         ORDER BY 1,
                                  CASE ap.tipo_midia WHEN 'ASSINADA' THEN 1 WHEN 'PROPRIA' THEN 2 WHEN 'MERCHANDISING' THEN 3
@@ -59,6 +62,7 @@ public class ComprovacaoMensalRepositorio {
                                  CASE ap.unidade WHEN 'INSERCAO' THEN 1 WHEN 'CPM' THEN 2 ELSE 3 END
                         """)
                 .param("parceriaId", parceriaId)
+                .param("mes", mes)
                 .query(LinhaMensal.class)
                 .list();
     }

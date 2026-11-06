@@ -3277,7 +3277,7 @@ O servidor **nunca redireciona** para este endereço: o front abre o link em aba
 
 ## 89. `GET /api/parcerias/{id}/comprovacao-mensal.xlsx`  · Requisitos RBS (R3.2, R3.3)
 
-Mesmas regras de quem chama e de erros da rota 88. **200** com `Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` e `Content-Disposition: attachment; filename="comprovacao-mensal-<marca>.xlsx"` (o nome só tem letras minúsculas, números e hífen). Duas abas:
+Mesmas regras de quem chama e de erros da rota 88. **Filtro opcional:** `?mes=AAAA-MM` (BG1) traz só as linhas daquele mês; sem ele, todos. Mês fora de `AAAA-MM` (inclusive vazio) dá **422** com `campos.mes` = `Use o mês no formato AAAA-MM.` Mês sem exibição devolve o arquivo só com o cabeçalho (e a aba de totais, também só com o cabeçalho). **200** com `Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` e `Content-Disposition: attachment; filename="comprovacao-mensal-<marca>.xlsx"` (o nome só tem letras minúsculas, números e hífen). Duas abas:
 
 - **"Comprovação mensal":** `Marca`, `Mês`, `Tipo de mídia`, `Unidade`, `Exibido no mês`, `Previsto no plano`, uma linha por linha da rota 88. Números saem como número, não como texto.
 - **"Totais por mês":** `Marca`, `Mês`, `Unidade`, `Exibido no mês`, uma linha por total da rota 88.
@@ -3286,7 +3286,7 @@ A planilha é gravada pelo próprio servidor (OOXML mínimo, sem dependência no
 
 ## 90. `GET /api/parcerias/{id}/comprovacao-mensal.csv`  · Requisitos RBS (R3.2, R3.3)
 
-Mesmas regras da rota 89. **200** com `Content-Type: text/csv; charset=UTF-8`, UTF-8 **com BOM**, separado por **ponto e vírgula**, decimais com vírgula e as mesmas seis colunas da primeira aba do `.xlsx`, com a mesma neutralização de fórmula. Grava `DOWNLOAD` (detalhe `csv`).
+Mesmas regras da rota 89, inclusive o `?mes=AAAA-MM` opcional e o 422 de mês malformado. **200** com `Content-Type: text/csv; charset=UTF-8`, UTF-8 **com BOM**, separado por **ponto e vírgula**, decimais com vírgula e as mesmas seis colunas da primeira aba do `.xlsx`, com a mesma neutralização de fórmula. Mês sem exibição devolve só o cabeçalho. Grava `DOWNLOAD` (detalhe `csv`).
 
 ## 91. `GET /api/eventos/{id}/comprovacao-mensal.xlsx`  · Requisitos RBS (R3.3)
 

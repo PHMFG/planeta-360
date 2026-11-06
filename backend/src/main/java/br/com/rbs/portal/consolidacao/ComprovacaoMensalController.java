@@ -11,6 +11,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -34,18 +35,18 @@ public class ComprovacaoMensalController {
         return servico.comprovacao(usuario, id);
     }
 
-    /** 89. A mesma comprovação em planilha .xlsx. */
+    /** 89. A mesma comprovação em planilha .xlsx; com ?mes=AAAA-MM, só aquele mês. */
     @GetMapping("/parcerias/{id}/comprovacao-mensal.xlsx")
     public ResponseEntity<byte[]> xlsx(@AuthenticationPrincipal UsuarioAutenticado usuario, @PathVariable long id,
-                                       HttpServletRequest requisicao) {
-        return baixar(servico.xlsx(usuario, id, requisicao));
+                                       @RequestParam(required = false) String mes, HttpServletRequest requisicao) {
+        return baixar(servico.xlsx(usuario, id, mes, requisicao));
     }
 
-    /** 90. A mesma comprovação em CSV (UTF-8 com BOM, separado por ponto e vírgula). */
+    /** 90. A mesma comprovação em CSV (UTF-8 com BOM, separado por ponto e vírgula); com ?mes=AAAA-MM, só aquele mês. */
     @GetMapping("/parcerias/{id}/comprovacao-mensal.csv")
     public ResponseEntity<byte[]> csv(@AuthenticationPrincipal UsuarioAutenticado usuario, @PathVariable long id,
-                                      HttpServletRequest requisicao) {
-        return baixar(servico.csv(usuario, id, requisicao));
+                                      @RequestParam(required = false) String mes, HttpServletRequest requisicao) {
+        return baixar(servico.csv(usuario, id, mes, requisicao));
     }
 
     /** 91. O lote da edição: um .xlsx com uma aba por parceria Master. Só a RBS. */
