@@ -33,6 +33,11 @@ public class MidiaDoPortal {
                         String localizador, Long total) {
     }
 
+    /** O total de uma marca numa unidade, para a RBS sem filtro de marca: "quanto cada marca entregou". */
+    public record TotalDaMarca(Long parceriaId, String patrocinador, String unidade, BigDecimal previsto, BigDecimal exibido,
+                               BigDecimal percentual, BigDecimal impacto) {
+    }
+
     /** O total de uma unidade no recorte, com a mesma regra de percentual e de impacto nulo. */
     public record Total(String unidade, BigDecimal previsto, BigDecimal exibido, BigDecimal percentual, BigDecimal impacto) {
     }
@@ -104,6 +109,14 @@ public class MidiaDoPortal {
             ORDER BY CASE m.unidade WHEN 'INSERCAO' THEN 1 WHEN 'CPM' THEN 2 ELSE 3 END
             """;
 
+    private static final String TOTAIS_POR_MARCA = PLANO + """
+            SELECT m.parceria_id, m.patrocinador, m.unidade, sum(m.previsto) AS previsto, sum(m.exibido) AS exibido,
+                   fn_pct_truncado(100.0 * sum(m.exibido) / sum(m.previsto)) AS percentual, sum(m.impacto) AS impacto
+            FROM midia m
+            GROUP BY m.parceria_id, m.patrocinador, m.unidade
+            ORDER BY m.patrocinador, CASE m.unidade WHEN 'INSERCAO' THEN 1 WHEN 'CPM' THEN 2 ELSE 3 END
+            """;
+
     private final JdbcClient jdbc;
 
     public MidiaDoPortal(JdbcClient jdbc) {
@@ -116,6 +129,10 @@ public class MidiaDoPortal {
 
     public List<Total> totais(Filtro filtro) {
         return consulta(TOTAIS, filtro).query(Total.class).list();
+    }
+
+    public List<TotalDaMarca> totaisPorMarca(Filtro filtro) {
+        return consulta(TOTAIS_POR_MARCA, filtro).query(TotalDaMarca.class).list();
     }
 
     private org.springframework.jdbc.core.simple.JdbcClient.StatementSpec consulta(String sql, Filtro filtro) {

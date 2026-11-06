@@ -292,10 +292,14 @@ class AtlasDaRbsFerramentasTest {
         AtlasContexto contexto = contextoDaRbs();
 
         @SuppressWarnings("unchecked")
-        List<Map<String, Object>> todas = (List<Map<String, Object>>) json(rodar(contexto, turno("mídia"), "consultar_midia", "{}")
-                .resultadoJson()).get("registros");
-        assertThat(todas).extracting(r -> ((Map<?, ?>) r.get("parceria")).get("patrocinador"))
-                .contains("Cliente Amarelo", "Cliente Roxo", "Cliente Verde");
+        Map<String, Object> resultado = json(rodar(contexto, turno("mídia"), "consultar_midia", "{}").resultadoJson());
+        List<Map<String, Object>> todas = (List<Map<String, Object>>) resultado.get("registros");
+        // As 40 linhas param na primeira marca; o total de cada marca vem em porMarca, com a unidade separada.
+        assertThat(todas).isNotEmpty();
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> porMarca = (List<Map<String, Object>>) resultado.get("porMarca");
+        assertThat(porMarca).extracting(r -> r.get("marca")).contains("Cliente Amarelo", "Cliente Roxo", "Cliente Verde");
+        assertThat(porMarca).allSatisfy(registro -> assertThat(registro).containsKeys("unidade", "previsto", "exibido", "marcador"));
 
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> subcotaG = (List<Map<String, Object>>) json(rodar(contexto, turno("mídia"),
@@ -320,12 +324,13 @@ class AtlasDaRbsFerramentasTest {
             assertThat(registro).containsKey("marca");
         });
         assertThat(registros).extracting(r -> r.get("marca")).isSorted();
-        assertThat(registros).extracting(r -> r.get("marca")).contains("Cliente Amarelo", "Cliente Roxo");
+        // Na amostra de 2027, só o Roxo espera envio (o VT com ajuste pedido); o Amarelo e o Verde não têm nada pendente da marca.
+        assertThat(registros).extracting(r -> r.get("marca")).contains("Cliente Roxo").doesNotContain("Cliente Amarelo");
 
         @SuppressWarnings("unchecked")
-        List<Map<String, Object>> doAmarelo = (List<Map<String, Object>>) json(rodar(contexto, turno("o que falta do amarelo"),
-                "listar_entregas", "{\"parceria\":\"Cliente Amarelo\",\"faltaReceber\":true}").resultadoJson()).get("registros");
-        assertThat(doAmarelo).isNotEmpty().allSatisfy(registro -> assertThat(registro).containsEntry("marca", "Cliente Amarelo"));
+        List<Map<String, Object>> doRoxo = (List<Map<String, Object>>) json(rodar(contexto, turno("o que falta do roxo"),
+                "listar_entregas", "{\"parceria\":\"Cliente Roxo\",\"faltaReceber\":true}").resultadoJson()).get("registros");
+        assertThat(doRoxo).isNotEmpty().allSatisfy(registro -> assertThat(registro).containsEntry("marca", "Cliente Roxo"));
     }
 
     // ---------------------------------------------------------------------

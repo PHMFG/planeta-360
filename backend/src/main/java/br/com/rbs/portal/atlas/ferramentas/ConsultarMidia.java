@@ -11,6 +11,7 @@ import br.com.rbs.portal.atlas.contexto.AtlasContexto;
 import br.com.rbs.portal.atlas.ferramentas.MidiaDoPortal.Filtro;
 import br.com.rbs.portal.atlas.ferramentas.MidiaDoPortal.Linha;
 import br.com.rbs.portal.atlas.ferramentas.MidiaDoPortal.Total;
+import br.com.rbs.portal.atlas.ferramentas.MidiaDoPortal.TotalDaMarca;
 import br.com.rbs.portal.atlas.provedor.ProvedorDeLlm.DefinicaoDeFerramenta;
 import br.com.rbs.portal.comum.DadosInvalidosException;
 import br.com.rbs.portal.comum.VerificadorDeAcesso;
@@ -88,7 +89,8 @@ public class ConsultarMidia implements Ferramenta {
                     + "entrega em percentual e o impacto. Filtros opcionais: parceria (nome do patrocinador sem caixa nem acento, ou "
                     + "id), cota (MASTER, SUBCOTA_G ou SUBCOTA), veiculo, formato, tipoMidia, unidade e mes (AAAA-MM). Sem parceria, lê "
                     + "todas as marcas da edição. Sem mês, cada linha do plano soma todos os meses e vem uma vez. Devolve os totais por "
-                    + "unidade (inserção, CPM e aplicação nunca se somam) e até 40 linhas, cada uma com a marca. Cada linha e cada total "
+                    + "unidade (inserção, CPM e aplicação nunca se somam), até 40 linhas, cada uma com a marca, e, sem parceria, o total "
+                    + "de cada marca por unidade em porMarca (use-o para comparar marcas). Cada linha e cada total "
                     + "vem com o marcador (R1, R2...): cite o marcador entre colchetes, como [R1], logo depois da afirmação, e copie "
                     + "os números exatamente como estão.",
             """
@@ -228,6 +230,15 @@ public class ConsultarMidia implements Ferramenta {
 
         Map<String, Object> extras = new LinkedHashMap<>();
         extras.put("totais", registrosDoTotal);
+        // A RBS sem filtro de marca: as linhas param no limite (a primeira marca enche as 40), e o total de cada marca por unidade
+        // é o que responde "quanto cada marca entregou". Cada um é uma fonte [R#], como os totais.
+        if (daRbs && filtro.parceriaId() == null) {
+            List<Map<String, Object>> registrosDaMarca = new ArrayList<>();
+            for (TotalDaMarca daMarca : midia.totaisPorMarca(filtro)) {
+                registrosDaMarca.add(registroDaMarca(turno, daMarca));
+            }
+            extras.put("porMarca", registrosDaMarca);
+        }
         String observacao = null;
         if (total > LIMITE) {
             extras.put("total", total);
@@ -372,6 +383,35 @@ public class ConsultarMidia implements Ferramenta {
         if (total.impacto() != null) {
             registro.put("impacto", total.impacto());
         }
+        return registro;
+    }
+
+    private static Map<String, Object> registroDaMarca(FontesDoTurno turno, TotalDaMarca total) {
+        String unidade = unidadeNaTela(total.unidade());
+        StringBuilder texto = new StringBuilder("Mídia de ").append(total.patrocinador()).append(" em ").append(unidade)
+                .append(". Previsto: ").append(quantidade(total.previsto())).append(". Exibido: ").append(quantidade(total.exibido()))
+                .append('.');
+        if (total.percentual() != null) {
+            texto.append(" Entrega: ").append(quantidade(total.percentual())).append("%.");
+        }
+        texto.append(total.impacto() == null ? " Impacto não informado." : " Impacto: " + quantidade(total.impacto()) + ".");
+        Map<String, Object> dados = new LinkedHashMap<>();
+        dados.put("marca", total.patrocinador());
+        dados.put("unidade", total.unidade());
+        dados.put("previsto", total.previsto());
+        dados.put("exibido", total.exibido());
+        if (total.percentual() != null) {
+            dados.put("percentual", total.percentual());
+        }
+        if (total.impacto() != null) {
+            dados.put("impacto", total.impacto());
+        }
+        // [ISOLAMENTO] Só a RBS chega aqui; a entidade é a parceria, com o id dela.
+        Fonte fonte = registrar(turno, "parceria", total.parceriaId(), "Mídia de " + total.patrocinador() + " · " + unidade, "Total",
+                texto.toString(), dados);
+        Map<String, Object> registro = new LinkedHashMap<>(dados);
+        registro.put("marcador", fonte.marcador());
+        registro.put("unidadeNome", unidade);
         return registro;
     }
 
