@@ -206,8 +206,12 @@ class AtlasDaRbsConversaTest {
         return "{\"consulta\":\"cortesias do plano comercial da cota Master\",\"tipo\":\"PLANO_COMERCIAL\"}";
     }
 
+    /**
+     * Uma busca que não acha nada. Desde que a RBS busca na edição inteira (AC2), a lista vetorial sempre traz os vizinhos mais
+     * próximos, mesmo de uma consulta sem sentido; a consulta só com palavras sem assunto não tem termo nenhum e volta vazia sempre.
+     */
     static String buscaSemResultado() {
-        return "{\"consulta\":\"zzzqqq xyzzy\"}";
+        return "{\"consulta\":\"de que para com uma\"}";
     }
 
     @Test
@@ -235,10 +239,10 @@ class AtlasDaRbsConversaTest {
         assertThat(textos(resposta)).containsExactly(NAO_ENCONTREI);
         assertThat(corpo(resposta)).doesNotContain("atendimento da RBS");
         assertThat(lerLista(resposta, "$.itens[?(@.tipo=='texto')].porModelo")).as("a frase fixa é do servidor").containsExactly(false);
-        // o que a busca devolveu ao modelo: nenhum trecho (a consulta não casa com nenhum documento da edição)
+        // o que a busca devolveu ao modelo: nenhum trecho (a consulta não tem termo que case com documento da edição)
         String resultado = modelo.ultimoPedido().mensagens().stream().filter(m -> "tool".equals(m.papel())).map(m -> m.conteudo())
                 .reduce((primeiro, segundo) -> segundo).orElseThrow();
-        assertThat(resultado).contains("\"trechos\":[]").contains("Nenhum trecho dos documentos do portal responde");
+        assertThat(resultado).contains("\"trechos\":[]");
     }
 
     @Test
