@@ -48,11 +48,13 @@ public class AcessoRepositorio {
      */
     public List<ParceriaDoUsuarioDto> parceriasDoUsuario(long usuarioId) {
         record LinhaParceria(Long id, String patrocinador, String cotaCodigo, String cotaNome,
-                             Long eventoId, String eventoNome, Integer edicao, String vinculo) {
+                             Long eventoId, String eventoNome, Integer edicao, String vinculo,
+                             String atendimentoNome, String atendimentoEmail) {
         }
         List<LinhaParceria> linhas = jdbc.sql("""
                         SELECT pa.id, pat.nome_canonico AS patrocinador, ct.codigo AS cota_codigo, ct.nome AS cota_nome,
-                               e.id AS evento_id, e.nome AS evento_nome, e.edicao, pu.vinculo
+                               e.id AS evento_id, e.nome AS evento_nome, e.edicao, pu.vinculo,
+                               pa.atendimento_nome, pa.atendimento_email
                         FROM parceria_usuario pu
                         JOIN parceria pa ON pa.id = pu.parceria_id
                         JOIN patrocinador pat ON pat.id = pa.patrocinador_id
@@ -94,7 +96,8 @@ public class AcessoRepositorio {
         return linhas.stream()
                 .map(l -> new ParceriaDoUsuarioDto(l.id(), l.patrocinador(), new CotaDto(l.cotaCodigo(), l.cotaNome()),
                         new EventoDto(l.eventoId(), l.eventoNome(), l.edicao()),
-                        abasPorParceria.getOrDefault(l.id(), List.of()), l.vinculo()))
+                        abasPorParceria.getOrDefault(l.id(), List.of()), l.vinculo(), l.atendimentoNome(),
+                        l.atendimentoEmail()))
                 .toList();
     }
 }

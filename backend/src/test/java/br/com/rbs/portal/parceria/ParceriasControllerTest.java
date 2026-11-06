@@ -459,6 +459,55 @@ class ParceriasControllerTest {
     }
 
     @Test
+    void rbsEditaOAtendimentoELimpaComStringVazia() {
+        SessaoDeApi rbs = SessaoDeApi.entrar(mvc, RBS);
+        SessaoDeApi amarelo = SessaoDeApi.entrar(mvc, AMARELO);
+        long id = amarelo();
+
+        MvcTestResult preenche = rbs.patch("/api/parcerias/" + id,
+                "{\"atendimentoNome\":\"Ana da RBS\",\"atendimentoEmail\":\"ana@rbs.example\"}");
+
+        assertThat(preenche).hasStatus(HttpStatus.OK);
+        assertThat(lerJson(preenche, "$.atendimentoNome")).isEqualTo("Ana da RBS");
+        assertThat(lerJson(preenche, "$.atendimentoEmail")).isEqualTo("ana@rbs.example");
+        assertThat(lerJson(amarelo.get("/api/auth/eu"), "$.parcerias[0].atendimentoNome")).isEqualTo("Ana da RBS");
+        assertThat(lerJson(amarelo.get("/api/auth/eu"), "$.parcerias[0].atendimentoEmail")).isEqualTo("ana@rbs.example");
+        assertThat(lerJson(amarelo.get("/api/parcerias/{id}", id), "$.atendimentoNome")).isEqualTo("Ana da RBS");
+
+        // [HISTORICO] EDICAO com o campo, sem o valor: é contato de uma pessoa.
+        List<Map<String, Object>> edicoes = jdbc.sql("SELECT detalhe, valor_anterior, valor_novo FROM historico WHERE acao = 'EDICAO' ORDER BY id")
+                .query().listOfRows();
+        assertThat(edicoes).extracting(e -> e.get("detalhe")).containsExactly("atendimentoNome", "atendimentoEmail");
+        assertThat(edicoes).allSatisfy(e -> {
+            assertThat(e.get("valor_anterior")).isNull();
+            assertThat(e.get("valor_novo")).isNull();
+        });
+
+        // "" limpa os dois (o banco guarda nulo); nulo continua "não muda".
+        MvcTestResult limpa = rbs.patch("/api/parcerias/" + id, "{\"atendimentoNome\":\"\",\"atendimentoEmail\":\"\"}");
+
+        assertThat(limpa).hasStatus(HttpStatus.OK);
+        assertThat(lerJson(limpa, "$.atendimentoNome")).isNull();
+        assertThat(lerJson(limpa, "$.atendimentoEmail")).isNull();
+        assertThat(lerJson(amarelo.get("/api/auth/eu"), "$.parcerias[0].atendimentoEmail")).isNull();
+        assertThat(contar("SELECT count(*) FROM historico WHERE acao = 'EDICAO'")).isEqualTo(4);
+    }
+
+    @Test
+    void atendimentoEmailInvalidoENomeLongoDao422() {
+        SessaoDeApi rbs = SessaoDeApi.entrar(mvc, RBS);
+        long id = amarelo();
+
+        MvcTestResult email = rbs.patch("/api/parcerias/" + id, "{\"atendimentoEmail\":\"sem-arroba\"}");
+        assertThat(email).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(lerJson(email, "$.campos.atendimentoEmail")).isEqualTo("E-mail inválido.");
+
+        MvcTestResult nome = rbs.patch("/api/parcerias/" + id, "{\"atendimentoNome\":\"" + "a".repeat(121) + "\"}");
+        assertThat(nome).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(lerJson(nome, "$.campos.atendimentoNome")).isEqualTo("O nome do atendimento tem no máximo 120 caracteres.");
+    }
+
+    @Test
     void patchVazioOuSemMudancaNaoGravaNada() {
         SessaoDeApi rbs = SessaoDeApi.entrar(mvc, RBS);
         long id = amarelo();

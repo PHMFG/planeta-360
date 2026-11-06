@@ -387,7 +387,7 @@ Use `cabecalho` como nome do cabeçalho e `token` como valor nas chamadas que al
 
 **Quem chama:** logado. **Corpo:** nenhum.
 
-**200**: o `UsuarioLogado`, **lido de novo no banco** a cada chamada. Serve para o front descobrir se a sessão ainda vale ao abrir o app.
+**200**: o `UsuarioLogado`, **lido de novo no banco** a cada chamada. Serve para o front descobrir se a sessão ainda vale ao abrir o app. Cada parceria de `parcerias` traz também `atendimentoNome` e `atendimentoEmail` (U7), nulos até a RBS preencher pela rota 10; é o contato que o FAQ da marca mostra.
 
 **Erros**
 
@@ -542,6 +542,8 @@ Os e-mails são guardados em minúsculas e sem espaços nas pontas. A parceria n
   "valorInvestimento": 1000000.00,
   "baseValor": "BRUTO_TABELA",
   "situacao": "ATIVA",
+  "atendimentoNome": "Ana da RBS",
+  "atendimentoEmail": "ana@rbs.example",
   "criadoEm": "2026-09-20T11:00:00-03:00",
   "abas": [ { "codigo": "PERFIL", "nome": "Perfil do cliente", "ordem": 1, "liberada": true, "incluidaNaCota": true } ],
   "emailsAutorizados": [
@@ -553,6 +555,7 @@ Os e-mails são guardados em minúsculas e sem espaços nas pontas. A parceria n
 
 - `abas` traz as 7 abas, com `liberada` e `incluidaNaCota` (o exemplo mostra uma só para ficar curto).
 - `emailsAutorizados` traz só os e-mails **não revogados**, com `situacao` `ATIVO` (já tem conta e vínculo) ou `PENDENTE` (autorizado, ainda sem primeiro acesso). Os detalhes (quem autorizou, revogados) estão na rota 11, só da RBS.
+- `atendimentoNome` e `atendimentoEmail` (U7) são o atendimento da marca, que a RBS edita pela rota 10; vêm nulos até ela preencher. A marca os vê aqui e na rota 4.
 
 ## 10. `PATCH /api/parcerias/{id}`  · etapa 4
 
@@ -567,6 +570,8 @@ Os e-mails são guardados em minúsculas e sem espaços nas pontas. A parceria n
   "valorInvestimento": 1200000.00,
   "baseValor": "LIQUIDO",
   "situacao": "ENCERRADA",
+  "atendimentoNome": "Ana da RBS",
+  "atendimentoEmail": "ana@rbs.example",
   "abas": [ { "codigo": "PESQUISA", "liberada": true } ]
 }
 ```
@@ -586,11 +591,13 @@ O evento **não muda** por aqui, e a cota também não: a RBS troca a cota pela 
 
 Quando o 422 vem junto com outro erro de campo, o `detail` volta a ser `"Confira os campos destacados e tente de novo."` e a frase fica só em `campos`. **Fechar** (`liberada: false`) e ocultar (`visivel`) valem para qualquer aba. Repetir `liberada: true` numa aba que já estava aberta (dado de antes da regra) é um `PATCH` sem mudança e não dá erro; depois de fechada, ela não volta a abrir.
 
-**200**: o objeto da rota 9, já com as mudanças. **Erros:** 400 (corpo que não é JSON), 403, 404, 409 (nome de patrocinador repetido), 422 (`valorInvestimento` sem `baseValor`, negativo ou com dígitos demais, `patrocinador.nome` em branco, aba que não existe, situação inválida, aba fora da cota que se tenta liberar).
+**200**: o objeto da rota 9, já com as mudanças. **Erros:** 400 (corpo que não é JSON), 403, 404, 409 (nome de patrocinador repetido), 422 (`valorInvestimento` sem `baseValor`, negativo ou com dígitos demais, `patrocinador.nome` em branco, `atendimentoEmail` fora do formato, aba que não existe, situação inválida, aba fora da cota que se tenta liberar).
 
 **Regras:** campo ausente ou `null` = não muda; texto em branco em `nomeProduto`, `patrocinador.segmento` limpa o campo. O `patrocinador.nome` é normalizado como na rota 8 (sem espaços nas pontas nem repetidos) e comparado com os outros patrocinadores sem diferença de maiúsculas ou de espaços; repetido dá 409 (`"Já existe um patrocinador com este nome."`). Mandar o nome atual com espaços a mais não muda nada e não grava histórico. O valor e a base vão sempre juntos (no estado final), e o valor segue a regra da rota 8 (não negativo, até 12 dígitos e 2 casas). `patrocinador.nome` em branco (só espaços) dá 422 em `campos["patrocinador.nome"]`. O nome e o segmento do `patrocinador` valem para a marca inteira, em todas as edições. Mandar uma aba no estado em que ela já está não grava nada.
 
-**Histórico:** uma linha `EDICAO` **por campo alterado** (`detalhe` = nome do campo, com `valorAnterior` e `valorNovo`) e uma `LIBERACAO_ABA` para cada aba alterada (`valorAnterior`/`valorNovo` = `liberada`, `fechada` ou `oculta`). O `PATCH` sem mudança real não grava histórico.
+`atendimentoNome` (até 120) e `atendimentoEmail` (até 254, formato de e-mail) são a exceção à regra do nulo: `""` **limpa** o campo, e nulo continua "não muda". E-mail fora do formato dá 422 em `campos.atendimentoEmail`.
+
+**Histórico:** uma linha `EDICAO` **por campo alterado** (`detalhe` = nome do campo, com `valorAnterior` e `valorNovo`) e uma `LIBERACAO_ABA` para cada aba alterada (`valorAnterior`/`valorNovo` = `liberada`, `fechada` ou `oculta`). O `PATCH` sem mudança real não grava histórico. O atendimento é a exceção: a linha `EDICAO` diz o campo (`atendimentoNome` ou `atendimentoEmail`) e **não** guarda o valor, porque é contato de uma pessoa.
 
 ## 11. `GET /api/parcerias/{id}/emails`  · etapa 4
 

@@ -80,8 +80,9 @@ public final class AcessoDtos {
     public record AbaDto(String codigo, String nome, int ordem, boolean liberada, boolean incluidaNaCota, boolean visivel) {
     }
 
+    /** [U7] O atendimento da marca vem junto: o FAQ da marca mostra o nome e o e-mail. Nulos até a RBS preencher. */
     public record ParceriaDoUsuarioDto(Long id, String patrocinador, CotaDto cota, EventoDto evento, List<AbaDto> abas,
-                                       String vinculo) {
+                                       String vinculo, String atendimentoNome, String atendimentoEmail) {
     }
 
     /** Quem está logado e a que parcerias tem acesso (lista vazia para o Admin RBS, que enxerga todas). */

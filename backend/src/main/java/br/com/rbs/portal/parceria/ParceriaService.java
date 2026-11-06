@@ -167,8 +167,8 @@ public class ParceriaService {
         List<AbaDto> abas = parcerias.abasDaParceria(base.id()).stream().map(ParceriaService::paraAbaDto).toList();
         return new ParceriaDetalheDto<>(base.id(), new PatrocinadorDto(base.patrocinadorId(), base.patrocinadorNome(), base.segmento()),
                 new EventoDto(base.eventoId(), base.eventoNome(), base.edicao()), new CotaDto(base.cotaCodigo(), base.cotaNome()),
-                base.nomeProduto(), base.valorInvestimento(), base.baseValor(), base.situacao(), base.criadoEm(), abas,
-                emailsAutorizados);
+                base.nomeProduto(), base.valorInvestimento(), base.baseValor(), base.situacao(), base.atendimentoNome(),
+                base.atendimentoEmail(), base.criadoEm(), abas, emailsAutorizados);
     }
 
     /** Como o contrato descreve: uma aba só conta como liberada se estiver liberada E visível. */
