@@ -72,7 +72,7 @@ test('o item Atlas aparece no menu da RBS', async ({ page }) => {
   await entrar(page, 'rbs')
   await page.getByRole('link', { name: 'Atlas', exact: true }).click()
   await expect(page).toHaveURL(/\/rbs\/atlas/)
-  await expect(page.getByRole('heading', { name: 'Atlas', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Todas as marcas' })).toBeVisible()
 })
 
 test('não há botão Debug na tela, para ninguém', async ({ page }) => {

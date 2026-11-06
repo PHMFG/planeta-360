@@ -44,7 +44,9 @@ test('[U17] o botão do Atlas da RBS abre o Atlas da gestão, na conversa', asyn
   await expect(page.locator('#atlas-legenda')).toContainText('todas as marcas')
   await atlas.click()
   await expect(page).toHaveURL(/\/rbs\/atlas$/)
-  await expect(page.getByRole('tab', { name: 'Conversa', selected: true })).toBeVisible()
+  // A Conversa é a tela inteira do Atlas, como a da marca; Documentos, Prazos e o diagnóstico ficam nos atalhos do topo.
+  await expect(page.getByRole('region', { name: 'Atlas da RBS' }).getByRole('heading', { name: 'Todas as marcas' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Documentos' })).toBeVisible()
 })
 
 test('[U04] sem entrega de mídia aberta, a marca sabe antes de escolher o arquivo', async ({ page }) => {

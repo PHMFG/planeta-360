@@ -6,7 +6,7 @@ import { estadoDosProvedores, listarTurnos, obterTurno, testarProvedor, type Est
 import { listarParcerias } from '../../api/parcerias'
 import { useDados } from '../../api/useDados'
 import { dolares, duracao, GavetaDoDiagnostico, SeloDoResultado, TracoDoTurno } from '../../atlas/Diagnostico'
-import { LinhaBuscando } from '../../atlas/Elementos'
+import { Chip, LinhaBuscando } from '../../atlas/Elementos'
 import { Aviso } from '../../componentes/Aviso'
 import { Botao } from '../../componentes/Botao'
 import { CabecalhoSecao } from '../../componentes/CabecalhoSecao'
@@ -268,6 +268,29 @@ export function AtlasRbs() {
     })
   }
 
+  // A Conversa é a tela inteira do Atlas, como a da marca (pedido do ph, 06/11); as outras abas são a gestão de sempre.
+  if (aba === 'conversa' && !esperando) {
+    return (
+      <AbaConversa
+        atalhos={
+          <>
+            <Chip icone="ri-file-text-line" onClick={() => mudar('aba', 'documentos')}>
+              Documentos
+            </Chip>
+            <Chip icone="ri-calendar-line" onClick={() => mudar('aba', 'prazos')}>
+              Prazos
+            </Chip>
+            {comDiagnostico && (
+              <Chip icone="ri-bug-line" onClick={() => mudar('aba', 'turnos')}>
+                Diagnóstico
+              </Chip>
+            )}
+          </>
+        }
+      />
+    )
+  }
+
   return (
     <div data-secao="neutro" className="flex min-w-0 flex-col gap-4">
       <CabecalhoSecao
@@ -311,7 +334,6 @@ export function AtlasRbs() {
       {!esperando && aba === 'turnos' && <AbaTurnos aoAbrir={(valor) => mudar('turno', valor)} />}
       {!esperando && aba === 'provedores' && <AbaProvedores />}
       {!esperando && aba === 'documentos' && <AbaDocumentos />}
-      {!esperando && aba === 'conversa' && <AbaConversa />}
       {!esperando && aba === 'busca' && <AbaBuscaDeTeste />}
       {!esperando && aba === 'prazos' && <AbaPrazos />}
       {turno && <GavetaDoTurno turno={turno} aoFechar={() => mudar('turno', null)} />}
