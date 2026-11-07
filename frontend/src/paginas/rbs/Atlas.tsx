@@ -21,7 +21,6 @@ import { AbaBuscaDeTeste } from './AtlasBuscaDeTeste'
 import { AbaConversa } from './AtlasConversa'
 import { AbaDocumentos } from './AtlasDocumentos'
 import { AbaPrazos } from './AtlasPrazos'
-import { obterEstadoDoLlm } from '../../api/debug'
 
 type Aba = 'turnos' | 'provedores' | 'documentos' | 'busca' | 'prazos' | 'conversa'
 
@@ -32,7 +31,8 @@ const ABAS: { codigo: Aba; nome: string }[] = [
   { codigo: 'prazos', nome: 'Prazos' },
 ]
 
-// O que só a equipe olha: fica atrás de "Diagnóstico", visível só com as rotas de debug da API (perfis dev e demo).
+// O que só a equipe olha: fica atrás de "Diagnóstico", visível quando o diagnóstico da API está ligado (perfis dev e demo; a rota
+// dos provedores responde 404 com ele desligado).
 const DIAGNOSTICO: { codigo: Aba; nome: string }[] = [
   { codigo: 'turnos', nome: 'Turnos' },
   { codigo: 'provedores', nome: 'Provedores' },
@@ -250,7 +250,7 @@ function AbaProvedores() {
 
 export function AtlasRbs() {
   const [busca, setBusca] = useSearchParams()
-  const debug = useDados(() => obterEstadoDoLlm().catch(() => null), [])
+  const debug = useDados(() => estadoDosProvedores().catch(() => null), [])
   const comDiagnostico = Boolean(debug.dado)
   const pedida = busca.get('aba')
   const aba: Aba = ABAS.find((item) => item.codigo === pedida)?.codigo ?? (comDiagnostico ? DIAGNOSTICO.find((item) => item.codigo === pedida)?.codigo : undefined) ?? 'conversa'
