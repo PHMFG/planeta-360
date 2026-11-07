@@ -1,5 +1,5 @@
 // A base de mídia (plano da base da RBS, M1 a M7): contratado × entregue por mês, veículo e formato, com impacto e
-// comprovantes. Rotas 105 a 108 (contrato em docs/atlas/extracao/contrato-onda0.md; vão para o api.md com o back).
+// comprovantes. Rotas 105 a 108 do docs/api.md.
 import { baixar, consulta, pedir } from './cliente'
 
 export type FiltrosDeMidia = {

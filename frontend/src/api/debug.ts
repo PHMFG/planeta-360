@@ -1,5 +1,6 @@
 // [TEMPORARIO] Rotas de debug para pôr a chave do modelo de linguagem do Atlas pela tela. Só existem no perfil dev da API
-// (atlas.debug.chaves) e só para a RBS; a marca recebe 403, os outros ambientes 404, e o botão não aparece. A chave nunca volta da API: só o final.
+// (atlas.debug.chaves) e só para a RBS; a marca recebe 403, os outros ambientes 404. O botão Debug saiu da tela em 06/11 (pedido
+// do ph); as rotas ficam para quem testa pela API. A chave nunca volta da API: só o final.
 import { ErroApi, pedir } from './cliente'
 import type { UsuarioResumo } from './parcerias'
 

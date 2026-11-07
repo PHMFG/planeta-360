@@ -1,5 +1,5 @@
 // O Atlas de entrada (plano da base da RBS, E1 a E17): a RBS arrasta um arquivo, o Atlas lê e propõe linhas, a pessoa revisa
-// e confirma. Rotas 109 a 117 (docs/atlas/extracao/contrato-onda0.md, que vai para o api.md junto com o back).
+// e confirma. Rotas 109 a 117 do docs/api.md.
 import { consulta, pedir, type Pagina } from './cliente'
 
 export type DestinoDaImportacao = 'VEICULACAO' | 'COMPROVANTE' | 'PESQUISA' | 'NUMEROS_EDICAO' | 'DADOS_ATIVACAO' | 'PLANO' | 'SO_CONSULTA'
