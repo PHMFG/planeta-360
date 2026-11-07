@@ -909,7 +909,7 @@ public class ImportacaoService {
                 importacao.parceriaId());
         long documentoId = repositorio.inserirDocumento(titulo, chave, versao, escopo, importacao.eventoId(),
                 importacao.cotaTipoId(), importacao.parceriaId(), arquivoDoDocumento.id(), dadosPessoais, null,
-                importacao.criadaPor(), aprovadoPor);
+                importacao.criadaPor(), importacao.origem() == ImportacaoDtos.OrigemDaImportacao.RBS);
         if (dadosPessoais) {
             List<Map<String, Object>> lista = suspeitas.stream()
                     .map(s -> Map.<String, Object>of("pagina", s.pagina(), "tipo", s.tipo())).toList();

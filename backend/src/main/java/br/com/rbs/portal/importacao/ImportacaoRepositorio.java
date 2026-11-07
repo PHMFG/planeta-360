@@ -625,17 +625,17 @@ public class ImportacaoRepositorio {
     }
 
     public long inserirDocumento(String titulo, String chave, int versao, String escopo, long eventoId, Long cotaId, Long parceriaId,
-                                 long arquivoId, boolean dadosPessoais, Integer paginas, long enviadoPor, Long aprovadoPor) {
+                                 long arquivoId, boolean dadosPessoais, Integer paginas, long enviadoPor, boolean soRbs) {
         return jdbc.sql("""
                         INSERT INTO documento (titulo, chave, versao, tipo, escopo, evento_id, cota_tipo_id, parceria_id, arquivo_id,
-                                               status, contem_dados_pessoais, paginas, enviado_por)
+                                               status, contem_dados_pessoais, paginas, enviado_por, so_rbs)
                         VALUES (:titulo, :chave, :versao, 'OUTRO', :escopo, :evento, CAST(:cota AS smallint), :parceria, :arquivo,
-                                'AGUARDANDO_APROVACAO', :dados, :paginas, :enviado)
+                                'AGUARDANDO_APROVACAO', :dados, :paginas, :enviado, :soRbs)
                         RETURNING id
                         """)
                 .param("titulo", titulo).param("chave", chave).param("versao", versao).param("escopo", escopo)
                 .param("evento", eventoId).param("cota", cotaId).param("parceria", parceriaId).param("arquivo", arquivoId)
-                .param("dados", dadosPessoais).param("paginas", paginas).param("enviado", enviadoPor)
+                .param("dados", dadosPessoais).param("paginas", paginas).param("enviado", enviadoPor).param("soRbs", soRbs)
                 .query(Long.class).single();
     }
 

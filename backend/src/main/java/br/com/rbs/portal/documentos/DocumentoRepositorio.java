@@ -162,7 +162,8 @@ public class DocumentoRepositorio {
 
     /** A regra da rota 56, a mesma do visualizador (rotas 59 e 60): indexado ou substituído, no escopo de uma parceria do usuário. */
     private static final String VISIVEL_PARA_A_MARCA = """
-            d.status IN ('INDEXADO', 'SUBSTITUIDO')
+            NOT d.so_rbs
+                          AND d.status IN ('INDEXADO', 'SUBSTITUIDO')
                           AND EXISTS (SELECT 1 FROM parceria_usuario pu
                                       JOIN usuario u ON u.id = pu.usuario_id
                                       JOIN parceria p ON p.id = pu.parceria_id
