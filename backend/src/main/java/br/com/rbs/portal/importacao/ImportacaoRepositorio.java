@@ -639,6 +639,43 @@ public class ImportacaoRepositorio {
                 .query(Long.class).single();
     }
 
+    /** O documento da importação como a confirmação o encontra: status, suspeita e o modelo já calculado na prévia. */
+    public record DocumentoDaImportacao(long id, String titulo, String status, boolean dadosPessoais, String modelo) {
+    }
+
+    public Optional<DocumentoDaImportacao> documentoDaImportacao(long documentoId) {
+        return jdbc.sql("""
+                        SELECT id, titulo, status, contem_dados_pessoais AS dados_pessoais, modelo_embedding
+                        FROM documento WHERE id = :id
+                        """).param("id", documentoId)
+                .query((rs, n) -> new DocumentoDaImportacao(rs.getLong("id"), rs.getString("titulo"), rs.getString("status"),
+                        rs.getBoolean("dados_pessoais"), rs.getString("modelo_embedding")))
+                .optional();
+    }
+
+    public long contarTrechosDoDocumento(long documentoId) {
+        return jdbc.sql("SELECT count(*) FROM documento_trecho WHERE documento_id = :id").param("id", documentoId)
+                .query(Long.class).single();
+    }
+
+    /**
+     * Tira o documento da importação do Atlas quando ela é descartada ou retirada: o que ainda não foi publicado vira RECUSADO e o
+     * que já estava indexado vira REVOGADO (o gatilho desliga os trechos na hora). Devolve quantos documentos mudaram.
+     */
+    public int desligarDocumentoDaImportacao(long importacaoId, long usuarioId) {
+        int recusados = jdbc.sql("""
+                        UPDATE documento SET status = 'RECUSADO'
+                        WHERE id IN (SELECT documento_id FROM importacao WHERE id = :importacao)
+                          AND status IN ('AGUARDANDO_APROVACAO', 'ERRO')
+                        """).param("importacao", importacaoId).update();
+        int revogados = jdbc.sql("""
+                        UPDATE documento SET status = 'REVOGADO', revogado_por = :usuario, revogado_em = now()
+                        WHERE id IN (SELECT documento_id FROM importacao WHERE id = :importacao)
+                          AND status IN ('INDEXADO', 'SUBSTITUIDO')
+                        """).param("importacao", importacaoId).param("usuario", usuarioId).update();
+        return recusados + revogados;
+    }
+
     /** Grava as suspeitas de dado pessoal (E4) no documento, para a prévia dizer onde elas estão. */
     public void gravarSuspeitasDoDocumento(long documentoId, String suspeitasJson) {
         jdbc.sql("UPDATE documento SET suspeitas = CAST(:suspeitas AS jsonb) WHERE id = :id")

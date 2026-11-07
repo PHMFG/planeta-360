@@ -379,6 +379,7 @@ A V25 fecha o vazamento do documento que a importação cria no Atlas: o arquivo
 | Política `documento_trecho_leitura_do_atlas` | Recriada com `EXISTS (... AND NOT d.so_rbs)`: nem os trechos do documento da RBS aparecem para o `atlas_ro`, mesmo numa consulta que não junte com `documento` |
 | Regra da marca | `DocumentoRepositorio.VISIVEL_PARA_A_MARCA` ganha `NOT d.so_rbs`: as rotas 56, 59 e 60 respondem 404 para o documento de uma importação da RBS, em qualquer status |
 | Documentos já existentes | O que veio de uma importação com `origem = 'RBS'` é marcado `so_rbs = true`; o da rota 117 fica `false` e no escopo `PARCERIA`, visível só àquela parceria |
+| Ciclo do documento da importação | A prévia cria o documento `AGUARDANDO_APROVACAO`; a confirmação (rota 113), com a RBS, o aprova, grava os trechos e o publica. Descartar o recusa e retirar o revoga, na mesma transação |
 | Amostra | Não muda: ela não cria importação nem documento de importação |
 
 ## Tabelas por área

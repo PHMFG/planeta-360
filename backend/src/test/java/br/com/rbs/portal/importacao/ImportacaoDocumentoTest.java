@@ -46,12 +46,17 @@ class ImportacaoDocumentoTest {
 
     @AfterEach
     void limpar() {
+        jdbc.sql("DELETE FROM veiculacao WHERE importacao_linha_id IS NOT NULL").update();
         jdbc.sql("DELETE FROM importacao").update();
         jdbc.sql("DELETE FROM documento_trecho WHERE documento_id IN "
                 + "(SELECT id FROM documento WHERE chave LIKE 'importacao-%')").update();
         jdbc.sql("DELETE FROM documento WHERE chave LIKE 'importacao-%'").update();
+        jdbc.sql("DELETE FROM stg_veiculacao WHERE carga_id IN (SELECT id FROM carga WHERE arquivo_id IN "
+                + "(SELECT id FROM arquivo WHERE categoria = 'IMPORTACAO'))").update();
+        jdbc.sql("DELETE FROM carga WHERE arquivo_id IN (SELECT id FROM arquivo WHERE categoria = 'IMPORTACAO')").update();
         jdbc.sql("DELETE FROM arquivo WHERE categoria = 'IMPORTACAO'").update();
-        jdbc.sql("DELETE FROM arquivo WHERE categoria = 'DOCUMENTO' AND nome_original = 'rbs-segredo.txt'").update();
+        jdbc.sql("DELETE FROM arquivo WHERE categoria = 'DOCUMENTO' AND nome_original IN "
+                + "('rbs-segredo.txt', 'rbs-veiculacao.csv')").update();
     }
 
     private long evento2027() {
@@ -65,9 +70,40 @@ class ImportacaoDocumentoTest {
                 .param("eventoId", String.valueOf(evento2027())).param("alcance", "EDICAO").param("destino", "SO_CONSULTA")
                 .session(rbs.sessao()).cookie(csrf.cookie()).header("X-XSRF-TOKEN", csrf.token()).exchange();
         assertThat(criada).hasStatus(HttpStatus.ACCEPTED);
+        return ((Number) lerJson(criada, "$.id")).longValue();
+    }
+
+    private void confirmar(SessaoDeApi rbs, long importacao) {
+        assertThat(rbs.post("/api/importacoes/" + importacao + "/confirmar", "{}")).hasStatus(HttpStatus.OK);
+    }
+
+    /** Uma importação de veiculação com o segredo numa coluna que a extração ignora, mas que fica no texto do documento. */
+    private long enviarVeiculacao(SessaoDeApi rbs) {
+        var plano = jdbc.sql("""
+                        SELECT ap.veiculo, ap.formato, ap.espaco_programa FROM aproveitamento_previsto ap
+                        JOIN parceria pa ON pa.id = ap.parceria_id JOIN patrocinador p ON p.id = pa.patrocinador_id
+                        JOIN evento e ON e.id = pa.evento_id
+                        WHERE p.nome_canonico = 'Cliente Amarelo' AND e.edicao = 2027 AND ap.categoria = 'MIDIA'
+                          AND ap.espaco_programa IS NOT NULL AND ap.formato !~ '[",]' AND ap.espaco_programa !~ '[",]'
+                          AND NOT EXISTS (SELECT 1 FROM veiculacao v WHERE v.aproveitamento_id = ap.id AND v.periodo = 'MES')
+                        ORDER BY ap.id LIMIT 1""").query().singleRow();
+        String csv = "patrocinador,veiculo,formato,espaco_programa,exibido_em,quantidade,link,observacao\n"
+                + "Cliente Amarelo," + plano.get("veiculo") + "," + plano.get("formato") + "," + plano.get("espaco_programa")
+                + ",2026-12-10T15:00:00-03:00,1,," + SEGREDO + "\n";
+        var csrf = ApoioDeTeste.pedirCsrf(mvc);
+        MvcTestResult criada = mvc.post().uri("/api/importacoes").multipart()
+                .file(new MockMultipartFile("arquivo", "rbs-veiculacao.csv", "text/csv", csv.getBytes(StandardCharsets.UTF_8)))
+                .param("eventoId", String.valueOf(evento2027())).param("alcance", "EDICAO").param("destino", "VEICULACAO")
+                .session(rbs.sessao()).cookie(csrf.cookie()).header("X-XSRF-TOKEN", csrf.token()).exchange();
+        assertThat(criada).hasStatus(HttpStatus.ACCEPTED);
         long id = ((Number) lerJson(criada, "$.id")).longValue();
-        assertThat(rbs.post("/api/importacoes/" + id + "/confirmar", "{}")).hasStatus(HttpStatus.OK);
+        assertThat(rbs.patch("/api/importacoes/" + id + "/linhas", "{\"situacao\":\"ACEITA\",\"todas\":true}"))
+                .hasStatus(HttpStatus.OK);
         return id;
+    }
+
+    private String statusDoDocumento(long documento) {
+        return jdbc.sql("SELECT status FROM documento WHERE id = :id").param("id", documento).query(String.class).single();
     }
 
     private Escopo doAmarelo() {
@@ -85,6 +121,7 @@ class ImportacaoDocumentoTest {
         SessaoDeApi rbs = SessaoDeApi.entrar(mvc, RBS);
         SessaoDeApi amarelo = SessaoDeApi.entrar(mvc, AMARELO);
         long importacao = enviar(rbs);
+        confirmar(rbs, importacao);
         long documento = ((Number) lerJson(rbs.get("/api/importacoes/" + importacao), "$.documentoId")).longValue();
 
         assertThat(buscar(doAmarelo()).textual()).as("a busca da marca não acha o documento da RBS")
@@ -96,5 +133,40 @@ class ImportacaoDocumentoTest {
                 .anyMatch(c -> c.documentoId() == documento);
         assertThat(rbs.get("/api/documentos/" + documento)).hasStatus(HttpStatus.OK);
         assertThat(rbs.get("/api/documentos/" + documento + "/conteudo")).hasStatus(HttpStatus.OK);
+    }
+
+    @Test
+    void oDocumentoSoEntraNoAtlasDepoisDeConfirmarERetirarOTira() {
+        SessaoDeApi rbs = SessaoDeApi.entrar(mvc, RBS);
+        long importacao = enviarVeiculacao(rbs);
+        long documento = ((Number) lerJson(rbs.get("/api/importacoes/" + importacao), "$.documentoId")).longValue();
+
+        assertThat(statusDoDocumento(documento)).as("a prévia não indexa o documento").isEqualTo("AGUARDANDO_APROVACAO");
+        assertThat(buscar(Escopo.todaAEdicao(evento2027())).textual())
+                .noneMatch(c -> c.documentoId() == documento);
+
+        confirmar(rbs, importacao);
+        assertThat(statusDoDocumento(documento)).isEqualTo("INDEXADO");
+        assertThat(buscar(Escopo.todaAEdicao(evento2027())).textual())
+                .anyMatch(c -> c.documentoId() == documento);
+
+        assertThat(rbs.post("/api/importacoes/" + importacao + "/retirar", "{}")).hasStatus(HttpStatus.OK);
+        assertThat(statusDoDocumento(documento)).isEqualTo("REVOGADO");
+        assertThat(jdbc.sql("SELECT count(*) FROM documento_trecho WHERE documento_id = :d AND ativo").param("d", documento)
+                .query(Long.class).single()).isZero();
+        assertThat(buscar(Escopo.todaAEdicao(evento2027())).textual())
+                .noneMatch(c -> c.documentoId() == documento);
+    }
+
+    @Test
+    void descartarRecusaODocumentoDaPrevia() {
+        SessaoDeApi rbs = SessaoDeApi.entrar(mvc, RBS);
+        long importacao = enviar(rbs);
+        long documento = ((Number) lerJson(rbs.get("/api/importacoes/" + importacao), "$.documentoId")).longValue();
+
+        assertThat(rbs.post("/api/importacoes/" + importacao + "/descartar", "{}")).hasStatus(HttpStatus.OK);
+        assertThat(statusDoDocumento(documento)).isEqualTo("RECUSADO");
+        assertThat(buscar(Escopo.todaAEdicao(evento2027())).textual())
+                .noneMatch(c -> c.documentoId() == documento);
     }
 }

@@ -461,6 +461,7 @@ public class ImportacaoService {
                         l.aproveitamentoId() != null ? l.aproveitamentoId() : l.aproveitamentoSugeridoId(), proposta(l, destino)))
                 .toList();
         ResultadoDaGravacao resultado = gravador.gravar(usuario, contexto, paraGravar);
+        publicarDocumentoDaImportacao(importacao, usuario);
         repositorio.marcarConfirmada(id, usuario.id(), resultado.cargaId());
         historico.registrar(AcaoHistorico.CRIACAO, usuario, importacao.parceriaId(), "importacao", id, "EM_PREVIA", "CONFIRMADA",
                 destino + " · " + resultado.inseridas() + " inseridas, " + resultado.duplicadas() + " duplicadas, "
@@ -477,6 +478,7 @@ public class ImportacaoService {
     public ImportacaoResumo descartar(UsuarioAutenticado usuario, long id, HttpServletRequest requisicao) {
         Importacao importacao = exigirAcesso(usuario, id);
         exigirEmPrevia(importacao);
+        repositorio.desligarDocumentoDaImportacao(id, usuario.id());
         repositorio.marcarDescartada(id);
         historico.registrar(AcaoHistorico.ALTERACAO_STATUS, usuario, importacao.parceriaId(), "importacao", id, "EM_PREVIA",
                 "DESCARTADA", null, requisicao);
@@ -511,6 +513,7 @@ public class ImportacaoService {
                     "Esta importação não se retira; corrija o valor na tela.");
             default -> throw new ConflitoException("Esta importação não se retira; corrija o valor na tela.");
         }
+        repositorio.desligarDocumentoDaImportacao(id, usuario.id());
         repositorio.marcarRetirada(id, usuario.id());
         historico.registrar(AcaoHistorico.EDICAO, usuario, importacao.parceriaId(), "importacao", id, "CONFIRMADA", "RETIRADA",
                 detalhe, requisicao);
@@ -901,8 +904,6 @@ public class ImportacaoService {
         repositorio.travarGrupoDeDocumento(importacao.eventoId(), escopo, importacao.cotaTipoId(), importacao.parceriaId(), chave);
         int versao = repositorio.proximaVersaoDeDocumento(importacao.eventoId(), escopo, importacao.cotaTipoId(),
                 importacao.parceriaId(), chave);
-        // Só a RBS aprova o documento: o da marca fica aguardando, porque o aprovador tem de ser um usuário da RBS.
-        Long aprovadoPor = importacao.origem() == ImportacaoDtos.OrigemDaImportacao.RBS ? importacao.criadaPor() : null;
         // O gatilho do documento exige arquivo da categoria DOCUMENTO; o arquivo da importação é IMPORTACAO. A cópia tem o mesmo
         // conteúdo e um nome novo no disco.
         var arquivoDoDocumento = armazenamento.gravarDocumentoImportado(bytes, importacao.arquivoNome(), importacao.criadaPor(),
@@ -915,17 +916,15 @@ public class ImportacaoService {
                     .map(s -> Map.<String, Object>of("pagina", s.pagina(), "tipo", s.tipo())).toList();
             repositorio.gravarSuspeitasDoDocumento(documentoId, JSON.writeValueAsString(lista));
         }
-        if (aprovadoPor == null || dadosPessoais || !embeddings.ligado()) {
-            // Sem aprovação (a importação da marca, no futuro), com suspeita de dado pessoal ou com os embeddings desligados, o
-            // documento fica aguardando: não entra em PROCESSANDO nem tem trechos indexados (o gatilho recusa os dois). A importação
-            // em si segue em EM_PREVIA; o documento continua como fonte, sem busca vetorial.
+        // Os trechos são calculados agora, mas ficam INATIVOS: a RLS e a busca só veem trecho ativo de documento INDEXADO (E13/E15).
+        // A confirmação só aprova e publica; sem isso, uma importação descartada deixaria o arquivo achável na busca.
+        if (dadosPessoais || !embeddings.ligado()) {
             if (!embeddings.ligado() && !dadosPessoais) {
                 log.warn("Importação: o documento {} fica aguardando porque os embeddings estão desligados ({}).", documentoId,
                         embeddings.motivoDeDesligado());
             }
             return documentoId;
         }
-        repositorio.aprovarDocumento(documentoId, aprovadoPor);
         List<TextoDoTrecho> textos = conteudo.pedacos().stream()
                 .map(p -> new TextoDoTrecho(p.localizador(), p.texto())).toList();
         List<float[]> vetores;
@@ -946,8 +945,31 @@ public class ImportacaoService {
                     Math.max(1, pedaco.texto().length() / 4), ProvedorDeEmbeddings.comoTextoDoBanco(vetores.get(i)));
         }
         repositorio.gravarModeloDoDocumento(documentoId, embeddings.modelo(), ProvedorDeEmbeddings.DIMENSOES);
-        repositorio.publicarDocumento(documentoId);
         return documentoId;
+    }
+
+    /**
+     * Publica o documento da importação na confirmação. A RBS aprova com o próprio usuário; a importação da marca fica aguardando
+     * (quem aprova documento é a RBS). Os trechos já foram calculados na prévia, inativos; a publicação os ativa. Sem trechos (dado
+     * pessoal ou embeddings desligados), o documento fica fora do índice.
+     */
+    private void publicarDocumentoDaImportacao(Importacao importacao, UsuarioAutenticado usuario) {
+        Long documentoId = importacao.documentoId();
+        if (documentoId == null) {
+            return;
+        }
+        Long aprovadoPor = usuario.ehRbs() ? usuario.id()
+                : importacao.origem() == ImportacaoDtos.OrigemDaImportacao.RBS ? importacao.criadaPor() : null;
+        if (aprovadoPor == null) {
+            return;
+        }
+        var documento = repositorio.documentoDaImportacao(documentoId).orElse(null);
+        if (documento == null || !"AGUARDANDO_APROVACAO".equals(documento.status()) || documento.dadosPessoais()
+                || documento.modelo() == null || repositorio.contarTrechosDoDocumento(documentoId) < 1) {
+            return;
+        }
+        repositorio.aprovarDocumento(documentoId, aprovadoPor);
+        repositorio.publicarDocumento(documentoId);
     }
 
     // ---------------------------------------------------------------------
