@@ -58,8 +58,9 @@ public class CasadorDoPlano {
                     && PalavrasDaFonte.parecido(formato, linha.formato())) {
                 porPalavras = linha;
             }
-            // Números diferentes nunca casam, nem pela semelhança de trigramas.
-            if (PalavrasDaFonte.numerosConflitantes(formato, linha.formato())) {
+            // O mesmo veículo e formato num espaço que não é o da linha não vira sugestão; números diferentes nunca casam, nem pela
+            // semelhança de trigramas.
+            if ((mesmoVeiculo && mesmoFormato) || PalavrasDaFonte.numerosConflitantes(formato, linha.formato())) {
                 continue;
             }
             double nota = semelhanca(veiculoNormalizado + " " + formatoNormalizado + " " + espacoNormalizado,
