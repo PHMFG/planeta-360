@@ -1,44 +1,29 @@
 // Mídia e conteúdo (Figma P03, F01, F02): envio de material, arquivos da marca e da RBS e previsto x exibido. [ITEM-4] [ITEM-5]
-import { useState, type FormEvent } from 'react'
+import { useMemo, useState, type FormEvent } from 'react'
 import { ErroApi } from '../../api/cliente'
 import { ACEITA_ENVIO, EXTENSOES_ACEITAS, REGRA_ENVIO, enviarArquivo, listarEntregas, problemaNoArquivo, type Arquivo, type Entrega } from '../../api/materiais'
-import { obterConsolidacao, type LinhaMidia } from '../../api/resultados'
 import { useDados } from '../../api/useDados'
-import { CartaoArquivo } from '../../componentes/Arquivo'
 import { AvisoAbaFechada, estadoAbaNaParceria } from '../../componentes/AbaFechada'
 import { AreaEnvio } from '../../componentes/AreaEnvio'
 import { Aviso } from '../../componentes/Aviso'
-import { Barra } from '../../componentes/Barra'
 import { Botao } from '../../componentes/Botao'
 import { CabecalhoSecao } from '../../componentes/CabecalhoSecao'
-import { Cartao, Grade3 } from '../../componentes/Cartao'
+import { Cartao } from '../../componentes/Cartao'
 import { Carregando } from '../../componentes/Carregando'
-import { AreaTexto, Busca, Filtros, Seletor } from '../../componentes/Formulario'
+import { AreaTexto, Seletor } from '../../componentes/Formulario'
 import { Modal } from '../../componentes/Modal'
-import { Status } from '../../componentes/Status'
-import { Tabela } from '../../componentes/Tabela'
 import { useSessao } from '../../sessao/Sessao'
-import { data, dataHora, numero, tamanho } from '../../util/formatar'
+import { data, tamanho } from '../../util/formatar'
 import { useParceria, useRecarregarSeAbaFechou } from './ContextoParceria'
 import { DetalheEntrega } from './DetalheEntrega'
 import { PostsELinks } from '../../componentes/PostsELinks'
 import { ComprovacaoMensal } from '../../componentes/ComprovacaoMensal'
+import { apelido } from '../../api/comprovacao'
+import { BaseDeMidia } from '../../componentes/BaseDeMidia'
+import { NavegadorDeArquivos, type Comprovante } from '../../componentes/navegador/NavegadorDeArquivos'
+import { usarToast } from '../../componentes/Toast'
+import { obterMidiaDaParceria } from '../../api/midia'
 import { ListaEntregas, NovaEntrega } from './EntregasDaAba'
-
-type Origem = 'todos' | 'marca' | 'rbs'
-type ArquivoDaEntrega = { arquivo: Arquivo; entrega: Entrega }
-
-const UNIDADES: Record<string, string> = { INSERCAO: 'Inserções', CPM: 'CPM (mil impressões)', APLICACAO: 'Aplicações' }
-
-/** Busca que acha "teste pequeno" em "teste-pequeno.pdf": sem acento, sem maiúscula e com hífen, ponto e sublinhado valendo espaço. */
-function normalizar(texto: string) {
-  return texto
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[-_.\s]+/g, ' ')
-    .trim()
-}
 
 function PreparoEnvio({
   arquivo,
@@ -130,38 +115,6 @@ function PreparoEnvio({
   )
 }
 
-function PrevistoExibido() {
-  const parceria = useParceria()
-  const consolidacao = useDados(() => obterConsolidacao(parceria.id), [parceria.id])
-  const colunas = (comVeiculo: boolean) => [
-    ...(comVeiculo ? [{ titulo: 'Veículo', celula: (linha: LinhaMidia) => <span className="font-semibold">{linha.veiculo}</span> }] : []),
-    { titulo: 'Unidade', celula: (linha: LinhaMidia) => UNIDADES[linha.unidade] ?? linha.unidade },
-    { titulo: 'Previsto', celula: (linha: LinhaMidia) => numero(linha.previsto), classe: 'text-right' },
-    { titulo: 'Exibido', celula: (linha: LinhaMidia) => numero(linha.exibido), classe: 'text-right' },
-    { titulo: 'Entrega', celula: (linha: LinhaMidia) => <Barra valor={linha.percentual} rotulo="Exibido sobre o previsto" /> },
-  ]
-
-  return (
-    <Cartao titulo="Previsto x exibido">
-      <Carregando dados={consolidacao}>
-        {(dado) =>
-          dado.midia.porUnidade.length === 0 ? (
-            <Aviso tipo="ausente" titulo="Ainda sem números de veiculação">
-              Os números aparecem depois que a RBS carrega a planilha de veiculação dos veículos.
-            </Aviso>
-          ) : (
-            <div className="flex flex-col gap-6">
-              {/* [DUPLICIDADE] Unidades diferentes (inserções e CPM) nunca são somadas entre si. */}
-              <Tabela linhas={dado.midia.porUnidade} chave={(linha) => linha.unidade} colunas={colunas(false)} />
-              <Tabela linhas={dado.midia.porVeiculo} chave={(linha) => `${linha.veiculo}-${linha.unidade}`} colunas={colunas(true)} />
-            </div>
-          )
-        }
-      </Carregando>
-    </Cartao>
-  )
-}
-
 export function Midia() {
   const parceria = useParceria()
   const { usuario } = useSessao()
@@ -193,20 +146,35 @@ function ConteudoMidia({ rbs }: { rbs: boolean }) {
   // Cada envio pelo detalhe (arquivo, texto ou link) relê Posts e links: o link novo aparece na hora.
   const [versaoDosLinks, setVersaoDosLinks] = useState(0)
   const [recebido, setRecebido] = useState<{ arquivo: Arquivo; entrega: Entrega } | null>(null)
-  const [busca, setBusca] = useState('')
-  const [origem, setOrigem] = useState<Origem>('todos')
+  const avisar = usarToast()
+  // Os comprovantes da base (prints e PDFs das veiculações) viram a pasta "Comprovantes de veiculação" do navegador.
+  const base = useDados(() => obterMidiaDaParceria(parceria.id), [parceria.id])
+  const comprovantes = useMemo<Comprovante[]>(() => {
+    const vistos = new Set<number>()
+    return (base.dado?.linhas ?? []).flatMap((linha) =>
+      linha.comprovantes
+        .filter((item) => !vistos.has(item.arquivoId) && vistos.add(item.arquivoId))
+        .map((item) => ({ ...item, legenda: [linha.veiculo, linha.formato, linha.mes].filter(Boolean).join(' · ') })),
+    )
+  }, [base.dado])
 
   const lista = entregas.dado ?? []
-  const arquivos: ArquivoDaEntrega[] = lista
-    .flatMap((entrega) => entrega.arquivos.map((arquivo) => ({ arquivo, entrega })))
-    .sort((a, b) => b.arquivo.enviadoEm.localeCompare(a.arquivo.enviadoEm))
-  const daRbs = (item: ArquivoDaEntrega) => item.arquivo.enviadoPor?.perfil === 'ADMIN_RBS'
-  const termo = normalizar(busca)
-  const visiveis = arquivos.filter(
-    (item) =>
-      (origem === 'todos' || (origem === 'rbs') === daRbs(item)) &&
-      (!termo || normalizar(item.arquivo.nomeOriginal).includes(termo) || normalizar(item.entrega.titulo).includes(termo)),
-  )
+
+  async function enviarParaPasta(arquivo: File, entrega: Entrega) {
+    const problema = problemaNoArquivo(arquivo)
+    if (problema) {
+      avisar(problema, 'falha')
+      return
+    }
+    try {
+      const enviado = await enviarArquivo(entrega.id, arquivo, { categoria: 'MATERIAL_MIDIA' })
+      setRecebido({ arquivo: enviado, entrega })
+      avisar(`${arquivo.name} enviado para “${entrega.titulo}”`)
+      entregas.recarregar()
+    } catch (erro) {
+      avisar(erro instanceof ErroApi ? erro.message : 'Não foi possível enviar o arquivo.', 'falha')
+    }
+  }
 
   return (
     <div data-secao="midia" className="flex flex-col gap-4">
@@ -216,7 +184,7 @@ function ConteudoMidia({ rbs }: { rbs: boolean }) {
         subtitulo={
           rbs
             ? `Os materiais que ${parceria.patrocinador} enviou, os retornos publicados pela RBS e o previsto x exibido da mídia.`
-            : 'Envie os materiais da campanha e consulte as publicações disponibilizadas pela RBS.'
+            : 'O que a RBS já veiculou da sua campanha, e o envio dos seus materiais.'
         }
       />
 
@@ -229,67 +197,45 @@ function ConteudoMidia({ rbs }: { rbs: boolean }) {
         </Aviso>
       )}
 
-      {/* Sem nenhuma entrega aberta, a marca sabe antes de escolher o arquivo, e não depois (U04). */}
-      {!rbs && semEntregaAberta && (
-        <Aviso tipo="restrito" titulo="Nenhuma entrega de mídia aceita envio agora">
-          A RBS abre cada entrega (ou pede um ajuste) quando é a hora de enviar. As entregas desta aba estão em análise, aprovadas ou
-          ainda não foram abertas. Dúvidas sobre prazos: fale com o time B2B da RBS.
-        </Aviso>
-      )}
+      {/* Os números primeiro (U5 e M6, plano da base da RBS): é o que a marca vem acompanhar; o envio de material vem depois.
+          O mês é só das Master (M7); a API recusa o filtro para as outras cotas. */}
+      <BaseDeMidia modo="parceria" parceriaId={parceria.id} apelido={apelido(parceria.patrocinador)} comMes={parceria.cota.codigo === 'MASTER'} />
+
+      {/* R3.2 e R3.3: só a cota Master (e a RBS, na parceria Master); as outras cotas não veem o cartão. */}
+      {parceria.cota.codigo === 'MASTER' && <ComprovacaoMensal parceriaId={parceria.id} patrocinador={parceria.patrocinador} />}
+
+      {/* R4.3 e R5.3.b: os links dos posts, clicáveis, da carga da RBS e dos materiais enviados. */}
+      <PostsELinks key={`links-${versaoDosLinks}`} parceriaId={parceria.id} />
       {!rbs && (
-        <AreaEnvio
-          texto={`ou selecione no computador · ${REGRA_ENVIO} · a entrega é escolhida na hora do envio`}
-          aceitar={EXTENSOES_ACEITAS}
-          aoEscolher={(arquivo) => {
-            setRecebido(null)
-            setEnvios((total) => total + 1)
-            setSelecionado(arquivo)
-          }}
-          desabilitado={!entregas.dado || semEntregaAberta}
-        />
+        <section className="flex flex-col gap-3" aria-label="Enviar material">
+          <h2 className="texto-titulo">Enviar material</h2>
+          {/* Sem nenhuma entrega aberta, a marca sabe antes de escolher o arquivo, e não depois (U04). */}
+          {semEntregaAberta && (
+            <Aviso tipo="restrito" titulo="Nenhuma entrega de mídia aceita envio agora">
+              A RBS abre cada entrega (ou pede um ajuste) quando é a hora de enviar.
+            </Aviso>
+          )}
+          <AreaEnvio
+            texto={`ou selecione no computador · ${REGRA_ENVIO} · a entrega é escolhida na hora do envio`}
+            aceitar={EXTENSOES_ACEITAS}
+            aoEscolher={(arquivo) => {
+              setRecebido(null)
+              setEnvios((total) => total + 1)
+              setSelecionado(arquivo)
+            }}
+            desabilitado={!entregas.dado || semEntregaAberta}
+            compacta={semEntregaAberta}
+          />
+          <p className="text-xs font-medium text-texto-2">
+            <span className="font-semibold text-tinta">A regra muda por tipo de conteúdo:</span> comercial de TV e conteúdo assinado não passam por
+            aprovação prévia; branded content segue regras específicas.
+          </p>
+        </section>
       )}
-
-      <Busca valor={busca} aoMudar={setBusca} placeholder="Buscar por nome do arquivo ou entrega…" />
-      <Filtros<Origem>
-        valor={origem}
-        aoMudar={setOrigem}
-        opcoes={[
-          { valor: 'todos', nome: 'Todos', total: arquivos.length },
-          { valor: 'marca', nome: 'Enviados pela marca', total: arquivos.filter((item) => !daRbs(item)).length },
-          { valor: 'rbs', nome: 'Publicados pela RBS', total: arquivos.filter(daRbs).length },
-        ]}
-      />
-
       <Carregando dados={entregas}>
-        {() =>
-          visiveis.length === 0 ? (
-            <Aviso
-              tipo="vazio"
-              titulo={!arquivos.length ? 'Nenhum arquivo enviado ainda' : termo ? 'Nenhum arquivo encontrado com essa busca' : 'Nenhum arquivo com esse filtro'}
-            />
-          ) : (
-            <Grade3>
-              {visiveis.map(({ arquivo, entrega }) => (
-                <CartaoArquivo
-                  key={arquivo.id}
-                  nome={arquivo.nomeOriginal}
-                  meta={`v${arquivo.versao} · ${arquivo.enviadoPor?.nome ?? '—'} · ${dataHora(arquivo.enviadoEm)}`}
-                  rodape={
-                    arquivo.enviadoPor?.perfil === 'ADMIN_RBS' ? (
-                      <span className="font-bold text-secao-texto">Publicado pela RBS · abrir / baixar</span>
-                    ) : arquivo.versao < Math.max(...entrega.arquivos.map((item) => item.versao)) ? (
-                      // O status é da entrega e vale para a versão mais nova; a antiga não foi aprovada nem recusada sozinha.
-                      <span className="font-semibold text-texto-2">Versão anterior · ver detalhe / histórico</span>
-                    ) : (
-                      <Status codigo={entrega.status} complemento="ver detalhe / histórico" />
-                    )
-                  }
-                  onClick={() => setAberta(entrega)}
-                />
-              ))}
-            </Grade3>
-          )
-        }
+        {(itens) => (
+          <NavegadorDeArquivos entregas={itens} comprovantes={comprovantes} podeEnviar={!rbs} aoEnviar={enviarParaPasta} aoAbrirEntrega={setAberta} />
+        )}
       </Carregando>
 
       <Cartao
@@ -306,18 +252,6 @@ function ConteudoMidia({ rbs }: { rbs: boolean }) {
           {(itens) => <ListaEntregas lista={itens} aoAbrir={setAberta} />}
         </Carregando>
       </Cartao>
-
-      <PrevistoExibido />
-
-      {/* R3.2 e R3.3: só a cota Master (e a RBS, na parceria Master); as outras cotas não veem o cartão. */}
-      {parceria.cota.codigo === 'MASTER' && <ComprovacaoMensal parceriaId={parceria.id} patrocinador={parceria.patrocinador} />}
-
-      {/* R4.3 e R5.3.b: os links dos posts, clicáveis, da carga da RBS e dos materiais enviados. */}
-      <PostsELinks key={`links-${versaoDosLinks}`} parceriaId={parceria.id} />
-
-      <Aviso titulo="A regra muda por tipo de conteúdo">
-        Comercial de TV e conteúdo assinado: sem aprovação prévia. Branded content: consulte as regras específicas antes do envio.
-      </Aviso>
 
       <PreparoEnvio
         key={envios}

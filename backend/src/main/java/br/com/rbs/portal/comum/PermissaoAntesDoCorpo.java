@@ -28,8 +28,9 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
  *       conversa: o patrocinador, na conversa da parceria dele, e, com {@code atlas.rbs.ligado}, a RBS, na conversa dela (a do Atlas da
  *       RBS, sem parceria). A RBS recebe o mesmo 403 antes do corpo quando o Atlas da RBS está desligado ou quando a conversa é de uma
  *       parceria; conversa que não existe ou é de outra pessoa da RBS o service responde com 404.</li>
- *   <li>O envio das perguntas da pesquisa (PUT): a RBS recebe 403; o patrocinador precisa ser da parceria (404 se não for)
- *       e ter a aba PESQUISA liberada (403), e só depois o corpo é lido e validado.</li>
+ *   <li>O envio das perguntas da pesquisa (PUT): o patrocinador precisa ser da parceria (404 se não for) e ter a aba PESQUISA
+ *       liberada (403), e só depois o corpo é lido e validado. A RBS também passa (escreve as perguntas de qualquer Master);
+ *       a cota Master é conferida no service.</li>
  * </ul>
  * A lista usa o método e o padrão exatamente como estão nos controllers; o HEAD vale como GET (senão ele contornaria a conferência
  * e a validação dos parâmetros viria antes do 403). O PermissaoAntesDoCorpoTest confere que toda rota
@@ -78,6 +79,11 @@ public class PermissaoAntesDoCorpo implements HandlerInterceptor, WebMvcConfigur
             // O lote da comprovação mensal (rota 91): uma aba por parceria Master da edição. As rotas 88 a 90 são da marca Master e da RBS
             // (a cota é conferida no service).
             "GET /api/eventos/{id}/comprovacao-mensal.xlsx",
+            // A consulta da mídia da RBS (rotas 107 e 108). As rotas 105 e 106 são da marca da parceria e da RBS (aba MIDIA e
+            // cota conferidas no service).
+            "GET /api/midia",
+            "GET /api/midia.xlsx",
+            "GET /api/midia.csv",
             // O diagnóstico do Atlas (rotas 50 a 53): os turnos de todas as conversas e os provedores. Sempre mapeadas; com o
             // diagnóstico desligado a RBS recebe 404 do service.
             "GET /api/atlas/diagnostico/turnos",
@@ -115,6 +121,11 @@ public class PermissaoAntesDoCorpo implements HandlerInterceptor, WebMvcConfigur
             "DELETE /api/posvenda/{id}",
             "GET /api/eventos/{id}/resultados",
             "PUT /api/eventos/{id}/resultados",
+            // A importação (rotas 109, 110 e 115): criar, listar e retirar. As rotas 111 a 114, 116 e a 112b são da RBS e da
+            // marca nas importações dela, e o service confere a parceria.
+            "POST /api/importacoes",
+            "GET /api/importacoes",
+            "POST /api/importacoes/{id}/retirar",
             // As rotas de debug da chave do modelo (temporárias, só no perfil dev): só a RBS as usa. Só existem com
             // atlas.debug.chaves=true; o teste de classificação liga a propriedade, porque no perfil test elas não existem.
             "GET /api/debug/llm",
@@ -156,7 +167,9 @@ public class PermissaoAntesDoCorpo implements HandlerInterceptor, WebMvcConfigur
             "PUT /api/parcerias/{id}/contrato/signatario", "CONTRATO",
             // As cortesias (rotas 83 e 84): a marca de outra parceria ou com a aba fechada não aprende nada sobre o formato do corpo.
             "POST /api/parcerias/{id}/cortesias/destinacoes", "CORTESIAS",
-            "PATCH /api/parcerias/{id}/cortesias/destinacoes/{destId}", "CORTESIAS");
+            "PATCH /api/parcerias/{id}/cortesias/destinacoes/{destId}", "CORTESIAS",
+            // A planilha da agência (rota 117): a marca com a aba APLICACOES aberta; a RBS passa em qualquer aba.
+            "POST /api/parcerias/{id}/importacoes", "APLICACOES");
     /** POST /api/entregas/{id}/conteudos (rota 86): o {id} é de entrega; a parceria e a aba saem dela. */
     static final String ENVIO_DE_CONTEUDO = "POST /api/entregas/{id}/conteudos";
     /** GET /api/parcerias/{id}/espacos (rota 71): o {@code ?aba=} inválido não vem antes do 404 e do 403. */
@@ -203,11 +216,17 @@ public class PermissaoAntesDoCorpo implements HandlerInterceptor, WebMvcConfigur
                 verificador.exigirPatrocinador(usuario, VerificadorDeAcesso.SO_PATROCINADOR_USA_O_ATLAS);
             }
         } else if (ENVIO_DAS_PERGUNTAS.equals(rota)) {
-            verificador.exigirPatrocinador(usuario, SO_PATROCINADOR_ENVIA_PERGUNTAS);
+            // A marca precisa ser Admin Patrocinador e ter a aba PESQUISA aberta; a RBS também escreve as perguntas de
+            // qualquer Master, e a cota é conferida no service. A parceria (404) vem antes do corpo para as duas.
+            if (!usuario.ehRbs()) {
+                verificador.exigirPatrocinador(usuario, SO_PATROCINADOR_ENVIA_PERGUNTAS);
+            }
             Long parceriaId = idDoCaminho(requisicao);
             if (parceriaId != null) {   // id que não é número: quem responde é o tratador de erros (404), depois daqui
                 verificador.exigirParceria(usuario, parceriaId);
-                verificador.exigirAbaLiberada(usuario, parceriaId, ABA_DA_PESQUISA);
+                if (!usuario.ehRbs()) {
+                    verificador.exigirAbaLiberada(usuario, parceriaId, ABA_DA_PESQUISA);
+                }
             }
         } else if (ENVIO_DE_CONTEUDO.equals(rota)) {
             Long entregaId = idDoCaminho(requisicao);

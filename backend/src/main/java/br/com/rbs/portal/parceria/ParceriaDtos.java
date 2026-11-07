@@ -25,6 +25,8 @@ public final class ParceriaDtos {
 
     /** O @Email do Bean Validation aceita "a@b"; o banco (CHECK em email_autorizado) exige um ponto no domínio. */
     static final String PADRAO_EMAIL = "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$";
+    /** O atendimento da parceria aceita "" para limpar o campo (o service grava nulo). */
+    static final String PADRAO_EMAIL_OPCIONAL = "^$|" + PADRAO_EMAIL;
     static final String PADRAO_VINCULO = "MARCA|AGENCIA";
     static final String PADRAO_BASE_VALOR = "BRUTO_TABELA|LIQUIDO";
     static final String PADRAO_SITUACAO = "EM_NEGOCIACAO|ATIVA|ENCERRADA|CANCELADA";
@@ -92,10 +94,14 @@ public final class ParceriaDtos {
                                           OffsetDateTime codigoExpiraEm) {
     }
 
-    /** Dados da parceria, abas e e-mails. E é EmailResumoDto no GET e EmailResumoComCodigoDto na criação. */
+    /**
+     * Dados da parceria, abas e e-mails. E é EmailResumoDto no GET e EmailResumoComCodigoDto na criação.
+     * {@code atendimentoNome} e {@code atendimentoEmail} são o atendimento da marca (U7), nulos até a RBS preencher.
+     */
     public record ParceriaDetalheDto<E>(Long id, PatrocinadorDto patrocinador, EventoDto evento, CotaDto cota,
                                         String nomeProduto, BigDecimal valorInvestimento, String baseValor, String situacao,
-                                        OffsetDateTime criadoEm, List<AbaDto> abas, List<E> emailsAutorizados) {
+                                        String atendimentoNome, String atendimentoEmail, OffsetDateTime criadoEm,
+                                        List<AbaDto> abas, List<E> emailsAutorizados) {
     }
 
     // ---------------------------------------------------------------------
@@ -186,7 +192,19 @@ public final class ParceriaDtos {
             String baseValor,
             @Pattern(regexp = PADRAO_SITUACAO, message = "A situação deve ser EM_NEGOCIACAO, ATIVA, ENCERRADA ou CANCELADA.")
             String situacao,
+            // [U7] O atendimento da marca. "" limpa o campo (exceção à regra de que nulo não muda), só nestes dois.
+            @Size(max = 120, message = "O nome do atendimento tem no máximo 120 caracteres.") String atendimentoNome,
+            @Email(message = "E-mail inválido.")
+            @Pattern(regexp = PADRAO_EMAIL_OPCIONAL, message = "E-mail inválido.")
+            @Size(max = 254, message = "O e-mail do atendimento tem no máximo 254 caracteres.")
+            String atendimentoEmail,
             @Valid List<AbaEdicaoRequisicao> abas) {
+
+        /** Espaços nas pontas saem antes da validação; "" continua "" (limpar) e nulo continua "não muda". */
+        public EditarParceriaRequisicao {
+            atendimentoNome = atendimentoNome == null ? null : atendimentoNome.trim();
+            atendimentoEmail = atendimentoEmail == null ? null : atendimentoEmail.trim();
+        }
     }
 
     // ---------------------------------------------------------------------

@@ -2,6 +2,7 @@ package br.com.rbs.portal.consolidacao;
 
 import br.com.rbs.portal.comum.AcaoHistorico;
 import br.com.rbs.portal.comum.Csv;
+import br.com.rbs.portal.comum.DadosInvalidosException;
 import br.com.rbs.portal.comum.Datas;
 import br.com.rbs.portal.comum.HistoricoService;
 import br.com.rbs.portal.comum.NaoEncontradoException;
@@ -39,6 +40,12 @@ public class ComprovacaoMensalService {
     /** A frase do 403 de quem é de uma cota que não recebe a planilha. */
     public static final String SO_AS_MASTER = "A comprovação mensal é das cotas Master.";
 
+    /** A frase do 422 do ?mes= fora de AAAA-MM nas rotas 89 e 90. */
+    public static final String MES_INVALIDO = "Use o mês no formato AAAA-MM.";
+
+    /** O mês do recorte: AAAA-MM, como no contrato. */
+    private static final java.util.regex.Pattern MES = java.util.regex.Pattern.compile("\\d{4}-(0[1-9]|1[0-2])");
+
     public static final Set<String> COTAS_COM_PLANILHA_MENSAL = Set.of("MASTER");
 
     static final String ENTIDADE_NO_HISTORICO = "comprovacao_mensal";
@@ -46,9 +53,9 @@ public class ComprovacaoMensalService {
     private static final List<Object> CABECALHO = List.of("Marca", "Mês", "Tipo de mídia", "Unidade", "Exibido no mês", "Previsto no plano");
     private static final List<Object> CABECALHO_DOS_TOTAIS = List.of("Marca", "Mês", "Unidade", "Exibido no mês");
 
-    private static final Map<String, String> TIPOS = Map.of("ASSINADA", "Assinada", "PROPRIA", "Própria", "MERCHANDISING",
+    static final Map<String, String> TIPOS = Map.of("ASSINADA", "Assinada", "PROPRIA", "Própria", "MERCHANDISING",
             "Merchandising", "BRANDED", "Branded", "CONTEUDO_DE_MARCA", "Conteúdo de marca");
-    private static final Map<String, String> UNIDADES = Map.of("INSERCAO", "Inserções", "CPM", "CPM", "APLICACAO", "Aplicações");
+    static final Map<String, String> UNIDADES = Map.of("INSERCAO", "Inserções", "CPM", "CPM", "APLICACAO", "Aplicações");
 
     /** Um arquivo pronto para baixar. */
     public record Arquivo(String nome, String tipoMime, byte[] bytes) {
@@ -69,24 +76,26 @@ public class ComprovacaoMensalService {
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public ComprovacaoMensalDto comprovacao(UsuarioAutenticado usuario, long parceriaId) {
         Parceria parceria = autorizar(usuario, parceriaId);
-        return montar(parceria);
+        return montar(parceria, null);
     }
 
-    /** Rota 89. [HISTORICO] DOWNLOAD na entidade comprovacao_mensal. */
+    /** Rota 89. Com {@code mes}, o arquivo traz só aquele mês. [HISTORICO] DOWNLOAD na entidade comprovacao_mensal. */
     @Transactional
-    public Arquivo xlsx(UsuarioAutenticado usuario, long parceriaId, HttpServletRequest requisicao) {
+    public Arquivo xlsx(UsuarioAutenticado usuario, long parceriaId, String mes, HttpServletRequest requisicao) {
         Parceria parceria = autorizar(usuario, parceriaId);
-        ComprovacaoMensalDto dto = montar(parceria);
+        String recorte = mesValido(mes);
+        ComprovacaoMensalDto dto = montar(parceria, recorte);
         byte[] bytes = PlanilhaXlsx.gerar(List.of(aba("Comprovação mensal", dto), abaDosTotais(dto)));
         historico.registrar(AcaoHistorico.DOWNLOAD, usuario, parceriaId, ENTIDADE_NO_HISTORICO, parceriaId, null, null, "xlsx", requisicao);
         return new Arquivo("comprovacao-mensal-" + apelido(parceria.patrocinador()) + ".xlsx", PlanilhaXlsx.TIPO_MIME, bytes);
     }
 
-    /** Rota 90. */
+    /** Rota 90. Com {@code mes}, o arquivo traz só aquele mês. */
     @Transactional
-    public Arquivo csv(UsuarioAutenticado usuario, long parceriaId, HttpServletRequest requisicao) {
+    public Arquivo csv(UsuarioAutenticado usuario, long parceriaId, String mes, HttpServletRequest requisicao) {
         Parceria parceria = autorizar(usuario, parceriaId);
-        ComprovacaoMensalDto dto = montar(parceria);
+        String recorte = mesValido(mes);
+        ComprovacaoMensalDto dto = montar(parceria, recorte);
         byte[] bytes = Csv.gerar(strings(CABECALHO), linhasDaTabela(dto));
         historico.registrar(AcaoHistorico.DOWNLOAD, usuario, parceriaId, ENTIDADE_NO_HISTORICO, parceriaId, null, null, "csv", requisicao);
         return new Arquivo("comprovacao-mensal-" + apelido(parceria.patrocinador()) + ".csv", "text/csv; charset=UTF-8", bytes);
@@ -101,7 +110,7 @@ public class ComprovacaoMensalService {
         List<PlanilhaXlsx.Aba> abas = new ArrayList<>();
         for (Master master : repositorio.masters(eventoId)) {
             Parceria parceria = new Parceria(master.id(), master.patrocinador(), "MASTER", edicao);
-            abas.add(aba(master.patrocinador(), montar(parceria)));
+            abas.add(aba(master.patrocinador(), montar(parceria, null)));
         }
         if (abas.isEmpty()) {
             abas.add(new PlanilhaXlsx.Aba("Sem cota Master", List.of(List.of("Marca"))));
@@ -130,8 +139,20 @@ public class ComprovacaoMensalService {
     // Montagem
     // ---------------------------------------------------------------------
 
-    private ComprovacaoMensalDto montar(Parceria parceria) {
-        List<LinhaMensal> linhas = repositorio.linhas(parceria.id());
+    /** [VALIDACAO] O {@code ?mes=} das rotas 89 e 90: nulo = todos os meses; fora de AAAA-MM, 422 em {@code campos.mes}. */
+    private static String mesValido(String mes) {
+        if (mes == null) {
+            return null;
+        }
+        String recorte = mes.strip();
+        if (!MES.matcher(recorte).matches()) {
+            throw new DadosInvalidosException(java.util.Map.of("mes", MES_INVALIDO));
+        }
+        return recorte;
+    }
+
+    private ComprovacaoMensalDto montar(Parceria parceria, String mes) {
+        List<LinhaMensal> linhas = repositorio.linhas(parceria.id(), mes);
         List<LinhaMensalDto> dtos = linhas.stream()
                 .map(l -> new LinhaMensalDto(l.mes(), l.tipoMidia(), TIPOS.getOrDefault(l.tipoMidia(), l.tipoMidia()), l.unidade(),
                         UNIDADES.getOrDefault(l.unidade(), l.unidade()), l.exibido(), l.previsto()))

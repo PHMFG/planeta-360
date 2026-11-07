@@ -203,7 +203,7 @@ export function AreaDaConversa({
           </div>
           {enviada && <MensagemVoce texto={enviada} />}
           {pensando && aoVivo && aoVivo.partes.length > 0 ? (
-            <BlocoDoAtlas compacto={compacta}>
+            <BlocoDoAtlas compacto={compacta} estado={!aoVivo.etapa && aoVivo.partes.at(-1)?.tipo === 'texto' ? 'escrevendo' : 'pensando'}>
               {aoVivo.partes.map((parte, posicao) =>
                 parte.tipo === 'raciocinio' ? (
                   <Raciocinio key={posicao} resumos={parte.resumos} desde={parte.desde} ate={parte.ate} />

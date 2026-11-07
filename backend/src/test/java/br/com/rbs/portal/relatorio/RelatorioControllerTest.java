@@ -183,7 +183,7 @@ class RelatorioControllerTest {
         assertThat(numero(indicador(resposta, "MIDIA_PREVISTO", "INSERCAO").get("valor"))).isEqualByComparingTo(previsto);
         assertThat(numero(indicador(resposta, "MIDIA_EXIBIDO", "INSERCAO").get("valor"))).isEqualByComparingTo(exibido);
         assertThat(previsto).isEqualByComparingTo("1113");
-        assertThat(exibido).isEqualByComparingTo("1105");
+        assertThat(exibido).isEqualByComparingTo("1115");
 
         // Um terceiro, das cortesias.
         BigDecimal cortesias = jdbc.sql("SELECT sum(quantidade) FROM cortesia_cota WHERE parceria_id = :p")
@@ -856,9 +856,9 @@ class RelatorioControllerTest {
 
         MvcTestResult resposta = gerar(rbs, parceria("Cliente Amarelo"));
 
-        // 1.105 de 1.113: o exemplo do QA. Antes saía "1105 de 1113".
-        assertThat(indicador(resposta, "MIDIA_ENTREGA_PCT", "INSERCAO").get("baseCalculo")).isEqualTo("1.105 de 1.113");
-        assertThat(numero(indicador(resposta, "MIDIA_ENTREGA_PCT", "INSERCAO").get("valor"))).isEqualByComparingTo("99.2");
+        // 1.115 de 1.113 (a amostra ganhou uma linha mensal de 10): o exemplo do QA, agora passando de 100.
+        assertThat(indicador(resposta, "MIDIA_ENTREGA_PCT", "INSERCAO").get("baseCalculo")).isEqualTo("1.115 de 1.113");
+        assertThat(numero(indicador(resposta, "MIDIA_ENTREGA_PCT", "INSERCAO").get("valor"))).isEqualByComparingTo("100.1");
         // Abaixo de mil não muda nada.
         assertThat(indicador(resposta, "ENTREGAS_CONCLUIDAS_PCT", "").get("baseCalculo")).isEqualTo("10 aprovadas de 11 aplicáveis");
         assertThat(String.valueOf(indicador(resposta, "PESQUISA_RESULTADO", "P1 · Sim").get("baseCalculo")))
@@ -1044,13 +1044,14 @@ class RelatorioControllerTest {
 
     @Test
     void todoPercentualCortaNaPrimeiraCasaNoRelatorioENaConsolidacao() {
-        // Aplicações do Amarelo: 17 de 19 = 89,47%. Arredondado saía 89,5; cortado sai 89,4, como a mídia (99,28% = 99,2).
+        // Aplicações do Amarelo: 17 de 19 = 89,47%. Arredondado saía 89,5; cortado sai 89,4. A mídia (100,17%) sai 100,1 e
+        // pode passar de 100.
         long amarelo = parceria("Cliente Amarelo");
         MockHttpSession rbs = entrar(RBS);
         MvcTestResult relatorio = gerar(rbs, amarelo);
         assertThat(numero(indicador(relatorio, "APLICACOES_COMPROVADAS_PCT", "").get("valor"))).isEqualByComparingTo("89.4");
         assertThat(indicador(relatorio, "APLICACOES_COMPROVADAS_PCT", "").get("baseCalculo")).isEqualTo("17 de 19");
-        assertThat(numero(indicador(relatorio, "MIDIA_ENTREGA_PCT", "INSERCAO").get("valor"))).isEqualByComparingTo("99.2");
+        assertThat(numero(indicador(relatorio, "MIDIA_ENTREGA_PCT", "INSERCAO").get("valor"))).isEqualByComparingTo("100.1");
         long id = ((Number) lerJson(relatorio, "$.id")).longValue();
         assertThat(texto(ler(rbs, "/api/relatorios/" + id + "/csv"))).contains(";89,4;%;17 de 19;sim");
 

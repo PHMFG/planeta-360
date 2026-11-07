@@ -53,9 +53,12 @@ public class CargaService {
     private static final int LOTE = 1000;
 
     // Os nomes são os do cabeçalho do CSV (os mesmos de stg_veiculacao e stg_pesquisa); o limite é o da coluna no banco.
+    // [CARGA] Na veiculação, exibido_em, impacto e mes são opcionais: a função do banco exige a exibição OU o mês, e o
+    // impacto ilegível vira rejeição. O Java só lê as células e manda o texto original do que não converteu.
     private static final List<Coluna> COLUNAS_DA_VEICULACAO = List.of(new Coluna("patrocinador", 120),
             new Coluna("veiculo", 80), new Coluna("formato", 160), new Coluna("espaco_programa", 160),
-            new Coluna("exibido_em", 40), new Coluna("quantidade", 40), new Coluna("link", 500));
+            new Coluna("exibido_em", 40, false), new Coluna("quantidade", 40), new Coluna("link", 500),
+            new Coluna("impacto", 40, false), new Coluna("mes", 40, false));
     private static final List<Coluna> COLUNAS_DA_PESQUISA = List.of(new Coluna("patrocinador", 120),
             new Coluna("pergunta", 40), new Coluna("indicador", 120), new Coluna("alternativa", 120),
             new Coluna("valor", 40), new Coluna("unidade", 12), new Coluna("base_respondentes", 40));
@@ -225,15 +228,18 @@ public class CargaService {
     // Conversão das linhas do CSV
     // ---------------------------------------------------------------------
 
-    // Os valores chegam na ordem de COLUNAS_DA_VEICULACAO. O que não converte (data ou quantidade ilegível) vai nulo e a
-    // função do banco rejeita a linha com o campo e o motivo. O texto original do que não converteu vai junto (e só nesse
-    // caso), para a função distinguir "ilegível" de "vazio" e dizer qual é o formato esperado.
+    // Os valores chegam na ordem de COLUNAS_DA_VEICULACAO. O que não converte (data, quantidade ou impacto ilegível) vai
+    // nulo e a função do banco rejeita a linha com o campo e o motivo. O texto original do que não converteu vai junto (e
+    // só nesse caso), para a função distinguir "ilegível" de "vazio" e dizer qual é o formato esperado. O mês vai como
+    // veio: quem confere AAAA-MM é a função do banco.
     private static LinhaDeVeiculacao veiculacao(Linha l) {
         List<String> v = l.valores();
         OffsetDateTime exibidoEm = Celulas.data(v.get(4));
         BigDecimal quantidade = Celulas.decimal(v.get(5), 14);
+        BigDecimal impacto = Celulas.decimal(v.get(7), 18);
         return new LinhaDeVeiculacao(l.numero(), v.get(0), v.get(1), v.get(2), v.get(3), exibidoEm, quantidade, v.get(6),
-                exibidoEm == null ? v.get(4) : null, quantidade == null ? v.get(5) : null);
+                exibidoEm == null ? v.get(4) : null, quantidade == null ? v.get(5) : null,
+                impacto, impacto == null ? v.get(7) : null, v.get(8));
     }
 
     // Os valores chegam na ordem de COLUNAS_DO_PLANO. Categoria, tipo e unidade são códigos de lista fechada: valem em maiúsculas

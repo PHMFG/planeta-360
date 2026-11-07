@@ -158,6 +158,11 @@ public class ArquivoService {
         if (arquivo.documentoId() != null && !usuario.ehRbs()) {
             throw naoEncontrado();
         }
+        // [ISOLAMENTO] O arquivo original de uma importação é da RBS, mesmo quando a importação é de uma parceria: a marca daquela
+        // parceria não o baixa. A exceção é a planilha que a própria marca enviou pela rota 117 (origem MARCA).
+        if ("IMPORTACAO".equals(arquivo.categoria()) && !usuario.ehRbs() && !arquivo.importacaoDaMarca()) {
+            throw naoEncontrado();
+        }
         if (arquivo.parceriaId() == null) {
             if (!usuario.ehRbs()) {
                 throw naoEncontrado();

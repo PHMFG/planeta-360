@@ -72,6 +72,11 @@ public class ParceriaEdicaoService {
         BigDecimal valorDepois = corpo.valorInvestimento() != null ? corpo.valorInvestimento() : antes.valorInvestimento();
         String baseDepois = corpo.baseValor() != null ? corpo.baseValor() : antes.baseValor();
         String situacaoDepois = corpo.situacao() != null ? corpo.situacao() : antes.situacao();
+        // [U7] Nulo não muda; "" limpa (o banco guarda nulo), só nestes dois campos.
+        String atendimentoNomeDepois = corpo.atendimentoNome() != null
+                ? ParceriaService.textoOuNulo(corpo.atendimentoNome()) : antes.atendimentoNome();
+        String atendimentoEmailDepois = corpo.atendimentoEmail() != null
+                ? ParceriaService.textoOuNulo(corpo.atendimentoEmail()) : antes.atendimentoEmail();
 
         // [VALIDACAO] O valor e a base vão juntos (o banco tem o CHECK ck_parceria_valor, mas a frase clara é desta camada).
         if (valorDepois != null && baseDepois == null) {
@@ -125,6 +130,18 @@ public class ParceriaEdicaoService {
             registrarEdicao(usuario, parceriaId, "parceria", parceriaId, "situacao", antes.situacao(), situacaoDepois, requisicao);
         }
 
+        // [U7] O atendimento da marca. [HISTORICO] EDICAO com o campo, sem o valor (é contato de uma pessoa).
+        if (!Objects.equals(atendimentoNomeDepois, antes.atendimentoNome())
+                || !Objects.equals(atendimentoEmailDepois, antes.atendimentoEmail())) {
+            repositorio.atualizarAtendimento(parceriaId, atendimentoNomeDepois, atendimentoEmailDepois);
+            if (!Objects.equals(atendimentoNomeDepois, antes.atendimentoNome())) {
+                registrarEdicaoSemValor(usuario, parceriaId, "atendimentoNome", requisicao);
+            }
+            if (!Objects.equals(atendimentoEmailDepois, antes.atendimentoEmail())) {
+                registrarEdicaoSemValor(usuario, parceriaId, "atendimentoEmail", requisicao);
+            }
+        }
+
         // Abas desta parceria. O estado vai sendo atualizado, para o mesmo código repetido na lista valer em ordem.
         Map<String, AbaDaParceria> estado = new LinkedHashMap<>();
         abasAntes.forEach(a -> estado.put(a.codigo(), a));
@@ -151,6 +168,11 @@ public class ParceriaEdicaoService {
         if (!Objects.equals(antes, depois) && !(antes != null && depois != null && igualEmNumero(antes, depois, campo))) {
             historico.registrar(AcaoHistorico.EDICAO, usuario, parceriaId, entidade, entidadeId, antes, depois, campo, requisicao);
         }
+    }
+
+    /** [U7] A edição do atendimento: o histórico diz o campo, sem o valor (nome e e-mail de uma pessoa). */
+    private void registrarEdicaoSemValor(UsuarioAutenticado usuario, long parceriaId, String campo, HttpServletRequest requisicao) {
+        historico.registrar(AcaoHistorico.EDICAO, usuario, parceriaId, "parceria", parceriaId, null, null, campo, requisicao);
     }
 
     // "1000000.00" e "1000000" são o mesmo valor; só o campo de dinheiro compara como número.

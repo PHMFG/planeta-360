@@ -2,6 +2,7 @@
    Cada seção tem três cores: a principal (cabeçalho, botão, item ativo), a de texto e a tinta (fundo suave).
    O atributo data-secao troca as três juntas, como o modo "P360 · Seção" do Figma. */
 @import "tailwindcss";
+@import "./movimento.css";
 
 /* Telas baixas, como um projetor em 1280×720: o menu fica mais compacto para as oito seções caberem sem rolar (U01). */
 @custom-variant baixa (@media (max-height: 820px));

@@ -196,7 +196,7 @@ public class HistoricoDaConversa {
      * então (a RBS fecha e reabre abas), e o resultado antigo continuaria dizendo "aba MIDIA", "categoria MIDIA" e "tipo cortesia".
      * {@code parceria_consultar} fica de fora: o catálogo dele é só o da aba de que o Atlas já depende.
      */
-    private static final Set<String> FERRAMENTAS_COM_REGISTROS_DO_PORTAL = Set.of("listar_entregas", "consultar_cota");
+    private static final Set<String> FERRAMENTAS_COM_REGISTROS_DO_PORTAL = Set.of("listar_entregas", "consultar_cota", "consultar_midia");
 
     /**
      * O resultado de uma ferramenta como o modelo o recebe. De um turno anterior ({@code deTurnoAnterior}): a busca e os prazos vão sem

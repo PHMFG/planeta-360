@@ -128,7 +128,8 @@ class PermissaoAntesDoCorpoTest {
 
         for (String uri : List.of("/api/entregas?tamanho=999", "/api/entregas?pagina=-1", "/api/cargas?pagina=-1",
                 "/api/cargas/1/rejeicoes?tamanho=0", "/api/historico?pagina=-1", "/api/historico.csv?q=" + "x".repeat(200),
-                "/api/relatorios?status=INVENTADO", "/api/relatorios.csv?status=INVENTADO", "/api/painel?eventoId=abc")) {
+                "/api/relatorios?status=INVENTADO", "/api/relatorios.csv?status=INVENTADO", "/api/painel?eventoId=abc",
+                "/api/midia", "/api/midia?eventoId=abc", "/api/midia.xlsx", "/api/midia.csv")) {
             MvcTestResult resposta = amarelo.get(uri);
             assertThat(resposta).as(uri).hasStatus(HttpStatus.FORBIDDEN);
             assertThat(lerJson(resposta, "$.detail")).isEqualTo(SO_RBS);
@@ -191,15 +192,16 @@ class PermissaoAntesDoCorpoTest {
     }
 
     @Test
-    void rbsRecebe403AntesDeQualquerOutraConferenciaNoEnvioDasPerguntas() {
+    void aRbsPassaNoEnvioDasPerguntasEParceriaInexistenteContinua404() {
         SessaoDeApi rbs = SessaoDeApi.entrar(mvc, RBS);
+        long amarelo = SessaoDeApi.parceriaDe2027(jdbc, "Cliente Amarelo");
 
-        for (String uri : List.of("/api/parcerias/999999/pesquisa/perguntas",
-                "/api/parcerias/" + SessaoDeApi.parceriaDe2027(jdbc, "Cliente Amarelo") + "/pesquisa/perguntas")) {
-            MvcTestResult resposta = rbs.put(uri, PERGUNTAS_INVALIDAS);
-            assertThat(resposta).as(uri).hasStatus(HttpStatus.FORBIDDEN);
-            assertThat(lerJson(resposta, "$.detail")).isEqualTo("Só o Admin Patrocinador da parceria envia as perguntas da pesquisa.");
-        }
+        // A RBS escreve as perguntas de qualquer Master: com o corpo inválido, ela recebe a validação do corpo (422).
+        MvcTestResult invalido = rbs.put("/api/parcerias/" + amarelo + "/pesquisa/perguntas", PERGUNTAS_INVALIDAS);
+        assertThat(invalido).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(lerJson(invalido, "$.campos['perguntas[0].texto']")).isEqualTo("A pergunta precisa ter de 10 a 300 caracteres.");
+        assertThat(rbs.put("/api/parcerias/999999/pesquisa/perguntas", PERGUNTAS_INVALIDAS))
+                .as("a parceria vem antes do corpo").hasStatus(HttpStatus.NOT_FOUND);
     }
 
     @Test
@@ -228,7 +230,10 @@ class PermissaoAntesDoCorpoTest {
             // O plano comercial (69) e os espaços de documento da marca (71 e 72): a marca da parceria e a RBS.
             "GET /api/parcerias/{id}/plano-comercial", "GET /api/parcerias/{id}/espacos",
             "POST /api/parcerias/{id}/espacos/{papel}/arquivos",
-            "GET /api/parcerias/{id}/pesquisa", "PUT /api/parcerias/{id}/pesquisa/perguntas",
+            "GET /api/parcerias/{id}/pesquisa", "GET /api/parcerias/{id}/pesquisa/perfil",
+            "PUT /api/parcerias/{id}/pesquisa/perguntas",
+            // As visitas e o selo "novo" (rota 120): a pessoa da parceria (marca ou RBS).
+            "POST /api/parcerias/{id}/visitas/{aba}", "GET /api/parcerias/{id}/novidades",
             "GET /api/parcerias/{id}/consolidacao", "GET /api/parcerias/{id}/relatorio", "GET /api/relatorios/{id}/csv",
             "GET /api/parcerias/{id}/aplicacoes", "GET /api/campos", "GET /api/parcerias/{id}/dados",
             "POST /api/parcerias/{id}/dados", "POST /api/parcerias/{id}/dados-informados/{chave}/arquivo",
@@ -246,8 +251,17 @@ class PermissaoAntesDoCorpoTest {
             // A comprovação mensal (rotas 88 a 90): a marca Master (aba MIDIA aberta) e a RBS; o lote (91) está na lista da RBS.
             "GET /api/parcerias/{id}/comprovacao-mensal", "GET /api/parcerias/{id}/comprovacao-mensal.xlsx",
             "GET /api/parcerias/{id}/comprovacao-mensal.csv",
+            // A consulta da mídia da parceria (rotas 105 e 106): a marca (aba MIDIA aberta) e a RBS; a da RBS (107 e 108) está na lista dela.
+            "GET /api/parcerias/{id}/midia", "GET /api/parcerias/{id}/midia.xlsx", "GET /api/parcerias/{id}/midia.csv",
             // O anexo de pós-venda (rota 96): a marca com o relatório disponibilizado e a RBS; publicar, listar, retirar e os números (97 a 101) são só da RBS.
-            "GET /api/parcerias/{id}/posvenda");
+            "GET /api/parcerias/{id}/posvenda",
+            // A importação (rotas 111 a 114, 116 e 112b): a RBS e a marca nas importações dela. Criar, listar e retirar (109,
+            // 110 e 115) estão na lista da RBS.
+            "GET /api/importacoes/{id}", "PATCH /api/importacoes/{id}/linhas/{linhaId}", "PATCH /api/importacoes/{id}/linhas",
+            "POST /api/importacoes/{id}/confirmar", "POST /api/importacoes/{id}/descartar",
+            "GET /api/importacoes/{id}/origem/{linhaId}",
+            // A planilha da agência (rota 117): a marca da parceria, com a aba APLICACOES aberta, e a RBS.
+            "POST /api/parcerias/{id}/importacoes");
 
     @Test
     void todaRotaDaApiEstaClassificadaEAListaDaRbsSoTemRotasQueExistem() {

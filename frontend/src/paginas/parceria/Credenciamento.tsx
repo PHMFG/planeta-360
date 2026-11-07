@@ -47,7 +47,7 @@ export function Credenciamento() {
       <CabecalhoSecao
         trilha={rbs ? 'Planeta Atlântida / RBS · Gestão' : 'Planeta Atlântida / Patrocinador'}
         titulo="Credenciamento"
-        subtitulo="Quantidades e setores definidos pela RBS; o cadastro das pessoas é feito no Open Staff."
+        subtitulo="As credenciais da sua cota e o acesso ao Open Staff."
       />
       <AvisoAbaFechada parceria={parceria} estado={estado} nome={SECAO.nome} rbs={rbs} />
       {podeVer && <ConteudoDoCredenciamento rbs={rbs} />}
@@ -93,7 +93,7 @@ function ConteudoDoCredenciamento({ rbs }: { rbs: boolean }) {
             <p className="mt-4 text-sm">
               <span className="font-semibold">Período de cadastro:</span> {periodo(credenciais)}
             </p>
-            <div className="mt-4">
+            <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-2">
               {enderecoSeguro(credenciais.openStaffUrl) ? (
                 <LinkExterno
                   href={credenciais.openStaffUrl!}
@@ -104,17 +104,11 @@ function ConteudoDoCredenciamento({ rbs }: { rbs: boolean }) {
               ) : (
                 <p className="text-sm font-medium text-texto-2">A RBS ainda não informou o endereço do Open Staff desta edição.</p>
               )}
+              {/* F9: uma linha no lugar do aviso de serviço externo e do espaço vazio do guia. */}
+              {enderecoSeguro(credenciais.openStaffUrl) && (
+                <span className="text-xs font-medium text-texto-2">O cadastro das pessoas é feito no Open Staff, fora do portal.</span>
+              )}
             </div>
-          </Cartao>
-
-          <Aviso titulo="Você será direcionado a um serviço externo">
-            O cadastro de pessoas acontece no Open Staff. Este portal mostra as orientações e não confirma cadastros nem sincroniza com o
-            sistema.
-          </Aviso>
-
-          <Cartao>
-            <p className="text-sm font-semibold">Guia de credenciamento</p>
-            <p className="text-xs font-medium text-texto-2">Quando a RBS publicar o guia, ele aparece na lista de entregas, no fim desta página · somente consulta</p>
           </Cartao>
 
           {rbs && <GradeDeCredenciais credenciais={credenciais} aoGravar={dados.recarregar} />}
@@ -173,8 +167,16 @@ function GradeDeCredenciais({ credenciais, aoGravar }: { credenciais: Credenciai
   }
 
   return (
-    <Cartao titulo="Credenciais da parceria">
-      <form onSubmit={salvar} className="flex flex-col gap-4" noValidate>
+    <Cartao
+      titulo="Credenciais da parceria"
+      // O salvar também no topo: no fim do formulário ele ficava abaixo da dobra em 1440×900 (rodada H3).
+      extra={
+        <Botao type="submit" form="form-credenciais" carregando={enviando} className="min-w-0 px-5" icone="ri-save-line">
+          Salvar
+        </Botao>
+      }
+    >
+      <form id="form-credenciais" onSubmit={salvar} className="flex flex-col gap-4" noValidate>
         {credenciais.credenciais.length > 0 && (
           <ul className="flex flex-col gap-2">
             {credenciais.credenciais.map((credencial) => {

@@ -39,6 +39,8 @@ export type EmailResumo = { id: number; email: string; vinculo: Vinculo; situaca
 
 export type ParceriaDetalhe = {
   id: number
+  atendimentoNome?: string | null
+  atendimentoEmail?: string | null
   patrocinador: { id: number; nome: string; segmento: string | null }
   evento: { id: number; nome: string; edicao: number }
   cota: Cota
@@ -85,6 +87,9 @@ export type MudancaParceria = {
   situacao?: Situacao
   valorInvestimento?: number | null
   baseValor?: 'BRUTO_TABELA' | 'LIQUIDO' | null
+  /** O atendimento da marca na RBS (U7): aparece no fim do FAQ dela. `""` limpa o campo. */
+  atendimentoNome?: string
+  atendimentoEmail?: string
   abas?: { codigo: CodigoAba; liberada?: boolean; visivel?: boolean }[]
 }
 

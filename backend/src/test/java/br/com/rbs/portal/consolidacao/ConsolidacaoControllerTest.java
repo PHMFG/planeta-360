@@ -130,16 +130,17 @@ class ConsolidacaoControllerTest {
         assertThat(resposta.getResponse().getContentType()).startsWith("application/json");
         assertThat(((Number) lerJson(resposta, "$.parceriaId")).longValue()).isEqualTo(amarelo);
 
-        // Conferência por SQL direto nas tabelas: 1113 previstos e 1105 exibidos em inserções.
+        // Conferência por SQL direto nas tabelas: 1113 previstos e 1115 exibidos em inserções (a amostra ganhou uma linha
+        // mensal de 10 para a primeira linha do plano do Amarelo).
         BigDecimal previstoNoBanco = previsto(amarelo, "INSERCAO");
         BigDecimal exibidoNoBanco = exibido(amarelo, "INSERCAO");
         assertThat(previstoNoBanco).isEqualByComparingTo("1113");
-        assertThat(exibidoNoBanco).isEqualByComparingTo("1105");
+        assertThat(exibidoNoBanco).isEqualByComparingTo("1115");
         assertThat(lerLista(resposta, "$.midia.porUnidade")).hasSize(1);
         assertThat(lerJson(resposta, "$.midia.porUnidade[0].unidade")).isEqualTo("INSERCAO");
         assertThat(numero(lerJson(resposta, "$.midia.porUnidade[0].previsto"))).isEqualByComparingTo(previstoNoBanco);
         assertThat(numero(lerJson(resposta, "$.midia.porUnidade[0].exibido"))).isEqualByComparingTo(exibidoNoBanco);
-        assertThat(numero(lerJson(resposta, "$.midia.porUnidade[0].percentual"))).isEqualByComparingTo("99.2");   // 1105 de 1113 = 99,28%: cortado, e não arredondado
+        assertThat(numero(lerJson(resposta, "$.midia.porUnidade[0].percentual"))).isEqualByComparingTo("100.1");   // 1115 de 1113 = 100,17%: cortado, e a mídia pode passar de 100
 
         // Aplicações de marca, entregas e cortesias, também conferidas nas tabelas.
         BigDecimal previstas = jdbc.sql("SELECT sum(quantidade_prevista) FROM aproveitamento_previsto "
@@ -241,8 +242,9 @@ class ConsolidacaoControllerTest {
     @Test
     void patrocinadorSoVeOsDoisTiposDeFaltanteQueEleResolveEARbsVeTodos() {
         long amarelo = parceria("Cliente Amarelo");
-        // A marca mandou só 2 das 3 perguntas: agora existe também o faltante PESQUISA_SEM_PERGUNTAS.
-        jdbc.sql("DELETE FROM pesquisa_pergunta WHERE parceria_id = :p AND ordem = 3").param("p", amarelo).update();
+        // A marca não tem nenhuma pergunta cadastrada: agora existe o faltante PESQUISA_SEM_PERGUNTAS (o limite é o da
+        // pesquisa, então ter uma ou duas perguntas já basta).
+        jdbc.sql("DELETE FROM pesquisa_pergunta WHERE parceria_id = :p").param("p", amarelo).update();
         List<String> todosNoBanco = jdbc.sql("SELECT DISTINCT tipo FROM vw_faltantes WHERE parceria_id = :p")
                 .param("p", amarelo).query(String.class).list();
         assertThat(todosNoBanco).as("a amostra tem faltantes que a marca não pode ver")
@@ -256,7 +258,7 @@ class ConsolidacaoControllerTest {
             assertThat(r).hasStatus(HttpStatus.OK);
             assertThat(lerLista(r, "$.faltantes[*].tipo")).containsExactly("PESQUISA_SEM_PERGUNTAS", "ENTREGA_PENDENTE");
             assertThat(lerLista(r, "$.faltantes[*].detalhe")).containsExactly(
-                    "Cota Master sem as 3 perguntas cadastradas", "Peça de 30\" para mídia própria (em analise)");
+                    "Cota Master sem perguntas cadastradas", "Peça de 30\" para mídia própria (em analise)");
             // O filtro vale para o corpo inteiro: nenhum faltante interno vaza nem no texto da resposta.
             assertThat(corpo(r)).doesNotContain("MIDIA_ABAIXO_DO_PREVISTO").doesNotContain("APLICACAO_SEM_COMPROVACAO")
                     .doesNotContain("FESTIVAL_SEM_NUMEROS").doesNotContain("Planeta Lounge");

@@ -16,14 +16,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.ClassPathResource;
 
 /**
- * Roda por JDBC o arquivo db/verificacao.sql (as 553 conferências do banco: contagens, órfãos, cargas, relatórios, a V7, a V8, a V9, a V10, a V11, a V12, a V13, a V14, a V15, a V16, a V17, a V18 e uma
- * tentativa de violar cada regra) e exige que todas passem. Atende o item 1 da Entrega 2 dentro do `./mvnw test`.
+ * Roda por JDBC o arquivo db/verificacao.sql (as 647 conferências do banco: contagens, órfãos, cargas, relatórios, a V7, a V8, a V9, a V10, a V11, a V12, a V13, a V14, a V15, a V16, a V17, a V18,
+ * a V19, a V20, a V21, a V22, a V23 e uma tentativa de violar cada regra) e exige que todas passem. Atende o item 1 da Entrega 2 dentro do `./mvnw test`.
  * O arquivo é SQL puro, sem comandos do psql, então roda inteiro numa única conexão.
  */
 @TesteDeIntegracao
 class VerificacaoDoBancoTest {
 
-    private static final int CONFERENCIAS_ESPERADAS = 553;
+    private static final int CONFERENCIAS_ESPERADAS = 647;
     // Começo do bloco que encerra o script com erro quando alguma conferência falhou.
     private static final String MARCA_DO_ERRO_FINAL = "DO $$\nBEGIN\n    IF EXISTS (SELECT 1 FROM _ver WHERE NOT ok)";
 

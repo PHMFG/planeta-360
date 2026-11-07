@@ -85,7 +85,7 @@ class PerfilDemoTest {
         Map<String, Object> demo = comPrefixo(bloco("demo"), "atlas.jev.");
         Map<String, Object> dev = comPrefixo(bloco("dev"), "atlas.jev.");
 
-        assertThat(demo).as("os seis pontos, com modo e limiar").hasSize(12);
+        assertThat(demo).as("os sete pontos, com modo e limiar").hasSize(14);
         assertThat(demo).isEqualTo(dev);
         assertThat(demo.keySet()).anyMatch(nome -> nome.equals("atlas.jev.intencao.limiar"));
     }

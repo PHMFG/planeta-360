@@ -755,3 +755,61 @@ END $$;
 DROP TABLE IF EXISTS pg_temp._amostra_foto, pg_temp._amostra_alvo, pg_temp._amostra_carga, pg_temp._amostra_envio, pg_temp._amostra_parc;
 DROP FUNCTION IF EXISTS pg_temp.quando(INT, TIME);
 DROP TABLE IF EXISTS pg_temp._amostra_ctl;
+
+-- ---------------------------------------------------------------------
+-- 17. Impacto e uma linha mensal na mídia do Amarelo (M1 e M2)
+-- ---------------------------------------------------------------------
+-- [M1] [M2] A consulta da mídia (rotas 105 a 108) e a comprovação mensal mostram o impacto e o total de um mês. Este bloco
+-- roda mesmo quando o resto da amostra já está no banco (o pular acima), então é idempotente: o UPDATE só toca o impacto
+-- nulo e o INSERT usa ON CONFLICT. O mês é derivado da primeira exibição da amostra (seis meses antes), e não de hoje, para
+-- ser o mesmo em toda repetição; a linha mensal fica num mês sem exibição daquela linha do plano.
+DO $$
+DECLARE
+    v_amarelo BIGINT;
+    v_ap BIGINT;
+    v_mes DATE;
+BEGIN
+    SELECT pa.id INTO v_amarelo
+    FROM parceria pa JOIN patrocinador p ON p.id = pa.patrocinador_id
+    JOIN evento e ON e.id = pa.evento_id
+    WHERE p.nome_canonico = 'Cliente Amarelo' AND e.edicao = 2027;
+    IF v_amarelo IS NULL THEN RETURN; END IF;
+
+    -- [M1] Impacto em algumas exibições de TV e rádio do Amarelo. O WHERE impacto IS NULL deixa a repetição segura.
+    UPDATE veiculacao v
+    SET impacto = round(v.quantidade * CASE ap.veiculo WHEN 'RBS TV' THEN 1500 ELSE 800 END)
+    FROM aproveitamento_previsto ap
+    WHERE ap.id = v.aproveitamento_id AND ap.parceria_id = v_amarelo
+      AND ap.categoria = 'MIDIA' AND ap.veiculo IN ('RBS TV', 'Rádio 92')
+      AND v.impacto IS NULL;
+
+    -- [M2] Uma linha mensal para a primeira linha do plano do Amarelo, num mês bem antes da primeira exibição.
+    SELECT ap.id INTO v_ap
+    FROM aproveitamento_previsto ap
+    WHERE ap.parceria_id = v_amarelo AND ap.categoria = 'MIDIA'
+    ORDER BY ap.id LIMIT 1;
+
+    SELECT (date_trunc('month', min(v.exibido_em) AT TIME ZONE 'America/Sao_Paulo') - INTERVAL '6 months')::date
+    INTO v_mes
+    FROM veiculacao v JOIN aproveitamento_previsto ap ON ap.id = v.aproveitamento_id
+    WHERE ap.parceria_id = v_amarelo AND ap.categoria = 'MIDIA' AND v.periodo = 'EXIBICAO';
+
+    IF v_ap IS NOT NULL AND v_mes IS NOT NULL THEN
+        -- A linha mensal entra ligada à primeira carga da amostra (a de veiculação), para não ficar sem origem; o
+        -- periodo MES a distingue das exibições carregadas.
+        INSERT INTO veiculacao (aproveitamento_id, exibido_em, quantidade, impacto, periodo, mes_referencia, carga_id)
+        VALUES (v_ap, v_mes::timestamp AT TIME ZONE 'America/Sao_Paulo', 10, 5000, 'MES', v_mes,
+                (SELECT min(id) FROM carga WHERE tipo = 'MIDIA'))
+        ON CONFLICT ON CONSTRAINT uq_veiculacao DO NOTHING;
+    END IF;
+END $$;
+
+-- ---------------------------------------------------------------------
+-- 18. A pergunta de nota da pesquisa do Amarelo
+-- ---------------------------------------------------------------------
+-- A V22 trouxe o tipo da pergunta com ESCOLHA por padrão, e a amostra (bloco 7) não o preenchia: a pergunta "De 0 a 10" aparecia
+-- como "Escolha entre alternativas". Como o bloco 17, este roda também num banco que já tem a amostra, e não muda nada da segunda vez.
+UPDATE pesquisa_pergunta pp SET tipo_resposta = 'NOTA'
+FROM parceria pa JOIN patrocinador p ON p.id = pa.patrocinador_id
+WHERE pp.parceria_id = pa.id AND p.nome_canonico = 'Cliente Amarelo'
+  AND pp.texto = 'De 0 a 10, quanto você recomendaria a marca a um amigo?' AND pp.tipo_resposta <> 'NOTA';

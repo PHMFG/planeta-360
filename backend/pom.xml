@@ -141,19 +141,18 @@
             <version>${resilience4j.version}</version>
         </dependency>
 
-        <!-- Testes: MockMvc/MockMvcTester e utilidades de sessão e CSRF -->
+        <!-- [IMPORTACAO] O leitor de .xlsx e .xls da importação (E6). Saiu do escopo de teste: o código de produção o usa. -->
         <dependency>
             <groupId>org.apache.poi</groupId>
             <artifactId>poi</artifactId>
             <version>${poi.version}</version>
-            <scope>test</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.poi</groupId>
             <artifactId>poi-ooxml</artifactId>
             <version>${poi.version}</version>
-            <scope>test</scope>
         </dependency>
+        <!-- Testes: MockMvc/MockMvcTester e utilidades de sessão e CSRF -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webmvc-test</artifactId>

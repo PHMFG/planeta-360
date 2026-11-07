@@ -122,12 +122,12 @@ class PlanilhaDaAgenciaTest {
     // ---------------------------------------------------------------------
 
     @Test
-    void oCatalogoTemOCampoDeArquivoDaAbaAplicacoesNaQuintaPosicao() {
+    void oCatalogoTemOCampoDeArquivoDaAbaAplicacoesNaSextaPosicao() {
         MvcTestResult catalogo = entrar(AMARELO).get("/api/campos");
 
         assertThat(catalogo).hasStatus(HttpStatus.OK);
         assertThat(lerLista(catalogo, "$[*].chave")).containsExactly("ativacao.visitantes_total", "ativacao.cadastros_consentidos",
-                "ativacao.brindes_disponiveis", "ativacao.brindes_distribuidos", CHAVE);
+                "ativacao.brindes_disponiveis", "ativacao.brindes_distribuidos", "ativacao.pessoas_na_ativacao", CHAVE);
         List<Map<String, Object>> achados = lerLista(catalogo, "$[?(@.chave=='" + CHAVE + "')]");
         assertThat(achados).hasSize(1);
         Map<String, Object> campo = achados.get(0);
@@ -135,7 +135,7 @@ class PlanilhaDaAgenciaTest {
                 .containsEntry("unidade", null).containsEntry("minimo", null).containsEntry("maximo", null)
                 .containsEntry("limiteCampo", null);
         assertThat(String.valueOf(campo.get("ajuda"))).contains("planilha").contains("agência");
-        assertThat(contar("SELECT ordem FROM campo_catalogo WHERE chave = ?", CHAVE)).isEqualTo(5);
+        assertThat(contar("SELECT ordem FROM campo_catalogo WHERE chave = ?", CHAVE)).isEqualTo(6);
     }
 
     @Test
@@ -207,11 +207,11 @@ class PlanilhaDaAgenciaTest {
 
         assertThat(dados).hasStatus(HttpStatus.OK);
         assertThat(lerLista(dados, "$.campos[*].chave")).containsExactly("ativacao.visitantes_total", "ativacao.cadastros_consentidos",
-                "ativacao.brindes_disponiveis", "ativacao.brindes_distribuidos", CHAVE);
-        assertThat(lerJson(dados, "$.campos[4].vigente.valor")).isEqualTo((int) arquivoId);
-        assertThat(lerJson(dados, "$.campos[4].vigente.arquivo.id")).isEqualTo((int) arquivoId);
-        assertThat(lerJson(dados, "$.campos[4].vigente.arquivo.nomeOriginal")).isEqualTo("contagem.xlsx");
-        assertThat(lerJson(dados, "$.campos[4].vigente.origem")).isEqualTo("PORTAL");
+                "ativacao.brindes_disponiveis", "ativacao.brindes_distribuidos", "ativacao.pessoas_na_ativacao", CHAVE);
+        assertThat(lerJson(dados, "$.campos[5].vigente.valor")).isEqualTo((int) arquivoId);
+        assertThat(lerJson(dados, "$.campos[5].vigente.arquivo.id")).isEqualTo((int) arquivoId);
+        assertThat(lerJson(dados, "$.campos[5].vigente.arquivo.nomeOriginal")).isEqualTo("contagem.xlsx");
+        assertThat(lerJson(dados, "$.campos[5].vigente.origem")).isEqualTo("PORTAL");
         // um campo de número que tem valor traz arquivo nulo
         marca.post("/api/parcerias/" + amarelo() + "/dados", "{\"valores\":[{\"chave\":\"ativacao.visitantes_total\",\"valor\":1200}]}");
         MvcTestResult depois = marca.get("/api/parcerias/" + amarelo() + "/dados?aba=APLICACOES");

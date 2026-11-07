@@ -12,7 +12,9 @@ import { Campo } from './Campo'
 import { Cartao } from './Cartao'
 import { Carregando } from './Carregando'
 import { Seletor } from './Formulario'
+import { Modal } from './Modal'
 import { Tabela } from './Tabela'
+import { usarToast } from './Toast'
 
 const VAZIO = { indicador: '', valor: '', qualificador: 'EXATO' as NumeroDaEdicao['qualificador'], unidade: '', fonte: '' }
 
@@ -23,7 +25,9 @@ export function NumerosDaEdicao({ eventoId, edicao }: { eventoId: number; edicao
   const [form, setForm] = useState(VAZIO)
   const [erros, setErros] = useState<Record<string, string>>({})
   const [falha, setFalha] = useState<string | null>(null)
-  const [feito, setFeito] = useState<string | null>(null)
+  const [aberto, setAberto] = useState(false)
+  const [salvoAgora, setSalvoAgora] = useState<string | null>(null)
+  const avisar = usarToast()
   const [enviando, setEnviando] = useState(false)
   const mudar = (campo: keyof typeof VAZIO, valor: string) => setForm((atual) => ({ ...atual, [campo]: valor }))
 
@@ -31,7 +35,6 @@ export function NumerosDaEdicao({ eventoId, edicao }: { eventoId: number; edicao
     evento.preventDefault()
     setErros({})
     setFalha(null)
-    setFeito(null)
     const valor = form.valor.trim().replace(/\./g, '').replace(',', '.')
     const faltam: Record<string, string> = {}
     if (!form.indicador.trim()) faltam.indicador = 'Informe o indicador.'
@@ -48,8 +51,10 @@ export function NumerosDaEdicao({ eventoId, edicao }: { eventoId: number; edicao
         unidade: form.unidade.trim(),
         fonte: form.fonte.trim(),
       })
-      setFeito(`${salvo.indicador}: ${comoTexto(salvo)}. Os relatórios gerados a partir de agora mostram este número.`)
+      avisar(`${salvo.indicador}: ${comoTexto(salvo)}. Os relatórios gerados a partir de agora mostram este número.`)
       setForm(VAZIO)
+      setAberto(false)
+      setSalvoAgora(salvo.indicador)
       numeros.recarregar()
     } catch (erro) {
       if (erro instanceof ErroApi && Object.keys(erro.campos).length) setErros(erro.campos)
@@ -59,11 +64,24 @@ export function NumerosDaEdicao({ eventoId, edicao }: { eventoId: number; edicao
     }
   }
 
+  function abrir(inicial = VAZIO) {
+    setForm(inicial)
+    setErros({})
+    setFalha(null)
+    setAberto(true)
+  }
+
   return (
-    <Cartao titulo={`Números da edição ${edicao}`}>
+    <Cartao
+      titulo={`Números da edição ${edicao}`}
+      extra={
+        <Botao variante="secundario" icone="ri-add-line" onClick={() => abrir()}>
+          Informar número
+        </Botao>
+      }
+    >
       <p className="mb-4 text-sm font-medium text-texto-2">
-        Os números do festival para a seção “O festival em números” do relatório. Cada um com unidade e fonte; o mesmo indicador
-        informado de novo troca o valor. Os relatórios já gerados não mudam: gere uma versão nova.
+        Os números do festival para “O festival em números” do relatório. Os relatórios já gerados não mudam: gere uma versão nova.
       </p>
       <Carregando dados={numeros} vazio={(lista) => lista.length === 0} textoVazio="Nenhum número informado: nos relatórios, “O festival em números” sai como indisponível.">
         {(lista) => (
@@ -71,6 +89,7 @@ export function NumerosDaEdicao({ eventoId, edicao }: { eventoId: number; edicao
             rotulo="Números da edição"
             linhas={lista}
             chave={(linha) => linha.id}
+            destaque={(linha) => linha.indicador === salvoAgora}
             colunas={[
               { titulo: 'Indicador', celula: (linha) => <span className="font-semibold">{linha.indicador}</span> },
               { titulo: 'Número', celula: comoTexto },
@@ -82,7 +101,7 @@ export function NumerosDaEdicao({ eventoId, edicao }: { eventoId: number; edicao
                     type="button"
                     className="text-xs font-bold hover:underline"
                     aria-label={`Corrigir ${linha.indicador}`}
-                    onClick={() => setForm({ indicador: linha.indicador, valor: String(linha.valor).replace('.', ','), qualificador: linha.qualificador, unidade: linha.unidade, fonte: linha.fonte })}
+                    onClick={() => abrir({ indicador: linha.indicador, valor: String(linha.valor).replace('.', ','), qualificador: linha.qualificador, unidade: linha.unidade, fonte: linha.fonte })}
                   >
                     Corrigir
                   </button>
@@ -92,32 +111,28 @@ export function NumerosDaEdicao({ eventoId, edicao }: { eventoId: number; edicao
           />
         )}
       </Carregando>
-      <form onSubmit={salvar} className="mt-6 flex flex-col gap-4" noValidate aria-label="Informar um número da edição">
-        <p className="text-sm font-semibold">Informar um número</p>
-        <div className="grid grid-cols-[minmax(0,1fr)] gap-4 md:grid-cols-2">
-          <Campo rotulo="Indicador" value={form.indicador} onChange={(campo) => mudar('indicador', campo.target.value)} erro={erros.indicador} ajuda="Ex.: Público total" maxLength={80} />
+      <Modal titulo="Informar um número" legenda={`Edição ${edicao} · o mesmo indicador informado de novo troca o valor`} aberto={aberto} aoFechar={() => setAberto(false)}>
+        <form onSubmit={salvar} className="flex flex-col gap-4" noValidate aria-label="Informar um número da edição">
           <div className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2">
-            <Seletor rotulo="Qualificador" value={form.qualificador} onChange={(campo) => mudar('qualificador', campo.target.value)} erro={erros.qualificador}>
-              <option value="EXATO">Exato</option>
-              <option value="MAIS_DE">Mais de</option>
-            </Seletor>
-            <Campo rotulo="Valor" value={form.valor} onChange={(campo) => mudar('valor', campo.target.value)} erro={erros.valor} inputMode="decimal" maxLength={20} />
+            <Campo rotulo="Indicador" value={form.indicador} onChange={(campo) => mudar('indicador', campo.target.value)} erro={erros.indicador} ajuda="Ex.: Público total" maxLength={80} />
+            <div className="grid grid-cols-[minmax(0,1fr)] gap-4 sm:grid-cols-2">
+              <Seletor rotulo="Qualificador" value={form.qualificador} onChange={(campo) => mudar('qualificador', campo.target.value)} erro={erros.qualificador}>
+                <option value="EXATO">Exato</option>
+                <option value="MAIS_DE">Mais de</option>
+              </Seletor>
+              <Campo rotulo="Valor" value={form.valor} onChange={(campo) => mudar('valor', campo.target.value)} erro={erros.valor} inputMode="decimal" maxLength={20} />
+            </div>
+            <Campo rotulo="Unidade" value={form.unidade} onChange={(campo) => mudar('unidade', campo.target.value)} erro={erros.unidade} ajuda="Ex.: pessoas" maxLength={20} />
+            <Campo rotulo="Fonte" value={form.fonte} onChange={(campo) => mudar('fonte', campo.target.value)} erro={erros.fonte} ajuda="Ex.: RBS, balanço da edição" maxLength={200} />
           </div>
-          <Campo rotulo="Unidade" value={form.unidade} onChange={(campo) => mudar('unidade', campo.target.value)} erro={erros.unidade} ajuda="Ex.: pessoas" maxLength={20} />
-          <Campo rotulo="Fonte" value={form.fonte} onChange={(campo) => mudar('fonte', campo.target.value)} erro={erros.fonte} ajuda="Ex.: RBS, balanço da edição" maxLength={200} />
-        </div>
-        {falha && <Aviso tipo="falha" titulo={falha} />}
-        {feito && (
-          <p className="text-sm font-semibold text-secao-texto" role="status">
-            {feito}
-          </p>
-        )}
-        <div>
-          <Botao type="submit" carregando={enviando} icone="ri-save-line">
-            Salvar número
-          </Botao>
-        </div>
-      </form>
+          {falha && <Aviso tipo="falha" titulo={falha} />}
+          <div>
+            <Botao type="submit" carregando={enviando} icone="ri-save-line">
+              Salvar número
+            </Botao>
+          </div>
+        </form>
+      </Modal>
     </Cartao>
   )
 }

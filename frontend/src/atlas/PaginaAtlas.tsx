@@ -373,7 +373,10 @@ export function PaginaAtlas() {
   return (
     <div className="flex h-[calc(100dvh-6rem)] min-h-[560px] gap-4 text-white lg:h-[calc(100dvh-2rem)]">
       {/* O fundo cobre a tela toda, por trás do menu flutuante: fluido na tela inicial, grafite depois. */}
-      <div aria-hidden="true" className={`fixed inset-0 -z-10 transition-colors duration-500 print:hidden ${fluido ? 'fundo-fluido' : 'bg-atlas'}`} />
+      <div aria-hidden="true" className={`fixed inset-0 -z-10 overflow-hidden transition-colors duration-500 print:hidden ${fluido ? '' : 'bg-atlas'}`}>
+        {/* O degradê da tela inicial anda devagar (F10); com movimento reduzido, fica parado. */}
+        {fluido && <div className="fundo-fluido absolute -inset-[6%] animate-fluir" />}
+      </div>
 
       <section className={`flex min-w-0 flex-1 flex-col ${modoDocumento && vistaMovel === 'conversa' ? 'max-lg:hidden' : ''} ${modoDocumento && fonteAberta ? 'lg:hidden' : ''}`} aria-label="Atlas">
         {modoDocumento ? (
@@ -471,7 +474,7 @@ export function PaginaAtlas() {
 
       {fonteAberta && (
         <Suspense fallback={<LinhaBuscando texto="Abrindo o documento…" />}>
-          <Visualizador fonte={fonteAberta} aoFechar={fecharFonte} className={modoDocumento ? 'lg:flex-1' : 'lg:w-[46%] lg:max-w-[720px] lg:shrink-0'} />
+          <Visualizador fonte={fonteAberta} aoFechar={fecharFonte} className={`animate-deslizar ${modoDocumento ? 'lg:flex-1' : 'lg:w-[46%] lg:max-w-[720px] lg:shrink-0'}`} />
         </Suspense>
       )}
 
@@ -480,7 +483,7 @@ export function PaginaAtlas() {
           sobretitulo={abaLateral === 'conversa' ? 'Atlas' : 'Fontes citadas'}
           titulo={abaLateral === 'conversa' ? tituloDa(conversa, relatorio) : 'Documentos usados na análise'}
           aoFechar={() => setDocumentoAberto(false)}
-          className={`w-full shrink-0 lg:w-[360px] xl:w-[420px] ${vistaMovel === 'documento' ? 'max-lg:hidden' : ''}`}
+          className={`w-full shrink-0 animate-deslizar lg:w-[360px] xl:w-[420px] ${vistaMovel === 'documento' ? 'max-lg:hidden' : ''}`}
           acoes={
             <div className="flex flex-wrap gap-2" role="tablist" aria-label="Painel do Atlas">
               <Chip role="tab" aria-selected={abaLateral === 'conversa'} variante={abaLateral === 'conversa' ? 'primario' : 'acao'} onClick={() => setAbaLateral('conversa')}>

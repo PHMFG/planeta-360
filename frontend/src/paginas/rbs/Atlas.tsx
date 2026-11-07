@@ -6,12 +6,12 @@ import { estadoDosProvedores, listarTurnos, obterTurno, testarProvedor, type Est
 import { listarParcerias } from '../../api/parcerias'
 import { useDados } from '../../api/useDados'
 import { dolares, duracao, GavetaDoDiagnostico, SeloDoResultado, TracoDoTurno } from '../../atlas/Diagnostico'
-import { LinhaBuscando } from '../../atlas/Elementos'
+import { Chip, LinhaBuscando } from '../../atlas/Elementos'
 import { Aviso } from '../../componentes/Aviso'
 import { Botao } from '../../componentes/Botao'
 import { CabecalhoSecao } from '../../componentes/CabecalhoSecao'
 import { Campo } from '../../componentes/Campo'
-import { Carregando } from '../../componentes/Carregando'
+import { Carregando, Esqueleto } from '../../componentes/Carregando'
 import { Cartao } from '../../componentes/Cartao'
 import { Seletor } from '../../componentes/Formulario'
 import { Paginacao } from '../../componentes/LinhaDoTempo'
@@ -24,13 +24,19 @@ import { AbaPrazos } from './AtlasPrazos'
 
 type Aba = 'turnos' | 'provedores' | 'documentos' | 'busca' | 'prazos' | 'conversa'
 
+// O uso do dia a dia (F9): conversar com o Atlas, os documentos dele e os prazos.
 const ABAS: { codigo: Aba; nome: string }[] = [
+  { codigo: 'conversa', nome: 'Conversa' },
+  { codigo: 'documentos', nome: 'Documentos' },
+  { codigo: 'prazos', nome: 'Prazos' },
+]
+
+// O que só a equipe olha: fica atrás de "Diagnóstico", visível quando o diagnóstico da API está ligado (perfis dev e demo; a rota
+// dos provedores responde 404 com ele desligado).
+const DIAGNOSTICO: { codigo: Aba; nome: string }[] = [
   { codigo: 'turnos', nome: 'Turnos' },
   { codigo: 'provedores', nome: 'Provedores' },
-  { codigo: 'documentos', nome: 'Documentos' },
   { codigo: 'busca', nome: 'Busca de teste' },
-  { codigo: 'prazos', nome: 'Prazos' },
-  { codigo: 'conversa', nome: 'Conversa' },
 ]
 
 const NOME_DO_PROVEDOR: Record<NomeDoProvedor, string> = { llm: 'Modelo de linguagem', jev: 'JEV', gemini: 'Embeddings (Gemini)' }
@@ -244,7 +250,13 @@ function AbaProvedores() {
 
 export function AtlasRbs() {
   const [busca, setBusca] = useSearchParams()
-  const aba: Aba = ABAS.find((item) => item.codigo === busca.get('aba'))?.codigo ?? 'turnos'
+  const debug = useDados(() => estadoDosProvedores().catch(() => null), [])
+  const comDiagnostico = Boolean(debug.dado)
+  const pedida = busca.get('aba')
+  const aba: Aba = ABAS.find((item) => item.codigo === pedida)?.codigo ?? (comDiagnostico ? DIAGNOSTICO.find((item) => item.codigo === pedida)?.codigo : undefined) ?? 'conversa'
+  const noDiagnostico = DIAGNOSTICO.some((item) => item.codigo === aba)
+  // Quem chega por ?aba=turnos espera a resposta do debug antes de cair na Conversa.
+  const esperando = DIAGNOSTICO.some((item) => item.codigo === pedida) && !debug.pronto
   const turno = busca.get('turno')
 
   function mudar(campo: 'aba' | 'turno', valor: string | null) {
@@ -256,29 +268,74 @@ export function AtlasRbs() {
     })
   }
 
+  // A Conversa é a tela inteira do Atlas, como a da marca (pedido do ph, 06/11); as outras abas são a gestão de sempre.
+  if (aba === 'conversa' && !esperando) {
+    return (
+      <AbaConversa
+        atalhos={
+          <>
+            <Chip icone="ri-file-text-line" onClick={() => mudar('aba', 'documentos')}>
+              Documentos
+            </Chip>
+            <Chip icone="ri-calendar-line" onClick={() => mudar('aba', 'prazos')}>
+              Prazos
+            </Chip>
+            {comDiagnostico && (
+              <Chip icone="ri-bug-line" onClick={() => mudar('aba', 'turnos')}>
+                Diagnóstico
+              </Chip>
+            )}
+          </>
+        }
+      />
+    )
+  }
+
   return (
     <div data-secao="neutro" className="flex min-w-0 flex-col gap-4">
-      <CabecalhoSecao trilha="Planeta Atlântida / RBS · Gestão" titulo="Atlas" subtitulo="O que o assistente fez em cada turno, em todas as parcerias, o estado dos provedores e os documentos de que ele se alimenta." />
-      <div className="flex flex-wrap gap-2" role="tablist" aria-label="Atlas na gestão">
-        {ABAS.map((item) => (
+      <CabecalhoSecao
+        trilha="Planeta Atlântida / RBS · Gestão"
+        titulo="Atlas"
+        subtitulo="Pergunte sobre a base de todas as marcas, cuide dos documentos que o Atlas consulta e dos prazos que ele acompanha."
+      />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap gap-2" role="tablist" aria-label="Atlas na gestão">
+          {(noDiagnostico ? DIAGNOSTICO : ABAS).map((item) => (
+            <button
+              key={item.codigo}
+              type="button"
+              role="tab"
+              aria-selected={aba === item.codigo}
+              onClick={() => mudar('aba', item.codigo)}
+              className={`h-10 rounded-full border px-4 text-sm font-semibold transition-colors duration-(--duracao-curta) ${aba === item.codigo ? 'border-tinta bg-tinta text-white' : 'border-borda bg-white hover:bg-cinza-100'}`}
+            >
+              {item.nome}
+            </button>
+          ))}
+        </div>
+        {comDiagnostico && (
           <button
-            key={item.codigo}
             type="button"
-            role="tab"
-            aria-selected={aba === item.codigo}
-            onClick={() => mudar('aba', item.codigo)}
-            className={`h-10 rounded-full border px-4 text-sm font-semibold ${aba === item.codigo ? 'border-tinta bg-tinta text-white' : 'border-borda bg-white hover:bg-cinza-100'}`}
+            className="flex items-center gap-1.5 text-[13px] font-semibold text-texto-2 hover:text-tinta hover:underline"
+            onClick={() => mudar('aba', noDiagnostico ? 'conversa' : 'turnos')}
           >
-            {item.nome}
+            {noDiagnostico ? (
+              '← Voltar ao Atlas'
+            ) : (
+              <>
+                <i className="ri-bug-line" aria-hidden="true" /> Diagnóstico
+                <span className="rounded-full bg-cinza-100 px-1.5 py-0.5 text-[10px] font-bold tracking-wide uppercase">debug</span>
+              </>
+            )}
           </button>
-        ))}
+        )}
       </div>
-      {aba === 'turnos' && <AbaTurnos aoAbrir={(valor) => mudar('turno', valor)} />}
-      {aba === 'provedores' && <AbaProvedores />}
-      {aba === 'documentos' && <AbaDocumentos />}
-      {aba === 'conversa' && <AbaConversa />}
-      {aba === 'busca' && <AbaBuscaDeTeste />}
-      {aba === 'prazos' && <AbaPrazos />}
+      {esperando && <Esqueleto linhas={4} />}
+      {!esperando && aba === 'turnos' && <AbaTurnos aoAbrir={(valor) => mudar('turno', valor)} />}
+      {!esperando && aba === 'provedores' && <AbaProvedores />}
+      {!esperando && aba === 'documentos' && <AbaDocumentos />}
+      {!esperando && aba === 'busca' && <AbaBuscaDeTeste />}
+      {!esperando && aba === 'prazos' && <AbaPrazos />}
       {turno && <GavetaDoTurno turno={turno} aoFechar={() => mudar('turno', null)} />}
     </div>
   )

@@ -150,14 +150,16 @@ public class RelatorioRepositorio {
     }
 
     /**
-     * Os números da versão, com seção, nome e unidade do catálogo. [RELATORIO] Parte do catálogo (tabela indicador), não das
-     * linhas gravadas: o indicador sem linha nesta versão sai como indisponível (sem recorte, valor nulo), então a leitura
-     * sempre traz as 6 seções e os 17 indicadores, até de versões geradas antes de a geração registrar todos eles. A ordem
-     * é montada pelo RelatorioService.
+     * Os números da versão, com seção, nome e unidade. [RELATORIO] Parte do catálogo (tabela indicador), não das linhas
+     * gravadas: o indicador sem linha nesta versão sai como indisponível (sem recorte, valor nulo), então a leitura sempre
+     * traz as 6 seções e os 17 indicadores, até de versões geradas antes de a geração registrar todos eles. A unidade é a do
+     * recorte (relatorio_indicador.unidade, o que a RBS digitou no número da edição) quando houver; sem ela, vale a do catálogo.
+     * A ordem é montada pelo RelatorioService.
      */
     public List<LinhaDeIndicador> indicadores(long relatorioId) {
         return jdbc.sql("""
-                        SELECT i.secao, i.codigo, i.nome, coalesce(ri.recorte, '') AS recorte, ri.valor, i.unidade,
+                        SELECT i.secao, i.codigo, i.nome, coalesce(ri.recorte, '') AS recorte, ri.valor,
+                               coalesce(ri.unidade, i.unidade) AS unidade,
                                CASE WHEN ri.indicador_codigo IS NULL THEN 'sem registro na base' ELSE ri.base_calculo END AS base_calculo,
                                coalesce(ri.disponivel, FALSE) AS disponivel
                         FROM indicador i

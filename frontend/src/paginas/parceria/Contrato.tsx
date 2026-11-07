@@ -38,7 +38,7 @@ export function Contrato() {
       <CabecalhoSecao
         trilha={rbs ? 'Planeta Atlântida / RBS · Gestão' : 'Planeta Atlântida / Patrocinador'}
         titulo="Contrato"
-        subtitulo="Contrato final assinado, disponibilizado pela RBS para consulta, e os dados de quem assina."
+        subtitulo="O contrato assinado e quem assina pela sua marca."
       />
       <AvisoAbaFechada parceria={parceria} estado={estado} nome={SECAO.nome} rbs={rbs} />
       {podeVer && <ConteudoDoContrato rbs={rbs} />}
@@ -90,10 +90,6 @@ function ConteudoDoContrato({ rbs }: { rbs: boolean }) {
               )}
             </div>
           </div>
-
-          <Aviso titulo="Documento final">
-            O PDF já assinado é disponibilizado pela RBS. Esta tela não realiza assinatura eletrônica nem altera o contrato.
-          </Aviso>
 
           {rbs && <EnvioDaRbs aoEnviar={dados.recarregar} />}
 

@@ -131,15 +131,32 @@ public interface ProvedorDeLlm {
     }
 
     /**
-     * O que vai ao modelo: a {@code sessao} (o id da conversa, estável, vai no cabeçalho {@code x-opencode-session}), as mensagens
-     * na ordem (a primeira é a de sistema) e as ferramentas do estado atual.
+     * Uma imagem que vai junto da mensagem do usuário, em base64 (o pedido de visão do E9). O provedor compatível com a OpenAI a
+     * manda como {@code image_url} com o prefixo {@code data:}; o que não lê imagem recusa o pedido.
      */
-    record PedidoAoLlm(String sessao, List<MensagemDeChat> mensagens, List<DefinicaoDeFerramenta> ferramentas) {
+    record Imagem(String mimeType, String base64) {
+    }
+
+    /**
+     * O que vai ao modelo: a {@code sessao} (o id da conversa, estável, vai no cabeçalho {@code x-opencode-session}), as mensagens
+     * na ordem (a primeira é a de sistema), as ferramentas do estado atual e, quando há, a imagem que acompanha a mensagem da pessoa.
+     */
+    record PedidoAoLlm(String sessao, List<MensagemDeChat> mensagens, List<DefinicaoDeFerramenta> ferramentas, Imagem imagem) {
 
         public PedidoAoLlm {
             mensagens = List.copyOf(mensagens);
             ferramentas = ferramentas == null ? List.of() : List.copyOf(ferramentas);
         }
+
+        /** O pedido sem imagem (o de todo o chat e o da extração de texto). */
+        public PedidoAoLlm(String sessao, List<MensagemDeChat> mensagens, List<DefinicaoDeFerramenta> ferramentas) {
+            this(sessao, mensagens, ferramentas, null);
+        }
+    }
+
+    /** Este provedor entende imagem? Falso por padrão; quem manda {@code image_url} sobrescreve. */
+    default boolean leImagem() {
+        return false;
     }
 
     /**

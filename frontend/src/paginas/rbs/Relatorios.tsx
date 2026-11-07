@@ -7,7 +7,7 @@ import { enderecoRelatoriosCsv, gerarRelatorio, listarRelatorios, mudarStatusRel
 import { useDados } from '../../api/useDados'
 import { Aviso } from '../../componentes/Aviso'
 import { CabecalhoSecao } from '../../componentes/CabecalhoSecao'
-import { Cartao, Indicador } from '../../componentes/Cartao'
+import { Cartao } from '../../componentes/Cartao'
 import { Carregando } from '../../componentes/Carregando'
 import { Filtros, Seletor } from '../../componentes/Formulario'
 import { NumerosDaEdicao } from '../../componentes/NumerosDaEdicao'
@@ -87,18 +87,6 @@ export function Relatorios() {
         }
       />
 
-      <div className="grid gap-4 md:grid-cols-4">
-        {/* Contagem pela versão mais nova (a mesma do filtro); a legenda lembra quantas marcas já veem uma versão anterior. */}
-        <Indicador rotulo="Sem relatório" valor={contar('SEM_RELATORIO')} />
-        <Indicador rotulo="Rascunho" valor={contar('RASCUNHO')} legenda="Versão mais nova ainda não vista pela marca" />
-        <Indicador rotulo="Validado" valor={contar('VALIDADO')} legenda="Números conferidos, falta disponibilizar" />
-        <Indicador
-          rotulo="Disponibilizado"
-          valor={contar('DISPONIBILIZADO')}
-          legenda={`Versão mais nova com a marca · ${todas.filter((linha) => linha.disponibilizada).length} marcas veem algum relatório`}
-        />
-      </div>
-
       <Cartao>
         <div className="mb-4 flex flex-wrap items-end justify-between gap-4">
           <Filtros<Situacao>
@@ -106,10 +94,11 @@ export function Relatorios() {
             aoMudar={setSituacao}
             opcoes={[
               { valor: 'TODAS', nome: 'Todas', total: contar('TODAS') },
-              { valor: 'SEM_RELATORIO', nome: 'Sem relatório' },
-              { valor: 'RASCUNHO', nome: 'Rascunho' },
-              { valor: 'VALIDADO', nome: 'Validado' },
-              { valor: 'DISPONIBILIZADO', nome: 'Disponibilizado' },
+              // Os quatro contadores viraram a contagem de cada filtro (pela versão mais nova do relatório).
+              { valor: 'SEM_RELATORIO', nome: 'Sem relatório', total: contar('SEM_RELATORIO') },
+              { valor: 'RASCUNHO', nome: 'Rascunho', total: contar('RASCUNHO') },
+              { valor: 'VALIDADO', nome: 'Validado', total: contar('VALIDADO') },
+              { valor: 'DISPONIBILIZADO', nome: 'Disponibilizado', total: contar('DISPONIBILIZADO') },
             ]}
           />
           <div className="w-64">
@@ -159,12 +148,17 @@ export function Relatorios() {
             />
           )}
         </Carregando>
-        {/* As duas colunas de números se explicam (U03). */}
-        <p className="mt-3 text-xs font-medium text-texto-2">
-          Indicadores: dos 17 do relatório, quantos têm dado e quantos saem como indisponíveis, com o motivo. Faltantes: o que impede
-          ou enfraquece o relatório, como mídia abaixo do previsto, aplicação sem foto ou entrega pendente. O pós-venda de cada
-          parceria se publica em Abrir.
-        </p>
+        {/* As duas colunas de números se explicam (U03), recolhidas num "i". */}
+        <details className="mt-3 text-xs font-medium text-texto-2">
+          <summary className="inline-flex cursor-pointer items-center gap-1 font-semibold hover:text-tinta">
+            <i className="ri-information-line text-sm" aria-hidden="true" /> Como ler as colunas
+          </summary>
+          <p className="mt-2">
+            Indicadores: dos 17 do relatório, quantos têm dado e quantos saem como indisponíveis, com o motivo. Faltantes: o que
+            impede ou enfraquece o relatório, como mídia abaixo do previsto, aplicação sem foto ou entrega pendente. O pós-venda de
+            cada parceria se publica em Abrir.
+          </p>
+        </details>
       </Cartao>
 
       {edicaoDosNumeros && <NumerosDaEdicao key={edicaoDosNumeros.id} eventoId={edicaoDosNumeros.id} edicao={edicaoDosNumeros.edicao} />}

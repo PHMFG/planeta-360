@@ -60,7 +60,13 @@ class ResultadosDaEdicaoTest extends ApoioDeDireitos {
         assertThat(festivalNumero(depois, "disponivel")).containsExactly(true, true);
         assertThat(festivalNumero(depois, "recorte")).containsExactlyInAnyOrder("Público total", "Marcas patrocinadoras");
         assertThat(festivalNumero(depois, "valor")).containsExactlyInAnyOrder(80000, 39);
+        assertThat(festivalNumero(depois, "unidade")).as("a unidade é a do recorte, não a do catálogo")
+                .containsExactlyInAnyOrder("pessoas", "marcas");
         assertThat(lerLista(depois, "$.secoes[*].indicadores[?(@.recorte=='Público total')].baseCalculo")).containsExactly("mais de; RBS, balanço da edição");
+        // O CSV da rota 36 usa a mesma unidade do recorte.
+        MvcTestResult csv = rbs.get("/api/relatorios/" + lerJson(depois, "$.id") + "/csv");
+        assertThat(new String(csv.getResponse().getContentAsByteArray(), java.nio.charset.StandardCharsets.UTF_8))
+                .contains("O festival em números;FESTIVAL_NUMERO;O festival em números;Público total;80000;pessoas;");
         assertThat(contar("SELECT count(*) FROM relatorio_indicador WHERE relatorio_id = ? AND indicador_codigo = 'FESTIVAL_NUMERO' AND NOT disponivel", idAntes))
                 .as("a fotografia antiga continua indisponível").isEqualTo(1);
 

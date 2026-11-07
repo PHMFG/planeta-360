@@ -49,4 +49,9 @@ public final class ProvedorComDisjuntor implements ProvedorDeLlm {
     public String modelo() {
         return provedor.modelo();
     }
+
+    @Override
+    public boolean leImagem() {
+        return provedor.leImagem();
+    }
 }

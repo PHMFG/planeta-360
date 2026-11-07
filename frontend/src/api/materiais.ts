@@ -113,7 +113,7 @@ export const criarEntrega = (
   dados: { abaCodigo: CodigoAba; titulo: string; descricao?: string; prazo?: string; status?: StatusEntrega },
 ) => pedir<Entrega>(`/parcerias/${parceriaId}/entregas`, { metodo: 'POST', corpo: dados })
 
-export type FiltrosFila = { status?: string; abaCodigo?: string; q?: string; atrasadas?: boolean; pagina?: number; tamanho?: number }
+export type FiltrosFila = { status?: string; abaCodigo?: string; parceriaId?: number; q?: string; atrasadas?: boolean; pagina?: number; tamanho?: number }
 
 export const listarFila = (filtros: FiltrosFila) => pedir<Pagina<ItemFila>>(`/entregas${consulta(filtros)}`)
 

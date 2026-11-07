@@ -4,15 +4,27 @@ import type { ButtonHTMLAttributes, ReactNode } from 'react'
 import { Link, type LinkProps } from 'react-router'
 
 /** P360/Atlas · Orbe (167:8): o globo sobre o degradê azul, roxo e rosa. */
-export function Orbe({ tamanho = 32 }: { tamanho?: 24 | 32 | 36 | 40 }) {
-  const icone = tamanho >= 36 ? 'text-xl' : tamanho === 32 ? 'text-lg' : 'text-sm'
+export type EstadoDaOrbe = 'parada' | 'pensando' | 'escrevendo'
+
+/**
+ * A orbe tem três estados (plano da base da RBS, F10): parada, ela respira devagar; pensando (o modelo trabalha, ou a importação
+ * lê o arquivo), um anel gira em volta; escrevendo (o texto chega), ela brilha. Com movimento reduzido, fica parada.
+ * O nome de transição "atlas-orbe" deixa a orbe do menu crescer até a da página quando o Atlas abre.
+ */
+export function Orbe({ tamanho = 32, estado, transicao = false }: { tamanho?: 24 | 32 | 36 | 40 | 56 | 72; estado?: EstadoDaOrbe; transicao?: boolean }) {
+  const icone = tamanho >= 56 ? 'text-3xl' : tamanho >= 36 ? 'text-xl' : tamanho === 32 ? 'text-lg' : 'text-sm'
+  const animacao = estado === 'parada' ? 'animate-respirar' : estado === 'escrevendo' ? 'animate-escrever' : ''
   return (
-    <span
-      aria-hidden="true"
-      style={{ width: tamanho, height: tamanho }}
-      className="grid shrink-0 place-items-center rounded-full border border-white/25 bg-[linear-gradient(135deg,#0a2a6e_14%,#572781_54%,#e1047d_86%)] text-white"
-    >
-      <i className={`ri-globe-fill ${icone}`} />
+    <span aria-hidden="true" className="relative grid shrink-0 place-items-center" style={{ width: tamanho, height: tamanho, viewTransitionName: transicao ? 'atlas-orbe' : undefined }}>
+      {estado === 'pensando' && (
+        <span className="absolute -inset-1 animate-pensar rounded-full bg-[conic-gradient(from_0deg,transparent_0deg,#c9a4e7_120deg,#e1047d_200deg,transparent_280deg)] opacity-90" />
+      )}
+      <span
+        style={{ width: tamanho, height: tamanho }}
+        className={`relative grid place-items-center rounded-full border border-white/25 bg-[linear-gradient(135deg,#0a2a6e_14%,#572781_54%,#e1047d_86%)] text-white ${animacao}`}
+      >
+        <i className={`ri-globe-fill ${icone}`} />
+      </span>
     </span>
   )
 }
@@ -74,7 +86,7 @@ export const PONTO_RASCUNHO = '#ffd201'
 /** Atlas/Mensagem · Você (179:1200): rótulo "VOCÊ" e a bolha à direita, com o canto de baixo mais fechado. */
 export function MensagemVoce({ texto }: { texto: string }) {
   return (
-    <div className="flex flex-col items-end gap-1.5 pl-10">
+    <div className="animate-entrar flex flex-col items-end gap-1.5 pl-10">
       <span className="text-[11px] font-bold tracking-[0.12em] text-white/64 uppercase">Você</span>
       <p className="max-w-full rounded-[20px_20px_6px_20px] bg-white/16 px-[18px] py-3.5 text-[15px] leading-normal font-medium break-words whitespace-pre-wrap text-white">
         {texto}
@@ -84,10 +96,11 @@ export function MensagemVoce({ texto }: { texto: string }) {
 }
 
 /** A resposta do modelo de linguagem: orbe, "atlas" e o conteúdo (texto, cartão, documento). */
-export function BlocoDoAtlas({ children, compacto = false }: { children: ReactNode; compacto?: boolean }) {
+export function BlocoDoAtlas({ children, compacto = false, estado }: { children: ReactNode; compacto?: boolean; estado?: EstadoDaOrbe }) {
+  // A resposta entra deslizando de leve; só a que está chegando mostra o estado da orbe (pensando ou escrevendo).
   return (
-    <div className={`flex ${compacto ? 'gap-2.5' : 'gap-3.5'}`}>
-      <Orbe tamanho={compacto ? 24 : 32} />
+    <div className={`flex animate-entrar ${compacto ? 'gap-2.5' : 'gap-3.5'}`}>
+      <Orbe tamanho={compacto ? 24 : 32} estado={estado} />
       <div className="flex min-w-0 flex-1 flex-col gap-3.5">
         <span className="text-[15px] font-semibold tracking-[-0.01em] text-white">atlas</span>
         {children}

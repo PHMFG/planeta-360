@@ -33,7 +33,8 @@ public class ParceriaRepositorio {
     /** A parceria sem abas e sem e-mails, com o necessário para a rota 9 e para a edição. */
     public record ParceriaBase(Long id, Long patrocinadorId, String patrocinadorNome, String segmento, Long eventoId,
                                String eventoNome, Integer edicao, String cotaCodigo, String cotaNome, String nomeProduto,
-                               BigDecimal valorInvestimento, String baseValor, String situacao, OffsetDateTime criadoEm) {
+                               BigDecimal valorInvestimento, String baseValor, String situacao, String atendimentoNome,
+                               String atendimentoEmail, OffsetDateTime criadoEm) {
     }
 
     /**
@@ -150,7 +151,8 @@ public class ParceriaRepositorio {
         return jdbc.sql("""
                         SELECT pa.id, pat.id AS patrocinador_id, pat.nome_canonico AS patrocinador_nome, pat.segmento,
                                e.id AS evento_id, e.nome AS evento_nome, e.edicao, ct.codigo AS cota_codigo, ct.nome AS cota_nome,
-                               pa.nome_produto, pa.valor_investimento, pa.base_valor, pa.situacao, pa.criado_em
+                               pa.nome_produto, pa.valor_investimento, pa.base_valor, pa.situacao,
+                               pa.atendimento_nome, pa.atendimento_email, pa.criado_em
                         FROM parceria pa
                         JOIN patrocinador pat ON pat.id = pa.patrocinador_id
                         JOIN evento e ON e.id = pa.evento_id
@@ -162,7 +164,16 @@ public class ParceriaRepositorio {
                 .optional()
                 .map(b -> new ParceriaBase(b.id(), b.patrocinadorId(), b.patrocinadorNome(), b.segmento(), b.eventoId(),
                         b.eventoNome(), b.edicao(), b.cotaCodigo(), b.cotaNome(), b.nomeProduto(), b.valorInvestimento(),
-                        b.baseValor(), b.situacao(), Datas.emBrasilia(b.criadoEm())));
+                        b.baseValor(), b.situacao(), b.atendimentoNome(), b.atendimentoEmail(), Datas.emBrasilia(b.criadoEm())));
+    }
+
+    /** [U7] O atendimento da marca (nome e e-mail): a RBS edita no Perfil e o FAQ da marca mostra. */
+    public void atualizarAtendimento(long parceriaId, String atendimentoNome, String atendimentoEmail) {
+        jdbc.sql("UPDATE parceria SET atendimento_nome = :nome, atendimento_email = :email WHERE id = :id")
+                .param("nome", atendimentoNome)
+                .param("email", atendimentoEmail)
+                .param("id", parceriaId)
+                .update();
     }
 
     public void atualizarParceria(long parceriaId, String nomeProduto, BigDecimal valorInvestimento, String baseValor,

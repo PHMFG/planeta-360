@@ -121,9 +121,11 @@ class LoopSemTransacaoComJevTest {
                 ApoioDoAtlas.valores(VISITANTES, 1200L, CADASTROS, 1072L)), requisicao());
         assertThat(pronta.itens()).anyMatch(ItemRelatorioPronto.class::isInstance);
 
-        // todos os pontos foram consultados, e nunca com transação aberta nem com conexão em uso
+        // todos os pontos do turno foram consultados, e nunca com transação aberta nem com conexão em uso. O ARQUIVO_DESTINO fica
+        // de fora: ele é da importação, não de uma conversa.
         assertThat(jev.recebidas().stream().map(JevRoteirizado.Recebida::ponto).distinct().toList())
-                .containsExactlyInAnyOrder(PontoDoJev.values());
+                .containsExactlyInAnyOrder(java.util.Arrays.stream(PontoDoJev.values())
+                        .filter(ponto -> ponto != PontoDoJev.ARQUIVO_DESTINO).toArray(PontoDoJev[]::new));
         assertThat(jev.algumaComTransacaoAberta()).as("transação aberta durante uma requisição ao JEV").isFalse();
         assertThat(jev.algumaComConexaoEmUso()).as("conexão do pool em uso durante uma requisição ao JEV").isFalse();
         assertThat(modelo.transacaoAtivaEmCadaPedido()).as("transação aberta em cada ida ao modelo").containsOnly(false);

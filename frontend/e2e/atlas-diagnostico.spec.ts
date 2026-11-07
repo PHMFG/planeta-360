@@ -1,4 +1,4 @@
-// A gaveta do diagnóstico na conversa da marca, a página Atlas da RBS e o botão Debug só para a RBS.
+// A gaveta do diagnóstico na conversa da marca, a página Atlas da RBS e nenhum botão Debug na tela.
 import { expect, test, type Page } from '@playwright/test'
 import { capturar, entrar, parceriaDa } from './apoio.ts'
 
@@ -40,7 +40,7 @@ test('a marca abre o diagnóstico da resposta, e a RBS vê o mesmo turno @vivo',
   const contexto = await browser.newContext({ baseURL: test.info().project.use.baseURL })
   const rbs = await contexto.newPage()
   await entrar(rbs, 'rbs')
-  await rbs.goto('/rbs/atlas')
+  await rbs.goto('/rbs/atlas?aba=turnos')
   await expect(rbs.getByRole('tab', { name: 'Turnos', selected: true })).toBeVisible()
   const primeira = rbs.locator('tbody tr').first()
   await expect(primeira).toContainText('Cliente Amarelo')
@@ -57,7 +57,7 @@ test('a marca abre o diagnóstico da resposta, e a RBS vê o mesmo turno @vivo',
 
 test('a RBS vê os provedores e testa a conexão @vivo', async ({ page }) => {
   await entrar(page, 'rbs')
-  await page.goto('/rbs/atlas')
+  await page.goto('/rbs/atlas?aba=turnos')
   await page.getByRole('tab', { name: 'Provedores' }).click()
   await expect(page.getByRole('heading', { name: 'Modelo de linguagem' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'JEV' })).toBeVisible()
@@ -72,16 +72,18 @@ test('o item Atlas aparece no menu da RBS', async ({ page }) => {
   await entrar(page, 'rbs')
   await page.getByRole('link', { name: 'Atlas', exact: true }).click()
   await expect(page).toHaveURL(/\/rbs\/atlas/)
-  await expect(page.getByRole('heading', { name: 'Atlas', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Todas as marcas' })).toBeVisible()
 })
 
-test('o botão Debug só aparece para a RBS', async ({ page }) => {
+test('não há botão Debug na tela, para ninguém', async ({ page }) => {
+  // Desde 06/11 (pedido do ph) a chave do modelo vem só do servidor (variável de ambiente ou config/segredos.local.properties).
   await entrar(page, 'amarelo')
   await expect(page.getByRole('link', { name: 'atlas', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: /^Debug/ })).toHaveCount(0)
   await page.getByRole('button', { name: 'Sair' }).click()
   await entrar(page, 'rbs')
-  await expect(page.getByRole('button', { name: /^Debug/ })).toBeVisible()
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+  await expect(page.getByRole('button', { name: /^Debug/ })).toHaveCount(0)
 })
 
 test.describe('no celular', () => {
@@ -89,7 +91,7 @@ test.describe('no celular', () => {
 
   test('a página da RBS e a gaveta cabem na tela', async ({ page }) => {
     await entrar(page, 'rbs')
-    await page.goto('/rbs/atlas')
+    await page.goto('/rbs/atlas?aba=turnos')
     await expect(page.getByRole('tab', { name: 'Turnos' })).toBeVisible()
     await semRolagemHorizontal(page)
     await capturar(page, 'rbs-atlas-celular')

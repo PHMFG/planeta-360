@@ -1,0 +1,140 @@
+/* Movimento do portal (plano da base da RBS, F10): durações e curvas como tokens, as animações de entrada, o Atlas e o
+   bloco do movimento reduzido. Regra: o movimento diz o que mudou (entrou, salvou, carregou), nunca decora, e não passa
+   de 250 ms, salvo o "respirar" do Atlas, que é contínuo e lento. Só transform e opacity, para não refazer o layout. */
+
+@theme {
+  --duracao-curta: 120ms;
+  --duracao-media: 200ms;
+  --duracao-longa: 480ms;
+  --curva-saida: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --curva-entrada: cubic-bezier(0.4, 0, 1, 1);
+
+  --animate-entrar: entrar 200ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-surgir: surgir 160ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-sumir: sumir 120ms cubic-bezier(0.4, 0, 1, 1) both;
+  --animate-crescer: crescer 180ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-encolher: encolher 120ms cubic-bezier(0.4, 0, 1, 1) both;
+  --animate-subir-aviso: subir-aviso 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-brilho: brilho 1.4s ease-in-out infinite;
+  --animate-respirar: respirar 4s ease-in-out infinite;
+  --animate-pensar: pensar 1.2s linear infinite;
+  --animate-escrever: escrever 1.6s ease-in-out infinite;
+  --animate-destacar: destacar 2s ease-out both;
+  --animate-deslizar: deslizar 240ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-fluir: fluir 24s ease-in-out infinite alternate;
+
+  @keyframes entrar {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes surgir {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes sumir {
+    from { opacity: 1; }
+    to { opacity: 0; }
+  }
+  @keyframes crescer {
+    from { opacity: 0; transform: scale(0.97); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes encolher {
+    from { opacity: 1; transform: none; }
+    to { opacity: 0; transform: scale(0.98); }
+  }
+  @keyframes subir-aviso {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: none; }
+  }
+  /* O esqueleto do carregando: uma faixa clara que passa da esquerda para a direita. */
+  @keyframes brilho {
+    from { background-position: 150% 0; }
+    to { background-position: -50% 0; }
+  }
+  /* A orbe do Atlas parada: respira devagar. */
+  @keyframes respirar {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.06); }
+  }
+  /* A orbe enquanto o modelo pensa: gira. */
+  @keyframes pensar {
+    to { transform: rotate(360deg); }
+  }
+  /* A orbe enquanto o texto chega: brilha. */
+  @keyframes escrever {
+    0%, 100% { filter: brightness(1) saturate(1); }
+    50% { filter: brightness(1.25) saturate(1.3); }
+  }
+  /* O painel que abre ao lado (o documento do Atlas): desliza da direita. */
+  @keyframes deslizar {
+    from { opacity: 0; transform: translateX(24px); }
+  }
+  /* O degradê do fundo do Atlas: as manchas andam devagar, quase parado. */
+  @keyframes fluir {
+    from { transform: scale(1) translate3d(0, 0, 0); }
+    to { transform: scale(1.1) translate3d(-2%, 1.5%, 0); }
+  }
+  /* A linha que acabou de chegar (um arquivo enviado, uma linha confirmada): a tinta da seção, que some. */
+  @keyframes destacar {
+    from { background-color: var(--secao-tinta); }
+    to { background-color: transparent; }
+  }
+}
+
+/* Itens de uma lista que entram em cascata: o atraso vem do índice, em --ordem. */
+@utility entrar-em-cascata {
+  animation: entrar 200ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: calc(min(var(--ordem, 0), 12) * 40ms);
+}
+
+/* O esqueleto: um bloco cinza com o brilho passando. */
+@utility esqueleto {
+  background-color: var(--color-cinza-100);
+  background-image: linear-gradient(90deg, transparent 0%, rgb(255 255 255 / 70%) 50%, transparent 100%);
+  background-size: 50% 100%;
+  background-repeat: no-repeat;
+  animation: brilho 1.4s ease-in-out infinite;
+}
+
+/* Troca de tela (View Transitions, pelo React Router): só o conteúdo entra e sai; o menu e a barra do topo ficam parados. O nome
+   vale só enquanto a transição acontece: um view-transition-name fixo cria contexto de empilhamento e prende os modais por baixo
+   da barra do topo. Navegador sem :active-view-transition ignora a regra e troca a tela sem animação. */
+:root:active-view-transition .conteudo-da-pagina {
+  view-transition-name: conteudo;
+}
+
+::view-transition-old(conteudo) {
+  animation: 120ms cubic-bezier(0.4, 0, 1, 1) both sumir;
+}
+::view-transition-new(conteudo) {
+  animation: 200ms cubic-bezier(0.2, 0.8, 0.2, 1) both entrar;
+}
+/* Abrir o Atlas: a orbe do botão do menu cresce até a da página (as duas têm o nome "atlas-orbe"). */
+::view-transition-group(atlas-orbe) {
+  animation-duration: 320ms;
+  animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+/* O resto da página não pisca: sem o fade padrão do navegador na raiz. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+}
+
+/* Movimento reduzido: nenhuma animação de deslocamento, escala ou brilho, e as transições ficam instantâneas. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}

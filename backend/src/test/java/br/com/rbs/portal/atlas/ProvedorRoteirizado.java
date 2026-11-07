@@ -31,6 +31,7 @@ public class ProvedorRoteirizado implements ProvedorDeLlm {
     private final List<Integer> idasEmFluxo = new ArrayList<>();
     private final List<PedidoDeResumo> resumosPedidos = new CopyOnWriteArrayList<>();
     private volatile Function<PedidoDeResumo, String> resumidor = pedido -> RESUMO_PADRAO;
+    private volatile boolean leImagem = true;
     private int registrados;
 
     /** O resumo do raciocínio que o roteiro devolve quando o teste não manda outro: passa na checagem do texto do chat. */
@@ -49,7 +50,14 @@ public class ProvedorRoteirizado implements ProvedorDeLlm {
         idasEmFluxo.clear();
         resumosPedidos.clear();
         resumidor = pedido -> RESUMO_PADRAO;
+        leImagem = true;
         registrados = 0;
+        return this;
+    }
+
+    /** Este provedor do roteiro não entende imagem (o teste da importação de imagem sem visão). */
+    public ProvedorRoteirizado semVisao() {
+        leImagem = false;
         return this;
     }
 
@@ -168,6 +176,11 @@ public class ProvedorRoteirizado implements ProvedorDeLlm {
     /** Quantas idas ao modelo foram em fluxo. */
     public int idasEmFluxo() {
         return idasEmFluxo.size();
+    }
+
+    @Override
+    public boolean leImagem() {
+        return leImagem;
     }
 
     @Override

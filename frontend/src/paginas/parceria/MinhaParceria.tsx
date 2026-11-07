@@ -1,22 +1,24 @@
-// Minha parceria (Figma P00): o que falta fazer, o que está com a RBS e o atalho para o relatório. [ITEM-7]
+// Minha parceria (Figma P00): o andamento das entregas com a próxima ação, o acompanhamento dos números e o relatório final.
+// [ITEM-7] Plano da base da RBS (U10, U12, U13): sem o cartão do Atlas no topo; os três contadores, a próxima ação e as
+// pendências viram um bloco só; o relatório final mostra o estado real da versão para a RBS e o disponibilizado para a marca.
 import { Link, useNavigate } from 'react-router'
-import { CaixaDoAtlas } from '../../atlas/CaixaDoAtlas'
 import { ErroApi } from '../../api/cliente'
 import { listarEntregas, type Entrega } from '../../api/materiais'
-import { obterPesquisa, obterRelatorio } from '../../api/resultados'
+import { obterConsolidacao, obterPesquisa, obterRelatorio, type Relatorio } from '../../api/resultados'
 import { useDados } from '../../api/useDados'
 import { estadoDaAba } from '../../componentes/AbaFechada'
 import { LinhaArquivo } from '../../componentes/Arquivo'
 import { Aviso } from '../../componentes/Aviso'
+import { Barra } from '../../componentes/Barra'
 import { LinkBotao } from '../../componentes/Botao'
 import { CabecalhoSecao } from '../../componentes/CabecalhoSecao'
-import { Cartao, Grade2, Grade3, Indicador } from '../../componentes/Cartao'
+import { Cartao } from '../../componentes/Cartao'
 import { Carregando } from '../../componentes/Carregando'
 import { nomeCota } from '../../componentes/Menu'
 import { SECOES } from '../../componentes/secoes'
 import { Status, type StatusEntrega } from '../../componentes/Status'
 import { useSessao } from '../../sessao/Sessao'
-import { data, dataHora } from '../../util/formatar'
+import { data, dataHora, porcentagem } from '../../util/formatar'
 import { useParceria } from './ContextoParceria'
 
 const A_FAZER: StatusEntrega[] = ['NAO_INICIADO', 'AGUARDANDO_ENVIO', 'AJUSTE_SOLICITADO']
@@ -53,135 +55,185 @@ export function MinhaParceria() {
     () => obterRelatorio(parceria.id).catch((erro: unknown) => (erro instanceof ErroApi && erro.status === 404 ? null : Promise.reject(erro))),
     [parceria.id],
   )
+  const midiaLiberada = estadoDaAba(parceria.abas.find((aba) => aba.codigo === 'MIDIA')) === 'LIBERADA'
+  const consolidacao = useDados(
+    () => (rbs || midiaLiberada ? obterConsolidacao(parceria.id) : Promise.resolve(null)),
+    [parceria.id, rbs, midiaLiberada],
+  )
 
   return (
     <div data-secao="parceria" className="flex flex-col gap-4">
       <CabecalhoSecao
-        trilha={usuario?.perfil === 'ADMIN_RBS' ? 'Planeta Atlântida / RBS · Gestão' : 'Planeta Atlântida / Patrocinador'}
-        titulo={usuario?.perfil === 'ADMIN_RBS' ? parceria.patrocinador : 'Minha parceria'}
-        subtitulo={`${nomeCota(parceria)} · ${parceria.evento.nome} ${parceria.evento.edicao} · próximas ações e entregas da empresa.`}
+        trilha={rbs ? 'Planeta Atlântida / RBS · Gestão' : 'Planeta Atlântida / Patrocinador'}
+        titulo={rbs ? parceria.patrocinador : 'Minha parceria'}
+        subtitulo={`${nomeCota(parceria)} · ${parceria.evento.nome} ${parceria.evento.edicao}`}
       />
 
-      {/* [ATLAS] A entrada do Atlas (Figma P00): só para a marca, que é quem conversa com ele. */}
-      {!rbs && <CaixaDoAtlas parceriaId={parceria.id} />}
+      {fechadas.length > 0 && !rbs && (
+        <Aviso tipo="restrito" titulo={`A RBS fechou por enquanto: ${fechadas.map((aba) => SECOES.find((secao) => secao.aba === aba.codigo)?.nome ?? aba.nome).join(', ')}`}>
+          As entregas dessas abas ficam fora das contas abaixo até a aba reabrir.
+        </Aviso>
+      )}
 
-      <Carregando dados={entregas}>
-        {(lista) => {
+      <Carregando dados={entregas} linhas={4}>
+        {(todas) => {
+          // "Não aplicável" não conta no total, como na lista de patrocinadores (a marca nem vê essas entregas).
+          const lista = todas.filter((entrega) => entrega.status !== 'NAO_APLICAVEL')
           const pendentes = lista.filter((entrega) => A_FAZER.includes(entrega.status)).sort(porUrgencia)
-          const comRbs = lista.filter((entrega) => COM_A_RBS.includes(entrega.status))
-          const aprovadas = lista.filter((entrega) => entrega.status === 'APROVADO')
+          const comRbs = lista.filter((entrega) => COM_A_RBS.includes(entrega.status)).length
+          const aprovadas = lista.filter((entrega) => entrega.status === 'APROVADO').length
           const proxima = pendentes[0]
           // Ajuste pedido em entrega vem primeiro; depois, pergunta da pesquisa devolvida; depois, o prazo mais próximo.
           const pesquisaPrimeiro = ajustesPesquisa.length > 0 && proxima?.status !== 'AJUSTE_SOLICITADO'
-          const aFazer = pendentes.length + ajustesPesquisa.length
+          const outras = pendentes.slice(pesquisaPrimeiro ? 0 : 1, 6)
           return (
-            <>
-              {fechadas.length > 0 && !rbs && (
-                <Aviso tipo="restrito" titulo={`A RBS fechou por enquanto: ${fechadas.map((aba) => SECOES.find((secao) => secao.aba === aba.codigo)?.nome ?? aba.nome).join(', ')}`}>
-                  As entregas dessas abas não entram nas contas abaixo até a aba reabrir. Dúvidas: fale com o time B2B da RBS.
-                </Aviso>
-              )}
-              <Grade3>
-                <Indicador rotulo="A fazer" valor={String(aFazer).padStart(2, '0')} legenda="Pendências da marca" />
-                <Indicador rotulo="Com a RBS" valor={String(comRbs.length).padStart(2, '0')} legenda="Enviados, aguardando análise" />
-                <Indicador
-                  rotulo="Aprovados"
-                  valor={String(aprovadas.length).padStart(2, '0')}
-                  legenda={lista.length ? `De ${lista.length} ${lista.length === 1 ? 'entrega' : 'entregas'} da parceria` : 'Nenhuma entrega aberta ainda'}
-                />
-              </Grade3>
-
-              <Cartao titulo={rbs ? 'Próxima ação da marca' : 'Sua próxima ação'}>
-                {pesquisaPrimeiro ? (
-                  <div className="flex flex-wrap items-center justify-between gap-4" data-secao="pesquisa">
-                    <div>
-                      <p className="text-sm">
-                        <span className="font-semibold">
-                          {ajustesPesquisa.length === 1 ? `Pergunta ${ajustesPesquisa[0].ordem}` : `${ajustesPesquisa.length} perguntas`} da pesquisa
-                        </span>{' '}
-                        · a RBS pediu ajuste
-                      </p>
-                      {ajustesPesquisa[0].observacaoRbs && <p className="mt-1 text-xs text-texto-2">RBS: {ajustesPesquisa[0].observacaoRbs}</p>}
-                    </div>
-                    <LinkBotao to={`${base}/pesquisa`}>Abrir Pesquisa</LinkBotao>
+            <Cartao titulo={rbs ? 'Próxima ação da marca' : 'Sua próxima ação'}>
+              {lista.length > 0 && (
+                <div className="mb-5 flex flex-wrap items-center gap-x-6 gap-y-2">
+                  <div className="min-w-[220px] flex-1">
+                    <Barra valor={(aprovadas / lista.length) * 100} rotulo="Entregas aprovadas" />
                   </div>
-                ) : proxima ? (
-                  <div className="flex flex-wrap items-center justify-between gap-4">
-                    <div>
-                      <p className="text-sm">
-                        <span className="font-semibold">{proxima.titulo}</span> · {secaoDa(proxima).nome} · {proxima.prazo ? `prazo ${data(proxima.prazo)}` : 'sem prazo definido'}
-                      </p>
-                      <div className="mt-1">
-                        <Status codigo={proxima.status} />
-                      </div>
-                      {proxima.ultimaObservacao && <p className="mt-1 text-xs text-texto-2">RBS: {proxima.ultimaObservacao.texto}</p>}
-                    </div>
-                    <LinkBotao to={`${base}/${secaoDa(proxima).caminho}`}>Abrir {secaoDa(proxima).nome}</LinkBotao>
-                  </div>
-                ) : lista.length === 0 && !fechadas.length ? (
-                  <p className="text-sm">A RBS ainda está preparando as entregas da sua parceria. Elas aparecem aqui assim que forem abertas.</p>
-                ) : fechadas.length ? (
-                  <p className="text-sm">Nada pendente nas abas abertas agora.</p>
-                ) : (
-                  <p className="text-sm">Tudo em dia: nenhuma entrega esperando a sua empresa.</p>
-                )}
-              </Cartao>
-
-              {/* Tudo o que a marca tem a fazer, além da próxima ação: as outras entregas e a pesquisa devolvida. */}
-              {aFazer > 1 && (
-                <Cartao titulo="Pendências por módulo">
-                  <Grade2>
-                    {!pesquisaPrimeiro && ajustesPesquisa.length > 0 && (
-                      <div data-secao="pesquisa">
-                        <LinhaArquivo
-                          titulo={`Pesquisa · ${ajustesPesquisa.length === 1 ? `pergunta ${ajustesPesquisa[0].ordem}` : `${ajustesPesquisa.length} perguntas`}`}
-                          icone={SECOES.find((secao) => secao.aba === 'PESQUISA')?.icone ?? 'ri-survey-line'}
-                          meta={`RBS: ${ajustesPesquisa[0].observacaoRbs ?? 'pediu ajuste'}`}
-                          rodape={<span className="text-xs font-bold text-[#c8203f]">Ajuste pedido pela RBS</span>}
-                          onClick={() => navegar(`${base}/pesquisa`)}
-                        />
-                      </div>
-                    )}
-                    {pendentes.slice(pesquisaPrimeiro ? 0 : 1, 7).map((entrega) => (
-                      <div key={entrega.id} data-secao={secaoDa(entrega).chave}>
-                        <LinhaArquivo
-                          titulo={`${secaoDa(entrega).nome} · ${entrega.titulo}`}
-                          icone={secaoDa(entrega).icone}
-                          meta={`Responsável: sua empresa · prazo ${data(entrega.prazo)}`}
-                          rodape={<Status codigo={entrega.status} />}
-                          onClick={() => navegar(`${base}/${secaoDa(entrega).caminho}`)}
-                        />
-                      </div>
-                    ))}
-                  </Grade2>
-                </Cartao>
+                  <p className="text-sm font-medium text-texto-2">
+                    <span className="font-semibold text-tinta">
+                      {aprovadas} de {lista.length}
+                    </span>{' '}
+                    aprovadas · {comRbs} com a RBS · {pendentes.length + ajustesPesquisa.length} a fazer
+                  </p>
+                </div>
               )}
-            </>
+
+              {pesquisaPrimeiro ? (
+                <div className="flex flex-wrap items-center justify-between gap-4" data-secao="pesquisa">
+                  <div>
+                    <p className="text-sm">
+                      <span className="font-semibold">
+                        {ajustesPesquisa.length === 1 ? `Pergunta ${ajustesPesquisa[0].ordem}` : `${ajustesPesquisa.length} perguntas`} da pesquisa
+                      </span>{' '}
+                      · a RBS pediu ajuste
+                    </p>
+                    {ajustesPesquisa[0].observacaoRbs && <p className="mt-1 text-xs text-texto-2">RBS: {ajustesPesquisa[0].observacaoRbs}</p>}
+                  </div>
+                  <LinkBotao to={`${base}/pesquisa`}>Abrir Pesquisa</LinkBotao>
+                </div>
+              ) : proxima ? (
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <p className="text-sm">
+                      <span className="font-semibold">{proxima.titulo}</span> · {secaoDa(proxima).nome} · {proxima.prazo ? `prazo ${data(proxima.prazo)}` : 'sem prazo definido'}
+                    </p>
+                    <div className="mt-1">
+                      <Status codigo={proxima.status} />
+                    </div>
+                    {proxima.ultimaObservacao && <p className="mt-1 text-xs text-texto-2">RBS: {proxima.ultimaObservacao.texto}</p>}
+                  </div>
+                  <LinkBotao to={`${base}/${secaoDa(proxima).caminho}`}>Abrir {secaoDa(proxima).nome}</LinkBotao>
+                </div>
+              ) : lista.length === 0 && !fechadas.length ? (
+                <p className="text-sm">A RBS ainda está preparando as entregas da parceria. Elas aparecem aqui assim que forem abertas.</p>
+              ) : (
+                <p className="text-sm font-medium">
+                  <i className="ri-checkbox-circle-fill mr-1.5 align-[-2px] text-aplicacoes" aria-hidden="true" />
+                  Tudo em dia: nenhuma entrega esperando {rbs ? 'a marca' : 'a sua empresa'}.
+                </p>
+              )}
+
+              {/* O que mais falta, além da próxima ação: uma linha por entrega, que abre a aba dela. */}
+              {(outras.length > 0 || (!pesquisaPrimeiro && ajustesPesquisa.length > 0)) && (
+                <ul className="mt-5 flex flex-col gap-2 border-t border-borda pt-4" aria-label="Também falta">
+                  {!pesquisaPrimeiro && ajustesPesquisa.length > 0 && (
+                    <li data-secao="pesquisa" className="entrar-em-cascata" style={{ '--ordem': 0 } as React.CSSProperties}>
+                      <LinhaArquivo
+                        titulo={`Pesquisa · ${ajustesPesquisa.length === 1 ? `pergunta ${ajustesPesquisa[0].ordem}` : `${ajustesPesquisa.length} perguntas`}`}
+                        icone={SECOES.find((secao) => secao.aba === 'PESQUISA')?.icone ?? 'ri-survey-line'}
+                        meta={`RBS: ${ajustesPesquisa[0].observacaoRbs ?? 'pediu ajuste'}`}
+                        onClick={() => navegar(`${base}/pesquisa`)}
+                      />
+                    </li>
+                  )}
+                  {outras.map((entrega, indice) => (
+                    <li key={entrega.id} data-secao={secaoDa(entrega).chave} className="entrar-em-cascata" style={{ '--ordem': indice + 1 } as React.CSSProperties}>
+                      <LinhaArquivo
+                        titulo={`${secaoDa(entrega).nome} · ${entrega.titulo}`}
+                        icone={secaoDa(entrega).icone}
+                        meta={entrega.prazo ? `prazo ${data(entrega.prazo)}` : 'sem prazo definido'}
+                        rodape={<Status codigo={entrega.status} />}
+                        onClick={() => navegar(`${base}/${secaoDa(entrega).caminho}`)}
+                      />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Cartao>
           )
         }}
       </Carregando>
 
-      <Carregando dados={relatorio}>
-        {(dado) => (
-          <Aviso tipo={dado ? 'info' : 'ausente'} titulo={dado ? `Relatório pós-evento disponível · versão ${dado.versao}` : 'Relatório pós-evento ainda não disponível'}>
-            {dado
-              ? `Disponibilizado pela RBS em ${dataHora(dado.disponibilizadoEm)}.`
-              : 'A RBS gera o relatório a partir dos dados do portal e o libera depois de validar os números.'}
-          </Aviso>
-        )}
-      </Carregando>
+      {/* Acompanhamento (U12): os números de agora, que levam às abas onde se filtra e exporta. */}
+      {consolidacao.dado && (
+        <Cartao titulo="Acompanhamento">
+          <div className="grid gap-4 md:grid-cols-2">
+            {consolidacao.dado.midia.porUnidade.length > 0 && (
+              <Link to={`${base}/midia`} viewTransition data-secao="midia" className="group flex flex-col gap-2 rounded-2xl border border-borda p-5 transition-shadow hover:shadow-menu">
+                <span className="texto-sobretitulo text-texto-2">Mídia entregue</span>
+                {consolidacao.dado.midia.porUnidade.map((linha) => (
+                  <div key={linha.unidade} className="flex flex-col gap-1">
+                    <Barra valor={linha.percentual} rotulo={`Mídia entregue em ${linha.unidade}`} />
+                  </div>
+                ))}
+                <span className="text-[13px] font-semibold text-secao-texto group-hover:underline">Ver por veículo e formato →</span>
+              </Link>
+            )}
+            {consolidacao.dado.aplicacoes.previstas ? (
+              <Link to={`${base}/aplicacoes`} viewTransition data-secao="aplicacoes" className="group flex flex-col gap-2 rounded-2xl border border-borda p-5 transition-shadow hover:shadow-menu">
+                <span className="texto-sobretitulo text-texto-2">Aplicações comprovadas</span>
+                <Barra valor={consolidacao.dado.aplicacoes.percentual} rotulo="Aplicações comprovadas" />
+                <span className="text-xs font-medium text-texto-2">
+                  {consolidacao.dado.aplicacoes.comprovadas ?? 0} de {consolidacao.dado.aplicacoes.previstas} · {porcentagem(consolidacao.dado.aplicacoes.percentual)}
+                </span>
+                <span className="text-[13px] font-semibold text-secao-texto group-hover:underline">Ver as aplicações →</span>
+              </Link>
+            ) : null}
+          </div>
+        </Cartao>
+      )}
 
-      <div className="flex flex-wrap gap-4">
-        <LinkBotao to={`${base}/relatorio`} icone="ri-file-chart-line">
+      <Carregando dados={relatorio} linhas={1}>
+        {(dado) => <RelatorioFinal relatorio={dado} rbs={rbs} base={base} />}
+      </Carregando>
+    </div>
+  )
+}
+
+/** O relatório final numa linha: para a marca, o disponibilizado; para a RBS, o estado real da versão mais nova (U13). */
+function RelatorioFinal({ relatorio, rbs, base }: { relatorio: Relatorio | null; rbs: boolean; base: string }) {
+  const texto = !relatorio
+    ? rbs
+      ? 'Nenhuma versão gerada ainda.'
+      : 'Ainda não disponível. A RBS libera depois de validar os números.'
+    : relatorio.status === 'DISPONIBILIZADO'
+      ? `Versão ${relatorio.versao}, disponibilizada pela RBS em ${dataHora(relatorio.disponibilizadoEm)}.`
+      : relatorio.status === 'VALIDADO'
+        ? `Versão ${relatorio.versao} validada; a marca ainda não vê.`
+        : `Versão ${relatorio.versao} em rascunho; a marca ainda não vê.`
+  return (
+    <section className="flex flex-wrap items-center justify-between gap-4 rounded-[20px] border border-borda bg-white px-6 py-4">
+      <div className="flex items-center gap-3">
+        <span className="grid size-10 shrink-0 place-items-center rounded-[10px] bg-secao-tinta text-secao-texto">
+          <i className="ri-file-chart-line text-xl" aria-hidden="true" />
+        </span>
+        <div>
+          <h2 className="text-sm font-bold">Relatório final</h2>
+          <p className="text-xs font-medium text-texto-2">{texto}</p>
+        </div>
+      </div>
+      <div className="flex items-center gap-4">
+        <Link to={`${base}/historico`} viewTransition className="text-[13px] font-semibold text-texto-2 hover:underline">
+          Histórico
+        </Link>
+        <LinkBotao to={`${base}/relatorio`} icone="ri-file-chart-line" variante={relatorio?.status === 'DISPONIBILIZADO' ? 'primario' : 'secundario'}>
           Ver relatório
         </LinkBotao>
-        <LinkBotao to={`${base}/historico`} variante="secundario" icone="ri-history-line">
-          Ver histórico
-        </LinkBotao>
-        <Link to={`${base}/contrato`} className="self-center text-[13px] font-semibold text-secao-texto hover:underline">
-          Consultar contrato →
-        </Link>
       </div>
-    </div>
+    </section>
   )
 }

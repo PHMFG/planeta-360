@@ -5,7 +5,7 @@ import { ErroApi } from '../api/cliente'
 import type { CampoCatalogo, ValorInformado, ValorVigente } from '../api/dados'
 import { data, numero } from '../util/formatar'
 import { Aviso } from './Aviso'
-import { Botao } from './Botao'
+import { Botao, usarFeito } from './Botao'
 import { Campo } from './Campo'
 
 export type CampoDoFormulario = CampoCatalogo & { vigente?: ValorVigente | null; obrigatorio?: boolean }
@@ -78,6 +78,7 @@ export function FormularioDadosInformados({
   const [erros, setErros] = useState<Record<string, string>>({})
   const [falha, setFalha] = useState<string | null>(null)
   const [enviando, setEnviando] = useState(false)
+  const [feito, marcarFeito] = usarFeito()
 
   /** O valor que vale para o limite de outro campo: o digitado agora ou, sem ele, o atual. */
   function valorEfetivo(chave: string): number | null {
@@ -121,6 +122,7 @@ export function FormularioDadosInformados({
     setEnviando(true)
     try {
       await aoEnviar(valores)
+      marcarFeito()
       setTextos({})
     } catch (erro) {
       if (erro instanceof ErroApi) {
@@ -175,7 +177,7 @@ export function FormularioDadosInformados({
       ) : (
         <div className="flex flex-col-reverse gap-3 sm:flex-row">
           {extra}
-          <Botao type="submit" carregando={enviando} disabled={desabilitado} icone="ri-save-line">
+          <Botao type="submit" carregando={enviando} feito={feito} disabled={desabilitado} icone="ri-save-line">
             {textoEnviar}
           </Botao>
         </div>

@@ -1,10 +1,13 @@
 // Menu lateral flutuante do Figma (P360/Navegação): marca, conta, as oito seções e o rodapé. [ITEM-7]
 // A RBS vê também os atalhos de gestão e escolhe a parceria que está consultando.
 import { useEffect, useRef, useState, type RefObject } from 'react'
-import { Link, NavLink, useMatch, useNavigate } from 'react-router'
+import { Link, NavLink, useLocation, useMatch, useNavigate } from 'react-router'
+import { obterNovidades, registrarVisita, type AbaComNovidade } from '../api/novidades'
 import type { ParceriaResumo, UsuarioLogado } from '../api/tipos'
+import { useDados } from '../api/useDados'
 import { useSessao } from '../sessao/Sessao'
 import { estadoAbaNaParceria } from './AbaFechada'
+import { Faq } from './Faq'
 import { Modal } from './Modal'
 import { GESTAO_RBS, SECOES, type Secao } from './secoes'
 import { usarFocoPreso } from './usarFocoPreso'
@@ -39,7 +42,38 @@ function classeItem(ativo: boolean) {
     : `${ITEM} font-semibold text-tinta hover:bg-cinza-100`
 }
 
-function ItemSecao({ secao, parceria, rbs }: { secao: Secao; parceria: ParceriaResumo; rbs: boolean }) {
+/**
+ * O selo "novo" da marca (S3): busca as novidades da parceria (e de novo ao voltar para a aba do navegador) e grava a visita à
+ * seção aberta. A seção aberta perde o selo na hora; a RBS não vê selo nem grava visita.
+ */
+function usarNovidades(parceria: ParceriaResumo | null, rbs: boolean) {
+  const local = useLocation()
+  const ativo = Boolean(parceria) && !rbs
+  const novidades = useDados(() => (ativo && parceria ? obterNovidades(parceria.id).catch(() => null) : Promise.resolve(null)), [parceria?.id, ativo])
+  const [vistas, setVistas] = useState<Set<string>>(new Set())
+  const prefixo = parceria ? `/parceria/${parceria.id}` : ''
+  const resto = parceria && local.pathname.startsWith(prefixo) ? local.pathname.slice(prefixo.length).replace(/^\//, '').split('/')[0] : null
+  const abaAberta: AbaComNovidade | null = resto === null ? null : resto === 'relatorio' ? 'RELATORIO' : (SECOES.find((secao) => secao.caminho === resto)?.aba ?? null)
+
+  const parceriaId = parceria?.id
+  useEffect(() => {
+    if (!ativo || !parceriaId || !abaAberta) return
+    setVistas((atual) => new Set(atual).add(abaAberta))
+    registrarVisita(parceriaId, abaAberta).catch(() => undefined)
+    // Pelo id, não pelo objeto: cada /auth/eu (a cada volta à aba) traz uma parceria nova e reenviaria a visita.
+  }, [ativo, parceriaId, abaAberta])
+
+  // A cada busca nova (volta à aba do navegador), o que a API diz vale de novo.
+  useEffect(() => setVistas(new Set()), [novidades.dado])
+
+  // Só quem já visitou a aba vê o selo: no primeiro acesso tudo seria "novo", e o selo não diria nada.
+  return (aba: AbaComNovidade | null) => {
+    const novidade = aba ? novidades.dado?.abas[aba] : undefined
+    return Boolean(aba && aba !== abaAberta && !vistas.has(aba) && novidade?.novo && novidade.desde)
+  }
+}
+
+function ItemSecao({ secao, parceria, rbs, novo = false }: { secao: Secao; parceria: ParceriaResumo; rbs: boolean; novo?: boolean }) {
   const estado = estadoAbaNaParceria(parceria, secao.aba)
   // A RBS olha a parceria de fora: "sua cota" é texto para a marca.
   const motivo =
@@ -56,11 +90,16 @@ function ItemSecao({ secao, parceria, rbs }: { secao: Secao; parceria: ParceriaR
 
   return (
     <li data-secao={secao.chave}>
-      <NavLink to={destino} end className={({ isActive }) => classeItem(isActive)}>
+      <NavLink to={destino} end viewTransition className={({ isActive }) => classeItem(isActive)}>
         {({ isActive }) => (
           <>
             <i className={`${secao.icone} text-xl ${isActive ? 'text-white' : 'text-secao'}`} aria-hidden="true" />
             <span className="flex-1">{secao.nome}</span>
+            {novo && (
+              <span className={`animate-surgir rounded-full px-1.5 py-0.5 text-[10px] font-bold tracking-wide uppercase ${isActive ? 'bg-white text-tinta' : 'bg-secao text-white'}`}>
+                novo<span className="sr-only"> desde a sua última visita</span>
+              </span>
+            )}
             {/* [PERMISSAO] A aba aparece para todos; o estado fica escrito ao lado do cadeado, e não só no hover (U05 e U19).
                 O motivo inteiro vai no title e no texto para leitor de tela. */}
             {estado !== 'LIBERADA' && (
@@ -117,22 +156,23 @@ function ChipConta({ usuario, parceria }: { usuario: UsuarioLogado; parceria: Pa
 const CLASSE_BOTAO_ATLAS = 'relative flex h-[60px] baixa:h-[50px] w-full items-center justify-center gap-2 overflow-hidden rounded-2xl border border-white/22 bg-atlas text-white shadow-atlas-brilho transition-[filter]'
 
 function BotaoAtlas({ destino }: { destino?: string }) {
-  // [ATLAS] Só a marca conversa com o Atlas, dentro de uma parceria: o botão abre a janela dele (Figma P360/Botão Atlas,
-  // 167:18). Para a RBS fica desabilitado, e os relatórios do Atlas aparecem na tela Relatório da parceria.
+  // [ATLAS] O botão abre o Atlas (Figma P360/Botão Atlas, 167:18): a marca, na janela dela, dentro da parceria; a RBS, no Atlas
+  // da gestão (/rbs/atlas), que consulta a base de todas as marcas. Sem destino (ninguém logado numa parceria), fica desabilitado.
   const ativo = Boolean(useMatch(`${destino ?? '/sem-atlas'}/*`))
   const conteudo = (
     <>
       <span className="absolute -top-6 -left-4 size-20 rounded-full bg-[#0a2a6e] opacity-70 blur-2xl" aria-hidden="true" />
       <span className="absolute -bottom-8 left-16 size-20 rounded-full bg-[#572781] opacity-70 blur-2xl" aria-hidden="true" />
       <span className="absolute -right-6 -bottom-6 size-20 rounded-full bg-[#e1047d] opacity-60 blur-2xl" aria-hidden="true" />
-      <i className="ri-globe-fill relative text-2xl" aria-hidden="true" />
+      {/* Fora do Atlas, este globo é a "atlas-orbe" que cresce até a orbe da página ao abrir; lá dentro, a página tem o nome. */}
+      <i className="ri-globe-fill relative text-2xl" aria-hidden="true" style={{ viewTransitionName: ativo ? undefined : 'atlas-orbe' }} />
       <span className="relative text-xl font-semibold tracking-[-0.01em]">atlas</span>
     </>
   )
   return (
     <div>
       {destino ? (
-        <Link to={destino} aria-describedby="atlas-legenda" aria-current={ativo ? 'page' : undefined} className={`${CLASSE_BOTAO_ATLAS} hover:brightness-125`}>
+        <Link to={destino} viewTransition aria-describedby="atlas-legenda" aria-current={ativo ? 'page' : undefined} className={`${CLASSE_BOTAO_ATLAS} hover:brightness-125`}>
           {conteudo}
         </Link>
       ) : (
@@ -142,7 +182,7 @@ function BotaoAtlas({ destino }: { destino?: string }) {
         </button>
       )}
       <p id="atlas-legenda" className={`mt-1.5 text-center text-[11px] font-medium ${ativo ? 'text-atlas-roxo' : 'text-texto-2'}`}>
-        {ativo ? 'Conversa aberta · assistente IA' : destino ? 'Assistente IA · números da parceria' : 'Assistente das marcas'}
+        {ativo ? 'Conversa aberta · assistente IA' : destino === '/rbs/atlas' ? 'Pergunte sobre todas as marcas' : destino ? 'Pergunte sobre os seus dados' : 'Assistente das marcas'}
       </p>
     </div>
   )
@@ -186,6 +226,8 @@ export function Menu({ parceria, aberto, aoFechar, atlas }: PropsMenu) {
   const { usuario, sair } = useSessao()
   const navegar = useNavigate()
   const [ajudaAberta, setAjudaAberta] = useState(false)
+  const rbsNoMenu = usuario?.perfil === 'ADMIN_RBS'
+  const temNovidade = usarNovidades(parceria, rbsNoMenu)
   // Na gaveta aberta o foco entra nela, o Tab gira só dentro dela, e o Esc fecha e devolve o foco ao botão Menu (U08).
   const gavetaRef = usarFocoPreso(aberto, aoFechar)
   // A gaveta entra com transição de visibilidade: no quadro em que abre ela ainda está invisível, e o foco do usarFocoPreso
@@ -251,7 +293,7 @@ export function Menu({ parceria, aberto, aoFechar, atlas }: PropsMenu) {
               <ul className="flex flex-col gap-1" data-secao="neutro">
                 {GESTAO_RBS.map((atalho) => (
                   <li key={atalho.caminho}>
-                    <NavLink to={atalho.caminho} end className={({ isActive }) => classeItem(isActive)}>
+                    <NavLink to={atalho.caminho} end viewTransition className={({ isActive }) => classeItem(isActive)}>
                       <i className={`${atalho.icone} text-xl`} aria-hidden="true" />
                       {atalho.nome}
                     </NavLink>
@@ -267,7 +309,7 @@ export function Menu({ parceria, aberto, aoFechar, atlas }: PropsMenu) {
             <ul className="flex flex-col gap-1">
               {/* A aba que a RBS ocultou some do menu da marca; a RBS continua vendo, marcada como Oculta (R6.a). */}
               {SECOES.filter((secao) => rbs || estadoAbaNaParceria(parceria, secao.aba) !== 'OCULTA').map((secao) => (
-                <ItemSecao key={secao.chave} secao={secao} parceria={parceria} rbs={rbs} />
+                <ItemSecao key={secao.chave} secao={secao} parceria={parceria} rbs={rbs} novo={temNovidade(secao.aba ?? 'RELATORIO')} />
               ))}
             </ul>
           )}
@@ -305,22 +347,25 @@ export function Menu({ parceria, aberto, aoFechar, atlas }: PropsMenu) {
         </div>
       </aside>
       {/* A ajuda abre num painel por cima da tela: dentro do menu, que rola, ela ficava cortada (U11). */}
-      <Modal titulo="Ajuda" legenda={rbs ? 'O que cada tela da gestão faz' : 'O que cada aba da parceria faz'} aberto={ajudaAberta} aoFechar={() => setAjudaAberta(false)}>
-        <ul className="flex flex-col gap-3 text-sm">
-          {(rbs ? GESTAO_RBS.map((atalho) => ({ nome: atalho.nome, texto: TEXTO_DA_GESTAO[atalho.caminho] ?? '' })) : SECOES.map((secao) => ({ nome: secao.nome, texto: secao.subtitulo }))).map(
-            (item) => (
-              <li key={item.nome}>
-                <span className="font-semibold">{item.nome}</span>
-                {item.texto && <span className="text-texto-2"> · {item.texto}</span>}
-              </li>
-            ),
-          )}
-        </ul>
-        <p className="mt-4 rounded-xl bg-cinza-100 p-3 text-sm font-medium">
-          {rbs
-            ? 'O Atlas de cada marca abre só no acesso dela. Dúvidas sobre o portal: fale com a equipe do projeto.'
-            : 'Dúvidas sobre a parceria, acessos, prazos ou cortesias: fale com o atendimento ao patrocinador da RBS (time B2B).'}
-        </p>
+      <Modal titulo="Ajuda" legenda={rbs ? 'O que cada tela da gestão faz' : 'Perguntas frequentes sobre o portal'} aberto={ajudaAberta} aoFechar={() => setAjudaAberta(false)}>
+        {rbs ? (
+          <>
+            <ul className="flex flex-col gap-3 text-sm">
+              {GESTAO_RBS.map((atalho) => (
+                <li key={atalho.nome}>
+                  <span className="font-semibold">{atalho.nome}</span>
+                  {TEXTO_DA_GESTAO[atalho.caminho] && <span className="text-texto-2"> · {TEXTO_DA_GESTAO[atalho.caminho]}</span>}
+                </li>
+              ))}
+            </ul>
+            <p className="mt-1 rounded-xl bg-cinza-100 p-3 text-sm font-medium">
+              O Atlas de cada marca abre só no acesso dela. Dúvidas sobre o portal: fale com a equipe do projeto.
+            </p>
+          </>
+        ) : (
+          // U7: a marca lê um FAQ que termina no contato do atendimento dela (os campos novos da parceria, quando a RBS preencher).
+          <Faq atendimento={{ nome: parceria?.atendimentoNome, email: parceria?.atendimentoEmail }} />
+        )}
       </Modal>
     </>
   )
@@ -330,8 +375,9 @@ export function Menu({ parceria, aberto, aoFechar, atlas }: PropsMenu) {
 const TEXTO_DA_GESTAO: Record<string, string> = {
   '/rbs': 'resumo das parcerias, da fila e da última carga.',
   '/rbs/patrocinadores': 'cadastro das parcerias e dos e-mails de acesso.',
-  '/rbs/fila': 'materiais enviados pelas marcas, para aprovar ou pedir ajuste.',
-  '/rbs/cargas': 'planilhas de veiculação, de pesquisa e do plano comercial.',
+  '/rbs/fila': 'o que as marcas enviaram, para aprovar ou pedir ajuste, e o que ainda falta receber de cada uma.',
+  '/rbs/importar': 'arraste o arquivo de um veículo, da pesquisa ou de uma marca; o Atlas lê e você confere antes de entrar.',
+  '/rbs/dados': 'o contratado e o entregue de todas as marcas, com filtros e a planilha para baixar.',
   '/rbs/pesquisa': 'a pesquisa de cada edição e as perguntas das marcas Master.',
   '/rbs/relatorios': 'gerar, validar e disponibilizar o relatório de cada parceria.',
   '/rbs/historico': 'tudo o que aconteceu no portal, com autor e data.',

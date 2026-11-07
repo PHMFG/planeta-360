@@ -76,12 +76,99 @@ public class Armazenamento {
     }
 
     /**
+     * O mesmo de {@link #gravar(byte[], String, String, long, Long)}, com a observação que liga o arquivo à origem dele. O comprovante
+     * de uma importação usa {@code importacao:<id>} para a retirada saber quais vínculos desfazer sem uma coluna nova.
+     */
+    public Arquivo gravarComObservacao(byte[] conteudo, String nomeOriginal, String categoria, long enviadoPor, Long parceriaId,
+                                       String observacao) {
+        Preparado pronto = preparar(conteudo, nomeOriginal);
+        String caminho = (parceriaId == null ? "geral" : "parcerias/" + parceriaId) + "/" + pronto.nomeNoDisco();
+        escrever(caminho, conteudo);
+        return inserir("""
+                        INSERT INTO arquivo (parceria_id, categoria, nome_original, mime_type, tamanho_bytes, caminho,
+                                             hash_sha256, enviado_por, observacao)
+                        VALUES (:parceriaId, :categoria, :nome, :mime, :tamanho, :caminho, :hash, :enviadoPor,
+                                nullif(CAST(:observacao AS text), ''))
+                        RETURNING\s""" + COLUNAS,
+                Map.of("categoria", categoria, "nome", pronto.nomeOriginal(), "mime", pronto.tipo().mime(),
+                        "tamanho", (long) conteudo.length, "caminho", caminho, "hash", pronto.hash(),
+                        "enviadoPor", enviadoPor, "observacao", observacao == null ? "" : observacao),
+                parceriaId, caminho);
+    }
+
+    /**
+     * O mesmo, com a aba do arquivo: o comprovante de uma veiculação mora na aba MIDIA, e a rota 18 confere a aba antes de entregar.
+     * Sem parceria não há aba (erro de quem chama).
+     */
+    public Arquivo gravarComObservacao(byte[] conteudo, String nomeOriginal, String categoria, long enviadoPor, Long parceriaId,
+                                       String observacao, String abaCodigo) {
+        if (parceriaId == null) {
+            throw new IllegalArgumentException("Arquivo geral da RBS (sem parceria) não pertence a uma aba.");
+        }
+        Preparado pronto = preparar(conteudo, nomeOriginal);
+        Integer abaId = jdbc.sql("SELECT id FROM aba WHERE codigo = :codigo").param("codigo", abaCodigo)
+                .query(Integer.class).optional()
+                .orElseThrow(() -> new IllegalArgumentException("A aba " + abaCodigo + " não existe."));
+        String caminho = "parcerias/" + parceriaId + "/" + pronto.nomeNoDisco();
+        escrever(caminho, conteudo);
+        return inserir("""
+                        INSERT INTO arquivo (parceria_id, aba_id, categoria, nome_original, mime_type, tamanho_bytes, caminho,
+                                             hash_sha256, enviado_por, observacao)
+                        VALUES (:parceriaId, :abaId, :categoria, :nome, :mime, :tamanho, :caminho, :hash, :enviadoPor,
+                                nullif(CAST(:observacao AS text), ''))
+                        RETURNING\s""" + COLUNAS,
+                Map.of("abaId", abaId, "categoria", categoria, "nome", pronto.nomeOriginal(), "mime", pronto.tipo().mime(),
+                        "tamanho", (long) conteudo.length, "caminho", caminho, "hash", pronto.hash(),
+                        "enviadoPor", enviadoPor, "observacao", observacao == null ? "" : observacao),
+                parceriaId, caminho);
+    }
+
+    /**
      * Confere um arquivo de documento do Atlas sem gravar nada, para a rota 54 recusar o que não é PDF nem TXT (415), o que passa do
      * limite (413) e o arquivo vazio (422) ANTES de extrair o texto. Devolve o tipo. O mesmo teste roda de novo dentro de
      * {@link #gravarDocumento(byte[], String, long, Long)}.
      */
     public TipoDeArquivo conferirDocumento(byte[] conteudo, String nomeOriginal) {
         return preparar(conteudo, nomeOriginal, Aceitos.DOCUMENTOS).tipo();
+    }
+
+    /**
+     * Grava o arquivo de uma importação (E1): categoria IMPORTACAO, com os formatos que a rota 109 aceita (planilha, Office, PDF,
+     * imagem e texto). {@code parceriaId} nulo = arquivo geral da RBS (alcance EDICAO ou COTA); preenchido, é o arquivo da parceria
+     * (alcance PARCERIA). O .csv e o .txt podem vir em Latin-1, como o Excel os grava; o leitor da importação os decodifica. Chame de
+     * dentro de uma transação: o rollback apaga o arquivo do disco.
+     */
+    public Arquivo gravarImportacao(byte[] conteudo, String nomeOriginal, long enviadoPor, Long parceriaId) {
+        Preparado pronto = preparar(conteudo, nomeOriginal, Aceitos.IMPORTACOES);
+        String caminho = (parceriaId == null ? "geral" : "parcerias/" + parceriaId) + "/" + pronto.nomeNoDisco();
+        escrever(caminho, conteudo);
+        return inserir("""
+                        INSERT INTO arquivo (parceria_id, categoria, nome_original, mime_type, tamanho_bytes, caminho,
+                                             hash_sha256, enviado_por)
+                        VALUES (:parceriaId, 'IMPORTACAO', :nome, :mime, :tamanho, :caminho, :hash, :enviadoPor)
+                        RETURNING\s""" + COLUNAS,
+                Map.of("nome", pronto.nomeOriginal(), "mime", pronto.tipo().mime(), "tamanho", (long) conteudo.length,
+                        "caminho", caminho, "hash", pronto.hash(), "enviadoPor", enviadoPor),
+                parceriaId, caminho);
+    }
+
+    /**
+     * Grava uma cópia do arquivo importado como documento (E15): categoria DOCUMENTO, com os formatos da importação. O gatilho
+     * {@code rn_documento_coerente} exige a categoria DOCUMENTO no arquivo do documento, e o arquivo da importação é IMPORTACAO;
+     * por isso a cópia (mesmo conteúdo, nome novo no disco). {@code parceriaId} nulo nos alcances EDICAO e COTA.
+     */
+    public Arquivo gravarDocumentoImportado(byte[] conteudo, String nomeOriginal, long enviadoPor, Long parceriaId) {
+        Preparado pronto = preparar(conteudo, nomeOriginal, Aceitos.IMPORTACOES);
+        String caminho = (parceriaId == null ? "geral" : "parcerias/" + parceriaId) + "/" + pronto.nomeNoDisco();
+        escrever(caminho, conteudo);
+        return inserir("""
+                        INSERT INTO arquivo (parceria_id, categoria, nome_original, mime_type, tamanho_bytes, caminho,
+                                             hash_sha256, enviado_por)
+                        VALUES (:parceriaId, 'DOCUMENTO', :nome, :mime, :tamanho, :caminho, :hash, :enviadoPor)
+                        RETURNING\s""" + COLUNAS,
+                Map.of("nome", pronto.nomeOriginal(), "mime", pronto.tipo().mime(), "tamanho", (long) conteudo.length,
+                        "caminho", caminho, "hash", pronto.hash(), "enviadoPor", enviadoPor),
+                parceriaId, caminho);
     }
 
     /**
@@ -258,11 +345,15 @@ public class Armazenamento {
     private record Preparado(String nomeOriginal, TipoDeArquivo tipo, String hash, String nomeNoDisco) {
     }
 
-    /** Os tipos que um envio aceita: os comuns, os do documento do Atlas (rota 54) e os da planilha da agência (rota 66). */
+    /**
+     * Os tipos que um envio aceita: os comuns, os do documento do Atlas (rota 54), os da planilha da agência (rota 66) e os da
+     * importação (rota 109: planilha, Office, PDF, imagem e texto).
+     */
     private enum Aceitos {
         COMUNS(null),
         DOCUMENTOS("pdf, txt"),
-        PLANILHAS("xlsx, xls, csv");
+        PLANILHAS("xlsx, xls, csv"),
+        IMPORTACOES("xlsx, xls, csv, docx, doc, pptx, ppt, pdf, txt, png, jpg, jpeg");
 
         private final String extensoes;
 
@@ -279,6 +370,10 @@ public class Armazenamento {
                 case COMUNS -> tipo != TipoDeArquivo.TXT;
                 case DOCUMENTOS -> tipo == TipoDeArquivo.PDF || tipo == TipoDeArquivo.TXT;
                 case PLANILHAS -> tipo == TipoDeArquivo.XLSX || tipo == TipoDeArquivo.XLS || tipo == TipoDeArquivo.CSV;
+                case IMPORTACOES -> tipo == TipoDeArquivo.XLSX || tipo == TipoDeArquivo.XLS || tipo == TipoDeArquivo.CSV
+                        || tipo == TipoDeArquivo.DOCX || tipo == TipoDeArquivo.DOC || tipo == TipoDeArquivo.PPTX
+                        || tipo == TipoDeArquivo.PPT || tipo == TipoDeArquivo.PDF || tipo == TipoDeArquivo.TXT
+                        || tipo == TipoDeArquivo.PNG || tipo == TipoDeArquivo.JPG || tipo == TipoDeArquivo.JPEG;
             };
         }
     }
@@ -306,11 +401,13 @@ public class Armazenamento {
                 .filter(aceitos::aceita)
                 .orElseThrow(() -> new ArquivoRecusadoException(HttpStatus.UNSUPPORTED_MEDIA_TYPE,
                         "Este tipo de arquivo não é aceito. Envie um destes: " + aceitos.extensoes() + "."));
-        // A planilha da agência (rota 66) em CSV aceita qualquer codificação sem byte nulo: ninguém a lê no servidor, e o Excel em
-        // português a grava em ANSI. Nas outras rotas o CSV precisa ser UTF-8 (a carga e a entrega leem ou mostram o texto).
-        boolean csvDaPlanilha = aceitos == Aceitos.PLANILHAS && tipo == TipoDeArquivo.CSV;
-        if (csvDaPlanilha ? !TipoDeArquivo.semBytesNulos(conteudo) : !tipo.conteudoConfere(conteudo)) {
-            throw new ArquivoRecusadoException(HttpStatus.UNSUPPORTED_MEDIA_TYPE, frasePorConteudo(tipo, conteudo, csvDaPlanilha));
+        // A planilha da agência (rota 66) e a importação (rota 109) em CSV/TXT aceitam qualquer codificação sem byte nulo: o leitor
+        // da importação decodifica UTF-8 ou Latin-1, e o Excel em português grava em ANSI. Nas outras rotas o CSV precisa ser UTF-8
+        // (a carga e a entrega leem ou mostram o texto).
+        boolean textoEmQualquerCodificacao = (aceitos == Aceitos.PLANILHAS && tipo == TipoDeArquivo.CSV)
+                || (aceitos == Aceitos.IMPORTACOES && (tipo == TipoDeArquivo.CSV || tipo == TipoDeArquivo.TXT));
+        if (textoEmQualquerCodificacao ? !TipoDeArquivo.semBytesNulos(conteudo) : !tipo.conteudoConfere(conteudo)) {
+            throw new ArquivoRecusadoException(HttpStatus.UNSUPPORTED_MEDIA_TYPE, frasePorConteudo(tipo, conteudo, textoEmQualquerCodificacao));
         }
         if (Ole2Diretorio.ehOfficeAntigo(tipo)) {
             switch (Ole2Diretorio.inspecionar(conteudo)) {

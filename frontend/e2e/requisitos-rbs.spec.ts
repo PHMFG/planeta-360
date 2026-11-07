@@ -5,7 +5,7 @@
 // Nada aqui muda número do Amarelo, do Roxo ou do Verde: quem precisa escrever cria uma marca de teste pela API, na pilha.
 import fs from 'node:fs'
 import { expect, test, type Page } from '@playwright/test'
-import { capturar, entrar, entrarComo, novaMarcaDeTeste, parceriaDa, sessaoDaApi, sessaoDaApiComo } from './apoio.ts'
+import { entrar, entrarComo, novaMarcaDeTeste, parceriaDa, sessaoDaApi, sessaoDaApiComo } from './apoio.ts'
 
 const PDF_DE_EXEMPLO = '../backend/src/main/resources/dev/documentos/d13-circular-revogada.pdf'
 
@@ -65,7 +65,7 @@ test.describe('R2 · manual de operações', () => {
 
     await entrar(page, 'rbs')
     await page.goto('/rbs/atlas')
-    await page.getByRole('tab', { name: 'Documentos' }).click()
+    await page.getByRole('button', { name: 'Documentos' }).click()
     const envio = page.locator('form').filter({ has: page.getByLabel('Chave') })
     await envio.locator('input[type=file]').setInputFiles({ name: `contatos-${sufixo}.pdf`, mimeType: 'application/pdf', buffer: pdf })
     await envio.getByLabel('Título').fill(titulo)
@@ -124,7 +124,8 @@ test.describe('R3 e R4 · comprovação mensal e formatos', () => {
     await expect(linha.locator('td').nth(3)).toHaveText(new Intl.NumberFormat('pt-BR').format(escolhida.exibido))
 
     const [xlsx] = await Promise.all([page.waitForEvent('download'), cartao.getByRole('button', { name: 'Baixar planilha (.xlsx)' }).click()])
-    expect(xlsx.suggestedFilename()).toBe('comprovacao-mensal-cliente-amarelo.xlsx')
+    // U1 (plano da base da RBS): com um mês escolhido, o arquivo leva o mês no nome e traz só ele.
+    expect(xlsx.suggestedFilename()).toBe(`comprovacao-mensal-cliente-amarelo-${escolhida.mes}.xlsx`)
     expect(fs.readFileSync(await xlsx.path()).subarray(0, 2).toString('latin1'), 'um .xlsx é um zip').toBe('PK')
     const [csv] = await Promise.all([page.waitForEvent('download'), cartao.getByRole('button', { name: 'Baixar CSV' }).click()])
     const texto = fs.readFileSync(await csv.path(), 'utf8')
@@ -161,7 +162,8 @@ test.describe('R3 e R4 · comprovação mensal e formatos', () => {
     await entregaDeMidia(marca.parceriaId)
     await entrarComo(page, marca.email)
     await page.goto(`/parceria/${marca.parceriaId}/midia`)
-    await page.getByText('Post de lançamento').first().click()
+    // O título também é o nome da pasta no navegador de arquivos; o detalhe abre pela lista de entregas.
+    await page.locator('section', { has: page.getByRole('heading', { name: 'Entregas de mídia' }) }).getByText('Post de lançamento').first().click()
     const detalhe = page.getByRole('dialog', { name: 'Post de lançamento' })
     const campo = detalhe.locator('input[type=file]')
     await expect(campo).toHaveAttribute('accept', /\.doc,.*\.xls,.*\.ppt,/)
@@ -268,7 +270,8 @@ test.describe('R5 · as abas', () => {
     await entregaDeMidia(marca.parceriaId)
     await entrarComo(page, marca.email)
     await page.goto(`/parceria/${marca.parceriaId}/midia`)
-    await page.getByText('Post de lançamento').first().click()
+    // O título também é o nome da pasta no navegador de arquivos; o detalhe abre pela lista de entregas.
+    await page.locator('section', { has: page.getByRole('heading', { name: 'Entregas de mídia' }) }).getByText('Post de lançamento').first().click()
     const detalhe = page.getByRole('dialog', { name: 'Post de lançamento' })
     await detalhe.getByRole('radio', { name: 'Texto' }).click()
     const texto = detalhe.getByLabel('Texto do material')
@@ -402,7 +405,8 @@ test.describe('R5 · as abas', () => {
     await expect(botao).toHaveAttribute('href', 'https://example.com/')
     await expect(botao).toHaveAttribute('target', '_blank')
     await expect(botao).toHaveAttribute('rel', 'noopener noreferrer')
-    await expect(page.getByText('Você será direcionado a um serviço externo')).toBeVisible()
+    // Rework visual (F9): o aviso de serviço externo virou uma linha ao lado do botão.
+    await expect(page.getByText('O cadastro das pessoas é feito no Open Staff, fora do portal.')).toBeVisible()
     // A API recusa endereço que não é https (o front também, antes de enviar).
     const { contexto, cabecalhos } = await sessaoDaApi('rbs')
     const eventos: { id: number; edicao: number }[] = await (await contexto.get('/api/eventos')).json()
@@ -616,19 +620,19 @@ test.describe('R6 a R8 · admin, identidade e pós-venda', () => {
     await page.goto(`/parceria/${marca.parceriaId}/pesquisa`)
     await expect(page.getByText(/não inclui|fora da cota/i).first()).toBeVisible()
   })
-  test('[R7.1] o emblema de 2027 aparece no login e nos cabeçalhos', async ({ page }) => {
+  test('[R7.1] o emblema de 2027 aparece no login e não nos cabeçalhos', async ({ page }) => {
+    // Desde 06/11 (pedido do ph), o emblema fica só no login: os cabeçalhos das telas não o repetem.
     await page.goto('/entrar')
-    await expect(page.getByRole('img', { name: 'Planeta Atlântida 2027' })).toBeVisible()
+    const login = page.getByRole('img', { name: 'Planeta Atlântida 2027' })
+    await expect(login).toBeVisible()
+    expect(await login.evaluate((imagem: HTMLImageElement) => imagem.complete && imagem.naturalWidth > 0)).toBe(true)
     const amarelo = await parceriaDa('amarelo')
     await entrar(page, 'amarelo')
-    for (const aba of ['perfil', 'midia', 'cortesias', 'relatorio']) {
+    for (const aba of ['perfil', 'midia']) {
       await page.goto(`/parceria/${amarelo}/${aba}`)
-      const emblema = page.locator('header img[data-emblema="2027"]')
-      await expect(emblema, aba).toBeVisible()
-      // O emblema carregou de fato (uma imagem quebrada também ficaria "visível").
-      expect(await emblema.evaluate((imagem: HTMLImageElement) => imagem.complete && imagem.naturalWidth > 0), aba).toBe(true)
+      await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
+      await expect(page.locator('header img[data-emblema="2027"]'), aba).toHaveCount(0)
     }
-    await capturar(page, 'r7-emblema-cabecalho-1440')
   })
   test('[R8.1] a marca vê o anexo de pós-venda com o relatório disponibilizado', async ({ page }) => {
     const marca = await novaMarcaDeTeste('SUBCOTA')
@@ -680,7 +684,8 @@ test.describe('R6 a R8 · admin, identidade e pós-venda', () => {
     await entrar(page, 'rbs')
     await page.goto('/rbs/relatorios')
     await page.getByLabel(/^Edição/).first().selectOption({ label: 'Planeta Atlântida 2027' })
-    const numeros = page.locator('form', { has: page.getByText('Informar um número') })
+    await page.getByRole('button', { name: 'Informar número' }).click()
+    const numeros = page.getByRole('dialog', { name: 'Informar um número' })
     const campo = numeros.getByLabel('Indicador')
     await campo.click()
     await campo.pressSequentially(indicador)
@@ -696,7 +701,7 @@ test.describe('R6 a R8 · admin, identidade e pós-venda', () => {
     // O relatório gerado depois traz o número em "O festival em números", com a fonte.
     await page.goto(`/parceria/${marca.parceriaId}/relatorio`)
     await page.getByRole('button', { name: 'Gerar nova versão' }).click()
-    await expect(page.getByRole('row').filter({ hasText: indicador })).toContainText(/80\.000/)
+    await expect(page.getByRole('listitem').filter({ hasText: indicador }).last()).toContainText(/80\.000/)
   })
 })
 

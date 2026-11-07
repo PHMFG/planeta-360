@@ -32,7 +32,7 @@ public class CargaRepositorio {
      */
     record LinhaDeVeiculacao(int linha, String patrocinador, String veiculo, String formato, String espacoPrograma,
                              OffsetDateTime exibidoEm, BigDecimal quantidade, String link, String exibidoEmTexto,
-                             String quantidadeTexto) {
+                             String quantidadeTexto, BigDecimal impacto, String impactoTexto, String mes) {
     }
 
     /** O mesmo para a planilha de pesquisa: o que não converteu está nulo e o texto original vai nos campos "Texto". */
@@ -102,8 +102,8 @@ public class CargaRepositorio {
     public void gravarVeiculacoes(long cargaId, List<LinhaDeVeiculacao> linhas) {
         lote.batchUpdate("""
                 INSERT INTO stg_veiculacao (carga_id, linha, patrocinador, veiculo, formato, espaco_programa, exibido_em,
-                                            quantidade, link, exibido_em_texto, quantidade_texto)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", new BatchPreparedStatementSetter() {
+                                            quantidade, link, exibido_em_texto, quantidade_texto, impacto, impacto_texto, mes)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""", new BatchPreparedStatementSetter() {
             @Override
             public void setValues(PreparedStatement ps, int i) throws SQLException {
                 LinhaDeVeiculacao l = linhas.get(i);
@@ -122,6 +122,9 @@ public class CargaRepositorio {
                 texto(ps, 9, l.link());
                 texto(ps, 10, l.exibidoEmTexto());
                 texto(ps, 11, l.quantidadeTexto());
+                decimal(ps, 12, l.impacto());
+                texto(ps, 13, l.impactoTexto());
+                texto(ps, 14, l.mes());
             }
 
             @Override

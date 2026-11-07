@@ -17,9 +17,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Rotas 23 a 25 do contrato (docs/api.md): ver a pesquisa da ativação, enviar as perguntas e a RBS decidir sobre cada uma.
- * Atende o item 5 da Entrega 2. [ISOLAMENTO] [PERMISSAO] A rota 24 é do Admin Patrocinador da parceria e a 25 só da RBS
- * (o outro perfil recebe 403). As regras ficam no PesquisaService.
+ * Rotas 23 a 25 e 119 do contrato (docs/api.md): ver a pesquisa da ativação, enviar as perguntas, a RBS decidir sobre cada
+ * uma e o perfil da pesquisa. Atende o item 5 da Entrega 2. [ISOLAMENTO] [PERMISSAO] A rota 24 é do Admin Patrocinador da
+ * parceria ou da RBS, e a 25 só da RBS (o outro perfil recebe 403). As regras ficam no PesquisaService.
  */
 @RestController
 @RequestMapping("/api")
@@ -37,7 +37,7 @@ public class PesquisaController {
         return servico.ver(usuario, id);
     }
 
-    /** 24. O PUT substitui o conjunto de perguntas da marca (de 1 a 3). */
+    /** 24. O PUT substitui o conjunto de perguntas da marca (até o limite da pesquisa). */
     @PutMapping("/parcerias/{id}/pesquisa/perguntas")
     public PesquisaDaParceriaDto enviarPerguntas(@AuthenticationPrincipal UsuarioAutenticado usuario, @PathVariable long id,
                                                  @Valid @RequestBody EnviarPerguntasRequisicao corpo,

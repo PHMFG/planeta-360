@@ -18,6 +18,8 @@ type PropsTabela<T> = {
   aoClicar?: (linha: T) => void
   /** O nome da tabela para quem usa leitor de tela, dito quando a caixa rolável recebe o foco. */
   rotulo?: string
+  /** A linha que acabou de chegar ou mudar (F10): o fundo pisca na tinta da seção e some em 2 s. */
+  destaque?: (linha: T) => boolean
 }
 
 /** A caixa tem mais conteúdo do que a largura dela. Relê quando o tamanho muda. */
@@ -37,7 +39,7 @@ function usarRolaParaOsLados() {
   return { caixa, rola }
 }
 
-export function Tabela<T>({ colunas, linhas, chave, vazio = 'Nada para mostrar.', aoClicar, rotulo = 'Tabela' }: PropsTabela<T>) {
+export function Tabela<T>({ colunas, linhas, chave, vazio = 'Nada para mostrar.', aoClicar, rotulo = 'Tabela', destaque }: PropsTabela<T>) {
   const { caixa, rola } = usarRolaParaOsLados()
   return (
     <div>
@@ -48,7 +50,7 @@ export function Tabela<T>({ colunas, linhas, chave, vazio = 'Nada para mostrar.'
       )}
       <div
         ref={caixa}
-        className="overflow-x-auto rounded-[10px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secao"
+        className="relative overflow-x-auto rounded-[10px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secao"
         {...(rola ? { tabIndex: 0, role: 'region', 'aria-label': `${rotulo}, role para os lados` } : {})}
       >
       <table className="w-full border-separate border-spacing-0 text-sm">
@@ -79,7 +81,7 @@ export function Tabela<T>({ colunas, linhas, chave, vazio = 'Nada para mostrar.'
               <tr
                 key={chave(linha)}
                 onClick={aoClicar ? () => aoClicar(linha) : undefined}
-                className={aoClicar ? 'cursor-pointer hover:bg-fundo' : ''}
+                className={`${aoClicar ? 'cursor-pointer hover:bg-fundo' : ''} ${destaque?.(linha) ? 'animate-destacar' : ''}`}
               >
                 {colunas.map((coluna) => (
                   <td key={coluna.titulo} className={`border-b border-borda px-3 py-3 align-middle ${coluna.classe ?? ''}`}>

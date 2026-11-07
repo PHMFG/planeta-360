@@ -1,0 +1,12 @@
+13/10/2026 14:03 - Fulana (RBS): Oi, tudo bem? Consegue me confirmar o que rodou ontem na 102.3?
+13/10/2026 14:04 - Atendimento Agência X: Oi, Fulana! Tudo bem. Vou conferir com a produção.
+13/10/2026 14:12 - Atendimento Agência X: Confirmado: saíram 4 comerciais de 30" do Cliente Roxo na Rádio 102.3 ontem, dia 12/10.
+13/10/2026 14:13 - Fulana (RBS): Perfeito, obrigada. E os cadastros da ativação?
+13/10/2026 14:20 - Atendimento Agência X: Estamos fechando a contagem. Se precisar falar com a produção, o telefone é (51) 98888-1234.
+13/10/2026 14:21 - Atendimento Agência X: Também pode escrever para producao@agencia-x.example.
+13/10/2026 14:25 - Fulana (RBS): Anotado. O e-mail é o melhor caminho?
+13/10/2026 14:26 - Atendimento Agência X: Sim, a caixa é lida todo dia. O telefone é só para urgência no fim de semana.
+13/10/2026 14:30 - Fulana (RBS): Combinado. Vou lançar a entrega na planilha padrão.
+13/10/2026 14:31 - Atendimento Agência X: Ótimo. Qualquer coisa estamos à disposição.
+13/10/2026 14:35 - Fulana (RBS): Obrigada!
+13/10/2026 14:36 - Atendimento Agência X: De nada, até mais.

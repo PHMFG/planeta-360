@@ -27,14 +27,16 @@ import { Aviso } from '../../componentes/Aviso'
 import { Botao } from '../../componentes/Botao'
 import { CabecalhoSecao } from '../../componentes/CabecalhoSecao'
 import { Campo, focarPrimeiroErro } from '../../componentes/Campo'
-import { Cartao, Indicador } from '../../componentes/Cartao'
+import { Barra } from '../../componentes/Barra'
+import { Cartao } from '../../componentes/Cartao'
 import { Carregando } from '../../componentes/Carregando'
 import { Seletor } from '../../componentes/Formulario'
 import { Modal } from '../../componentes/Modal'
 import { SECOES } from '../../componentes/secoes'
 import { Tabela } from '../../componentes/Tabela'
+import { usarToast } from '../../componentes/Toast'
 import { useSessao } from '../../sessao/Sessao'
-import { data, dataHora, numero, porcentagem } from '../../util/formatar'
+import { data, dataHora, numero } from '../../util/formatar'
 import { useParceria, useRecarregarSeAbaFechou } from './ContextoParceria'
 import { EntregasDaAba } from './EntregasDaAba'
 
@@ -62,7 +64,7 @@ export function Cortesias() {
       <CabecalhoSecao
         trilha={rbs ? 'Planeta Atlântida / RBS · Gestão' : 'Planeta Atlântida / Patrocinador'}
         titulo="Cortesias"
-        subtitulo={rbs ? 'Cota por setor e dia, prazo de destinação e o que a marca já destinou.' : 'Destinação conforme a sua cota e o contrato.'}
+        subtitulo={rbs ? 'Cota por setor e dia, prazo de destinação e o que a marca já destinou.' : 'Os ingressos da sua cota e para quem você os destinou.'}
       />
       <AvisoAbaFechada parceria={parceria} estado={estado} nome={SECAO.nome} rbs={rbs} />
       {podeVer && <ConteudoDeCortesias rbs={rbs} />}
@@ -76,31 +78,53 @@ function ConteudoDeCortesias({ rbs }: { rbs: boolean }) {
   const dados = useDados(() => obterCortesias(parceria.id), [parceria.id])
   useRecarregarSeAbaFechou(dados)
   const [destinando, setDestinando] = useState(false)
-  const [aviso, setAviso] = useState<string | null>(null)
+  const avisar = usarToast()
 
   return (
     <Carregando dados={dados}>
       {(cortesias) => (
         <>
-          <Aviso titulo="Quantidades por setor, tipo e dia">
-            Consulte cada categoria separadamente. A disponibilidade não é uma hierarquia entre cotas: o passaporte vale os dois dias e
-            conta à parte da sexta e do sábado.
-          </Aviso>
-
           {rbs && <GradeDaRbs cortesias={cortesias} aoGravar={dados.recarregar} />}
 
-          <Cartao titulo="Destinação de ingressos">
+          {/* F9 (plano da base da RBS): a ação e o prazo no topo do cartão; saíram os avisos de regra e o espaço vazio das
+              orientações, que só repetiam o que a tabela e o botão já dizem. O passaporte aparece como linha própria da tabela. */}
+          <Cartao
+            titulo="Destinação de ingressos"
+            extra={
+              cortesias.cotas.length > 0 && (
+                <div className="flex flex-wrap items-center justify-end gap-3">
+                  <span className="text-xs font-semibold text-texto-2">
+                    {cortesias.cortesiasPrazo
+                      ? cortesias.prazoEncerrado
+                        ? `Prazo encerrado em ${data(cortesias.cortesiasPrazo)}`
+                        : `Prazo para destinar: até ${data(cortesias.cortesiasPrazo)}`
+                      : 'Sem prazo definido'}
+                  </span>
+                  <Botao onClick={() => setDestinando(true)} disabled={!rbs && cortesias.prazoEncerrado}>
+                    Destinar cortesias
+                  </Botao>
+                </div>
+              )
+            }
+          >
             {cortesias.cotas.length === 0 ? (
               <Aviso tipo="ausente" titulo="A RBS ainda não informou a cota de cortesias desta parceria">
                 {rbs ? 'Preencha a cota acima.' : 'Quando a RBS informar, as quantidades aparecem aqui.'}
               </Aviso>
             ) : (
               <>
-                <div className="mb-4 grid gap-3 sm:grid-cols-3">
-                  <Indicador rotulo="Cota" valor={numero(cortesias.totais.cota)} legenda="Somando setores e dias" />
-                  <Indicador rotulo="Destinadas" valor={numero(cortesias.totais.destinadas)} legenda={porcentagem(cortesias.totais.percentual)} />
-                  <Indicador rotulo="Disponíveis" valor={numero(cortesias.totais.disponiveis)} legenda="Ainda para destinar" />
+                <div className="mb-5 flex flex-wrap items-center gap-x-6 gap-y-2">
+                  <p className="text-sm">
+                    <span className="font-semibold">
+                      {numero(cortesias.totais.destinadas)} de {numero(cortesias.totais.cota)}
+                    </span>{' '}
+                    <span className="text-texto-2">destinadas · {numero(cortesias.totais.disponiveis)} disponíveis</span>
+                  </p>
+                  <div className="min-w-[200px] flex-1">
+                    <Barra valor={cortesias.totais.percentual} rotulo="Cortesias destinadas" />
+                  </div>
                 </div>
+                {!rbs && cortesias.prazoEncerrado && <p className="mb-3 text-xs font-medium text-texto-2">O prazo terminou: a destinação agora é com a RBS.</p>}
                 <Tabela<CelulaCortesia>
                   rotulo="Destinação de ingressos"
                   linhas={cortesias.cotas}
@@ -119,44 +143,6 @@ function ConteudoDeCortesias({ rbs }: { rbs: boolean }) {
             )}
           </Cartao>
 
-          {/* Figma P04: as orientações são publicadas pela RBS como entregas desta aba, na lista do fim da página. */}
-          <Cartao>
-            <p className="text-sm font-semibold">Orientações de distribuição</p>
-            <p className="text-xs font-medium text-texto-2">Quando a RBS publicar as orientações, elas aparecem na lista de entregas, no fim desta página · somente consulta</p>
-          </Cartao>
-
-          <Aviso titulo="Liberação e destinação">
-            A RBS libera as quantidades contratadas. Você destina as cortesias por setor, tipo e dia, respeitando o disponível.{' '}
-            {cortesias.cortesiasPrazo
-              ? cortesias.prazoEncerrado
-                ? `O prazo para destinar terminou em ${data(cortesias.cortesiasPrazo)}: para mudar, peça o ajuste à RBS.`
-                : `O prazo para destinar vai até ${data(cortesias.cortesiasPrazo)}.`
-              : 'A RBS ainda não definiu um prazo para destinar.'}
-          </Aviso>
-
-          {aviso && (
-            <p className="text-sm font-semibold text-secao-texto" role="status">
-              {aviso}
-            </p>
-          )}
-
-          {cortesias.cotas.length > 0 && (
-            <div>
-              <Botao
-                onClick={() => {
-                  setAviso(null)
-                  setDestinando(true)
-                }}
-                disabled={!rbs && cortesias.prazoEncerrado}
-              >
-                Destinar cortesias
-              </Botao>
-              {!rbs && cortesias.prazoEncerrado && (
-                <p className="mt-2 text-xs font-medium text-texto-2">O prazo terminou: a destinação agora é com a RBS.</p>
-              )}
-            </div>
-          )}
-
           <DestinacoesFeitas cortesias={cortesias} rbs={rbs} aoMudar={dados.recarregar} />
 
           <FormularioDeDestinacao
@@ -165,7 +151,7 @@ function ConteudoDeCortesias({ rbs }: { rbs: boolean }) {
             aoFechar={() => setDestinando(false)}
             aoDestinar={(texto) => {
               setDestinando(false)
-              setAviso(texto)
+              avisar(texto)
               dados.recarregar()
             }}
           />
@@ -281,11 +267,11 @@ function FormularioDeDestinacao({
                 Quantidade liberada: {numero(celula.cota)} · já destinada: {numero(celula.destinadas)} · disponível: {numero(celula.disponiveis)}.
               </Aviso>
             )}
-            <Aviso tipo={passa ? 'falha' : 'info'} titulo="Validação" className={passa ? '' : 'max-sm:hidden'}>
-              {passa
-                ? `A quantidade passa do disponível (${numero(celula!.disponiveis)}). O que você preencheu fica: ajuste a quantidade e revise de novo.`
-                : 'Se a quantidade passar do disponível, a destinação não é gravada e o que você digitou continua no formulário. Confira antes de registrar.'}
-            </Aviso>
+            {passa && (
+              <Aviso tipo="falha" titulo={`A quantidade passa do disponível (${numero(celula!.disponiveis)})`}>
+                O que você preencheu fica: ajuste a quantidade e revise de novo.
+              </Aviso>
+            )}
           </>
         )}
         {falha && <Aviso tipo="falha" titulo={falha} />}
@@ -493,13 +479,18 @@ function GradeDaRbs({ cortesias, aoGravar }: { cortesias: DadosDeCortesias; aoGr
   }
 
   return (
-    <Cartao titulo="Cota de cortesias da parceria">
-      <p className="mb-4 text-sm font-medium text-texto-2">
-        Preencha a quantidade de cada setor e tipo/dia que o contrato dá. Deixe em branco o que a cota não tem. A cota não pode ficar abaixo do que a
-        marca já destinou.
-      </p>
-      <form onSubmit={salvar} className="flex flex-col gap-4" noValidate>
-        <div className="overflow-x-auto">
+    <Cartao
+      titulo="Cota de cortesias da parceria"
+      // O salvar também no topo: no fim do formulário ele ficava abaixo da dobra em 1440×900 (rodada H3).
+      extra={
+        <Botao type="submit" form="form-cota-cortesias" carregando={enviando} className="min-w-0 px-5" icone="ri-save-line">
+          Salvar
+        </Botao>
+      }
+    >
+      <p className="mb-4 text-sm font-medium text-texto-2">O que o contrato dá, por setor e tipo/dia. Em branco, a cota não tem.</p>
+      <form id="form-cota-cortesias" onSubmit={salvar} className="flex flex-col gap-4" noValidate>
+        <div className="relative overflow-x-auto">
           <table className="w-full border-separate border-spacing-0 text-sm">
             <thead>
               <tr>

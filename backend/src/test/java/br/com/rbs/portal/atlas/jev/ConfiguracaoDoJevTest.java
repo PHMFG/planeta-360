@@ -95,6 +95,6 @@ class ConfiguracaoDoJevTest {
     @Test
     void osPontosTemOsNomesDaConfiguracaoEDoArquivoDePerguntas() {
         assertThat(java.util.Arrays.stream(PontoDoJev.values()).map(PontoDoJev::nome))
-                .containsExactly("intencao", "cartao", "fontes", "resposta", "coerencia", "lacunas");
+                .containsExactly("intencao", "cartao", "fontes", "resposta", "coerencia", "lacunas", "arquivo_destino");
     }
 }

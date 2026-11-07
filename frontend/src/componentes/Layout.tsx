@@ -4,14 +4,15 @@ import { useState } from 'react'
 import { Outlet } from 'react-router'
 import type { ParceriaResumo } from '../api/tipos'
 import { useSessao } from '../sessao/Sessao'
-import { BotaoDebug } from './BotaoDebug'
 import { Menu } from './Menu'
 
 export function Layout({ parceria, contexto }: { parceria: ParceriaResumo | null; contexto?: unknown }) {
   const [menuAberto, setMenuAberto] = useState(false)
   const { usuario } = useSessao()
   // [ATLAS] Só a marca conversa com o Atlas, e sempre dentro de uma parceria: o botão do menu abre a janela dele.
-  const atlas = parceria !== null && usuario?.perfil === 'ADMIN_PATROCINADOR' ? `/parceria/${parceria.id}/atlas` : undefined
+  // A marca conversa dentro da parceria dela; a RBS, no Atlas da gestão, que consulta a base de todas as marcas (pedido do ph, 06/11).
+  const atlas =
+    usuario?.perfil === 'ADMIN_RBS' ? '/rbs/atlas' : parceria !== null && usuario?.perfil === 'ADMIN_PATROCINADOR' ? `/parceria/${parceria.id}/atlas` : undefined
 
   return (
     <div className="min-h-screen">
@@ -34,10 +35,11 @@ export function Layout({ parceria, contexto }: { parceria: ParceriaResumo | null
         aoFechar={() => setMenuAberto(false)}
         atlas={atlas}
       />
-      {/* [TEMPORARIO] Só aparece com as rotas de debug da API (perfil dev). */}
-      <BotaoDebug />
       <main className="p-4 lg:pl-[296px] print:p-0">
-        <div className="flex max-w-[1200px] min-w-0 flex-col gap-4">
+        {/* [MOVIMENTO] Só o conteúdo troca na transição de tela; o menu e a barra do topo ficam parados. */}
+        {/* O nome da transição ("conteudo") só vale durante a troca de tela (movimento.css): fixo, ele criaria um contexto de
+            empilhamento, e os modais e o visualizador daqui de dentro ficariam por baixo da barra do topo e do menu. */}
+        <div className="conteudo-da-pagina flex max-w-[1200px] min-w-0 flex-col gap-4">
           <Outlet context={contexto} />
         </div>
       </main>

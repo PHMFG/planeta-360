@@ -32,6 +32,8 @@ export default defineConfig({
     timezoneId: 'America/Sao_Paulo',
     screenshot: 'only-on-failure',
     trace: 'retain-on-failure',
+    // Movimento reduzido por padrão (F10): as animações não atrasam nem confundem os testes. O movimento.spec.ts liga de volta.
+    contextOptions: { reducedMotion: 'reduce' },
   },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   // Na pilha, o front já está no ar (recarga ao vivo do código desta pasta). No modo dev, o Vite sobe aqui.

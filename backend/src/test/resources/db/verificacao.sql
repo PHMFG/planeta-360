@@ -1,6 +1,6 @@
--- Confere o banco depois de V1 a V18 e da amostra R__amostra.sql: contagens, cargas, relatórios, órfãos e uma tentativa de violar cada regra.
+-- Confere o banco depois de V1 a V25 e da amostra R__amostra.sql: contagens, cargas, relatórios, órfãos e uma tentativa de violar cada regra.
 -- Atende o item 1 da Entrega 2 (amostra e verificações), prova as 8 correções do item 8 e, na seção 8, o plano comercial, o
--- catálogo e os dados informados da V7 e, na seção 9, as tabelas do Atlas da V8, o resumo do raciocínio da V9 e o traço do diagnóstico da V10 e, na seção 10, os documentos, os trechos, a busca sem acento e a RLS da V11 e, na seção 11, as fontes citadas, o documento congelado e o plural da busca da V12 e, na seção 12, os prazos da V13 e, na seção 14, o JEV e a conversa sem parceria da V15 e, na seção 15, o papel da entrega, o Open Staff, o texto e link da entrega, o contrato e a pesquisa da ativação da V16 e, na seção 15b, as páginas fora do Atlas da V17 e, na seção 15, o pós-venda da V18. Nenhuma linha fica gravada: as tentativas são desfeitas (só as sequências avançam).
+-- catálogo e os dados informados da V7 e, na seção 9, as tabelas do Atlas da V8, o resumo do raciocínio da V9 e o traço do diagnóstico da V10 e, na seção 10, os documentos, os trechos, a busca sem acento e a RLS da V11 e, na seção 11, as fontes citadas, o documento congelado e o plural da busca da V12 e, na seção 12, os prazos da V13 e, na seção 14, o JEV e a conversa sem parceria da V15 e, na seção 15, o papel da entrega, o Open Staff, o texto e link da entrega, o contrato e a pesquisa da ativação da V16 e, na seção 15b, as páginas fora do Atlas da V17 e, na seção 15, o pós-venda da V18 e, na seção 16, a unidade do relatório e o atendimento da V19, a base de mídia da V20, a importação da V21, a pesquisa e as visitas da V22 e os faltantes e a carga da pesquisa da V23. Nenhuma linha fica gravada: as tentativas são desfeitas (só as sequências avançam).
 
 -- Como rodar (banco de dev ou de teste com a amostra carregada; sem meta-comandos, serve também para JDBC com o texto inteiro):
 --   PGPASSWORD=portal psql -X -P pager=off -v ON_ERROR_STOP=1 -h localhost -U portal -d <banco> -f verificacao.sql
@@ -69,15 +69,15 @@ END $f$;
 DO $$
 BEGIN
     -- A tabela de controle do Flyway (flyway_schema_history) não é do portal: fica de fora quando o banco foi criado pelo Flyway.
-    PERFORM pg_temp.confere('ESTRUTURA', 'tabelas (29 da modelagem + 4 novas na V1 + 3 na V7 + 7 na V8 + 1 na V10 + 2 na V11 + 1 na V12 + 1 na V13 + 1 na V16 + 1 na V18)', 50,
+    PERFORM pg_temp.confere('ESTRUTURA', 'tabelas (29 da modelagem + 4 novas na V1 + 3 na V7 + 7 na V8 + 1 na V10 + 2 na V11 + 1 na V12 + 1 na V13 + 1 na V16 + 1 na V18 + 2 na V21 + 3 na V22)', 55,
        (SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
            AND table_name <> 'flyway_schema_history'));
-    PERFORM pg_temp.confere('ESTRUTURA', 'visões (7 de consolidação + vw_dado_vigente)', 8,
+    PERFORM pg_temp.confere('ESTRUTURA', 'visões (7 de consolidação + vw_dado_vigente + vw_midia_detalhe da V20)', 9,
        (SELECT count(*) FROM information_schema.views WHERE table_schema = 'public'));
     PERFORM pg_temp.confere('ESTRUTURA', 'funções fn_carregar_veiculacoes, fn_carregar_pesquisa, fn_carregar_plano, fn_gerar_relatorio', 4,
        (SELECT count(*) FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
-         WHERE n.nspname = 'public' AND p.proname IN ('fn_carregar_veiculacoes', 'fn_carregar_pesquisa', 'fn_carregar_plano', 'fn_gerar_relatorio')));
-    PERFORM pg_temp.confere('ESTRUTURA', 'gatilhos de regra (rn_*): 29 até a V15, mais rn_contrato_arquivo e rn_entrega_conteudo_imutavel da V16, rn_documento_paginas_ignoradas da V17, mais rn_evento_posvenda_conteudo e rn_evento_posvenda_imutavel da V18', 34,
+          WHERE n.nspname = 'public' AND p.proname IN ('fn_carregar_veiculacoes', 'fn_carregar_pesquisa', 'fn_carregar_plano', 'fn_gerar_relatorio')));
+    PERFORM pg_temp.confere('ESTRUTURA', 'gatilhos de regra (rn_*): 34 até a V18, mais rn_veiculacao_periodo da V20, os 3 da V21 e rn_pesquisa_pergunta_limite da V22', 39,
        (SELECT count(*) FROM pg_trigger WHERE NOT tgisinternal AND tgname LIKE 'rn\_%'));
     PERFORM pg_temp.confere('BASE', 'tipos de cota', 3, (SELECT count(*) FROM cota_tipo));
     PERFORM pg_temp.confere('BASE', 'abas do menu', 7, (SELECT count(*) FROM aba));
@@ -130,7 +130,7 @@ BEGIN
     PERFORM pg_temp.confere('CARGA 1', 'rejeitadas', 4, c.linhas_rejeitadas);
     PERFORM pg_temp.confere('CARGA 1', 'rejeição: reels do Roxo (aproveitamento fora do plano)', 2,
         (SELECT count(*) FROM carga_rejeicao WHERE carga_id = c.id AND motivo = 'Aproveitamento não encontrado no plano comercial'));
-    PERFORM pg_temp.confere('CARGA 1', 'rejeição: linha da Verde sem data', 1,
+    PERFORM pg_temp.confere('CARGA 1', 'rejeição: linha da Verde sem data nem mês', 1,
         (SELECT count(*) FROM carga_rejeicao WHERE carga_id = c.id AND campo = 'exibido_em' AND motivo = 'Campo obrigatório vazio ou inválido'));
     PERFORM pg_temp.confere('CARGA 1', 'rejeição: Cliente Azul (marca sem parceria na edição)', 1,
         (SELECT count(*) FROM carga_rejeicao WHERE carga_id = c.id AND motivo = 'Patrocinador sem parceria nesta edição'));
@@ -143,7 +143,9 @@ BEGIN
     PERFORM pg_temp.confere('CARGA 2', 'inseridas', 0, c.linhas_inseridas);
     PERFORM pg_temp.confere('CARGA 2', 'duplicadas', 1485, c.linhas_duplicadas);
     PERFORM pg_temp.confere('CARGA 2', 'rejeitadas', 4, c.linhas_rejeitadas);
-    PERFORM pg_temp.confere('CARGA 2', 'veiculações na base depois das duas cargas (sem contagem em dobro)', 1483, (SELECT count(*) FROM veiculacao));
+    -- A amostra tem ainda uma linha mensal (periodo MES) para o Amarelo; ela não é uma exibição carregada.
+    PERFORM pg_temp.confere('CARGA 2', 'exibições na base depois das duas cargas (sem contagem em dobro)', 1483,
+        (SELECT count(*) FROM veiculacao WHERE periodo = 'EXIBICAO'));
 
     SELECT * INTO c FROM carga WHERE tipo = 'PESQUISA' ORDER BY id LIMIT 1;
     PERFORM pg_temp.confere('PESQUISA', 'carga de pesquisa: lidas', 11, c.linhas_lidas);
@@ -166,7 +168,7 @@ BEGIN
     PERFORM pg_temp.confere('CONSOLIDAÇÃO', 'Roxo, CPM: exibido de previsto (%, cortado), sem somar com inserções', 97.2,
         (SELECT u.pct_entrega FROM vw_midia_unidade u JOIN parceria pa ON pa.id = u.parceria_id JOIN patrocinador p ON p.id = pa.patrocinador_id
           WHERE p.nome_canonico = 'Cliente Roxo' AND u.unidade = 'CPM'));
-    PERFORM pg_temp.confere('CONSOLIDAÇÃO', 'Amarelo, inserções: exibido de previsto (%, cortado: 1105 de 1113 = 99,28)', 99.2,
+    PERFORM pg_temp.confere('CONSOLIDAÇÃO', 'Amarelo, inserções: exibido de previsto (%, cortado: 1115 de 1113 = 100,17)', 100.1,
         (SELECT u.pct_entrega FROM vw_midia_unidade u JOIN parceria pa ON pa.id = u.parceria_id JOIN patrocinador p ON p.id = pa.patrocinador_id
           WHERE p.nome_canonico = 'Cliente Amarelo' AND u.unidade = 'INSERCAO'));
     PERFORM pg_temp.confere('CONSOLIDAÇÃO', 'Verde, inserções: exibido de previsto (%)', 100,
@@ -684,10 +686,11 @@ END $$;
 -- ---------------------------------------------------------------------
 -- 8. V7: plano comercial por CSV, catálogo de campos e dados informados
 -- ---------------------------------------------------------------------
--- O catálogo que a V7 carrega em todos os ambientes: os quatro inteiros da aba Aplicações e os dois limites entre campos
+-- O catálogo que a V7 carrega em todos os ambientes: os inteiros da aba Aplicações (quatro da V7 e o das pessoas na ativação, da
+-- V22) e os dois limites entre campos
 DO $$
 BEGIN
-    PERFORM pg_temp.confere('V7 CATÁLOGO', 'campos da aba Aplicações (inteiros a partir de 0, sem máximo)', 4,
+    PERFORM pg_temp.confere('V7 CATÁLOGO', 'campos da aba Aplicações (inteiros a partir de 0, sem máximo)', 5,
         (SELECT count(*) FROM campo_catalogo c JOIN aba a ON a.id = c.aba_id
           WHERE a.codigo = 'APLICACOES' AND c.tipo = 'INTEIRO' AND c.minimo = 0 AND c.maximo IS NULL));
     PERFORM pg_temp.afirma('V7 CATÁLOGO', 'cadastros não passam de visitantes e brindes distribuídos não passam dos disponíveis (limite_campo)',
@@ -1135,10 +1138,10 @@ DECLARE
             SELECT c.parceria_id, c.id, gen_random_uuid(), 1, '%1$s', '%2$s', now(), %3$s FROM atlas_conversa c WHERE c.id = v_conversa;
         END $d$ $c$;
 BEGIN
-    PERFORM pg_temp.afirma('V10 ESTRUTURA', 'o CHECK de etapa aceita as 15 etapas do plano',
+    PERFORM pg_temp.afirma('V10 ESTRUTURA', 'o CHECK de etapa aceita as 16 etapas do plano',
         (SELECT count(*) FROM unnest(ARRAY['G1_LIMITES','J1_INTENCAO','J1_CARTAO','LLM_IDA','FERRAMENTA','BUSCA','R3_FONTES','CHECAGEM',
-                                           'R5_RESPOSTA','V2_COERENCIA','LACUNAS','RESUMO','SAIDA','DISJUNTOR','ERRO']) e
-          WHERE (SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = 'ck_atlas_traco_etapa') LIKE '%''' || e || '''%') = 15);
+                                           'R5_RESPOSTA','V2_COERENCIA','LACUNAS','RESUMO','SAIDA','DISJUNTOR','ARQUIVO_DESTINO','ERRO']) e
+          WHERE (SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE conname = 'ck_atlas_traco_etapa') LIKE '%''' || e || '''%') = 16);
     PERFORM pg_temp.confere('V10 ESTRUTURA', 'a amostra não traz traço do diagnóstico', 0, (SELECT count(*) FROM atlas_traco));
     PERFORM pg_temp.aceita('V10 TRACO', 'um traço de LLM_IDA numa conversa do Amarelo', format(c_novo, 'LLM_IDA', 'OK', '12'));
     PERFORM pg_temp.recusa('V10 TRACO', 'etapa fora da lista', 'ck_atlas_traco_etapa', format(c_novo, 'INVENTADA', 'OK', '12'));
@@ -2238,13 +2241,13 @@ END $$;
 -- parceria são da V7. Aqui se confere a linha nova e que o valor de arquivo funciona como os outros (vigente, um valor só, mesma parceria).
 DO $$
 BEGIN
-    PERFORM pg_temp.confere('V14 CATÁLOGO', 'campos da aba Aplicações (os quatro inteiros e a planilha)', 5,
+    PERFORM pg_temp.confere('V14 CATÁLOGO', 'campos da aba Aplicações (os cinco inteiros da ativação e a planilha)', 6,
         (SELECT count(*) FROM campo_catalogo c JOIN aba a ON a.id = c.aba_id WHERE a.codigo = 'APLICACOES'));
     PERFORM pg_temp.confere('V14 CATÁLOGO', 'campos de arquivo no catálogo (só a planilha da agência)', 1,
         (SELECT count(*) FROM campo_catalogo WHERE tipo = 'ARQUIVO'));
-    PERFORM pg_temp.afirma('V14 CATÁLOGO', 'a planilha: aba Aplicações, ordem 5, rótulo e ajuda, sem unidade, limites nem campo-limite',
+    PERFORM pg_temp.afirma('V14 CATÁLOGO', 'a planilha: aba Aplicações, ordem 6 (a V22 pôs as pessoas na ativação antes), rótulo e ajuda, sem unidade, limites nem campo-limite',
         EXISTS (SELECT 1 FROM campo_catalogo c JOIN aba a ON a.id = c.aba_id
-                 WHERE c.chave = 'ativacao.planilha_agencia' AND a.codigo = 'APLICACOES' AND c.tipo = 'ARQUIVO' AND c.ordem = 5
+                 WHERE c.chave = 'ativacao.planilha_agencia' AND a.codigo = 'APLICACOES' AND c.tipo = 'ARQUIVO' AND c.ordem = 6
                    AND c.rotulo = 'Planilha da agência' AND c.ajuda ILIKE '%planilha%agência%'
                    AND c.unidade IS NULL AND c.minimo IS NULL AND c.maximo IS NULL AND c.limite_campo IS NULL));
     PERFORM pg_temp.afirma('V14 CATÁLOGO', 'a planilha vem depois dos quatro inteiros na ordem do formulário',
@@ -2703,7 +2706,601 @@ BEGIN
 END $$;
 
 -- ---------------------------------------------------------------------
--- 16. Resultado: a lista de conferências e, se alguma falhou, o erro final (saída diferente de zero com ON_ERROR_STOP)
+-- 16. V19 a V22: a unidade do relatório, o atendimento, a base de mídia, a importação, a pesquisa e as visitas
+-- ---------------------------------------------------------------------
+-- A V19 acrescenta a unidade do recorte no relatório (BG2) e o atendimento da parceria (U7).
+DO $$
+DECLARE v_amarelo2026 BIGINT; v_rel BIGINT; v_fest INT; v_sem INT; v_unid_ok BOOLEAN;
+BEGIN
+    PERFORM pg_temp.confere('V19 RELATÓRIO', 'a coluna unidade em relatorio_indicador', 1,
+        (SELECT count(*) FROM information_schema.columns WHERE table_name = 'relatorio_indicador' AND column_name = 'unidade'));
+    PERFORM pg_temp.confere('V19 ATENDIMENTO', 'as colunas atendimento_nome e atendimento_email na parceria', 2,
+        (SELECT count(*) FROM information_schema.columns WHERE table_name = 'parceria' AND column_name IN ('atendimento_nome', 'atendimento_email')));
+    PERFORM pg_temp.confere('V19 ATENDIMENTO', 'a amostra não tem atendimento cadastrado', 0,
+        (SELECT count(*) FROM parceria WHERE atendimento_nome IS NOT NULL OR atendimento_email IS NOT NULL));
+    PERFORM pg_temp.confere('V19 RELATÓRIO', 'na visão, só o FESTIVAL_NUMERO leva a unidade do recorte', 0,
+        (SELECT count(*) FROM vw_indicadores_parceria WHERE unidade IS NOT NULL AND indicador_codigo <> 'FESTIVAL_NUMERO'));
+    PERFORM pg_temp.recusa('V19 ATENDIMENTO', 'e-mail do atendimento malformado', 'ck_parceria_atendimento_email', $q$
+        UPDATE parceria SET atendimento_nome = 'Fulano', atendimento_email = 'sem-arroba'
+        WHERE id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027) $q$);
+    PERFORM pg_temp.aceita('V19 ATENDIMENTO', 'nome e e-mail válidos do atendimento', $q$
+        UPDATE parceria SET atendimento_nome = 'Atendimento RBS', atendimento_email = 'atendimento@rbs.example'
+        WHERE id = (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027) $q$);
+
+    SELECT id INTO v_amarelo2026 FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2026;
+    BEGIN
+        v_rel := fn_gerar_relatorio(v_amarelo2026, (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example'));
+        SELECT count(*) INTO v_fest FROM relatorio_indicador
+         WHERE relatorio_id = v_rel AND indicador_codigo = 'FESTIVAL_NUMERO' AND unidade IS NOT NULL;
+        SELECT count(*) INTO v_sem FROM relatorio_indicador
+         WHERE relatorio_id = v_rel AND unidade IS NOT NULL AND indicador_codigo <> 'FESTIVAL_NUMERO';
+        SELECT bool_and(er.unidade IS NOT NULL) INTO v_unid_ok
+          FROM evento_resultado er JOIN evento e ON e.id = er.evento_id WHERE e.edicao = 2026;
+        RAISE EXCEPTION 'desfazer' USING ERRCODE = 'ZZ001';
+    EXCEPTION WHEN SQLSTATE 'ZZ001' THEN NULL;
+    END;
+    PERFORM pg_temp.confere('V19 RELATÓRIO', 'a geração copiou a unidade dos 6 números do festival de 2026', 6, v_fest);
+    PERFORM pg_temp.confere('V19 RELATÓRIO', 'nenhum outro indicador do relatório levou unidade', 0, v_sem);
+    PERFORM pg_temp.afirma('V19 RELATÓRIO', 'todo número do festival de 2026 tem unidade na amostra', v_unid_ok);
+END $$;
+
+-- A V20 acrescenta o impacto e o período da mídia (M1 e M2), a função de carga nova e a visão da consulta (M3).
+DO $$
+DECLARE
+    v_ev BIGINT; v_b2b BIGINT; v_amarelo BIGINT; v_ap BIGINT;
+    c1 BIGINT; c2 BIGINT; c3 BIGINT; c4 BIGINT;
+    r1 RECORD; r2 RECORD; r3 RECORD; r4 RECORD;
+    v_exib TIMESTAMPTZ; v_periodo VARCHAR(10); v_mes DATE; v_impacto NUMERIC(18,2); v_impacto_nulo BOOLEAN;
+BEGIN
+    SELECT id INTO v_ev FROM evento WHERE nome = 'Planeta Atlântida' AND edicao = 2027;
+    SELECT id INTO v_b2b FROM _ver_usr WHERE email = 'b2b@rbs.example';
+    SELECT id INTO v_amarelo FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027;
+    SELECT ap.id INTO v_ap FROM aproveitamento_previsto ap
+     WHERE ap.parceria_id = v_amarelo AND ap.categoria = 'MIDIA' ORDER BY ap.id LIMIT 1;
+
+    PERFORM pg_temp.confere('V20 ESTRUTURA', 'as colunas impacto, periodo e mes_referencia em veiculacao', 3,
+        (SELECT count(*) FROM information_schema.columns WHERE table_name = 'veiculacao' AND column_name IN ('impacto', 'periodo', 'mes_referencia')));
+    PERFORM pg_temp.confere('V20 ESTRUTURA', 'as colunas impacto, impacto_texto e mes em stg_veiculacao', 3,
+        (SELECT count(*) FROM information_schema.columns WHERE table_name = 'stg_veiculacao' AND column_name IN ('impacto', 'impacto_texto', 'mes')));
+
+    PERFORM pg_temp.recusa('V20 PERÍODO', 'impacto negativo', 'ck_veiculacao_impacto', $q$
+        INSERT INTO veiculacao (aproveitamento_id, exibido_em, quantidade, impacto)
+        SELECT id, timestamptz '2031-01-10 10:00-03', 1, -1 FROM aproveitamento_previsto
+         WHERE categoria = 'MIDIA' ORDER BY id LIMIT 1 $q$);
+    PERFORM pg_temp.recusa('V20 PERÍODO', 'período fora da lista', 'ck_veiculacao_periodo', $q$
+        INSERT INTO veiculacao (aproveitamento_id, exibido_em, quantidade, periodo)
+        SELECT id, timestamptz '2031-01-10 10:00-03', 1, 'DIA' FROM aproveitamento_previsto
+         WHERE categoria = 'MIDIA' ORDER BY id LIMIT 1 $q$);
+    PERFORM pg_temp.recusa('V20 PERÍODO', 'linha mensal sem o mês de referência', 'ck_veiculacao_mes_referencia', $q$
+        INSERT INTO veiculacao (aproveitamento_id, exibido_em, quantidade, periodo)
+        SELECT id, timestamptz '2031-02-01 00:00-03', 1, 'MES' FROM aproveitamento_previsto
+         WHERE categoria = 'MIDIA' ORDER BY id LIMIT 1 $q$);
+    PERFORM pg_temp.recusa('V20 PERÍODO', 'exibição com mês de referência', 'ck_veiculacao_mes_referencia', $q$
+        INSERT INTO veiculacao (aproveitamento_id, exibido_em, quantidade, mes_referencia)
+        SELECT id, timestamptz '2031-02-10 10:00-03', 1, DATE '2031-02-01' FROM aproveitamento_previsto
+         WHERE categoria = 'MIDIA' ORDER BY id LIMIT 1 $q$);
+    PERFORM pg_temp.recusa('V20 PERÍODO', 'mês de referência que não é o dia 1', 'ck_veiculacao_mes_referencia', $q$
+        INSERT INTO veiculacao (aproveitamento_id, exibido_em, quantidade, periodo, mes_referencia)
+        SELECT id, timestamptz '2031-02-15 00:00-03', 1, 'MES', DATE '2031-02-15' FROM aproveitamento_previsto
+         WHERE categoria = 'MIDIA' ORDER BY id LIMIT 1 $q$);
+    PERFORM pg_temp.aceita('V20 PERÍODO', 'a linha mensal grava o exibido_em no dia 1, à meia-noite de Brasília', $q$
+        DO $d$ DECLARE v_id BIGINT; v_exib TIMESTAMPTZ;
+        BEGIN
+            SELECT id INTO v_id FROM aproveitamento_previsto WHERE categoria = 'MIDIA' ORDER BY id LIMIT 1;
+            INSERT INTO veiculacao (aproveitamento_id, exibido_em, quantidade, periodo, mes_referencia, impacto)
+            VALUES (v_id, timestamptz '2031-03-15 13:45-03', 10, 'MES', DATE '2031-03-01', 1200);
+            SELECT exibido_em INTO v_exib FROM veiculacao
+             WHERE aproveitamento_id = v_id AND periodo = 'MES' AND mes_referencia = DATE '2031-03-01';
+            IF v_exib IS DISTINCT FROM timestamptz '2031-03-01 00:00:00-03' THEN
+                RAISE EXCEPTION 'exibido_em saiu como %', v_exib;
+            END IF;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V20 PERÍODO', 'total mensal quando já há exibição no mesmo mês', 'rn_veiculacao_periodo', $q$
+        DO $d$ DECLARE v_id BIGINT;
+        BEGIN
+            SELECT id INTO v_id FROM aproveitamento_previsto WHERE categoria = 'MIDIA' ORDER BY id LIMIT 1;
+            INSERT INTO veiculacao (aproveitamento_id, exibido_em, quantidade) VALUES (v_id, timestamptz '2031-04-10 10:00-03', 1);
+            INSERT INTO veiculacao (aproveitamento_id, exibido_em, quantidade, periodo, mes_referencia)
+            VALUES (v_id, timestamptz '2031-04-01 00:00-03', 5, 'MES', DATE '2031-04-01');
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V20 PERÍODO', 'exibição quando já há o total mensal no mesmo mês', 'rn_veiculacao_periodo', $q$
+        DO $d$ DECLARE v_id BIGINT;
+        BEGIN
+            SELECT id INTO v_id FROM aproveitamento_previsto WHERE categoria = 'MIDIA' ORDER BY id LIMIT 1;
+            INSERT INTO veiculacao (aproveitamento_id, exibido_em, quantidade, periodo, mes_referencia)
+            VALUES (v_id, timestamptz '2031-05-01 00:00-03', 5, 'MES', DATE '2031-05-01');
+            INSERT INTO veiculacao (aproveitamento_id, exibido_em, quantidade) VALUES (v_id, timestamptz '2031-05-10 10:00-03', 1);
+        END $d$ $q$);
+
+    BEGIN
+        INSERT INTO carga (tipo, executada_por) VALUES ('MIDIA', v_b2b) RETURNING id INTO c1;
+        INSERT INTO stg_veiculacao (carga_id, linha, patrocinador, veiculo, formato, espaco_programa, mes, quantidade, impacto)
+        SELECT c1, 1, p.nome_canonico, ap.veiculo, ap.formato, ap.espaco_programa, '2030-05', 10, 500
+        FROM aproveitamento_previsto ap JOIN parceria pa ON pa.id = ap.parceria_id JOIN patrocinador p ON p.id = pa.patrocinador_id
+        WHERE ap.id = v_ap;
+        INSERT INTO stg_veiculacao (carga_id, linha, patrocinador, veiculo, formato, espaco_programa, exibido_em, quantidade, impacto_texto)
+        SELECT c1, 2, p.nome_canonico, ap.veiculo, ap.formato, ap.espaco_programa, timestamptz '2030-06-01 10:00-03', 1, 'muito'
+        FROM aproveitamento_previsto ap JOIN parceria pa ON pa.id = ap.parceria_id JOIN patrocinador p ON p.id = pa.patrocinador_id
+        WHERE ap.id = v_ap;
+        INSERT INTO stg_veiculacao (carga_id, linha, patrocinador, veiculo, formato, espaco_programa, exibido_em, mes, quantidade)
+        SELECT c1, 3, p.nome_canonico, ap.veiculo, ap.formato, ap.espaco_programa, timestamptz '2030-08-01 10:00-03', '2030-08', 1
+        FROM aproveitamento_previsto ap JOIN parceria pa ON pa.id = ap.parceria_id JOIN patrocinador p ON p.id = pa.patrocinador_id
+        WHERE ap.id = v_ap;
+        INSERT INTO stg_veiculacao (carga_id, linha, patrocinador, veiculo, formato, espaco_programa, mes, quantidade)
+        SELECT c1, 4, p.nome_canonico, ap.veiculo, ap.formato, ap.espaco_programa, '2030-5', 1
+        FROM aproveitamento_previsto ap JOIN parceria pa ON pa.id = ap.parceria_id JOIN patrocinador p ON p.id = pa.patrocinador_id
+        WHERE ap.id = v_ap;
+        INSERT INTO stg_veiculacao (carga_id, linha, patrocinador, veiculo, formato, espaco_programa, quantidade)
+        SELECT c1, 5, p.nome_canonico, ap.veiculo, ap.formato, ap.espaco_programa, 1
+        FROM aproveitamento_previsto ap JOIN parceria pa ON pa.id = ap.parceria_id JOIN patrocinador p ON p.id = pa.patrocinador_id
+        WHERE ap.id = v_ap;
+        INSERT INTO stg_veiculacao (carga_id, linha, patrocinador, veiculo, formato, espaco_programa, exibido_em, quantidade, impacto_texto)
+        SELECT c1, 6, p.nome_canonico, ap.veiculo, ap.formato, ap.espaco_programa, timestamptz '2030-07-05 10:00-03', 2, ''
+        FROM aproveitamento_previsto ap JOIN parceria pa ON pa.id = ap.parceria_id JOIN patrocinador p ON p.id = pa.patrocinador_id
+        WHERE ap.id = v_ap;
+        INSERT INTO stg_veiculacao (carga_id, linha, patrocinador, veiculo, formato, espaco_programa, mes, quantidade)
+        SELECT c1, 7, p.nome_canonico, ap.veiculo, ap.formato, ap.espaco_programa, '2030-05', 4
+        FROM aproveitamento_previsto ap JOIN parceria pa ON pa.id = ap.parceria_id JOIN patrocinador p ON p.id = pa.patrocinador_id
+        WHERE ap.id = v_ap;
+        SELECT * INTO r1 FROM fn_carregar_veiculacoes(c1, v_ev);
+        SELECT v.exibido_em, v.periodo, v.mes_referencia, v.impacto INTO v_exib, v_periodo, v_mes, v_impacto
+          FROM veiculacao v WHERE v.carga_id = c1 AND v.periodo = 'MES';
+        SELECT EXISTS (SELECT 1 FROM veiculacao v
+                        WHERE v.carga_id = c1 AND v.periodo = 'EXIBICAO' AND v.impacto IS NULL
+                          AND v.exibido_em = timestamptz '2030-07-05 10:00-03') INTO v_impacto_nulo;
+
+        INSERT INTO carga (tipo, executada_por) VALUES ('MIDIA', v_b2b) RETURNING id INTO c2;
+        INSERT INTO stg_veiculacao (carga_id, linha, patrocinador, veiculo, formato, espaco_programa, exibido_em, quantidade)
+        SELECT c2, 1, p.nome_canonico, ap.veiculo, ap.formato, ap.espaco_programa, timestamptz '2030-05-10 10:00-03', 3
+        FROM aproveitamento_previsto ap JOIN parceria pa ON pa.id = ap.parceria_id JOIN patrocinador p ON p.id = pa.patrocinador_id
+        WHERE ap.id = v_ap;
+        SELECT * INTO r2 FROM fn_carregar_veiculacoes(c2, v_ev);
+
+        INSERT INTO carga (tipo, executada_por) VALUES ('MIDIA', v_b2b) RETURNING id INTO c3;
+        INSERT INTO stg_veiculacao (carga_id, linha, patrocinador, veiculo, formato, espaco_programa, mes, quantidade)
+        SELECT c3, 1, p.nome_canonico, ap.veiculo, ap.formato, ap.espaco_programa, '2030-05', 4
+        FROM aproveitamento_previsto ap JOIN parceria pa ON pa.id = ap.parceria_id JOIN patrocinador p ON p.id = pa.patrocinador_id
+        WHERE ap.id = v_ap;
+        SELECT * INTO r3 FROM fn_carregar_veiculacoes(c3, v_ev);
+
+        -- o mesmo arquivo com as duas formas do mesmo mês: as duas viram rejeição, e a carga não é derrubada
+        INSERT INTO carga (tipo, executada_por) VALUES ('MIDIA', v_b2b) RETURNING id INTO c4;
+        INSERT INTO stg_veiculacao (carga_id, linha, patrocinador, veiculo, formato, espaco_programa, mes, quantidade)
+        SELECT c4, 1, p.nome_canonico, ap.veiculo, ap.formato, ap.espaco_programa, '2030-09', 5
+        FROM aproveitamento_previsto ap JOIN parceria pa ON pa.id = ap.parceria_id JOIN patrocinador p ON p.id = pa.patrocinador_id
+        WHERE ap.id = v_ap;
+        INSERT INTO stg_veiculacao (carga_id, linha, patrocinador, veiculo, formato, espaco_programa, exibido_em, quantidade)
+        SELECT c4, 2, p.nome_canonico, ap.veiculo, ap.formato, ap.espaco_programa, timestamptz '2030-09-10 10:00-03', 3
+        FROM aproveitamento_previsto ap JOIN parceria pa ON pa.id = ap.parceria_id JOIN patrocinador p ON p.id = pa.patrocinador_id
+        WHERE ap.id = v_ap;
+        SELECT * INTO r4 FROM fn_carregar_veiculacoes(c4, v_ev);
+        RAISE EXCEPTION 'desfazer' USING ERRCODE = 'ZZ001';
+    EXCEPTION WHEN SQLSTATE 'ZZ001' THEN NULL;
+    END;
+
+    PERFORM pg_temp.confere('V20 CARGA', 'arquivo misto: lidas', 7, r1.lidas);
+    PERFORM pg_temp.confere('V20 CARGA', 'arquivo misto: inseridas', 2, r1.inseridas);
+    PERFORM pg_temp.confere('V20 CARGA', 'arquivo misto: duplicadas', 1, r1.duplicadas);
+    PERFORM pg_temp.confere('V20 CARGA', 'arquivo misto: rejeitadas', 4, r1.rejeitadas);
+    PERFORM pg_temp.afirma('V20 CARGA', 'a linha mensal grava período, mês e impacto, e o exibido_em vira o dia 1 à meia-noite',
+        v_periodo = 'MES' AND v_mes = DATE '2030-05-01' AND v_impacto = 500 AND v_exib = timestamptz '2030-05-01 00:00:00-03');
+    PERFORM pg_temp.afirma('V20 CARGA', 'o impacto vazio vale como nulo', v_impacto_nulo);
+    PERFORM pg_temp.confere('V20 CARGA', 'segunda carga (exibição no mês do total): lidas', 1, r2.lidas);
+    PERFORM pg_temp.confere('V20 CARGA', 'segunda carga: inseridas', 0, r2.inseridas);
+    PERFORM pg_temp.confere('V20 CARGA', 'segunda carga: duplicadas', 0, r2.duplicadas);
+    PERFORM pg_temp.confere('V20 CARGA', 'segunda carga: rejeitadas', 1, r2.rejeitadas);
+    PERFORM pg_temp.confere('V20 CARGA', 'terceira carga (total mensal repetido): lidas', 1, r3.lidas);
+    PERFORM pg_temp.confere('V20 CARGA', 'terceira carga: inseridas', 0, r3.inseridas);
+    PERFORM pg_temp.confere('V20 CARGA', 'terceira carga: duplicadas', 1, r3.duplicadas);
+    PERFORM pg_temp.confere('V20 CARGA', 'terceira carga: rejeitadas', 0, r3.rejeitadas);
+    PERFORM pg_temp.confere('V20 CARGA', 'arquivo com as duas formas do mesmo mês: lidas', 2, r4.lidas);
+    PERFORM pg_temp.confere('V20 CARGA', 'arquivo com as duas formas do mesmo mês: inseridas', 0, r4.inseridas);
+    PERFORM pg_temp.confere('V20 CARGA', 'arquivo com as duas formas do mesmo mês: duplicadas', 0, r4.duplicadas);
+    PERFORM pg_temp.confere('V20 CARGA', 'arquivo com as duas formas do mesmo mês: rejeitadas', 2, r4.rejeitadas);
+
+    PERFORM pg_temp.confere('V20 VISÃO', 'a linha do plano sem veiculação aparece uma vez, com mês nulo e exibido 0', 1,
+        (SELECT count(*) FROM vw_midia_detalhe d
+          WHERE d.aproveitamento_id = (SELECT ap.id FROM aproveitamento_previsto ap
+                                        WHERE ap.categoria = 'MIDIA'
+                                          AND NOT EXISTS (SELECT 1 FROM veiculacao v WHERE v.aproveitamento_id = ap.id)
+                                        ORDER BY ap.id LIMIT 1)
+            AND d.mes IS NULL AND d.exibido = 0));
+    PERFORM pg_temp.confere('V20 VISÃO', 'a soma do exibido de cada linha do plano bate com a veiculação', 0,
+        (SELECT count(*) FROM (SELECT aproveitamento_id, sum(quantidade) AS qtd FROM veiculacao GROUP BY aproveitamento_id) v
+           JOIN (SELECT aproveitamento_id, sum(exibido) AS ex FROM vw_midia_detalhe GROUP BY aproveitamento_id) d
+             ON d.aproveitamento_id = v.aproveitamento_id
+          WHERE d.ex <> v.qtd));
+    PERFORM pg_temp.confere('V20 VISÃO', 'exibições, comprovantes, links e impacto batem com a base, mês a mês', 0,
+        (SELECT count(*) FROM vw_midia_detalhe d
+           LEFT JOIN (SELECT v.aproveitamento_id,
+                             date_trunc('month', v.exibido_em AT TIME ZONE 'America/Sao_Paulo')::date AS mes,
+                             count(*) AS exibicoes, count(v.comprovante_arquivo_id) AS comprovantes,
+                             count(v.link) AS links, sum(v.impacto) AS impacto
+                        FROM veiculacao v GROUP BY 1, 2) b
+             ON b.aproveitamento_id = d.aproveitamento_id AND b.mes IS NOT DISTINCT FROM d.mes
+          WHERE d.exibicoes <> coalesce(b.exibicoes, 0) OR d.comprovantes <> coalesce(b.comprovantes, 0)
+             OR d.links <> coalesce(b.links, 0) OR d.impacto IS DISTINCT FROM b.impacto));
+END $$;
+
+-- A V21 acrescenta a importação e as linhas dela, o vínculo da veiculação com a linha, o localizador do trecho e a categoria
+-- IMPORTACAO do arquivo. As três regras novas são o alcance, a prévia e as transições.
+DO $$
+DECLARE v_amarelo BIGINT; v_b2b BIGINT;
+BEGIN
+    SELECT id INTO v_amarelo FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027;
+    SELECT id INTO v_b2b FROM _ver_usr WHERE email = 'b2b@rbs.example';
+
+    PERFORM pg_temp.confere('V21 ESTRUTURA', 'as tabelas importacao e importacao_linha', 2,
+        (SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('importacao', 'importacao_linha')));
+    PERFORM pg_temp.confere('V21 ESTRUTURA', 'as colunas de alcance, origem, destino, situação e arquivo da importação', 7,
+        (SELECT count(*) FROM information_schema.columns WHERE table_name = 'importacao'
+            AND column_name IN ('alcance', 'origem', 'destino_sugerido', 'destino', 'situacao', 'arquivo_id', 'documento_id')));
+    PERFORM pg_temp.confere('V21 ESTRUTURA', 'as colunas da linha proposta', 7,
+        (SELECT count(*) FROM information_schema.columns WHERE table_name = 'importacao_linha'
+            AND column_name IN ('ordem', 'dados', 'origem', 'situacao', 'parceria_id', 'aproveitamento_id', 'semelhanca')));
+    PERFORM pg_temp.confere('V21 ESTRUTURA', 'a veiculação aponta para a linha da importação', 1,
+        (SELECT count(*) FROM information_schema.columns WHERE table_name = 'veiculacao' AND column_name = 'importacao_linha_id'));
+    PERFORM pg_temp.confere('V21 ESTRUTURA', 'o trecho guarda o localizador', 1,
+        (SELECT count(*) FROM information_schema.columns WHERE table_name = 'documento_trecho' AND column_name = 'localizador'));
+    PERFORM pg_temp.aceita('V21 ARQUIVO', 'a categoria IMPORTACAO', $q$
+        INSERT INTO arquivo (parceria_id, categoria, nome_original, mime_type, tamanho_bytes, caminho, enviado_por)
+        SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), 'IMPORTACAO', 'importacao.xlsx',
+               'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 10, 'teste/v21-categoria.xlsx',
+               (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') $q$);
+
+    PERFORM pg_temp.recusa('V21 ALCANCE', 'alcance EDICAO com parceria', 'ck_importacao_alcance_coerente', $q$
+        INSERT INTO importacao (evento_id, alcance, parceria_id, origem, arquivo_id, criada_por)
+        SELECT e.id, 'EDICAO', (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), 'RBS',
+               (SELECT id FROM arquivo ORDER BY id LIMIT 1), (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example')
+        FROM evento e WHERE e.edicao = 2027 $q$);
+    PERFORM pg_temp.recusa('V21 ALCANCE', 'alcance COTA sem a cota', 'ck_importacao_alcance_coerente', $q$
+        INSERT INTO importacao (evento_id, alcance, origem, arquivo_id, criada_por)
+        SELECT e.id, 'COTA', 'RBS', (SELECT id FROM arquivo ORDER BY id LIMIT 1),
+               (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM evento e WHERE e.edicao = 2027 $q$);
+    PERFORM pg_temp.recusa('V21 ALCANCE', 'alcance PARCERIA sem a parceria', 'ck_importacao_alcance_coerente', $q$
+        INSERT INTO importacao (evento_id, alcance, origem, arquivo_id, criada_por)
+        SELECT e.id, 'PARCERIA', 'RBS', (SELECT id FROM arquivo ORDER BY id LIMIT 1),
+               (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM evento e WHERE e.edicao = 2027 $q$);
+    PERFORM pg_temp.recusa('V21 ALCANCE', 'alcance fora da lista', 'ck_importacao_alcance', $q$
+        INSERT INTO importacao (evento_id, alcance, origem, arquivo_id, criada_por)
+        SELECT e.id, 'EVENTO', 'RBS', (SELECT id FROM arquivo ORDER BY id LIMIT 1),
+               (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM evento e WHERE e.edicao = 2027 $q$);
+    PERFORM pg_temp.recusa('V21 ALCANCE', 'origem fora da lista', 'ck_importacao_origem', $q$
+        INSERT INTO importacao (evento_id, alcance, origem, arquivo_id, criada_por)
+        SELECT e.id, 'EDICAO', 'JORNAL', (SELECT id FROM arquivo ORDER BY id LIMIT 1),
+               (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM evento e WHERE e.edicao = 2027 $q$);
+    PERFORM pg_temp.recusa('V21 ALCANCE', 'situação fora da lista', 'ck_importacao_situacao', $q$
+        INSERT INTO importacao (evento_id, alcance, origem, arquivo_id, situacao, criada_por)
+        SELECT e.id, 'EDICAO', 'RBS', (SELECT id FROM arquivo ORDER BY id LIMIT 1), 'PAUSADA',
+               (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM evento e WHERE e.edicao = 2027 $q$);
+    PERFORM pg_temp.recusa('V21 ALCANCE', 'destino fora da lista', 'ck_importacao_destino', $q$
+        INSERT INTO importacao (evento_id, alcance, origem, arquivo_id, destino, criada_por)
+        SELECT e.id, 'EDICAO', 'RBS', (SELECT id FROM arquivo ORDER BY id LIMIT 1), 'TUDO',
+               (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM evento e WHERE e.edicao = 2027 $q$);
+    PERFORM pg_temp.recusa('V21 ALCANCE', 'confiança acima de 1', 'ck_importacao_confianca', $q$
+        INSERT INTO importacao (evento_id, alcance, origem, arquivo_id, confianca, criada_por)
+        SELECT e.id, 'EDICAO', 'RBS', (SELECT id FROM arquivo ORDER BY id LIMIT 1), 1.5,
+               (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM evento e WHERE e.edicao = 2027 $q$);
+
+    PERFORM pg_temp.recusa('V21 TRANSIÇÃO', 'pular de LENDO para CONFIRMADA', 'rn_importacao_transicao', $q$
+        DO $d$ DECLARE v_imp BIGINT;
+        BEGIN
+            INSERT INTO importacao (evento_id, alcance, origem, arquivo_id, criada_por)
+            SELECT e.id, 'EDICAO', 'RBS', (SELECT id FROM arquivo ORDER BY id LIMIT 1),
+                   (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM evento e WHERE e.edicao = 2027
+            RETURNING id INTO v_imp;
+            UPDATE importacao SET situacao = 'CONFIRMADA', confirmada_por = (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example'),
+                                  confirmada_em = now() WHERE id = v_imp;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V21 TRANSIÇÃO', 'voltar de EM_PREVIA para LENDO', 'rn_importacao_transicao', $q$
+        DO $d$ DECLARE v_imp BIGINT;
+        BEGIN
+            INSERT INTO importacao (evento_id, alcance, origem, arquivo_id, criada_por)
+            SELECT e.id, 'EDICAO', 'RBS', (SELECT id FROM arquivo ORDER BY id LIMIT 1),
+                   (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM evento e WHERE e.edicao = 2027
+            RETURNING id INTO v_imp;
+            UPDATE importacao SET situacao = 'EM_PREVIA' WHERE id = v_imp;
+            UPDATE importacao SET situacao = 'LENDO' WHERE id = v_imp;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V21 TRANSIÇÃO', 'trocar o arquivo de uma importação', 'rn_importacao_transicao', $q$
+        DO $d$ DECLARE v_imp BIGINT;
+        BEGIN
+            INSERT INTO importacao (evento_id, alcance, origem, arquivo_id, criada_por)
+            SELECT e.id, 'EDICAO', 'RBS', (SELECT id FROM arquivo ORDER BY id LIMIT 1),
+                   (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM evento e WHERE e.edicao = 2027
+            RETURNING id INTO v_imp;
+            UPDATE importacao SET arquivo_id = (SELECT id FROM arquivo ORDER BY id DESC LIMIT 1) WHERE id = v_imp;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V21 TRANSIÇÃO', 'confirmar sem quem confirmou e quando', 'rn_importacao_transicao', $q$
+        DO $d$ DECLARE v_imp BIGINT;
+        BEGIN
+            INSERT INTO importacao (evento_id, alcance, origem, arquivo_id, criada_por)
+            SELECT e.id, 'EDICAO', 'RBS', (SELECT id FROM arquivo ORDER BY id LIMIT 1),
+                   (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM evento e WHERE e.edicao = 2027
+            RETURNING id INTO v_imp;
+            UPDATE importacao SET situacao = 'EM_PREVIA' WHERE id = v_imp;
+            UPDATE importacao SET situacao = 'CONFIRMADA' WHERE id = v_imp;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V21 TRANSIÇÃO', 'retirar sem quem retirou e quando', 'rn_importacao_transicao', $q$
+        DO $d$ DECLARE v_imp BIGINT; v_b2b BIGINT;
+        BEGIN
+            SELECT id INTO v_b2b FROM _ver_usr WHERE email = 'b2b@rbs.example';
+            INSERT INTO importacao (evento_id, alcance, origem, arquivo_id, criada_por)
+            SELECT e.id, 'EDICAO', 'RBS', (SELECT id FROM arquivo ORDER BY id LIMIT 1), v_b2b
+            FROM evento e WHERE e.edicao = 2027 RETURNING id INTO v_imp;
+            UPDATE importacao SET situacao = 'EM_PREVIA' WHERE id = v_imp;
+            UPDATE importacao SET situacao = 'CONFIRMADA', confirmada_por = v_b2b, confirmada_em = now() WHERE id = v_imp;
+            UPDATE importacao SET situacao = 'RETIRADA' WHERE id = v_imp;
+        END $d$ $q$);
+    PERFORM pg_temp.aceita('V21 TRANSIÇÃO', 'LENDO, EM_PREVIA, CONFIRMADA e RETIRADA, com quem confirmou e quem retirou', $q$
+        DO $d$ DECLARE v_imp BIGINT; v_b2b BIGINT;
+        BEGIN
+            SELECT id INTO v_b2b FROM _ver_usr WHERE email = 'b2b@rbs.example';
+            INSERT INTO importacao (evento_id, alcance, origem, arquivo_id, criada_por)
+            SELECT e.id, 'EDICAO', 'RBS', (SELECT id FROM arquivo ORDER BY id LIMIT 1), v_b2b
+            FROM evento e WHERE e.edicao = 2027 RETURNING id INTO v_imp;
+            UPDATE importacao SET situacao = 'EM_PREVIA' WHERE id = v_imp;
+            UPDATE importacao SET situacao = 'CONFIRMADA', confirmada_por = v_b2b, confirmada_em = now() WHERE id = v_imp;
+            UPDATE importacao SET situacao = 'RETIRADA', retirada_por = v_b2b, retirada_em = now() WHERE id = v_imp;
+        END $d$ $q$);
+    PERFORM pg_temp.aceita('V21 TRANSIÇÃO', 'descartar em EM_PREVIA', $q$
+        DO $d$ DECLARE v_imp BIGINT;
+        BEGIN
+            INSERT INTO importacao (evento_id, alcance, origem, arquivo_id, criada_por)
+            SELECT e.id, 'EDICAO', 'RBS', (SELECT id FROM arquivo ORDER BY id LIMIT 1),
+                   (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM evento e WHERE e.edicao = 2027
+            RETURNING id INTO v_imp;
+            UPDATE importacao SET situacao = 'EM_PREVIA' WHERE id = v_imp;
+            UPDATE importacao SET situacao = 'DESCARTADA' WHERE id = v_imp;
+        END $d$ $q$);
+
+    PERFORM pg_temp.recusa('V21 LINHA', 'linha de outra marca no alcance PARCERIA', 'rn_importacao_linha_alcance', $q$
+        DO $d$ DECLARE v_imp BIGINT;
+        BEGIN
+            INSERT INTO importacao (evento_id, alcance, parceria_id, origem, arquivo_id, criada_por)
+            SELECT e.id, 'PARCERIA', (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), 'RBS',
+                   (SELECT id FROM arquivo ORDER BY id LIMIT 1), (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example')
+            FROM evento e WHERE e.edicao = 2027 RETURNING id INTO v_imp;
+            INSERT INTO importacao_linha (importacao_id, ordem, destino, dados, origem, parceria_id)
+            VALUES (v_imp, 1, 'VEICULACAO', '{}'::jsonb, '{}'::jsonb,
+                    (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Verde' AND edicao = 2027));
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V21 LINHA', 'linha de outra cota no alcance COTA', 'rn_importacao_linha_alcance', $q$
+        DO $d$ DECLARE v_imp BIGINT;
+        BEGIN
+            INSERT INTO importacao (evento_id, alcance, cota_tipo_id, origem, arquivo_id, criada_por)
+            SELECT e.id, 'COTA', (SELECT id FROM cota_tipo WHERE codigo = 'MASTER'), 'RBS',
+                   (SELECT id FROM arquivo ORDER BY id LIMIT 1), (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example')
+            FROM evento e WHERE e.edicao = 2027 RETURNING id INTO v_imp;
+            INSERT INTO importacao_linha (importacao_id, ordem, destino, dados, origem, parceria_id)
+            VALUES (v_imp, 1, 'VEICULACAO', '{}'::jsonb, '{}'::jsonb,
+                    (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Roxo' AND edicao = 2027));
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V21 LINHA', 'linha de outra edição no alcance EDICAO', 'rn_importacao_linha_alcance', $q$
+        DO $d$ DECLARE v_imp BIGINT;
+        BEGIN
+            INSERT INTO importacao (evento_id, alcance, origem, arquivo_id, criada_por)
+            SELECT e.id, 'EDICAO', 'RBS', (SELECT id FROM arquivo ORDER BY id LIMIT 1),
+                   (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM evento e WHERE e.edicao = 2027
+            RETURNING id INTO v_imp;
+            INSERT INTO importacao_linha (importacao_id, ordem, destino, dados, origem, parceria_id)
+            VALUES (v_imp, 1, 'VEICULACAO', '{}'::jsonb, '{}'::jsonb,
+                    (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2026));
+        END $d$ $q$);
+    PERFORM pg_temp.aceita('V21 LINHA', 'linha da marca do alcance, com a origem de cada campo', $q$
+        DO $d$ DECLARE v_imp BIGINT;
+        BEGIN
+            INSERT INTO importacao (evento_id, alcance, parceria_id, origem, arquivo_id, criada_por)
+            SELECT e.id, 'PARCERIA', (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), 'RBS',
+                   (SELECT id FROM arquivo ORDER BY id LIMIT 1), (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example')
+            FROM evento e WHERE e.edicao = 2027 RETURNING id INTO v_imp;
+            INSERT INTO importacao_linha (importacao_id, ordem, destino, dados, origem, parceria_id, aproveitamento_id, semelhanca)
+            VALUES (v_imp, 1, 'VEICULACAO', '{"veiculo": "atl.la"}', '{"veiculo": {"localizador": "Planilha!B7", "trecho": "atl.la"}}',
+                    (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027),
+                    (SELECT ap.id FROM aproveitamento_previsto ap WHERE ap.parceria_id =
+                        (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027) LIMIT 1), 0.87);
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V21 LINHA', 'criar linha depois de confirmada', 'rn_importacao_linha_previa', $q$
+        DO $d$ DECLARE v_imp BIGINT; v_b2b BIGINT;
+        BEGIN
+            SELECT id INTO v_b2b FROM _ver_usr WHERE email = 'b2b@rbs.example';
+            INSERT INTO importacao (evento_id, alcance, origem, arquivo_id, criada_por)
+            SELECT e.id, 'EDICAO', 'RBS', (SELECT id FROM arquivo ORDER BY id LIMIT 1), v_b2b
+            FROM evento e WHERE e.edicao = 2027 RETURNING id INTO v_imp;
+            UPDATE importacao SET situacao = 'EM_PREVIA' WHERE id = v_imp;
+            UPDATE importacao SET situacao = 'CONFIRMADA', confirmada_por = v_b2b, confirmada_em = now() WHERE id = v_imp;
+            INSERT INTO importacao_linha (importacao_id, ordem, destino, dados, origem)
+            VALUES (v_imp, 1, 'VEICULACAO', '{}'::jsonb, '{}'::jsonb);
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V21 LINHA', 'editar linha depois de confirmada', 'rn_importacao_linha_previa', $q$
+        DO $d$ DECLARE v_imp BIGINT; v_b2b BIGINT;
+        BEGIN
+            SELECT id INTO v_b2b FROM _ver_usr WHERE email = 'b2b@rbs.example';
+            INSERT INTO importacao (evento_id, alcance, origem, arquivo_id, criada_por)
+            SELECT e.id, 'EDICAO', 'RBS', (SELECT id FROM arquivo ORDER BY id LIMIT 1), v_b2b
+            FROM evento e WHERE e.edicao = 2027 RETURNING id INTO v_imp;
+            INSERT INTO importacao_linha (importacao_id, ordem, destino, dados, origem)
+            VALUES (v_imp, 1, 'VEICULACAO', '{}'::jsonb, '{}'::jsonb);
+            UPDATE importacao SET situacao = 'EM_PREVIA' WHERE id = v_imp;
+            UPDATE importacao SET situacao = 'CONFIRMADA', confirmada_por = v_b2b, confirmada_em = now() WHERE id = v_imp;
+            UPDATE importacao_linha SET motivo = 'tentativa' WHERE importacao_id = v_imp;
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V21 LINHA', 'apagar linha depois de confirmada', 'rn_importacao_linha_previa', $q$
+        DO $d$ DECLARE v_imp BIGINT; v_b2b BIGINT;
+        BEGIN
+            SELECT id INTO v_b2b FROM _ver_usr WHERE email = 'b2b@rbs.example';
+            INSERT INTO importacao (evento_id, alcance, origem, arquivo_id, criada_por)
+            SELECT e.id, 'EDICAO', 'RBS', (SELECT id FROM arquivo ORDER BY id LIMIT 1), v_b2b
+            FROM evento e WHERE e.edicao = 2027 RETURNING id INTO v_imp;
+            INSERT INTO importacao_linha (importacao_id, ordem, destino, dados, origem)
+            VALUES (v_imp, 1, 'VEICULACAO', '{}'::jsonb, '{}'::jsonb);
+            UPDATE importacao SET situacao = 'EM_PREVIA' WHERE id = v_imp;
+            UPDATE importacao SET situacao = 'CONFIRMADA', confirmada_por = v_b2b, confirmada_em = now() WHERE id = v_imp;
+            DELETE FROM importacao_linha WHERE importacao_id = v_imp;
+        END $d$ $q$);
+    PERFORM pg_temp.aceita('V21 LINHA', 'apagar a linha da importação solta a veiculação (SET NULL)', $q$
+        DO $d$ DECLARE v_imp BIGINT; v_lin BIGINT; v_ap BIGINT; v_veic BIGINT;
+        BEGIN
+            SELECT ap.id INTO v_ap FROM aproveitamento_previsto ap WHERE ap.categoria = 'MIDIA' ORDER BY ap.id LIMIT 1;
+            INSERT INTO importacao (evento_id, alcance, origem, arquivo_id, criada_por)
+            SELECT e.id, 'EDICAO', 'RBS', (SELECT id FROM arquivo ORDER BY id LIMIT 1),
+                   (SELECT id FROM _ver_usr WHERE email = 'b2b@rbs.example') FROM evento e WHERE e.edicao = 2027
+            RETURNING id INTO v_imp;
+            INSERT INTO importacao_linha (importacao_id, ordem, destino, dados, origem)
+            VALUES (v_imp, 1, 'VEICULACAO', '{}'::jsonb, '{}'::jsonb) RETURNING id INTO v_lin;
+            INSERT INTO veiculacao (aproveitamento_id, exibido_em, quantidade, importacao_linha_id)
+            VALUES (v_ap, timestamptz '2032-01-10 10:00-03', 1, v_lin) RETURNING id INTO v_veic;
+            DELETE FROM importacao_linha WHERE id = v_lin;
+            IF (SELECT importacao_linha_id FROM veiculacao WHERE id = v_veic) IS NOT NULL THEN
+                RAISE EXCEPTION 'a veiculação ficou presa à linha apagada';
+            END IF;
+        END $d$ $q$);
+END $$;
+
+-- A V22 relaxa o limite de perguntas, dá tipo e alternativas à pergunta e acrescenta as respostas de texto, o perfil, o campo do
+-- público da ativação e a última visita a cada aba.
+DO $$
+DECLARE v_amarelo BIGINT; v_pesquisa BIGINT; v_pergunta BIGINT; v_b2b BIGINT;
+BEGIN
+    SELECT id INTO v_amarelo FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027;
+    SELECT id INTO v_b2b FROM _ver_usr WHERE email = 'b2b@rbs.example';
+    SELECT p.id INTO v_pesquisa FROM pesquisa p WHERE p.escopo = 'ATIVACAO';
+    SELECT q.id INTO v_pergunta FROM pesquisa_pergunta q WHERE q.pesquisa_id = v_pesquisa AND q.ordem = 1;
+
+    PERFORM pg_temp.confere('V22 ESTRUTURA', 'a coluna limite_perguntas, obrigatória e com padrão 10', 1,
+        (SELECT count(*) FROM information_schema.columns WHERE table_name = 'pesquisa' AND column_name = 'limite_perguntas'
+            AND is_nullable = 'NO' AND column_default LIKE '10%'));
+    PERFORM pg_temp.confere('V22 ESTRUTURA', 'tipo_resposta e alternativas na pergunta', 2,
+        (SELECT count(*) FROM information_schema.columns WHERE table_name = 'pesquisa_pergunta' AND column_name IN ('tipo_resposta', 'alternativas')));
+    PERFORM pg_temp.afirma('V22 ESTRUTURA', 'as perguntas da amostra ficaram ESCOLHA, sem alternativas, e a de 0 a 10 é NOTA (bloco 18)',
+        (SELECT bool_and(alternativas IS NULL AND tipo_resposta = CASE WHEN texto LIKE 'De 0 a 10%' THEN 'NOTA' ELSE 'ESCOLHA' END)
+           FROM pesquisa_pergunta));
+    PERFORM pg_temp.confere('V22 ESTRUTURA', 'as tabelas pesquisa_resposta_texto, pesquisa_perfil e visita_aba', 3,
+        (SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public'
+            AND table_name IN ('pesquisa_resposta_texto', 'pesquisa_perfil', 'visita_aba')));
+    PERFORM pg_temp.confere('V22 CATÁLOGO', 'o campo ativacao.pessoas_na_ativacao na aba Aplicações, depois dos outros', 1,
+        (SELECT count(*) FROM campo_catalogo c JOIN aba a ON a.id = c.aba_id
+          WHERE c.chave = 'ativacao.pessoas_na_ativacao' AND c.tipo = 'INTEIRO' AND c.ordem = 5 AND c.unidade = 'pessoas'
+            AND c.minimo = 0 AND a.codigo = 'APLICACOES'));
+
+    PERFORM pg_temp.aceita('V22 ORDEM', 'a quarta pergunta (antes o CHECK parava em 3)', $q$
+        INSERT INTO pesquisa_pergunta (parceria_id, ordem, texto, status)
+        SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), 4, 'Quarta pergunta', 'RASCUNHO' $q$);
+    -- O gatilho do limite (10 sem pesquisa) recusaria antes; o CHECK de 1 a 30 é a rede de baixo, provada com o gatilho desligado.
+    PERFORM pg_temp.recusa('V22 ORDEM', 'a pergunta 31 (o teto do CHECK)', 'ck_pesquisa_pergunta_ordem', $q$
+        DO $d$ BEGIN
+            ALTER TABLE pesquisa_pergunta DISABLE TRIGGER rn_pesquisa_pergunta_limite;
+            INSERT INTO pesquisa_pergunta (parceria_id, ordem, texto, status)
+            SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), 31, 'Pergunta 31', 'RASCUNHO';
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V22 ORDEM', 'pergunta acima do limite configurado na pesquisa', 'rn_pesquisa_pergunta_limite', $q$
+        DO $d$ BEGIN
+            UPDATE pesquisa SET limite_perguntas = 2 WHERE escopo = 'ATIVACAO';
+            INSERT INTO pesquisa_pergunta (parceria_id, pesquisa_id, ordem, texto, status)
+            SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Roxo' AND edicao = 2027),
+                   (SELECT id FROM pesquisa WHERE escopo = 'ATIVACAO'), 3, 'Terceira do limite', 'RASCUNHO';
+        END $d$ $q$);
+    PERFORM pg_temp.recusa('V22 ORDEM', 'pergunta sem pesquisa com ordem acima de 10', 'rn_pesquisa_pergunta_limite', $q$
+        INSERT INTO pesquisa_pergunta (parceria_id, ordem, texto, status)
+        SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), 11, 'Sem pesquisa', 'RASCUNHO' $q$);
+
+    PERFORM pg_temp.recusa('V22 TIPO', 'tipo de resposta fora da lista', 'ck_pesquisa_pergunta_tipo', $q$
+        INSERT INTO pesquisa_pergunta (parceria_id, ordem, texto, status, tipo_resposta)
+        SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Roxo' AND edicao = 2027), 5, 'Tipo errado', 'RASCUNHO', 'MULTIPLA' $q$);
+    PERFORM pg_temp.recusa('V22 TIPO', 'alternativas que não são uma lista', 'ck_pesquisa_pergunta_alternativas', $q$
+        INSERT INTO pesquisa_pergunta (parceria_id, ordem, texto, status, alternativas)
+        SELECT (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Roxo' AND edicao = 2027), 6, 'Alternativas erradas', 'RASCUNHO',
+               '{"a": 1}'::jsonb $q$);
+
+    PERFORM pg_temp.aceita('V22 TEXTO', 'uma resposta de texto com a contagem das repetições', $q$
+        INSERT INTO pesquisa_resposta_texto (pesquisa_id, parceria_id, pergunta_id, texto, contagem, suspeita_dado_pessoal, carga_id)
+        SELECT q.pesquisa_id, q.parceria_id, q.id, 'Muito bom', 7, FALSE, (SELECT id FROM carga WHERE tipo = 'PESQUISA' ORDER BY id LIMIT 1)
+        FROM pesquisa_pergunta q WHERE q.ordem = 1 LIMIT 1 $q$);
+    PERFORM pg_temp.recusa('V22 TEXTO', 'resposta de texto com contagem zero', 'ck_pesquisa_resposta_texto_contagem', $q$
+        INSERT INTO pesquisa_resposta_texto (pesquisa_id, parceria_id, pergunta_id, texto, contagem)
+        SELECT q.pesquisa_id, q.parceria_id, q.id, 'Zero', 0 FROM pesquisa_pergunta q WHERE q.ordem = 1 LIMIT 1 $q$);
+    PERFORM pg_temp.recusa('V22 TEXTO', 'resposta de texto em branco', 'ck_pesquisa_resposta_texto_texto', $q$
+        INSERT INTO pesquisa_resposta_texto (pesquisa_id, parceria_id, pergunta_id, texto)
+        SELECT q.pesquisa_id, q.parceria_id, q.id, '   ' FROM pesquisa_pergunta q WHERE q.ordem = 1 LIMIT 1 $q$);
+
+    PERFORM pg_temp.aceita('V22 PERFIL', 'uma dimensão do perfil na pesquisa geral (sem parceria)', $q$
+        INSERT INTO pesquisa_perfil (pesquisa_id, parceria_id, dimensao, categoria, valor, base_respondentes)
+        SELECT id, NULL, 'GENERO', 'Feminino', 52.5, 1038 FROM pesquisa WHERE escopo = 'GERAL' LIMIT 1 $q$);
+    PERFORM pg_temp.recusa('V22 PERFIL', 'valor acima de 100', 'ck_pesquisa_perfil_valor', $q$
+        INSERT INTO pesquisa_perfil (pesquisa_id, parceria_id, dimensao, categoria, valor, base_respondentes)
+        SELECT id, NULL, 'GENERO', 'Outro', 120, 1038 FROM pesquisa WHERE escopo = 'GERAL' LIMIT 1 $q$);
+    PERFORM pg_temp.recusa('V22 PERFIL', 'base de respondentes zero', 'ck_pesquisa_perfil_base', $q$
+        INSERT INTO pesquisa_perfil (pesquisa_id, parceria_id, dimensao, categoria, valor, base_respondentes)
+        SELECT id, NULL, 'GENERO', 'Outro', 10, 0 FROM pesquisa WHERE escopo = 'GERAL' LIMIT 1 $q$);
+    PERFORM pg_temp.recusa('V22 PERFIL', 'dimensão fora da lista', 'ck_pesquisa_perfil_dimensao', $q$
+        INSERT INTO pesquisa_perfil (pesquisa_id, parceria_id, dimensao, categoria, valor, base_respondentes)
+        SELECT id, NULL, 'ALTURA', 'Alta', 10, 1038 FROM pesquisa WHERE escopo = 'GERAL' LIMIT 1 $q$);
+    PERFORM pg_temp.recusa('V22 PERFIL', 'a mesma categoria duas vezes (com parceria nula)', 'uq_pesquisa_perfil', $q$
+        DO $d$ BEGIN
+            INSERT INTO pesquisa_perfil (pesquisa_id, parceria_id, dimensao, categoria, valor, base_respondentes)
+            SELECT id, NULL, 'GENERO', 'Feminino', 52.5, 1038 FROM pesquisa WHERE escopo = 'GERAL' LIMIT 1;
+            INSERT INTO pesquisa_perfil (pesquisa_id, parceria_id, dimensao, categoria, valor, base_respondentes)
+            SELECT id, NULL, 'GENERO', 'Feminino', 53, 1038 FROM pesquisa WHERE escopo = 'GERAL' LIMIT 1;
+        END $d$ $q$);
+
+    PERFORM pg_temp.aceita('V22 VISITA', 'a visita de uma pessoa a uma aba da parceria', $q$
+        INSERT INTO visita_aba (usuario_id, parceria_id, aba, visto_em)
+        SELECT u.id, (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), 'MIDIA', now()
+        FROM _ver_usr u WHERE u.email = 'marketing@amarelo.example' $q$);
+    PERFORM pg_temp.recusa('V22 VISITA', 'aba fora da lista', 'ck_visita_aba', $q$
+        INSERT INTO visita_aba (usuario_id, parceria_id, aba, visto_em)
+        SELECT u.id, (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), 'HOME', now()
+        FROM _ver_usr u WHERE u.email = 'marketing@amarelo.example' $q$);
+    PERFORM pg_temp.recusa('V22 VISITA', 'a mesma visita duas vezes', 'visita_aba_pkey', $q$
+        DO $d$ BEGIN
+            INSERT INTO visita_aba (usuario_id, parceria_id, aba, visto_em)
+            SELECT u.id, (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), 'RELATORIO', now()
+            FROM _ver_usr u WHERE u.email = 'marketing@amarelo.example';
+            INSERT INTO visita_aba (usuario_id, parceria_id, aba, visto_em)
+            SELECT u.id, (SELECT id FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027), 'RELATORIO', now()
+            FROM _ver_usr u WHERE u.email = 'marketing@amarelo.example';
+        END $d$ $q$);
+END $$;
+
+-- A V23 troca a regra da pesquisa na visão de faltantes (nenhuma pergunta, e não menos de 3) e faz a carga de resultados
+-- recusar a alternativa fora da lista de uma pergunta fechada (BG3).
+DO $$
+DECLARE v_2026 BIGINT; v_2027 BIGINT; v_carga BIGINT; v_pesq BIGINT; v_amarelo BIGINT; v_estado TEXT; v_msg TEXT;
+BEGIN
+    SELECT id INTO v_2026 FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2026;
+    SELECT id INTO v_2027 FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027;
+    SELECT id INTO v_pesq FROM pesquisa WHERE escopo = 'ATIVACAO';
+    SELECT id INTO v_amarelo FROM _ver_parc WHERE cliente = 'Cliente Amarelo' AND edicao = 2027;
+
+    -- A de 2026 é Master e não tem pergunta; a de 2027 é Master e tem 3 (uma ou duas já não bastam para o faltante).
+    PERFORM pg_temp.confere('V23 FALTANTES', 'a Master sem nenhuma pergunta continua nos faltantes', 1,
+        (SELECT count(*) FROM vw_faltantes WHERE parceria_id = v_2026 AND tipo = 'PESQUISA_SEM_PERGUNTAS'));
+    PERFORM pg_temp.confere('V23 FALTANTES', 'a Master com perguntas sai dos faltantes', 0,
+        (SELECT count(*) FROM vw_faltantes WHERE parceria_id = v_2027 AND tipo = 'PESQUISA_SEM_PERGUNTAS'));
+
+    -- A carga de resultados recusa a alternativa fora da lista de uma pergunta ESCOLHA; a linha sem lista continua aceita.
+    BEGIN
+        UPDATE pesquisa_pergunta SET tipo_resposta = 'ESCOLHA', alternativas = '["Sim","Não"]'::jsonb
+        WHERE parceria_id = v_amarelo AND ordem = 1;
+        INSERT INTO carga (tipo, evento_id, executada_por)
+        SELECT 'PESQUISA', e.id, u.id FROM evento e, _ver_usr u
+        WHERE e.edicao = 2027 AND u.email = 'b2b@rbs.example' RETURNING id INTO v_carga;
+        INSERT INTO stg_pesquisa (carga_id, linha, patrocinador, pergunta, indicador, alternativa, valor, unidade, base_respondentes)
+        VALUES (v_carga, 1, 'Cliente Amarelo', 1, 'Pergunta 1', 'Talvez', 10, 'PERCENTUAL', 412);
+        PERFORM fn_carregar_pesquisa(v_carga, v_pesq);
+        IF (SELECT count(*) FROM carga_rejeicao WHERE carga_id = v_carga AND campo = 'alternativa'
+                AND motivo = 'Alternativa fora da lista da pergunta.') <> 1 THEN
+            RAISE EXCEPTION 'a alternativa fora da lista entrou' USING ERRCODE = 'check_violation', CONSTRAINT = 'v23_carga';
+        END IF;
+        RAISE EXCEPTION 'desfazer a tentativa' USING ERRCODE = 'ZZ001';
+    EXCEPTION WHEN OTHERS THEN
+        GET STACKED DIAGNOSTICS v_estado = RETURNED_SQLSTATE, v_msg = MESSAGE_TEXT;
+    END;
+    PERFORM pg_temp.afirma('V23 CARGA', 'a alternativa fora da lista vira rejeição com motivo', v_estado = 'ZZ001');
+END $$;
+
+-- ---------------------------------------------------------------------
+-- 17. Resultado: a lista de conferências e, se alguma falhou, o erro final (saída diferente de zero com ON_ERROR_STOP)
 -- ---------------------------------------------------------------------
 SELECT grupo, conferencia, esperado, obtido, CASE WHEN ok THEN 'ok' ELSE 'FALHOU' END AS resultado FROM _ver ORDER BY ordem;
 SELECT count(*) AS conferencias, count(*) FILTER (WHERE ok) AS ok, count(*) FILTER (WHERE NOT ok) AS falhas FROM _ver;

@@ -281,6 +281,51 @@ class ComprovacaoMensalTest {
     }
 
     @Test
+    void oMesPedidoTrazSoAqueleMesNoCsvENoXlsx() {
+        long amarelo = parceria("Cliente Amarelo");
+        long cpm = planoEmCpm(amarelo);
+        exibir(cpm, "2030-06-10T15:00:00Z", 30);
+        exibir(cpm, "2030-07-10T15:00:00Z", 12);
+        SessaoDeApi sessao = SessaoDeApi.entrar(mvc, AMARELO);
+
+        MvcTestResult csv = sessao.get(rota(amarelo, ".csv") + "?mes=2030-06");
+        MvcTestResult xlsx = sessao.get(rota(amarelo, ".xlsx") + "?mes=2030-06");
+
+        assertThat(csv).hasStatus(HttpStatus.OK);
+        String texto = new String(csv.getResponse().getContentAsByteArray(), StandardCharsets.UTF_8);
+        assertThat(texto).contains(";2030-06;Assinada;CPM;30;500");
+        assertThat(texto).doesNotContain(";2030-07;");
+        assertThat(xlsx).hasStatus(HttpStatus.OK);
+    }
+
+    @Test
+    void mesSemExibicaoDevolveSoOCabecalho() {
+        long amarelo = parceria("Cliente Amarelo");
+
+        MvcTestResult csv = SessaoDeApi.entrar(mvc, AMARELO).get(rota(amarelo, ".csv") + "?mes=2031-12");
+
+        assertThat(csv).hasStatus(HttpStatus.OK);
+        String texto = new String(csv.getResponse().getContentAsByteArray(), StandardCharsets.UTF_8);
+        String[] linhas = texto.substring(1).split("\r\n");
+        assertThat(linhas).hasSize(1);
+        assertThat(linhas[0]).isEqualTo("Marca;Mês;Tipo de mídia;Unidade;Exibido no mês;Previsto no plano");
+    }
+
+    @Test
+    void mesMalformadoDa422ComCamposMesNasDuasRotas() {
+        long amarelo = parceria("Cliente Amarelo");
+        SessaoDeApi sessao = SessaoDeApi.entrar(mvc, AMARELO);
+
+        for (String sufixo : List.of(".xlsx", ".csv")) {
+            for (String mes : List.of("2026-13", "2026-1", "abc", "")) {
+                MvcTestResult resposta = sessao.get(rota(amarelo, sufixo) + "?mes=" + mes);
+                assertThat(resposta).as(sufixo + " ?mes=" + mes).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
+                assertThat(lerJson(resposta, "$.campos.mes")).isEqualTo(ComprovacaoMensalService.MES_INVALIDO);
+            }
+        }
+    }
+
+    @Test
     void xlsxVemComOTipoEOAnexoCertos() {
         long amarelo = parceria("Cliente Amarelo");
 

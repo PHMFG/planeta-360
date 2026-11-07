@@ -4,10 +4,22 @@ import type { Cota, ResumoEntregas, UsuarioResumo } from './parcerias'
 import type { StatusEntrega } from '../componentes/Status'
 
 // ---------- Pesquisa ----------
+export type TipoResposta = 'ESCOLHA' | 'SIM_NAO' | 'NOTA' | 'TEXTO'
+
+export const NOME_DO_TIPO_DE_RESPOSTA: Record<TipoResposta, string> = {
+  ESCOLHA: 'Escolha entre alternativas',
+  SIM_NAO: 'Sim ou não',
+  NOTA: 'Nota de 0 a 10',
+  TEXTO: 'Resposta livre',
+}
+
 export type Pergunta = {
   id: number
   ordem: number
   texto: string
+  /** Desde a V22; pergunta antiga vem sem o tipo e vale como escolha. */
+  tipoResposta?: TipoResposta | null
+  alternativas?: string[] | null
   status: 'RASCUNHO' | 'ENVIADA' | 'APROVADA'
   observacaoRbs: string | null
   enviadaPor: UsuarioResumo | null
@@ -41,7 +53,11 @@ export type PesquisaDaParceria = {
 
 export const obterPesquisa = (parceriaId: number) => pedir<PesquisaDaParceria>(`/parcerias/${parceriaId}/pesquisa`)
 
-export const enviarPerguntas = (parceriaId: number, perguntas: { ordem: number; texto: string }[]) =>
+/** Sem `tipoResposta`, a API mantém o tipo e as alternativas que a pergunta já tem (é assim que a pergunta sem mudança vai). */
+export type PerguntaParaEnviar = { ordem: number; texto: string; tipoResposta?: TipoResposta; alternativas?: string[] }
+
+/** A marca Master envia as perguntas dela; a RBS também escreve as de qualquer Master (rota 24). */
+export const enviarPerguntas = (parceriaId: number, perguntas: PerguntaParaEnviar[]) =>
   pedir<PesquisaDaParceria>(`/parcerias/${parceriaId}/pesquisa/perguntas`, { metodo: 'PUT', corpo: { perguntas } })
 
 export const decidirPergunta = (perguntaId: number, decisao: 'APROVAR' | 'PEDIR_AJUSTE', observacao?: string) =>
@@ -49,6 +65,28 @@ export const decidirPergunta = (perguntaId: number, decisao: 'APROVAR' | 'PEDIR_
     metodo: 'PATCH',
     corpo: { decisao, observacao: observacao || undefined },
   })
+
+// ---------- Perfil do público (rota 119; plano da base da RBS, P3) ----------
+export type LinhaDoPerfil = { dimensao: string; categoria: string; valor: number; baseRespondentes: number }
+
+export type PerfilDaPesquisa = {
+  pesquisa: { id: number; nome: string; baseRespondentes: number | null } | null
+  perfil: LinhaDoPerfil[]
+  geral: LinhaDoPerfil[]
+  respostasTexto: { perguntaId: number; ordem: number; texto: string; contagem: number; suspeita?: boolean }[]
+}
+
+export const obterPerfilDaPesquisa = (parceriaId: number) => pedir<PerfilDaPesquisa>(`/parcerias/${parceriaId}/pesquisa/perfil`)
+
+export const NOME_DA_DIMENSAO: Record<string, string> = {
+  GENERO: 'Gênero',
+  FAIXA_ETARIA: 'Faixa etária',
+  RENDA: 'Renda',
+  DOMICILIO: 'Onde mora',
+  SETOR: 'Setor do festival',
+  RECORRENCIA: 'Quantas vezes veio',
+  OUTRA: 'Outros',
+}
 
 // ---------- Pesquisa da edição (rotas 92 a 95; R5.6.d) ----------
 export type EscopoDaPesquisa = 'ATIVACAO' | 'GERAL'

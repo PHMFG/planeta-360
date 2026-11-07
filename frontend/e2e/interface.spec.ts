@@ -37,13 +37,16 @@ test('[U16] os botões de cada e-mail autorizado dizem de qual e-mail são', asy
   for (const nome of nomes) expect(nome).toMatch(/@/)
 })
 
-test('[U17] o botão do Atlas desabilitado da RBS não parece ativo e diz por quê', async ({ page }) => {
+test('[U17] o botão do Atlas da RBS abre o Atlas da gestão, na conversa', async ({ page }) => {
+  // Desde 06/11 (pedido do ph) a RBS usa o botão: ele leva ao Atlas da gestão, que consulta a base de todas as marcas.
   await entrar(page, 'rbs')
-  const atlas = page.getByRole('navigation', { name: 'Menu principal' }).locator('xpath=..').getByRole('button', { name: /atlas/i })
-  await expect(atlas).toBeDisabled()
-  const opacidade = await atlas.evaluate((b) => Number(getComputedStyle(b).opacity))
-  expect(opacidade, 'o desabilitado precisa parecer desabilitado').toBeLessThan(0.8)
-  await expect(page.locator('#atlas-legenda')).toContainText(/marca|patrocinador/i)
+  const atlas = page.getByRole('navigation', { name: 'Menu principal' }).locator('xpath=..').getByRole('link', { name: /atlas/i }).last()
+  await expect(page.locator('#atlas-legenda')).toContainText('todas as marcas')
+  await atlas.click()
+  await expect(page).toHaveURL(/\/rbs\/atlas$/)
+  // A Conversa é a tela inteira do Atlas, como a da marca; Documentos, Prazos e o diagnóstico ficam nos atalhos do topo.
+  await expect(page.getByRole('region', { name: 'Atlas da RBS' }).getByRole('heading', { name: 'Todas as marcas' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Documentos' })).toBeVisible()
 })
 
 test('[U04] sem entrega de mídia aberta, a marca sabe antes de escolher o arquivo', async ({ page }) => {
@@ -149,6 +152,8 @@ test('[U03] a lista de relatórios conta indicadores e explica as colunas', asyn
     const [com, sem] = texto.match(/\d+/g)!.map(Number)
     expect(com + sem, texto).toBe(17)
   }
+  // A explicação das colunas fica recolhida em "Como ler as colunas" (F9).
+  await page.getByText('Como ler as colunas').click()
   await expect(page.getByText(/Faltantes: o que impede/)).toBeVisible()
 })
 

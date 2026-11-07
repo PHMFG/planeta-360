@@ -1,0 +1,1750 @@
+{
+  "arquivos": [
+    {
+      "arquivo": "tv-novembro.xlsx",
+      "destino": "VEICULACAO",
+      "temDadoPessoal": false,
+      "linhas": [
+        {
+          "dados": {
+            "patrocinador": "Cliente Amarelo",
+            "veiculo": "RBS TV",
+            "formato": "Chamadas assinadas",
+            "espaco_programa": "Programação",
+            "mes": "2026-11",
+            "quantidade": 296,
+            "impacto": 1842000
+          },
+          "origem": {
+            "patrocinador": "Entregas Nov-26!F5",
+            "veiculo": "Entregas Nov-26!A1",
+            "formato": "Entregas Nov-26!B6",
+            "espaco_programa": "Entregas Nov-26!A6",
+            "mes": "Entregas Nov-26!A3",
+            "quantidade": "Entregas Nov-26!F6",
+            "impacto": "Entregas Nov-26!E6"
+          }
+        },
+        {
+          "dados": {
+            "patrocinador": "Cliente Amarelo",
+            "veiculo": "RBS TV",
+            "formato": "Vinhetas de bloco",
+            "espaco_programa": "Jornal do Almoço (PTV1)",
+            "mes": "2026-11",
+            "quantidade": 9,
+            "impacto": 812500
+          },
+          "origem": {
+            "patrocinador": "Entregas Nov-26!F5",
+            "veiculo": "Entregas Nov-26!A1",
+            "formato": "Entregas Nov-26!B7",
+            "espaco_programa": "Entregas Nov-26!A7",
+            "mes": "Entregas Nov-26!A3",
+            "quantidade": "Entregas Nov-26!F7",
+            "impacto": "Entregas Nov-26!E7"
+          }
+        },
+        {
+          "dados": {
+            "patrocinador": "Cliente Amarelo",
+            "veiculo": "RBS TV",
+            "formato": "Flashes ao vivo de 60\"",
+            "espaco_programa": "Novela I e Novela II",
+            "mes": "2026-11",
+            "quantidade": 4,
+            "impacto": 2140000
+          },
+          "origem": {
+            "patrocinador": "Entregas Nov-26!F5",
+            "veiculo": "Entregas Nov-26!A1",
+            "formato": "Entregas Nov-26!B8",
+            "espaco_programa": "Entregas Nov-26!A8",
+            "mes": "Entregas Nov-26!A3",
+            "quantidade": "Entregas Nov-26!F8",
+            "impacto": "Entregas Nov-26!E8"
+          }
+        },
+        {
+          "dados": {
+            "patrocinador": "Cliente Amarelo",
+            "veiculo": "RBS TV",
+            "formato": "Comercial 30\"",
+            "espaco_programa": "BPRA",
+            "mes": "2026-11",
+            "quantidade": 4,
+            "impacto": 640300
+          },
+          "origem": {
+            "patrocinador": "Entregas Nov-26!F5",
+            "veiculo": "Entregas Nov-26!A1",
+            "formato": "Entregas Nov-26!B9",
+            "espaco_programa": "Entregas Nov-26!A9",
+            "mes": "Entregas Nov-26!A3",
+            "quantidade": "Entregas Nov-26!F9",
+            "impacto": "Entregas Nov-26!E9"
+          }
+        },
+        {
+          "dados": {
+            "patrocinador": "Cliente Amarelo",
+            "veiculo": "RBS TV",
+            "formato": "Comercial 30\"",
+            "espaco_programa": "PTV1",
+            "mes": "2026-11",
+            "quantidade": 2,
+            "impacto": 512900
+          },
+          "origem": {
+            "patrocinador": "Entregas Nov-26!F5",
+            "veiculo": "Entregas Nov-26!A1",
+            "formato": "Entregas Nov-26!B10",
+            "espaco_programa": "Entregas Nov-26!A10",
+            "mes": "Entregas Nov-26!A3",
+            "quantidade": "Entregas Nov-26!F10",
+            "impacto": "Entregas Nov-26!E10"
+          }
+        },
+        {
+          "dados": {
+            "patrocinador": "Cliente Amarelo",
+            "veiculo": "RBS TV",
+            "formato": "Comercial 30\"",
+            "espaco_programa": "GESP",
+            "mes": "2026-11",
+            "quantidade": 2,
+            "impacto": 388100
+          },
+          "origem": {
+            "patrocinador": "Entregas Nov-26!F5",
+            "veiculo": "Entregas Nov-26!A1",
+            "formato": "Entregas Nov-26!B11",
+            "espaco_programa": "Entregas Nov-26!A11",
+            "mes": "Entregas Nov-26!A3",
+            "quantidade": "Entregas Nov-26!F11",
+            "impacto": "Entregas Nov-26!E11"
+          }
+        },
+        {
+          "dados": {
+            "patrocinador": "Cliente Amarelo",
+            "veiculo": "RBS TV",
+            "formato": "Comercial 30\"",
+            "espaco_programa": "PTV2",
+            "mes": "2026-11",
+            "quantidade": 3,
+            "impacto": 701400
+          },
+          "origem": {
+            "patrocinador": "Entregas Nov-26!F5",
+            "veiculo": "Entregas Nov-26!A1",
+            "formato": "Entregas Nov-26!B12",
+            "espaco_programa": "Entregas Nov-26!A12",
+            "mes": "Entregas Nov-26!A3",
+            "quantidade": "Entregas Nov-26!F12",
+            "impacto": "Entregas Nov-26!E12"
+          }
+        },
+        {
+          "dados": {
+            "patrocinador": "Cliente Amarelo",
+            "veiculo": "RBS TV",
+            "formato": "Comercial 30\"",
+            "espaco_programa": "JNAC",
+            "mes": "2026-11",
+            "quantidade": 2,
+            "impacto": 905700
+          },
+          "origem": {
+            "patrocinador": "Entregas Nov-26!F5",
+            "veiculo": "Entregas Nov-26!A1",
+            "formato": "Entregas Nov-26!B13",
+            "espaco_programa": "Entregas Nov-26!A13",
+            "mes": "Entregas Nov-26!A3",
+            "quantidade": "Entregas Nov-26!F13",
+            "impacto": "Entregas Nov-26!E13"
+          }
+        },
+        {
+          "dados": {
+            "patrocinador": "Cliente Amarelo",
+            "veiculo": "RBS TV",
+            "formato": "Comercial 30\"",
+            "espaco_programa": "N15H",
+            "mes": "2026-11",
+            "quantidade": 1,
+            "impacto": 210800
+          },
+          "origem": {
+            "patrocinador": "Entregas Nov-26!F5",
+            "veiculo": "Entregas Nov-26!A1",
+            "formato": "Entregas Nov-26!B14",
+            "espaco_programa": "Entregas Nov-26!A14",
+            "mes": "Entregas Nov-26!A3",
+            "quantidade": "Entregas Nov-26!F14",
+            "impacto": "Entregas Nov-26!E14"
+          }
+        }
+      ],
+      "naoEntra": [
+        {
+          "o": "Entregas Nov-26!A1:H5",
+          "motivo": "título, mês e cabeçalho: não são entregas"
+        },
+        {
+          "o": "Entregas Nov-26!A15:H15",
+          "motivo": "linha de total: não é uma entrega"
+        }
+      ]
+    },
+    {
+      "arquivo": "padrao-rbs-outubro.xlsx",
+      "destino": "VEICULACAO",
+      "temDadoPessoal": false,
+      "linhas": [
+        {
+          "dados": {
+            "patrocinador": "Cliente Amarelo",
+            "veiculo": "Rádio 92",
+            "formato": "Chamadas assinadas 5\"",
+            "mes": "2026-10",
+            "quantidade": 96,
+            "impacto": 412000
+          },
+          "origem": {
+            "patrocinador": "Outubro!E1",
+            "veiculo": "Outubro!B2",
+            "formato": "Outubro!C2",
+            "mes": "Outubro!A2",
+            "quantidade": "Outubro!E2",
+            "impacto": "Outubro!D2"
+          }
+        },
+        {
+          "dados": {
+            "patrocinador": "Cliente Amarelo",
+            "veiculo": "Rádio 92",
+            "formato": "Comercial 30\"",
+            "mes": "2026-10",
+            "quantidade": 48,
+            "impacto": 388500
+          },
+          "origem": {
+            "patrocinador": "Outubro!E1",
+            "veiculo": "Outubro!B3",
+            "formato": "Outubro!C3",
+            "mes": "Outubro!A3",
+            "quantidade": "Outubro!E3",
+            "impacto": "Outubro!D3"
+          }
+        },
+        {
+          "dados": {
+            "patrocinador": "Cliente Amarelo",
+            "veiculo": "Rádio 102.3",
+            "formato": "Chamadas assinadas 5\"",
+            "mes": "2026-10",
+            "quantidade": 92,
+            "impacto": 507200
+          },
+          "origem": {
+            "patrocinador": "Outubro!E1",
+            "veiculo": "Outubro!B4",
+            "formato": "Outubro!C4",
+            "mes": "Outubro!A4",
+            "quantidade": "Outubro!E4",
+            "impacto": "Outubro!D4"
+          }
+        },
+        {
+          "dados": {
+            "patrocinador": "Cliente Roxo",
+            "veiculo": "Rádio 102.3",
+            "formato": "Mídia de apoio (comerciais 30\")",
+            "mes": "2026-10",
+            "quantidade": 74,
+            "impacto": 431800
+          },
+          "origem": {
+            "patrocinador": "Outubro!F1",
+            "veiculo": "Outubro!B5",
+            "formato": "Outubro!C5",
+            "mes": "Outubro!A5",
+            "quantidade": "Outubro!F5",
+            "impacto": "Outubro!D5"
+          }
+        },
+        {
+          "dados": {
+            "patrocinador": "Cliente Amarelo",
+            "veiculo": "RBS TV",
+            "formato": "Chamadas assinadas",
+            "mes": "2026-10",
+            "quantidade": 31,
+            "impacto": 1842000
+          },
+          "origem": {
+            "patrocinador": "Outubro!E1",
+            "veiculo": "Outubro!B6",
+            "formato": "Outubro!C6",
+            "mes": "Outubro!A6",
+            "quantidade": "Outubro!E6",
+            "impacto": "Outubro!D6"
+          }
+        },
+        {
+          "dados": {
+            "patrocinador": "Cliente Amarelo",
+            "veiculo": "Zero Hora",
+            "formato": "Página inteira assinada",
+            "mes": "2026-10",
+            "quantidade": 2,
+            "impacto": 620000
+          },
+          "origem": {
+            "patrocinador": "Outubro!E1",
+            "veiculo": "Outubro!B7",
+            "formato": "Outubro!C7",
+            "mes": "Outubro!A7",
+            "quantidade": "Outubro!E7",
+            "impacto": "Outubro!D7"
+          }
+        },
+        {
+          "dados": {
+            "patrocinador": "Cliente Amarelo",
+            "veiculo": "Zero Hora",
+            "formato": "Página dupla assinada",
+            "mes": "2026-10",
+            "quantidade": 1,
+            "impacto": 1180000
+          },
+          "origem": {
+            "patrocinador": "Outubro!E1",
+            "veiculo": "Outubro!B8",
+            "formato": "Outubro!C8",
+            "mes": "Outubro!A8",
+            "quantidade": "Outubro!E8",
+            "impacto": "Outubro!D8"
+          }
+        },
+        {
+          "dados": {
+            "patrocinador": "Cliente Amarelo",
+            "veiculo": "Diário Gaúcho",
+            "formato": "Página inteira assinada",
+            "mes": "2026-10",
+            "quantidade": 2,
+            "impacto": 355000
+          },
+          "origem": {
+            "patrocinador": "Outubro!E1",
+            "veiculo": "Outubro!B9",
+            "formato": "Outubro!C9",
+            "mes": "Outubro!A9",
+            "quantidade": "Outubro!E9",
+            "impacto": "Outubro!D9"
+          }
+        },
+        {
+          "dados": {
+            "patrocinador": "Cliente Amarelo",
+            "veiculo": "Pioneiro",
+            "formato": "Página dupla assinada",
+            "mes": "2026-10",
+            "quantidade": 1,
+            "impacto": 214000
+          },
+          "origem": {
+            "patrocinador": "Outubro!E1",
+            "veiculo": "Outubro!B10",
+            "formato": "Outubro!C10",
+            "mes": "Outubro!A10",
+            "quantidade": "Outubro!E10",
+            "impacto": "Outubro!D10"
+          }
+        },
+        {
+          "dados": {
+            "patrocinador": "Cliente Roxo",
+            "veiculo": "atl.la",
+            "formato": "Matéria digital",
+            "mes": "2026-10",
+            "quantidade": 1,
+            "impacto": 88000
+          },
+          "origem": {
+            "patrocinador": "Outubro!F1",
+            "veiculo": "Outubro!B11",
+            "formato": "Outubro!C11",
+            "mes": "Outubro!A11",
+            "quantidade": "Outubro!F11",
+            "impacto": "Outubro!D11"
+          }
+        },
+        {
+          "dados": {
+            "patrocinador": "Cliente Roxo",
+            "veiculo": "atl.la",
+            "formato": "Mídia display multiformatos",
+            "mes": "2026-10",
+            "quantidade": 96000,
+            "impacto": 740000
+          },
+          "origem": {
+            "patrocinador": "Outubro!F1",
+            "veiculo": "Outubro!B12",
+            "formato": "Outubro!C12",
+            "mes": "Outubro!A12",
+            "quantidade": "Outubro!F12",
+            "impacto": "Outubro!D12"
+          }
+        },
+        {
+          "dados": {
+            "patrocinador": "Cliente Verde",
+            "veiculo": "atl.la",
+            "formato": "Story próprio de até 1' (ativação do cotista)",
+            "mes": "2026-10",
+            "quantidade": 1,
+            "impacto": 135000
+          },
+          "origem": {
+            "patrocinador": "Outubro!G1",
+            "veiculo": "Outubro!B13",
+            "formato": "Outubro!C13",
+            "mes": "Outubro!A13",
+            "quantidade": "Outubro!G13",
+            "impacto": "Outubro!D13"
+          }
+        },
+        {
+          "dados": {
+            "patrocinador": "Cliente Verde",
+            "veiculo": "No evento",
+            "formato": "VT telão 30\"",
+            "mes": "2026-10",
+            "quantidade": 2,
+            "impacto": 1560000
+          },
+          "origem": {
+            "patrocinador": "Outubro!G1",
+            "veiculo": "Outubro!B14",
+            "formato": "Outubro!C14",
+            "mes": "Outubro!A14",
+            "quantidade": "Outubro!G14",
+            "impacto": "Outubro!D14"
+          }
+        },
+        {
+          "dados": {
+            "patrocinador": "Cliente Roxo",
+            "veiculo": "GaúchaZH",
+            "formato": "Blindagem Exclusive 1 manhã",
+            "mes": "2026-10",
+            "quantidade": 1,
+            "impacto": 290000
+          },
+          "origem": {
+            "patrocinador": "Outubro!F1",
+            "veiculo": "Outubro!B15",
+            "formato": "Outubro!C15",
+            "mes": "Outubro!A15",
+            "quantidade": "Outubro!F15",
+            "impacto": "Outubro!D15"
+          }
+        }
+      ],
+      "naoEntra": [
+        {
+          "o": "Outubro!A1:G1",
+          "motivo": "cabeçalho: não é entrega"
+        },
+        {
+          "o": "Outubro!E2:G15 (células com 0)",
+          "motivo": "quantidade zero não é entrega"
+        }
+      ]
+    },
+    {
+      "arquivo": "radio92-outubro.docx",
+      "destino": "VEICULACAO",
+      "temDadoPessoal": false,
+      "linhas": [
+        {
+          "dados": {
+            "patrocinador": "Cliente Amarelo",
+            "veiculo": "Rádio 92",
+            "formato": "Chamadas assinadas 5\"",
+            "exibido_em": "2026-10-05T00:00:00-03:00",
+            "quantidade": 3
+          },
+          "origem": {
+            "patrocinador": "parágrafo 3",
+            "veiculo": "parágrafo 3",
+            "formato": "parágrafo 3",
+            "exibido_em": "parágrafo 3",
+            "quantidade": "parágrafo 3"
+          }
+        },
+        {
+          "dados": {
+            "patrocinador": "Cliente Amarelo",
+            "veiculo": "Rádio 92",
+            "formato": "Comercial 30\"",
+            "exibido_em": "2026-10-05T00:00:00-03:00",
+            "quantidade": 2
+          },
+          "origem": {
+            "patrocinador": "parágrafo 3",
+            "veiculo": "parágrafo 3",
+            "formato": "parágrafo 3",
+            "exibido_em": "parágrafo 3",
+            "quantidade": "parágrafo 3"
+          }
+        },
+        {
+          "dados": {
+            "patrocinador": "Cliente Amarelo",
+            "veiculo": "Rádio 92",
+            "formato": "Chamadas assinadas 5\"",
+            "exibido_em": "2026-10-06T00:00:00-03:00",
+            "quantidade": 2
+          },
+          "origem": {
+            "patrocinador": "parágrafo 4",
+            "veiculo": "parágrafo 4",
+            "formato": "parágrafo 4",
+            "exibido_em": "parágrafo 4",
+            "quantidade": "parágrafo 4"
+          }
+        },
+        {
+          "dados": {
+            "patrocinador": "Cliente Amarelo",
+            "veiculo": "Rádio 92",
+            "formato": "Comercial 30\"",
+            "exibido_em": "2026-10-06T00:00:00-03:00",
+            "quantidade": 1
+          },
+          "origem": {
+            "patrocinador": "parágrafo 4",
+            "veiculo": "parágrafo 4",
+            "formato": "parágrafo 4",
+            "exibido_em": "parágrafo 4",
+            "quantidade": "parágrafo 4"
+          }
+        },
+        {
+          "dados": {
+            "patrocinador": "Cliente Amarelo",
+            "veiculo": "Rádio 92",
+            "formato": "Chamadas assinadas 5\"",
+            "exibido_em": "2026-10-07T00:00:00-03:00",
+            "quantidade": 4
+          },
+          "origem": {
+            "patrocinador": "parágrafo 5",
+            "veiculo": "parágrafo 5",
+            "formato": "parágrafo 5",
+            "exibido_em": "parágrafo 5",
+            "quantidade": "parágrafo 5"
+          }
+        },
+        {
+          "dados": {
+            "patrocinador": "Cliente Amarelo",
+            "veiculo": "Rádio 92",
+            "formato": "Comercial 30\"",
+            "exibido_em": "2026-10-07T00:00:00-03:00",
+            "quantidade": 2
+          },
+          "origem": {
+            "patrocinador": "parágrafo 5",
+            "veiculo": "parágrafo 5",
+            "formato": "parágrafo 5",
+            "exibido_em": "parágrafo 5",
+            "quantidade": "parágrafo 5"
+          }
+        },
+        {
+          "dados": {
+            "patrocinador": "Cliente Amarelo",
+            "veiculo": "Rádio 92",
+            "formato": "Chamadas assinadas 5\"",
+            "exibido_em": "2026-10-08T00:00:00-03:00",
+            "quantidade": 2
+          },
+          "origem": {
+            "patrocinador": "parágrafo 6",
+            "veiculo": "parágrafo 6",
+            "formato": "parágrafo 6",
+            "exibido_em": "parágrafo 6",
+            "quantidade": "parágrafo 6"
+          }
+        },
+        {
+          "dados": {
+            "patrocinador": "Cliente Amarelo",
+            "veiculo": "Rádio 92",
+            "formato": "Comercial 30\"",
+            "exibido_em": "2026-10-08T00:00:00-03:00",
+            "quantidade": 2
+          },
+          "origem": {
+            "patrocinador": "parágrafo 6",
+            "veiculo": "parágrafo 6",
+            "formato": "parágrafo 6",
+            "exibido_em": "parágrafo 6",
+            "quantidade": "parágrafo 6"
+          }
+        },
+        {
+          "dados": {
+            "patrocinador": "Cliente Amarelo",
+            "veiculo": "Rádio 92",
+            "formato": "Chamadas assinadas 5\"",
+            "exibido_em": "2026-10-09T00:00:00-03:00",
+            "quantidade": 3
+          },
+          "origem": {
+            "patrocinador": "parágrafo 7",
+            "veiculo": "parágrafo 7",
+            "formato": "parágrafo 7",
+            "exibido_em": "parágrafo 7",
+            "quantidade": "parágrafo 7"
+          }
+        },
+        {
+          "dados": {
+            "patrocinador": "Cliente Amarelo",
+            "veiculo": "Rádio 92",
+            "formato": "Comercial 30\"",
+            "exibido_em": "2026-10-09T00:00:00-03:00",
+            "quantidade": 1
+          },
+          "origem": {
+            "patrocinador": "parágrafo 7",
+            "veiculo": "parágrafo 7",
+            "formato": "parágrafo 7",
+            "exibido_em": "parágrafo 7",
+            "quantidade": "parágrafo 7"
+          }
+        },
+        {
+          "dados": {
+            "patrocinador": "Cliente Amarelo",
+            "veiculo": "Rádio 92",
+            "formato": "Chamadas assinadas 5\"",
+            "exibido_em": "2026-10-12T00:00:00-03:00",
+            "quantidade": 1
+          },
+          "origem": {
+            "patrocinador": "parágrafo 8",
+            "veiculo": "parágrafo 8",
+            "formato": "parágrafo 8",
+            "exibido_em": "parágrafo 8",
+            "quantidade": "parágrafo 8"
+          }
+        },
+        {
+          "dados": {
+            "patrocinador": "Cliente Amarelo",
+            "veiculo": "Rádio 92",
+            "formato": "Chamadas assinadas 5\"",
+            "exibido_em": "2026-10-13T00:00:00-03:00",
+            "quantidade": 3
+          },
+          "origem": {
+            "patrocinador": "parágrafo 9",
+            "veiculo": "parágrafo 9",
+            "formato": "parágrafo 9",
+            "exibido_em": "parágrafo 9",
+            "quantidade": "parágrafo 9"
+          }
+        },
+        {
+          "dados": {
+            "patrocinador": "Cliente Amarelo",
+            "veiculo": "Rádio 92",
+            "formato": "Comercial 30\"",
+            "exibido_em": "2026-10-13T00:00:00-03:00",
+            "quantidade": 2
+          },
+          "origem": {
+            "patrocinador": "parágrafo 9",
+            "veiculo": "parágrafo 9",
+            "formato": "parágrafo 9",
+            "exibido_em": "parágrafo 9",
+            "quantidade": "parágrafo 9"
+          }
+        },
+        {
+          "dados": {
+            "patrocinador": "Cliente Amarelo",
+            "veiculo": "Rádio 92",
+            "formato": "Chamadas assinadas 5\"",
+            "exibido_em": "2026-10-14T00:00:00-03:00",
+            "quantidade": 2
+          },
+          "origem": {
+            "patrocinador": "parágrafo 10",
+            "veiculo": "parágrafo 10",
+            "formato": "parágrafo 10",
+            "exibido_em": "parágrafo 10",
+            "quantidade": "parágrafo 10"
+          }
+        },
+        {
+          "dados": {
+            "patrocinador": "Cliente Amarelo",
+            "veiculo": "Rádio 92",
+            "formato": "Comercial 30\"",
+            "exibido_em": "2026-10-14T00:00:00-03:00",
+            "quantidade": 1
+          },
+          "origem": {
+            "patrocinador": "parágrafo 10",
+            "veiculo": "parágrafo 10",
+            "formato": "parágrafo 10",
+            "exibido_em": "parágrafo 10",
+            "quantidade": "parágrafo 10"
+          }
+        },
+        {
+          "dados": {
+            "patrocinador": "Cliente Amarelo",
+            "veiculo": "Rádio 92",
+            "formato": "Chamadas assinadas 5\"",
+            "exibido_em": "2026-10-15T00:00:00-03:00",
+            "quantidade": 4
+          },
+          "origem": {
+            "patrocinador": "parágrafo 11",
+            "veiculo": "parágrafo 11",
+            "formato": "parágrafo 11",
+            "exibido_em": "parágrafo 11",
+            "quantidade": "parágrafo 11"
+          }
+        },
+        {
+          "dados": {
+            "patrocinador": "Cliente Amarelo",
+            "veiculo": "Rádio 92",
+            "formato": "Comercial 30\"",
+            "exibido_em": "2026-10-15T00:00:00-03:00",
+            "quantidade": 2
+          },
+          "origem": {
+            "patrocinador": "parágrafo 11",
+            "veiculo": "parágrafo 11",
+            "formato": "parágrafo 11",
+            "exibido_em": "parágrafo 11",
+            "quantidade": "parágrafo 11"
+          }
+        },
+        {
+          "dados": {
+            "patrocinador": "Cliente Amarelo",
+            "veiculo": "Rádio 92",
+            "formato": "Chamadas assinadas 5\"",
+            "exibido_em": "2026-10-16T00:00:00-03:00",
+            "quantidade": 2
+          },
+          "origem": {
+            "patrocinador": "parágrafo 12",
+            "veiculo": "parágrafo 12",
+            "formato": "parágrafo 12",
+            "exibido_em": "parágrafo 12",
+            "quantidade": "parágrafo 12"
+          }
+        },
+        {
+          "dados": {
+            "patrocinador": "Cliente Amarelo",
+            "veiculo": "Rádio 92",
+            "formato": "Comercial 30\"",
+            "exibido_em": "2026-10-16T00:00:00-03:00",
+            "quantidade": 1
+          },
+          "origem": {
+            "patrocinador": "parágrafo 12",
+            "veiculo": "parágrafo 12",
+            "formato": "parágrafo 12",
+            "exibido_em": "parágrafo 12",
+            "quantidade": "parágrafo 12"
+          }
+        }
+      ],
+      "naoEntra": [
+        {
+          "o": "parágrafo 1",
+          "motivo": "título do relatório: não é entrega"
+        },
+        {
+          "o": "parágrafo 2",
+          "motivo": "mês do relatório: não é entrega"
+        },
+        {
+          "o": "parágrafo 13",
+          "motivo": "observações sem números de entrega"
+        }
+      ]
+    },
+    {
+      "arquivo": "zh-pagina-dupla.png",
+      "destino": "COMPROVANTE",
+      "temDadoPessoal": false,
+      "linhas": [
+        {
+          "dados": {
+            "patrocinador": "Cliente Amarelo",
+            "veiculo": "Zero Hora",
+            "formato": "Página dupla assinada",
+            "data": "2026-10-18"
+          },
+          "origem": {
+            "patrocinador": "imagem",
+            "veiculo": "imagem",
+            "formato": "imagem",
+            "data": "imagem"
+          }
+        }
+      ],
+      "naoEntra": [
+        {
+          "o": "Manchetes e expediente do jornal",
+          "motivo": "contexto do print; o comprovante é a página dupla do Cliente Amarelo"
+        }
+      ]
+    },
+    {
+      "arquivo": "post-instagram.png",
+      "destino": "COMPROVANTE",
+      "temDadoPessoal": false,
+      "linhas": [
+        {
+          "dados": {
+            "patrocinador": "Cliente Roxo",
+            "veiculo": "atl.la",
+            "formato": "Post feed serviço e valorização do cotista (durante)",
+            "data": "2026-10-21"
+          },
+          "origem": {
+            "patrocinador": "imagem",
+            "veiculo": "imagem",
+            "formato": "imagem",
+            "data": "imagem"
+          }
+        }
+      ],
+      "naoEntra": [
+        {
+          "o": "Curtidas e alcance",
+          "motivo": "evidência do print; o comprovante é o post do Cliente Roxo"
+        }
+      ]
+    },
+    {
+      "arquivo": "pesquisa-ativacao.xlsx",
+      "destino": "PESQUISA",
+      "temDadoPessoal": false,
+      "linhas": [
+        {
+          "dados": {
+            "tipo": "PERFIL",
+            "patrocinador": "Cliente Amarelo",
+            "dimensao": "GENERO",
+            "categoria": "Feminino",
+            "valor": 58,
+            "base_respondentes": 412
+          },
+          "origem": {
+            "patrocinador": "Cliente Amarelo!A1",
+            "dimensao": "Cliente Amarelo!A5",
+            "categoria": "Cliente Amarelo!B5",
+            "valor": "Cliente Amarelo!C5",
+            "base_respondentes": "Cliente Amarelo!D5"
+          }
+        },
+        {
+          "dados": {
+            "tipo": "PERFIL",
+            "patrocinador": "Cliente Amarelo",
+            "dimensao": "GENERO",
+            "categoria": "Masculino",
+            "valor": 40,
+            "base_respondentes": 412
+          },
+          "origem": {
+            "patrocinador": "Cliente Amarelo!A1",
+            "dimensao": "Cliente Amarelo!A6",
+            "categoria": "Cliente Amarelo!B6",
+            "valor": "Cliente Amarelo!C6",
+            "base_respondentes": "Cliente Amarelo!D6"
+          }
+        },
+        {
+          "dados": {
+            "tipo": "PERFIL",
+            "patrocinador": "Cliente Amarelo",
+            "dimensao": "GENERO",
+            "categoria": "Outro",
+            "valor": 2,
+            "base_respondentes": 412
+          },
+          "origem": {
+            "patrocinador": "Cliente Amarelo!A1",
+            "dimensao": "Cliente Amarelo!A7",
+            "categoria": "Cliente Amarelo!B7",
+            "valor": "Cliente Amarelo!C7",
+            "base_respondentes": "Cliente Amarelo!D7"
+          }
+        },
+        {
+          "dados": {
+            "tipo": "PERFIL",
+            "patrocinador": "Cliente Amarelo",
+            "dimensao": "FAIXA_ETARIA",
+            "categoria": "16 a 24 anos",
+            "valor": 31,
+            "base_respondentes": 412
+          },
+          "origem": {
+            "patrocinador": "Cliente Amarelo!A1",
+            "dimensao": "Cliente Amarelo!A8",
+            "categoria": "Cliente Amarelo!B8",
+            "valor": "Cliente Amarelo!C8",
+            "base_respondentes": "Cliente Amarelo!D8"
+          }
+        },
+        {
+          "dados": {
+            "tipo": "PERFIL",
+            "patrocinador": "Cliente Amarelo",
+            "dimensao": "FAIXA_ETARIA",
+            "categoria": "25 a 34 anos",
+            "valor": 36,
+            "base_respondentes": 412
+          },
+          "origem": {
+            "patrocinador": "Cliente Amarelo!A1",
+            "dimensao": "Cliente Amarelo!A9",
+            "categoria": "Cliente Amarelo!B9",
+            "valor": "Cliente Amarelo!C9",
+            "base_respondentes": "Cliente Amarelo!D9"
+          }
+        },
+        {
+          "dados": {
+            "tipo": "PERFIL",
+            "patrocinador": "Cliente Amarelo",
+            "dimensao": "FAIXA_ETARIA",
+            "categoria": "35 a 44 anos",
+            "valor": 21,
+            "base_respondentes": 412
+          },
+          "origem": {
+            "patrocinador": "Cliente Amarelo!A1",
+            "dimensao": "Cliente Amarelo!A10",
+            "categoria": "Cliente Amarelo!B10",
+            "valor": "Cliente Amarelo!C10",
+            "base_respondentes": "Cliente Amarelo!D10"
+          }
+        },
+        {
+          "dados": {
+            "tipo": "PERFIL",
+            "patrocinador": "Cliente Amarelo",
+            "dimensao": "FAIXA_ETARIA",
+            "categoria": "45 a 59 anos",
+            "valor": 10,
+            "base_respondentes": 412
+          },
+          "origem": {
+            "patrocinador": "Cliente Amarelo!A1",
+            "dimensao": "Cliente Amarelo!A11",
+            "categoria": "Cliente Amarelo!B11",
+            "valor": "Cliente Amarelo!C11",
+            "base_respondentes": "Cliente Amarelo!D11"
+          }
+        },
+        {
+          "dados": {
+            "tipo": "PERFIL",
+            "patrocinador": "Cliente Amarelo",
+            "dimensao": "FAIXA_ETARIA",
+            "categoria": "60 anos ou mais",
+            "valor": 2,
+            "base_respondentes": 412
+          },
+          "origem": {
+            "patrocinador": "Cliente Amarelo!A1",
+            "dimensao": "Cliente Amarelo!A12",
+            "categoria": "Cliente Amarelo!B12",
+            "valor": "Cliente Amarelo!C12",
+            "base_respondentes": "Cliente Amarelo!D12"
+          }
+        },
+        {
+          "dados": {
+            "tipo": "PERFIL",
+            "patrocinador": "Cliente Amarelo",
+            "dimensao": "RENDA",
+            "categoria": "Até 2 salários mínimos",
+            "valor": 14,
+            "base_respondentes": 412
+          },
+          "origem": {
+            "patrocinador": "Cliente Amarelo!A1",
+            "dimensao": "Cliente Amarelo!A13",
+            "categoria": "Cliente Amarelo!B13",
+            "valor": "Cliente Amarelo!C13",
+            "base_respondentes": "Cliente Amarelo!D13"
+          }
+        },
+        {
+          "dados": {
+            "tipo": "PERFIL",
+            "patrocinador": "Cliente Amarelo",
+            "dimensao": "RENDA",
+            "categoria": "2 a 5 salários mínimos",
+            "valor": 33,
+            "base_respondentes": 412
+          },
+          "origem": {
+            "patrocinador": "Cliente Amarelo!A1",
+            "dimensao": "Cliente Amarelo!A14",
+            "categoria": "Cliente Amarelo!B14",
+            "valor": "Cliente Amarelo!C14",
+            "base_respondentes": "Cliente Amarelo!D14"
+          }
+        },
+        {
+          "dados": {
+            "tipo": "PERFIL",
+            "patrocinador": "Cliente Amarelo",
+            "dimensao": "RENDA",
+            "categoria": "5 a 10 salários mínimos",
+            "valor": 34,
+            "base_respondentes": 412
+          },
+          "origem": {
+            "patrocinador": "Cliente Amarelo!A1",
+            "dimensao": "Cliente Amarelo!A15",
+            "categoria": "Cliente Amarelo!B15",
+            "valor": "Cliente Amarelo!C15",
+            "base_respondentes": "Cliente Amarelo!D15"
+          }
+        },
+        {
+          "dados": {
+            "tipo": "PERFIL",
+            "patrocinador": "Cliente Amarelo",
+            "dimensao": "RENDA",
+            "categoria": "Mais de 10 salários mínimos",
+            "valor": 19,
+            "base_respondentes": 412
+          },
+          "origem": {
+            "patrocinador": "Cliente Amarelo!A1",
+            "dimensao": "Cliente Amarelo!A16",
+            "categoria": "Cliente Amarelo!B16",
+            "valor": "Cliente Amarelo!C16",
+            "base_respondentes": "Cliente Amarelo!D16"
+          }
+        },
+        {
+          "dados": {
+            "tipo": "PERFIL",
+            "patrocinador": "Cliente Amarelo",
+            "dimensao": "DOMICILIO",
+            "categoria": "Rio Grande do Sul",
+            "valor": 91,
+            "base_respondentes": 412
+          },
+          "origem": {
+            "patrocinador": "Cliente Amarelo!A1",
+            "dimensao": "Cliente Amarelo!A17",
+            "categoria": "Cliente Amarelo!B17",
+            "valor": "Cliente Amarelo!C17",
+            "base_respondentes": "Cliente Amarelo!D17"
+          }
+        },
+        {
+          "dados": {
+            "tipo": "PERFIL",
+            "patrocinador": "Cliente Amarelo",
+            "dimensao": "DOMICILIO",
+            "categoria": "Outros estados",
+            "valor": 9,
+            "base_respondentes": 412
+          },
+          "origem": {
+            "patrocinador": "Cliente Amarelo!A1",
+            "dimensao": "Cliente Amarelo!A18",
+            "categoria": "Cliente Amarelo!B18",
+            "valor": "Cliente Amarelo!C18",
+            "base_respondentes": "Cliente Amarelo!D18"
+          }
+        },
+        {
+          "dados": {
+            "tipo": "RESPOSTA",
+            "patrocinador": "Cliente Amarelo",
+            "pergunta": 1,
+            "alternativa": "Sim",
+            "valor": 64,
+            "unidade": "PERCENTUAL",
+            "base_respondentes": 412
+          },
+          "origem": {
+            "patrocinador": "Cliente Amarelo!A1",
+            "pergunta": "Cliente Amarelo!A22",
+            "alternativa": "Cliente Amarelo!C22",
+            "valor": "Cliente Amarelo!D22",
+            "unidade": "Cliente Amarelo!E22",
+            "base_respondentes": "Cliente Amarelo!F22"
+          }
+        },
+        {
+          "dados": {
+            "tipo": "RESPOSTA",
+            "patrocinador": "Cliente Amarelo",
+            "pergunta": 1,
+            "alternativa": "Não",
+            "valor": 36,
+            "unidade": "PERCENTUAL",
+            "base_respondentes": 412
+          },
+          "origem": {
+            "patrocinador": "Cliente Amarelo!A1",
+            "pergunta": "Cliente Amarelo!A23",
+            "alternativa": "Cliente Amarelo!C23",
+            "valor": "Cliente Amarelo!D23",
+            "unidade": "Cliente Amarelo!E23",
+            "base_respondentes": "Cliente Amarelo!F23"
+          }
+        },
+        {
+          "dados": {
+            "tipo": "RESPOSTA",
+            "patrocinador": "Cliente Amarelo",
+            "pergunta": 2,
+            "alternativa": "Nota média",
+            "valor": 8.4,
+            "unidade": "NOTA",
+            "base_respondentes": 412
+          },
+          "origem": {
+            "patrocinador": "Cliente Amarelo!A1",
+            "pergunta": "Cliente Amarelo!A24",
+            "alternativa": "Cliente Amarelo!C24",
+            "valor": "Cliente Amarelo!D24",
+            "unidade": "Cliente Amarelo!E24",
+            "base_respondentes": "Cliente Amarelo!F24"
+          }
+        },
+        {
+          "dados": {
+            "tipo": "RESPOSTA",
+            "patrocinador": "Cliente Amarelo",
+            "pergunta": 2,
+            "alternativa": "Notas 9 e 10",
+            "valor": 61,
+            "unidade": "PERCENTUAL",
+            "base_respondentes": 412
+          },
+          "origem": {
+            "patrocinador": "Cliente Amarelo!A1",
+            "pergunta": "Cliente Amarelo!A25",
+            "alternativa": "Cliente Amarelo!C25",
+            "valor": "Cliente Amarelo!D25",
+            "unidade": "Cliente Amarelo!E25",
+            "base_respondentes": "Cliente Amarelo!F25"
+          }
+        },
+        {
+          "dados": {
+            "tipo": "RESPOSTA",
+            "patrocinador": "Cliente Amarelo",
+            "pergunta": 2,
+            "alternativa": "Notas 7 e 8",
+            "valor": 28,
+            "unidade": "PERCENTUAL",
+            "base_respondentes": 412
+          },
+          "origem": {
+            "patrocinador": "Cliente Amarelo!A1",
+            "pergunta": "Cliente Amarelo!A26",
+            "alternativa": "Cliente Amarelo!C26",
+            "valor": "Cliente Amarelo!D26",
+            "unidade": "Cliente Amarelo!E26",
+            "base_respondentes": "Cliente Amarelo!F26"
+          }
+        },
+        {
+          "dados": {
+            "tipo": "RESPOSTA",
+            "patrocinador": "Cliente Amarelo",
+            "pergunta": 2,
+            "alternativa": "Notas de 0 a 6",
+            "valor": 11,
+            "unidade": "PERCENTUAL",
+            "base_respondentes": 412
+          },
+          "origem": {
+            "patrocinador": "Cliente Amarelo!A1",
+            "pergunta": "Cliente Amarelo!A27",
+            "alternativa": "Cliente Amarelo!C27",
+            "valor": "Cliente Amarelo!D27",
+            "unidade": "Cliente Amarelo!E27",
+            "base_respondentes": "Cliente Amarelo!F27"
+          }
+        },
+        {
+          "dados": {
+            "tipo": "RESPOSTA",
+            "patrocinador": "Cliente Amarelo",
+            "pergunta": 3,
+            "alternativa": "Melhorou",
+            "valor": 58,
+            "unidade": "PERCENTUAL",
+            "base_respondentes": 412
+          },
+          "origem": {
+            "patrocinador": "Cliente Amarelo!A1",
+            "pergunta": "Cliente Amarelo!A28",
+            "alternativa": "Cliente Amarelo!C28",
+            "valor": "Cliente Amarelo!D28",
+            "unidade": "Cliente Amarelo!E28",
+            "base_respondentes": "Cliente Amarelo!F28"
+          }
+        },
+        {
+          "dados": {
+            "tipo": "RESPOSTA",
+            "patrocinador": "Cliente Amarelo",
+            "pergunta": 3,
+            "alternativa": "Não mudou",
+            "valor": 39,
+            "unidade": "PERCENTUAL",
+            "base_respondentes": 412
+          },
+          "origem": {
+            "patrocinador": "Cliente Amarelo!A1",
+            "pergunta": "Cliente Amarelo!A29",
+            "alternativa": "Cliente Amarelo!C29",
+            "valor": "Cliente Amarelo!D29",
+            "unidade": "Cliente Amarelo!E29",
+            "base_respondentes": "Cliente Amarelo!F29"
+          }
+        },
+        {
+          "dados": {
+            "tipo": "RESPOSTA",
+            "patrocinador": "Cliente Amarelo",
+            "pergunta": 3,
+            "alternativa": "Piorou",
+            "valor": 3,
+            "unidade": "PERCENTUAL",
+            "base_respondentes": 412
+          },
+          "origem": {
+            "patrocinador": "Cliente Amarelo!A1",
+            "pergunta": "Cliente Amarelo!A30",
+            "alternativa": "Cliente Amarelo!C30",
+            "valor": "Cliente Amarelo!D30",
+            "unidade": "Cliente Amarelo!E30",
+            "base_respondentes": "Cliente Amarelo!F30"
+          }
+        },
+        {
+          "dados": {
+            "tipo": "RESPOSTA",
+            "patrocinador": "Cliente Amarelo",
+            "pergunta": 4,
+            "texto": "A ativação no Camarote estava muito bem organizada.",
+            "base_respondentes": 412
+          },
+          "origem": {
+            "patrocinador": "Cliente Amarelo!A1",
+            "pergunta": "Cliente Amarelo!A34",
+            "texto": "Cliente Amarelo!B34",
+            "base_respondentes": "Cliente Amarelo!B2"
+          }
+        },
+        {
+          "dados": {
+            "tipo": "RESPOSTA",
+            "patrocinador": "Cliente Amarelo",
+            "pergunta": 4,
+            "texto": "Gostei da experiência com realidade aumentada.",
+            "base_respondentes": 412
+          },
+          "origem": {
+            "patrocinador": "Cliente Amarelo!A1",
+            "pergunta": "Cliente Amarelo!A35",
+            "texto": "Cliente Amarelo!B35",
+            "base_respondentes": "Cliente Amarelo!B2"
+          }
+        },
+        {
+          "dados": {
+            "tipo": "RESPOSTA",
+            "patrocinador": "Cliente Amarelo",
+            "pergunta": 4,
+            "texto": "O brinde é útil e a equipe foi atenciosa.",
+            "base_respondentes": 412
+          },
+          "origem": {
+            "patrocinador": "Cliente Amarelo!A1",
+            "pergunta": "Cliente Amarelo!A36",
+            "texto": "Cliente Amarelo!B36",
+            "base_respondentes": "Cliente Amarelo!B2"
+          }
+        },
+        {
+          "dados": {
+            "tipo": "RESPOSTA",
+            "patrocinador": "Cliente Amarelo",
+            "pergunta": 4,
+            "texto": "A fila para entrar na Arena estava grande.",
+            "base_respondentes": 412
+          },
+          "origem": {
+            "patrocinador": "Cliente Amarelo!A1",
+            "pergunta": "Cliente Amarelo!A37",
+            "texto": "Cliente Amarelo!B37",
+            "base_respondentes": "Cliente Amarelo!B2"
+          }
+        },
+        {
+          "dados": {
+            "tipo": "RESPOSTA",
+            "patrocinador": "Cliente Amarelo",
+            "pergunta": 4,
+            "texto": "A música e o espaço da marca combinaram bem.",
+            "base_respondentes": 412
+          },
+          "origem": {
+            "patrocinador": "Cliente Amarelo!A1",
+            "pergunta": "Cliente Amarelo!A38",
+            "texto": "Cliente Amarelo!B38",
+            "base_respondentes": "Cliente Amarelo!B2"
+          }
+        },
+        {
+          "dados": {
+            "tipo": "PERFIL",
+            "patrocinador": null,
+            "dimensao": "GENERO",
+            "categoria": "Feminino",
+            "valor": 62,
+            "base_respondentes": 1038
+          },
+          "origem": {
+            "patrocinador": "Geral!A1",
+            "dimensao": "Geral!A5",
+            "categoria": "Geral!B5",
+            "valor": "Geral!C5",
+            "base_respondentes": "Geral!D5"
+          }
+        },
+        {
+          "dados": {
+            "tipo": "PERFIL",
+            "patrocinador": null,
+            "dimensao": "GENERO",
+            "categoria": "Masculino",
+            "valor": 36,
+            "base_respondentes": 1038
+          },
+          "origem": {
+            "patrocinador": "Geral!A1",
+            "dimensao": "Geral!A6",
+            "categoria": "Geral!B6",
+            "valor": "Geral!C6",
+            "base_respondentes": "Geral!D6"
+          }
+        },
+        {
+          "dados": {
+            "tipo": "PERFIL",
+            "patrocinador": null,
+            "dimensao": "GENERO",
+            "categoria": "Outro",
+            "valor": 2,
+            "base_respondentes": 1038
+          },
+          "origem": {
+            "patrocinador": "Geral!A1",
+            "dimensao": "Geral!A7",
+            "categoria": "Geral!B7",
+            "valor": "Geral!C7",
+            "base_respondentes": "Geral!D7"
+          }
+        },
+        {
+          "dados": {
+            "tipo": "PERFIL",
+            "patrocinador": null,
+            "dimensao": "FAIXA_ETARIA",
+            "categoria": "16 a 24 anos",
+            "valor": 28,
+            "base_respondentes": 1038
+          },
+          "origem": {
+            "patrocinador": "Geral!A1",
+            "dimensao": "Geral!A8",
+            "categoria": "Geral!B8",
+            "valor": "Geral!C8",
+            "base_respondentes": "Geral!D8"
+          }
+        },
+        {
+          "dados": {
+            "tipo": "PERFIL",
+            "patrocinador": null,
+            "dimensao": "FAIXA_ETARIA",
+            "categoria": "25 a 34 anos",
+            "valor": 34,
+            "base_respondentes": 1038
+          },
+          "origem": {
+            "patrocinador": "Geral!A1",
+            "dimensao": "Geral!A9",
+            "categoria": "Geral!B9",
+            "valor": "Geral!C9",
+            "base_respondentes": "Geral!D9"
+          }
+        },
+        {
+          "dados": {
+            "tipo": "PERFIL",
+            "patrocinador": null,
+            "dimensao": "FAIXA_ETARIA",
+            "categoria": "35 a 44 anos",
+            "valor": 22,
+            "base_respondentes": 1038
+          },
+          "origem": {
+            "patrocinador": "Geral!A1",
+            "dimensao": "Geral!A10",
+            "categoria": "Geral!B10",
+            "valor": "Geral!C10",
+            "base_respondentes": "Geral!D10"
+          }
+        },
+        {
+          "dados": {
+            "tipo": "PERFIL",
+            "patrocinador": null,
+            "dimensao": "FAIXA_ETARIA",
+            "categoria": "45 a 59 anos",
+            "valor": 13,
+            "base_respondentes": 1038
+          },
+          "origem": {
+            "patrocinador": "Geral!A1",
+            "dimensao": "Geral!A11",
+            "categoria": "Geral!B11",
+            "valor": "Geral!C11",
+            "base_respondentes": "Geral!D11"
+          }
+        },
+        {
+          "dados": {
+            "tipo": "PERFIL",
+            "patrocinador": null,
+            "dimensao": "FAIXA_ETARIA",
+            "categoria": "60 anos ou mais",
+            "valor": 3,
+            "base_respondentes": 1038
+          },
+          "origem": {
+            "patrocinador": "Geral!A1",
+            "dimensao": "Geral!A12",
+            "categoria": "Geral!B12",
+            "valor": "Geral!C12",
+            "base_respondentes": "Geral!D12"
+          }
+        },
+        {
+          "dados": {
+            "tipo": "PERFIL",
+            "patrocinador": null,
+            "dimensao": "RENDA",
+            "categoria": "Até 2 salários mínimos",
+            "valor": 18,
+            "base_respondentes": 1038
+          },
+          "origem": {
+            "patrocinador": "Geral!A1",
+            "dimensao": "Geral!A13",
+            "categoria": "Geral!B13",
+            "valor": "Geral!C13",
+            "base_respondentes": "Geral!D13"
+          }
+        },
+        {
+          "dados": {
+            "tipo": "PERFIL",
+            "patrocinador": null,
+            "dimensao": "RENDA",
+            "categoria": "2 a 5 salários mínimos",
+            "valor": 37,
+            "base_respondentes": 1038
+          },
+          "origem": {
+            "patrocinador": "Geral!A1",
+            "dimensao": "Geral!A14",
+            "categoria": "Geral!B14",
+            "valor": "Geral!C14",
+            "base_respondentes": "Geral!D14"
+          }
+        },
+        {
+          "dados": {
+            "tipo": "PERFIL",
+            "patrocinador": null,
+            "dimensao": "RENDA",
+            "categoria": "5 a 10 salários mínimos",
+            "valor": 29,
+            "base_respondentes": 1038
+          },
+          "origem": {
+            "patrocinador": "Geral!A1",
+            "dimensao": "Geral!A15",
+            "categoria": "Geral!B15",
+            "valor": "Geral!C15",
+            "base_respondentes": "Geral!D15"
+          }
+        },
+        {
+          "dados": {
+            "tipo": "PERFIL",
+            "patrocinador": null,
+            "dimensao": "RENDA",
+            "categoria": "Mais de 10 salários mínimos",
+            "valor": 16,
+            "base_respondentes": 1038
+          },
+          "origem": {
+            "patrocinador": "Geral!A1",
+            "dimensao": "Geral!A16",
+            "categoria": "Geral!B16",
+            "valor": "Geral!C16",
+            "base_respondentes": "Geral!D16"
+          }
+        },
+        {
+          "dados": {
+            "tipo": "PERFIL",
+            "patrocinador": null,
+            "dimensao": "DOMICILIO",
+            "categoria": "Rio Grande do Sul",
+            "valor": 96,
+            "base_respondentes": 1038
+          },
+          "origem": {
+            "patrocinador": "Geral!A1",
+            "dimensao": "Geral!A17",
+            "categoria": "Geral!B17",
+            "valor": "Geral!C17",
+            "base_respondentes": "Geral!D17"
+          }
+        },
+        {
+          "dados": {
+            "tipo": "PERFIL",
+            "patrocinador": null,
+            "dimensao": "DOMICILIO",
+            "categoria": "Outros estados",
+            "valor": 4,
+            "base_respondentes": 1038
+          },
+          "origem": {
+            "patrocinador": "Geral!A1",
+            "dimensao": "Geral!A18",
+            "categoria": "Geral!B18",
+            "valor": "Geral!C18",
+            "base_respondentes": "Geral!D18"
+          }
+        }
+      ],
+      "naoEntra": [
+        {
+          "o": "Cliente Amarelo!A2:B2",
+          "motivo": "base de respondentes: ela vai em cada linha, não é uma linha"
+        },
+        {
+          "o": "Geral!A2:B2",
+          "motivo": "base de respondentes: ela vai em cada linha, não é uma linha"
+        },
+        {
+          "o": "Geral",
+          "motivo": "a pesquisa geral tem perfil; as 3 perguntas e o texto livre são da ativação da Master"
+        }
+      ]
+    },
+    {
+      "arquivo": "numeros-da-edicao.pdf",
+      "destino": "NUMEROS_EDICAO",
+      "temDadoPessoal": false,
+      "linhas": [
+        {
+          "dados": {
+            "indicador": "Público (planetários)",
+            "valor": 80000,
+            "qualificador": "MAIS_DE",
+            "unidade": "pessoas",
+            "fonte": "PV_PA_26_GERAL.pdf"
+          },
+          "origem": {
+            "indicador": "página 1",
+            "valor": "página 1",
+            "qualificador": "página 1",
+            "unidade": "página 1",
+            "fonte": "página 1"
+          }
+        },
+        {
+          "dados": {
+            "indicador": "Marcas parceiras",
+            "valor": 39,
+            "qualificador": "EXATO",
+            "unidade": "marcas",
+            "fonte": "PV_PA_26_GERAL.pdf"
+          },
+          "origem": {
+            "indicador": "página 1",
+            "valor": "página 1",
+            "qualificador": "página 1",
+            "unidade": "página 1",
+            "fonte": "página 1"
+          }
+        },
+        {
+          "dados": {
+            "indicador": "Impactos nas redes do evento",
+            "valor": 19000000,
+            "qualificador": "MAIS_DE",
+            "unidade": "impactos",
+            "fonte": "PV_PA_26_GERAL.pdf"
+          },
+          "origem": {
+            "indicador": "página 1",
+            "valor": "página 1",
+            "qualificador": "página 1",
+            "unidade": "página 1",
+            "fonte": "página 1"
+          }
+        },
+        {
+          "dados": {
+            "indicador": "Pessoas nas transmissões",
+            "valor": 1600000,
+            "qualificador": "EXATO",
+            "unidade": "pessoas",
+            "fonte": "Relatório de transmissões 2026"
+          },
+          "origem": {
+            "indicador": "página 1",
+            "valor": "página 1",
+            "qualificador": "página 1",
+            "unidade": "página 1",
+            "fonte": "página 1"
+          }
+        }
+      ],
+      "naoEntra": [
+        {
+          "o": "Título e expediente",
+          "motivo": "não são números da edição"
+        },
+        {
+          "o": "Fontes citadas no rodapé",
+          "motivo": "a fonte vai no campo fonte de cada linha"
+        }
+      ]
+    },
+    {
+      "arquivo": "agencia-amarelo.xlsx",
+      "destino": "DADOS_ATIVACAO",
+      "temDadoPessoal": false,
+      "linhas": [
+        {
+          "dados": {
+            "campo_chave": "ativacao.visitantes_total",
+            "valor": 8600
+          },
+          "origem": {
+            "campo_chave": "Agencia!A4",
+            "valor": "Agencia!B4"
+          }
+        },
+        {
+          "dados": {
+            "campo_chave": "ativacao.cadastros_consentidos",
+            "valor": 3180
+          },
+          "origem": {
+            "campo_chave": "Agencia!A5",
+            "valor": "Agencia!B5"
+          }
+        },
+        {
+          "dados": {
+            "campo_chave": "ativacao.brindes_disponiveis",
+            "valor": 5000
+          },
+          "origem": {
+            "campo_chave": "Agencia!A6",
+            "valor": "Agencia!B6"
+          }
+        },
+        {
+          "dados": {
+            "campo_chave": "ativacao.brindes_distribuidos",
+            "valor": 4360
+          },
+          "origem": {
+            "campo_chave": "Agencia!A7",
+            "valor": "Agencia!B7"
+          }
+        }
+      ],
+      "naoEntra": [
+        {
+          "o": "Agencia!A11:D13",
+          "motivo": "quebra por dia e total: o resumo é que traz os campos do catálogo"
+        },
+        {
+          "o": "Agencia!A1:B3",
+          "motivo": "título e cabeçalho: não são campos"
+        }
+      ]
+    },
+    {
+      "arquivo": "conversa-whatsapp.txt",
+      "destino": "SO_CONSULTA",
+      "temDadoPessoal": true,
+      "linhas": [],
+      "naoEntra": [
+        {
+          "o": "linha 3",
+          "motivo": "informação de entrega: o destino é só consulta, o conteúdo fica no documento"
+        },
+        {
+          "o": "linha 5",
+          "motivo": "telefone fictício: dado pessoal, não vira linha"
+        },
+        {
+          "o": "linha 6",
+          "motivo": "e-mail fictício: dado pessoal, não vira linha"
+        }
+      ]
+    }
+  ]
+}

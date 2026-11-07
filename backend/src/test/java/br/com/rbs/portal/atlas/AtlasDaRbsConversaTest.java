@@ -122,7 +122,7 @@ class AtlasDaRbsConversaTest {
     }
 
     @Test
-    void oModeloRecebeOPromptDaRbsEAsQuatroFerramentasDela() {
+    void oModeloRecebeOPromptDaRbsEAsSeisFerramentasDela() {
         SessaoDeApi rbs = entrar();
         long conversa = abrir(rbs);
         modelo.texto("Posso ajudar com os documentos da edição.");
@@ -133,7 +133,8 @@ class AtlasDaRbsConversaTest {
         String esperado = PromptsDoAtlas.comporDaRbs().replace("@DATA@", DateTimeFormatter.ofPattern("dd/MM/yyyy").format(Datas.hoje()));
         assertThat(pedido.mensagens().get(0).conteudo()).isEqualTo(esperado);
         assertThat(esperado).contains("equipe da RBS").doesNotContain("@MARCA@").doesNotContain("Cliente Amarelo");
-        assertThat(nomesDasFerramentas(pedido)).containsExactly("buscar_documentos", "contar_dias", "calcular", "gerar_modelo");
+        assertThat(nomesDasFerramentas(pedido)).containsExactly("buscar_documentos", "listar_entregas", "consultar_midia", "contar_dias",
+                "calcular", "gerar_modelo");
         assertThat(pedido.ferramentas().toString()).doesNotContain("parceria_consultar").doesNotContain("relatorio_");
         exigirHistoricoValido(pedido);
         assertThat(pedido.sessao()).isEqualTo(String.valueOf(conversa));
@@ -205,28 +206,50 @@ class AtlasDaRbsConversaTest {
         return "{\"consulta\":\"cortesias do plano comercial da cota Master\",\"tipo\":\"PLANO_COMERCIAL\"}";
     }
 
+    /**
+     * Uma busca que não acha nada. Desde que a RBS busca na edição inteira (AC2), a lista vetorial sempre traz os vizinhos mais
+     * próximos, mesmo de uma consulta sem sentido; a consulta só com palavras sem assunto não tem termo nenhum e volta vazia sempre.
+     */
+    static String buscaSemResultado() {
+        return "{\"consulta\":\"de que para com uma\"}";
+    }
+
     @Test
-    void oPlanoDeCotaNaoExisteParaARbsEAFraseDeNaoEncontreiNaoMandaFalarComARbs() {
+    void oPlanoDeCotaExisteParaARbsEApareceNaBusca() {
         SessaoDeApi rbs = entrar();
         long conversa = abrir(rbs);
-        modelo.chamada("buscar_documentos", buscaDePlano()).texto(NAO_ENCONTREI);
+        modelo.chamada("buscar_documentos", buscaDePlano()).texto("O plano da cota Master está nos documentos da edição.");
+
+        MvcTestResult resposta = falar(rbs, conversa, "Quantas cortesias a Master tem?");
+
+        assertThat(textos(resposta)).containsExactly("O plano da cota Master está nos documentos da edição.");
+        String resultado = modelo.ultimoPedido().mensagens().stream().filter(m -> "tool".equals(m.papel())).map(m -> m.conteudo())
+                .reduce((primeiro, segundo) -> segundo).orElseThrow();
+        assertThat(resultado).contains("Plano comercial · Cota Master 2027").doesNotContain("\"trechos\":[]");
+    }
+
+    @Test
+    void aFraseDeNaoEncontreiNaoMandaFalarComARbs() {
+        SessaoDeApi rbs = entrar();
+        long conversa = abrir(rbs);
+        modelo.chamada("buscar_documentos", buscaSemResultado()).texto(NAO_ENCONTREI);
 
         MvcTestResult resposta = falar(rbs, conversa, "Quantas cortesias a Master tem?");
 
         assertThat(textos(resposta)).containsExactly(NAO_ENCONTREI);
         assertThat(corpo(resposta)).doesNotContain("atendimento da RBS");
         assertThat(lerLista(resposta, "$.itens[?(@.tipo=='texto')].porModelo")).as("a frase fixa é do servidor").containsExactly(false);
-        // o que a busca devolveu ao modelo: nenhum trecho (os planos de cota são COTA, nunca GLOBAL)
+        // o que a busca devolveu ao modelo: nenhum trecho (a consulta não tem termo que case com documento da edição)
         String resultado = modelo.ultimoPedido().mensagens().stream().filter(m -> "tool".equals(m.papel())).map(m -> m.conteudo())
                 .reduce((primeiro, segundo) -> segundo).orElseThrow();
-        assertThat(resultado).contains("\"trechos\":[]").contains("Nenhum trecho dos documentos do portal responde");
+        assertThat(resultado).contains("\"trechos\":[]");
     }
 
     @Test
     void respostaSemFonteDepoisDeBuscaVaziaViraAFraseDeNaoEncontreiSemIndicacao() {
         SessaoDeApi rbs = entrar();
         long conversa = abrir(rbs);
-        modelo.chamada("buscar_documentos", buscaDePlano()).texto("O plano da Master dá uma boa quantidade de cortesias para a marca.");
+        modelo.chamada("buscar_documentos", buscaSemResultado()).texto("O plano da Master dá uma boa quantidade de cortesias para a marca.");
 
         MvcTestResult resposta = falar(rbs, conversa, "Quantas cortesias a Master tem?");
 
@@ -257,21 +280,20 @@ class AtlasDaRbsConversaTest {
         long conversa = abrir(rbs);
         long relatorios = jdbc.sql("SELECT count(*) FROM atlas_relatorio").query(Long.class).single();
         modelo.chamada("parceria_consultar", "{}").chamada("relatorio_iniciar", "{\"modelo\":\"ATIVACAO_EVENTO\"}")
-                .chamada("listar_entregas", "{}").texto("Não consegui buscar isso agora.");
+                .texto("Não consegui buscar isso agora.");
 
         MvcTestResult resposta = falar(rbs, conversa, "Como está o Amarelo?");
 
         assertThat(textos(resposta)).containsExactly("Não consegui buscar isso agora.");
         List<String> resultados = modelo.ultimoPedido().mensagens().stream().filter(m -> "tool".equals(m.papel())).map(m -> m.conteudo()).toList();
-        assertThat(resultados).hasSize(3);
+        assertThat(resultados).hasSize(2);
         assertThat(resultados.get(0)).contains("Não existe a ferramenta parceria_consultar");
         assertThat(resultados.get(1)).contains("Não existe a ferramenta relatorio_iniciar");
-        assertThat(resultados.get(2)).contains("Não existe a ferramenta listar_entregas");
         assertThat(jdbc.sql("SELECT count(*) FROM atlas_relatorio").query(Long.class).single()).isEqualTo(relatorios);
         assertThat(jdbc.sql("""
                 SELECT count(*) FROM atlas_tool_call t JOIN atlas_mensagem m ON m.id = t.mensagem_id
                 WHERE m.conversa_id = :c AND t.erro IS NOT NULL
-                """).param("c", conversa).query(Long.class).single()).isEqualTo(3);
+                """).param("c", conversa).query(Long.class).single()).isEqualTo(2);
     }
 
     @Test

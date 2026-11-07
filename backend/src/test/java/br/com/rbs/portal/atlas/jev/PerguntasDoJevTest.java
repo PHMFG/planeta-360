@@ -10,7 +10,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 /**
- * [ATLAS] O arquivo de perguntas do JEV ({@code atlas/jev/perguntas.json}), que o servidor e a calibração leem: os seis pontos, as
+ * [ATLAS] O arquivo de perguntas do JEV ({@code atlas/jev/perguntas.json}), que o servidor e a calibração leem: os pontos, as
  * opções do plano na ordem do plano ({@code outro} por último na intenção), os marcadores que cada molde usa e a repetição do molde
  * da resposta por frase. Sem contexto do Spring.
  */
@@ -28,12 +28,14 @@ class PerguntasDoJevTest {
     }
 
     @Test
-    void aIntencaoTemAsNoveOpcoesDoPlanoComOutroPorUltimo() {
+    void aIntencaoTemAsDezOpcoesDoPlanoComOutroPorUltimo() {
         PerguntaAoJev intencao = perguntas.perguntas(PontoDoJev.INTENCAO).get("intencao");
 
         assertThat(intencao.tipo()).isEqualTo("choice");
-        assertThat(intencao.criterios().keySet()).containsExactly("pergunta_documentos", "dados_parceria", "misto", "montar_relatorio",
-                "outro_relatorio", "modelo_em_branco", "fora_de_escopo", "saudacao_uso", "outro");
+        assertThat(intencao.criterios().keySet()).containsExactly("pergunta_documentos", "dados_parceria", "dados_de_midia", "misto",
+                "montar_relatorio", "outro_relatorio", "modelo_em_branco", "fora_de_escopo", "saudacao_uso", "outro");
+        assertThat(intencao.criterios().get("dados_de_midia")).contains("mídia", "veiculação", "inserções", "impacto",
+                "contratado x entregue");
     }
 
     @Test

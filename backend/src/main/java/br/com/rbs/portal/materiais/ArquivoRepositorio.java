@@ -18,7 +18,8 @@ public class ArquivoRepositorio {
      * documento do Atlas a que o arquivo pertence (nulo se não é de documento): só a RBS baixa esse arquivo pela rota 18.
      */
     public record ArquivoParaDownload(Long id, Long parceriaId, String nomeOriginal, String mimeType, String caminho,
-                                      Integer versao, boolean relatorioNaoDisponibilizado, String abaCodigo, Long documentoId) {
+                                      Integer versao, boolean relatorioNaoDisponibilizado, String abaCodigo, Long documentoId,
+                                      String categoria, boolean importacaoDaMarca) {
     }
 
     private final JdbcClient jdbc;
@@ -33,7 +34,10 @@ public class ArquivoRepositorio {
                                EXISTS (SELECT 1 FROM relatorio r WHERE r.arquivo_id = a.id
                                        AND r.status <> 'DISPONIBILIZADO') AS relatorio_nao_disponibilizado,
                                ab.codigo AS aba_codigo,
-                               (SELECT d.id FROM documento d WHERE d.arquivo_id = a.id) AS documento_id
+                               (SELECT d.id FROM documento d WHERE d.arquivo_id = a.id) AS documento_id,
+                               a.categoria,
+                               EXISTS (SELECT 1 FROM importacao i WHERE i.arquivo_id = a.id AND i.origem = 'MARCA')
+                                   AS importacao_da_marca
                         FROM arquivo a LEFT JOIN aba ab ON ab.id = a.aba_id WHERE a.id = :id
                         """)
                 .param("id", arquivoId)

@@ -16,8 +16,10 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  *   <li>o limite de tempo da consulta e os ajustes do índice vetorial (a busca iterativa do HNSW, que continua achando vizinhos
  *       quando o filtro de escopo descarta os primeiros).</li>
  * </ol>
- * Os valores do escopo são sempre números do servidor, nunca texto da pessoa nem do modelo. No escopo só global (o Atlas da RBS) a cota
- * e a parceria vão vazias: as políticas as leem como nulas e só o documento {@code GLOBAL} da edição passa.
+ * Os valores do escopo são sempre números do servidor, nunca texto da pessoa nem do modelo. No escopo só global a cota e a parceria
+ * vão vazias: as políticas as leem como nulas e só o documento {@code GLOBAL} da edição passa. O escopo de toda a edição (o Atlas da
+ * RBS, desde a base da RBS) é a exceção: a política não representa "todas as cotas e parcerias", então ele não troca o papel e lê com
+ * o filtro de edição do servidor sempre junto; só a conversa da RBS o monta.
  */
 final class ContextoDeRls {
 
@@ -34,6 +36,13 @@ final class ContextoDeRls {
      * um identificador): nesse caso nenhuma consulta pode rodar.
      */
     static void aplicar(JdbcClient jdbc, String papel, Escopo escopo, int limiteDeTempoEmMs) {
+        if (escopo.todaAEdicao()) {
+            // [ISOLAMENTO] O escopo de toda a edição é o da RBS, que pode ler todos os documentos. A política da RLS é por cota e
+            // por parceria e não tem como representar "todas"; sem V nova, este é o único caminho. O filtro do WHERE (só a edição,
+            // indexado e ativo) vai sempre junto, e nenhuma conversa de marca monta este escopo.
+            configurar(jdbc, escopo, limiteDeTempoEmMs);
+            return;
+        }
         if (papel == null || !NOME_DE_PAPEL.matcher(papel).matches()) {
             throw new IllegalStateException("Nome de papel inválido para a busca nos documentos.");
         }
@@ -45,8 +54,13 @@ final class ContextoDeRls {
         }
         // O escopo só global (o Atlas da RBS) grava a cota e a parceria VAZIAS: o NULLIF das políticas as lê como nulas, e a comparação
         // com nulo nunca é verdadeira. Nenhum documento de cota nem de parceria passa, e não depende de um id "que não existe".
-        String cota = escopo.soGlobal() ? "" : Integer.toString(escopo.cotaTipoId());
-        String parceria = escopo.soGlobal() ? "" : Long.toString(escopo.parceriaId());
+        configurar(jdbc, escopo, limiteDeTempoEmMs);
+    }
+
+    /** Os parâmetros da transação (o contexto da RLS e o tempo limite), sem mexer no papel. */
+    private static void configurar(JdbcClient jdbc, Escopo escopo, int limiteDeTempoEmMs) {
+        String cota = escopo.soGlobal() || escopo.todaAEdicao() ? "" : Integer.toString(escopo.cotaTipoId());
+        String parceria = escopo.soGlobal() || escopo.todaAEdicao() ? "" : Long.toString(escopo.parceriaId());
         jdbc.sql("""
                         SELECT set_config('app.evento_id', :evento, true), set_config('app.cota_tipo_id', :cota, true),
                                set_config('app.parceria_id', :parceria, true), set_config('statement_timeout', :tempo, true),

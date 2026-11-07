@@ -18,7 +18,7 @@ export type ComprovacaoMensal = { parceriaId: number; patrocinador: string; linh
 export const obterComprovacaoMensal = (parceriaId: number) => pedir<ComprovacaoMensal>(`/parcerias/${parceriaId}/comprovacao-mensal`)
 
 /** "Cliente Amarelo" → "cliente-amarelo", para o nome do arquivo baixado. */
-function apelido(nome: string) {
+export function apelido(nome: string) {
   return (
     nome
       .normalize('NFD')
@@ -29,8 +29,12 @@ function apelido(nome: string) {
   )
 }
 
-export const baixarComprovacaoMensal = (parceriaId: number, patrocinador: string, formato: 'xlsx' | 'csv') =>
-  baixar(`/parcerias/${parceriaId}/comprovacao-mensal.${formato}`, `comprovacao-mensal-${apelido(patrocinador)}.${formato}`)
+/** Com `mes` (AAAA-MM), a planilha traz só aquele mês (U1, plano da base da RBS); sem ele, todos os meses. */
+export const baixarComprovacaoMensal = (parceriaId: number, patrocinador: string, formato: 'xlsx' | 'csv', mes?: string) =>
+  baixar(
+    `/parcerias/${parceriaId}/comprovacao-mensal.${formato}${mes ? `?mes=${encodeURIComponent(mes)}` : ''}`,
+    `comprovacao-mensal-${apelido(patrocinador)}${mes ? `-${mes}` : ''}.${formato}`,
+  )
 
 export const baixarLoteDaComprovacao = (eventoId: number, edicao: string | number) =>
   baixar(`/eventos/${eventoId}/comprovacao-mensal.xlsx`, `comprovacao-mensal-edicao-${apelido(String(edicao))}.xlsx`)

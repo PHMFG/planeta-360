@@ -10,13 +10,17 @@ import '@fontsource/montserrat/700.css'
 import 'remixicon/fonts/remixicon.css'
 import './estilos/tema.css'
 import { App } from './App'
+import { ProvedorDeToast } from './componentes/Toast'
 import { ProvedorSessao } from './sessao/Sessao'
 
 createRoot(document.getElementById('raiz')!).render(
   <StrictMode>
     <BrowserRouter>
       <ProvedorSessao>
-        <App />
+        {/* O aviso curto (toast) mora acima das rotas: recarregar a parceria remonta o layout, e o aviso não pode sumir junto. */}
+        <ProvedorDeToast>
+          <App />
+        </ProvedorDeToast>
       </ProvedorSessao>
     </BrowserRouter>
   </StrictMode>,

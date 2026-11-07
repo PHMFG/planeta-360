@@ -131,6 +131,38 @@ class PlanilhaMensalXlsxTest {
     }
 
     @Test
+    void oMesPedidoLimitaOArquivoELidoPeloPoi() throws Exception {
+        long amarelo = amarelo();
+        long cpm = jdbc.sql("""
+                INSERT INTO aproveitamento_previsto (parceria_id, categoria, veiculo, formato, espaco_programa, tipo_midia,
+                                                     quantidade_prevista, unidade)
+                VALUES (:p, 'MIDIA', 'Rede Atlântida RS', 'Formato de teste em CPM', 'Teste', 'ASSINADA', 500, 'CPM') RETURNING id
+                """).param("p", amarelo).query(Long.class).single();
+        jdbc.sql("INSERT INTO veiculacao (aproveitamento_id, exibido_em, quantidade) VALUES (:a, '2030-06-10T15:00:00Z', 30)")
+                .param("a", cpm).update();
+        jdbc.sql("INSERT INTO veiculacao (aproveitamento_id, exibido_em, quantidade) VALUES (:a, '2030-07-10T15:00:00Z', 12)")
+                .param("a", cpm).update();
+
+        try (Workbook livro = abrir(SessaoDeApi.entrar(mvc, AMARELO).get(
+                "/api/parcerias/" + amarelo + "/comprovacao-mensal.xlsx?mes=2030-06"))) {
+            Map<String, BigDecimal> lido = lido(livro.getSheetAt(0));
+            assertThat(lido).containsOnlyKeys("2030-06|Assinada|CPM");
+            assertThat(lido.get("2030-06|Assinada|CPM")).isEqualByComparingTo("30");
+        }
+    }
+
+    @Test
+    void mesSemExibicaoDevolveAsDuasAbasSoComOCabecalho() throws Exception {
+        long amarelo = amarelo();
+
+        try (Workbook livro = abrir(SessaoDeApi.entrar(mvc, AMARELO).get(
+                "/api/parcerias/" + amarelo + "/comprovacao-mensal.xlsx?mes=2031-12"))) {
+            assertThat(livro.getSheetAt(0).getLastRowNum()).isZero();
+            assertThat(livro.getSheetAt(1).getLastRowNum()).isZero();
+        }
+    }
+
+    @Test
     void naoHaCelulaDeFormulaNemUnidadesSomadas() throws Exception {
         long amarelo = amarelo();
         long cpm = jdbc.sql("""
