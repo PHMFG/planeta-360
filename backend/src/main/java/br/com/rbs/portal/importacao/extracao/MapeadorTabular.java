@@ -807,8 +807,16 @@ public class MapeadorTabular implements ExtratorDeLinhas {
         return switch (campo) {
             case "quantidade", "impacto", "quantidade_prevista", "fonte_pagina", "pergunta", "base_respondentes" -> {
                 BigDecimal numero = decimal(valor);
-                yield numero == null ? valor : numero.stripTrailingZeros().scale() <= 0 ? numero.longValueExact()
-                        : numero.stripTrailingZeros();
+                // Um número que não cabe num long (gigante, ou 1E+30 de uma célula) fica como texto: a conferência recusa só a
+                // linha, em vez de a ArithmeticException derrubar a leitura inteira.
+                if (numero != null && numero.stripTrailingZeros().scale() <= 0) {
+                    try {
+                        yield numero.longValueExact();
+                    } catch (ArithmeticException naoCabe) {
+                        yield valor;
+                    }
+                }
+                yield numero == null ? valor : numero.stripTrailingZeros();
             }
             case "valor" -> {
                 BigDecimal numero = decimal(valor);
