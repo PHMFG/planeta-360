@@ -93,7 +93,7 @@ public class ImportacaoService {
     static final String LEITURA_INTERROMPIDA = "Leitura interrompida: a API foi reiniciada antes de terminar. Importe o arquivo de novo.";
     private static final int LIMITE_DO_TEXTO = 100_000;
     private static final int LIMITE_DO_MOTIVO = 500;
-    private static final Set<String> EXTENSOES = Set.of("xlsx", "xls", "csv", "docx", "doc", "pptx", "ppt", "pdf", "txt", "png", "jpg",
+    private static final Set<String> EXTENSOES = Set.of("xlsx", "xls", "csv", "docx", "pptx", "pdf", "txt", "png", "jpg",
             "jpeg");
     private static final Set<DestinoDaImportacao> DESTINOS = Set.of(DestinoDaImportacao.values());
     private static final Set<SituacaoDaImportacao> SITUACOES = Set.of(SituacaoDaImportacao.values());
