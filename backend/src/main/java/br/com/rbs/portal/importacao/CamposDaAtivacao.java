@@ -2,6 +2,8 @@ package br.com.rbs.portal.importacao;
 
 import br.com.rbs.portal.dados.DadoInformadoRepositorio;
 import br.com.rbs.portal.dados.DadoInformadoRepositorio.LinhaDeCampo;
+import br.com.rbs.portal.dados.DadoInformadoRepositorio.LinhaDeVigente;
+import java.math.BigDecimal;
 import java.text.Normalizer;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -40,6 +42,17 @@ public class CamposDaAtivacao {
             return Optional.empty();
         }
         return Optional.ofNullable(porNome().get(alvo));
+    }
+
+    /** O valor numérico vigente de cada campo da parceria, pela chave do campo; os sem valor não aparecem. */
+    public Map<String, BigDecimal> valoresVigentes(long parceriaId) {
+        Map<String, BigDecimal> valores = new LinkedHashMap<>();
+        for (LinhaDeVigente vigente : repositorio.vigentes(parceriaId)) {
+            if (vigente.valorNumero() != null) {
+                valores.put(vigente.campoChave(), vigente.valorNumero());
+            }
+        }
+        return valores;
     }
 
     /** O mapa da chave e do rótulo normalizados para o campo, montado a cada chamada (o catálogo é pequeno). */

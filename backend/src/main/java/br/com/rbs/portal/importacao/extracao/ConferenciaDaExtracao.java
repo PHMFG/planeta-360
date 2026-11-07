@@ -146,6 +146,10 @@ public class ConferenciaDaExtracao {
         String alvo;
         try {
             alvo = NormalizadorDeNumeros.normalizarNumero(texto(valor));
+            // O sinal negativo é da regra do destino (mínimo); a fonte escreve o número e a conferência só precisa achá-lo.
+            if (alvo.startsWith("-")) {
+                alvo = alvo.substring(1);
+            }
         } catch (RuntimeException naoEhNumero) {
             return true;
         }

@@ -735,10 +735,14 @@ public class ImportacaoService {
         // A mesma linha duas vezes no arquivo (mesma marca, veículo, formato, data e quantidade) contaria a exibição em dobro: a
         // segunda vem recusada, apontando a primeira (achado da rodada do Atlas da RBS, 06/11).
         Map<String, String> vistas = new HashMap<>();
+        List<LinhaProposta> ajustadas = new ArrayList<>();
+        List<ConferenciaDaLinha> conferidas = new ArrayList<>();
+        List<String> dadosDasLinhas = new ArrayList<>();
+        List<java.util.LinkedHashSet<String>> problemasPorLinha = new ArrayList<>();
         for (LinhaProposta proposta : extracao.linhas()) {
             LinhaProposta ajustada = ajustar(proposta);
             ConferenciaDaLinha conferenciaDaLinha = conferir(importacao, destino, ajustada);
-            List<String> problemas = new ArrayList<>(conferenciaDaLinha.problemas());
+            java.util.LinkedHashSet<String> problemas = new java.util.LinkedHashSet<>(conferenciaDaLinha.problemas());
             String dados = JSON.writeValueAsString(ajustada.dados());
             OrigemDoValor onde = ajustada.origem().get("veiculo");
             String repetida = destino == DestinoDaImportacao.VEICULACAO
@@ -747,13 +751,35 @@ public class ImportacaoService {
             if (repetida != null) {
                 problemas.add("Repete " + repetida.replaceFirst("!.*?(\\d+)$", ", linha $1") + " deste arquivo.");
             }
+            ajustadas.add(ajustada);
+            conferidas.add(conferenciaDaLinha);
+            dadosDasLinhas.add(dados);
+            problemasPorLinha.add(problemas);
+            ordem++;
+        }
+        // A conferência do conjunto (a relação entre campos, como cadastros ≤ visitantes) só vale com todas as linhas na mão.
+        DestinoDeGravacao gravador = destinos.stream().filter(d -> d.destino() == destino).findFirst().orElse(null);
+        if (gravador != null) {
+            AlcanceDeUmaImportacao alcance = new AlcanceDeUmaImportacao(importacao.eventoId(), importacao.alcance(),
+                    importacao.cotaTipoId(), importacao.parceriaId());
+            gravador.problemasDoConjunto(ajustadas, alcance).forEach((indice, problemas) -> {
+                if (indice >= 0 && indice < problemasPorLinha.size()) {
+                    problemasPorLinha.get(indice).addAll(problemas);
+                }
+            });
+        }
+        for (int i = 0; i < ajustadas.size(); i++) {
+            LinhaProposta ajustada = ajustadas.get(i);
+            ConferenciaDaLinha conferenciaDaLinha = conferidas.get(i);
+            List<String> problemas = List.copyOf(problemasPorLinha.get(i));
             SituacaoDaLinha situacao = problemas.isEmpty() ? SituacaoDaLinha.PROPOSTA : SituacaoDaLinha.RECUSADA;
-            repositorio.inserirLinha(importacao.id(), ordem++, destino, dados,
+            repositorio.inserirLinha(importacao.id(), i + 1, destino, dadosDasLinhas.get(i),
                     JSON.writeValueAsString(ajustada.origem()), situacao,
                     problemas.isEmpty() ? null : String.join(" ", problemas),
                     conferenciaDaLinha.parceriaId(), conferenciaDaLinha.aproveitamentoSugeridoId(),
                     conferenciaDaLinha.semelhanca());
         }
+        ordem = ajustadas.size() + 1;
         for (NaoEntendidoDto naoEntendido : extracao.naoEntendidos()) {
             Map<String, Object> dados = new LinkedHashMap<>();
             dados.put("naoEntendido", true);

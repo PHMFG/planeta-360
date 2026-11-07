@@ -2,6 +2,7 @@ package br.com.rbs.portal.importacao;
 
 import br.com.rbs.portal.comum.UsuarioAutenticado;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Um destino da importação. Diz o destino que trata, confere uma linha proposta e grava as linhas aceitas quando a importação é
@@ -15,6 +16,14 @@ public interface DestinoDeGravacao {
 
     /** Confere a linha no alcance da importação e devolve os problemas, em português; lista vazia quando ela está boa. */
     List<String> problemas(LinhaProposta linha, AlcanceDeUmaImportacao alcance);
+
+    /**
+     * Confere o conjunto das linhas, para os destinos em que uma linha depende da outra (cadastros ≤ visitantes). A chave é o
+     * índice da linha na lista; os destinos sem regra de conjunto não devolvem nada.
+     */
+    default Map<Integer, List<String>> problemasDoConjunto(List<LinhaProposta> linhas, AlcanceDeUmaImportacao alcance) {
+        return Map.of();
+    }
 
     /**
      * Grava as linhas aceitas, numa carga nova quando o destino usa a área de passagem. Devolve os totais da carga; o destino que

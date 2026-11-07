@@ -215,6 +215,55 @@ class ImportacaoPesquisaAtivacaoTest {
     }
 
     @Test
+    void aConferenciaDaAgenciaRecusaTipoMinimoERelacaoNaPrevia() {
+        SessaoDeApi rbs = SessaoDeApi.entrar(mvc, RBS);
+        byte[] planilha = csv("campo,valor",
+                "ativacao.visitantes_total,10.5",
+                "ativacao.brindes_disponiveis,-1",
+                "ativacao.visitantes_total,100",
+                "ativacao.cadastros_consentidos,200");
+        long id = id(enviarRbs(rbs, "planilha-t4b.csv", planilha, "PARCERIA", amarelo(), "DADOS_ATIVACAO"));
+
+        List<Map<String, Object>> itens = itens(rbs, id);
+        assertThat(itens).hasSize(4);
+        assertThat(itens.get(0).get("situacao")).isEqualTo("RECUSADA");
+        assertThat(String.valueOf(itens.get(0).get("motivo"))).contains("número inteiro");
+        assertThat(itens.get(1).get("situacao")).isEqualTo("RECUSADA");
+        assertThat(String.valueOf(itens.get(1).get("motivo"))).contains("mínimo");
+        assertThat(itens.get(2).get("situacao")).isEqualTo("PROPOSTA");
+        assertThat(itens.get(3).get("situacao")).isEqualTo("RECUSADA");
+        assertThat(String.valueOf(itens.get(3).get("motivo"))).contains("Não pode passar de Visitantes no espaço (100)");
+
+        aceitarTodas(rbs, id);
+        MvcTestResult confirmada = rbs.post("/api/importacoes/" + id + "/confirmar", "{}");
+        assertThat(confirmada).hasStatus(HttpStatus.OK);
+        assertThat(lerJson(confirmada, "$.resultado.inseridas")).isEqualTo(1);
+    }
+
+    @Test
+    void aLinhaQueEscapaDaPreviaViraRejeicaoSemDerrubarAsOutras() {
+        SessaoDeApi rbs = SessaoDeApi.entrar(mvc, RBS);
+        byte[] planilha = csv("campo,valor",
+                "ativacao.visitantes_total,100",
+                "ativacao.brindes_disponiveis,10");
+        long id = id(enviarRbs(rbs, "planilha-t4b.csv", planilha, "PARCERIA", amarelo(), "DADOS_ATIVACAO"));
+        aceitarTodas(rbs, id);
+        // Simula uma linha editada por fora depois da prévia: o valor decimal num campo inteiro passaria pelo aceite em lote.
+        jdbc.sql("""
+                        UPDATE importacao_linha SET dados = jsonb_set(dados, '{valor}', '10.5'::jsonb)
+                        WHERE importacao_id = :id AND ordem = 2
+                        """).param("id", id).update();
+
+        MvcTestResult confirmada = rbs.post("/api/importacoes/" + id + "/confirmar", "{}");
+        assertThat(confirmada).hasStatus(HttpStatus.OK);
+        assertThat(jdbc.sql("""
+                        SELECT count(*) FROM dado_informado d JOIN parceria p ON p.id = d.parceria_id
+                        JOIN patrocinador pa ON pa.id = p.patrocinador_id
+                        WHERE pa.nome_canonico = 'Cliente Amarelo' AND d.id > :max
+                        """).param("max", dadoInformadoMax).query(Long.class).single()).isEqualTo(1);
+    }
+
+    @Test
     void aPlanilhaDaAgenciaSoValeNumaImportacaoDeParceria() {
         SessaoDeApi rbs = SessaoDeApi.entrar(mvc, RBS);
         MvcTestResult criada = enviarRbs(rbs, "planilha-t4b.csv", csv("campo,valor", "ativacao.visitantes_total,10"),

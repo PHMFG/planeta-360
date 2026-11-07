@@ -20,6 +20,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
@@ -42,10 +45,14 @@ public class ParaPesquisa implements DestinoDeGravacao {
 
     private final ImportacaoRepositorio repositorio;
     private final DetectorDeDadosPessoais detector;
+    private final TransactionTemplate savepoint;
 
-    public ParaPesquisa(ImportacaoRepositorio repositorio, DetectorDeDadosPessoais detector) {
+    public ParaPesquisa(ImportacaoRepositorio repositorio, DetectorDeDadosPessoais detector,
+                        PlatformTransactionManager gerenteDeTransacao) {
         this.repositorio = repositorio;
         this.detector = detector;
+        this.savepoint = new TransactionTemplate(gerenteDeTransacao);
+        this.savepoint.setPropagationBehavior(TransactionDefinition.PROPAGATION_NESTED);
     }
 
     @Override
@@ -199,8 +206,20 @@ public class ParaPesquisa implements DestinoDeGravacao {
 
     @Override
     public ResultadoDaGravacao gravar(UsuarioAutenticado usuario, ContextoDaGravacao contexto, List<LinhaAceita> linhas) {
-        boolean precisaAtivacao = linhas.stream().anyMatch(l -> usaAtivacao(l.proposta()));
-        boolean precisaGeral = linhas.stream().anyMatch(l -> usaGeral(l.proposta()));
+        // A prévia já recusou o que não passa nas regras; a confirmação repete a conferência e separa o resto, para uma linha
+        // ruim não entrar no serviço nem na área de passagem.
+        List<Rejeicao> rejeicoes = new ArrayList<>();
+        List<LinhaAceita> validas = new ArrayList<>();
+        for (LinhaAceita linha : linhas) {
+            List<String> problemas = problemas(linha.proposta(), contexto.alcance());
+            if (problemas.isEmpty()) {
+                validas.add(linha);
+            } else {
+                rejeicoes.add(new Rejeicao(linha.ordem(), problemas.getFirst()));
+            }
+        }
+        boolean precisaAtivacao = validas.stream().anyMatch(l -> usaAtivacao(l.proposta()));
+        boolean precisaGeral = validas.stream().anyMatch(l -> usaGeral(l.proposta()));
         Long ativacao = precisaAtivacao ? pesquisa(contexto.eventoId(), "ATIVACAO") : null;
         Long geral = precisaGeral ? pesquisa(contexto.eventoId(), "GERAL") : null;
         if (precisaAtivacao && ativacao == null) {
@@ -210,12 +229,11 @@ public class ParaPesquisa implements DestinoDeGravacao {
             throw semPesquisa(contexto.eventoId(), "GERAL");
         }
 
-        List<Rejeicao> rejeicoes = new ArrayList<>();
         Long cargaId = null;
         int lidas = 0;
         int inseridas = 0;
         int duplicadas = 0;
-        List<LinhaAceita> resultados = linhas.stream().filter(l -> tipo(l.proposta()).equals(RESULTADO)).toList();
+        List<LinhaAceita> resultados = validas.stream().filter(l -> tipo(l.proposta()).equals(RESULTADO)).toList();
         if (!resultados.isEmpty()) {
             cargaId = repositorio.criarCarga("PESQUISA", contexto.arquivoId(), contexto.eventoId(), usuario.id());
             for (LinhaAceita linha : resultados) {
@@ -233,7 +251,7 @@ public class ParaPesquisa implements DestinoDeGravacao {
                     .map(r -> new Rejeicao(r.ordem(), r.motivo())).toList());
         }
 
-        for (LinhaAceita linha : linhas) {
+        for (LinhaAceita linha : validas) {
             Map<String, Object> dados = linha.proposta().dados();
             String tipo = tipo(linha.proposta());
             try {
@@ -244,9 +262,11 @@ public class ParaPesquisa implements DestinoDeGravacao {
                     }
                     String dimensao = texto(dados.get("dimensao")).strip().toUpperCase(Locale.ROOT);
                     String categoria = texto(dados.get("categoria")).strip();
-                    repositorio.apagarPerfil(pesquisa, linha.parceriaId(), dimensao, categoria);
-                    repositorio.inserirPerfil(pesquisa, linha.parceriaId(), dimensao, categoria, numero(dados.get("valor")),
-                            inteiro(dados.get("base_respondentes")), contexto.importacaoId());
+                    savepoint.executeWithoutResult(estado -> {
+                        repositorio.apagarPerfil(pesquisa, linha.parceriaId(), dimensao, categoria);
+                        repositorio.inserirPerfil(pesquisa, linha.parceriaId(), dimensao, categoria, numero(dados.get("valor")),
+                                inteiro(dados.get("base_respondentes")), contexto.importacaoId());
+                    });
                     inseridas++;
                     lidas++;
                 } else if (TEXTO.equals(tipo)) {
@@ -261,8 +281,8 @@ public class ParaPesquisa implements DestinoDeGravacao {
                     int contagem = inteiro(dados.get("valor"));
                     boolean suspeita = !detector.analisarConversa(List.of(
                             new Pagina(1, List.of(new Linha(resposta, 0, List.of(), false))))).isEmpty();
-                    repositorio.inserirRespostaTexto(ativacao, linha.parceriaId(), pergunta.id(), resposta, contagem, suspeita,
-                            contexto.importacaoId());
+                    savepoint.executeWithoutResult(estado -> repositorio.inserirRespostaTexto(ativacao, linha.parceriaId(),
+                            pergunta.id(), resposta, contagem, suspeita, contexto.importacaoId()));
                     inseridas++;
                     lidas++;
                 }
