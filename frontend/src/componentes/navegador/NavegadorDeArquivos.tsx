@@ -2,7 +2,9 @@
 // pastas "Publicados pela RBS" e "Comprovantes de veiculação". Dentro da pasta, a versão atual de cada arquivo com a miniatura;
 // as anteriores ficam em "Versões anteriores". Clicar abre o arquivo na tela; arrastar um arquivo para a pasta de uma entrega
 // aberta já envia para ela (só a marca). Só usa as rotas que já existem: as entregas, os comprovantes da base e o download.
-import { lazy, Suspense, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react'
+import { ErroApi } from '../../api/cliente'
+import { usarToast } from '../Toast'
 import { ACEITA_ENVIO, EXTENSOES_ACEITAS, baixarArquivo, type Arquivo, type Entrega } from '../../api/materiais'
 import { normalizar } from '../../util/texto'
 import { data, dataHora, tamanho } from '../../util/formatar'
@@ -209,6 +211,7 @@ function CartaoDoArquivo({ item, vista, aoAbrir, ordem }: { item: ItemDoNavegado
 /** O arquivo aberto na tela: imagem, PDF, vídeo ou áudio; o resto, só o download. */
 function Visualizacao({ item, aoFechar, aoAbrirEntrega }: { item: ItemDoNavegador; aoFechar: () => void; aoAbrirEntrega: (entrega: Entrega) => void }) {
   const [baixando, setBaixando] = useState(false)
+  const avisar = usarToast()
   const tipo = item.mime
   const corpo = tipo === 'application/pdf' ? (
     <VisualizadorDePdf arquivoId={item.id} nome={item.nome} />
@@ -233,6 +236,9 @@ function Visualizacao({ item, aoFechar, aoAbrirEntrega }: { item: ItemDoNavegado
               setBaixando(true)
               try {
                 await baixarArquivo({ id: item.id, nomeOriginal: item.nome })
+              } catch (erro) {
+                // O arquivo pode ter saído do disco ou a sessão pode ter caído: a pessoa precisa saber que não baixou.
+                avisar(erro instanceof ErroApi ? erro.message : 'Não foi possível baixar o arquivo.', 'falha')
               } finally {
                 setBaixando(false)
               }
@@ -253,6 +259,20 @@ function Visualizacao({ item, aoFechar, aoAbrirEntrega }: { item: ItemDoNavegado
 
 export function NavegadorDeArquivos({ entregas, comprovantes, podeEnviar, aoEnviar, aoAbrirEntrega, acoes }: Props) {
   const pastas = useMemo(() => montarPastas(entregas, comprovantes), [entregas, comprovantes])
+  // Um arquivo solto fora de uma pasta que aceita envio não pode abrir no navegador e tirar a pessoa do portal: com o navegador de
+  // arquivos na tela, a página ignora o soltar. As pastas que aceitam e a área "Enviar material" continuam recebendo o delas.
+  useEffect(() => {
+    if (!podeEnviar) return
+    const ignorar = (evento: globalThis.DragEvent) => {
+      if (evento.dataTransfer && Array.from(evento.dataTransfer.types).includes('Files')) evento.preventDefault()
+    }
+    window.addEventListener('dragover', ignorar)
+    window.addEventListener('drop', ignorar)
+    return () => {
+      window.removeEventListener('dragover', ignorar)
+      window.removeEventListener('drop', ignorar)
+    }
+  }, [podeEnviar])
   const [chave, setChave] = useState<string | null>(null)
   const [anteriores, setAnteriores] = useState(false)
   const [vista, setVista] = useState<'grade' | 'lista'>('grade')

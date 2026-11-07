@@ -5,6 +5,7 @@ import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import { ErroApi, lerArquivo } from '../api/cliente'
 import { nomeDoMes } from '../api/comprovacao'
 import { baixarArquivo } from '../api/materiais'
+import { usarToast } from './Toast'
 import {
   NOME_DO_TIPO_DE_MIDIA,
   baixarMidiaDaEdicao,
@@ -92,6 +93,7 @@ type Props =
   | { modo: 'edicao'; eventoId?: number; edicao?: number; parcerias: { id: number; nome: string }[] }
 
 export function BaseDeMidia(props: Props) {
+  const avisar = usarToast()
   const [mes, setMes] = useState('')
   const [veiculo, setVeiculo] = useState('')
   const [formato, setFormato] = useState('')
@@ -340,7 +342,7 @@ export function BaseDeMidia(props: Props) {
                 <button type="button" className="truncate text-left font-semibold hover:underline" onClick={() => setAberto(item.arquivoId)} aria-pressed={item.arquivoId === aberto}>
                   {item.nome}
                 </button>
-                <button type="button" className="shrink-0 text-xs font-bold text-secao-texto hover:underline" onClick={() => baixarArquivo({ id: item.arquivoId, nomeOriginal: item.nome })}>
+                <button type="button" className="shrink-0 text-xs font-bold text-secao-texto hover:underline" onClick={() => baixarArquivo({ id: item.arquivoId, nomeOriginal: item.nome }).catch((erro) => avisar(erro instanceof ErroApi ? erro.message : 'Não foi possível baixar o comprovante.', 'falha'))}>
                   Baixar
                 </button>
               </li>
