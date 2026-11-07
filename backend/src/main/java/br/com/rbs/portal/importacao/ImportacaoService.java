@@ -377,10 +377,15 @@ public class ImportacaoService {
         }
         if ((mudou || aceitando) && situacao != SituacaoDaLinha.DESCARTADA) {
             ConferenciaDaLinha conferida = conferir(importacao, linha.destino(),
-                    new LinhaProposta(linha.destino(), dados, origens, ehDeTexto(origens)));
+                    new LinhaProposta(linha.destino(), dados, origens, ehDeTexto(origens)), aproveitamentoId);
             parceriaId = conferida.parceriaId();
-            sugeridoId = conferida.aproveitamentoSugeridoId();
-            semelhanca = conferida.semelhanca();
+            if (aproveitamentoId != null) {
+                sugeridoId = linha.aproveitamentoSugeridoId();
+                semelhanca = linha.semelhanca();
+            } else {
+                sugeridoId = conferida.aproveitamentoSugeridoId();
+                semelhanca = conferida.semelhanca();
+            }
             if (!conferida.problemas().isEmpty()) {
                 if (aceitando) {
                     // Aceitar é uma decisão: a linha recusada não passa por fora, como no lote. Corrija e aceite de novo.
@@ -465,7 +470,7 @@ public class ImportacaoService {
         List<LinhaGravada> reconferidas = new ArrayList<>();
         List<String> recusadas = new ArrayList<>();
         for (LinhaGravada linha : aceitas) {
-            ConferenciaDaLinha conferida = conferir(importacao, destino, proposta(linha, destino));
+            ConferenciaDaLinha conferida = conferir(importacao, destino, proposta(linha, destino), linha.aproveitamentoId());
             if (conferida.problemas().isEmpty()) {
                 reconferidas.add(linha);
             } else {
@@ -877,6 +882,15 @@ public class ImportacaoService {
     }
 
     private ConferenciaDaLinha conferir(Importacao importacao, DestinoDaImportacao destino, LinhaProposta proposta) {
+        return conferir(importacao, destino, proposta, null);
+    }
+
+    /**
+     * A conferência com uma linha do plano já escolhida: nesse caso o casador não roda (a escolha manda) e o conflito do mês é
+     * conferido sobre a linha escolhida, não sobre a que o casador sugeriria.
+     */
+    private ConferenciaDaLinha conferir(Importacao importacao, DestinoDaImportacao destino, LinhaProposta proposta,
+                                        Long aproveitamentoEscolhido) {
         Long parceriaId = null;
         String marca = texto(proposta.dados().get("patrocinador"));
         List<String> problemas = new ArrayList<>();
@@ -903,15 +917,28 @@ public class ImportacaoService {
         Long sugeridoId = null;
         BigDecimal semelhanca = null;
         if (problemas.isEmpty() && destino == DestinoDaImportacao.VEICULACAO && parceriaId != null) {
-            ResultadoDoCasamento casamento = casar(parceriaId, proposta.dados());
-            if (casamento.problema() != null) {
-                problemas.add(casamento.problema());
+            Long plano = aproveitamentoEscolhido;
+            if (plano != null) {
+                if (repositorio.planilha(plano, parceriaId).isEmpty()) {
+                    problemas.add("Esta linha do plano não é da marca da linha.");
+                    plano = null;
+                } else {
+                    sugeridoId = plano;
+                }
             } else {
-                sugeridoId = casamento.aproveitamentoId();
-                semelhanca = casamento.semelhanca();
+                ResultadoDoCasamento casamento = casar(parceriaId, proposta.dados());
+                if (casamento.problema() != null) {
+                    problemas.add(casamento.problema());
+                } else {
+                    sugeridoId = casamento.aproveitamentoId();
+                    semelhanca = casamento.semelhanca();
+                    plano = sugeridoId;
+                }
+            }
+            if (plano != null) {
                 // M2: o total do mês e as exibições do mesmo mês nunca se somam. A carga recusaria a linha na confirmação; a
                 // prévia já avisa, com o que está na base (achado da rodada H1).
-                String conflito = conflitoDoMes(sugeridoId, proposta.dados());
+                String conflito = conflitoDoMes(plano, proposta.dados());
                 if (conflito != null) {
                     problemas.add(conflito);
                 }

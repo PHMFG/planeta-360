@@ -68,7 +68,7 @@ class ImportacaoTest {
         jdbc.sql("DELETE FROM arquivo WHERE categoria = 'IMPORTACAO'").update();
         jdbc.sql("DELETE FROM arquivo WHERE categoria = 'DOCUMENTO' AND nome_original IN "
                 + "('tv-novembro.xlsx', 'padrao-rbs-outubro.xlsx', 'conversa-whatsapp.txt', 'resumo.txt')").update();
-        jdbc.sql("DELETE FROM aproveitamento_previsto WHERE formato = 'Comprovante de teste'").update();
+        jdbc.sql("DELETE FROM aproveitamento_previsto WHERE formato IN ('Comprovante de teste', 'Linha escolhida de teste')").update();
         jdbc.sql("DELETE FROM arquivo WHERE categoria = 'COMPROVACAO' AND observacao LIKE 'importacao:%'").update();
     }
 
@@ -416,6 +416,61 @@ class ImportacaoTest {
         assertThat(String.valueOf(lerJson(recusada, "$.motivo"))).contains("não aparece na fonte");
     }
 
+    @Test
+    void escolherALinhaDoPlanoTiraARecusaDoCasador() {
+        SessaoDeApi rbs = SessaoDeApi.entrar(mvc, RBS);
+        Map<String, Object> plano = planoDaMidiaSemTotalMensal();
+        byte[] csv = ("patrocinador,veiculo,formato,espaco_programa,exibido_em,quantidade,link\n"
+                + "Cliente Amarelo,Rádio Que Não Existe,Formato Que Não Existe,Espaço Que Não Existe,"
+                + "2026-12-10T15:00:00-03:00,1,\n").getBytes(StandardCharsets.UTF_8);
+        long id = ((Number) lerJson(enviar(rbs, "linha-sem-casamento.csv", csv, evento2027(), "EDICAO", null, null,
+                "VEICULACAO"), "$.id")).longValue();
+        Map<String, Object> item = primeiraLinha(rbs.get("/api/importacoes/" + id));
+        assertThat(item.get("situacao")).isEqualTo("RECUSADA");
+        assertThat(String.valueOf(item.get("motivo"))).contains("Escolha a linha do plano.");
+        long linhaId = ((Number) item.get("id")).longValue();
+        long planoId = ((Number) plano.get("id")).longValue();
+
+        MvcTestResult editada = rbs.patch("/api/importacoes/" + id + "/linhas/" + linhaId,
+                "{\"aproveitamentoId\":" + planoId + "}");
+        assertThat(editada).hasStatus(HttpStatus.OK);
+        assertThat(lerJson(editada, "$.situacao")).isNotEqualTo("RECUSADA");
+        assertThat(((Number) lerJson(editada, "$.aproveitamento.id")).longValue()).isEqualTo(planoId);
+
+        assertThat(rbs.patch("/api/importacoes/" + id + "/linhas", "{\"situacao\":\"ACEITA\",\"todas\":true}"))
+                .hasStatus(HttpStatus.OK);
+        assertThat(rbs.post("/api/importacoes/" + id + "/confirmar", "{}")).hasStatus(HttpStatus.OK);
+    }
+
+    @Test
+    void oConflitoDoMesUsaALinhaDoPlanoEscolhida() {
+        SessaoDeApi rbs = SessaoDeApi.entrar(mvc, RBS);
+        long parceria = SessaoDeApi.parceriaDe2027(jdbc, "Cliente Amarelo");
+        long plano = jdbc.sql("""
+                        INSERT INTO aproveitamento_previsto (parceria_id, categoria, veiculo, formato, espaco_programa,
+                                                             quantidade_prevista, unidade, tipo_midia)
+                        VALUES (:parceria, 'MIDIA', 'Rádio Escolhida', 'Linha escolhida de teste', 'Programa escolhido', 10,
+                                'INSERCAO', 'ASSINADA')
+                        RETURNING id
+                        """).param("parceria", parceria).query(Long.class).single();
+        jdbc.sql("""
+                        INSERT INTO veiculacao (aproveitamento_id, exibido_em, quantidade, periodo, mes_referencia)
+                        VALUES (:plano, TIMESTAMPTZ '2026-12-01 00:00:00-03', 5, 'MES', DATE '2026-12-01')
+                        """).param("plano", plano).update();
+        byte[] csv = ("patrocinador,veiculo,formato,espaco_programa,exibido_em,quantidade,link\n"
+                + "Cliente Amarelo,Rádio Que Não Existe,Formato Que Não Existe,Espaço Que Não Existe,"
+                + "2026-12-10T15:00:00-03:00,1,\n").getBytes(StandardCharsets.UTF_8);
+        long id = ((Number) lerJson(enviar(rbs, "linha-escolhida.csv", csv, evento2027(), "EDICAO", null, null,
+                "VEICULACAO"), "$.id")).longValue();
+        long linhaId = ((Number) primeiraLinha(rbs.get("/api/importacoes/" + id)).get("id")).longValue();
+
+        MvcTestResult editada = rbs.patch("/api/importacoes/" + id + "/linhas/" + linhaId,
+                "{\"aproveitamentoId\":" + plano + "}");
+        assertThat(editada).hasStatus(HttpStatus.OK);
+        assertThat(lerJson(editada, "$.situacao")).isEqualTo("RECUSADA");
+        assertThat(String.valueOf(lerJson(editada, "$.motivo"))).contains("já tem o total de 2026-12");
+    }
+
     private void imagemTranscritaEPostaEmLinha(String transcricao, String localizador, String patrocinador, String veiculo,
                                                String formato, String data, String trechoDaData) {
         roteiro.limpar()
@@ -584,7 +639,7 @@ class ImportacaoTest {
 
     private Map<String, Object> planoDaMidiaSemTotalMensal() {
         return jdbc.sql("""
-                        SELECT ap.veiculo, ap.formato, ap.espaco_programa FROM aproveitamento_previsto ap
+                        SELECT ap.id, ap.veiculo, ap.formato, ap.espaco_programa FROM aproveitamento_previsto ap
                         JOIN parceria pa ON pa.id = ap.parceria_id JOIN patrocinador p ON p.id = pa.patrocinador_id
                         JOIN evento e ON e.id = pa.evento_id
                         WHERE p.nome_canonico = 'Cliente Amarelo' AND e.edicao = 2027 AND ap.categoria = 'MIDIA'
