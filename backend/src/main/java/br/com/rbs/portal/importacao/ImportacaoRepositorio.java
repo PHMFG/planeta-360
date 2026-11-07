@@ -299,12 +299,18 @@ public class ImportacaoRepositorio {
     public int atualizarSituacaoDasLinhas(long importacaoId, List<Long> ids, SituacaoDaLinha situacao, Long editadaPor,
                                           OffsetDateTime editadaEm) {
         String idsSql = ids == null || ids.isEmpty() ? null : ids.toString().replace("[", "{").replace("]", "}");
+        // A decisão em lote só muda linha entendida e ainda decidível: RECUSADA e a linha "não entendida" ficam de fora, com ou
+        // sem ids. Descartar aceita desfazer um ACEITA; aceitar não passa por cima de uma RECUSADA.
+        String situacoes = situacao == SituacaoDaLinha.ACEITA ? "('PROPOSTA', 'EDITADA')"
+                : "('PROPOSTA', 'EDITADA', 'ACEITA')";
         return jdbc.sql("""
                         UPDATE importacao_linha SET situacao = :situacao, editada_por = :editadaPor, editada_em = :editadaEm
                         WHERE importacao_id = :importacao
                           AND (CAST(:ids AS bigint[]) IS NULL OR id = ANY(CAST(:ids AS bigint[])))
-                          AND (CAST(:ids AS bigint[]) IS NOT NULL OR situacao IN ('PROPOSTA', 'EDITADA'))
-                        """)
+                          AND ((CAST(:ids AS bigint[]) IS NULL AND situacao IN ('PROPOSTA', 'EDITADA'))
+                               OR (CAST(:ids AS bigint[]) IS NOT NULL AND situacao IN %s))
+                          AND NOT (dados @> '{"naoEntendido": true}'::jsonb)
+                        """.formatted(situacoes))
                 .param("importacao", importacaoId).param("ids", idsSql).param("situacao", situacao.name())
                 .param("editadaPor", editadaPor).param("editadaEm", editadaEm).update();
     }

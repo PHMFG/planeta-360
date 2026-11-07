@@ -241,7 +241,7 @@ class ImportacaoPesquisaAtivacaoTest {
     }
 
     @Test
-    void aLinhaQueEscapaDaPreviaViraRejeicaoSemDerrubarAsOutras() {
+    void aConfirmacaoReconfereALinhaAceitaPorFora() {
         SessaoDeApi rbs = SessaoDeApi.entrar(mvc, RBS);
         byte[] planilha = csv("campo,valor",
                 "ativacao.visitantes_total,100",
@@ -255,12 +255,34 @@ class ImportacaoPesquisaAtivacaoTest {
                         """).param("id", id).update();
 
         MvcTestResult confirmada = rbs.post("/api/importacoes/" + id + "/confirmar", "{}");
-        assertThat(confirmada).hasStatus(HttpStatus.OK);
+        assertThat(confirmada).hasStatus(HttpStatus.UNPROCESSABLE_CONTENT);
+        assertThat(String.valueOf(lerJson(confirmada, "$.campos.linhas"))).contains("conferência recusou", "linha 2");
+        assertThat(lerJson(rbs.get("/api/importacoes/" + id), "$.situacao")).isEqualTo("EM_PREVIA");
         assertThat(jdbc.sql("""
                         SELECT count(*) FROM dado_informado d JOIN parceria p ON p.id = d.parceria_id
                         JOIN patrocinador pa ON pa.id = p.patrocinador_id
                         WHERE pa.nome_canonico = 'Cliente Amarelo' AND d.id > :max
-                        """).param("max", dadoInformadoMax).query(Long.class).single()).isEqualTo(1);
+                        """).param("max", dadoInformadoMax).query(Long.class).single()).isZero();
+    }
+
+    @Test
+    void oLoteComIdsIgnoraARecusada() {
+        SessaoDeApi rbs = SessaoDeApi.entrar(mvc, RBS);
+        byte[] planilha = csv("campo,valor",
+                "ativacao.visitantes_total,100",
+                "ativacao.inexistente,10");
+        long id = id(enviarRbs(rbs, "planilha-t4b.csv", planilha, "PARCERIA", amarelo(), "DADOS_ATIVACAO"));
+        List<Map<String, Object>> itens = itens(rbs, id);
+        long proposta = ((Number) itens.get(0).get("id")).longValue();
+        long recusada = ((Number) itens.get(1).get("id")).longValue();
+
+        MvcTestResult lote = rbs.patch("/api/importacoes/" + id + "/linhas",
+                "{\"situacao\":\"ACEITA\",\"ids\":[" + proposta + "," + recusada + "]}");
+        assertThat(lote).hasStatus(HttpStatus.OK);
+        assertThat(lerJson(lote, "$.alteradas")).isEqualTo(1);
+        List<Map<String, Object>> depois = itens(rbs, id);
+        assertThat(depois.get(0).get("situacao")).isEqualTo("ACEITA");
+        assertThat(depois.get(1).get("situacao")).isEqualTo("RECUSADA");
     }
 
     @Test

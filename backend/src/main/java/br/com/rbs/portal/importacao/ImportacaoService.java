@@ -353,6 +353,7 @@ public class ImportacaoService {
             }
         }
         SituacaoDaLinha situacao = linha.situacao();
+        boolean aceitando = corpo != null && corpo.situacao() == SituacaoDaLinha.ACEITA;
         if (corpo != null && corpo.situacao() != null) {
             if (corpo.situacao() != SituacaoDaLinha.ACEITA && corpo.situacao() != SituacaoDaLinha.DESCARTADA) {
                 campos.put("situacao", "Use ACEITA ou DESCARTADA.");
@@ -374,13 +375,17 @@ public class ImportacaoService {
             dados = new LinkedHashMap<>(ajustada.dados());
             origens = new LinkedHashMap<>(ajustada.origem());
         }
-        if (mudou && situacao != SituacaoDaLinha.DESCARTADA) {
+        if ((mudou || aceitando) && situacao != SituacaoDaLinha.DESCARTADA) {
             ConferenciaDaLinha conferida = conferir(importacao, linha.destino(),
                     new LinhaProposta(linha.destino(), dados, origens, ehDeTexto(origens)));
             parceriaId = conferida.parceriaId();
             sugeridoId = conferida.aproveitamentoSugeridoId();
             semelhanca = conferida.semelhanca();
             if (!conferida.problemas().isEmpty()) {
+                if (aceitando) {
+                    // Aceitar é uma decisão: a linha recusada não passa por fora, como no lote. Corrija e aceite de novo.
+                    throw new ConflitoException(String.join(" ", conferida.problemas()));
+                }
                 situacao = SituacaoDaLinha.RECUSADA;
                 motivo = String.join(" ", conferida.problemas());
             } else {
@@ -455,8 +460,23 @@ public class ImportacaoService {
         ContextoDaGravacao contexto = new ContextoDaGravacao(id, importacao.eventoId(),
                 new AlcanceDeUmaImportacao(importacao.eventoId(), importacao.alcance(), importacao.cotaTipoId(),
                         importacao.parceriaId()), importacao.arquivoId(), importacao.arquivoNome());
+        // A linha pode ter sido aceita antes de uma edição por fora (ou continuar ACEITA de uma versão antiga da prévia): a
+        // confirmação repete a conferência. Se alguma recusar, nada é gravado (422) e a pessoa corrige e confirma de novo.
+        List<LinhaGravada> reconferidas = new ArrayList<>();
+        List<String> recusadas = new ArrayList<>();
+        for (LinhaGravada linha : aceitas) {
+            ConferenciaDaLinha conferida = conferir(importacao, destino, proposta(linha, destino));
+            if (conferida.problemas().isEmpty()) {
+                reconferidas.add(linha);
+            } else {
+                recusadas.add("linha " + linha.ordem() + ": " + String.join(" ", conferida.problemas()));
+            }
+        }
+        if (!recusadas.isEmpty()) {
+            throw new DadosInvalidosException(Map.of("linhas", "A conferência recusou: " + String.join("; ", recusadas)));
+        }
         // O modelo pode ter sugerido um destino diferente do escolhido; a confirmação usa o da importação.
-        List<LinhaAceita> paraGravar = aceitas.stream()
+        List<LinhaAceita> paraGravar = reconferidas.stream()
                 .map(l -> new LinhaAceita(l.id(), l.ordem(), l.parceriaId(), l.parceriaPatrocinador(),
                         l.aproveitamentoId() != null ? l.aproveitamentoId() : l.aproveitamentoSugeridoId(), proposta(l, destino)))
                 .toList();
