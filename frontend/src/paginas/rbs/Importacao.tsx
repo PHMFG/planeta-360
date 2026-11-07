@@ -372,7 +372,8 @@ export function Importacao() {
         </Cartao>
       )}
 
-      {origem && <PainelDaOrigem importacaoId={id} {...origem} aoFechar={() => setOrigem(null)} />}
+      {/* A chave recria o painel a cada célula: a origem da anterior não fica na tela sob o título da nova. */}
+      {origem && <PainelDaOrigem key={`${origem.linha.id}-${origem.campo}`} importacaoId={id} {...origem} aoFechar={() => setOrigem(null)} />}
       {editando && (
         <EdicaoDaLinha
           importacao={importacao}
@@ -390,7 +391,6 @@ export function Importacao() {
   )
 }
 
-/** A leitura em andamento: a orbe pensa e as três etapas acendem uma a uma. */
 /** O painel da origem: a célula marcada na planilha, o trecho no texto ou a imagem, ao lado da prévia. */
 function PainelDaOrigem({ importacaoId, linha, campo, aoFechar }: { importacaoId: number; linha: LinhaDaImportacao; campo: string; aoFechar: () => void }) {
   const origem = useDados<OrigemParaVer>(() => obterOrigem(importacaoId, linha.id, campo), [importacaoId, linha.id, campo])
@@ -516,9 +516,13 @@ function EdicaoDaLinha({
   aoSalvar: (salva: LinhaDaImportacao) => void
 }) {
   const campos = (importacao.destino && CAMPOS_DO_DESTINO[importacao.destino]) || []
-  const [valores, setValores] = useState<Record<string, string>>(() =>
-    Object.fromEntries(campos.map((campo) => [campo.chave, linha.dados[campo.chave] === null || linha.dados[campo.chave] === undefined ? '' : String(linha.dados[campo.chave])])),
-  )
+  // O número vem da API com ponto ("45.5") e o campo é em português ("45,5"): sem a troca, salvar leria 455.
+  const original = (campo: { chave: string; numero?: boolean }) => {
+    const valor = linha.dados[campo.chave]
+    if (valor === null || valor === undefined) return ''
+    return campo.numero && typeof valor === 'number' ? String(valor).replace('.', ',') : String(valor)
+  }
+  const [valores, setValores] = useState<Record<string, string>>(() => Object.fromEntries(campos.map((campo) => [campo.chave, original(campo)])))
   const [aproveitamentoId, setAproveitamentoId] = useState(String(linha.aproveitamento?.id ?? linha.aproveitamentoSugerido?.id ?? ''))
   const plano = useDados(
     () => (importacao.destino === 'VEICULACAO' && linha.parceria ? obterConsolidacao(linha.parceria.id).then((dado) => dado.midia.linhas) : Promise.resolve([])),
@@ -529,12 +533,17 @@ function EdicaoDaLinha({
   const [salvando, setSalvando] = useState(false)
 
   async function salvar() {
+    const alterados = campos.filter((campo) => valores[campo.chave] !== original(campo))
+    const comoNumero = (texto: string) => Number(texto.trim().replace(/\./g, '').replace(',', '.'))
+    const invalidos = alterados.filter((campo) => campo.numero && valores[campo.chave] !== '' && !Number.isFinite(comoNumero(valores[campo.chave])))
+    if (invalidos.length) {
+      setErros(Object.fromEntries(invalidos.map((campo) => [campo.chave, 'Escreva um número, como 1.250 ou 45,5.'])))
+      return
+    }
     setSalvando(true)
     setFalha(null)
     const mudados = Object.fromEntries(
-      campos
-        .filter((campo) => valores[campo.chave] !== (linha.dados[campo.chave] === null || linha.dados[campo.chave] === undefined ? '' : String(linha.dados[campo.chave])))
-        .map((campo) => [campo.chave, valores[campo.chave] === '' ? null : campo.numero ? Number(valores[campo.chave].replace(/\./g, '').replace(',', '.')) : valores[campo.chave]]),
+      alterados.map((campo) => [campo.chave, valores[campo.chave] === '' ? null : campo.numero ? comoNumero(valores[campo.chave]) : valores[campo.chave]]),
     )
     try {
       const salva = await mudarLinha(importacao.id, linha.id, {
