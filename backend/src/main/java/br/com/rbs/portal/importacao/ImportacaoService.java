@@ -444,10 +444,12 @@ public class ImportacaoService {
                 .filter(l -> l.situacao() == SituacaoDaLinha.ACEITA)
                 .filter(l -> linhasEscolhidas == null || linhasEscolhidas.isEmpty() || linhasEscolhidas.contains(l.id()))
                 .toList();
-        if (aceitas.isEmpty()) {
+        DestinoDaImportacao destino = importacao.destino() != null ? importacao.destino()
+                : aceitas.isEmpty() ? null : aceitas.getFirst().destino();
+        // O destino SO_CONSULTA só guarda o documento: não há linha para aceitar, e a confirmação fecha a importação.
+        if (aceitas.isEmpty() && destino != DestinoDaImportacao.SO_CONSULTA) {
             throw new ConflitoException("Aceite ao menos uma linha antes de confirmar.");
         }
-        DestinoDaImportacao destino = importacao.destino() != null ? importacao.destino() : aceitas.getFirst().destino();
         DestinoDeGravacao gravador = destinos.stream().filter(d -> d.destino() == destino).findFirst()
                 .orElseThrow(() -> new ConflitoException("Este destino ainda não está disponível nesta versão."));
         ContextoDaGravacao contexto = new ContextoDaGravacao(id, importacao.eventoId(),

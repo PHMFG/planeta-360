@@ -67,7 +67,7 @@ class ImportacaoTest {
         jdbc.sql("DELETE FROM carga WHERE arquivo_id IN (SELECT id FROM arquivo WHERE categoria = 'IMPORTACAO')").update();
         jdbc.sql("DELETE FROM arquivo WHERE categoria = 'IMPORTACAO'").update();
         jdbc.sql("DELETE FROM arquivo WHERE categoria = 'DOCUMENTO' AND nome_original IN "
-                + "('tv-novembro.xlsx', 'padrao-rbs-outubro.xlsx', 'conversa-whatsapp.txt')").update();
+                + "('tv-novembro.xlsx', 'padrao-rbs-outubro.xlsx', 'conversa-whatsapp.txt', 'resumo.txt')").update();
         jdbc.sql("DELETE FROM aproveitamento_previsto WHERE formato = 'Comprovante de teste'").update();
         jdbc.sql("DELETE FROM arquivo WHERE categoria = 'COMPROVACAO' AND observacao LIKE 'importacao:%'").update();
     }
@@ -237,6 +237,23 @@ class ImportacaoTest {
         assertThat(lerJson(detalhe, "$.situacao")).isEqualTo("EM_PREVIA");
         assertThat(roteiro.pedidos()).as("o dado pessoal vem antes do modelo").isEmpty();
         assertThat(lerLista(detalhe, "$.suspeitas")).as("a prévia diz onde está a suspeita").isNotEmpty();
+    }
+
+    @Test
+    void soConsultaConfirmaSemNenhumaLinhaAceita() {
+        SessaoDeApi rbs = SessaoDeApi.entrar(mvc, RBS);
+        MvcTestResult criada = enviar(rbs, "resumo.txt", "Resumo da reunião de operações do festival.".getBytes(StandardCharsets.UTF_8),
+                evento2027(), "EDICAO", null, null, "SO_CONSULTA");
+        assertThat(criada).hasStatus(HttpStatus.ACCEPTED);
+        long id = ((Number) lerJson(criada, "$.id")).longValue();
+        MvcTestResult detalhe = rbs.get("/api/importacoes/" + id);
+        assertThat(lerJson(detalhe, "$.situacao")).isEqualTo("EM_PREVIA");
+        assertThat(lerLista(detalhe, "$.itens")).isEmpty();
+
+        MvcTestResult confirmada = rbs.post("/api/importacoes/" + id + "/confirmar", "{}");
+        assertThat(confirmada).hasStatus(HttpStatus.OK);
+        assertThat(lerJson(confirmada, "$.situacao")).isEqualTo("CONFIRMADA");
+        assertThat(lerJson(confirmada, "$.resultado.inseridas")).isEqualTo(0);
     }
 
     @Test
