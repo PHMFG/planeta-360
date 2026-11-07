@@ -33,6 +33,6 @@ class ParaVeiculacaoTest {
                 dados("patrocinador", "Cliente Amarelo", "veiculo", "Rádio 92", "formato", "Chamada assinada", "quantidade", 40),
                 Map.of());
 
-        assertThat(destino.problemas(linha, ALCANCE)).contains("Falta o mês ou a data da exibição.");
+        assertThat(destino.problemas(linha, ALCANCE)).contains("Falta a data ou o mês da entrega.");
     }
 }

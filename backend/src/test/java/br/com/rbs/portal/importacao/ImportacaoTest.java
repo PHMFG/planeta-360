@@ -711,7 +711,7 @@ class ImportacaoTest {
         List<Map<String, Object>> itens = (List<Map<String, Object>>) (List<?>) lerLista(rbs.get("/api/importacoes/" + id), "$.itens");
         assertThat(itens).hasSize(1);
         assertThat(itens.getFirst().get("situacao")).isEqualTo("RECUSADA");
-        assertThat(String.valueOf(itens.getFirst().get("motivo"))).contains("Falta o mês ou a data da exibição.");
+        assertThat(String.valueOf(itens.getFirst().get("motivo"))).contains("Falta a data ou o mês da entrega.");
     }
 
     private static RespostaDoLlm resposta(String destino, String linha) {
