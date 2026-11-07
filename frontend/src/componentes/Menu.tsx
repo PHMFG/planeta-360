@@ -55,11 +55,13 @@ function usarNovidades(parceria: ParceriaResumo | null, rbs: boolean) {
   const resto = parceria && local.pathname.startsWith(prefixo) ? local.pathname.slice(prefixo.length).replace(/^\//, '').split('/')[0] : null
   const abaAberta: AbaComNovidade | null = resto === null ? null : resto === 'relatorio' ? 'RELATORIO' : (SECOES.find((secao) => secao.caminho === resto)?.aba ?? null)
 
+  const parceriaId = parceria?.id
   useEffect(() => {
-    if (!ativo || !parceria || !abaAberta) return
+    if (!ativo || !parceriaId || !abaAberta) return
     setVistas((atual) => new Set(atual).add(abaAberta))
-    registrarVisita(parceria.id, abaAberta).catch(() => undefined)
-  }, [ativo, parceria, abaAberta])
+    registrarVisita(parceriaId, abaAberta).catch(() => undefined)
+    // Pelo id, não pelo objeto: cada /auth/eu (a cada volta à aba) traz uma parceria nova e reenviaria a visita.
+  }, [ativo, parceriaId, abaAberta])
 
   // A cada busca nova (volta à aba do navegador), o que a API diz vale de novo.
   useEffect(() => setVistas(new Set()), [novidades.dado])

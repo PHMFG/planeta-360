@@ -41,7 +41,9 @@ export function ImportacaoDaAgencia({ parceriaId, campos, aoConfirmar }: { parce
     if (!lendo || !importacao) return
     const timer = window.setInterval(() => {
       obterImportacao(importacao.id)
-        .then(setImportacao)
+        // A resposta só vale para a importação ainda aberta: se a pessoa fechou a janela ou enviou outra planilha enquanto o
+        // pedido voltava, ela não reabre a janela nem troca a importação.
+        .then((lida) => setImportacao((atual) => (atual?.id === lida.id ? lida : atual)))
         .catch(() => undefined)
     }, 2000)
     return () => window.clearInterval(timer)

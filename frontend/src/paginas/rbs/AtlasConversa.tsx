@@ -53,17 +53,23 @@ function ConversaDaEdicao({
   }, [evento.id])
 
   useEffect(() => {
+    // Trocar de edição depressa: a resposta da edição anterior chega depois e não pode cair sobre a nova.
+    let ativo = true
     setConversa(null)
     setFechado(false)
     atualizarLista()
       .then((conversas) => {
-        if (conversas[0]) return obterConversa(conversas[0].id).then(setConversa)
+        if (ativo && conversas[0]) return obterConversa(conversas[0].id).then((lida) => ativo && setConversa(lida))
       })
       .catch((erro: unknown) => {
+        if (!ativo) return
         // Com o Atlas da RBS desligado na API, a rota não existe: a aba diz isso.
         if (erro instanceof ErroApi && erro.status === 404) setFechado(true)
         else setFalha(erro instanceof ErroApi ? erro.message : 'Não foi possível abrir as conversas.')
       })
+    return () => {
+      ativo = false
+    }
   }, [atualizarLista])
 
   useEffect(() => () => turnoAtual.current?.abort(), [])
@@ -128,7 +134,11 @@ function ConversaDaEdicao({
                   className={`${classeDoSeletor} w-56`}
                   value={conversa?.conversaId ?? ''}
                   disabled={pensando}
-                  onChange={(campo) => void obterConversa(Number(campo.target.value)).then(setConversa)}
+                  onChange={(campo) =>
+                    void obterConversa(Number(campo.target.value))
+                      .then(setConversa)
+                      .catch((erro: unknown) => setFalha(erro instanceof ErroApi ? erro.message : 'Não foi possível abrir a conversa.'))
+                  }
                 >
                   {!conversa && <option value="">Nova conversa</option>}
                   {lista.map((item) => (
