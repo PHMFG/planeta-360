@@ -228,7 +228,10 @@ function Perguntas({ dados, rbs, aoEnviar, aoDecidir }: PropsPerguntas) {
   }
 
   function acrescentar() {
-    const ordem = Math.max(0, ...rascunhos.map((rascunho) => rascunho.ordem)) + 1
+    // A menor ordem livre: com limite 3, tirar a 2 e acrescentar dá a 2 de novo, e não a 4 (que a API recusa com 422).
+    const usadas = new Set(rascunhos.map((rascunho) => rascunho.ordem))
+    let ordem = 1
+    while (usadas.has(ordem)) ordem++
     setRascunhos((lista) => [...lista, { chave: `n${ordem}-${Date.now()}`, ordem, texto: '', tipoResposta: 'ESCOLHA', alternativas: ['', ''] }])
   }
 
