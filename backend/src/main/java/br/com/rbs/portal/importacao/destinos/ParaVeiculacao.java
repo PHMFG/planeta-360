@@ -50,7 +50,7 @@ public class ParaVeiculacao implements DestinoDeGravacao {
             }
         }
         if (linha.dados().get("exibido_em") == null && linha.dados().get("mes") == null) {
-            problemas.add("Falta a data ou o mês da entrega.");
+            problemas.add("Falta o mês ou a data da exibição.");
         }
         Object impacto = linha.dados().get("impacto");
         if (impacto != null && MapeadorTabular.decimal(String.valueOf(impacto)) == null) {

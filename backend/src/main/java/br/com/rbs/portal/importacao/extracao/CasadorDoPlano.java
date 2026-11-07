@@ -13,7 +13,8 @@ import org.springframework.stereotype.Component;
 
 /**
  * Casa a linha importada com a linha do plano comercial da marca (E11). [IMPORTACAO] A ordem é: igual depois de normalizar caixa,
- * acento, aspas e espaços; depois a grafia alternativa do veículo; depois a semelhança por trigramas, toda em Java. A sugestão e a
+ * acento, aspas e espaços; depois as palavras do formato, quando o veículo é o mesmo (plural, prefixo de cinco letras e os números
+ * iguais, com "Indeterminado" no espaço aceitando qualquer espaço); depois a semelhança por trigramas, toda em Java. A sugestão e a
  * semelhança ficam guardadas na linha; abaixo de 0,6 não há sugestão, e a pessoa escolhe a linha do plano na prévia.
  */
 @Component
@@ -24,6 +25,7 @@ public class CasadorDoPlano {
     }
 
     private static final double LIMIAR = 0.6;
+    private static final BigDecimal APROXIMADA = new BigDecimal("0.900");
 
     private final ImportacaoRepositorio repositorio;
 
@@ -39,6 +41,7 @@ public class CasadorDoPlano {
         String veiculoNormalizado = normalizar(veiculo);
         String formatoNormalizado = normalizar(formato);
         String espacoNormalizado = normalizar(espacoPrograma);
+        PlanilhaDoPlano porPalavras = null;
         PlanilhaDoPlano melhor = null;
         double melhorNota = 0;
         for (PlanilhaDoPlano linha : plano) {
@@ -47,11 +50,16 @@ public class CasadorDoPlano {
             String outroEspaco = normalizar(linha.espacoPrograma());
             boolean mesmoVeiculo = veiculoNormalizado.equals(outroVeiculo);
             boolean mesmoFormato = formatoNormalizado.equals(outroFormato);
-            boolean mesmoEspaco = espacoNormalizado.isEmpty() || espacoNormalizado.equals(outroEspaco);
-            if (mesmoVeiculo && mesmoFormato && mesmoEspaco) {
+            boolean espacoAceito = espacoDoPlanoAceita(espacoNormalizado, outroEspaco);
+            if (mesmoVeiculo && mesmoFormato && espacoAceito) {
                 return new Resultado(linha.id(), BigDecimal.ONE, null);
             }
-            if (mesmoVeiculo && mesmoFormato && !espacoProgramaValido(espacoNormalizado, outroEspaco)) {
+            if (mesmoVeiculo && espacoAceito && porPalavras == null
+                    && PalavrasDaFonte.parecido(formato, linha.formato())) {
+                porPalavras = linha;
+            }
+            // Números diferentes nunca casam, nem pela semelhança de trigramas.
+            if (PalavrasDaFonte.numerosConflitantes(formato, linha.formato())) {
                 continue;
             }
             double nota = semelhanca(veiculoNormalizado + " " + formatoNormalizado + " " + espacoNormalizado,
@@ -61,14 +69,18 @@ public class CasadorDoPlano {
                 melhor = linha;
             }
         }
+        if (porPalavras != null) {
+            return new Resultado(porPalavras.id(), APROXIMADA, null);
+        }
         if (melhor != null && melhorNota >= LIMIAR) {
             return new Resultado(melhor.id(), BigDecimal.valueOf(melhorNota).setScale(3, RoundingMode.HALF_UP), null);
         }
         return new Resultado(null, null, null);
     }
 
-    private static boolean espacoProgramaValido(String espaco, String outro) {
-        return espaco.isEmpty() || espaco.equals(outro);
+    /** O espaço do plano vazio ou "Indeterminado" aceita qualquer espaço; o da linha vazio também não atrapalha. */
+    private static boolean espacoDoPlanoAceita(String espaco, String outro) {
+        return espaco.isEmpty() || outro.isEmpty() || outro.startsWith("indeterminado") || espaco.equals(outro);
     }
 
     /** Sem caixa, sem acento, sem aspas e com um espaço só entre as palavras. */

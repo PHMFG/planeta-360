@@ -6,7 +6,6 @@ import br.com.rbs.portal.importacao.AlcanceDeUmaImportacao;
 import br.com.rbs.portal.importacao.ImportacaoRepositorio;
 import br.com.rbs.portal.importacao.LinhaProposta;
 import br.com.rbs.portal.importacao.OrigemDoValor;
-import java.text.Normalizer;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.YearMonth;
@@ -26,7 +25,7 @@ import org.springframework.stereotype.Component;
  * Numa linha de texto corrido ({@link LinhaProposta#deTexto()}), a conferência é a mais rigorosa do E8: <b>todo</b> valor precisa de
  * origem e precisa aparecer no trecho citado, não só o número e a data. Os campos que são código do destino (o qualificador, o tipo,
  * a dimensão, a unidade e o tipo de mídia) não precisam aparecer com o nome do código na fonte; a unidade continua tendo de ser uma
- * das conhecidas.
+ * das conhecidas. As palavras de um campo de texto são comparadas pela regra do {@link PalavrasDaFonte}.
  */
 @Component
 public class ConferenciaDaExtracao {
@@ -62,9 +61,9 @@ public class ConferenciaDaExtracao {
             }
             OrigemDoValor origem = linha.origem().get(campo);
             if (origem == null || origem.trecho() == null) {
-                problemas.add("Falta a origem de " + campo + " na fonte.");
+                problemas.add("Falta a origem " + origemDoCampo(campo) + " na fonte.");
             } else if (!numeroNaFonte(valor, origem.trecho())) {
-                problemas.add("O valor de " + campo + " não aparece na fonte " + origem.localizador() + ".");
+                problemas.add(nomeDoCampo(campo) + " não aparece na fonte " + origem.localizador() + ".");
             }
         }
         Object mes = linha.dados().get("mes");
@@ -77,6 +76,9 @@ public class ConferenciaDaExtracao {
         Object exibidoEm = linha.dados().get("exibido_em");
         if (exibidoEm != null && !dataNaEdicao(texto(exibidoEm), edicao(alcance.eventoId()))) {
             problemas.add("A data está fora da edição (outubro a fevereiro).");
+        }
+        if (mes != null && exibidoEm != null && mesesDiferentes(texto(mes), texto(exibidoEm))) {
+            problemas.add("A data da exibição não é do mês informado.");
         }
         Object unidade = linha.dados().get("unidade");
         if (unidade != null && !UNIDADES.contains(texto(unidade).toUpperCase(Locale.ROOT))) {
@@ -99,12 +101,12 @@ public class ConferenciaDaExtracao {
             }
             OrigemDoValor origem = linha.origem().get(nome);
             if (origem == null || origem.trecho() == null || origem.trecho().isBlank()) {
-                problemas.add("Falta a origem de " + nome + " na fonte.");
+                problemas.add("Falta a origem " + origemDoCampo(nome) + " na fonte.");
                 continue;
             }
             if (NUMEROS.contains(nome)) {
                 if (!numeroNaFonte(valor, origem.trecho())) {
-                    problemas.add("O valor de " + nome + " não aparece na fonte " + origem.localizador() + ".");
+                    problemas.add(nomeDoCampo(nome) + " não aparece na fonte " + origem.localizador() + ".");
                 }
             } else if ("mes".equals(nome)) {
                 if (!mesNaFonte(valor, origem.trecho())) {
@@ -125,13 +127,18 @@ public class ConferenciaDaExtracao {
                     problemas.add("A unidade " + valor + " não é conhecida.");
                 }
             } else if (!CODIGOS.contains(nome) && !textoNaFonte(valor, origem)) {
-                problemas.add("O valor de " + nome + " não aparece na fonte " + origem.localizador() + ".");
+                problemas.add(nomeDoCampo(nome) + " não aparece na fonte " + origem.localizador() + ".");
             }
+        }
+        Object mes = linha.dados().get("mes");
+        Object exibidoEm = linha.dados().get("exibido_em");
+        if (mes != null && exibidoEm != null && mesesDiferentes(texto(mes), texto(exibidoEm))) {
+            problemas.add("A data da exibição não é do mês informado.");
         }
         return problemas;
     }
 
-    private static boolean numeroNaFonte(Object valor, String trecho) {
+    static boolean numeroNaFonte(Object valor, String trecho) {
         // O valor não é número: quem dá o motivo é o destino, com a frase do campo ("precisa ser um número").
         if (MapeadorTabular.decimal(texto(valor)) == null) {
             return true;
@@ -154,12 +161,11 @@ public class ConferenciaDaExtracao {
         if (origem == null || origem.trecho() == null) {
             return false;
         }
-        String comparavel = comparavel(texto(valor));
-        return !comparavel.isEmpty() && comparavel(origem.trecho()).contains(comparavel);
+        return PalavrasDaFonte.aparece(texto(valor), origem.trecho());
     }
 
     /** O mês pode estar escrito como "2026-10", "outubro de 2026" ou como uma data de outubro daquele ano. */
-    private static boolean mesNaFonte(Object valor, String trecho) {
+    static boolean mesNaFonte(Object valor, String trecho) {
         String texto = texto(valor);
         if (textoNaFonte(valor, new OrigemDoValor("", trecho))) {
             return true;
@@ -173,7 +179,12 @@ public class ConferenciaDaExtracao {
                 }
             }
             String semAcento = NormalizadorDeNumeros.semAcento(trecho);
-            return semAcento.contains(nomeDoMes(alvo.getMonthValue())) && semAcento.contains(String.valueOf(alvo.getYear()));
+            if (!semAcento.contains(nomeDoMes(alvo.getMonthValue()))) {
+                return false;
+            }
+            // O mês citado sem ano ("em outubro") vale com o ano da edição; se o trecho diz outro ano, não vale.
+            boolean temAno = semAcento.matches("(?s).*\\b(?:19|20)\\d{2}\\b.*");
+            return !temAno || semAcento.contains(String.valueOf(alvo.getYear()));
         } catch (DateTimeParseException invalido) {
             return false;
         }
@@ -185,7 +196,7 @@ public class ConferenciaDaExtracao {
     }
 
     /** A data pode estar escrita como "2026-10-18", "18/10/2026" ou "18 de outubro de 2026". */
-    private static boolean dataNaFonte(Object valor, String trecho) {
+    static boolean dataNaFonte(Object valor, String trecho) {
         LocalDate alvo = dataDe(texto(valor));
         if (alvo == null) {
             return textoNaFonte(valor, new OrigemDoValor("", trecho));
@@ -204,10 +215,15 @@ public class ConferenciaDaExtracao {
         return false;
     }
 
-    private static String comparavel(String texto) {
-        String semAcento = Normalizer.normalize(texto == null ? "" : texto, Normalizer.Form.NFD).replaceAll("\\p{M}+", "")
-                .toLowerCase(Locale.ROOT);
-        return semAcento.replaceAll("[^a-z0-9]+", " ").strip().replaceAll("\\s+", " ");
+    /** O mês e a data só podem conviver quando dizem o mesmo mês; nesse caso o serviço tira o mês antes de gravar. */
+    static boolean mesesDiferentes(String mes, String data) {
+        try {
+            YearMonth doMes = YearMonth.parse(mes.strip());
+            LocalDate doDia = dataDe(data);
+            return doDia != null && !YearMonth.from(doDia).equals(doMes);
+        } catch (RuntimeException invalido) {
+            return false;
+        }
     }
 
     private Integer edicao(long eventoId) {
@@ -259,6 +275,74 @@ public class ConferenciaDaExtracao {
         } catch (DateTimeParseException invalido) {
             return null;
         }
+    }
+
+    /** O nome do campo na frase da prévia, em português, sem o nome cru do JSON. */
+    static String nomeDoCampo(String campo) {
+        return switch (campo) {
+            case "patrocinador" -> "A marca";
+            case "veiculo" -> "O veículo";
+            case "formato" -> "O formato";
+            case "espaco_programa" -> "O espaço ou programa";
+            case "quantidade" -> "A quantidade";
+            case "impacto" -> "O impacto";
+            case "valor" -> "O número";
+            case "base_respondentes" -> "A base de respondentes";
+            case "quantidade_prevista" -> "A quantidade prevista";
+            case "pergunta" -> "O número da pergunta";
+            case "fonte_pagina" -> "A página da fonte";
+            case "indicador" -> "O indicador";
+            case "fonte" -> "A fonte";
+            case "qualificador" -> "O qualificador";
+            case "unidade" -> "A unidade";
+            case "tipo" -> "O tipo";
+            case "dimensao" -> "A dimensão";
+            case "categoria" -> "A categoria";
+            case "alternativa" -> "A alternativa";
+            case "texto" -> "O texto";
+            case "link" -> "O link";
+            case "campo_chave" -> "O campo";
+            case "bloco" -> "O bloco";
+            case "janela" -> "A janela";
+            case "tipo_midia" -> "O tipo de mídia";
+            case "mes" -> "O mês";
+            case "exibido_em", "data" -> "A data";
+            default -> "O campo " + campo;
+        };
+    }
+
+    /** A contração para "Falta a origem ... na fonte." */
+    static String origemDoCampo(String campo) {
+        return switch (campo) {
+            case "patrocinador" -> "da marca";
+            case "veiculo" -> "do veículo";
+            case "formato" -> "do formato";
+            case "espaco_programa" -> "do espaço ou programa";
+            case "quantidade" -> "da quantidade";
+            case "impacto" -> "do impacto";
+            case "valor" -> "do número";
+            case "base_respondentes" -> "da base de respondentes";
+            case "quantidade_prevista" -> "da quantidade prevista";
+            case "pergunta" -> "do número da pergunta";
+            case "fonte_pagina" -> "da página da fonte";
+            case "indicador" -> "do indicador";
+            case "fonte" -> "da fonte";
+            case "qualificador" -> "do qualificador";
+            case "unidade" -> "da unidade";
+            case "tipo" -> "do tipo";
+            case "dimensao" -> "da dimensão";
+            case "categoria" -> "da categoria";
+            case "alternativa" -> "da alternativa";
+            case "texto" -> "do texto";
+            case "link" -> "do link";
+            case "campo_chave" -> "do campo";
+            case "bloco" -> "do bloco";
+            case "janela" -> "da janela";
+            case "tipo_midia" -> "do tipo de mídia";
+            case "mes" -> "do mês";
+            case "exibido_em", "data" -> "da data";
+            default -> "de " + campo;
+        };
     }
 
     private static String texto(Object valor) {

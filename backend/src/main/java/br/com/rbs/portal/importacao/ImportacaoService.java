@@ -1,5 +1,6 @@
 package br.com.rbs.portal.importacao;
 
+import br.com.rbs.portal.atlas.checagem.NormalizadorDeNumeros;
 import br.com.rbs.portal.atlas.embeddings.ProvedorDeEmbeddings;
 import br.com.rbs.portal.atlas.embeddings.ProvedorDeEmbeddings.TextoDoTrecho;
 import br.com.rbs.portal.atlas.jev.JevDoTurno;
@@ -49,6 +50,7 @@ import br.com.rbs.portal.importacao.ImportacaoRepositorio.TotaisDaCarga;
 import br.com.rbs.portal.importacao.extracao.CasadorDoPlano;
 import br.com.rbs.portal.importacao.extracao.ConferenciaDaExtracao;
 import br.com.rbs.portal.importacao.extracao.SugestorDeDestino;
+import br.com.rbs.portal.importacao.extracao.MapeadorTabular;
 import br.com.rbs.portal.importacao.leitores.LeitorDeImagem;
 import br.com.rbs.portal.materiais.MateriaisDtos.PaginaDto;
 import jakarta.servlet.http.HttpServletRequest;
@@ -56,7 +58,9 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.YearMonth;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -331,6 +335,7 @@ public class ImportacaoService {
                 .orElseThrow(() -> new NaoEncontradoException("Não encontramos esta linha da importação."));
         Map<String, String> campos = new LinkedHashMap<>();
         Map<String, Object> dados = lerDados(linha.dados());
+        Map<String, OrigemDoValor> origens = lerOrigem(linha.origem());
         Long aproveitamentoId = linha.aproveitamentoId();
         boolean mudou = false;
         if (corpo != null && corpo.dados() != null && !corpo.dados().isEmpty()) {
@@ -364,8 +369,12 @@ public class ImportacaoService {
         Long sugeridoId = linha.aproveitamentoSugeridoId();
         BigDecimal semelhanca = linha.semelhanca();
         String motivo = situacao == SituacaoDaLinha.ACEITA || situacao == SituacaoDaLinha.DESCARTADA ? linha.motivo() : null;
+        if (mudou) {
+            LinhaProposta ajustada = ajustar(new LinhaProposta(linha.destino(), dados, origens, ehDeTexto(origens)));
+            dados = new LinkedHashMap<>(ajustada.dados());
+            origens = new LinkedHashMap<>(ajustada.origem());
+        }
         if (mudou && situacao != SituacaoDaLinha.DESCARTADA) {
-            Map<String, OrigemDoValor> origens = lerOrigem(linha.origem());
             ConferenciaDaLinha conferida = conferir(importacao, linha.destino(),
                     new LinhaProposta(linha.destino(), dados, origens, ehDeTexto(origens)));
             parceriaId = conferida.parceriaId();
@@ -382,7 +391,8 @@ public class ImportacaoService {
             }
         }
         OffsetDateTime agora = OffsetDateTime.now(br.com.rbs.portal.comum.Datas.BRASILIA);
-        repositorio.atualizarLinha(linha.id(), linha.destino(), JSON.writeValueAsString(dados), linha.origem(), situacao,
+        repositorio.atualizarLinha(linha.id(), linha.destino(), JSON.writeValueAsString(dados),
+                mudou ? JSON.writeValueAsString(origens) : linha.origem(), situacao,
                 motivo, parceriaId, sugeridoId, aproveitamentoId, semelhanca,
                 mudou ? usuario.id() : linha.editadaPor(), mudou ? agora : linha.editadaEm());
         return itemDaLinha(repositorio.linha(importacaoId, linhaId).orElseThrow());
@@ -721,10 +731,11 @@ public class ImportacaoService {
         // segunda vem recusada, apontando a primeira (achado da rodada do Atlas da RBS, 06/11).
         Map<String, String> vistas = new HashMap<>();
         for (LinhaProposta proposta : extracao.linhas()) {
-            ConferenciaDaLinha conferenciaDaLinha = conferir(importacao, destino, proposta);
+            LinhaProposta ajustada = ajustar(proposta);
+            ConferenciaDaLinha conferenciaDaLinha = conferir(importacao, destino, ajustada);
             List<String> problemas = new ArrayList<>(conferenciaDaLinha.problemas());
-            String dados = JSON.writeValueAsString(proposta.dados());
-            OrigemDoValor onde = proposta.origem().get("veiculo");
+            String dados = JSON.writeValueAsString(ajustada.dados());
+            OrigemDoValor onde = ajustada.origem().get("veiculo");
             String repetida = destino == DestinoDaImportacao.VEICULACAO
                     ? vistas.putIfAbsent(dados, onde != null && onde.localizador() != null ? onde.localizador() : "a linha " + ordem)
                     : null;
@@ -733,7 +744,7 @@ public class ImportacaoService {
             }
             SituacaoDaLinha situacao = problemas.isEmpty() ? SituacaoDaLinha.PROPOSTA : SituacaoDaLinha.RECUSADA;
             repositorio.inserirLinha(importacao.id(), ordem++, destino, dados,
-                    JSON.writeValueAsString(proposta.origem()), situacao,
+                    JSON.writeValueAsString(ajustada.origem()), situacao,
                     problemas.isEmpty() ? null : String.join(" ", problemas),
                     conferenciaDaLinha.parceriaId(), conferenciaDaLinha.aproveitamentoSugeridoId(),
                     conferenciaDaLinha.semelhanca());
@@ -1035,7 +1046,99 @@ public class ImportacaoService {
 
     private LinhaProposta proposta(LinhaGravada linha, DestinoDaImportacao destino) {
         Map<String, OrigemDoValor> origens = lerOrigem(linha.origem());
-        return new LinhaProposta(destino, lerDados(linha.dados()), origens, ehDeTexto(origens));
+        return ajustar(new LinhaProposta(destino, lerDados(linha.dados()), origens, ehDeTexto(origens)));
+    }
+
+    /**
+     * A linha antes da conferência: o mês que a data já diz sai, e a escala da unidade dos números da edição entra no valor
+     * (80 mil = 80000; 1,6 milhão = 1600000), com o resto da unidade virando o código conhecido.
+     */
+    private static LinhaProposta ajustar(LinhaProposta proposta) {
+        Map<String, Object> dados = new LinkedHashMap<>(proposta.dados());
+        Map<String, OrigemDoValor> origem = new LinkedHashMap<>(proposta.origem());
+        ajustarMesEData(dados, origem);
+        if (proposta.destino() == DestinoDaImportacao.NUMEROS_EDICAO) {
+            ajustarEscalaDaUnidade(dados);
+        }
+        return new LinhaProposta(proposta.destino(), dados, origem, proposta.deTexto());
+    }
+
+    /** Quando a data e o mês dizem o mesmo mês, fica só a data; o mês seria recusado pela carga, que nunca aceita os dois. */
+    private static void ajustarMesEData(Map<String, Object> dados, Map<String, OrigemDoValor> origem) {
+        Object mes = dados.get("mes");
+        Object exibidoEm = dados.get("exibido_em");
+        if (mes == null || exibidoEm == null) {
+            return;
+        }
+        LocalDate data = ConferenciaDaExtracao.dataDe(String.valueOf(exibidoEm));
+        if (data == null) {
+            return;
+        }
+        try {
+            if (YearMonth.from(data).equals(YearMonth.parse(String.valueOf(mes).strip()))) {
+                dados.remove("mes");
+                origem.remove("mes");
+            }
+        } catch (RuntimeException invalido) {
+            // Mês inválido fica para a conferência dizer o motivo.
+        }
+    }
+
+    private static void ajustarEscalaDaUnidade(Map<String, Object> dados) {
+        Object unidade = dados.get("unidade");
+        if (unidade == null || String.valueOf(unidade).isBlank()) {
+            return;
+        }
+        String texto = String.valueOf(unidade).strip();
+        String semAcento = NormalizadorDeNumeros.semAcento(texto);
+        String[] partes = semAcento.split("\\s+", 2);
+        BigDecimal multiplicador = multiplicador(partes[0]);
+        if (multiplicador == null) {
+            String codigo = codigoDaUnidade(semAcento);
+            if (codigo != null) {
+                dados.put("unidade", codigo);
+            }
+            return;
+        }
+        BigDecimal valor = MapeadorTabular.decimal(String.valueOf(dados.get("valor")));
+        if (valor != null) {
+            BigDecimal convertido = valor.multiply(multiplicador).stripTrailingZeros();
+            if (convertido.scale() < 0) {
+                convertido = convertido.setScale(0);
+            }
+            dados.put("valor", convertido.scale() <= 0 ? convertido.longValueExact() : convertido);
+        }
+        String resto = partes.length > 1 ? partes[1].strip() : "";
+        resto = resto.replaceFirst("^(de|da|do|das|dos|e)\\s+", "").strip();
+        String codigo = codigoDaUnidade(resto);
+        dados.put("unidade", codigo == null ? resto : codigo);
+    }
+
+    private static BigDecimal multiplicador(String escala) {
+        return switch (escala) {
+            case "mil" -> BigDecimal.valueOf(1_000);
+            case "milhao", "milhoes", "mi" -> BigDecimal.valueOf(1_000_000);
+            case "bilhao", "bilhoes" -> BigDecimal.valueOf(1_000_000_000);
+            default -> null;
+        };
+    }
+
+    private static String codigoDaUnidade(String unidade) {
+        String nome = NormalizadorDeNumeros.semAcento(unidade).replaceAll("[^a-z0-9]+", " ").strip();
+        return switch (nome) {
+            case "", "unidade" -> "UNIDADE";
+            case "pessoa", "pessoas", "publico", "publicos", "planetario", "planetarios", "visitante", "visitantes" -> "PESSOAS";
+            case "impacto", "impactos", "visualizacao", "visualizacoes" -> "IMPACTOS";
+            case "marca", "marcas" -> "MARCAS";
+            case "real", "reais", "r" -> "REAIS";
+            case "insercao", "insercoes" -> "INSERCAO";
+            case "cpm" -> "CPM";
+            case "aplicacao", "aplicacoes" -> "APLICACAO";
+            case "percentual" -> "PERCENTUAL";
+            case "nota" -> "NOTA";
+            case "contagem" -> "CONTAGEM";
+            default -> null;
+        };
     }
 
     /** A linha veio de texto corrido? O localizador de uma planilha é "Aba!Célula"; os outros formatos não têm célula. */

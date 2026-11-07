@@ -52,6 +52,12 @@ class ExtratorLivreTest {
                 new Pedaco(PARAGRAFO, "parágrafo 3", 2)), Map.of());
     }
 
+    private static ConteudoLido conteudoDaImagem() {
+        return new ConteudoLido("PNG", List.of(new Pedaco(
+                "CLIENTE ROXO\nRádio Atlântida\nConteúdo assinado\nPlaneta Atlântida\n21 de outubro de 2026", "imagem", 1)),
+                Map.of());
+    }
+
     private static String proposta(int quantidade) {
         return """
                 {"destino":"VEICULACAO","linhas":[{"campos":{"patrocinador":"Cliente Amarelo","veiculo":"Rádio 92",
@@ -69,6 +75,11 @@ class ExtratorLivreTest {
             assertThat(pedido.mensagens().get(1).conteudo()).contains("<fonte>", "parágrafo 3");
             return new RespostaDoLlm(null, List.of(new ChamadaDeFerramenta("m1", "propor_linhas", argumentos)), null);
         });
+    }
+
+    private static RespostaDoLlm resposta(String destino, String linha) {
+        return new RespostaDoLlm(null, List.of(new ChamadaDeFerramenta("m1", "propor_linhas",
+                "{\"destino\":\"" + destino + "\",\"linhas\":[" + linha + "]}")), null);
     }
 
     @Test
@@ -93,13 +104,59 @@ class ExtratorLivreTest {
     }
 
     @Test
-    void aOrigemComLocalizadorQueNãoExisteFicaSemOrigem() {
+    void aOrigemComLocalizadorQueNãoExisteEhProcuradaNosPedacos() {
         String argumentos = proposta(3).replace("parágrafo 3\",\"trecho\":\"3 chamadas", "parágrafo 99\",\"trecho\":\"3 chamadas");
         roteirizar(argumentos);
         LinhaProposta linha = extrator.extrairComDetalhe(conteudo(), DestinoDaImportacao.VEICULACAO, alcance()).linhas().getFirst();
-        assertThat(linha.origem()).doesNotContainKey("quantidade");
-        assertThat(conferencia.problemas(linha, alcance(), null))
-                .anySatisfy(problema -> assertThat(problema).contains("Falta a origem de quantidade"));
+        assertThat(linha.origem()).containsKey("quantidade");
+        assertThat(linha.origem().get("quantidade").localizador()).isEqualTo("parágrafo 3");
+        assertThat(linha.origem().get("quantidade").trecho()).contains("3 chamadas");
+        assertThat(conferencia.problemas(linha, alcance(), null)).isEmpty();
+    }
+
+    @Test
+    void aOrigemVaziaEhPreenchidaComOSPedacoDoConteudoLido() {
+        roteiro.limpar().passo(pedido -> resposta("COMPROVANTE", """
+                {"campos":{"patrocinador":"Cliente Roxo","veiculo":"Rádio Atlântida","formato":"Conteúdo assinado",
+                  "espaco_programa":"Planeta Atlântida","data":"2026-10-21"},"origem":{}}
+                """));
+        LinhaProposta linha = extrator.extrairComDetalhe(conteudoDaImagem(), DestinoDaImportacao.COMPROVANTE, alcance())
+                .linhas().getFirst();
+
+        assertThat(linha.origem()).containsKeys("patrocinador", "veiculo", "formato", "espaco_programa", "data");
+        for (String campo : List.of("patrocinador", "veiculo", "formato", "espaco_programa", "data")) {
+            assertThat(linha.origem().get(campo).localizador()).as(campo).isEqualTo("imagem");
+        }
+        assertThat(linha.origem().get("patrocinador").trecho()).contains("CLIENTE ROXO");
+        assertThat(linha.origem().get("veiculo").trecho()).contains("Rádio Atlântida");
+        assertThat(linha.origem().get("data").trecho()).contains("21 de outubro de 2026");
+        assertThat(conferencia.problemas(linha, alcance(), null)).isEmpty();
+    }
+
+    @Test
+    void oPromptDizQueUmMesSemAnoUsaOAnoDaEdicao() {
+        String[] sistema = new String[1];
+        roteiro.limpar().passo(pedido -> {
+            sistema[0] = pedido.mensagens().get(0).conteudo();
+            return resposta("VEICULACAO", "");
+        });
+
+        extrator.extrairComDetalhe(conteudo(), DestinoDaImportacao.VEICULACAO, alcance());
+
+        assertThat(sistema[0]).contains("ano da edição", "em outubro", "2026");
+    }
+
+    @Test
+    void oPromptDizQueAUnidadeEhUmCodigoEONumeroJaVemNaEscala() {
+        String[] usuario = new String[1];
+        roteiro.limpar().passo(pedido -> {
+            usuario[0] = pedido.mensagens().get(1).conteudo();
+            return resposta("NUMEROS_EDICAO", "");
+        });
+
+        extrator.extrairComDetalhe(conteudo(), DestinoDaImportacao.NUMEROS_EDICAO, alcance());
+
+        assertThat(usuario[0]).contains("PESSOAS", "IMPACTOS", "MARCAS", "REAIS", "UNIDADE", "80000");
     }
 
     @Test

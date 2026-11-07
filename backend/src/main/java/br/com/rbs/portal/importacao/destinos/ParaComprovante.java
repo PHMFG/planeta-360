@@ -14,6 +14,7 @@ import br.com.rbs.portal.importacao.extracao.ConferenciaDaExtracao;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -28,7 +29,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class ParaComprovante implements DestinoDeGravacao {
 
-    static final String SEM_VEICULACAO = "Nenhuma veiculação desta marca nesta data";
+    private static final DateTimeFormatter DIA_MES_ANO = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     private final ImportacaoRepositorio repositorio;
     private final CasadorDoPlano casador;
@@ -68,7 +69,7 @@ public class ParaComprovante implements DestinoDeGravacao {
             return problemas;
         }
         if (veiculacao(parceria, data, texto(linha.dados().get("veiculo")), texto(linha.dados().get("formato"))).isEmpty()) {
-            problemas.add(SEM_VEICULACAO);
+            problemas.add(semVeiculacao(texto(linha.dados().get("veiculo")), data));
         }
         return problemas;
     }
@@ -87,11 +88,15 @@ public class ParaComprovante implements DestinoDeGravacao {
                     continue;
                 }
                 LocalDate data = data(linha.proposta());
-                Optional<Long> veiculacao = data == null ? Optional.empty()
-                        : veiculacao(parceria, data, texto(linha.proposta().dados().get("veiculo")),
-                                texto(linha.proposta().dados().get("formato")));
+                if (data == null) {
+                    rejeicoes.add(new Rejeicao(linha.ordem(), "A data do comprovante não é válida."));
+                    continue;
+                }
+                Optional<Long> veiculacao = veiculacao(parceria, data, texto(linha.proposta().dados().get("veiculo")),
+                        texto(linha.proposta().dados().get("formato")));
                 if (veiculacao.isEmpty()) {
-                    rejeicoes.add(new Rejeicao(linha.ordem(), SEM_VEICULACAO));
+                    rejeicoes.add(new Rejeicao(linha.ordem(), semVeiculacao(
+                            texto(linha.proposta().dados().get("veiculo")), data)));
                     continue;
                 }
                 var arquivo = armazenamento.gravarComObservacao(conteudo, contexto.nomeArquivo(), "COMPROVACAO", usuario.id(),
@@ -103,6 +108,12 @@ public class ParaComprovante implements DestinoDeGravacao {
             }
         }
         return new ResultadoDaGravacao(null, linhas.size(), inseridas, 0, rejeicoes.size(), rejeicoes);
+    }
+
+    /** A frase do comprovante sem exibição: o veículo como veio, a data em dd/MM/aaaa e o que fazer. */
+    private static String semVeiculacao(String veiculo, LocalDate data) {
+        return "Nenhuma veiculação de " + veiculo + " desta marca em " + data.format(DIA_MES_ANO)
+                + ": registre a veiculação antes de anexar o comprovante.";
     }
 
     // ---------------------------------------------------------------------

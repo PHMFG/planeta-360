@@ -443,7 +443,7 @@ class ImportacaoTest {
         assertThat(lerJson(detalhe, "$.situacao")).isEqualTo("EM_PREVIA");
         assertThat(lerJson(detalhe, "$.itens[0].situacao")).isEqualTo("RECUSADA");
         assertThat(String.valueOf(lerJson(detalhe, "$.itens[0].motivo")))
-                .contains("Nenhuma veiculação desta marca nesta data");
+                .contains("Nenhuma veiculação de");
         assertThat(lerJson(detalhe, "$.itens[0].dados.data")).isEqualTo("2026-10-21");
         assertThat(lerJson(detalhe, "$.itens[0].origem.data.localizador")).isEqualTo("imagem");
 
@@ -543,7 +543,7 @@ class ImportacaoTest {
         MvcTestResult detalhe = rbs.get("/api/importacoes/" + id);
         assertThat(lerJson(detalhe, "$.itens[0].situacao")).isEqualTo("RECUSADA");
         assertThat(String.valueOf(lerJson(detalhe, "$.itens[0].motivo")))
-                .contains("Nenhuma veiculação desta marca nesta data");
+                .contains("Nenhuma veiculação de");
     }
 
     @Test
@@ -562,5 +562,160 @@ class ImportacaoTest {
         } catch (Exception erro) {
             throw new IllegalStateException(erro);
         }
+    }
+
+
+    private Map<String, Object> planoDaMidiaSemTotalMensal() {
+        return jdbc.sql("""
+                        SELECT ap.veiculo, ap.formato, ap.espaco_programa FROM aproveitamento_previsto ap
+                        JOIN parceria pa ON pa.id = ap.parceria_id JOIN patrocinador p ON p.id = pa.patrocinador_id
+                        JOIN evento e ON e.id = pa.evento_id
+                        WHERE p.nome_canonico = 'Cliente Amarelo' AND e.edicao = 2027 AND ap.categoria = 'MIDIA'
+                          AND ap.espaco_programa IS NOT NULL AND ap.formato !~ '[",]' AND ap.espaco_programa !~ '[",]'
+                          AND NOT EXISTS (SELECT 1 FROM veiculacao v WHERE v.aproveitamento_id = ap.id AND v.periodo = 'MES')
+                        ORDER BY ap.id LIMIT 1""").query().singleRow();
+    }
+
+    private static String linhaDoPlano(Map<String, Object> plano) {
+        return "Cliente Amarelo," + plano.get("veiculo") + "," + plano.get("formato") + "," + plano.get("espaco_programa");
+    }
+
+    @Test
+    void aDataDoMesmoMesNaoVaiJuntoComOMesParaACarga() {
+        SessaoDeApi rbs = SessaoDeApi.entrar(mvc, RBS);
+        Map<String, Object> plano = planoDaMidiaSemTotalMensal();
+        byte[] linha = ("patrocinador,veiculo,formato,espaco_programa,exibido_em,mes,quantidade,link\n"
+                + linhaDoPlano(plano) + ",2026-12-10T15:00:00-03:00,2026-12,1,\n").getBytes(StandardCharsets.UTF_8);
+        long id = ((Number) lerJson(enviar(rbs, "exibicao-com-mes.csv", linha, evento2027(), "EDICAO", null, null,
+                "VEICULACAO"), "$.id")).longValue();
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> itens = (List<Map<String, Object>>) (List<?>) lerLista(rbs.get("/api/importacoes/" + id), "$.itens");
+        assertThat(itens).hasSize(1);
+        assertThat(itens.getFirst().get("situacao")).isEqualTo("PROPOSTA");
+        @SuppressWarnings("unchecked")
+        Map<String, Object> dados = (Map<String, Object>) itens.getFirst().get("dados");
+        assertThat(dados).as("a data já diz o mês").doesNotContainKey("mes");
+
+        assertThat(rbs.patch("/api/importacoes/" + id + "/linhas", "{\"situacao\":\"ACEITA\",\"todas\":true}")).hasStatus(HttpStatus.OK);
+        MvcTestResult confirmada = rbs.post("/api/importacoes/" + id + "/confirmar", "{}");
+        assertThat(confirmada).hasStatus(HttpStatus.OK);
+        assertThat(lerJson(confirmada, "$.resultado.rejeitadas")).as("nenhuma linha recusada na carga").isEqualTo(0);
+    }
+
+    @Test
+    void aDataDeOutroMesQueOMesEhRecusadaJaNaPrevia() {
+        SessaoDeApi rbs = SessaoDeApi.entrar(mvc, RBS);
+        Map<String, Object> plano = planoDaMidiaSemTotalMensal();
+        byte[] linha = ("patrocinador,veiculo,formato,espaco_programa,exibido_em,mes,quantidade,link\n"
+                + linhaDoPlano(plano) + ",2026-12-10T15:00:00-03:00,2027-01,1,\n").getBytes(StandardCharsets.UTF_8);
+        long id = ((Number) lerJson(enviar(rbs, "exibicao-mes-diferente.csv", linha, evento2027(), "EDICAO", null, null,
+                "VEICULACAO"), "$.id")).longValue();
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> itens = (List<Map<String, Object>>) (List<?>) lerLista(rbs.get("/api/importacoes/" + id), "$.itens");
+        assertThat(itens).hasSize(1);
+        assertThat(itens.getFirst().get("situacao")).isEqualTo("RECUSADA");
+        assertThat(String.valueOf(itens.getFirst().get("motivo"))).contains("A data da exibição não é do mês informado.");
+    }
+
+    /** Um PDF de verdade com uma linha de texto, para a extração livre dos números da edição. */
+    private static byte[] pdfComTexto(String texto) throws IOException {
+        try (PDDocument documento = new PDDocument(); ByteArrayOutputStream saida = new ByteArrayOutputStream()) {
+            PDPage pagina = new PDPage();
+            documento.addPage(pagina);
+            var fonte = new org.apache.pdfbox.pdmodel.font.PDType1Font(
+                    org.apache.pdfbox.pdmodel.font.Standard14Fonts.FontName.HELVETICA);
+            try (var conteudo = new org.apache.pdfbox.pdmodel.PDPageContentStream(documento, pagina)) {
+                conteudo.beginText();
+                conteudo.setFont(fonte, 10);
+                conteudo.newLineAtOffset(40, 750);
+                conteudo.showText(texto);
+                conteudo.endText();
+            }
+            documento.save(saida);
+            return saida.toByteArray();
+        }
+    }
+
+    private static String origem(String trecho) {
+        return "{\"localizador\":\"página 1, linha 1\",\"trecho\":\"" + trecho + "\"}";
+    }
+
+    @Test
+    void osNumerosDaEdicaoComMilEMilhaoChegamNaEscala() throws IOException {
+        roteiro.limpar().passo(pedido -> new RespostaDoLlm(null, List.of(new ChamadaDeFerramenta("m1", "propor_linhas",
+                "{\"destino\":\"NUMEROS_EDICAO\",\"linhas\":["
+                        + "{\"campos\":{\"indicador\":\"Público (planetários)\",\"valor\":80,\"unidade\":\"mil planetários\","
+                        + "\"qualificador\":\"MAIS_DE\",\"fonte\":\"PV_PA_26_GERAL.pdf\"},"
+                        + "\"origem\":{\"indicador\":" + origem("Público (planetários)") + ",\"valor\":" + origem("+80 mil planetários")
+                        + ",\"unidade\":" + origem("+80 mil planetários") + ",\"qualificador\":" + origem("+80 mil planetários")
+                        + ",\"fonte\":" + origem("PV_PA_26_GERAL.pdf") + "}},"
+                        + "{\"campos\":{\"indicador\":\"Marcas parceiras\",\"valor\":39,\"unidade\":\"marcas\","
+                        + "\"qualificador\":\"EXATO\",\"fonte\":\"PV_PA_26_GERAL.pdf\"},"
+                        + "\"origem\":{\"indicador\":" + origem("Marcas parceiras") + ",\"valor\":" + origem("39 marcas parceiras")
+                        + ",\"unidade\":" + origem("39 marcas parceiras") + ",\"qualificador\":" + origem("39 marcas parceiras")
+                        + ",\"fonte\":" + origem("PV_PA_26_GERAL.pdf") + "}},"
+                        + "{\"campos\":{\"indicador\":\"Impactos nas redes do evento\",\"valor\":19,\"unidade\":\"milhões de impactos\","
+                        + "\"qualificador\":\"MAIS_DE\",\"fonte\":\"PV_PA_26_GERAL.pdf\"},"
+                        + "\"origem\":{\"indicador\":" + origem("Impactos nas redes do evento") + ",\"valor\":"
+                        + origem("+19 milhões de impactos nas redes") + ",\"unidade\":" + origem("+19 milhões de impactos nas redes")
+                        + ",\"qualificador\":" + origem("+19 milhões de impactos nas redes") + ",\"fonte\":"
+                        + origem("PV_PA_26_GERAL.pdf") + "}},"
+                        + "{\"campos\":{\"indicador\":\"Pessoas nas transmissões\",\"valor\":1.6,\"unidade\":\"milhão\","
+                        + "\"qualificador\":\"EXATO\",\"fonte\":\"Relatório de transmissões 2026\"},"
+                        + "\"origem\":{\"indicador\":" + origem("Pessoas nas transmissões") + ",\"valor\":"
+                        + origem("1,6 milhão nas transmissões") + ",\"unidade\":" + origem("1,6 milhão nas transmissões")
+                        + ",\"qualificador\":" + origem("1,6 milhão nas transmissões") + ",\"fonte\":"
+                        + origem("Relatório de transmissões 2026") + "}}"
+                        + "]}")), null));
+        String texto = "Público (planetários): +80 mil planetários. Marcas parceiras: 39 marcas parceiras. "
+                + "Impactos nas redes do evento: +19 milhões de impactos nas redes. Pessoas nas transmissões: "
+                + "1,6 milhão nas transmissões. Fonte: PV_PA_26_GERAL.pdf. Fonte: Relatório de transmissões 2026.";
+        SessaoDeApi rbs = SessaoDeApi.entrar(mvc, RBS);
+        long id = ((Number) lerJson(enviar(rbs, "numeros-da-edicao.pdf", pdfComTexto(texto), evento2027(), "EDICAO", null, null,
+                "NUMEROS_EDICAO"), "$.id")).longValue();
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> itens = (List<Map<String, Object>>) (List<?>) lerLista(rbs.get("/api/importacoes/" + id), "$.itens");
+        assertThat(itens).hasSize(4).allSatisfy(item -> assertThat(item.get("situacao")).isEqualTo("PROPOSTA"));
+        assertThat(dados(itens.get(0))).containsEntry("valor", 80000).containsEntry("unidade", "PESSOAS");
+        assertThat(dados(itens.get(1))).containsEntry("valor", 39).containsEntry("unidade", "MARCAS");
+        assertThat(dados(itens.get(2))).containsEntry("valor", 19000000).containsEntry("unidade", "IMPACTOS");
+        assertThat(dados(itens.get(3))).containsEntry("valor", 1600000).containsEntry("unidade", "UNIDADE");
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> dados(Map<String, Object> item) {
+        return (Map<String, Object>) item.get("dados");
+    }
+
+    @Test
+    void aVeiculacaoSemMesESemDataEhRecusadaNaPrevia() {
+        String conversa = "Oi, aqui é da Rádio 92: em outubro rodamos 40 chamadas assinadas de 5 segundos do Cliente Amarelo "
+                + "no programa Pretinho Básico.";
+        roteiro.limpar().passo(pedido -> resposta("VEICULACAO", """
+                {"campos":{"patrocinador":"Cliente Amarelo","veiculo":"Rádio 92","formato":"chamadas assinadas de 5 segundos",
+                  "espaco_programa":"Pretinho Básico","quantidade":40},
+                 "origem":{"patrocinador":{"localizador":"linha 1","trecho":"Cliente Amarelo"},
+                           "veiculo":{"localizador":"linha 1","trecho":"Rádio 92"},
+                           "formato":{"localizador":"linha 1","trecho":"40 chamadas assinadas de 5 segundos"},
+                           "espaco_programa":{"localizador":"linha 1","trecho":"programa Pretinho Básico"},
+                           "quantidade":{"localizador":"linha 1","trecho":"40 chamadas"}}}
+                """));
+        SessaoDeApi rbs = SessaoDeApi.entrar(mvc, RBS);
+        long id = ((Number) lerJson(enviar(rbs, "conversa-colada.txt", conversa.getBytes(StandardCharsets.UTF_8), evento2027(),
+                "EDICAO", null, null, "VEICULACAO"), "$.id")).longValue();
+
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> itens = (List<Map<String, Object>>) (List<?>) lerLista(rbs.get("/api/importacoes/" + id), "$.itens");
+        assertThat(itens).hasSize(1);
+        assertThat(itens.getFirst().get("situacao")).isEqualTo("RECUSADA");
+        assertThat(String.valueOf(itens.getFirst().get("motivo"))).contains("Falta o mês ou a data da exibição.");
+    }
+
+    private static RespostaDoLlm resposta(String destino, String linha) {
+        return new RespostaDoLlm(null, List.of(new ChamadaDeFerramenta("m1", "propor_linhas",
+                "{\"destino\":\"" + destino + "\",\"linhas\":[" + linha + "]}")), null);
     }
 }
