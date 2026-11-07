@@ -76,7 +76,9 @@ export function MinhaParceria() {
       )}
 
       <Carregando dados={entregas} linhas={4}>
-        {(lista) => {
+        {(todas) => {
+          // "Não aplicável" não conta no total, como na lista de patrocinadores (a marca nem vê essas entregas).
+          const lista = todas.filter((entrega) => entrega.status !== 'NAO_APLICAVEL')
           const pendentes = lista.filter((entrega) => A_FAZER.includes(entrega.status)).sort(porUrgencia)
           const comRbs = lista.filter((entrega) => COM_A_RBS.includes(entrega.status)).length
           const aprovadas = lista.filter((entrega) => entrega.status === 'APROVADO').length
