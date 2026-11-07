@@ -1,4 +1,4 @@
--- Confere o banco depois de V1 a V23 e da amostra R__amostra.sql: contagens, cargas, relatórios, órfãos e uma tentativa de violar cada regra.
+-- Confere o banco depois de V1 a V25 e da amostra R__amostra.sql: contagens, cargas, relatórios, órfãos e uma tentativa de violar cada regra.
 -- Atende o item 1 da Entrega 2 (amostra e verificações), prova as 8 correções do item 8 e, na seção 8, o plano comercial, o
 -- catálogo e os dados informados da V7 e, na seção 9, as tabelas do Atlas da V8, o resumo do raciocínio da V9 e o traço do diagnóstico da V10 e, na seção 10, os documentos, os trechos, a busca sem acento e a RLS da V11 e, na seção 11, as fontes citadas, o documento congelado e o plural da busca da V12 e, na seção 12, os prazos da V13 e, na seção 14, o JEV e a conversa sem parceria da V15 e, na seção 15, o papel da entrega, o Open Staff, o texto e link da entrega, o contrato e a pesquisa da ativação da V16 e, na seção 15b, as páginas fora do Atlas da V17 e, na seção 15, o pós-venda da V18 e, na seção 16, a unidade do relatório e o atendimento da V19, a base de mídia da V20, a importação da V21, a pesquisa e as visitas da V22 e os faltantes e a carga da pesquisa da V23. Nenhuma linha fica gravada: as tentativas são desfeitas (só as sequências avançam).
 
@@ -3172,8 +3172,9 @@ BEGIN
             AND is_nullable = 'NO' AND column_default LIKE '10%'));
     PERFORM pg_temp.confere('V22 ESTRUTURA', 'tipo_resposta e alternativas na pergunta', 2,
         (SELECT count(*) FROM information_schema.columns WHERE table_name = 'pesquisa_pergunta' AND column_name IN ('tipo_resposta', 'alternativas')));
-    PERFORM pg_temp.afirma('V22 ESTRUTURA', 'as perguntas da amostra ficaram ESCOLHA, sem alternativas',
-        (SELECT bool_and(tipo_resposta = 'ESCOLHA' AND alternativas IS NULL) FROM pesquisa_pergunta));
+    PERFORM pg_temp.afirma('V22 ESTRUTURA', 'as perguntas da amostra ficaram ESCOLHA, sem alternativas, e a de 0 a 10 é NOTA (bloco 18)',
+        (SELECT bool_and(alternativas IS NULL AND tipo_resposta = CASE WHEN texto LIKE 'De 0 a 10%' THEN 'NOTA' ELSE 'ESCOLHA' END)
+           FROM pesquisa_pergunta));
     PERFORM pg_temp.confere('V22 ESTRUTURA', 'as tabelas pesquisa_resposta_texto, pesquisa_perfil e visita_aba', 3,
         (SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public'
             AND table_name IN ('pesquisa_resposta_texto', 'pesquisa_perfil', 'visita_aba')));

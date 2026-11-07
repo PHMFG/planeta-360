@@ -803,3 +803,13 @@ BEGIN
         ON CONFLICT ON CONSTRAINT uq_veiculacao DO NOTHING;
     END IF;
 END $$;
+
+-- ---------------------------------------------------------------------
+-- 18. A pergunta de nota da pesquisa do Amarelo
+-- ---------------------------------------------------------------------
+-- A V22 trouxe o tipo da pergunta com ESCOLHA por padrão, e a amostra (bloco 7) não o preenchia: a pergunta "De 0 a 10" aparecia
+-- como "Escolha entre alternativas". Como o bloco 17, este roda também num banco que já tem a amostra, e não muda nada da segunda vez.
+UPDATE pesquisa_pergunta pp SET tipo_resposta = 'NOTA'
+FROM parceria pa JOIN patrocinador p ON p.id = pa.patrocinador_id
+WHERE pp.parceria_id = pa.id AND p.nome_canonico = 'Cliente Amarelo'
+  AND pp.texto = 'De 0 a 10, quanto você recomendaria a marca a um amigo?' AND pp.tipo_resposta <> 'NOTA';
