@@ -295,13 +295,13 @@ public class ConsultarMidia implements Ferramenta {
 
         Map<String, Object> dados = new LinkedHashMap<>();
         dados.put("unidade", linha.unidade());
-        dados.put("previsto", linha.previsto());
-        dados.put("exibido", linha.exibido());
+        dados.put("previsto", semZeros(linha.previsto()));
+        dados.put("exibido", semZeros(linha.exibido()));
         if (linha.percentual() != null) {
             dados.put("percentual", linha.percentual());
         }
         if (linha.impacto() != null) {
-            dados.put("impacto", linha.impacto());
+            dados.put("impacto", semZeros(linha.impacto()));
         }
         if (linha.mes() != null) {
             dados.put("mes", linha.mes());
@@ -340,13 +340,13 @@ public class ConsultarMidia implements Ferramenta {
         if (comMes) {
             registro.put("mes", linha.mes());   // nulo quando a consulta soma todos os meses
         }
-        registro.put("previsto", linha.previsto());
-        registro.put("exibido", linha.exibido());
+        registro.put("previsto", semZeros(linha.previsto()));
+        registro.put("exibido", semZeros(linha.exibido()));
         if (linha.percentual() != null) {
             registro.put("percentual", linha.percentual());
         }
         if (linha.impacto() != null) {
-            registro.put("impacto", linha.impacto());
+            registro.put("impacto", semZeros(linha.impacto()));
         }
         if (linha.arquivo() != null) {
             Map<String, Object> importacao = new LinkedHashMap<>();
@@ -370,13 +370,13 @@ public class ConsultarMidia implements Ferramenta {
         texto.append(total.impacto() == null ? " Impacto não informado." : " Impacto: " + quantidade(total.impacto()) + ".");
         Map<String, Object> dados = new LinkedHashMap<>();
         dados.put("unidade", total.unidade());
-        dados.put("previsto", total.previsto());
-        dados.put("exibido", total.exibido());
+        dados.put("previsto", semZeros(total.previsto()));
+        dados.put("exibido", semZeros(total.exibido()));
         if (total.percentual() != null) {
             dados.put("percentual", total.percentual());
         }
         if (total.impacto() != null) {
-            dados.put("impacto", total.impacto());
+            dados.put("impacto", semZeros(total.impacto()));
         }
         Fonte fonte = registrar(turno, "veiculacao", idDoTotal(total.unidade()), "Total de mídia · " + unidade, "Total",
                 texto.toString(), dados);
@@ -385,13 +385,13 @@ public class ConsultarMidia implements Ferramenta {
         registro.put("marcador", fonte.marcador());
         registro.put("unidade", total.unidade());
         registro.put("unidadeNome", unidade);
-        registro.put("previsto", total.previsto());
-        registro.put("exibido", total.exibido());
+        registro.put("previsto", semZeros(total.previsto()));
+        registro.put("exibido", semZeros(total.exibido()));
         if (total.percentual() != null) {
             registro.put("percentual", total.percentual());
         }
         if (total.impacto() != null) {
-            registro.put("impacto", total.impacto());
+            registro.put("impacto", semZeros(total.impacto()));
         }
         return registro;
     }
@@ -408,13 +408,13 @@ public class ConsultarMidia implements Ferramenta {
         Map<String, Object> dados = new LinkedHashMap<>();
         dados.put("marca", total.patrocinador());
         dados.put("unidade", total.unidade());
-        dados.put("previsto", total.previsto());
-        dados.put("exibido", total.exibido());
+        dados.put("previsto", semZeros(total.previsto()));
+        dados.put("exibido", semZeros(total.exibido()));
         if (total.percentual() != null) {
             dados.put("percentual", total.percentual());
         }
         if (total.impacto() != null) {
-            dados.put("impacto", total.impacto());
+            dados.put("impacto", semZeros(total.impacto()));
         }
         // [ISOLAMENTO] Só a RBS chega aqui; a entidade é a parceria, com o id dela.
         Fonte fonte = registrar(turno, "parceria", total.parceriaId(), "Mídia de " + total.patrocinador() + " · " + unidade, "Total",
@@ -454,5 +454,14 @@ public class ConsultarMidia implements Ferramenta {
 
     private static String limpo(String texto) {
         return texto == null || texto.isBlank() ? null : texto.strip();
+    }
+
+    /** 343.00 vira 343 e 460000.00 vira 460000: a quantidade vem do banco com duas casas, e o modelo as copiava ("343,00"). */
+    private static BigDecimal semZeros(BigDecimal valor) {
+        if (valor == null) {
+            return null;
+        }
+        BigDecimal limpo = valor.stripTrailingZeros();
+        return limpo.scale() < 0 ? limpo.setScale(0) : limpo;
     }
 }
