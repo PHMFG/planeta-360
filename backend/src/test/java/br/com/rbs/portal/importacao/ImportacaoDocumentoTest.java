@@ -56,7 +56,7 @@ class ImportacaoDocumentoTest {
         jdbc.sql("DELETE FROM carga WHERE arquivo_id IN (SELECT id FROM arquivo WHERE categoria = 'IMPORTACAO')").update();
         jdbc.sql("DELETE FROM arquivo WHERE categoria = 'IMPORTACAO'").update();
         jdbc.sql("DELETE FROM arquivo WHERE categoria = 'DOCUMENTO' AND nome_original IN "
-                + "('rbs-segredo.txt', 'rbs-veiculacao.csv')").update();
+                + "('rbs-segredo.txt', 'rbs-veiculacao.csv', 'rbs-nota.txt', 'agencia.csv')").update();
     }
 
     private long evento2027() {
@@ -114,6 +114,46 @@ class ImportacaoDocumentoTest {
 
     private ResultadoDaBusca buscar(Escopo escopo) {
         return busca.buscar(new Pedido(escopo, SEGREDO, null, BuscaHibrida.K_PADRAO, null, null));
+    }
+
+    private long enviarRbsNaParceria(SessaoDeApi rbs, long parceria) {
+        var csrf = ApoioDeTeste.pedirCsrf(mvc);
+        MvcTestResult criada = mvc.post().uri("/api/importacoes").multipart()
+                .file(new MockMultipartFile("arquivo", "rbs-nota.txt", "text/plain", TEXTO.getBytes(StandardCharsets.UTF_8)))
+                .param("eventoId", String.valueOf(evento2027())).param("alcance", "PARCERIA")
+                .param("parceriaId", String.valueOf(parceria)).param("destino", "SO_CONSULTA")
+                .session(rbs.sessao()).cookie(csrf.cookie()).header("X-XSRF-TOKEN", csrf.token()).exchange();
+        assertThat(criada).hasStatus(HttpStatus.ACCEPTED);
+        return ((Number) lerJson(criada, "$.id")).longValue();
+    }
+
+    @Test
+    void oArquivoDaImportacaoDaRbsNaParceriaNaoSaiParaAMarca() {
+        SessaoDeApi rbs = SessaoDeApi.entrar(mvc, RBS);
+        SessaoDeApi amarelo = SessaoDeApi.entrar(mvc, AMARELO);
+        long parceria = SessaoDeApi.parceriaDe2027(jdbc, "Cliente Amarelo");
+        long importacao = enviarRbsNaParceria(rbs, parceria);
+        long arquivo = ((Number) lerJson(rbs.get("/api/importacoes/" + importacao), "$.arquivo.id")).longValue();
+
+        assertThat(amarelo.get("/api/arquivos/" + arquivo)).hasStatus(HttpStatus.NOT_FOUND);
+        assertThat(rbs.get("/api/arquivos/" + arquivo)).hasStatus(HttpStatus.OK);
+    }
+
+    @Test
+    void oArquivoDaPlanilhaDaAgenciaSaiParaAPropriaMarca() {
+        SessaoDeApi amarelo = SessaoDeApi.entrar(mvc, AMARELO);
+        long parceria = SessaoDeApi.parceriaDe2027(jdbc, "Cliente Amarelo");
+        var csrf = ApoioDeTeste.pedirCsrf(mvc);
+        byte[] planilha = "campo,valor\nativacao.visitantes_total,10\n".getBytes(StandardCharsets.UTF_8);
+        MvcTestResult criada = mvc.post().uri("/api/parcerias/" + parceria + "/importacoes").multipart()
+                .file(new MockMultipartFile("arquivo", "agencia.csv", "text/csv", planilha))
+                .session(amarelo.sessao()).cookie(csrf.cookie()).header("X-XSRF-TOKEN", csrf.token()).exchange();
+        assertThat(criada).hasStatus(HttpStatus.ACCEPTED);
+        long importacao = ((Number) lerJson(criada, "$.id")).longValue();
+        long arquivo = ((Number) lerJson(amarelo.get("/api/importacoes/" + importacao), "$.arquivo.id")).longValue();
+
+        assertThat(amarelo.get("/api/arquivos/" + arquivo)).hasStatus(HttpStatus.OK);
+        assertThat(SessaoDeApi.entrar(mvc, RBS).get("/api/arquivos/" + arquivo)).hasStatus(HttpStatus.OK);
     }
 
     @Test

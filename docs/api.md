@@ -804,6 +804,8 @@ O `filename*` leva o nome original em UTF-8 (com acentos e espaços codificados)
 
 **Arquivo de documento do Atlas.** O arquivo de qualquer documento (rota 54) **não sai por aqui para a marca**: ela recebe 404 (`"Não encontramos este arquivo."`) mesmo no anexo da própria parceria, e mesmo com o documento aprovado. Um documento de escopo `PARCERIA` é gravado com a parceria, e sem esta regra sairia por esta rota recusado, não aprovado ou revogado (como o D11, com CPFs). A marca só lê documento pelo visualizador (rotas 59 e 60, no M4), que confere o status e o escopo. A RBS baixa. O `DOWNLOAD` de um arquivo de documento fica na entidade `documento` (a marca não vê essas linhas).
 
+**Arquivo original de importação** (categoria `IMPORTACAO`): só a RBS baixa, **exceto** o da importação que a própria marca enviou pela rota 117 (origem `MARCA`), que a marca da parceria baixa. Uma importação da RBS de alcance `PARCERIA` também dá 404 à marca daquela parceria.
+
 **Erros:** 403 (aba fechada); 404 (não existe, é de outra parceria, é de um documento do Atlas e quem pede é a marca, ou o arquivo sumiu do armazenamento: `"Este arquivo não está mais disponível. Avise a equipe da RBS."`). **Histórico:** `DOWNLOAD`, com quem baixou, de que IP e navegador.
 
 ## 19. `PATCH /api/entregas/{id}/status`  · etapa 5
