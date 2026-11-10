@@ -1,46 +1,88 @@
-# Planeta 360 · Portal do Patrocinador
+<div align="center">
 
-Portal em que cada marca patrocinadora do Planeta Atlântida acompanha a própria parceria com a RBS: materiais, prazos, pesquisa, resultados de mídia e o relatório pós-evento. A RBS cadastra as parcerias, libera os acessos, analisa os materiais, carrega as planilhas e gera o relatório a partir da base, sem montagem manual.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/banner-dark.png">
+  <img src="docs/assets/banner-light.png" width="100%" alt="The Planeta 360 logo, a magenta-to-indigo wordmark with a globe as the zero, next to Portal do Patrocinador and the stack line">
+</picture>
 
-Esta é a versão da **Entrega 2** (primeira versão funcional) do Desafio GC 2026. A versão anterior continua no GitHub, na tag `sprint-1`.
+**[Tour](#tour) · [Getting started](#getting-started) · [Usage](#usage) · [How it works](#how-it-works) · [Português](README.pt-BR.md)**
 
-| Parte | Tecnologia | Porta |
-| --- | --- | --- |
-| Banco | PostgreSQL 18 (funciona a partir do 15), tabelas criadas pelo Flyway | 5432 |
-| API | Java 21+, Spring Boot 4.1, sessão por cookie com CSRF | 8080 |
-| Front | React 19, TypeScript, Vite 8 e Tailwind 4, no visual do Figma | 5173 |
+<a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-a508a5?style=flat-square&labelColor=120e1f" alt="License: MIT"></a>
+<img src="https://img.shields.io/badge/Spring_Boot-4.1-8a12a8?style=flat-square&logo=springboot&logoColor=white&labelColor=120e1f" alt="Spring Boot 4.1 on Java 21">
+<img src="https://img.shields.io/badge/PostgreSQL-18_%2B_pgvector-6a1aaa?style=flat-square&logo=postgresql&logoColor=white&labelColor=120e1f" alt="PostgreSQL 18 with pgvector">
+<img src="https://img.shields.io/badge/React-19-4427b3?style=flat-square&logo=react&logoColor=white&labelColor=120e1f" alt="React 19 with TypeScript">
 
-## Antes de começar
+<br><br>
 
-Instale e, depois de cada instalação, abra um terminal novo:
+<img src="docs/assets/screenshot-partnership.png" width="880" alt="The sponsor's home screen, Minha parceria: the next action is a video in Ajuste solicitado with the organizer's note, 6 of 7 deliveries approved, and media delivery at 97%">
 
-- **JDK 21 ou mais novo** (recomendado: 25 LTS, por exemplo o Temurin). Confira com `java -version`.
-- **Node.js 24 LTS** (ou 22.22+). Confira com `node -v`.
-- **PostgreSQL 18** (funciona a partir do 15).
-  - macOS: `brew install postgresql@18` e depois `brew services start postgresql@18`. O Homebrew deixa o `psql` dessa versão fora do PATH. Rode a linha abaixo uma vez, abra um terminal novo e confira com `psql --version` (em Mac com Intel, troque `/opt/homebrew` por `/usr/local`):
+</div>
 
-    ```bash
-    echo 'export PATH="/opt/homebrew/opt/postgresql@18/bin:$PATH"' >> ~/.zshrc
-    ```
+## A sponsor portal where each brand follows its own festival partnership.
 
-  - Windows: instalador oficial em postgresql.org. Guarde a senha do usuário `postgres` e a porta (5432, ou 5433 se já havia outro PostgreSQL na máquina). O `psql` fica no menu Iniciar, como "SQL Shell (psql)".
-  - Linux (Debian/Ubuntu): `sudo apt install postgresql`.
+Planeta 360 is the sponsor portal of a music festival. Every brand sees only its own partnership: what it has to deliver, what the organizer approved or sent back, how much of the contracted media has aired, and the final report. The organizer's team registers partnerships, reviews materials, imports the spreadsheets that broadcasters and agencies send, and builds the report from that base instead of assembling it by hand. Atlas, the built-in assistant, answers questions about each brand's numbers and the event documents, and cites where every number came from.
 
-Maven não precisa: o projeto traz o Maven Wrapper (`mvnw` no macOS e Linux, `mvnw.cmd` no Windows). Na primeira vez, o wrapper baixa o Maven e as dependências da API e o `npm install` baixa as do front: precisa de internet e leva alguns minutos.
+> [!NOTE]
+> Built by a student team for Desafio GC 2026, a challenge set by RBS around the Planeta Atlântida festival. It is not an official RBS product. All brands, people and documents in the demo data are fictitious, and the interface is in Brazilian Portuguese.
 
-As portas 5432 (banco), 8080 (API) e 5173 (front) precisam estar livres. Para o banco em outra porta, veja o fim do passo 2.
+## Features
 
-## Como rodar
+- **One partnership per brand** - a sponsor sees only its own data; another brand's partnership answers 404, and the API tests check it.
+- **Deliveries with history** - files, text or links, with versions, approval or a request for changes, and a history the database will not let anyone edit.
+- **Import with provenance** - drop a broadcaster's spreadsheet, check each number against the cell it came from, then confirm what enters the base.
+- **Media base** - contracted vs. delivered per brand, outlet, format and month, with .xlsx and CSV export.
+- **Report from the base** - 6 sections and 17 indicators, validated and released by the organizer; missing data shows as unavailable, with the reason.
+- **Atlas assistant** - an optional LLM chat that answers with the portal's numbers and cited documents; the server checks every number's origin before it reaches the screen.
 
-São três passos, nesta ordem: banco, API e front. A API e o front ficam cada um no seu terminal, abertos enquanto o portal estiver em uso. Para parar, `Ctrl+C` em cada um.
+## Tour
 
-**1. Criar os bancos (uma vez só).** Abra o `psql` como administrador do PostgreSQL:
+The animations below come from the project's demo walkthrough, recorded on fictitious data.
 
-- macOS: `psql postgres`
-- Windows: abra o "SQL Shell (psql)", aperte Enter em Server e Database, informe a porta (Enter se for 5432), Enter em Username e digite a senha do `postgres`.
-- Linux: `sudo -u postgres psql`
+### For sponsors
 
-Rode e saia com `\q`:
+<p align="center">
+  <img src="docs/assets/demo-sponsor-upload.gif" width="800" alt="Cliente Amarelo opens Minha parceria, follows the next action to Mídia e conteúdo and drops a new version of a 30-second video that the organizer sent back">
+  <br><sub><b>Minha parceria</b> points to the next action, and the brand sends a new version of a video the organizer sent back.</sub>
+</p>
+
+<p align="center">
+  <img src="docs/assets/demo-agency-sheet.gif" width="800" alt="In Aplicações da marca, the brand uploads the agency's count sheet and each number appears with the cell it came from before it is saved">
+  <br><sub>In <b>Aplicações da marca</b>, the portal reads the agency's count sheet and shows the cell behind each number before anything is saved.</sub>
+</p>
+
+### For the organizer
+
+<p align="center">
+  <img src="docs/assets/demo-organizer-approve.gif" width="800" alt="The organizer opens Materiais, picks the new version sent by Cliente Amarelo and approves it">
+  <br><sub><b>Materiais</b> lists what the brands sent; the organizer opens the new version and approves it.</sub>
+</p>
+
+<p align="center">
+  <img src="docs/assets/demo-data-reports.gif" width="800" alt="Dados shows contracted vs. delivered media for every brand, filtered by month and outlet, then the survey and the post-event reports of the edition">
+  <br><sub><b>Dados</b> holds the media of every brand, with filters and export; then the edition survey and the post-event reports. The import is in <a href="#usage">Usage</a>.</sub>
+</p>
+
+### Atlas
+
+<p align="center">
+  <img src="docs/assets/demo-atlas-sponsor.gif" width="800" alt="A brand asks Atlas how many service credentials it has per day in the Arena; the answer cites the commercial plan and the chip opens the PDF on page 3 with the passage highlighted">
+  <br><sub>A brand asks about its credentials. The answer cites the commercial plan, and the chip opens the PDF on the cited page with the passage highlighted.</sub>
+</p>
+
+<p align="center">
+  <img src="docs/assets/demo-atlas-organizer.gif" width="800" alt="The organizer opens the documents Atlas reads, then asks how one brand's November delivery went and gets an answer with sources">
+  <br><sub>The organizer checks the documents Atlas reads and asks about one brand's delivery in November.</sub>
+</p>
+
+> [!NOTE]
+> The Atlas answers in these two animations were scripted for the demo video, so no model was called. With a model connected, the same screens show its answer as it streams.
+
+## Getting started
+
+> [!NOTE]
+> You need JDK 21 or newer, Node.js 24 LTS (22.22+ works), and PostgreSQL 15 or newer (18 recommended) with [pgvector](https://github.com/pgvector/pgvector) 0.8.0+. Maven is not needed: the repository ships the Maven Wrapper. Ports 5432, 8080 and 5173 must be free.
+
+Create the database role and databases once, in `psql` as a PostgreSQL superuser:
 
 ```sql
 CREATE ROLE portal LOGIN PASSWORD 'portal';
@@ -48,49 +90,22 @@ CREATE DATABASE portal OWNER portal;
 CREATE DATABASE portal_teste OWNER portal;
 ```
 
-Os bancos começam vazios. As tabelas, as regras e a amostra (Amarelo, Roxo e Verde) são criadas pelo Flyway quando a API sobe.
-
-**Já rodou a Sprint 1 nesta máquina?** Ela usava o mesmo usuário `portal` e o mesmo banco `portal`, com as tabelas antigas. O `CREATE ROLE` vai avisar que o usuário já existe (pode seguir), mas o banco precisa ser apagado e criado de novo, com a versão antiga desligada:
-
-```sql
-DROP DATABASE portal;
-CREATE DATABASE portal OWNER portal;
-CREATE DATABASE portal_teste OWNER portal;
-```
-
-**Extensão do Atlas (uma vez só, e de novo ao criar um banco).** As buscas nos documentos usam o pgvector. No macOS e no Linux, rode na raiz do repositório:
+Then clone and prepare pgvector (macOS and Linux; it installs pgvector with Homebrew if needed and creates the `atlas_ro` role):
 
 ```bash
+git clone https://github.com/PHMFG/planeta-360.git
+cd planeta-360
 scripts/preparar-banco-atlas.sh
 ```
 
-O script instala o pgvector pelo Homebrew, se precisar, e prepara os bancos `portal` e `portal_teste`: extensão no schema `extensoes` e papel `atlas_ro`. O Atlas precisa do pgvector 0.8.0 ou mais novo. O script pode rodar de novo sem problema, e aceita outros bancos como argumento. Ele precisa de um superusuário do PostgreSQL. No macOS é o usuário atual. No Linux, instale o pacote (`sudo apt install postgresql-18-pgvector`) e rode com `sudo -u postgres`, ou informe `PGUSER`, `PGHOST` e `PGPASSWORD`. No Windows, instale o pgvector como manda o [README dele](https://github.com/pgvector/pgvector#windows) e rode no `psql` os comandos SQL do script.
-
-**2. Subir a API**, num terminal:
+Start the API with the demo data, in one terminal:
 
 ```bash
 cd backend
 ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
 ```
 
-No Windows, no Prompt de Comando ou no PowerShell (no PowerShell, as aspas são obrigatórias):
-
-```bat
-cd backend
-.\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=dev"
-```
-
-A API está pronta quando aparece `Started PortalApplication`. O perfil `dev` carrega a amostra de demonstração e, ao subir, cria em `backend/armazenamento/` um arquivo de exemplo para cada arquivo da amostra (é o que faz o botão "Baixar" funcionar na demonstração); sem perfil, sobe só a estrutura (como em produção, sem amostra e sem arquivos de exemplo). O perfil `demo` (`SPRING_PROFILES_ACTIVE=demo`, ou `ATLAS_PERFIL=demo scripts/atlas-dev.sh start`) é o da apresentação: sobe como o `dev` (amostra, arquivos de exemplo e o kit de documentos do Atlas, com as chaves do mesmo arquivo de segredos), com o relatório, o diagnóstico e o Atlas da RBS ligados, mas **sem** as rotas de debug da chave do modelo (404) e sem a caixa de debug das ferramentas: quem mostra como a resposta foi feita é o diagnóstico. Ele usa as chaves de verdade. Use um banco descartável com ele. A 8080 é só a API: as telas ficam no front (passo 3).
-
-**PostgreSQL em outra porta** (a Sprint 1 usava a 5433)? Informe a URL do banco no mesmo terminal, antes de subir a API:
-
-```bash
-export PORTAL_BD_URL=jdbc:postgresql://localhost:5433/portal
-```
-
-No Windows: `set "PORTAL_BD_URL=jdbc:postgresql://localhost:5433/portal"` no Prompt de Comando, ou `$env:PORTAL_BD_URL="jdbc:postgresql://localhost:5433/portal"` no PowerShell. Usuário e senha diferentes de `portal` vão em `PORTAL_BD_USUARIO` e `PORTAL_BD_SENHA`.
-
-**3. Subir o front**, com a API no ar, em outro terminal:
+It is ready when the log shows `Started PortalApplication`. Flyway creates the tables and loads three fictitious sponsors. Then start the web app in another terminal:
 
 ```bash
 cd frontend
@@ -98,237 +113,154 @@ npm install
 npm run dev
 ```
 
-Abra <http://localhost:5173>. O Vite repassa as chamadas `/api` para a porta 8080, então front e API funcionam como um site só.
+Open http://localhost:5173. Vite forwards `/api` to the API on port 8080, so both run as one site.
 
-**Recomeçar do zero.** Para voltar à amostra original, pare a API, rode no `psql` o `DROP DATABASE portal;` e o `CREATE DATABASE portal OWNER portal;`, rode o `scripts/preparar-banco-atlas.sh` e suba a API de novo. Os arquivos enviados ficam em `backend/armazenamento/`, que pode ser apagada junto (a API recria os arquivos de exemplo da amostra na subida).
+> [!IMPORTANT]
+> The API refuses to start without pgvector and the `atlas_ro` role in the database. Run `scripts/preparar-banco-atlas.sh` again whenever you create a new database. On Windows, install pgvector by hand and run the script's SQL in `psql`.
 
-**Quem já tinha o banco `portal` criado precisa recomeçar do zero para ver a amostra nova.** A amostra só carrega num banco vazio e não roda de novo sobre um banco que já a tem. A versão atual traz: entregas Enviado, Em análise e Aprovado com o arquivo que a marca mandou, o VT do Roxo em "Ajuste solicitado" com o recado da RBS no histórico, horários sempre no passado (contados a partir do dia em que o banco é criado) e nenhum "(simulada)" no nome da pesquisa. Num banco criado antes, as migrações novas (V4 a V6) rodam sozinhas ao subir a API, mas a amostra antiga continua como estava. O mesmo vale para o alinhamento com os planos comerciais do kit de documentos do Atlas: as cortesias e as credenciais do Roxo (4 na Arena e 2 no Camarote por dia, 5 credenciais na Arena) e da Verde (4 e 2 por dia, 10 credenciais), iguais aos PDFs dos planos da RBS, e o portão do Camarote e do Lounge (Portão 4) só aparecem num banco recriado. **A amostra mudou de novo**: além desses números, a edição 2027 passou a ter o endereço do Open Staff (`https://example.com/`), o credenciamento de 01/12 a 20/12/2026 e o prazo das cortesias em 15/01/2027; as entregas de ingressos e de logo ganharam o papel; as exibições do Amarelo se espalham por três meses; e algumas exibições do Roxo nas redes trazem o link do post. As contagens não mudam (79 linhas de plano, 1.489 linhas lidas). Cada pessoa do grupo recria o próprio banco com os comandos acima.
+<details>
+<summary><b>Optional: turn on Atlas</b></summary>
+<br>
 
-**Requisitos da RBS (V16 a V18).** As três migrações rodam sozinhas sobre o banco que já existe: a V16 (papel das entregas, formulário de ingressos, credenciamento e prazo de cortesias da edição, conteúdo em texto ou link), a V17 (páginas de um documento fora do Atlas) e a V18 (pós-venda da parceria). Mas a amostra e o kit do Atlas mudaram junto (os anexos D06 e D07, com as metragens e a montagem do Amarelo e o Roxo como Cota Apresenta): **recrie o seu banco** com os comandos de "Recomeçar do zero" para ver tudo como no roteiro abaixo.
+Without these variables the portal and the tests work normally, but Atlas does not answer. Keys go in environment variables or in `backend/config/segredos.local.properties` (copy `segredos.exemplo.properties`; Git ignores the local file).
 
-**Atlas (V7 a V15).** As migrações rodam sozinhas ao subir a API, sobre o banco que já existe, mas a V11 precisa do pgvector e do papel `atlas_ro`: rode antes o `scripts/preparar-banco-atlas.sh`, ou a subida para com a mensagem que pede isso. O kit de documentos e os prazos do Atlas não dependem de recriar o banco: entram na subida, nos perfis `dev` e `demo`, com os embeddings ligados.
-
-## Se algo der errado
-
-| O que aparece | O que fazer |
+| Variable | What it enables |
 | --- | --- |
-| `psql: command not found` (macOS) | Falta a linha do PATH em "Antes de começar". Rode e abra um terminal novo. |
-| `'psql' não é reconhecido` (Windows) | Use o "SQL Shell (psql)" do menu Iniciar. |
-| `role "portal" already exists` ou `database "portal" already exists` | Ficaram de uma instalação anterior, talvez da Sprint 1. Veja "Já rodou a Sprint 1?" no passo 1. |
-| API: `Connection to localhost:5432 refused` | O PostgreSQL está parado ou em outra porta. macOS: `brew services start postgresql@18`. Windows: inicie o serviço `postgresql-x64-18` em Serviços. Outra porta: `PORTAL_BD_URL` (passo 2). |
-| API: `database "portal" does not exist`, `role "portal" does not exist` ou `password authentication failed for user "portal"` | O passo 1 não rodou nesse PostgreSQL. Confira se a porta é a mesma. |
-| API: `Found non-empty schema(s) "public" but no schema history table` | O banco `portal` tem as tabelas antigas da Sprint 1. Apague e crie de novo (passo 1). |
-| API: `O Atlas precisa da extensão vector (pgvector) neste banco` ou `O Atlas precisa do papel atlas_ro neste PostgreSQL` | Rode `scripts/preparar-banco-atlas.sh` e suba a API de novo. |
-| API: `Port 8080 was already in use` | Outra API ainda está rodando, talvez em outro terminal. Feche-a (no macOS e no Linux, `lsof -i :8080` mostra quem usa a porta). |
-| API: erro de compilação com `release version 21` | O Maven achou um JDK anterior ao 21. Confira `java -version` e, se existir, o `JAVA_HOME`. |
-| API, no PowerShell: `Unknown lifecycle phase ".run.profiles=dev"` | Faltaram as aspas em `"-Dspring-boot.run.profiles=dev"`. |
-| Login: "Sem conexão com o servidor. Confira se a API está rodando." | A API parou ou ainda está subindo. Espere o `Started PortalApplication` no terminal do passo 2. |
+| `ATLAS_LLM=openai`, `OPENCODE_API_KEY` | The chat, through any OpenAI-compatible endpoint (`ATLAS_LLM_BASE_URL`, `ATLAS_LLM_MODELO`; DeepSeek V4.1 Flash on OpenCode Go by default) |
+| `ATLAS_EMBEDDINGS=gemini`, `GEMINI_API_KEY` | Semantic search over the event documents. Without it, search is text only |
+| `ATLAS_JEV`, `TYPESAFE_API_KEY` | A classifier that checks intent and answers at six decision points. Optional |
 
-## Usuários de teste
+The full list, with defaults, is in [`docs/arquitetura.md`](docs/arquitetura.md) and [`docs/api.md`](docs/api.md) (in Portuguese).
 
-Todos usam a senha `senha123`. O sistema detecta o perfil pela conta: a RBS cai no painel de gestão e o patrocinador na própria parceria.
+</details>
 
-| E-mail | Perfil | Vê |
+Tests:
+
+```bash
+cd backend && ./mvnw test
+cd frontend && npm run build && npm run lint
+```
+
+The backend suite (about 3,700 tests) uses the `portal_teste` database and drops it on every run; set `PORTAL_BD_TESTE_URL` to use another one. It needs no API key.
+
+## Usage
+
+Every demo account uses the password `senha123`. The portal picks the profile from the account.
+
+| Account | Profile |
+| --- | --- |
+| `marketing@roxo.example` | Sponsor, Cliente Roxo (Subcota G) |
+| `marketing@amarelo.example` | Sponsor, Cliente Amarelo (Master) |
+| `b2b@rbs.example` | Organizer team, all partnerships |
+
+1. Sign in as `marketing@roxo.example`. **Minha parceria** shows the next action: the stage video in **Ajuste solicitado**, with the organizer's note.
+2. In **Mídia e conteúdo**, drop a PDF, image or video on the upload area and send it. It becomes a new version with author, date and status **Enviado**.
+3. Still as Roxo, open http://localhost:5173/parceria/2, the Amarelo partnership. The screen says **Parceria não encontrada** and the API answers 404.
+4. Sign in as `b2b@rbs.example`. In **Importar**, drop [`backend/src/test/resources/importacao/corpus/tv-novembro.xlsx`](backend/src/test/resources/importacao/corpus/tv-novembro.xlsx), a fictitious TV delivery sheet. The import reads it without any model: 9 rows wait in **Para revisar** and 6 passages are set aside as not understood. Click the pin next to a value to open the cell it came from, then **Aceitar as 9** and **Confirmar**.
+5. In **Materiais**, approve the Roxo upload, and in **Relatórios** generate, validate and release the Roxo report. Back as Roxo, it opens in **Relatório**.
+
+<p align="center">
+  <img src="docs/assets/demo-import-provenance.gif" width="720" alt="Import review of tv-novembro.xlsx: clicking the pin next to a format, a programme and a month opens the source sheet on the right with the matching cell highlighted">
+</p>
+
+## Screens
+
+<details>
+<summary><b>Import review, quota change, media, Atlas documents and mobile</b></summary>
+<br>
+
+<p align="center">
+  <img src="docs/assets/screenshot-import-review.png" width="880" alt="Revise antes de entrar: nine rows from tv-novembro.xlsx waiting for review, and the De onde veio panel showing cell B6 of the sheet highlighted"><br>
+  <em>Every imported number keeps the cell it came from.</em>
+</p>
+
+<p align="center">
+  <img src="docs/assets/screenshot-partner-settings.png" width="880" alt="Trocar a cota dialog for Cliente Roxo, previewing a change from Subcota G to Master: tabs that close, tabs that may open and what does not change by itself"><br>
+  <em>Changing a brand's quota shows the impact before it happens.</em>
+</p>
+
+<p align="center">
+  <img src="docs/assets/screenshot-media.png" width="880" alt="Contratado x entregue for Cliente Amarelo: 1,115 of 1,113 insertions delivered, by outlet, with month, outlet and media type filters and xlsx and CSV export"><br>
+  <em>A Master sponsor follows contracted vs. delivered media by outlet.</em>
+</p>
+
+<p align="center">
+  <img src="docs/assets/screenshot-atlas-documents.png" width="880" alt="Atlas documents: one document revoked, a scanned notice with no text in error, and a list of accredited people blocked because it seems to hold personal data"><br>
+  <em>Documents that seem to hold personal data cannot be approved for Atlas.</em>
+</p>
+
+<p align="center">
+  <img src="docs/assets/screenshot-mobile.png" width="320" alt="Minha parceria on a phone, with the drawer menu button, the next action and media delivery"><br>
+  <em>On a phone, the menu moves into a drawer.</em>
+</p>
+
+</details>
+
+## How it works
+
+```mermaid
+flowchart LR
+  web["Browser<br/>React 19 · Vite · Tailwind"] -- "/api (Vite proxy)" --> api["API<br/>Spring Boot 4.1 · Java 21"]
+  api -- "SQL (JdbcClient)" --> db[("PostgreSQL 18<br/>Flyway V1–V25 · pgvector")]
+  api --> files[["Uploaded files<br/>local disk"]]
+  api -. "optional" .-> llm["LLM<br/>OpenAI-compatible"]
+  api -. "optional" .-> emb["Embeddings<br/>Gemini"]
+```
+
+The browser and the API share one origin, with a session cookie and a CSRF token instead of a bearer token. Rules that must always hold, such as the immutable history, the report status order or the courtesy-ticket limits, live in PostgreSQL triggers; rules that depend on who is calling (profile, partnership, tab) live in the API; the web app only repeats them to guide the screen. Repositories use hand-written SQL with no ORM, and the media and report figures come from views and functions in the database. The design is described in [`docs/arquitetura.md`](docs/arquitetura.md), the API contract in [`docs/api.md`](docs/api.md) and the schema in [`docs/banco.md`](docs/banco.md), all in Portuguese.
+
+### Inside Atlas
+
+```mermaid
+flowchart TD
+  q["Question"] --> lim["Limits<br/>daily cap · per hour · one turn at a time"]
+  lim --> jev{"JEV intent<br/>optional"}
+  jev -- "out of scope" --> fixo["Fixed reply"]
+  jev --> loop["Agent loop<br/>LLM, up to 8 tool calls"]
+  loop <--> tools["Tools<br/>portal data · media · deliveries · deadlines<br/>document search · day count · calculator"]
+  loop --> check{"Source check<br/>every number cited?"}
+  check -- "no, twice" --> nf["“Não encontrei”"]
+  check -- "yes" --> out["Streamed answer<br/>with source chips"]
+```
+
+- **The model never brings its own numbers.** Each tool returns numbered sources: `T#` for a document passage, `R#` for a portal record, `C#` for a calculation or a day count. Before a sentence reaches the screen, the server checks that every number and date in it is in a source cited in that sentence, in a calculation of the turn or in what the person wrote. A failed check asks for one rewrite; a second failure becomes a fixed "not found".
+- **Arithmetic is code.** `contar_dias` counts days with `java.time` and the holidays; `calcular` runs a sandboxed JEXL expression whose variables must each have an origin.
+- **Search is hybrid and isolated.** Documents are split by page, embedded with Gemini and stored in pgvector. A query mixes vector and full-text results (reciprocal rank fusion) under a read-only `atlas_ro` role, and row-level security limits it to the edition, quota and partnership of the conversation. A document that seems to hold personal data cannot be approved.
+- **The brand's conversation has no partnership argument.** The partnership comes from the session, so a brand cannot ask about another one. The organizer has its own conversation over the whole edition.
+- **Guard rails.** Daily and hourly limits per partnership and per person, circuit breakers for the model, JEV and Gemini, and a per-turn trace (steps, timings, tokens, cost) in the diagnostics. The model's reasoning stays on the server; the screen shows only a short summary that passes the same checks.
+- **Reports by placeholder.** When Atlas drafts the activation report, the model writes text with placeholders and the server fills in every number, with its origin under the report's sources.
+
+Details, with every tool and limit, are in sections 5 and 6 of [`docs/arquitetura.md`](docs/arquitetura.md).
+
+## Roadmap
+
+- [x] Sponsor portal: seven tabs, deliveries in file, text or link, versions and history
+- [x] Organizer tools: partnerships, tabs and quotas, materials queue, CSV loads and history
+- [x] Import with provenance, media base and typed survey questions
+- [x] Report from the base, with the post-event annex
+- [x] Atlas: chat with cited sources, report drafting and per-turn diagnostics
+- [ ] Automatic activation e-mail and password recovery (today the organizer passes the code on)
+- [ ] Login rate limiting and a `Secure` session cookie behind HTTPS
+- [ ] Audio in the import
+- [ ] Open Staff integration (today a link to the external site)
+- [ ] Native PDF export of the report (today through the browser's print)
+- [ ] Docker image and public deployment
+
+## License and credits
+
+MIT. See [LICENSE](LICENSE). Built by the Desafio GC 2026 team; the original repository is [Gabriela-Mattos-18/planeta-360](https://github.com/Gabriela-Mattos-18/planeta-360).
+
+| Component | Use | License |
 | --- | --- | --- |
-| `b2b@rbs.example` | Admin RBS | Todas as parcerias e a gestão |
-| `pesquisa@rbs.example` | Admin RBS | Todas as parcerias e a gestão |
-| `marketing@amarelo.example` | Patrocinador | Cliente Amarelo · Master · 2027 |
-| `atendimento@agencia-x.example` | Patrocinador (agência) | Cliente Amarelo · Master · 2027 |
-| `marketing@roxo.example` | Patrocinador | Cliente Roxo · Subcota G · 2027 |
-| `marketing@verde.example` | Patrocinador | Cliente Verde · Subcota · 2027 |
+| [Spring Boot](https://spring.io/projects/spring-boot) and [Spring AI](https://spring.io/projects/spring-ai) | API, security, LLM client | Apache-2.0 |
+| [Flyway](https://github.com/flyway/flyway) | Database migrations | Apache-2.0 |
+| [PostgreSQL](https://www.postgresql.org) and [pgvector](https://github.com/pgvector/pgvector) | Database and vector search | PostgreSQL License |
+| [Apache POI](https://poi.apache.org), [PDFBox](https://pdfbox.apache.org), Commons CSV and JEXL | Reading spreadsheets, Office files and PDFs | Apache-2.0 |
+| [Bucket4j](https://github.com/bucket4j/bucket4j) and [Resilience4j](https://github.com/resilience4j/resilience4j) | Rate limits and circuit breakers | Apache-2.0 |
+| [React](https://react.dev), [React Router](https://reactrouter.com), [Vite](https://vite.dev) and [Tailwind CSS](https://tailwindcss.com) | Web app | MIT |
+| [react-pdf](https://github.com/wojtekmaj/react-pdf) and [pdf.js](https://github.com/mozilla/pdf.js) | PDF viewer | MIT and Apache-2.0 |
+| [Remix Icon](https://github.com/Remix-Design/RemixIcon) | Interface icons | Remix Icon License v1.0 |
+| [Bebas Neue](https://fonts.google.com/specimen/Bebas+Neue) and [Montserrat](https://fonts.google.com/specimen/Montserrat) | Interface fonts | SIL OFL 1.1 |
+| [JetBrains Mono](https://github.com/JetBrains/JetBrainsMono) | Stack line in the banner | SIL OFL 1.1 |
 
-**Primeiro acesso de um e-mail novo.** A RBS cadastra a parceria (ou autoriza o e-mail no Perfil) e recebe um código de ativação, que aparece uma vez só. A pessoa entra em "Primeiro acesso", informa o e-mail, o código e cria a senha. Na V1 não há e-mail automático: a RBS repassa o código.
-
-## Roteiro de demonstração (item 7)
-
-Com o banco recém-criado (amostra original):
-
-1. Entre como `marketing@roxo.example`. "Minha parceria" mostra a próxima ação: o "VT para os telões dos palcos", em "Ajuste solicitado", com o recado da RBS (o VT passa de 30 segundos e a trilha precisa de autorização). Em **Mídia e conteúdo**, a entrega mostra o envio anterior da marca, com a observação que ela escreveu, e o **Histórico** traz o envio e o pedido de ajuste, com autor e data.
-2. Em **Mídia e conteúdo**, solte um PDF (ou JPG, PNG, MP4) na área de envio, escolha a entrega e envie. O arquivo vira uma nova versão, com autor, data e status "Enviado".
-3. Isolamento: ainda como Roxo, abra <http://localhost:5173/parceria/2> (a parceria do Amarelo). A tela diz "Parceria não encontrada" e a API responde 404, igual a um id que não existe.
-4. Saia e entre como `b2b@rbs.example`. Em **Materiais** (aba "Para analisar"), abra o envio do Roxo e aprove (ou peça ajuste com uma observação). Tudo fica no **Histórico**, com autor e data.
-5. Em **Cargas**, envie `docs/exemplos/veiculacao.csv` duas vezes. Na segunda, nada é inserido: as linhas contam como duplicadas.
-6. Em **Relatórios**, gere uma nova versão do relatório do Roxo, valide e disponibilize.
-7. Volte como Roxo: o relatório aparece em **Relatório**, com as seções do modelo, e pode ser impresso ou exportado em CSV.
-
-Os pedidos da RBS de 04/11 (continua com o mesmo banco):
-
-8. Como `marketing@amarelo.example` (Master), em **Mídia e conteúdo**: o cartão **Comprovação mensal** mostra o exibido de cada mês por tipo de mídia e unidade, com a planilha `.xlsx` e o CSV; **Posts e links** traz os links dos posts, que abrem em aba nova. No detalhe de uma entrega, o material vai em arquivo, texto ou link. Como Roxo, a comprovação mensal não aparece (é só das Master).
-9. Ainda como Amarelo: no **Perfil**, o plano comercial e a compra de ingressos; em **Cortesias**, a quantidade por setor e dia e o botão **Destinar cortesias**; em **Credenciamento**, a liberação, o período e o botão do Open Staff; em **Contrato**, o contrato assinado na tela e os dados de quem assina. (Destinar e preencher gravam: para não mudar os números da amostra, faça isso numa marca nova, cadastrada pela RBS.)
-10. Como `b2b@rbs.example`: no Perfil de uma parceria, **Direitos por contrato**, as abas em três estados (liberada, fechada ou oculta) e **Trocar cota**, com a prévia do impacto; no menu, **Pesquisa** (abrir a da edição e decidir as perguntas das marcas), **Cargas** (o lote da comprovação mensal das Master) e **Relatórios** (os números da edição); na página do relatório de uma parceria, o **Pós-venda da edição**, que a marca vê depois das 6 seções.
-11. Em **Atlas** > **Documentos**, um PDF com uma página de telefones trava a aprovação e a tela diz qual página; marcada como fora do Atlas, ela não entra no índice e o PDF continua inteiro no visualizador.
-
-### Roteiro da base de dados (reunião de 05/11)
-
-A RBS juntava à mão, numa planilha só, o que cada veículo, a empresa de pesquisa e as agências mandavam, cada um num formato. Agora ela arrasta o arquivo, o Atlas lê, mostra de onde tirou cada número, e nada entra na base sem a pessoa confirmar. Com o banco recém-criado:
-
-1. Como `b2b@rbs.example`, abra **Importar**. Escolha a edição e de quem é o arquivo (todas as marcas, uma cota ou uma marca) e arraste um CSV no formato padrão (`docs/exemplos/veiculacao.csv`) ou uma planilha de veículo. A importação nasce "Lendo" e vira "Para revisar": cada número tem "ver de onde veio", que abre a célula da planilha; a linha de uma marca que não existe na edição vem recusada, com o motivo. Edite uma linha, aceite as outras e confirme. As planilhas de teste em `backend/src/test/resources/importacao/corpus/` (a padrão da RBS, a da TV, a da pesquisa) são lidas mesmo sem o modelo; Word, PowerPoint, PDF, prints e texto colado precisam do modelo de linguagem ligado (veja abaixo) e, sem ele, ficam só para consulta, com a explicação na tela.
-2. Em **Dados**, a mídia de todas as marcas: o contratado e o entregue por marca, com impacto, os filtros de marca, cota, mês, veículo, formato e tipo, e a planilha do filtro em `.xlsx` ou CSV. Toque numa marca para ver os veículos dela. De volta à importação, **Retirar importação** tira da base as linhas que ela gravou.
-3. Como `marketing@amarelo.example` (Master), em **Mídia e conteúdo**, o mesmo contratado x entregue só da marca, com o filtro de mês (só das Master), o impacto e os comprovantes, que abrem na tela. Em **Aplicações da marca**, **Ler os números de uma planilha** lê a planilha da agência (`agencia-amarelo.xlsx` no corpus de teste) e mostra cada número com a célula de origem; salvar grava os números com o nome de quem confirmou.
-4. Em **Pesquisa**, as perguntas têm tipo (escolha entre alternativas, sim ou não, nota de 0 a 10, resposta livre) e o limite vem da pesquisa da edição (10 por padrão); a RBS também escreve as perguntas pela marca. Quando a RBS importa a planilha da empresa de pesquisa, o cartão **Quem passou pelo seu espaço** mostra o perfil do público ao lado do festival inteiro.
-5. No menu da marca, o selo **novo** aparece na aba que mudou desde a última visita da pessoa (um status de entrega, uma veiculação, um resultado), sem e-mail.
-6. Como RBS, em **Atlas**, a conversa consulta a mídia de qualquer marca ("quanto cada marca entregou de rádio em outubro?") e o que falta receber de cada uma, com os números citados. Precisa do modelo de linguagem.
-
-### Roteiro do Atlas
-
-O Atlas é o chat: a marca pergunta sobre os números da própria parceria e sobre os documentos do evento, e o que vem de documento cita a fonte. Nos perfis `dev` e `demo` o relatório da ativação também funciona, na mesma conversa (o modo só chat, sem o relatório, continua existindo: `ATLAS_RELATORIO=false`). Ele precisa do modelo de linguagem ligado (veja abaixo); sem o modelo, o botão "Montar relatório" monta o relatório sem ele.
-
-1. Como `b2b@rbs.example`, em **Patrocinadores**, cadastre a parceria "Cliente Teste" na edição 2027. Em **Cargas**, escolha "Plano comercial" e envie `docs/exemplos/plano.csv`: 8 linhas entram, 1 é duplicada e 2 são rejeitadas, com o motivo (mídia sem tipo e uma marca sem parceria). Para ver o plano do Amarelo crescer, envie também `docs/exemplos/plano-amarelo-p07-p10.csv` (as páginas 7 a 10 do plano dele, 36 linhas, todas entram; a unidade das impressões de display é pergunta aberta à RBS).
-2. Abra a parceria do Cliente Amarelo, em **Aplicações da marca**: o plano linha a linha, com as fotos de comprovação. Use "Anexar foto" numa linha sem foto, e o total de comprovadas sobe.
-3. Entre como `marketing@amarelo.example` e, em **Aplicações da marca**, informe os números que só a marca sabe (visitantes, cadastros e brindes): eles ficam com o seu nome e a data. A planilha de contagem da agência (xlsx, xls ou csv, até 20 MB) também fica ali, como um valor com autor e data (API: `POST /api/parcerias/{id}/dados-informados/ativacao.planilha_agencia/arquivo`, rota 66, e o download é a rota 18); ela não entra no relatório do Atlas.
-4. Toque em **atlas**, no menu ("Pergunte sobre os seus dados"). O Atlas abre numa janela própria, com o menu à vista. Pergunte "quantas aplicações já foram comprovadas?": a resposta chega enquanto o modelo escreve, e os números vêm do portal.
-5. No perfil `dev`, cada resposta mostra, em caixas amarelas de debug, as ferramentas que o modelo usou, com o que ele pediu e o que recebeu de volta. Sem ferramenta, a resposta diz isso. Nos perfis `dev` e `demo`, o botão **Diagnóstico** embaixo da resposta abre as etapas do turno: busca, JEV, checagem e tempos.
-6. Pergunte "até quando preciso informar os geradores?": a resposta traz a data com um chip, como `T1`, e a lista "Fontes" embaixo. O chip abre o manual ao lado da conversa, na página citada, com o trecho destacado.
-7. Peça os números de outra marca: o Atlas não tem como consultá-los e responde só "Não encontrei isso nos documentos do portal. Para essa dúvida, fale com o atendimento da RBS.", sem dizer se existem e sem número nenhum.
-8. Como `b2b@rbs.example`, abra **Atlas**. As abas são Conversa (o Atlas da RBS, por edição), Documentos e Prazos; nos perfis `dev` e `demo`, o link **Diagnóstico** abre Turnos, Provedores e Busca de teste. Em **Busca de teste**, escolha uma parceria e escreva uma consulta: aparecem as duas listas da busca, o que o modelo receberia e o que essa parceria enxerga, sem gastar o modelo.
-9. Como `marketing@amarelo.example`, peça ao Atlas "monta o relatório da ativação": ele junta o que o portal já sabe, pede num cartão os números que só a marca tem, escreve os textos (só com marcadores, o servidor põe os números) e o relatório pronto abre com a origem de cada número na aba **Fontes** e, no fim do documento, em **Referências**. Um relatório que ficou pela metade (em montagem ou esperando o cartão) pode ser descartado pela API (`POST /api/atlas/relatorios/{id}/descartar`, rota 65): o cartão fecha e a conversa segue livre para começar outro. Pedir "o relatório pós-evento" é outro caminho: o Atlas explica, em texto fixo, que o oficial é da RBS e oferece um modelo em branco.
-
-A apresentação segue um roteiro de oito passos, que o ensaio automático percorre: veja "Ensaio da demonstração", em Testes.
-
-### Ligar o modelo de linguagem (opcional)
-
-Sem estas variáveis, o portal e os testes funcionam normalmente, mas o Atlas não responde. Com elas, a marca conversa com o Atlas pelo chat. A resposta aparece enquanto o modelo escreve, com a etapa do momento ("Consultando os números da parceria…"). Antes dela, uma caixa conta o tempo em que o modelo pensa e mostra um resumo curto do raciocínio, que fica aberto enquanto ele pensa e depois recolhe; dá para abrir de novo, inclusive nas conversas antigas. O raciocínio completo não sai do servidor: ele volta só ao modelo. O resumo é escrito no servidor, numa chamada curta à parte, e passa pela mesma checagem do texto do Atlas (sem números nem nomes internos); recusado, a caixa mostra só o tempo.
-
-**Sem botão na tela.** A chave entra só pelo servidor: variável de ambiente ou `backend/config/segredos.local.properties` (perfil `dev`, com a API subindo a partir de `backend/`, como faz o `scripts/atlas-dev.sh`). As rotas de debug da chave continuam existindo no perfil `dev` (`docs/api.md`), sem tela.
-
-**Pelas variáveis de ambiente:**
-
-```bash
-cd backend
-ATLAS_LLM=openai OPENCODE_API_KEY=sua-chave ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
-```
-
-No Windows (PowerShell): `$env:ATLAS_LLM="openai"; $env:OPENCODE_API_KEY="sua-chave"` antes do `.\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=dev"`.
-
-**Pelo arquivo de segredos (perfis `dev` e `demo`).** Copie `backend/config/segredos.exemplo.properties` para `backend/config/segredos.local.properties` e preencha as chaves. A API lê esse arquivo ao subir a partir de `backend/`, e o Git o ignora. Sem ele, o portal sobe normalmente, com o Atlas desligado. Variável de ambiente vence o arquivo.
-
-| Variável | Padrão | Para quê |
-| --- | --- | --- |
-| `ATLAS_LLM` | `none` | `openai` liga o modelo (qualquer serviço compatível com a API da OpenAI) |
-| `OPENCODE_API_KEY` | — | A chave do provedor. Em variável de ambiente ou no arquivo de segredos, nunca no repositório. Com `ATLAS_LLM=openai` e sem ela, o Atlas não responde e a API avisa no log |
-| `ATLAS_LLM_BASE_URL` | `https://opencode.ai/inference/go/openai/v1` | O endereço do provedor |
-| `ATLAS_LLM_MODELO` | `deepseek-v4.1-flash` | O modelo |
-| `ATLAS_RACIOCINIO` | `true` | O raciocínio do modelo, com o resumo na conversa. Ligado, cada resposta demora uns segundos a mais e gasta mais do limite do provedor |
-| `ATLAS_PRAZO_DO_RESUMO` | `PT15S` | Quanto o fim do turno espera pelos resumos do raciocínio; o que passar do prazo aparece na próxima leitura da conversa |
-| `ATLAS_TETO_DIARIO` | `200` | Mensagens do Atlas por parceria por dia; depois disso, o chat responde 429 |
-| `ATLAS_LIMITE_MENSAGENS_POR_HORA`, `ATLAS_LIMITE_RELATORIOS_POR_DIA` | `20`, `3` | Por usuário: mensagens de texto por hora, na conversa da marca e na da RBS (acima, 429 com quanto falta), e relatórios por dia que o modelo monta (acima, o modelo sugere o botão). O botão não conta. Ficam na memória: reiniciar a API zera |
-| `ATLAS_LIMITE_DOCUMENTOS_POR_HORA`, `ATLAS_LIMITE_BUSCAS_DE_TESTE_POR_HORA` | `120`, `60` | Por usuário: aberturas do arquivo de um documento por hora (a fonte do visualizador; cada uma grava um registro) e buscas de teste da RBS por hora (cada uma pode gastar um embedding do Gemini). Acima, 429 com quanto falta. Na memória, como os outros |
-| `ATLAS_DISJUNTORES` | `true` | Os disjuntores do modelo, do JEV e do Gemini: com 5 falhas seguidas (ou 50% das 10 últimas) o provedor para de ser chamado por 60 s, e o Atlas segue sem ele (frase fixa de falha, sem JEV, busca só textual). O estado está na aba Provedores |
-| `ATLAS_RELATORIO` | `false` (`true` nos perfis `dev` e `demo`) | Liga o relatório montado pelo Atlas (pedido no chat, botão, cartão e documento). Desligado, o Atlas é só o chat e as rotas do relatório respondem 404 |
-| `ATLAS_RBS` | `false` (`true` nos perfis `dev` e `demo`) | O Atlas da RBS: a equipe da RBS conversa com o Atlas por edição, sem parceria, para tirar dúvidas dos documentos globais da edição (rotas 67 e 68 e, na conversa dela, as 44, 45 e 49). Desligado, as rotas 67 e 68 respondem 404 e nada muda. Veja `docs/api.md`, "O Atlas da RBS" |
-| `ATLAS_RBS_TETO_DIARIO` | `200` | Mensagens do modelo por pessoa da RBS por dia no Atlas da RBS; depois disso, 429 |
-| `ATLAS_DEBUG_FERRAMENTAS` | `false` (`true` no perfil `dev`; sempre `false` no `demo`) | Mostra na conversa as ferramentas que o modelo usou, com argumentos e resultado. Temporário |
-| `ATLAS_DIAGNOSTICO` | `false` (`true` nos perfis `dev` e `demo`) | O diagnóstico: cada turno do Atlas deixa um traço (etapas, tempos, tokens, custo) que a RBS lê pelas rotas 50 a 53. Desligado, nada é gravado e as rotas respondem 404. Veja `docs/api.md`, "Diagnóstico do Atlas" |
-| `ATLAS_DIAGNOSTICO_MARCA` | `false` (`true` nos perfis `dev` e `demo`) | A marca vê o diagnóstico das próprias conversas (rota 49). Só vale com o diagnóstico ligado |
-| `ATLAS_EMBEDDINGS`, `GEMINI_API_KEY` | `none`, — | Os embeddings dos documentos do Atlas: `gemini` (o Gemini de verdade, com a chave), `teste` (determinístico e sem rede, **só em banco descartável** como o `portal_e2e`: os vetores não têm o significado dos do Gemini) ou `none`. Com `none`, a API sobe do mesmo jeito, aprovar um documento o deixa em `ERRO` com o motivo, e a amostra dos perfis `dev` e `demo` não cria os documentos de exemplo (avisa no log; quando a chave chega, a próxima subida cria e indexa o kit). A cota gratuita do Gemini é de 1.000 chamadas por dia: sem cota, a busca segue só com a lista textual, e documento novo fica em `ERRO` (na hora, com "A cota do dia do Gemini acabou; ...") até reindexar. O limite por minuto, ao contrário, a indexação espera sozinha, pelo tempo que o Gemini pede (até `atlas.embeddings.espera-maxima-no-429`, 90 s). Veja `docs/api.md`, "Os documentos do Atlas" |
-| `ATLAS_JEV`, `TYPESAFE_API_KEY` | `none`, — | O JEV, um classificador que entra em seis pontos de decisão, e a chave dele. Sem perfil, `ATLAS_JEV` dá o modo de todos: `none`, `sombra` (só observa) ou `ativo`. Nos perfis `dev` e `demo` cada ponto já vem fixado pela calibração, e `ATLAS_JEV` não muda nada: intenção, cartão e resposta ativos; fontes, coerência e lacunas em sombra. Ele nunca é barreira: se falhar, o turno segue com o modelo. Veja `docs/api.md`, "O JEV nos pontos de decisão" |
-| `ATLAS_JEV_<PONTO>` | Fixado nos perfis `dev` e `demo` | Troca o modo de um ponto: `INTENCAO`, `CARTAO`, `FONTES`, `RESPOSTA`, `COERENCIA` ou `LACUNAS` |
-| `ATLAS_JEV_MODELO` | `jev-1.14.0` | A versão do JEV |
-| `ATLAS_JEV_BASE_URL`, `ATLAS_GEMINI_BASE_URL` | Endereços oficiais | Os endereços do JEV e do Gemini |
-| `ATLAS_PRECO_ENTRADA`, `ATLAS_PRECO_SAIDA` | `0.30`, `1.20` | US$ por milhão de tokens, usados no custo do diagnóstico quando a resposta do provedor não traz o preço |
-
-Todo número do chat tem origem: vem da base do portal, do que a marca informou ou de um documento citado na mesma frase. O servidor confere isso antes de a frase chegar à tela. Use só dados fictícios enquanto o provedor estiver em teste.
-
-**Regras de envio.** Arquivos de até 20 MB nos formatos PDF, PNG, JPG (e JPEG), DOC, DOCX, XLS, XLSX, PPT, PPTX, CSV, MP4, MP3 e ZIP (os do Office antigo só sem macro VBA). A API confere o conteúdo, e não só o nome. O download sai sempre como anexo. Cada envio aceita uma observação (até 500 caracteres), que fica na versão e no histórico. As planilhas de carga são CSV em UTF-8 com vírgula como separador (no Excel, "Salvar como" e "CSV UTF-8"); as colunas estão em `docs/banco.md` e há exemplos em `docs/exemplos/`. Linha com data ou quantidade ilegível é rejeitada com o motivo e o formato esperado, e o resto do arquivo entra.
-
-## Testes
-
-```bash
-cd backend
-./mvnw test
-```
-
-No Windows: `.\mvnw.cmd test`. Os testes usam o banco `portal_teste`, que é apagado e recriado a cada execução (nunca aponte para o `portal`). Com o PostgreSQL em outra porta, informe `PORTAL_BD_TESTE_URL` (por exemplo, `jdbc:postgresql://localhost:5433/portal_teste`) do mesmo jeito que o `PORTAL_BD_URL` do passo 2. Eles cobrem o isolamento entre parcerias pela API, as permissões, o envio com histórico, a carga sem duplicidade e o relatório. As conferências do banco ficam em `backend/src/test/resources/db/verificacao.sql`. Esses testes usam provedores falsos e não pedem chave. Os marcados `@Tag("avaliacao")` chamam os provedores de verdade e ficam de fora; para rodá-los, use `./mvnw test -Dgroups=avaliacao -Dtestes.excluidos=`.
-
-No front, `npm run build` confere os tipos e gera a versão de produção; `npm run lint` roda o Oxlint.
-
-**No navegador.** Na primeira vez, `npx playwright install chromium`, em `frontend/`. Os testes escrevem no banco, então dizer onde eles rodam é obrigatório, e a preparação recusa o banco `portal`:
-
-- `PORTAL_E2E_PILHA=N npm run e2e` (N de 1 a 9) usa a pilha N do `.claude/pilhas-de-teste.sh` (um script local, fora do Git): front na 518N, API na 808N, banco `portal_qaN`.
-- `PORTAL_E2E_PILHA=dev npm run e2e` sobe o front na porta 5190 (ou na de `E2E_PORTA_FRONT`) e fala com a API do `scripts/atlas-dev.sh`, na 8080 (ou na de `ATLAS_DEV_PORTA`). Essa API precisa subir com `PORTAL_BD_URL` apontando para um banco de teste.
-
-As capturas ficam em `frontend/e2e/capturas/`, e o resultado de cada teste em `frontend/resultados-e2e/resultado.json` (ou no nome dado em `E2E_RESULTADO`). Os testes marcados `@vivo` usam o modelo de verdade; sem chave, rode `npm run e2e -- --grep-invert @vivo`. O kit de documentos precisa estar indexado (`ATLAS_EMBEDDINGS` em `gemini` ou `teste`), porque os testes das fontes dependem dele.
-
-**Ensaio da demonstração.** `frontend/e2e/demo.spec.ts` percorre o roteiro inteiro com o modelo e o Gemini de verdade: os documentos da RBS e o envio do FAQ, o prazo com o PDF aberto na página citada, a conta com "Como calculei", os dias úteis, o relatório até o PDF, o pedido do pós-evento e o modelo em branco, o ataque como Cliente Roxo e o diagnóstico. Ele precisa do perfil `demo` num banco recém-criado, e cada turno tem até 30 s:
-
-```bash
-scripts/preparar-banco-atlas.sh portal_demo
-ATLAS_DEV_PORTA=8099 ATLAS_PERFIL=demo PORTAL_BD_URL=jdbc:postgresql://localhost:5432/portal_demo scripts/atlas-dev.sh start
-cd frontend
-E2E_DEMO=1 PORTAL_E2E_PILHA=dev ATLAS_DEV_PORTA=8099 npx playwright test e2e/demo.spec.ts
-```
-
-As capturas de cada passo e os tempos (`demo-tempos.json`) ficam em `frontend/e2e/capturas/`. Sem `E2E_DEMO`, o teste é pulado. Para repetir, recrie o banco: o envio do FAQ muda a versão dele.
-
-**Avaliador de conversas.** `ferramentas/avaliacao-atlas/` (Node 22, sem dependências) conversa com o Atlas de verdade, com casos e gabarito, e confere vazamento entre parcerias, origem dos números, ferramentas, fontes, contas e latência. Ele precisa da API no perfil `dev`, porque lê o debug das ferramentas:
-
-```bash
-node ferramentas/avaliacao-atlas/avaliar.mjs --marco M9 --split ajuste
-```
-
-Opções: `--split` (`ajuste`, `reserva` ou `todos`), `--categoria`, `--casos`, `--api` e, para uma conversa solta, `--livre "pergunta" --persona amarelo`. O resultado vai para `docs/atlas/controle/avaliacoes/`, que fica fora do Git, e a saída é 1 se houver vazamento, número sem origem ou caso com erro. Os testes dele: `node --test ferramentas/avaliacao-atlas/testes/*.test.mjs`. Os documentos fictícios do kit são gerados em `ferramentas/documentos-ficticios/` (`npm run gerar` e `npm run conferir`).
-
-**CI.** `.github/workflows/ci.yml` roda a cada push na `atlas-completo` e em todo PR: a suíte do back num PostgreSQL 18 com pgvector, sem nenhuma chave, e o build e o lint do front. O e2e, o avaliador e os testes `@Tag("avaliacao")` ficam de fora, porque precisam da API ou dos provedores.
-
-**Conferências com as chaves.** `scripts/fumaca-provedores.sh` confere o OpenCode Go, o JEV e o Gemini com chamadas reais, sem imprimir nenhuma chave. `scripts/conferir-segredos.sh` procura as chaves nos arquivos versionados, nos logs, em `backend/target/` e no traço de um banco, também sem imprimi-las (`--banco portal_e2e`, e `--historico` para todo o histórico do Git).
-
-## Itens da Entrega 2
-
-| # | Item | Onde está |
-| --- | --- | --- |
-| 1 | Diagnóstico dos dados | Amostra organizada em `backend/src/main/resources/db/dev/R__amostra.sql`; entidades Java em `record` nos pacotes de cada área |
-| 2 | Modelo do relatório | Seções e catálogo de 17 indicadores no banco (V3); tela Relatório |
-| 3 | Acesso e cadastro | Login por sessão, primeiro acesso por código, Patrocinadores (cadastro), Perfil (empresa, abas e e-mails); isolamento testado pela API |
-| 4 | Materiais e acompanhamento | Mídia e conteúdo e as abas, com versões, status e histórico; Materiais da RBS (para analisar e o que falta receber de cada marca) |
-| 5 | Consolidação dos dados | Importar (o Atlas lê planilha, CSV, texto e, com o modelo, Word, PDF e prints; prévia com a origem de cada número, confirmar e retirar), Dados (a base de mídia de todas as marcas, com filtros e exportação) e Cargas (o CSV padrão), sem contagem duplicada e com rejeições com motivo |
-| 6 | Relatório | Gerado por parceria a partir da base; a RBS valida e disponibiliza; exporta CSV e imprime |
-| 7 | Integração | Menu com as sete abas, painel da RBS e o roteiro acima |
-| 8 | Modelagem e database | `docs/banco.md` (tabelas, colunas, regras e Sprint 1 x Entrega 2), `docs/modelagem/sprint-1/` e as migrações do Flyway |
-
-## Pendências registradas
-
-- O plano comercial de uma parceria cadastrada ao vivo entra pela carga "Plano comercial" (Cargas), e as fotos de comprovação pela aba Aplicações da marca (só a RBS anexa).
-- Corrigir uma linha do plano comercial: o reenvio com outra quantidade conta como duplicado (vale a primeira versão), e não há tela para editar a linha.
-- Pedidos da RBS de 04/11 que ficaram em parte, com o motivo:
-  - Comprovação mensal: a planilha foi conferida pelo leitor dos testes (Apache POI); falta abri-la à mão no Excel e no LibreOffice. O previsto que aparece nela é o do plano inteiro, porque o plano não divide o previsto por mês.
-  - Pós-venda: o texto, o aftermovie, o clipping, a audiência por veículo e os links dos posts entram; as fotos da edição entram como link de um álbum, não como galeria. Parceria encerrada não recebe pós-venda (o Amarelo de 2026, na amostra).
-  - Pesquisa: a RBS abre a pesquisa pela tela, mas não há prazo para as perguntas (a tabela não tem a coluna).
-  - Arquivos: `.doc`, `.xls` e `.ppt` entram se não tiverem macro VBA. A macro antiga do Excel (XLM) não é detectável pela leitura do diretório, e a macro dentro de `.docx`, `.xlsx` e `.pptx` não é conferida.
-  - Identidade visual: o emblema de 2027 está no login e nos cabeçalhos, no sistema do Figma; as cores e fontes oficiais esperam a RBS.
-  - A cota do Roxo segue o texto da RBS (Subcota G); o PDF do plano dele diz "Cota Apresenta", e o anexo do kit (D07) segue o PDF.
-- Relatório montado pelo Atlas: ligado nos perfis `dev` e `demo` e desligado no padrão (`ATLAS_RELATORIO`). No texto do relatório o modelo não escreve número nem data (nem por extenso): os números vêm do servidor, com a origem em "Referências", no fim do documento.
-- Atlas com o modelo de linguagem: testado contra um servidor falso e com a chave de verdade do OpenCode Go. Para decidir com a equipe: os termos de uso do OpenCode, que falam em uso interno de quem assina, e o acordo de retenção zero do DeepSeek no Go, que vale até 30/11/2026 e é renovado mês a mês.
-- Retenção zero (pedida pela RBS): só o DeepSeek no Go tem acordo registrado. O JEV só tem retenção zero no plano empresarial, e o Gemini guarda registros por até 55 dias; nenhum dos dois tem acordo assinado neste projeto.
-- Dado pessoal no modelo: a consulta do Atlas leva ao modelo o nome de quem informou cada dado ("Informado por ... em ..."). Fica assim por decisão do dono do produto. Destinatários de cortesia e signatários do contrato (só nome, e-mail e cargo, sem CPF) não vão ao modelo, ao log nem ao histórico.
-- Dados informados pela marca entram sem aprovação da RBS, com o nome de quem informou e a data.
-- Importação pelo Atlas (reunião de 05/11): sem o modelo de linguagem, só o CSV no formato padrão e as planilhas que a leitura em código entende viram linhas; Word, PDF, prints e texto ficam só para consulta. O conflito entre o total do mês e as exibições do mesmo mês aparece já na prévia, como linha recusada com o motivo. Imagem e PDF escaneado vão inteiros ao modelo com visão (o detector de dado pessoal só confere o texto que ele transcreveu). Áudio fica fora desta versão. O "impacto" de cada veículo (audiência, impressões ou alcance) e o recorte por mês para as subcotas esperam a RBS.
-- E-mail automático do código de ativação; recuperação de senha.
-- PDF do relatório: pela impressão do navegador.
-- A confirmar com a RBS: limite de usuários por parceria, quem envia as fotos de comprovação, formato dos resultados da pesquisa, quem carrega os resultados (hoje a RBS), o `.ai` do Illustrator (hoje só dentro de `.zip`), o limite de 20 MB, CPF de convidados e signatários, se o acesso total do admin inclui liberar uma aba fora da cota (hoje a API recusa, e o caminho é trocar a cota) e as cores e fontes da identidade visual de 2027.
-- Segurança para produção: limite de tentativas de login e cookie de sessão `Secure` atrás de HTTPS.
-- Fora desta versão: n8n; integração com o Open Staff (o portal só leva ao site); SharePoint e Outlook (a RBS não dá acesso à API do SharePoint, e o portal guarda os arquivos num repositório próprio); cifra de arquivos, Docker, Swagger e a implantação pública.
-
-## Pastas
-
-```text
-backend/      API Spring Boot (pacotes comum, acesso, parceria, materiais, pesquisa, consolidacao, relatorio,
-              aplicacoes, dados, documentos, prazos, cortesias, credenciamento, contrato, atlas)
-              src/main/resources/db/migration  estrutura, regras e dados base (Flyway)
-              src/main/resources/db/dev        amostra de demonstração
-              src/main/resources/atlas         prompts, modelos do relatório, modelos em branco e as perguntas do JEV
-              src/main/resources/dev           arquivos de exemplo e o kit de documentos do Atlas
-frontend/     React + Vite (api, atlas, componentes, estilos, paginas/acesso, paginas/parceria, paginas/rbs, sessao, util)
-              e2e                              testes no navegador e o ensaio da demonstração
-ferramentas/  avaliacao-atlas (avaliador de conversas e calibração do JEV) e documentos-ficticios (o kit)
-scripts/      preparar-banco-atlas.sh (pgvector e papel atlas_ro), atlas-dev.sh (API em segundo plano),
-              fumaca-provedores.sh e conferir-segredos.sh
-.github/      workflows/ci.yml
-docs/         banco.md, api.md, exemplos de CSV e a modelagem da Sprint 1
-```
-
-## Referências
-
-- Contrato da API: [`docs/api.md`](docs/api.md)
-- Banco de dados: [`docs/banco.md`](docs/banco.md)
-- Figma: [Mockup · 07 · Implementação (Entrega 2)](https://www.figma.com/design/tXjjKVcZD978u5f6bYFimf/Mockup?node-id=408-2), com as telas do portal desta versão; o desenho de referência continua em [06 · UI com a marca](https://www.figma.com/design/tXjjKVcZD978u5f6bYFimf/Mockup?node-id=165-2)
-- Documentos da Etapa 2 no Drive: Diagnóstico dos dados, Modelo do relatório e Modelagem do banco
+Remix Icon 4.9 ships under its own license, which allows use inside apps and documentation but not as a logo. The optional AI providers (OpenCode Go and the Gemini API) have their own terms; send them fictitious data only. Planeta Atlântida and RBS are trademarks of their owners: the festival emblem on the login screen is not covered by this project's license and does not appear in these images.
